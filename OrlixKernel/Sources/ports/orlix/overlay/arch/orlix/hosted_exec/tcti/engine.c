@@ -9,6 +9,8 @@
 #include <linux/signal.h>
 #include <linux/smp.h>
 #include <linux/string.h>
+#include <linux/utsname.h>
+#include <internal/asm/host_memory.h>
 #include <asm/hosted_exec.h>
 #include <asm/ptrace.h>
 #include <asm/signal.h>
@@ -25,6 +27,7 @@
 #define TCTI_ELF_IMAGE_SCAN_LIMIT (16UL * 1024UL * 1024UL)
 #define TCTI_MAX_DYNAMIC_ENTRIES 256
 #define TCTI_MAX_RELA_ENTRIES 4096
+#define TCTI_STATIC_PIE_TLS_TCB_OFFSET 0x78UL
 #ifndef R_AARCH64_RELATIVE
 #define R_AARCH64_RELATIVE 1027
 #endif
@@ -263,13 +266,39 @@ static int tcti_apply_relative_relocations(struct mm_struct *mm,
 	return 0;
 }
 
+bool tcti_static_pie_initial_tls(unsigned long base, const Elf64_Phdr *phdr,
+				 unsigned long *initial_tls)
+{
+	unsigned long tls;
+
+	if (!phdr || phdr->p_type != PT_TLS || !initial_tls)
+		return false;
+	if (!phdr->p_memsz)
+		return false;
+	if (phdr->p_vaddr > ULONG_MAX - TCTI_STATIC_PIE_TLS_TCB_OFFSET)
+		return false;
+	if (base > ULONG_MAX - phdr->p_vaddr - TCTI_STATIC_PIE_TLS_TCB_OFFSET)
+		return false;
+
+	tls = base + phdr->p_vaddr + TCTI_STATIC_PIE_TLS_TCB_OFFSET;
+	if (tls >= TASK_SIZE)
+		return false;
+
+	*initial_tls = tls;
+	return true;
+}
+
 static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 						      struct pt_regs *regs,
 						      struct mm_struct *mm,
 						      unsigned long *applied_base)
 {
+	Elf64_Phdr dynamic_phdr = { 0 };
+	unsigned long initial_tls = 0;
 	unsigned long base;
 	Elf64_Ehdr ehdr;
+	bool found_dynamic = false;
+	bool found_initial_tls = false;
 	size_t index;
 	int ret;
 
@@ -303,25 +332,41 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 						   &phdr, sizeof(phdr));
 		if (ret)
 			return ret;
-		if (phdr.p_type != PT_DYNAMIC)
-			continue;
-
-		pr_info("Orlix TCTI: static PIE dynamic task=%s pid=%d base=%#lx index=%zu vaddr=%#llx memsz=%#llx filesz=%#llx flags=%#x\n",
-			task->comm, task_pid_nr(task), base, index,
-			(unsigned long long)phdr.p_vaddr,
-			(unsigned long long)phdr.p_memsz,
-			(unsigned long long)phdr.p_filesz, phdr.p_flags);
-		ret = tcti_apply_relative_relocations(mm, regs, base, &phdr);
-		if (ret)
-			return ret;
-		pr_info_once("Orlix TCTI: applied static PIE R_AARCH64_RELATIVE relocations task=%s pid=%d base=%#lx\n",
-			     task->comm, task_pid_nr(task), base);
-		mm->context.orlix_tcti_static_pie_base = base;
-		if (applied_base)
-			*applied_base = base;
-		return 0;
+		if (tcti_static_pie_initial_tls(base, &phdr, &initial_tls))
+			found_initial_tls = true;
+		if (phdr.p_type == PT_DYNAMIC) {
+			dynamic_phdr = phdr;
+			found_dynamic = true;
+		}
 	}
 
+	if (found_initial_tls) {
+#if defined(ORLIX_APP_HOSTED_BOOT)
+		unsigned long prepared_tls;
+
+		prepared_tls = orlix_hosted_prepare_user_entry(initial_tls);
+		pr_info("Orlix TCTI: static PIE initial TLS task=%s pid=%d base=%#lx tls=%#lx prepared=%#lx\n",
+			task->comm, task_pid_nr(task), base, initial_tls,
+			prepared_tls);
+#endif
+	}
+
+	if (!found_dynamic)
+		return 0;
+
+	pr_info("Orlix TCTI: static PIE dynamic task=%s pid=%d base=%#lx vaddr=%#llx memsz=%#llx filesz=%#llx flags=%#x\n",
+		task->comm, task_pid_nr(task), base,
+		(unsigned long long)dynamic_phdr.p_vaddr,
+		(unsigned long long)dynamic_phdr.p_memsz,
+		(unsigned long long)dynamic_phdr.p_filesz, dynamic_phdr.p_flags);
+	ret = tcti_apply_relative_relocations(mm, regs, base, &dynamic_phdr);
+	if (ret)
+		return ret;
+	pr_info_once("Orlix TCTI: applied static PIE R_AARCH64_RELATIVE relocations task=%s pid=%d base=%#lx\n",
+		     task->comm, task_pid_nr(task), base);
+	mm->context.orlix_tcti_static_pie_base = base;
+	if (applied_base)
+		*applied_base = base;
 	return 0;
 }
 
@@ -510,13 +555,52 @@ bool tcti_prepare_successful_execve_return(struct pt_regs *regs)
 	return true;
 }
 
+static void tcti_refresh_current_user_range(unsigned long start, size_t length)
+{
+	unsigned long page;
+	unsigned long end;
+
+	if (!start || start >= TASK_SIZE || !length)
+		return;
+	if (length > TASK_SIZE - start)
+		length = TASK_SIZE - start;
+
+	end = PAGE_ALIGN(start + length);
+	if (!end || end > TASK_SIZE)
+		end = TASK_SIZE;
+
+	for (page = start & PAGE_MASK; page < end; page += PAGE_SIZE)
+		(void)orlix_refresh_current_user_mapping_page(page);
+}
+
+static void tcti_sync_syscall_user_ranges(struct pt_regs *regs,
+					  unsigned long nr)
+{
+	if (!regs || IS_ERR_VALUE(regs->regs[0]))
+		return;
+
+	switch (nr) {
+	case __NR_read:
+		tcti_refresh_current_user_range(regs->regs[1], regs->regs[0]);
+		break;
+	case __NR_uname:
+		tcti_refresh_current_user_range(regs->orig_x0,
+						sizeof(struct new_utsname));
+		break;
+	default:
+		break;
+	}
+}
+
 static void orlix_tcti_handle_syscall(struct pt_regs *regs)
 {
 	unsigned long nr = regs->regs[8];
 	unsigned long pc = regs->pc;
 
+	orlix_host_user_sync_writable_mappings();
 	tcti_prepare_syscall_handoff(regs);
 	orlix_syscall_dispatch(regs);
+	tcti_sync_syscall_user_ranges(regs, nr);
 	tcti_report_syscall_return(current, regs, nr, pc);
 }
 

@@ -123,12 +123,27 @@ static int tcti_fault_requirements(enum tcti_access access,
 	}
 }
 
-static int tcti_sync_faulted_user_window(unsigned long address)
+static int tcti_sync_faulted_user_window(unsigned long address,
+					 enum tcti_access access)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
-	return orlix_sync_current_user_fault_window(address, 0);
+	unsigned long fault_flags = 0;
+
+	switch (access) {
+	case TCTI_ACCESS_FETCH:
+		fault_flags = ORLIX_HOST_USER_FAULT_EXEC;
+		break;
+	case TCTI_ACCESS_WRITE:
+		fault_flags = ORLIX_HOST_USER_FAULT_WRITE;
+		break;
+	case TCTI_ACCESS_READ:
+		break;
+	}
+
+	return orlix_sync_current_user_fault_window(address, fault_flags);
 #else
 	(void)address;
+	(void)access;
 	return 0;
 #endif
 }
@@ -164,7 +179,7 @@ retry:
 	if (fault_signal_pending(fault, regs))
 		return 0;
 	if (fault & VM_FAULT_COMPLETED)
-		return tcti_sync_faulted_user_window(address);
+		return tcti_sync_faulted_user_window(address, access);
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
@@ -182,7 +197,7 @@ retry:
 	}
 
 	mmap_read_unlock(mm);
-	return tcti_sync_faulted_user_window(address);
+	return tcti_sync_faulted_user_window(address, access);
 
 bad_area:
 	mmap_read_unlock(mm);

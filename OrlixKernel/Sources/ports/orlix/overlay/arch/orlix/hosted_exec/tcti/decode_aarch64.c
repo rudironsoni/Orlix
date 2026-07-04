@@ -62,18 +62,36 @@
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08007c00U
 #define AARCH64_SIMD_MOVI_2D_ZERO_MASK 0xffffffe0U
 #define AARCH64_SIMD_MOVI_2D_ZERO_PATTERN 0x6f00e400U
+#define AARCH64_SIMD_MOVI_2D_ONES_MASK 0xffffffe0U
+#define AARCH64_SIMD_MOVI_2D_ONES_PATTERN 0x6f07e7e0U
 #define AARCH64_SIMD_MOVI_2S_0X100_MASK 0xffffffe0U
 #define AARCH64_SIMD_MOVI_2S_0X100_PATTERN 0x0f002420U
+#define AARCH64_SIMD_MOVI_4S_0X1_MASK 0xffffffe0U
+#define AARCH64_SIMD_MOVI_4S_0X1_PATTERN 0x4f000420U
 #define AARCH64_SIMD_MOVI_4S_0X41_MASK 0xffffffe0U
 #define AARCH64_SIMD_MOVI_4S_0X41_PATTERN 0x4f020420U
 #define AARCH64_SIMD_MOVI_16B_0XDF_MASK 0xffffffe0U
 #define AARCH64_SIMD_MOVI_16B_0XDF_PATTERN 0x4f06e7e0U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_PATTERN 0x6e000400U
+#define AARCH64_SIMD_XTN_4H_MASK 0xfffffc00U
+#define AARCH64_SIMD_XTN_4H_PATTERN 0x0e612800U
 #define AARCH64_SIMD_DUP_2D_GPR_MASK 0xfffffc00U
 #define AARCH64_SIMD_DUP_2D_GPR_PATTERN 0x4e080c00U
+#define AARCH64_SIMD_AND_8B_MASK 0xff20fc00U
+#define AARCH64_SIMD_AND_8B_PATTERN 0x0e201c00U
 #define AARCH64_SIMD_AND_16B_MASK 0xff20fc00U
 #define AARCH64_SIMD_AND_16B_PATTERN 0x4e201c00U
+#define AARCH64_SIMD_CMEQ_4S_MASK 0xffe0fc00U
+#define AARCH64_SIMD_CMEQ_4S_PATTERN 0x6ea08c00U
+#define AARCH64_SIMD_UMAXV_4H_MASK 0xfffffc20U
+#define AARCH64_SIMD_UMAXV_4H_PATTERN 0x2e70a800U
+#define AARCH64_SIMD_UMAXV_4S_MASK 0xfffffc20U
+#define AARCH64_SIMD_UMAXV_4S_PATTERN 0x6eb0a800U
+#define AARCH64_SIMD_ADDV_4S_MASK 0xfffffc20U
+#define AARCH64_SIMD_ADDV_4S_PATTERN 0x4eb1b800U
+#define AARCH64_FMOV_W_S_MASK 0xfffffc00U
+#define AARCH64_FMOV_W_S_PATTERN 0x1e260000U
 #define AARCH64_SIMD_ORR_4S_0X30_MASK 0xffffffe0U
 #define AARCH64_SIMD_ORR_4S_0X30_PATTERN 0x4f011600U
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
@@ -780,6 +798,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_MOVI_2D_ONES_MASK) ==
+	    AARCH64_SIMD_MOVI_2D_ONES_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.logical_immediate = ~0ULL;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_MOVI_2S_0X100_MASK) ==
 	    AARCH64_SIMD_MOVI_2S_0X100_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
@@ -787,6 +816,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.logical_immediate = 0x0000010000000100ULL;
 		decoded.access_size = sizeof(u64);
 		decoded.result_size = sizeof(u64);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_MOVI_4S_0X1_MASK) ==
+	    AARCH64_SIMD_MOVI_4S_0X1_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.logical_immediate = 0x0000000100000001ULL;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		return decoded;
 	}
@@ -810,6 +850,18 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.access_size = 2 * sizeof(u64);
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_XTN_4H_MASK) ==
+	    AARCH64_SIMD_XTN_4H_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u32);
+		decoded.result_size = sizeof(u16);
+		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_XTN;
 		return decoded;
 	}
 
@@ -845,6 +897,19 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_AND_8B_MASK) ==
+	    AARCH64_SIMD_AND_8B_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.logical_op = TCTI_LOGICAL_AND;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_AND_16B_MASK) ==
 	    AARCH64_SIMD_AND_16B_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
@@ -855,6 +920,64 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.logical_op = TCTI_LOGICAL_AND;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_CMEQ_4S_MASK) ==
+	    AARCH64_SIMD_CMEQ_4S_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_COMPARE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = sizeof(u32);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_UMAXV_4S_MASK) ==
+	    AARCH64_SIMD_UMAXV_4S_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u32);
+		decoded.result_size = sizeof(u32);
+		decoded.simd_fp = true;
+		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_UMAXV;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_UMAXV_4H_MASK) ==
+	    AARCH64_SIMD_UMAXV_4H_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u16);
+		decoded.result_size = sizeof(u16);
+		decoded.simd_fp = true;
+		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_UMAXV;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_ADDV_4S_MASK) ==
+	    AARCH64_SIMD_ADDV_4S_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u32);
+		decoded.result_size = sizeof(u32);
+		decoded.simd_fp = true;
+		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_ADDV;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_FMOV_W_S_MASK) == AARCH64_FMOV_W_S_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u32);
+		decoded.result_size = sizeof(u32);
+		decoded.simd_fp = true;
 		return decoded;
 	}
 

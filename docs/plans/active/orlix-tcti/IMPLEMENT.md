@@ -1,6 +1,212 @@
 # IMPLEMENT.md
 
+## 2026-07-04
+
+### Checkpoint: Harness Status Separates Pass From Prerequisite Satisfaction
+
+- Harness-only correction:
+  - `GateStatus` now emits `satisfies_prerequisite` separately from `passed`.
+  - `superseded` and `not_needed` gates now report `passed=false` and `satisfies_prerequisite=true`.
+  - Scheduler prerequisite checks now use `satisfies_prerequisite`; release/readiness checks still require real `passed=true` evidence.
+  - Structural golden validation artifacts now fail if they do not carry current `git_sha`.
+  - The pinned simulator identity was moved out of scheduler constants into `.agents/skills/orlix-tcti-next-step/references/environment-policy.json`, with `ORLIX_TCTI_REQUIRED_SIMULATOR_ID` and `ORLIX_TCTI_REQUIRED_SIMULATOR_NAME` remaining as overrides.
+  - `agent-harness-check` now validates the environment policy file and rejects `superseded` or `not_needed` states that masquerade as `passed=true`.
+- Current harness state:
+  - Status JSON: `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON: `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown: `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `next_eligible_gate=simulator-tcti-runtime-stability`.
+  - `physical_device_allowed=false`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+- Verification:
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check` passed.
+  - `rtk proxy jq empty .agents/skills/orlix-tcti-next-step/references/environment-policy.json` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+  - `jq` over `Build/AgentHarness/orlix-tcti/status.json` confirmed no `superseded` or `not_needed` gate has `passed=true`.
+- Boundary:
+  - No phone gate was run.
+  - No simulator runtime gate was run.
+  - No TCTI runtime feature was implemented.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - This does not complete the larger scheduler refactor; gate-specific semantic recognizers still need to move behind gate-owned reports.
+
 ## 2026-07-03
+
+### Checkpoint: Simulator-First Hook Enforcement Hardened
+
+- Harness-selected gate:
+  - `simulator-tcti-linux-console-usability`.
+  - Selected command:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Harness policy correction:
+  - The pre-tool TCTI safety policy now normalizes JSON-shaped hook payloads and extracts `tool_input.command`, so live `PreToolUse` payloads are checked the same way as raw command strings.
+  - `agent-harness-check` now includes JSON-shaped regression cases for physical/default-phone `runtime-validation`, direct `devicectl`, `xctrace`, `ios-deploy`, and direct physical `xcodebuild`.
+  - `.codex/rules/orlix.rules` now blocks unpinned default-phone `rtk proxy make runtime-validation GATE=...` commands for the full simulator readiness ladder, not only first syscall.
+  - `PLAN.md` now starts runtime validation from the pinned simulator command and states the full simulator readiness ladder before phone work.
+- Current status:
+  - Status JSON: `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON: `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown: `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `next_eligible_gate=simulator-tcti-linux-console-usability`.
+  - `physical_device_allowed=false`.
+  - Missing simulator readiness still includes console usability, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+- Fresh simulator run:
+  - Only booted simulator before the run:
+    - `Orlix-iPhone-15-Pro-Max`.
+    - UDID `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+  - Report:
+    - `Build/Reports/runtime/tcti-init-console-write-20260704T012856Z-80253.json`.
+    - `status=fail`, `passed=false`.
+    - `destination=iphonesimulator`.
+    - `selected_device_id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D`.
+    - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+    - `simulator_single_booted=true`.
+    - `backend=tcti`.
+    - `profile=tcti_runtime`.
+    - `preflight_only=false`.
+    - `autonomous_tests_bypassed=false`.
+  - Failure facts:
+    - The run reached TCTI in `init` and reached `ORLIX-ROOT-OVERLAY-READY`.
+    - mlibc aborted in `../../src/mlibc-43ab07732cdf/options/internal/include/mlibc/lock.hpp:112` with `__ensure((state & ownerMask) == mlibc::this_tid()) failed`.
+    - TCTI then reported unsupported instruction `0xd4200020` at `pc=0x45e7301cb008`.
+    - Linux panicked with `Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000004`.
+    - Fatal artifact: `Build/Reports/runtime/tcti-init-console-write-20260704T012856Z-80253.artifacts/tcti-simulator-fatal-runtime.txt`.
+  - Forbidden behavior fields remained false:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+- Verification:
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy` passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed and reported `physical_device_allowed=false`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `simulator-tcti-linux-console-usability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+  - The selected pinned simulator runtime gate failed as recorded above.
+- Boundary:
+  - No phone gate was run.
+  - No direct physical-device command was run.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full simulator Linux usability and full TCTI remain incomplete.
+
+### Checkpoint: Explicit Simulator Readiness Blocks Phone Work
+
+- Harness-selected gate:
+  - `simulator-tcti-runtime-stability`.
+  - Selected command:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Harness policy correction:
+  - `status.json` and `next-task.json` now expose the explicit simulator readiness contract through `simulator_readiness_gate_ids` and `simulator_readiness_missing_gate_ids`.
+  - `status.json` now exposes `physical_device_blockers`.
+  - `agent-task-envelope-check` rejects stale envelopes whose simulator readiness lists do not match the freshly computed status.
+  - A physical-device gate remains invalid while any simulator readiness gate is missing, stale, failing, evidence-only, preflight-only, or emergency-override.
+  - `agent-harness-check` now fails if the full simulator ladder or new status fields are removed from the next-step script or runtime-validation preflight.
+- Current status:
+  - Status JSON: `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON: `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown: `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `simulator_gates_complete=false`.
+  - `physical_device_allowed=false`.
+  - Missing simulator readiness gates:
+    - `simulator-tcti-runtime-stability`.
+    - `simulator-tcti-linux-console-usability`.
+    - `simulator-tcti-static-busybox-start`.
+    - `simulator-tcti-static-busybox-shell-command`.
+    - `simulator-tcti-full-shell-usability`.
+    - `simulator-tcti-package-behavior`.
+    - `simulator-tcti-dynamic-loader-support`.
+    - `simulator-tcti-signals`.
+    - `simulator-tcti-vfs-completeness`.
+    - `simulator-tcti-full-linux-runtime-readiness`.
+- Verification:
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed and reported `physical_device_allowed=false`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+- Boundary:
+  - No phone gate was run.
+  - No simulator runtime gate was rerun for this harness-only checkpoint.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full simulator Linux usability and full TCTI remain incomplete.
+
+### Checkpoint: Full Simulator Readiness Blocks Phone Work
+
+- Harness-selected gate:
+  - `simulator-tcti-runtime-stability`.
+  - Selected command:
+    - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Harness policy correction:
+  - Physical phone work is blocked until the pinned simulator has current passing reports for first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+  - `AGENTS.md`, `PLAN.md`, and the TCTI next-step skill state this as a hard boundary.
+  - `tools/runtime/orlix-runtime-validation.sh` now includes an explicit current passing simulator `tcti-init-first-syscall` report predicate in the full simulator ladder, instead of relying on the later stability gate to imply it.
+- Current status:
+  - Status JSON: `Build/AgentHarness/orlix-tcti/status.json`.
+  - Next-task JSON: `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - Next-task Markdown: `Build/AgentHarness/orlix-tcti/next-task.md`.
+  - `simulator_gates_complete=false`.
+  - `physical_device_allowed=false`.
+  - `release_gate_eligible=false`.
+  - `readiness_gate_eligible=false`.
+  - `next_eligible_gate=simulator-tcti-runtime-stability`.
+- Verification:
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+- Boundary:
+  - No phone gate is accepted for this checkpoint.
+  - No TCTI runtime feature was implemented in this checkpoint.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter Linux behavior was added.
+  - No Darwin syscall guest side effect was added.
+  - No VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics were added.
+  - No generated Linux or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - Full TCTI and simulator Linux readiness remain incomplete.
 
 ### Checkpoint: Static BusyBox Starts In Pinned Simulator
 

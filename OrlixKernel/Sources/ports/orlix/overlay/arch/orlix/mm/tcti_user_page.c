@@ -11,6 +11,7 @@
 #include <asm/pgtable.h>
 #include <asm/processor.h>
 #include <asm/tcti.h>
+#include <internal/asm/host_trap.h>
 
 #include "../hosted_exec/tcti/block_cache.h"
 
@@ -90,12 +91,50 @@ retry:
 	}
 }
 
-static int tcti_sync_faulted_user_window(unsigned long address)
+static bool tcti_vma_is_executable(struct mm_struct *mm, unsigned long address)
+{
+	struct vm_area_struct *vma;
+	bool executable = false;
+
+	if (!mm)
+		return false;
+
+	mmap_read_lock(mm);
+	vma = find_vma(mm, address);
+	if (vma && address >= vma->vm_start && address < vma->vm_end &&
+	    (vma->vm_flags & VM_EXEC))
+		executable = true;
+	mmap_read_unlock(mm);
+
+	return executable;
+}
+
+static int tcti_sync_faulted_user_window(struct mm_struct *mm,
+					 unsigned long address,
+					 enum tcti_access access)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
-	return orlix_sync_current_user_fault_window(address, 0);
+	unsigned long fault_flags = 0;
+
+	if (access == TCTI_ACCESS_READ && tcti_vma_is_executable(mm, address))
+		return 0;
+
+	switch (access) {
+	case TCTI_ACCESS_FETCH:
+		fault_flags = ORLIX_HOST_USER_FAULT_EXEC;
+		break;
+	case TCTI_ACCESS_WRITE:
+		fault_flags = ORLIX_HOST_USER_FAULT_WRITE;
+		break;
+	case TCTI_ACCESS_READ:
+		break;
+	}
+
+	return orlix_sync_current_user_fault_window(address, fault_flags);
 #else
+	(void)mm;
 	(void)address;
+	(void)access;
 	return 0;
 #endif
 }
@@ -356,11 +395,10 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		if (ret) {
 			ret = tcti_fault_in_user_page(mm, current_va, access);
 			if (!ret) {
-				if (access == TCTI_ACCESS_WRITE) {
-					ret = tcti_sync_faulted_user_window(current_va);
-					if (ret)
-						return ret;
-				}
+				ret = tcti_sync_faulted_user_window(mm, current_va,
+								   access);
+				if (ret)
+					return ret;
 				continue;
 			}
 		}

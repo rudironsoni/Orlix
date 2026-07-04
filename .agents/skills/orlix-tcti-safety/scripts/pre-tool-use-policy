@@ -1,8 +1,18 @@
 #!/usr/bin/env sh
 set -eu
 
-payload="$(cat)"
+raw_payload="$(cat)"
+payload="$(printf '%s' "$raw_payload" | sed 's/\\"/"/g')"
+hook_command="$(
+  printf '%s' "$payload" |
+    sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+)"
+if [ -n "$hook_command" ]; then
+  payload="$(printf '%s\n%s' "$payload" "$hook_command")"
+fi
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+sim_id="C47ED88D-0D0A-420D-8C78-D4C1D34A276D"
+sim_name="Orlix-iPhone-15-Pro-Max"
 
 warn() {
   printf '%s\n' "ORLIX-TCTI-HOOK-WARN: $*" >&2
@@ -13,66 +23,280 @@ block() {
   exit 2
 }
 
-has_pass_report() {
-  target="$1"
-  report="$root/Build/TCTI/reports/$target/report.json"
-  test -f "$report" && grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report"
-}
-
-autonomous_preflight_passed() {
-  has_pass_report tcti-plan-consistency &&
-    has_pass_report tcti-report-schema-check &&
-  has_pass_report tcti-toolchain-check &&
-  has_pass_report tcti-golden-elf &&
-  has_pass_report tcti-appstore-safety-audit
-}
-
-if printf '%s' "$payload" | grep -Eq '(^|[[:space:]])(rtk[[:space:]]+)?(proxy[[:space:]]+)?(rg|grep|nl|cat|ls|head|tail|find)([[:space:]]|$)|(^|[[:space:]])rtk[[:space:]]+(read|json|log)([[:space:]]|$)|sed[[:space:]]+-n'; then
+if printf '%s' "$raw_payload" | grep -q '\*\*\* Begin Patch'; then
+  if printf '%s' "$raw_payload" |
+    grep -Eq '^\*\*\* (Add|Update|Delete) File: (Build/Reports/runtime|Build/TCTI/reports|Build/OrlixKernel/(src|upstream)/linux-|tools/agent|tools/mcp/orlix-tcti-mcp)'; then
+    block "patches must not edit generated reports, generated Linux trees, tools/agent, or a custom Orlix MCP."
+  fi
   exit 0
 fi
 
+has_pass_report() {
+  target="$1"
+  report="$root/Build/TCTI/reports/$target/report.json"
+  current_sha="$(git -C "$root" rev-parse HEAD 2>/dev/null || true)"
+  test -n "$current_sha" || return 1
+  test -f "$report" &&
+    grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report" &&
+    grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$report" &&
+    grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$report" &&
+    ! grep -q '"status"[[:space:]]*:[[:space:]]*"evidence"' "$report" &&
+    ! grep -q '"preflight_only"[[:space:]]*:[[:space:]]*true' "$report" &&
+    ! grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*true' "$report"
+}
+
+autonomous_preflight_passed() {
+  has_pass_report tcti-contract &&
+    has_pass_report tcti-golden-elf &&
+    has_pass_report tcti-diff-switch &&
+    has_pass_report tcti-memory-fuzz &&
+    has_pass_report tcti-direct-chain-fuzz &&
+    has_pass_report tcti-appstore-safety-audit &&
+    has_pass_report tcti-report-schema-check
+}
+
+latest_runtime_report_for_gate() {
+  gate="$1"
+  latest=""
+  for report in "$root"/Build/Reports/runtime/"$gate"-*.json; do
+    test -e "$report" || continue
+    if test -z "$latest" || test "$report" -nt "$latest"; then
+      latest="$report"
+    fi
+  done
+  test -n "$latest" || return 1
+  printf '%s\n' "$latest"
+}
+
+simulator_report_passed() {
+  gate="$1"
+  report="$(latest_runtime_report_for_gate "$gate")" || return 1
+  fatal_artifact="${report%.json}.artifacts/tcti-simulator-fatal-runtime.txt"
+  current_sha="$(git -C "$root" rev-parse HEAD 2>/dev/null || true)"
+  test -n "$current_sha" || return 1
+  grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report" || return 1
+  grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$report" || return 1
+  grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$report" || return 1
+  grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$report" || return 1
+  grep -q "\"selected_device_id\"[[:space:]]*:[[:space:]]*\"$sim_id\"" "$report" || return 1
+  grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$sim_name\"" "$report" || return 1
+  grep -Eq '"simulator_booted_count"[[:space:]]*:[[:space:]]*"?1"?' "$report" || return 1
+  grep -q '"simulator_single_booted"[[:space:]]*:[[:space:]]*true' "$report" || return 1
+  grep -Eq "\"(gate|target)\"[[:space:]]*:[[:space:]]*\"$gate\"" "$report" || return 1
+  grep -q '"backend"[[:space:]]*:[[:space:]]*"tcti"' "$report" || return 1
+  grep -q '"profile"[[:space:]]*:[[:space:]]*"tcti_runtime"' "$report" || return 1
+  grep -q '"preflight_only"[[:space:]]*:[[:space:]]*false' "$report" || return 1
+  grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*false' "$report" || return 1
+  test -f "$fatal_artifact" || return 1
+  test ! -s "$fatal_artifact" || return 1
+  for key in generated_exec_memory host_exec_guest_text host_x18 map_jit native_ios_api_exposure_to_guest rwx; do
+    grep -q "\"$key\"[[:space:]]*:[[:space:]]*false" "$report" || return 1
+  done
+  return 0
+}
+
+simulator_marker_report_passed() {
+  gate="$1"
+  artifact="$2"
+  marker="$3"
+  report="$(latest_runtime_report_for_gate "$gate")" || return 1
+  simulator_report_passed "$gate" || return 1
+  marker_path="${report%.json}.artifacts/$artifact"
+  test -s "$marker_path" || return 1
+  grep -F -q "$marker" "$marker_path" || return 1
+}
+
+simulator_tcti_full_ladder_passed() {
+  simulator_report_passed tcti-init-first-syscall &&
+    simulator_report_passed tcti-simulator-stability &&
+    simulator_marker_report_passed tcti-init-console-write tcti-console-write.txt ORLIX-TCTI-CONSOLE-OK &&
+    simulator_report_passed tcti-static-busybox-start &&
+    simulator_marker_report_passed tcti-static-busybox-shell-command tcti-static-busybox-shell-command.txt ORLIX-TCTI-BUSYBOX-USABLE &&
+    simulator_marker_report_passed tcti-full-shell-usability tcti-full-shell-usability.txt ORLIX-TCTI-SHELL-USABLE &&
+    simulator_marker_report_passed tcti-package-behavior tcti-package-behavior.txt ORLIX-TCTI-PACKAGE-BEHAVIOR-OK &&
+    simulator_marker_report_passed tcti-dynamic-loader-support tcti-dynamic-loader-support.txt ORLIX-TCTI-DYNAMIC-LOADER-OK &&
+    simulator_marker_report_passed tcti-signals tcti-signals.txt ORLIX-TCTI-SIGNALS-OK &&
+    simulator_marker_report_passed tcti-vfs-completeness tcti-vfs-completeness.txt ORLIX-TCTI-VFS-OK &&
+    simulator_marker_report_passed tcti-full-linux-runtime-readiness tcti-full-linux-runtime-readiness.txt ORLIX-TCTI-FULL-RUNTIME-OK
+}
+
+tcti_runtime_validation_command() {
+  printf '%s' "$payload" |
+    grep -Eq '(^|[[:space:];|&])(rtk[[:space:]]+)?(proxy[[:space:]]+)?make([^;&|]*)[[:space:]]runtime-validation([^[:alnum:]_-]|[[:space:]]|$)|(^|[[:space:];|&])(rtk[[:space:]]+)?(proxy[[:space:]]+)?make[[:space:]][^;&|]*runtime-validation([^[:alnum:]_-]|[[:space:]]|$)'
+}
+
+tcti_runtime_validation_has_pinned_simulator() {
+  printf '%s' "$payload" |
+    grep -Fq "ORLIX_SIMULATOR_ID=$sim_id" &&
+    printf '%s' "$payload" |
+    grep -Fq "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=$sim_id" &&
+    printf '%s' "$payload" |
+    grep -Fq "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=$sim_name"
+}
+
+tcti_runtime_validation_has_unpinned_device_id() {
+  printf '%s' "$payload" |
+    grep -Eq 'ORLIX_DEVICE_ID=([^[:space:];|&"'\''`]+)' || return 1
+  printf '%s' "$payload" |
+    grep -Fq "ORLIX_DEVICE_ID=$sim_id" && return 1
+  return 0
+}
+
+tcti_runtime_validation_has_unpinned_simulator_id() {
+  printf '%s' "$payload" |
+    grep -Eq 'ORLIX_SIMULATOR_ID=([^[:space:];|&"'\''`]+)' || return 1
+  printf '%s' "$payload" |
+    grep -Fq "ORLIX_SIMULATOR_ID=$sim_id" && return 1
+  return 0
+}
+
+tcti_runtime_validation_has_explicit_destination() {
+  printf '%s' "$payload" |
+    grep -Eq 'DESTINATION='
+}
+
+tcti_runtime_validation_is_simulator() {
+  if printf '%s' "$payload" | grep -Eq 'DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'; then
+    return 1
+  fi
+  if tcti_runtime_validation_has_unpinned_device_id ||
+    tcti_runtime_validation_has_unpinned_simulator_id; then
+    return 1
+  fi
+  if ! tcti_runtime_validation_has_explicit_destination; then
+    return 0
+  fi
+  printf '%s' "$payload" |
+    grep -Eq 'DESTINATION=iphonesimulator|DESTINATION=["'\'']iOS Simulator["'\'']' &&
+    tcti_runtime_validation_has_pinned_simulator &&
+    ! tcti_runtime_validation_has_unpinned_device_id
+}
+
+tcti_runtime_validation_is_unpinned_simulator() {
+  tcti_runtime_validation_command || return 1
+  if printf '%s' "$payload" |
+    grep -Eq 'DESTINATION=iphonesimulator|DESTINATION=["'\'']iOS Simulator["'\'']'; then
+    { ! tcti_runtime_validation_has_pinned_simulator || tcti_runtime_validation_has_unpinned_device_id; }
+    return
+  fi
+  if ! tcti_runtime_validation_has_explicit_destination; then
+    tcti_runtime_validation_has_unpinned_device_id ||
+      tcti_runtime_validation_has_unpinned_simulator_id
+    return
+  fi
+  return 1
+}
+
+direct_physical_device_tool_command() {
+  printf '%s' "$payload" |
+    grep -Eq '(^|[[:space:];|&])(env[[:space:]]+[^;|&]*[[:space:]]+|command[[:space:]]+)?([^[:space:];|&]*/)?xcrun[[:space:]]+devicectl([[:space:]]|$)|(^|[[:space:];|&])(env[[:space:]]+[^;|&]*[[:space:]]+|command[[:space:]]+)?([^[:space:];|&]*/)?xcrun[[:space:]]+xctrace([[:space:]]|$)|(^|[[:space:];|&])(env[[:space:]]+[^;|&]*[[:space:]]+|command[[:space:]]+)?([^[:space:];|&]*/)?ios-deploy([[:space:]]|$)'
+}
+
+direct_physical_xcodebuild_command() {
+  printf '%s' "$payload" | grep -Eq '(^|[[:space:];|&])([^[:space:];|&]*/)?xcodebuild([[:space:]]|$)' || return 1
+  printf '%s' "$payload" | grep -Eq 'beta-archive|beta-export-archive|beta-upload' && return 1
+  if printf '%s' "$payload" | grep -Eq 'iphoneos|generic/platform=iOS|platform=iOS,'; then
+    return 0
+  fi
+  if printf '%s' "$payload" | grep -Eq '(^|[[:space:],])id=[0-9A-Fa-f-]{8,}([[:space:],'\''"]|$)'; then
+    printf '%s' "$payload" | grep -Eq "platform=iOS Simulator|iphonesimulator|id=$sim_id" && return 1
+    return 0
+  fi
+  return 1
+}
+
+source_policy_read_command() {
+  printf '%s' "$payload" |
+    grep -Eq '(^|[[:space:]])(rtk[[:space:]]+)?(proxy[[:space:]]+)?(rg|grep|nl|cat|ls|head|tail|find|jq)([[:space:]]|$)|(^|[[:space:]])rtk[[:space:]]+(read|json|log)([[:space:]]|$)|sed[[:space:]]+-n' &&
+    printf '%s' "$payload" |
+    grep -Eq '(^|[^[:alnum:]_./-])(AGENTS\.md|\.codex/rules/orlix\.rules|\.agents/skills/orlix-tcti[^[:space:];|&]*|docs/plans/active/orlix-tcti|tools/runtime/orlix-runtime-validation\.sh|Build/Reports/runtime|Build/AgentHarness/orlix-tcti)([^[:alnum:]_./-]|$)' &&
+    ! direct_physical_device_tool_command &&
+    ! printf '%s' "$payload" |
+      grep -Eq '(^|[[:space:]])(make|xcodebuild)([[:space:]]|$)|apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i|>[[:space:]]|>>|DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'
+}
+
 case "$payload" in
   *Build/OrlixKernel/src/linux-*|*Build/OrlixKernel/upstream/linux-*)
-    if printf '%s' "$payload" | grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i|>[[:space:]]*Build/OrlixKernel|>>[[:space:]]*Build/OrlixKernel|git[[:space:]].*(checkout|restore|reset|clean|apply|am)'; then
+    if printf '%s' "$payload" |
+      grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i|>[[:space:]]*Build/OrlixKernel|>>[[:space:]]*Build/OrlixKernel|git[[:space:]].*(checkout|restore|reset|clean|apply|am)'; then
       block "generated Linux trees are read-only. Move fixes to durable Orlix overlay inputs."
     fi
     ;;
 esac
 
-if printf '%s' "$payload" | grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' &&
-   printf '%s' "$payload" | grep -Eq 'development_defconfig|release_defconfig'; then
+if printf '%s' "$payload" |
+  grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' &&
+  printf '%s' "$payload" |
+    grep -Eq 'development_defconfig|release_defconfig'; then
   block "product defconfigs must not default to TCTI/debug-switch before autonomous and physical gates pass."
 fi
 
-if printf '%s' "$payload" | grep -Eq 'MAP_JIT|JIT|RWX|PROT_EXEC|vm_protect.*EXECUTE|prot_exec' &&
-   printf '%s' "$payload" | grep -Eq 'OrlixKernel/Sources|OrlixHostAdapter/Sources|OrlixOS|project.yml'; then
+if printf '%s' "$payload" |
+  grep -Eq 'MAP_JIT|JIT|RWX|PROT_EXEC|vm_protect.*EXECUTE|prot_exec' &&
+  printf '%s' "$payload" |
+    grep -Eq 'OrlixKernel/Sources|OrlixHostAdapter/Sources|OrlixOS|project.yml'; then
   block "JIT, RWX, MAP_JIT, or host executable guest-text behavior is forbidden in product paths."
 fi
 
-if printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS|generic/platform=iOS|ios-deploy|devicectl'; then
+if direct_physical_device_tool_command; then
+  block "direct physical-device tooling is forbidden before full pinned simulator readiness runtime-validation preflight."
+fi
+
+if direct_physical_xcodebuild_command; then
+  block "direct physical-device xcodebuild is forbidden before full pinned simulator readiness runtime-validation preflight."
+fi
+
+if tcti_runtime_validation_is_unpinned_simulator; then
+  block "simulator TCTI runtime-validation must use pinned $sim_name simulator variables."
+fi
+
+if source_policy_read_command; then
+  exit 0
+fi
+
+if tcti_runtime_validation_command && ! tcti_runtime_validation_is_simulator; then
+  if [ "${ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE:-0}" != "1" ] &&
+     [ "${ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED:-0}" != "1" ]; then
+    block "physical/default-phone TCTI runtime-validation requires explicit human opt-in after full pinned simulator readiness passes."
+  fi
+  autonomous_preflight_passed ||
+    block "physical/default-phone TCTI runtime-validation requires passing autonomous no-phone reports first."
+  simulator_tcti_full_ladder_passed ||
+    block "physical/default-phone TCTI runtime-validation requires current pinned simulator reports first syscall, stability, console, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader, signals, VFS completeness, full Linux runtime readiness."
+fi
+
+if printf '%s' "$payload" |
+  grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS|generic/platform=iOS'; then
   if printf '%s' "$payload" | grep -Eq 'Build/Reports/runtime' &&
      printf '%s' "$payload" | grep -Eq 'jq|sed[[:space:]]+-n|cat|grep|ls|head|tail|rtk[[:space:]]+(read|json|log)' &&
-     ! printf '%s' "$payload" | grep -Eq 'xcodebuild|devicectl|ios-deploy|DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'; then
+     ! printf '%s' "$payload" |
+       grep -Eq 'xcodebuild|DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'; then
     :
-  elif printf '%s' "$payload" | grep -Eq 'docs/plans/active/orlix-tcti/IMPLEMENT.md' &&
-       printf '%s' "$payload" | grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i' &&
-       ! printf '%s' "$payload" | grep -Eq 'xcodebuild|devicectl|ios-deploy|DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'; then
+  elif printf '%s' "$payload" |
+    grep -Eq 'docs/plans/active/orlix-tcti/IMPLEMENT.md' &&
+    printf '%s' "$payload" |
+      grep -Eq 'apply_patch|sed[[:space:]].*-i|perl[[:space:]].*-i' &&
+    ! printf '%s' "$payload" |
+      grep -Eq 'xcodebuild|DESTINATION=iphoneos|generic/platform=iOS|platform=iOS,'; then
     :
-  elif printf '%s' "$payload" | grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos' && ! autonomous_preflight_passed; then
-    block "physical TCTI gates require passing no-phone reports before device work."
-  elif printf '%s' "$payload" | grep -Eq 'ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT'; then
-    block "physical TCTI evidence override is disabled until simulator stability passes."
-  elif ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|ORLIX_RUNTIME_PREFLIGHT_ONLY=1'; then
-    block "direct device work must go through runtime-validation or explicit evidence-mode preflight."
+  elif printf '%s' "$payload" |
+    grep -Eq 'ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT'; then
+    block "physical TCTI evidence override is disabled until full pinned simulator readiness passes."
+  elif ! printf '%s' "$payload" |
+    grep -Eq 'runtime-validation|tcti-gate|beta-archive'; then
+    block "direct device work must go through runtime-validation explicit evidence-mode preflight."
   fi
 fi
 
 if printf '%s' "$payload" | grep -Eq 'xcodebuild' &&
-   printf '%s' "$payload" | grep -Eq 'iphoneos|generic/platform=iOS|platform=iOS,' &&
-   ! printf '%s' "$payload" | grep -Eq 'runtime-validation|beta-archive|beta-export-archive|beta-upload'; then
-  block "device-oriented xcodebuild invocations must use sanctioned runtime-validation or beta release flow."
+  printf '%s' "$payload" |
+    grep -Eq 'iphoneos|generic/platform=iOS|platform=iOS,|(^|[[:space:],])id=[0-9A-Fa-f-]{8,}([[:space:],'\''"]|$)' &&
+  ! printf '%s' "$payload" |
+    grep -Eq 'beta-archive|beta-export-archive|beta-upload'; then
+  block "device-oriented xcodebuild invocations must use sanctioned runtime-validation beta release flow."
 fi
 
-if printf '%s' "$payload" | grep -Eiq 'fix everything|fix all|make .*all.*(tcti|runtime)|just run the device|skip.*tcti-(next|status)'; then
+if printf '%s' "$payload" |
+  grep -Eiq 'fix everything|fix all|make .*all.*(tcti|runtime)|just run device|skip.*tcti-(next|status)'; then
   warn "broad TCTI work should start with status/plan inspection and planner plus safety reviewer."
 fi

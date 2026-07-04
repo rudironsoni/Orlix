@@ -1197,6 +1197,29 @@ static int tcti_execute_simd_vector_element_move(
 	u8 source_shift;
 	u8 destination_shift;
 
+	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_XTN) {
+		u64 source_low;
+		u64 source_high;
+		u64 narrowed;
+
+		if (decoded->access_size != sizeof(u32) ||
+		    decoded->result_size != sizeof(u16) ||
+		    decoded->rd != decoded->rn)
+			return -EOPNOTSUPP;
+
+		source_low = current->thread.user_simd[decoded->rn * 2];
+		source_high = current->thread.user_simd[decoded->rn * 2 + 1];
+		narrowed = (source_low & GENMASK_ULL(15, 0)) |
+			   (((source_low >> 32) & GENMASK_ULL(15, 0)) << 16) |
+			   ((source_high & GENMASK_ULL(15, 0)) << 32) |
+			   (((source_high >> 32) & GENMASK_ULL(15, 0)) << 48);
+		current->thread.user_simd[decoded->rd * 2] = narrowed;
+		current->thread.user_simd[decoded->rd * 2 + 1] = 0;
+		current->thread.user_simd_valid = 1;
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->immediate) {
 		if (decoded->access_size != sizeof(u64))
 			return -EOPNOTSUPP;
@@ -1241,14 +1264,15 @@ static int tcti_execute_simd_vector_logical(
 	u64 right_high;
 
 	if (decoded->logical_op != TCTI_LOGICAL_AND ||
-	    decoded->access_size != 2 * sizeof(u64))
+	    (decoded->access_size != sizeof(u64) &&
+	     decoded->access_size != 2 * sizeof(u64)))
 		return -EOPNOTSUPP;
 
 	left_low = current->thread.user_simd[decoded->rn * 2];
 	left_high = current->thread.user_simd[decoded->rn * 2 + 1];
 	right_low = current->thread.user_simd[decoded->rm * 2];
 	right_high = current->thread.user_simd[decoded->rm * 2 + 1];
-	tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64),
+	tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
 				    left_low & right_low,
 				    left_high & right_high);
 	regs->pc += sizeof(u32);
@@ -1274,9 +1298,98 @@ static int tcti_execute_simd_vector_logical_immediate(
 	return 0;
 }
 
+static int tcti_execute_simd_vector_compare(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	u64 low = 0;
+	u64 high = 0;
+	u8 lane;
+
+	if (decoded->access_size != sizeof(u32) ||
+	    decoded->result_size != 2 * sizeof(u64))
+		return -EOPNOTSUPP;
+
+	for (lane = 0; lane < 4; lane++) {
+		u8 word = lane / 2;
+		u8 shift = (lane % 2) * 32;
+		u32 left = (current->thread.user_simd[decoded->rn * 2 + word] >>
+			    shift) & GENMASK(31, 0);
+		u32 right = (current->thread.user_simd[decoded->rm * 2 + word] >>
+			     shift) & GENMASK(31, 0);
+		u64 result = left == right ? GENMASK_ULL(31, 0) : 0;
+
+		if (word)
+			high |= result << shift;
+		else
+			low |= result << shift;
+	}
+
+	tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64), low, high);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int tcti_execute_simd_vector_reduction(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	u32 result = 0;
+	u8 lane_bits;
+	u8 lane;
+
+	if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV &&
+	    decoded->access_size == sizeof(u16) &&
+	    decoded->result_size == sizeof(u16)) {
+		lane_bits = 16;
+	} else if (decoded->access_size == sizeof(u32) &&
+		   decoded->result_size == sizeof(u32)) {
+		lane_bits = 32;
+	} else {
+		return -EOPNOTSUPP;
+	}
+
+	for (lane = 0; lane < 4; lane++) {
+		u8 byte_offset = lane * decoded->access_size;
+		u8 word = byte_offset / sizeof(u64);
+		u8 shift = (byte_offset % sizeof(u64)) * 8;
+		u32 value = (current->thread.user_simd[decoded->rn * 2 + word] >>
+			     shift) & GENMASK(lane_bits - 1, 0);
+
+		switch (decoded->simd_reduction_op) {
+		case TCTI_SIMD_REDUCTION_UMAXV:
+			if (lane == 0 || value > result)
+				result = value;
+			break;
+		case TCTI_SIMD_REDUCTION_ADDV:
+			result += value;
+			break;
+		default:
+			return -EOPNOTSUPP;
+		}
+	}
+
+	tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64), result, 0);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int tcti_execute_fp_scalar_move(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	u32 value;
+
+	if (decoded->access_size != sizeof(u32) ||
+	    decoded->result_size != sizeof(u32))
+		return -EOPNOTSUPP;
+
+	value = current->thread.user_simd[decoded->rn * 2] & GENMASK(31, 0);
+	tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u32), value);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 int tcti_execute_decoded_semantics(struct mm_struct *mm,
-				   struct pt_regs *regs,
-				   const struct tcti_decoded_instruction *decoded,
+				 struct pt_regs *regs,
+				 const struct tcti_decoded_instruction *decoded,
 				   unsigned long *fault_address)
 {
 	u64 immediate;
@@ -1390,6 +1503,12 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return tcti_execute_simd_vector_logical(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE:
 		return tcti_execute_simd_vector_logical_immediate(regs, decoded);
+	case TCTI_DECODE_SIMD_VECTOR_COMPARE:
+		return tcti_execute_simd_vector_compare(regs, decoded);
+	case TCTI_DECODE_SIMD_VECTOR_REDUCTION:
+		return tcti_execute_simd_vector_reduction(regs, decoded);
+	case TCTI_DECODE_FP_SCALAR_MOVE:
+		return tcti_execute_fp_scalar_move(regs, decoded);
 	default:
 		return -EOPNOTSUPP;
 	}

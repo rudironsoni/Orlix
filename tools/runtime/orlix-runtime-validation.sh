@@ -9,7 +9,14 @@ if [ -z "$profile" ]; then
 	*) profile="development" ;;
 	esac
 fi
-destination="${DESTINATION:-iphoneos}"
+if [ -n "${DESTINATION:-}" ]; then
+	destination="$DESTINATION"
+else
+	case "$gate" in
+	tcti-*) destination="iphonesimulator" ;;
+	*) destination="iphoneos" ;;
+	esac
+fi
 configuration="${CONFIGURATION:-Debug}"
 scheme="${ORLIX_SCHEME:-Orlix}"
 bundle_id="${ORLIX_APP_BUNDLE_ID:-com.rudironsoni.Orlix}"
@@ -29,6 +36,7 @@ tcti_device_override_reason="${ORLIX_TCTI_DEVICE_OVERRIDE_REASON:-${ORLIX_TCTI_D
 tcti_evidence_mode=0
 build_root="${ORLIX_BUILD_ROOT:-}"
 busybox_shell_marker="ORLIX-TCTI-BUSYBOX-USABLE"
+console_marker="ORLIX-TCTI-CONSOLE-OK"
 full_shell_marker="ORLIX-TCTI-SHELL-USABLE"
 package_behavior_marker="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"
 dynamic_loader_marker="ORLIX-TCTI-DYNAMIC-LOADER-OK"
@@ -248,8 +256,8 @@ tcti_runtime_events_json() {
 	local last_return_signed_ret=""
 
 	first_svc_line="$(grep -h -F 'Orlix TCTI: svc #0' "$artifact_dir"/tcti-first-syscall.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | head -1 || true)"
-	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=sh ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=sh .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=(init|sh) ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=(init|sh) .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	fault_line="$(grep -h -E 'Orlix TCTI: user fault ' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	signaled_line="$(grep -h -E 'orlix-init: process signaled pid=[0-9]+ signal=[0-9]+' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	last_return_line="$(grep -h -E 'Orlix TCTI: syscall return task=sh ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
@@ -339,6 +347,18 @@ JSON
 simulator_launch_arguments() {
 	local -n output_args="$1"
 	case "$gate" in
+	tcti-init-first-syscall|tcti-simulator-stability)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.terminal=0 orlix.exec=/bin/true orlix.argv0=/bin/true"
+		)
+		;;
+	tcti-init-console-write)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=printf%20$console_marker%3B%20exit%200"
+		)
+		;;
 	tcti-static-busybox-shell-command)
 		output_args=(
 			--orlix-kernel-command-line-append \
@@ -392,8 +412,11 @@ write_json_report() {
 	local bypass_reason="$5"
 	local release_eligible="false"
 	local readiness_eligible="false"
-	if [ "$status" = "pass" ] && [ "$destination" = "iphoneos" ]; then
-		release_eligible="true"
+	if [ "$status" = "pass" ] &&
+		[ "$destination" = "iphoneos" ] &&
+		[ "$gate" = "tcti-init-first-syscall" ] &&
+		autonomous_tcti_reports_passed &&
+		simulator_tcti_full_ladder_passed; then
 		readiness_eligible="true"
 	fi
 	local escaped_message
@@ -484,9 +507,16 @@ is_tcti_physical_gate() {
 
 report_has_passed() {
 	local path="$1"
+	local current_sha
+	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+	[ -n "$current_sha" ] || return 1
 	[ -s "$path" ] &&
 		grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$path" &&
-		grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$path"
+		grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$path" &&
+		grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" &&
+		! grep -q '"status"[[:space:]]*:[[:space:]]*"evidence"' "$path" &&
+		! grep -q '"preflight_only"[[:space:]]*:[[:space:]]*true' "$path" &&
+		! grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*true' "$path"
 }
 
 autonomous_tcti_reports_passed() {
@@ -509,6 +539,19 @@ latest_simulator_stability_report() {
 	local latest=""
 	local path
 	for path in "$report_dir"/tcti-simulator-stability-*.json; do
+		[ -e "$path" ] || continue
+		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
+			latest="$path"
+		fi
+	done
+	[ -n "$latest" ] || return 1
+	printf '%s\n' "$latest"
+}
+
+latest_simulator_first_syscall_report() {
+	local latest=""
+	local path
+	for path in "$report_dir"/tcti-init-first-syscall-*.json; do
 		[ -e "$path" ] || continue
 		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
 			latest="$path"
@@ -579,6 +622,21 @@ simulator_tcti_report_passed() {
 	for key in generated_exec_memory host_exec_guest_text host_x18 map_jit native_ios_api_exposure_to_guest rwx; do
 		grep -q "\"$key\"[[:space:]]*:[[:space:]]*false" "$path" || return 1
 	done
+	simulator_tcti_report_fatal_free "$path" || return 1
+	return 0
+}
+
+simulator_tcti_report_fatal_free() {
+	local path="$1"
+	local artifacts="${path%.json}.artifacts"
+
+	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=[0-9]+|orlix-init: shell exit status=[1-9][0-9]*([[:space:]]|$)' \
+		"$artifacts"/launch-console.log \
+		"$artifacts"/launch.log \
+		"$artifacts"/simulator-terminal-output.txt \
+		"$artifacts"/simulator-unified.log >/dev/null 2>&1; then
+		return 1
+	fi
 	return 0
 }
 
@@ -588,11 +646,20 @@ simulator_tcti_stability_report_passed() {
 	simulator_tcti_report_passed "$path" "tcti-simulator-stability"
 }
 
+simulator_tcti_first_syscall_report_passed() {
+	local path
+	path="$(latest_simulator_first_syscall_report)" || return 1
+	simulator_tcti_report_passed "$path" "tcti-init-first-syscall" || return 1
+	grep -q 'tcti-first-syscall.txt' "$path" || return 1
+	return 0
+}
+
 simulator_tcti_console_usability_report_passed() {
 	local path
 	path="$(latest_simulator_console_usability_report)" || return 1
 	simulator_tcti_report_passed "$path" "tcti-init-console-write" || return 1
 	grep -q 'tcti-console-write.txt' "$path" || return 1
+	grep -F -q "$console_marker" "${path%.json}.artifacts/tcti-console-write.txt" || return 1
 	return 0
 }
 
@@ -617,7 +684,8 @@ simulator_tcti_marker_report_passed() {
 }
 
 simulator_tcti_full_ladder_passed() {
-	simulator_tcti_stability_report_passed &&
+	simulator_tcti_first_syscall_report_passed &&
+		simulator_tcti_stability_report_passed &&
 		simulator_tcti_console_usability_report_passed &&
 		simulator_tcti_static_busybox_report_passed &&
 		simulator_tcti_marker_report_passed tcti-static-busybox-shell-command tcti-static-busybox-shell-command.txt ORLIX-TCTI-BUSYBOX-USABLE &&
@@ -626,15 +694,26 @@ simulator_tcti_full_ladder_passed() {
 		simulator_tcti_marker_report_passed tcti-dynamic-loader-support tcti-dynamic-loader-support.txt ORLIX-TCTI-DYNAMIC-LOADER-OK &&
 		simulator_tcti_marker_report_passed tcti-signals tcti-signals.txt ORLIX-TCTI-SIGNALS-OK &&
 		simulator_tcti_marker_report_passed tcti-vfs-completeness tcti-vfs-completeness.txt ORLIX-TCTI-VFS-OK &&
-		simulator_tcti_marker_report_passed tcti-full-linux-runtime-readiness tcti-full-linux-runtime-readiness.txt ORLIX-TCTI-FULL-RUNTIME-OK
+			simulator_tcti_marker_report_passed tcti-full-linux-runtime-readiness tcti-full-linux-runtime-readiness.txt ORLIX-TCTI-FULL-RUNTIME-OK
+}
+
+tcti_runtime_or_harness_worktree_clean() {
+	[ -z "$(git status --short 2>/dev/null)" ]
 }
 
 physical_tcti_preflight() {
 	is_tcti_physical_gate || return 0
+	if [ "${ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE:-0}" != "1" ] &&
+		[ "${ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED:-0}" != "1" ]; then
+		die "Physical TCTI gates require explicit human opt-in through ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 or ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1 after simulator readiness passes."
+	fi
+	if ! tcti_runtime_or_harness_worktree_clean; then
+		die "Physical TCTI gates require a clean worktree so current simulator reports cover the app, kernel, libc, OS payload, runtime, and harness inputs."
+	fi
 	if autonomous_tcti_reports_passed && simulator_tcti_full_ladder_passed; then
 		return 0
 	fi
-	die "Physical TCTI gates require passing autonomous TCTI reports plus current passing simulator stability, Linux console, static BusyBox start, full shell usability, package behavior, dynamic loader, signals, VFS, and full Linux runtime readiness reports before device work."
+		die "Physical TCTI gates require passing autonomous TCTI reports plus current passing simulator first-syscall, stability, Linux console, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader, signals, VFS, and full Linux runtime readiness reports before device work."
 }
 
 validate_gate() {
@@ -898,6 +977,10 @@ PY
 select_simulator() {
 	assert_tcti_simulator_scope_top_level
 	if [ -n "$device_id" ]; then
+		if [ "$device_id" != "$required_simulator_id" ]; then
+			die "TCTI simulator gates must not override the pinned simulator through ORLIX_DEVICE_ID; got \`${device_id}\`, expected \`${required_simulator_id}\`."
+		fi
+		device_name="$required_simulator_name"
 		return
 	fi
 	if [ -n "$simulator_id" ]; then
@@ -1330,7 +1413,7 @@ assert_no_simulator_fatal_runtime() {
 	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
 		die "Gate \`$gate\` is simulator-only."
 	fi
-	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=[0-9]+|orlix-init: shell exit status=.*[1-9][0-9]*' \
+	if grep -E 'Kernel panic|Attempted (to )?kill init|Orlix TCTI: user fault|panic - not syncing|BUG:|Oops|SIGSEGV|fatal error|Fatal error|crash|Crash|orlix-init: process signaled .* signal=[0-9]+|orlix-init: shell exit status=[1-9][0-9]*([[:space:]]|$)' \
 		"$artifact_dir"/launch-console.log \
 		"$artifact_dir"/launch.log \
 		"$artifact_dir"/simulator-terminal-output.txt \
@@ -1370,24 +1453,19 @@ assert_gate_markers() {
 		}
 	}
 	case "$gate" in
-	tcti-init-first-syscall)
-		capture_tcti_first_syscall
-		;;
+		tcti-init-first-syscall)
+			capture_tcti_first_syscall
+			assert_no_simulator_fatal_runtime
+			;;
 	tcti-simulator-stability)
 		capture_tcti_first_syscall
 		assert_no_simulator_fatal_runtime
 		;;
-	tcti-init-console-write)
-		grep -E 'linux-console|Orlix TCTI: svc #0|ORLIX|Linux version' \
-			"$artifact_dir/launch-console.log" \
-			"$artifact_dir/launch.log" \
-			"$artifact_dir/simulator-terminal-output.txt" \
-			"$artifact_dir/simulator-unified.log" \
-			>"$artifact_dir/tcti-console-write.txt" 2>/dev/null || {
-			failure_stage="tcti-console-write-marker"
-			die "No Linux console or TCTI console marker was captured from \`$destination\`."
-		}
-		;;
+		tcti-init-console-write)
+			capture_tcti_first_syscall
+			capture_guest_marker "$console_marker" "tcti-console-write.txt" "TCTI console write"
+			assert_no_simulator_fatal_runtime
+			;;
 		tcti-static-busybox-start)
 		capture_tcti_first_syscall
 		grep -E 'Orlix TCTI: static PIE image task=sh pid=[0-9]+|Orlix TCTI: svc #0 task=sh pid=[0-9]+' \

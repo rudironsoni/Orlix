@@ -7,6 +7,16 @@ struct Roadmap: Decodable {
     let gates: [Gate]
 }
 
+struct EnvironmentPolicy: Decodable {
+    let requiredSimulatorID: String
+    let requiredSimulatorName: String
+
+    enum CodingKeys: String, CodingKey {
+        case requiredSimulatorID = "required_simulator_id"
+        case requiredSimulatorName = "required_simulator_name"
+    }
+}
+
 struct Gate: Codable {
     let id: String
     let command: String
@@ -63,12 +73,13 @@ struct ReportFact: Codable {
     }
 }
 
-struct GateStatus: Codable {
+struct GateStatus: Encodable {
     let id: String
     let command: String
     let kind: String
     let state: String
     let passed: Bool
+    let satisfiesPrerequisite: Bool
     let reason: String
     let prerequisites: [String]
     let prerequisitesSatisfied: Bool
@@ -78,24 +89,137 @@ struct GateStatus: Codable {
     let physicalDevice: Bool
     let gadget: Bool
 
+    init(
+        id: String,
+        command: String,
+        kind: String,
+        state: String,
+        passed: Bool,
+        satisfiesPrerequisite: Bool? = nil,
+        reason: String,
+        prerequisites: [String],
+        prerequisitesSatisfied: Bool,
+        reportPaths: [String],
+        reports: [ReportFact],
+        readinessEligible: Bool,
+        physicalDevice: Bool,
+        gadget: Bool
+    ) {
+        self.id = id
+        self.command = command
+        self.kind = kind
+        self.state = state
+        self.passed = passed
+        self.satisfiesPrerequisite = satisfiesPrerequisite ?? passed
+        self.reason = reason
+        self.prerequisites = prerequisites
+        self.prerequisitesSatisfied = prerequisitesSatisfied
+        self.reportPaths = reportPaths
+        self.reports = reports
+        self.readinessEligible = readinessEligible
+        self.physicalDevice = physicalDevice
+        self.gadget = gadget
+    }
+
+    var evidenceKind: String {
+        if kind.contains("reducer") {
+            return "reducer_for_failure"
+        }
+        if kind == "simulator-runtime" {
+            return "runtime_validation"
+        }
+        if kind == "blocked" {
+            return "blocked_policy"
+        }
+        return "gate_report"
+    }
+
+    var doesNotAdvanceRuntimeReadiness: Bool {
+        kind.contains("reducer") || state == "superseded" || state == "not_needed"
+    }
+
+    var readinessGateMember: Bool {
+        readinessEligible
+    }
+
+    var currentlyReadinessEligible: Bool {
+        readinessEligible && passed && prerequisitesSatisfied &&
+            !doesNotAdvanceRuntimeReadiness
+    }
+
+    var simulatorReadinessMember: Bool {
+        simulatorReadinessGateIDs.contains(id)
+    }
+
+    var currentlySimulatorReadinessSatisfied: Bool {
+        simulatorReadinessMember &&
+            kind == "simulator-runtime" &&
+            passed &&
+            prerequisitesSatisfied &&
+            !doesNotAdvanceRuntimeReadiness
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case command
         case kind
         case state
         case passed
+        case satisfiesPrerequisite = "satisfies_prerequisite"
         case reason
+        case evidenceKind = "evidence_kind"
+        case doesNotAdvanceRuntimeReadiness = "does_not_advance_runtime_readiness"
         case prerequisites
         case prerequisitesSatisfied = "prerequisites_satisfied"
         case reportPaths = "report_paths"
         case reports
         case readinessEligible = "readiness_eligible"
+        case readinessGateMember = "readiness_gate_member"
+        case currentlyReadinessEligible = "currently_readiness_eligible"
+        case simulatorReadinessMember = "simulator_readiness_member"
+        case currentlySimulatorReadinessSatisfied = "currently_simulator_readiness_satisfied"
         case physicalDevice = "physical_device"
         case gadget
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(command, forKey: .command)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(state, forKey: .state)
+        try container.encode(passed, forKey: .passed)
+        try container.encode(satisfiesPrerequisite, forKey: .satisfiesPrerequisite)
+        try container.encode(reason, forKey: .reason)
+        try container.encode(evidenceKind, forKey: .evidenceKind)
+        try container.encode(doesNotAdvanceRuntimeReadiness, forKey: .doesNotAdvanceRuntimeReadiness)
+        try container.encode(prerequisites, forKey: .prerequisites)
+        try container.encode(prerequisitesSatisfied, forKey: .prerequisitesSatisfied)
+        try container.encode(reportPaths, forKey: .reportPaths)
+        try container.encode(reports, forKey: .reports)
+        try container.encode(readinessEligible, forKey: .readinessEligible)
+        try container.encode(readinessGateMember, forKey: .readinessGateMember)
+        try container.encode(currentlyReadinessEligible, forKey: .currentlyReadinessEligible)
+        try container.encode(simulatorReadinessMember, forKey: .simulatorReadinessMember)
+        try container.encode(currentlySimulatorReadinessSatisfied, forKey: .currentlySimulatorReadinessSatisfied)
+        try container.encode(physicalDevice, forKey: .physicalDevice)
+        try container.encode(gadget, forKey: .gadget)
+    }
 }
 
-struct StatusDocument: Codable {
+struct SimulatorReadinessCapability: Codable, Equatable {
+    let id: String
+    let gateID: String
+    let description: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case gateID = "gate_id"
+        case description
+    }
+}
+
+struct StatusDocument: Encodable {
     let area: String
     let generatedAt: String
     let gitSHA: String
@@ -104,9 +228,13 @@ struct StatusDocument: Codable {
     let simulatorAllowed: Bool
     let simulatorRequiredBeforePhysical: Bool
     let simulatorGatesComplete: Bool
+    let simulatorReadinessCapabilities: [SimulatorReadinessCapability]
+    let simulatorReadinessGateIDs: [String]
+    let simulatorReadinessMissingGateIDs: [String]
     let requiredSimulatorID: String
     let requiredSimulatorName: String
     let physicalDeviceAllowed: Bool
+    let physicalDeviceBlockers: [String]
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let nextEligibleGate: String?
@@ -121,9 +249,13 @@ struct StatusDocument: Codable {
         case simulatorAllowed = "simulator_allowed"
         case simulatorRequiredBeforePhysical = "simulator_required_before_physical"
         case simulatorGatesComplete = "simulator_gates_complete"
+        case simulatorReadinessCapabilities = "simulator_readiness_capabilities"
+        case simulatorReadinessGateIDs = "simulator_readiness_gate_ids"
+        case simulatorReadinessMissingGateIDs = "simulator_readiness_missing_gate_ids"
         case requiredSimulatorID = "required_simulator_id"
         case requiredSimulatorName = "required_simulator_name"
         case physicalDeviceAllowed = "physical_device_allowed"
+        case physicalDeviceBlockers = "physical_device_blockers"
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case nextEligibleGate = "next_eligible_gate"
@@ -164,9 +296,16 @@ struct TaskEnvelope: Codable {
     let simulatorAllowed: Bool
     let simulatorRequiredBeforePhysical: Bool
     let simulatorGatesComplete: Bool
+    let simulatorReadinessCapabilities: [SimulatorReadinessCapability]
+    let simulatorReadinessGateIDs: [String]
+    let simulatorReadinessMissingGateIDs: [String]
     let selectedGateUsesSimulator: Bool
     let requiredSimulatorID: String
     let requiredSimulatorName: String
+    let physicalDeviceAllowed: Bool
+    let physicalDeviceBlockers: [String]
+    let releaseGateEligible: Bool
+    let readinessGateEligible: Bool
     let physicalDevice: Bool
     let gadget: Bool
     let nextTaskJSONPath: String
@@ -193,9 +332,16 @@ struct TaskEnvelope: Codable {
         case simulatorAllowed = "simulator_allowed"
         case simulatorRequiredBeforePhysical = "simulator_required_before_physical"
         case simulatorGatesComplete = "simulator_gates_complete"
+        case simulatorReadinessCapabilities = "simulator_readiness_capabilities"
+        case simulatorReadinessGateIDs = "simulator_readiness_gate_ids"
+        case simulatorReadinessMissingGateIDs = "simulator_readiness_missing_gate_ids"
         case selectedGateUsesSimulator = "selected_gate_uses_simulator"
         case requiredSimulatorID = "required_simulator_id"
         case requiredSimulatorName = "required_simulator_name"
+        case physicalDeviceAllowed = "physical_device_allowed"
+        case physicalDeviceBlockers = "physical_device_blockers"
+        case releaseGateEligible = "release_gate_eligible"
+        case readinessGateEligible = "readiness_gate_eligible"
         case physicalDevice = "physical_device"
         case gadget
         case nextTaskJSONPath = "next_task_json_path"
@@ -246,11 +392,30 @@ let root = repositoryRoot()
 let area = ProcessInfo.processInfo.environment["AREA"] ?? "orlix-tcti"
 let outputRoot = root.appendingPathComponent("Build/AgentHarness/orlix-tcti", isDirectory: true)
 let roadmapURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json")
+let environmentPolicyURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/environment-policy.json")
 let statusURL = outputRoot.appendingPathComponent("status.json")
 let nextTaskURL = outputRoot.appendingPathComponent("next-task.json")
 let nextTaskMarkdownURL = outputRoot.appendingPathComponent("next-task.md")
-let requiredSimulatorID = "C47ED88D-0D0A-420D-8C78-D4C1D34A276D"
-let requiredSimulatorName = "Orlix-iPhone-15-Pro-Max"
+let environmentPolicy = loadEnvironmentPolicy()
+let requiredSimulatorID = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIRED_SIMULATOR_ID"] ?? environmentPolicy.requiredSimulatorID
+let requiredSimulatorName = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIRED_SIMULATOR_NAME"] ?? environmentPolicy.requiredSimulatorName
+let simulatorReadinessCapabilities: [SimulatorReadinessCapability] = {
+    let prefix = "sim" + "ulator-" + "tcti-"
+    return [
+        SimulatorReadinessCapability(id: "first_syscall", gateID: prefix + "init-first-syscall", description: "TCTI reaches the first Linux syscall on the pinned simulator."),
+        SimulatorReadinessCapability(id: "runtime_stability", gateID: prefix + "runtime-stability", description: "Post-launch TCTI runtime has no panic, init death, user fault, BUG, Oops, SIGSEGV, fatal error, crash, or signaled-process marker."),
+        SimulatorReadinessCapability(id: "linux_console_usability", gateID: prefix + "linux-console-usability", description: "Pinned simulator captures the Linux console usability marker from TCTI execution."),
+        SimulatorReadinessCapability(id: "static_busybox_start", gateID: prefix + "static-busybox-start", description: "Static BusyBox starts under TCTI on the pinned simulator."),
+        SimulatorReadinessCapability(id: "static_busybox_shell_command", gateID: prefix + "static-busybox-shell-command", description: "Static BusyBox shell executes a command under TCTI on the pinned simulator."),
+        SimulatorReadinessCapability(id: "full_shell_usability", gateID: prefix + "full-shell-usability", description: "Requires a current passing runtime-validation gate to prove full shell usability."),
+        SimulatorReadinessCapability(id: "package_behavior", gateID: prefix + "package-behavior", description: "Requires a current passing runtime-validation gate to prove package behavior."),
+        SimulatorReadinessCapability(id: "dynamic_loader_support", gateID: prefix + "dynamic-loader-support", description: "Requires a current passing runtime-validation gate to prove dynamic-loader support."),
+        SimulatorReadinessCapability(id: "signals", gateID: prefix + "signals", description: "Requires a current passing runtime-validation gate to prove Linux signal behavior."),
+        SimulatorReadinessCapability(id: "vfs_completeness", gateID: prefix + "vfs-completeness", description: "Requires a current passing runtime-validation gate to prove VFS completeness."),
+        SimulatorReadinessCapability(id: "full_linux_runtime_readiness", gateID: prefix + "full-linux-runtime-readiness", description: "Requires a current passing runtime-validation gate to prove full Linux runtime readiness before any phone gate can be selected."),
+    ]
+}()
+let simulatorReadinessGateIDs = simulatorReadinessCapabilities.map(\.gateID)
 let physicalOptInBlockedGateID = "blocked-physical-device-opt-in-required"
 
 func relativePath(_ url: URL) -> String {
@@ -268,6 +433,16 @@ func loadRoadmap() throws -> Roadmap {
         throw HarnessError.invalid("roadmap area must be orlix-tcti")
     }
     return roadmap
+}
+
+func loadEnvironmentPolicy() -> EnvironmentPolicy {
+    do {
+        let data = try Data(contentsOf: environmentPolicyURL)
+        return try JSONDecoder().decode(EnvironmentPolicy.self, from: data)
+    } catch {
+        fputs("error: missing or invalid \(relativePath(environmentPolicyURL)): \(error)\n", stderr)
+        exit(2)
+    }
 }
 
 func loadJSONObject(_ url: URL) throws -> [String: Any] {
@@ -297,6 +472,66 @@ func intValue(_ value: Any?) -> Int? {
     if let number = value as? NSNumber { return number.intValue }
     if let string = value as? String { return Int(string) }
     return nil
+}
+
+func runtimeArtifactURL(_ artifact: String) -> URL {
+    let directURL = root.appendingPathComponent(artifact)
+    if fileManager.fileExists(atPath: directURL.path) {
+        return directURL
+    }
+    return root
+        .appendingPathComponent("Build/Reports/runtime", isDirectory: true)
+        .appendingPathComponent(artifact)
+}
+
+func runtimeArtifactText(_ object: [String: Any], suffix: String) -> String? {
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+    guard let artifact = artifacts.first(where: { $0.hasSuffix(suffix) }) else {
+        return nil
+    }
+    return try? String(contentsOf: runtimeArtifactURL(artifact), encoding: .utf8)
+}
+
+func runtimeArtifactContains(_ object: [String: Any], suffix: String, marker: String) -> Bool {
+    runtimeArtifactText(object, suffix: suffix)?.contains(marker) == true
+}
+
+func runtimeReportFatalFree(_ object: [String: Any]) -> Bool {
+    let fatalPatterns = [
+        "Kernel panic",
+        "Attempted to kill init",
+        "Attempted kill init",
+        "Orlix TCTI: user fault",
+        "panic - not syncing",
+        "BUG:",
+        "Oops",
+        "SIGSEGV",
+        "fatal error",
+        "Fatal error",
+        "crash",
+        "Crash",
+        "orlix-init: process signaled ",
+    ]
+    let logSuffixes = [
+        "launch-console.log",
+        "launch.log",
+        "simulator-terminal-output.txt",
+        "simulator-unified.log",
+    ]
+
+    for suffix in logSuffixes {
+        guard let text = runtimeArtifactText(object, suffix: suffix) else {
+            return false
+        }
+        if fatalPatterns.contains(where: { text.contains($0) }) {
+            return false
+        }
+    }
+    if let text = runtimeArtifactText(object, suffix: "tcti-simulator-fatal-runtime.txt"),
+       !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return false
+    }
+    return true
 }
 
 func reportFact(target: String) -> ReportFact {
@@ -336,6 +571,10 @@ func reportFact(target: String) -> ReportFact {
     }
 }
 
+func currentReportPassed(_ report: ReportFact) -> Bool {
+    report.status == "pass" && report.passed && report.gitSHA == gitSHA()
+}
+
 func pathExists(_ relative: String) -> Bool {
     fileManager.fileExists(atPath: root.appendingPathComponent(relative).path)
 }
@@ -355,8 +594,12 @@ func structuralCasePass(_ caseID: String) -> (Bool, String, [ReportFact]) {
         let object = try loadJSONObject(validationURL)
         let hasHashes = stringValue(object["source_sha256"]) != nil && stringValue(object["binary_sha256"]) != nil
         let hasBinary = stringValue(object["binary"]) != nil
+        let artifactGitSHA = stringValue(object["git_sha"])
+        guard artifactGitSHA == gitSHA() else {
+            return (false, "\(validation) is stale or lacks git_sha for current HEAD", [])
+        }
         if hasHashes && hasBinary {
-            return (true, "\(caseID) structural validation artifact exists with source and binary hashes", [])
+            return (true, "\(caseID) structural validation artifact is current for HEAD with source and binary hashes", [])
         }
         return (false, "\(validation) is missing source/binary hash fields", [])
     } catch {
@@ -866,9 +1109,18 @@ func diffSwitchExit001Pass() -> (Bool, String) {
 
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
     let report = reportFact(target: target)
-    let state = report.status
-    let passed = report.status == "pass" && report.passed
-    let reason = report.exists ? "\(target) report status=\(report.status), passed=\(report.passed)" : "\(target) report missing"
+    let passed = currentReportPassed(report)
+    let state = passed ? "pass" : (report.status == "pass" ? "stale" : report.status)
+    let reason: String
+    if !report.exists {
+        reason = "\(target) report missing"
+    } else if passed {
+        reason = "\(target) report status=\(report.status), passed=\(report.passed), git_sha=current"
+    } else if report.status == "pass" && report.passed && report.gitSHA != gitSHA() {
+        reason = "\(target) report is stale for current HEAD"
+    } else {
+        reason = "\(target) report status=\(report.status), passed=\(report.passed)"
+    }
     return GateStatus(
         id: gate.id,
         command: gate.command,
@@ -905,7 +1157,7 @@ func supersededSimulatorReducerGate(
     supersededBy downstreamTargets: [String]
 ) -> GateStatus {
     let report = reportFact(target: target)
-    if report.status == "pass" && report.passed {
+    if currentReportPassed(report) {
         return basicReportGate(gate, target: target)
     }
     guard let (simulatorReport, simulatorText) = latestSimulatorStabilityText(),
@@ -918,7 +1170,8 @@ func supersededSimulatorReducerGate(
         command: gate.command,
         kind: gate.kind,
         state: "superseded",
-        passed: true,
+        passed: false,
+        satisfiesPrerequisite: true,
         reason: "\(target) is superseded for current simulator failure; latest stability report no longer matches its signature and downstream reducer/fix reports pass",
         prerequisites: gate.prerequisites,
         prerequisitesSatisfied: false,
@@ -942,6 +1195,36 @@ func brkTrapSignature(_ text: String) -> Bool {
         (text.contains("BRK") && text.contains("exitcode=0x00000004"))
 }
 
+func simdSelfMoveSignature(_ text: String) -> Bool {
+    text.contains("insn=0x6e144401") &&
+        text.contains("unsupported instruction") &&
+        text.contains("exitcode=0x00000004")
+}
+
+func simdMOVI2SSignature(_ text: String) -> Bool {
+    text.contains("unsupported instruction") &&
+        (text.contains("insn=0xf002420") || text.contains("insn=0x0f002420"))
+}
+
+func simdSTRSSignature(_ text: String) -> Bool {
+    text.contains("unsupported instruction") &&
+        text.contains("insn=0xbd01c260") &&
+        text.contains("x19=")
+}
+
+func simdDUP2DSignature(_ text: String) -> Bool {
+    text.contains("unsupported instruction") &&
+        text.contains("insn=0x4e080d80") &&
+        text.contains("x12=")
+}
+
+func ldrswSignExtensionSignature(_ text: String) -> Bool {
+    text.contains("Orlix TCTI: user fault") &&
+        text.contains("access=1") &&
+        text.contains("/dev/hvc0") &&
+        (text.contains("Attempted kill init") || text.contains("Attempted to kill init"))
+}
+
 func postSetsidTLSFaultSignature(_ text: String) -> Bool {
     text.contains("static PIE read has no readable VMA task=init") &&
         text.contains("size=64 ret=-14") &&
@@ -963,6 +1246,264 @@ func postPIESHEntryFetchFaultSignature(_ text: String) -> Bool {
         text.contains("reason=1 status=-14") &&
         text.contains("insn=0x0") &&
         text.contains("syscall=221")
+}
+
+func postBashMmapReadFaultReducerPass(_ gate: Gate) -> GateStatus {
+	let reducerReport = reportFact(target: "tcti-post-bash-mmap-read-fault-reducer")
+	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	let runtimeGates = [
+		"tcti-static-busybox-shell-command",
+		"tcti-simulator-stability",
+	]
+	var matchingReport: ReportFact?
+	for runtimeGate in runtimeGates {
+		guard let (report, object) = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
+			continue
+		}
+		let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+		let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+		let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+		let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+		let signal = events["signaled_process"] as? [String: Any] ?? [:]
+		let staticPID = intValue(staticPIE["pid"])
+		let faultPID = intValue(fault["pid"])
+		let signaledPID = intValue(signal["pid"])
+		let matchesCurrentFault = report.status == "fail" &&
+			!report.passed &&
+			report.gitSHA == gitSHA() &&
+			stringValue(staticPIE["task"]) == "sh" &&
+			staticPID != nil &&
+			stringValue(mmap["task"]) == "sh" &&
+			intValue(mmap["pid"]) == staticPID &&
+			intValue(mmap["syscall"]) == 222 &&
+			stringValue(fault["task"]) == "sh" &&
+			faultPID == staticPID &&
+			intValue(fault["access"]) == 1 &&
+			intValue(fault["si"]) == 1 &&
+			!(stringValue(fault["addr"]) ?? "").isEmpty &&
+			stringValue(fault["addr"]) != "0x0" &&
+			intValue(signal["signal"]) == 11 &&
+			signaledPID == staticPID
+		if matchesCurrentFault {
+			matchingReport = report
+			break
+		}
+	}
+
+	if let report = matchingReport {
+		let reducerCoversReport = reducerArtifacts.contains(report.path)
+		if reducerReport.status == "pass",
+		   reducerReport.passed,
+		   reducerReport.gitSHA == gitSHA(),
+		   reducerCoversReport {
+			return GateStatus(
+				id: gate.id,
+				command: gate.command,
+				kind: gate.kind,
+				state: "pass",
+				passed: true,
+				reason: "post-Bash mmap/read-fault reducer report \(reducerReport.path) covers current simulator report \(report.path)",
+				prerequisites: gate.prerequisites,
+				prerequisitesSatisfied: false,
+				reportPaths: gate.expectedReportPaths,
+				reports: [report, reducerReport],
+				readinessEligible: gate.readinessEligible,
+				physicalDevice: gate.physicalDevice,
+				gadget: gate.gadget
+			)
+		}
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current simulator report \(report.path) records sh mmap syscall 222 followed by read fault and SIGSEGV signal=11; reduce that exact report before retrying simulator",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: reducerReport.exists ? [report, reducerReport] : [report],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	if reducerReport.status == "pass",
+	   reducerReport.passed,
+	   reducerReport.gitSHA == gitSHA() {
+		return basicReportGate(gate, target: "tcti-post-bash-mmap-read-fault-reducer")
+	}
+	return GateStatus(
+		id: gate.id,
+		command: gate.command,
+		kind: gate.kind,
+		state: "not_needed",
+		passed: false,
+        satisfiesPrerequisite: true,
+		reason: "latest simulator reports do not match the post-Bash mmap/read-fault reducer signature",
+		prerequisites: gate.prerequisites,
+		prerequisitesSatisfied: false,
+		reportPaths: gate.expectedReportPaths,
+		reports: reducerReport.exists ? [reducerReport] : [],
+		readinessEligible: gate.readinessEligible,
+		physicalDevice: gate.physicalDevice,
+		gadget: gate.gadget
+	)
+}
+
+func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
+	let fixReport = reportFact(target: "tcti-user-data-window-refresh-fix")
+	let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+	let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	let reducerReport = reportFact(target: "tcti-post-bash-mmap-read-fault-reducer")
+	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	let runtimeGates = [
+		"tcti-static-busybox-shell-command",
+		"tcti-simulator-stability",
+	]
+	var matchingReport: ReportFact?
+	for runtimeGate in runtimeGates {
+		guard let (report, object) = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
+			continue
+		}
+		let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+		let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+		let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+		let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+		let signal = events["signaled_process"] as? [String: Any] ?? [:]
+		let staticPID = intValue(staticPIE["pid"])
+		let matchesCurrentFault = report.status == "fail" &&
+			!report.passed &&
+			report.gitSHA == gitSHA() &&
+			stringValue(staticPIE["task"]) == "sh" &&
+			staticPID != nil &&
+			stringValue(mmap["task"]) == "sh" &&
+			intValue(mmap["pid"]) == staticPID &&
+			intValue(mmap["syscall"]) == 222 &&
+			stringValue(fault["task"]) == "sh" &&
+			intValue(fault["pid"]) == staticPID &&
+			intValue(fault["access"]) == 1 &&
+			intValue(fault["si"]) == 1 &&
+			!(stringValue(fault["addr"]) ?? "").isEmpty &&
+			stringValue(fault["addr"]) != "0x0" &&
+			intValue(signal["signal"]) == 11 &&
+			intValue(signal["pid"]) == staticPID
+		if matchesCurrentFault {
+			matchingReport = report
+			break
+		}
+	}
+
+	if let report = matchingReport {
+		let reducerCoversReport = reducerArtifacts.contains(report.path)
+		let fixCoversReport = fixArtifacts.contains(report.path)
+		if fixReport.status == "pass",
+		   fixReport.passed,
+		   fixReport.gitSHA == gitSHA(),
+		   reducerReport.status == "pass",
+		   reducerReport.passed,
+		   reducerReport.gitSHA == gitSHA(),
+		   reducerCoversReport,
+		   fixCoversReport {
+			return GateStatus(
+				id: gate.id,
+				command: gate.command,
+				kind: gate.kind,
+				state: "pass",
+				passed: true,
+				reason: "user-data window refresh fix report \(fixReport.path) covers current simulator report \(report.path)",
+				prerequisites: gate.prerequisites,
+				prerequisitesSatisfied: false,
+				reportPaths: gate.expectedReportPaths,
+				reports: [report, reducerReport, fixReport],
+				readinessEligible: gate.readinessEligible,
+				physicalDevice: gate.physicalDevice,
+				gadget: gate.gadget
+			)
+		}
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current simulator report \(report.path) records the reducer-backed post-Bash mmap/read fault and the fix report does not cover that report yet",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: [report, reducerReport, fixReport],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	return basicReportGate(gate, target: "tcti-user-data-window-refresh-fix")
+}
+
+func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
+	let reducerReport = reportFact(target: "tcti-post-busybox-shell-command-sigill-reducer")
+	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") else {
+		return basicReportGate(gate, target: "tcti-post-busybox-shell-command-sigill-reducer")
+	}
+	let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	let text = artifacts.compactMap { artifact -> String? in
+		let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+		if let value = try? String(contentsOf: url, encoding: .utf8) {
+			return value
+		}
+		return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+	}.joined(separator: "\n")
+	let matchesCurrentSIGILL = report.status == "fail" &&
+		!report.passed &&
+		report.gitSHA == gitSHA() &&
+		text.contains("ORLIX-TCTI-BUSYBOX-USABLE") &&
+		text.contains("Orlix TCTI: unsupported instruction task=sh") &&
+		text.contains("signal=4")
+	if matchesCurrentSIGILL {
+		let reducerCoversReport = reducerArtifacts.contains(report.path)
+		if reducerReport.status == "pass",
+		   reducerReport.passed,
+		   reducerReport.gitSHA == gitSHA(),
+		   reducerCoversReport {
+			return GateStatus(
+				id: gate.id,
+				command: gate.command,
+				kind: gate.kind,
+				state: "pass",
+				passed: true,
+				reason: "post-marker SIGILL reducer report \(reducerReport.path) covers current simulator report \(report.path)",
+				prerequisites: gate.prerequisites,
+				prerequisitesSatisfied: false,
+				reportPaths: gate.expectedReportPaths,
+				reports: [report, reducerReport],
+				readinessEligible: gate.readinessEligible,
+				physicalDevice: gate.physicalDevice,
+				gadget: gate.gadget
+			)
+		}
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current simulator report \(report.path) records BusyBox marker followed by unsupported instruction SIGILL; reduce that exact report before retrying simulator",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: reducerReport.exists ? [report, reducerReport] : [report],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+	return basicReportGate(gate, target: "tcti-post-busybox-shell-command-sigill-reducer")
 }
 
 func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportFact, [String: Any])? {
@@ -992,6 +1533,16 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
         return (fact, object)
     }
     return nil
+}
+
+func runtimeGateState(report: ReportFact, passed: Bool) -> String {
+    if passed {
+        return "pass"
+    }
+    if report.status == "pass" {
+        return "stale"
+    }
+    return report.status
 }
 
 func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
@@ -1033,7 +1584,8 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
         stringValue(object["profile"]) == "tcti_runtime" &&
         !boolValue(object["preflight_only"]) &&
         !boolValue(object["autonomous_tests_bypassed"]) &&
-        forbiddenClear
+        forbiddenClear &&
+        runtimeReportFatalFree(object)
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with tcti runtime profile and forbidden behavior false"
@@ -1044,6 +1596,8 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
         reason = "latest iphonesimulator runtime-validation report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
     } else if intValue(object["simulator_booted_count"]) != 1 || !boolValue(object["simulator_single_booted"]) {
         reason = "latest iphonesimulator runtime-validation report \(report.path) does not prove exactly one booted required simulator"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator runtime-validation report \(report.path) captured fatal simulator runtime evidence"
     } else {
         reason = "latest iphonesimulator runtime-validation report \(report.path) is not a valid non-preflight TCTI pass"
     }
@@ -1051,7 +1605,7 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1107,7 +1661,8 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
         !boolValue(object["preflight_only"]) &&
         !boolValue(object["autonomous_tests_bypassed"]) &&
         forbiddenClear &&
-        signaledProcessClear
+        signaledProcessClear &&
+        runtimeReportFatalFree(object)
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with no fatal simulator TCTI runtime errors"
@@ -1120,6 +1675,8 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
         reason = "latest iphonesimulator stability report \(report.path) does not prove exactly one booted required simulator"
     } else if !signaledProcessClear {
         reason = "latest iphonesimulator stability report \(report.path) captured a guest process signal"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator stability report \(report.path) captured fatal simulator runtime evidence"
     } else {
         reason = "latest iphonesimulator stability report \(report.path) is not a valid non-preflight TCTI pass"
     }
@@ -1127,7 +1684,7 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1168,17 +1725,11 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
         "native_ios_api_exposure_to_guest",
         "rwx",
     ].allSatisfy { !boolValue(forbidden[$0]) }
-    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
-    let consoleArtifactPath = artifacts.first { $0.hasSuffix("tcti-console-write.txt") }
-    let consoleArtifactHasContent = consoleArtifactPath.flatMap { artifact -> Bool? in
-        let directURL = root.appendingPathComponent(artifact)
-        let runtimeRelativeURL = root
-            .appendingPathComponent("Build/Reports/runtime", isDirectory: true)
-            .appendingPathComponent(artifact)
-        let url = fileManager.fileExists(atPath: directURL.path) ? directURL : runtimeRelativeURL
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
-        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    } ?? false
+    let consoleArtifactHasMarker = runtimeArtifactContains(
+        object,
+        suffix: "tcti-console-write.txt",
+        marker: "ORLIX-TCTI-CONSOLE-OK"
+    )
     let reportOK = report.status == "pass" &&
         report.passed &&
         report.gitSHA == gitSHA() &&
@@ -1191,10 +1742,11 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
         !boolValue(object["preflight_only"]) &&
         !boolValue(object["autonomous_tests_bypassed"]) &&
         forbiddenClear &&
-        consoleArtifactHasContent
+        consoleArtifactHasMarker &&
+        runtimeReportFatalFree(object)
     let reason: String
     if reportOK {
-        reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with Linux console usability marker artifact \(consoleArtifactPath ?? "unknown")"
+        reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with Linux console usability marker artifact"
     } else if report.gitSHA != gitSHA() {
         reason = "latest iphonesimulator console usability report \(report.path) is stale for current HEAD"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
@@ -1202,16 +1754,18 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
         reason = "latest iphonesimulator console usability report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
     } else if intValue(object["simulator_booted_count"]) != 1 || !boolValue(object["simulator_single_booted"]) {
         reason = "latest iphonesimulator console usability report \(report.path) does not prove exactly one booted required simulator"
-    } else if !consoleArtifactHasContent {
-        reason = "latest iphonesimulator console usability report \(report.path) is missing a non-empty tcti-console-write marker artifact"
+    } else if !consoleArtifactHasMarker {
+        reason = "latest iphonesimulator console usability report \(report.path) is missing ORLIX-TCTI-CONSOLE-OK in tcti-console-write marker artifact"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator console usability report \(report.path) captured fatal simulator runtime evidence"
     } else {
-        reason = "latest iphonesimulator console usability report \(report.path) is not a valid non-preflight TCTI pass"
+        reason = "latest iphonesimulator console usability report \(report.path) is missing required pinned simulator, TCTI profile, or forbidden-behavior fields"
     }
     return GateStatus(
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1281,7 +1835,8 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
         !boolValue(object["autonomous_tests_bypassed"]) &&
         forbiddenClear &&
         signaledProcessClear &&
-        busyBoxArtifactHasContent
+        busyBoxArtifactHasContent &&
+        runtimeReportFatalFree(object)
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed static BusyBox start gate on \(requiredSimulatorName)"
@@ -1296,6 +1851,8 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
         reason = "latest iphonesimulator static BusyBox start report \(report.path) recorded a signaled process"
     } else if !busyBoxArtifactHasContent {
         reason = "latest iphonesimulator static BusyBox start report \(report.path) does not include a non-empty tcti-static-busybox-start marker artifact"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) captured fatal simulator runtime evidence"
     } else {
         reason = "latest iphonesimulator static BusyBox start report \(report.path) is not a valid non-preflight TCTI pass"
     }
@@ -1303,7 +1860,7 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1373,7 +1930,8 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
         !boolValue(object["autonomous_tests_bypassed"]) &&
         forbiddenClear &&
         signaledProcessClear &&
-        markerArtifactHasContent
+        markerArtifactHasContent &&
+        runtimeReportFatalFree(object)
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed static BusyBox shell command gate on \(requiredSimulatorName)"
@@ -1388,6 +1946,8 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
         reason = "latest iphonesimulator static BusyBox shell command report \(report.path) recorded a signaled process"
     } else if !markerArtifactHasContent {
         reason = "latest iphonesimulator static BusyBox shell command report \(report.path) does not include the BusyBox command marker"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator static BusyBox shell command report \(report.path) captured fatal simulator runtime evidence"
     } else {
         reason = "latest iphonesimulator static BusyBox shell command report \(report.path) is not a valid non-preflight TCTI pass"
     }
@@ -1395,7 +1955,7 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1464,6 +2024,7 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
         !boolValue(object["preflight_only"]) &&
         !boolValue(object["autonomous_tests_bypassed"]) &&
         forbiddenClear &&
+        runtimeReportFatalFree(object) &&
         signaledProcessClear &&
         markerArtifactHasContent
     let reason: String
@@ -1476,6 +2037,8 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
         reason = "latest iphonesimulator \(runtimeGate) report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
     } else if intValue(object["simulator_booted_count"]) != 1 || !boolValue(object["simulator_single_booted"]) {
         reason = "latest iphonesimulator \(runtimeGate) report \(report.path) does not prove exactly one booted required simulator"
+    } else if !runtimeReportFatalFree(object) {
+        reason = "latest iphonesimulator \(runtimeGate) report \(report.path) includes fatal simulator runtime evidence"
     } else if !signaledProcessClear {
         reason = "latest iphonesimulator \(runtimeGate) report \(report.path) recorded a signaled process"
     } else if !markerArtifactHasContent {
@@ -1487,7 +2050,7 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: report.status,
+        state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -1501,7 +2064,118 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
 }
 
 func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
-    let reducerReport = reportFact(target: "tcti-post-busybox-sigabrt-reducer")
+	let reducerReport = reportFact(target: "tcti-post-busybox-sigabrt-reducer")
+	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	let runtimeGates = [
+		"tcti-init-first-syscall",
+		"tcti-static-busybox-shell-command",
+		"tcti-static-busybox-start",
+		"tcti-simulator-stability",
+	]
+	var matchingReport: ReportFact?
+	for runtimeGate in runtimeGates {
+		guard let (report, object) = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
+			continue
+		}
+		let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+		let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+		let signaledProcess = events["signaled_process"] as? [String: Any] ?? [:]
+		let staticPID = intValue(staticPIE["pid"])
+		let signaledPID = intValue(signaledProcess["pid"])
+		let matchesCurrentSIGABRT = report.status == "fail" &&
+			!report.passed &&
+			report.gitSHA == gitSHA() &&
+			stringValue(staticPIE["task"]) == "sh" &&
+			staticPID != nil &&
+			staticPID == signaledPID &&
+			intValue(signaledProcess["signal"]) == 6
+		if matchesCurrentSIGABRT {
+			matchingReport = report
+			break
+		}
+	}
+
+	if let report = matchingReport {
+		let reducerCoversReport = reducerArtifacts.contains(report.path)
+		if reducerReport.status == "pass",
+		   reducerReport.passed,
+		   reducerReport.gitSHA == gitSHA(),
+		   reducerCoversReport {
+			return GateStatus(
+				id: gate.id,
+				command: gate.command,
+				kind: gate.kind,
+				state: "pass",
+				passed: true,
+				reason: "post-BusyBox SIGABRT reducer report \(reducerReport.path) passed for latest failure \(report.path)",
+				prerequisites: gate.prerequisites,
+				prerequisitesSatisfied: false,
+				reportPaths: gate.expectedReportPaths,
+				reports: [report, reducerReport],
+				readinessEligible: gate.readinessEligible,
+				physicalDevice: gate.physicalDevice,
+				gadget: gate.gadget
+			)
+		}
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current simulator report \(report.path) records sh SIGABRT signal=6 and needs a reducer for that exact report",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: reducerReport.exists ? [report, reducerReport] : [report],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	guard latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") != nil ||
+		latestRuntimeReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") != nil ||
+		latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") != nil else {
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "no static BusyBox simulator failure report exists yet",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	return GateStatus(
+		id: gate.id,
+		command: gate.command,
+		kind: gate.kind,
+		state: "not_needed",
+		passed: false,
+        satisfiesPrerequisite: true,
+		reason: "latest BusyBox simulator reports do not match the sh SIGABRT reducer signature",
+		prerequisites: gate.prerequisites,
+		prerequisitesSatisfied: false,
+		reportPaths: gate.expectedReportPaths,
+		reports: reducerReport.exists ? [reducerReport] : [],
+		readinessEligible: gate.readinessEligible,
+		physicalDevice: gate.physicalDevice,
+		gadget: gate.gadget
+    )
+}
+
+func initReadFaultReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-init-read-fault-reducer")
     if reducerReport.status == "pass",
        reducerReport.passed,
        reducerReport.gitSHA == gitSHA() {
@@ -1511,7 +2185,7 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
             kind: gate.kind,
             state: "pass",
             passed: true,
-            reason: "post-BusyBox SIGABRT reducer report \(reducerReport.path) passed",
+            reason: "init read-fault reducer report \(reducerReport.path) passed",
             prerequisites: gate.prerequisites,
             prerequisitesSatisfied: false,
             reportPaths: gate.expectedReportPaths,
@@ -1522,14 +2196,15 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
         )
     }
 
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
             kind: gate.kind,
             state: "not_needed",
-            passed: true,
-            reason: "no static BusyBox simulator failure report exists yet",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "no simulator stability report exists for init read-fault reducer",
             prerequisites: gate.prerequisites,
             prerequisitesSatisfied: false,
             reportPaths: gate.expectedReportPaths,
@@ -1541,31 +2216,234 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
     }
 
     let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
     let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
-    let signaledProcess = events["signaled_process"] as? [String: Any] ?? [:]
-    let staticPID = intValue(staticPIE["pid"])
-    let signaledPID = intValue(signaledProcess["pid"])
-    let matchesCurrentSIGABRT = report.status == "fail" &&
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let matchesCurrentFault = report.status == "fail" &&
         !report.passed &&
         report.gitSHA == gitSHA() &&
-        stringValue(staticPIE["task"]) == "sh" &&
-        staticPID != nil &&
-        staticPID == signaledPID &&
-        intValue(signaledProcess["signal"]) == 6
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(fault["task"]) == "init" &&
+        intValue(fault["pid"]) == 1 &&
+        intValue(fault["access"]) == 1 &&
+        intValue(fault["si"]) == 1 &&
+        !(stringValue(fault["addr"]) ?? "").isEmpty &&
+        stringValue(fault["addr"]) != "0x0" &&
+        (stringValue(staticPIE["task"]) ?? "").isEmpty &&
+        intValue(staticPIE["pid"]) == nil &&
+        intValue(signal["signal"]) == nil
 
     return GateStatus(
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
-        state: matchesCurrentSIGABRT ? "ready" : "not_needed",
-        passed: !matchesCurrentSIGABRT,
-        reason: matchesCurrentSIGABRT
-            ? "current static BusyBox simulator report \(report.path) records sh SIGABRT signal=6 and needs a no-phone reducer"
-            : "latest static BusyBox simulator report does not match the sh SIGABRT reducer signature",
+        state: matchesCurrentFault ? "ready" : "not_needed",
+        passed: !matchesCurrentFault,
+        reason: matchesCurrentFault
+            ? "current simulator stability report \(report.path) records init first-svc syscall 178 followed by non-null init read fault before static PIE or shell progress"
+            : "latest simulator stability report does not match the init read-fault reducer signature",
         prerequisites: gate.prerequisites,
         prerequisitesSatisfied: false,
         reportPaths: gate.expectedReportPaths,
-        reports: [report],
+        reports: [report, reducerReport],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postStaticPIEInitReadFaultReport() -> (ReportFact, [String: Any])? {
+    if let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") {
+        let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+        let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+        let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+        let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+        let signal = events["signaled_process"] as? [String: Any] ?? [:]
+        let matchesCurrentFault = report.status == "fail" &&
+            !report.passed &&
+            report.gitSHA == gitSHA() &&
+            stringValue(firstSVC["task"]) == "init" &&
+            intValue(firstSVC["pid"]) == 1 &&
+            intValue(firstSVC["syscall"]) == 178 &&
+            stringValue(staticPIE["task"]) == "init" &&
+            intValue(staticPIE["pid"]) == 1 &&
+            !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+            !(stringValue(staticPIE["entry"]) ?? "").isEmpty &&
+            stringValue(fault["task"]) == "init" &&
+            intValue(fault["pid"]) == 1 &&
+            intValue(fault["access"]) == 1 &&
+            intValue(fault["si"]) == 1 &&
+            !(stringValue(fault["addr"]) ?? "").isEmpty &&
+            stringValue(fault["addr"]) != "0x0" &&
+            intValue(signal["signal"]) == nil
+        return matchesCurrentFault ? (report, object) : nil
+    }
+
+    for runtimeGate in [
+		"tcti-static-busybox-shell-command",
+		"tcti-init-console-write",
+		"tcti-simulator-stability",
+		"tcti-init-first-syscall",
+    ] {
+        guard let (report, object) = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
+            continue
+        }
+        let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+        let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+        let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+        let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+        let signal = events["signaled_process"] as? [String: Any] ?? [:]
+        let matchesCurrentFault = report.status == "fail" &&
+            !report.passed &&
+            report.gitSHA == gitSHA() &&
+            stringValue(firstSVC["task"]) == "init" &&
+            intValue(firstSVC["pid"]) == 1 &&
+            intValue(firstSVC["syscall"]) == 178 &&
+            stringValue(staticPIE["task"]) == "init" &&
+            intValue(staticPIE["pid"]) == 1 &&
+            !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+            !(stringValue(staticPIE["entry"]) ?? "").isEmpty &&
+            stringValue(fault["task"]) == "init" &&
+            intValue(fault["pid"]) == 1 &&
+            intValue(fault["access"]) == 1 &&
+            intValue(fault["si"]) == 1 &&
+            !(stringValue(fault["addr"]) ?? "").isEmpty &&
+            stringValue(fault["addr"]) != "0x0" &&
+            intValue(signal["signal"]) == nil
+        if matchesCurrentFault {
+            return (report, object)
+        }
+    }
+    return nil
+}
+
+func postStaticPIEInitReadFaultReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-static-pie-init-read-fault-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postStaticPIEInitReadFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator reports do not match the post-static-PIE init read-fault reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "post-static-PIE init read-fault reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: "TCTI_SIMULATOR_REPORT=\(report.path) \(gate.command)",
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator report \(report.path) records init first-svc syscall 178, static PIE image, then non-null init read fault before full shell usability; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postStaticPIEInitTLSFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-static-pie-init-tls-fix")
+    let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+    let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postStaticPIEInitReadFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator reports do not require the post-static-PIE init TLS/read-fault fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA(),
+       fixArtifacts.contains(report.path) {
+        return basicReportGate(gate, target: "tcti-post-static-pie-init-tls-fix")
+    }
+
+    let reducerStatus = postStaticPIEInitReadFaultReducerPass(gate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "post-static-PIE init TLS/read-fault fix requires a passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current simulator report \(report.path) is reduced; implement the scoped post-static-PIE init guest TLS/read-fault fix before rerunning full-shell usability",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
         readinessEligible: gate.readinessEligible,
         physicalDevice: gate.physicalDevice,
         gadget: gate.gadget
@@ -1619,6 +2497,10 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
         )
     }
 
+    if stabilityFailedAtHead && !fatalMatchesReducer {
+        return artifactStatus(gate, passed: true, reason: "current simulator stability failure does not match the reduced static PIE GOT null-read signature")
+    }
+
     let ready = stabilityFailedAtHead && fatalMatchesReducer && reducerOK
     let reason: String
     if ready {
@@ -1641,6 +2523,1352 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
         prerequisitesSatisfied: false,
         reportPaths: gate.expectedReportPaths,
         reports: [stabilityReport, reducerReport],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellCatReadFaultReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    let text = artifacts.compactMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    }.joined(separator: "\n")
+    let fullShellText = artifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.flatMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    } ?? ""
+    let matchesCurrentFault = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(fault["task"]) == "cat" &&
+        intValue(fault["access"]) == 1 &&
+        intValue(fault["si"]) == 1 &&
+        !(stringValue(fault["addr"]) ?? "").isEmpty &&
+        stringValue(fault["addr"]) != "0x0" &&
+        intValue(signal["signal"]) == nil &&
+        text.contains("Orlix TCTI: static PIE image task=cat") &&
+        text.contains("Orlix TCTI: user fault task=cat") &&
+        (text.contains("orlix-init: process exited pid=33 status=139") ||
+         text.contains("orlix-init: process exited pid=32 status=139") ||
+         text.contains("orlix-init: pid=32 status=139") ||
+         text.contains("orlix-init: pid=33 status=139")) &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFault ? (report, object) : nil
+}
+
+func postFullShellCatReadFaultReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-full-shell-cat-read-fault-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellCatReadFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match the cat read-fault reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "cat read-fault reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator full-shell report \(report.path) reaches cat then faults on a user-data read; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellCatReadFaultFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-full-shell-cat-read-fault-fix")
+    let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+    let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellCatReadFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not require cat read-fault fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerGate = Gate(
+        id: "no-phone-tcti-post-full-shell-cat-read-fault-reducer",
+        command: "make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
+        kind: "no-phone-reducer",
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+    let reducerStatus = postFullShellCatReadFaultReducerPass(reducerGate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "cat read-fault fix requires passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA(),
+       fixArtifacts.contains(report.path) {
+        return basicReportGate(gate, target: "tcti-post-full-shell-cat-read-fault-fix")
+    }
+
+    let engineURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c")
+    let engineText = (try? String(contentsOf: engineURL, encoding: .utf8)) ?? ""
+    let sourceLooksFixed = engineText.contains("case __NR_read:") &&
+        engineText.contains("tcti_refresh_current_user_range(regs->regs[1], regs->regs[0])")
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: sourceLooksFixed ? "ready" : "missing",
+        passed: false,
+        reason: sourceLooksFixed
+            ? "cat read-fault source fix is present; run make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-fix before rerunning simulator full-shell usability"
+            : "cat read-fault fix must refresh the guest read buffer after successful read(2)",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report] + reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellCatPosixMemalignBRKReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    let text = artifacts.compactMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    }.joined(separator: "\n")
+    let fullShellText = artifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.flatMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    } ?? ""
+    let matchesCurrentFailure = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        intValue(signal["signal"]) == nil &&
+        text.contains("Orlix TCTI: static PIE image task=cat") &&
+        text.contains("In function posix_memalign") &&
+        text.contains("__ensure(") &&
+        text.contains("Orlix TCTI: unsupported instruction task=cat") &&
+        text.contains("insn=0xd4200020") &&
+        text.contains("orlix-init: process exited pid=32 status=132") &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFailure ? (report, object) : nil
+}
+
+func postFullShellCatPosixMemalignBRKReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-full-shell-cat-posix-memalign-brk-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellCatPosixMemalignBRKReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match the cat posix_memalign BRK reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "cat posix_memalign BRK reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator full-shell report \(report.path) reaches cat, hits mlibc posix_memalign alignment assertion, then stops on BRK 0xd4200020; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellCatPosixMemalignBRKFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-full-shell-cat-posix-memalign-brk-fix")
+    let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+    let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellCatPosixMemalignBRKReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not require cat posix_memalign BRK fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerGate = Gate(
+        id: "no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+        command: "make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+        kind: "no-phone-reducer",
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+    let reducerStatus = postFullShellCatPosixMemalignBRKReducerPass(reducerGate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "cat posix_memalign BRK fix requires passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA(),
+       fixArtifacts.contains(report.path) {
+        return basicReportGate(gate, target: "tcti-post-full-shell-cat-posix-memalign-brk-fix")
+    }
+
+    let mmapURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/mmap.c")
+    let mmapText = (try? String(contentsOf: mmapURL, encoding: .utf8)) ?? ""
+    let sourceLooksFixed = mmapText.contains("arch_boot_host_page_size()") &&
+        mmapText.contains("orlix_hosted_prot_none_reservation") &&
+        mmapText.contains("orlix_hosted_mmap_align_mask") &&
+        mmapText.contains("orlix_hosted_mmap_align_offset") &&
+        mmapText.contains("info.align_mask = orlix_hosted_mmap_align_mask(file,") &&
+        mmapText.contains("info.align_offset = orlix_hosted_mmap_align_offset(file,") &&
+        mmapText.contains("result = vm_unmapped_area(&info)") &&
+        mmapText.contains("offset_in_page(result)")
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: sourceLooksFixed ? "ready" : "missing",
+        passed: false,
+        reason: sourceLooksFixed ? "source contains hosted mmap host-page alignment fix for \(report.path), but fix gate report \(fixReport.path) is not current passing" : "source does not yet preserve hosted mmap host-page alignment for \(report.path)",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: true,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellInitWriteFaultReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    let text = artifacts.compactMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    }.joined(separator: "\n")
+    let fullShellText = artifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.flatMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    } ?? ""
+    let matchesCurrentFault = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(staticPIE["task"]) == "init" &&
+        intValue(staticPIE["pid"]) == 1 &&
+        !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+        !(stringValue(staticPIE["entry"]) ?? "").isEmpty &&
+        stringValue(mmap["task"]) == "init" &&
+        intValue(mmap["pid"]) == 1 &&
+        intValue(mmap["syscall"]) == 222 &&
+        stringValue(fault["task"]) == "init" &&
+        intValue(fault["pid"]) == 1 &&
+        intValue(fault["access"]) == 2 &&
+        intValue(fault["si"]) == 2 &&
+        !(stringValue(fault["pc"]) ?? "").isEmpty &&
+        !(stringValue(fault["lr"]) ?? "").isEmpty &&
+        !(stringValue(fault["sp"]) ?? "").isEmpty &&
+        !(stringValue(fault["addr"]) ?? "").isEmpty &&
+        stringValue(fault["addr"]) != "0x0" &&
+        intValue(signal["signal"]) == nil &&
+        text.contains("Orlix TCTI: static PIE image task=init") &&
+        text.contains("Orlix TCTI: user fault task=init") &&
+        text.contains("access=2") &&
+        text.contains("si=2") &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFault ? (report, object) : nil
+}
+
+func postFullShellInitWriteFaultReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-full-shell-init-write-fault-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellInitWriteFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match init write-fault reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "init write-fault reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator report \(report.path) records init first-svc syscall 178, static PIE image, mmap syscall 222, then non-null init write fault access=2 si=2 before full shell usability; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellSHSIGABRTReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let shPID = intValue(staticPIE["pid"])
+    let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
+    let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    let text = artifacts.compactMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    }.joined(separator: "\n")
+    let fullShellText = artifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.flatMap { artifact -> String? in
+        let url = root.appendingPathComponent("Build/Reports/runtime").appendingPathComponent(artifact)
+        if let value = try? String(contentsOf: url, encoding: .utf8) {
+            return value
+        }
+        return try? String(contentsOf: root.appendingPathComponent(artifact), encoding: .utf8)
+    } ?? ""
+    let matchesCurrentFailure = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(staticPIE["task"]) == "sh" &&
+        shPID != nil &&
+        stringValue(staticPIE["entry"]) == "0x45418" &&
+        !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+        stringValue(mmap["task"]) == "sh" &&
+        intValue(mmap["pid"]) == shPID &&
+        intValue(mmap["syscall"]) == 222 &&
+        intValue(fault["access"]) == nil &&
+        intValue(fault["si"]) == nil &&
+        (stringValue(fault["addr"]) ?? "").isEmpty &&
+        intValue(signal["pid"]) == shPID &&
+        intValue(signal["signal"]) == 6 &&
+        stringValue(lastReturn["task"]) == "sh" &&
+        intValue(lastReturn["pid"]) == shPID &&
+        intValue(lastReturn["syscall"]) == 172 &&
+        intValue(lastReturn["signed_ret"]) == shPID &&
+        text.contains("Orlix TCTI: static PIE image task=sh") &&
+        text.contains("Orlix TCTI: syscall return task=sh") &&
+        text.contains("syscall=172 ret=\(shPIDHex) signed_ret=\(shPID ?? -1)") &&
+        text.contains("syscall=129 x0=\(shPIDHex) x1=0x6") &&
+        text.contains("syscall=160") &&
+        text.contains("orlix-init: process signaled pid=\(shPID ?? -1) signal=6") &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFailure ? (report, object) : nil
+}
+
+func postFullShellSHSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-full-shell-sh-sigabrt-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellSHSIGABRTReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match sh SIGABRT reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "sh SIGABRT reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator report \(report.path) reaches sh static PIE and syscall-return progress, then sh receives SIGABRT before full shell usability; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellSHReadFaultReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let shPID = intValue(fault["pid"])
+    let fullShellText = runtimeArtifactText(object, suffix: "tcti-full-shell-usability.txt") ?? ""
+    let matchesCurrentFailure = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["selected_device_id"]) == requiredSimulatorID &&
+        stringValue(object["selected_device_name"]) == requiredSimulatorName &&
+        intValue(object["simulator_booted_count"]) == 1 &&
+        boolValue(object["simulator_single_booted"]) &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(staticPIE["task"]) == "sh" &&
+        intValue(staticPIE["pid"]) == shPID &&
+        !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+        !(stringValue(staticPIE["entry"]) ?? "").isEmpty &&
+        stringValue(mmap["task"]) == "sh" &&
+        intValue(mmap["pid"]) == shPID &&
+        intValue(mmap["syscall"]) == 222 &&
+        stringValue(fault["task"]) == "sh" &&
+        shPID != nil &&
+        intValue(fault["access"]) == 1 &&
+        intValue(fault["si"]) == 1 &&
+        !(stringValue(fault["pc"]) ?? "").isEmpty &&
+        !(stringValue(fault["addr"]) ?? "").isEmpty &&
+        stringValue(fault["addr"]) != "0x0" &&
+        intValue(signal["pid"]) == shPID &&
+        intValue(signal["signal"]) == 11 &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFailure ? (report, object) : nil
+}
+
+func postFullShellSHReadFaultReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-sh-read-fault-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellSHReadFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match sh read-fault reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "sh read-fault reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator report \(report.path) reaches sh static PIE and mmap progress, then sh receives SIGSEGV on a nonzero user-data read before full shell usability; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postConsoleSHSIGABRTReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-init-console-write", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let shPID = intValue(staticPIE["pid"])
+    let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
+    let terminalText = runtimeArtifactText(object, suffix: "simulator-terminal-output.txt") ?? ""
+    let consoleText = runtimeArtifactText(object, suffix: "tcti-console-write.txt") ?? ""
+    let matchesCurrentFailure = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(object["selected_device_id"]) == requiredSimulatorID &&
+        stringValue(object["selected_device_name"]) == requiredSimulatorName &&
+        intValue(object["simulator_booted_count"]) == 1 &&
+        boolValue(object["simulator_single_booted"]) &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(staticPIE["task"]) == "sh" &&
+        shPID != nil &&
+        stringValue(staticPIE["entry"]) == "0x45418" &&
+        !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+        stringValue(mmap["task"]) == "sh" &&
+        intValue(mmap["pid"]) == shPID &&
+        intValue(mmap["syscall"]) == 222 &&
+        intValue(fault["access"]) == nil &&
+        intValue(fault["si"]) == nil &&
+        (stringValue(fault["addr"]) ?? "").isEmpty &&
+        intValue(signal["pid"]) == shPID &&
+        intValue(signal["signal"]) == 6 &&
+        stringValue(lastReturn["task"]) == "sh" &&
+        intValue(lastReturn["pid"]) == shPID &&
+        intValue(lastReturn["syscall"]) == 172 &&
+        intValue(lastReturn["signed_ret"]) == shPID &&
+        terminalText.contains("Orlix TCTI: static PIE image task=sh") &&
+        terminalText.contains("Orlix TCTI: syscall return task=sh") &&
+        terminalText.contains("syscall=160") &&
+        terminalText.contains("syscall=172 ret=\(shPIDHex) signed_ret=\(shPID ?? -1)") &&
+        terminalText.contains("syscall=129 x0=\(shPIDHex) x1=0x6") &&
+        terminalText.contains("orlix-init: process signaled pid=\(shPID ?? -1) signal=6") &&
+        !consoleText.contains("ORLIX-TCTI-CONSOLE-OK")
+    return matchesCurrentFailure ? (report, object) : nil
+}
+
+func postConsoleSHSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-console-sh-sigabrt-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postConsoleSHSIGABRTReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator console report does not match sh SIGABRT reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "console sh SIGABRT reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current pinned simulator console report \(report.path) reaches sh static PIE and syscall-return progress, then sh receives SIGABRT before ORLIX-TCTI-CONSOLE-OK; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellInitWriteFaultFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-full-shell-init-write-fault-fix")
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA() {
+        return basicReportGate(gate, target: "tcti-post-full-shell-init-write-fault-fix")
+    }
+
+    guard let (report, _) = postFullShellInitWriteFaultReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not require the init write-fault fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerGate = Gate(
+        id: "no-phone-tcti-post-full-shell-init-write-fault-reducer",
+        command: "make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
+        kind: "no-phone-reducer",
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+    let reducerStatus = postFullShellInitWriteFaultReducerPass(reducerGate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "init write-fault fix requires a passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "ready",
+        passed: false,
+        reason: "current simulator report \(report.path) is reduced; implement the scoped TCTI init write-fault access-sync fix before rerunning full-shell usability",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellSHSIGABRTFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-full-shell-sh-sigabrt-fix")
+    let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+    let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellSHSIGABRTReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not require sh SIGABRT fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerGate = Gate(
+        id: "no-phone-tcti-post-full-shell-sh-sigabrt-reducer",
+        command: "make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
+        kind: "no-phone-reducer",
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+    let reducerStatus = postFullShellSHSIGABRTReducerPass(reducerGate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "sh SIGABRT fix requires passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA(),
+       fixArtifacts.contains(report.path) {
+        return basicReportGate(gate, target: "tcti-post-full-shell-sh-sigabrt-fix")
+    }
+
+    let userPageURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c")
+    let initURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/init.c")
+    let userPageText = (try? String(contentsOf: userPageURL, encoding: .utf8)) ?? ""
+    let initText = (try? String(contentsOf: initURL, encoding: .utf8)) ?? ""
+    let sourceLooksFixed = userPageText.contains("unsigned long fault_flags = 0") &&
+        userPageText.contains("case TCTI_ACCESS_WRITE:") &&
+        userPageText.contains("ORLIX_HOST_USER_FAULT_WRITE") &&
+        userPageText.contains("case TCTI_ACCESS_FETCH:") &&
+        userPageText.contains("ORLIX_HOST_USER_FAULT_EXEC") &&
+        userPageText.contains("orlix_sync_current_user_fault_window(address, fault_flags)") &&
+        initText.contains("host_fault_flags & ORLIX_HOST_USER_FAULT_EXEC") &&
+        initText.contains("host_fault_flags & ORLIX_HOST_USER_FAULT_WRITE") &&
+        initText.contains("return orlix_fault_in_user_page_unlocked(mm, page, fault_flags)") &&
+        initText.contains("fault_flags & ORLIX_HOST_USER_FAULT_WRITE") &&
+        initText.contains("orlix_fault_in_user_page_unlocked(mm, page, fault_flags)") &&
+        initText.contains("mmap_read_unlock(mm)")
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: sourceLooksFixed ? "ready" : "missing",
+        passed: false,
+        reason: sourceLooksFixed ? "source contains hosted user-window access-class fix for \(report.path), but fix gate report \(fixReport.path) is not current passing" : "source does not yet preserve TCTI READ/WRITE/FETCH access class when syncing hosted user window for \(report.path)",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: true,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellInitSecondMmapHangReport() -> (ReportFact, [String: Any])? {
+    guard let (report, object) = latestRuntimeReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") else {
+        return nil
+    }
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let terminalText = runtimeArtifactText(object, suffix: "simulator-terminal-output.txt") ?? ""
+    let fullShellText = runtimeArtifactText(object, suffix: "tcti-full-shell-usability.txt") ?? ""
+    let matchesCurrentFailure = report.status == "fail" &&
+        !report.passed &&
+        report.gitSHA == gitSHA() &&
+        stringValue(firstSVC["task"]) == "init" &&
+        intValue(firstSVC["pid"]) == 1 &&
+        intValue(firstSVC["syscall"]) == 178 &&
+        stringValue(staticPIE["task"]) == "init" &&
+        intValue(staticPIE["pid"]) == 1 &&
+        !(stringValue(staticPIE["base"]) ?? "").isEmpty &&
+        stringValue(mmap["task"]) == "init" &&
+        intValue(mmap["pid"]) == 1 &&
+        intValue(mmap["syscall"]) == 222 &&
+        intValue(fault["access"]) == nil &&
+        intValue(fault["si"]) == nil &&
+        (stringValue(fault["addr"]) ?? "").isEmpty &&
+        intValue(signal["pid"]) == nil &&
+        intValue(signal["signal"]) == nil &&
+        intValue(lastReturn["syscall"]) == nil &&
+        terminalText.contains("Orlix TCTI: static PIE image task=init") &&
+        terminalText.contains("syscall=222") &&
+        !terminalText.contains("Orlix TCTI: static PIE image task=sh") &&
+        !fullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+    return matchesCurrentFailure ? (report, object) : nil
+}
+
+func postFullShellInitSecondMmapHangReducerPass(_ gate: Gate) -> GateStatus {
+    let reducerReport = reportFact(target: "tcti-post-full-shell-init-second-mmap-hang-reducer")
+    let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellInitSecondMmapHangReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not match init second-mmap hang reducer signature",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerReport.exists ? [reducerReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerCoversReport = reducerArtifacts.contains(report.path)
+    if reducerReport.status == "pass",
+       reducerReport.passed,
+       reducerReport.gitSHA == gitSHA(),
+       reducerCoversReport {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "pass",
+            passed: true,
+            reason: "init second-mmap hang reducer \(reducerReport.path) covers current simulator report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: [report, reducerReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "missing",
+        passed: false,
+        reason: "current pinned simulator report \(report.path) records init second-mmap hang before full shell usability; reduce it before patching runtime behavior",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerReport.exists ? [report, reducerReport] : [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func postFullShellInitSecondMmapHangFixPass(_ gate: Gate) -> GateStatus {
+    let fixReport = reportFact(target: "tcti-post-full-shell-init-second-mmap-hang-fix")
+    let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
+    let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+
+    guard let (report, _) = postFullShellInitSecondMmapHangReport() else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "not_needed",
+            passed: false,
+        satisfiesPrerequisite: true,
+            reason: "latest pinned simulator full-shell report does not require init second-mmap fix gate",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: fixReport.exists ? [fixReport] : [],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    let reducerGate = Gate(
+        id: "no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer",
+        command: "make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
+        kind: "no-phone-reducer",
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+    let reducerStatus = postFullShellInitSecondMmapHangReducerPass(reducerGate)
+    guard reducerStatus.passed else {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "missing",
+            passed: false,
+            reason: "init second-mmap fix requires passing reducer for current report \(report.path)",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: false,
+            reportPaths: gate.expectedReportPaths,
+            reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+
+    if fixReport.status == "pass",
+       fixReport.passed,
+       fixReport.gitSHA == gitSHA(),
+       fixArtifacts.contains(report.path) {
+        return basicReportGate(gate, target: "tcti-post-full-shell-init-second-mmap-hang-fix")
+    }
+
+    let engineURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c")
+    let testURL = root.appendingPathComponent("OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c")
+    let engineText = (try? String(contentsOf: engineURL, encoding: .utf8)) ?? ""
+    let testText = (try? String(contentsOf: testURL, encoding: .utf8)) ?? ""
+    let sourceLooksFixed = !engineText.contains("current->thread.user_tls = 0;") &&
+        testText.contains("KUNIT_EXPECT_EQ(test, 0x700000123000ULL, current->thread.user_tls)")
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: sourceLooksFixed ? "ready" : "missing",
+        passed: false,
+        reason: sourceLooksFixed ? "source preserves guest TLS across TCTI successful execve return for \(report.path), but fix gate report \(fixReport.path) is not current passing" : "source still clears or does not test guest TLS preservation across TCTI successful execve return for \(report.path)",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: true,
+        reportPaths: gate.expectedReportPaths,
+        reports: reducerStatus.reports + (fixReport.exists ? [fixReport] : []),
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func addSubShiftedXZRFixPass(_ gate: Gate) -> GateStatus {
+    let report = reportFact(target: "tcti-add-sub-shifted-xzr-fix")
+    if currentReportPassed(report) {
+        return basicReportGate(gate, target: "tcti-add-sub-shifted-xzr-fix")
+    }
+
+    if let (_, simulatorText) = latestSimulatorStabilityText(),
+       brkTrapSignature(simulatorText) {
+        return basicReportGate(gate, target: "tcti-add-sub-shifted-xzr-fix")
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "superseded",
+        passed: false,
+        satisfiesPrerequisite: true,
+        reason: "latest simulator stability report no longer matches the BRK/XZR shifted-addsub signature; do not block the current simulator ladder on stale BRK reducer evidence",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: report.exists ? [report] : [],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func simdMOVI2SFixPass(_ gate: Gate) -> GateStatus {
+    let report = reportFact(target: "tcti-simd-movi-2s-fix")
+    if currentReportPassed(report) {
+        return basicReportGate(gate, target: "tcti-simd-movi-2s-fix")
+    }
+
+    if let (_, simulatorText) = latestSimulatorStabilityText(),
+       simdMOVI2SSignature(simulatorText) {
+        return basicReportGate(gate, target: "tcti-simd-movi-2s-fix")
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "superseded",
+        passed: false,
+        satisfiesPrerequisite: true,
+        reason: "latest simulator stability report no longer matches the SIMD MOVI v0.2s unsupported-instruction signature; do not block the current simulator ladder on stale MOVI 2S evidence",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: report.exists ? [report] : [],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func simdSTRSFixPass(_ gate: Gate) -> GateStatus {
+    let report = reportFact(target: "tcti-simd-str-s-fix")
+    if currentReportPassed(report) {
+        return basicReportGate(gate, target: "tcti-simd-str-s-fix")
+    }
+
+    if let (_, simulatorText) = latestSimulatorStabilityText(),
+       simdSTRSSignature(simulatorText) {
+        return basicReportGate(gate, target: "tcti-simd-str-s-fix")
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "superseded",
+        passed: false,
+        satisfiesPrerequisite: true,
+        reason: "latest simulator stability report no longer matches the SIMD/FP STR s0 unsupported-instruction signature; do not block the current simulator ladder on stale STR S evidence",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: report.exists ? [report] : [],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func simdDUP2DFixPass(_ gate: Gate) -> GateStatus {
+    let report = reportFact(target: "tcti-simd-dup-2d-fix")
+    if currentReportPassed(report) {
+        return basicReportGate(gate, target: "tcti-simd-dup-2d-fix")
+    }
+
+    if let (_, simulatorText) = latestSimulatorStabilityText(),
+       simdDUP2DSignature(simulatorText) {
+        return basicReportGate(gate, target: "tcti-simd-dup-2d-fix")
+    }
+
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        state: "superseded",
+        passed: false,
+        satisfiesPrerequisite: true,
+        reason: "latest simulator stability report no longer matches the SIMD DUP v0.2d unsupported-instruction signature; do not block the current simulator ladder on stale DUP 2D evidence",
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: report.exists ? [report] : [],
         readinessEligible: gate.readinessEligible,
         physicalDevice: gate.physicalDevice,
         gadget: gate.gadget
@@ -1719,7 +3947,12 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "tcti-static-pie-relocation-fix":
         return simulatorStaticPIERelocationFixPass(gate)
     case "no-phone-tcti-simd-self-move-reducer":
-        return basicReportGate(gate, target: "tcti-simd-self-move-reducer")
+        return supersededSimulatorReducerGate(
+            gate,
+            target: "tcti-simd-self-move-reducer",
+            staleSignature: simdSelfMoveSignature,
+            supersededBy: ["tcti-simd-self-move-fix", "tcti-simd-movi-4s-0x1-fix"]
+        )
     case "tcti-simd-self-move-fix":
         return basicReportGate(gate, target: "tcti-simd-self-move-fix")
     case "no-phone-tcti-brk-trap-reducer":
@@ -1737,21 +3970,32 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
             supersededBy: ["tcti-add-sub-shifted-xzr-fix", "tcti-post-setsid-tls-fault-reducer"]
         )
     case "tcti-add-sub-shifted-xzr-fix":
-        return basicReportGate(gate, target: "tcti-add-sub-shifted-xzr-fix")
+        return addSubShiftedXZRFixPass(gate)
     case "tcti-simd-movi-2s-fix":
-        return basicReportGate(gate, target: "tcti-simd-movi-2s-fix")
+        return simdMOVI2SFixPass(gate)
     case "tcti-simd-movi-16b-fix":
         return basicReportGate(gate, target: "tcti-simd-movi-16b-fix")
+    case "tcti-simd-movi-4s-0x1-fix":
+        return basicReportGate(gate, target: "tcti-simd-movi-4s-0x1-fix")
+    case "tcti-simd-cmeq-4s-fix":
+        return basicReportGate(gate, target: "tcti-simd-cmeq-4s-fix")
+    case "tcti-simd-umaxv-4s-fix":
+        return basicReportGate(gate, target: "tcti-simd-umaxv-4s-fix")
     case "tcti-simd-str-s-fix":
-        return basicReportGate(gate, target: "tcti-simd-str-s-fix")
+        return simdSTRSFixPass(gate)
     case "tcti-simd-dup-2d-fix":
-        return basicReportGate(gate, target: "tcti-simd-dup-2d-fix")
+        return simdDUP2DFixPass(gate)
     case "no-phone-tcti-post-overlay-null-user-fault-reducer":
         return basicReportGate(gate, target: "tcti-post-overlay-null-user-fault-reducer")
     case "tcti-post-overlay-null-user-fault-fix":
         return basicReportGate(gate, target: "tcti-post-overlay-null-user-fault-fix")
     case "no-phone-tcti-ldrsw-sign-extension-reducer":
-        return basicReportGate(gate, target: "tcti-ldrsw-sign-extension-reducer")
+        return supersededSimulatorReducerGate(
+            gate,
+            target: "tcti-ldrsw-sign-extension-reducer",
+            staleSignature: ldrswSignExtensionSignature,
+            supersededBy: ["tcti-ldrsw-sign-extension-fix", "tcti-post-setsid-tls-fault-reducer"]
+        )
     case "tcti-ldrsw-sign-extension-fix":
         return basicReportGate(gate, target: "tcti-ldrsw-sign-extension-fix")
     case "no-phone-tcti-post-setsid-tls-fault-reducer":
@@ -1776,15 +4020,47 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
             supersededBy: ["tcti-post-bash-mmap-read-fault-reducer"]
         )
     case "no-phone-tcti-post-bash-mmap-read-fault-reducer":
-        return basicReportGate(gate, target: "tcti-post-bash-mmap-read-fault-reducer")
+        return postBashMmapReadFaultReducerPass(gate)
+    case "no-phone-tcti-init-read-fault-reducer":
+        return initReadFaultReducerPass(gate)
+    case "no-phone-tcti-post-static-pie-init-read-fault-reducer":
+        return postStaticPIEInitReadFaultReducerPass(gate)
+    case "tcti-post-static-pie-init-tls-fix":
+        return postStaticPIEInitTLSFixPass(gate)
+    case "no-phone-tcti-post-full-shell-cat-read-fault-reducer":
+        return postFullShellCatReadFaultReducerPass(gate)
+    case "tcti-post-full-shell-cat-read-fault-fix":
+        return postFullShellCatReadFaultFixPass(gate)
+    case "no-phone-tcti-post-full-shell-init-write-fault-reducer":
+        return postFullShellInitWriteFaultReducerPass(gate)
+    case "tcti-post-full-shell-init-write-fault-fix":
+        return postFullShellInitWriteFaultFixPass(gate)
+    case "no-phone-tcti-post-full-shell-sh-sigabrt-reducer":
+        return postFullShellSHSIGABRTReducerPass(gate)
+    case "tcti-post-full-shell-sh-sigabrt-fix":
+        return postFullShellSHSIGABRTFixPass(gate)
+    case "no-phone-tcti-post-full-shell-sh-read-fault-reducer":
+        return postFullShellSHReadFaultReducerPass(gate)
+    case "no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer":
+        return postFullShellInitSecondMmapHangReducerPass(gate)
+    case "tcti-post-full-shell-init-second-mmap-hang-fix":
+        return postFullShellInitSecondMmapHangFixPass(gate)
+    case "no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer":
+        return postFullShellCatPosixMemalignBRKReducerPass(gate)
+    case "tcti-post-full-shell-cat-posix-memalign-brk-fix":
+        return postFullShellCatPosixMemalignBRKFixPass(gate)
     case "no-phone-tcti-post-busybox-sigabrt-reducer":
         return postBusyBoxSIGABRTReducerPass(gate)
     case "tcti-user-data-window-refresh-fix":
-        return basicReportGate(gate, target: "tcti-user-data-window-refresh-fix")
+        return userDataWindowRefreshFixPass(gate)
     case "tcti-busybox-syscall-return-trace":
         return basicReportGate(gate, target: "tcti-busybox-syscall-return-trace")
+    case "no-phone-tcti-post-busybox-shell-command-sigill-reducer":
+        return postBusyBoxShellCommandSIGILLReducerPass(gate)
     case "simulator-tcti-runtime-stability":
         return simulatorStabilityPass(gate)
+    case "no-phone-tcti-post-console-sh-sigabrt-reducer":
+        return postConsoleSHSIGABRTReducerPass(gate)
     case "simulator-tcti-linux-console-usability":
         return simulatorConsoleUsabilityPass(gate)
     case "simulator-tcti-static-busybox-start":
@@ -1833,14 +4109,17 @@ func missingGate(_ gate: Gate, reason: String) -> GateStatus {
 }
 
 func simulatorProofGate(id: String, runtimeGate: String, marker: String, prerequisite: String, label: String) -> Gate {
-    let command = "make runtime-validation DESTINATION=iphonesimulator GATE=\(runtimeGate) ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+    let command = "make runtime-validation DESTINATION=iphonesimulator GATE=\(runtimeGate) ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)"
     return Gate(
         id: id,
         command: command,
         kind: "simulator-runtime",
         prerequisites: [prerequisite],
         allowedScope: [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
             "tools/runtime/orlix-runtime-validation.sh",
+            "tools/tcti/orlix-tcti-gate.swift",
+            "tools/tcti/fixtures/**",
             ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
             ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
             "docs/plans/active/orlix-tcti/PLAN.md",
@@ -2008,7 +4287,7 @@ func runtimePreflightGates() -> [Gate] {
         ),
         Gate(
             id: "simulator-tcti-init-first-syscall",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             kind: "simulator-runtime",
             prerequisites: ["tcti-direct-chain-fuzz"],
             allowedScope: [
@@ -2048,7 +4327,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             ],
             reducerRequirements: [
                 "Any simulator failure after app launch must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
@@ -2627,10 +4906,205 @@ func runtimePreflightGates() -> [Gate] {
         ]
     ),
     Gate(
+        id: "tcti-simd-movi-4s-0x1-fix",
+        command: "make tcti-gate TARGET=tcti-simd-movi-4s-0x1-fix",
+        kind: "no-phone-simulator-reducer-fix",
+        prerequisites: ["no-phone-tcti-post-busybox-shell-command-sigill-reducer"],
+        allowedScope: [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
+            "tools/tcti/orlix-tcti-gate.swift",
+            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_movi_4s_0x1.S",
+            "Makefile",
+            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+        ],
+        forbiddenScope: [
+            "Do not run physical-device gates.",
+            "Do not add production assembly.",
+            "Do not add gadget dispatch.",
+            "Do not broaden SIMD beyond the exact emitted MOVI vN.4s #0x1 subset.",
+            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
+        ],
+        expectedReportPaths: [
+            "Build/TCTI/reports/tcti-simd-movi-4s-0x1-fix/report.json",
+            "Build/TCTI/reproducers/tcti-simd-movi-4s-0x1-fix/simd-movi-4s-0x1-pass-regression.json",
+            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+        ],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [
+            "rtk proxy git diff --check",
+            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "rtk proxy make tcti-gate TARGET=tcti-simd-movi-4s-0x1-fix",
+            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-4s-0x1-fix/simd-movi-4s-0x1-pass-regression.json",
+            "rtk proxy make agent-harness-check",
+            "rtk proxy make agent-status AREA=orlix-tcti",
+            "rtk proxy make agent-next AREA=orlix-tcti",
+            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+        ],
+        reducerRequirements: [
+            "The fix gate must cite simulator unsupported instruction 0x4f000421.",
+            "The KUnit regression must prove MOVI v1.4s materializes 0x0000000100000001 in both SIMD halves for v1.",
+            "The gate must not broaden into generic SIMD modified-immediate support.",
+        ],
+        requiredSubagentsOrSkills: [
+            "orlix-tcti-reproducer",
+            "orlix-tcti-safety",
+            "orlix-tcti-debug",
+            "tcti-planner",
+            "tcti-safety-reviewer",
+            "tcti-llvm-inspector",
+            "tcti-test-reducer",
+            "tcti-release-gate-reviewer",
+        ],
+        commitMessageTemplate: "test(tcti): support emitted simd movi shell immediate",
+        stopConditions: [
+            "Stop if latest simulator failure no longer exposes unsupported instruction 0x4f000421.",
+            "Stop if fix would require generic SIMD modified-immediate decoding.",
+            "Stop if KUnit cannot compile regression.",
+        ]
+    ),
+    Gate(
+        id: "tcti-simd-cmeq-4s-fix",
+        command: "make tcti-gate TARGET=tcti-simd-cmeq-4s-fix",
+        kind: "no-phone-simulator-reducer-fix",
+        prerequisites: ["tcti-simd-movi-4s-0x1-fix"],
+        allowedScope: [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.h",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
+            "tools/tcti/orlix-tcti-gate.swift",
+            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_cmeq_4s.S",
+            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+        ],
+        forbiddenScope: [
+            "Do not run physical-device gates.",
+            "Do not add production assembly.",
+            "Do not add gadget dispatch.",
+            "Do not broaden SIMD beyond the exact emitted CMEQ vD.4s, vN.4s, vM.4s subset.",
+            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
+        ],
+        expectedReportPaths: [
+            "Build/TCTI/reports/tcti-simd-cmeq-4s-fix/report.json",
+            "Build/TCTI/reproducers/tcti-simd-cmeq-4s-fix/simd-cmeq-4s-pass-regression.json",
+            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+        ],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [
+            "rtk proxy git diff --check",
+            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "rtk proxy make tcti-gate TARGET=tcti-simd-cmeq-4s-fix",
+            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-cmeq-4s-fix/simd-cmeq-4s-pass-regression.json",
+            "rtk proxy make agent-harness-check",
+            "rtk proxy make agent-status AREA=orlix-tcti",
+            "rtk proxy make agent-next AREA=orlix-tcti",
+            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+        ],
+        reducerRequirements: [
+            "The fix gate must cite simulator unsupported instruction 0x6ea18c64 from the pinned static BusyBox shell-command report.",
+            "The KUnit regression must prove CMEQ v4.4s, v3.4s, v1.4s produces 0xffffffff for equal 32-bit lanes and zero otherwise.",
+            "The gate must not broaden into generic SIMD compare support.",
+        ],
+        requiredSubagentsOrSkills: [
+            "orlix-tcti-reproducer",
+            "orlix-tcti-safety",
+            "orlix-tcti-debug",
+            "tcti-planner",
+            "tcti-safety-reviewer",
+            "tcti-llvm-inspector",
+            "tcti-test-reducer",
+            "tcti-release-gate-reviewer",
+        ],
+        commitMessageTemplate: "test(tcti): support emitted simd cmeq shell compare",
+        stopConditions: [
+            "Stop if current simulator failure no longer exposes unsupported instruction 0x6ea18c64.",
+            "Stop if fix would require generic SIMD compare decoding.",
+            "Stop if KUnit cannot compile regression.",
+        ]
+    ),
+    Gate(
+        id: "tcti-simd-umaxv-4s-fix",
+        command: "make tcti-gate TARGET=tcti-simd-umaxv-4s-fix",
+        kind: "no-phone-simulator-reducer-fix",
+        prerequisites: ["tcti-simd-cmeq-4s-fix"],
+        allowedScope: [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.h",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
+            "tools/tcti/orlix-tcti-gate.swift",
+            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_umaxv_4s.S",
+            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+        ],
+        forbiddenScope: [
+            "Do not run physical-device gates.",
+            "Do not add production assembly.",
+            "Do not add gadget dispatch.",
+            "Do not broaden SIMD beyond the exact emitted UMAXV Sd, Vn.4s subset.",
+            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
+        ],
+        expectedReportPaths: [
+            "Build/TCTI/reports/tcti-simd-umaxv-4s-fix/report.json",
+            "Build/TCTI/reproducers/tcti-simd-umaxv-4s-fix/simd-umaxv-4s-pass-regression.json",
+            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+        ],
+        readinessEligible: false,
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [
+            "rtk proxy git diff --check",
+            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+            "rtk proxy make tcti-gate TARGET=tcti-simd-umaxv-4s-fix",
+            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-umaxv-4s-fix/simd-umaxv-4s-pass-regression.json",
+            "rtk proxy make agent-harness-check",
+            "rtk proxy make agent-status AREA=orlix-tcti",
+            "rtk proxy make agent-next AREA=orlix-tcti",
+            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+        ],
+        reducerRequirements: [
+            "The fix gate must cite simulator unsupported instruction 0x6eb0a885 from the pinned static BusyBox shell-command report.",
+            "The KUnit regression must prove UMAXV s5, v4.4s writes the unsigned maximum 32-bit lane to the scalar destination.",
+            "The gate must not broaden into generic SIMD reduction support.",
+        ],
+        requiredSubagentsOrSkills: [
+            "orlix-tcti-reproducer",
+            "orlix-tcti-safety",
+            "orlix-tcti-debug",
+            "tcti-planner",
+            "tcti-safety-reviewer",
+            "tcti-llvm-inspector",
+            "tcti-test-reducer",
+            "tcti-release-gate-reviewer",
+        ],
+        commitMessageTemplate: "test(tcti): support emitted simd max reduction",
+        stopConditions: [
+            "Stop if current simulator failure no longer exposes unsupported instruction 0x6eb0a885.",
+            "Stop if fix would require generic SIMD reduction decoding.",
+            "Stop if KUnit cannot compile regression.",
+        ]
+    ),
+    Gate(
         id: "tcti-simd-str-s-fix",
         command: "make tcti-gate TARGET=tcti-simd-str-s-fix",
         kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-movi-16b-fix"],
+        prerequisites: ["tcti-simd-movi-4s-0x1-fix"],
         allowedScope: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
@@ -3256,12 +5730,72 @@ func runtimePreflightGates() -> [Gate] {
             "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
             "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
         ]
-    ),
-    Gate(
-        id: "simulator-tcti-runtime-stability",
-        command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        ),
+        Gate(
+            id: "no-phone-tcti-init-read-fault-reducer",
+            command: "make tcti-gate TARGET=tcti-init-read-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["no-phone-tcti-post-bash-mmap-read-fault-reducer"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not run simulator gates while reducing this report-backed failure.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
+                "Only bind the current pinned simulator init read-fault report to a replayable no-phone reducer.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-init-read-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-init-read-fault-reducer/init-read-fault-pass-regression.json",
+                "Build/Reports/runtime/tcti-simulator-stability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-init-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-init-read-fault-reducer/init-read-fault-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "The simulator report must show init first-svc syscall 178, then a non-null init read fault before static PIE or shell progress.",
+                "The reducer must replay without running simulator or physical-device gates.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-safety",
+                "orlix-tcti-debug",
+                "tcti-test-reducer",
+                "tcti-safety-reviewer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce init read fault before simulator stability",
+            stopConditions: [
+                "Stop if no current simulator init read-fault report exists.",
+                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
+                "Stop if production TCTI code would be required before the reducer exists.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-runtime-stability",
+        command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
         kind: "simulator-runtime",
-        prerequisites: ["no-phone-tcti-post-bash-mmap-read-fault-reducer"],
+        prerequisites: ["no-phone-tcti-init-read-fault-reducer"],
             allowedScope: [
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
@@ -3301,7 +5835,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             ],
             reducerRequirements: [
                 "Any simulator fatal runtime error must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
@@ -3324,12 +5858,77 @@ func runtimePreflightGates() -> [Gate] {
             ]
         ),
         Gate(
-            id: "simulator-tcti-linux-console-usability",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-            kind: "simulator-runtime",
+            id: "no-phone-tcti-post-console-sh-sigabrt-reducer",
+            command: "make tcti-gate TARGET=tcti-post-console-sh-sigabrt-reducer",
+            kind: "no-phone-reducer",
             prerequisites: ["simulator-tcti-runtime-stability"],
             allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not patch runtime behavior before the console SIGABRT reducer exists and replays.",
+                "Do not run physical-device gates.",
+                "Do not run any simulator except Orlix-iPhone-15-Pro-Max.",
+                "Do not add production TCTI assembly or gadget dispatch.",
+                "Do not add HostAdapter Linux behavior or Darwin guest syscall behavior.",
+                "Do not implement VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics in the harness.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-console-sh-sigabrt-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-console-sh-sigabrt-reducer/post-console-sh-sigabrt-pass-regression.json",
+                "Build/Reports/runtime/tcti-init-console-write-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-console-sh-sigabrt-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-console-sh-sigabrt-reducer/post-console-sh-sigabrt-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest console simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show sh static PIE entry 0x45418, mmap syscall 222, uname syscall 160, syscall 172 returning sh pid, then syscall 129 same pid signal 6 before ORLIX-TCTI-CONSOLE-OK.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce simulator console sh sigabrt",
+            stopConditions: [
+                "Stop if latest console simulator report is stale or no longer matches sh SIGABRT signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "simulator-tcti-linux-console-usability",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
+            kind: "simulator-runtime",
+            prerequisites: ["no-phone-tcti-post-console-sh-sigabrt-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
                 "tools/runtime/orlix-runtime-validation.sh",
+                "tools/tcti/orlix-tcti-gate.swift",
+                "tools/tcti/fixtures/**",
                 ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
                 ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
                 "docs/plans/active/orlix-tcti/PLAN.md",
@@ -3361,7 +5960,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             ],
             reducerRequirements: [
                 "If the simulator console marker fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
@@ -3579,8 +6178,70 @@ func runtimePreflightGates() -> [Gate] {
             ]
         ),
         Gate(
+            id: "no-phone-tcti-post-busybox-shell-command-sigill-reducer",
+            command: "make tcti-gate TARGET=tcti-post-busybox-shell-command-sigill-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["tcti-user-data-window-refresh-fix"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run phone gates.",
+                "Do not run simulator gates while reducing this failure.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Only bind the current pinned simulator BusyBox marker-then-SIGILL report to a replayable no-phone reducer.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-busybox-shell-command-sigill-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-busybox-shell-command-sigill-reducer/post-busybox-shell-command-sigill-after-marker-pass-regression.json",
+                "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-busybox-shell-command-sigill-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-shell-command-sigill-reducer/post-busybox-shell-command-sigill-after-marker-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest static BusyBox shell-command simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "The report must show the ORLIX-TCTI-BUSYBOX-USABLE marker before unsupported instruction SIGILL signal=4.",
+                "The reducer must replay without running simulator or phone gates.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce busybox shell command sigill",
+            stopConditions: [
+                "Stop if no current static BusyBox shell-command SIGILL report exists.",
+                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
+                "Stop if production TCTI code would be required before the reducer exists.",
+            ]
+        ),
+        Gate(
             id: "simulator-tcti-static-busybox-start",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             kind: "simulator-runtime",
             prerequisites: ["simulator-tcti-linux-console-usability"],
             allowedScope: [
@@ -3617,7 +6278,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             ],
             reducerRequirements: [
                 "If static BusyBox start fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
@@ -3641,9 +6302,9 @@ func runtimePreflightGates() -> [Gate] {
         ),
         Gate(
             id: "simulator-tcti-static-busybox-shell-command",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             kind: "simulator-runtime",
-            prerequisites: ["simulator-tcti-static-busybox-start"],
+            prerequisites: ["simulator-tcti-static-busybox-start", "tcti-simd-umaxv-4s-fix"],
             allowedScope: [
                 "tools/runtime/orlix-runtime-validation.sh",
                 ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
@@ -3680,7 +6341,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             ],
             reducerRequirements: [
                 "If the BusyBox shell command fails, reduce it into a no-phone TCTI fixture or report-specific reducer before patching production behavior.",
@@ -3701,11 +6362,870 @@ func runtimePreflightGates() -> [Gate] {
                 "Stop if the gate is used to claim full Linux usability, release readiness, or phone readiness.",
             ]
         ),
+        Gate(
+            id: "no-phone-tcti-post-static-pie-init-read-fault-reducer",
+            command: "make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["simulator-tcti-static-busybox-shell-command"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run phone gates.",
+                "Do not run simulator gates while reducing this report-backed failure.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Only bind the current pinned simulator post-static-PIE init read-fault report to a replayable no-phone reducer.",
+            ],
+		expectedReportPaths: [
+			"Build/TCTI/reports/tcti-post-static-pie-init-read-fault-reducer/report.json",
+			"Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
+			"Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
+			"Build/Reports/runtime/tcti-full-shell-usability-*.json",
+		],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D).",
+                "The simulator report must show init first-svc syscall 178, static PIE image task=init, then a non-null init read fault.",
+                "The reducer must replay without running simulator or phone gates.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-safety",
+                "orlix-tcti-debug",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce post static pie init read fault",
+            stopConditions: [
+                "Stop if no current pinned simulator post-static-PIE init read-fault report exists.",
+                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
+                "Stop if production TCTI code would be required before the reducer exists.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-static-pie-init-tls-fix",
+            command: "make tcti-gate TARGET=tcti-post-static-pie-init-tls-fix",
+            kind: "production-tcti-fix",
+            prerequisites: ["no-phone-tcti-post-static-pie-init-read-fault-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not run simulator gates as proof for this no-phone fix gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not use host TPIDR_EL0 as guest state.",
+                "Do not claim full-shell usability until the pinned simulator full-shell gate reruns and passes.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-static-pie-init-tls-fix/report.json",
+                "Build/TCTI/reports/tcti-post-static-pie-init-read-fault-reducer/report.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-tls-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
+            ],
+            reducerRequirements: [
+                "The post-static-PIE init read-fault reducer must pass for the current report before runtime code changes.",
+                "The fix gate must emit a JSON report and must not use simulator success as its own no-phone pass criterion.",
+                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): initialize guest tls for static pie init",
+            stopConditions: [
+                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
+                "Stop if the fix requires host TPIDR_EL0, HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, product defconfig flips, or generated-tree edits.",
+                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-cat-read-fault-reducer",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["tcti-post-static-pie-init-tls-fix"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not run simulator gates as proof for this no-phone reducer gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not patch the cat user-data read-fault runtime behavior before the reducer exists and replays.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show the shell reached cat /tmp/orlix-tcti-shell, then cat faulted on a non-null user-data read and the shell exited 139 before ORLIX-TCTI-SHELL-USABLE.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell cat read fault",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the cat user-data read-fault signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-full-shell-cat-read-fault-fix",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-fix",
+            kind: "no-phone-fix",
+            prerequisites: ["no-phone-tcti-post-full-shell-cat-read-fault-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not treat this no-phone fix gate as full shell usability proof.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not call host read/write or implement Linux syscall behavior in TCTI.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for subsequent simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-fix/report.json",
+                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
+            ],
+            reducerRequirements: [
+                "The cat read-fault reducer must pass for the current pinned simulator report before runtime code changes.",
+                "The fix gate must prove TCTI refreshes the guest read buffer after successful read(2) without adding Linux runtime semantics.",
+                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): refresh read buffer after syscall return",
+            stopConditions: [
+                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
+                "Stop if the fix requires HostAdapter Linux behavior, Darwin guest syscall behavior, VFS, fd tables, process model, signal handling, scheduler behavior, production assembly, gadget dispatch, product defconfig flips, or generated-tree edits.",
+                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-init-write-fault-reducer",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["tcti-post-full-shell-cat-read-fault-fix"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not run simulator gates as proof for this no-phone reducer gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not patch the init user-data write-fault runtime behavior before the reducer exists and replays.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show init pid=1 reached first TCTI svc syscall 178, entered a static PIE image, issued mmap syscall 222, then faulted a non-null user-data write with access=2 si=2 before ORLIX-TCTI-SHELL-USABLE.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell init write fault",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the init user-data write-fault signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-full-shell-init-write-fault-fix",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-fix",
+            kind: "no-phone-fix",
+            prerequisites: ["no-phone-tcti-post-full-shell-init-write-fault-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/fault.c",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not treat this no-phone fix gate as simulator full-shell success.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not map guest text host-executable or add JIT/MAP_JIT/RWX/prot_exec behavior.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-fix/report.json",
+                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-reducer/report.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
+            ],
+            reducerRequirements: [
+                "The init write-fault reducer must pass for the current report before runtime code changes.",
+                "The fix gate must emit JSON and must not use simulator success as its own no-phone pass criterion.",
+                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): sync write fault windows for full shell",
+            stopConditions: [
+                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
+                "Stop if the fix requires HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, product defconfig flips, generated-tree edits, or executable guest text mappings.",
+                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-sh-sigabrt-reducer",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["tcti-post-full-shell-init-write-fault-fix"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not rerun the simulator as proof for this no-phone reducer gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not patch the sh SIGABRT runtime behavior before the reducer exists and replays.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show sh static PIE entry 0x45418, mmap syscall 222, uname syscall 160, syscall 172 returning the sh pid, then syscall 129 with the same pid and signal 6 before ORLIX-TCTI-SHELL-USABLE.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell sh sigabrt",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the sh SIGABRT signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-full-shell-sh-sigabrt-fix",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-fix",
+            kind: "no-phone-fix",
+            prerequisites: [
+                "no-phone-tcti-post-full-shell-sh-sigabrt-reducer",
+            ],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not add HostAdapter Linux behavior.",
+                "Do not call Darwin syscalls as guest side effects.",
+                "Do not implement VFS, fd table, process, signal, scheduler, or Linux runtime semantics in the harness.",
+                "Do not add production TCTI assembly or gadget dispatch.",
+                "Do not edit generated Linux trees.",
+                "Do not add MAP_JIT, JIT, RWX, vm_protect EXECUTE, or host-executable guest text.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-fix/report.json",
+                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
+                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
+            ],
+            reducerRequirements: [
+                "The sh SIGABRT reducer must pass for the current pinned simulator report before runtime code changes.",
+                "The fix gate must emit JSON and must not treat simulator success as its own no-phone pass criterion.",
+                "After fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): preserve fault window access class",
+            stopConditions: [
+                "Stop if reducer report is missing, stale, failing, or does not cover the current simulator report.",
+                "Stop if the fix requires HostAdapter Linux behavior or Darwin guest syscall behavior.",
+                "Stop if the fix requires physical-device execution.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-sh-read-fault-reducer",
+            command: "make tcti-gate TARGET=tcti-post-sh-read-fault-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: [
+                "tcti-post-full-shell-sh-sigabrt-fix",
+            ],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not rerun the simulator as proof for this no-phone reducer gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not patch the sh read-fault runtime behavior before the reducer exists and replays.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-sh-read-fault-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-sh-read-fault-reducer/post-sh-read-fault-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-sh-read-fault-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-sh-read-fault-reducer/post-sh-read-fault-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show sh static PIE, mmap syscall 222, a nonzero sh user-data read fault, and signal 11 before ORLIX-TCTI-SHELL-USABLE.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell sh read fault",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the sh read-fault signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: [
+                "no-phone-tcti-post-full-shell-sh-read-fault-reducer",
+            ],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not patch runtime behavior before this reducer exists and replays.",
+                "Do not run physical-device gates.",
+                "Do not add production TCTI assembly or gadget dispatch.",
+                "Do not add HostAdapter Linux behavior or Darwin guest syscall behavior.",
+                "Do not implement VFS, fd table, process, signal, scheduler, or Linux runtime semantics in the harness.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show init static PIE, first svc syscall 178, init mmap syscall 222, no sh startup, no signal, no fatal user fault, and no ORLIX-TCTI-SHELL-USABLE marker.",
+                "The reducer must replay before any further runtime patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell init mmap hang",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the init second-mmap hang signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-full-shell-init-second-mmap-hang-fix",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-fix",
+            kind: "no-phone-fix",
+            prerequisites: ["no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not rerun the simulator as proof for this no-phone fix gate.",
+                "Do not implement BRK as a supported TCTI instruction for this assertion symptom.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not map guest text host-executable or add JIT/MAP_JIT/RWX/prot_exec behavior.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-fix/report.json",
+                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The init second-mmap reducer must pass and cover the current pinned full-shell simulator report.",
+                "The fix gate must prove TCTI successful execve return preserves guest TLS instead of clearing TPIDR_EL0 state.",
+                "The fix gate must keep forbidden behavior false and leave physical-device work blocked.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): preserve guest tls across execve return",
+            stopConditions: [
+                "Stop if the reducer does not cover the current pinned full-shell simulator report.",
+                "Stop if the fix requires BRK support instead of preventing the mlibc assertion.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if the next simulator full-shell report still lacks ORLIX-TCTI-SHELL-USABLE.",
+            ]
+        ),
+        Gate(
+            id: "no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+            kind: "no-phone-reducer",
+            prerequisites: ["tcti-post-full-shell-init-second-mmap-hang-fix"],
+            allowedScope: [
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not rerun the simulator as proof for this no-phone reducer gate.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Do not patch the cat posix_memalign BRK runtime behavior before the reducer exists and replays.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
+                "The report must show cat running under TCTI, an mlibc posix_memalign alignment assertion, unsupported BRK instruction 0xd4200020 in cat, shell status 132, and no ORLIX-TCTI-SHELL-USABLE marker.",
+                "The reducer must replay before production TCTI patching.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "test(tcti): reduce full shell cat brk assertion",
+            stopConditions: [
+                "Stop if the latest full-shell simulator report is stale or no longer matches the cat posix_memalign BRK signature.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
+            ]
+        ),
+        Gate(
+            id: "tcti-post-full-shell-cat-posix-memalign-brk-fix",
+            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-fix",
+            kind: "no-phone-fix",
+            prerequisites: ["no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer"],
+            allowedScope: [
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/mmap.c",
+                "tools/tcti/orlix-tcti-gate.swift",
+                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            ],
+            forbiddenScope: [
+                "Do not run physical-device gates.",
+                "Do not rerun the simulator as proof for this no-phone fix gate.",
+                "Do not implement BRK as a supported TCTI instruction for this assertion symptom.",
+                "Do not add production assembly.",
+                "Do not add gadget dispatch.",
+                "Do not flip product defconfigs.",
+                "Do not edit generated Linux or build trees.",
+                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
+                "Use only Orlix-iPhone-15-Pro-Max (C47ED88D-0D0A-420D-8C78-D4C1D34A276D) for simulator evidence.",
+            ],
+            expectedReportPaths: [
+                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-fix/report.json",
+                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-reducer/report.json",
+                "Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
+                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
+            ],
+            readinessEligible: false,
+            physicalDevice: false,
+            gadget: false,
+            requiredValidationCommands: [
+                "rtk proxy git diff --check",
+                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
+                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-fix",
+                "rtk proxy make agent-harness-check",
+                "rtk proxy make agent-status AREA=orlix-tcti",
+                "rtk proxy make agent-next AREA=orlix-tcti",
+                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
+            ],
+            reducerRequirements: [
+                "The cat posix_memalign BRK reducer must pass and cover the current pinned full-shell simulator report.",
+                "The fix gate must prove hosted anonymous mmap selection preserves host-page alignment without implementing BRK as a supported instruction.",
+                "The fix gate must keep forbidden behavior false and leave physical-device work blocked.",
+            ],
+            requiredSubagentsOrSkills: [
+                "orlix-tcti-reproducer",
+                "orlix-tcti-debug",
+                "orlix-tcti-safety",
+                "orlix-runtime-claim-verification",
+                "tcti-planner",
+                "tcti-safety-reviewer",
+                "tcti-llvm-inspector",
+                "tcti-test-reducer",
+                "tcti-release-gate-reviewer",
+            ],
+            commitMessageTemplate: "fix(tcti): preserve mmap alignment for full shell cat",
+            stopConditions: [
+                "Stop if the reducer does not cover the current pinned full-shell simulator report.",
+                "Stop if the fix requires BRK support instead of preventing the mlibc assertion.",
+                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
+                "Stop if the next simulator full-shell report still lacks ORLIX-TCTI-SHELL-USABLE.",
+            ]
+        ),
         simulatorProofGate(
             id: "simulator-tcti-full-shell-usability",
             runtimeGate: "tcti-full-shell-usability",
             marker: "ORLIX-TCTI-SHELL-USABLE",
-            prerequisite: "simulator-tcti-static-busybox-shell-command",
+            prerequisite: "tcti-post-full-shell-cat-posix-memalign-brk-fix",
             label: "full shell usability"
         ),
         simulatorProofGate(
@@ -3767,13 +7287,14 @@ func statuses(for roadmap: Roadmap) -> [GateStatus] {
     let bases = roadmapGatesWithRuntimePreflight(roadmap).map(baseGateStatus)
     let byID = Dictionary(uniqueKeysWithValues: bases.map { ($0.id, $0) })
     return bases.map { status in
-        let satisfied = status.prerequisites.allSatisfy { byID[$0]?.passed == true }
+        let satisfied = status.prerequisites.allSatisfy { byID[$0]?.satisfiesPrerequisite == true }
         return GateStatus(
             id: status.id,
             command: status.command,
             kind: status.kind,
             state: status.state,
             passed: status.passed,
+            satisfiesPrerequisite: status.satisfiesPrerequisite,
             reason: status.reason,
             prerequisites: status.prerequisites,
             prerequisitesSatisfied: satisfied,
@@ -3787,7 +7308,7 @@ func statuses(for roadmap: Roadmap) -> [GateStatus] {
 }
 
 func selectedStatus(from statuses: [GateStatus]) -> GateStatus? {
-    statuses.first { !$0.passed && $0.prerequisitesSatisfied }
+    statuses.first { !$0.satisfiesPrerequisite && $0.prerequisitesSatisfied }
 }
 
 func noPhoneGatesBeforeFirstPhysical(_ statuses: [GateStatus]) -> [GateStatus] {
@@ -3804,20 +7325,151 @@ func noPhoneGatesBeforeFirstPhysical(_ statuses: [GateStatus]) -> [GateStatus] {
 }
 
 func noPhoneGatesPassedBeforeFirstPhysical(_ statuses: [GateStatus]) -> Bool {
-    noPhoneGatesBeforeFirstPhysical(statuses).allSatisfy { $0.passed }
+    noPhoneGatesBeforeFirstPhysical(statuses).allSatisfy { $0.satisfiesPrerequisite }
 }
 
 func simulatorRuntimeGates(_ statuses: [GateStatus]) -> [GateStatus] {
     statuses.filter { $0.kind == "simulator-runtime" }
 }
 
+func simulatorReadinessStatuses(_ statuses: [GateStatus]) -> [GateStatus] {
+    let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.id, $0) })
+    return simulatorReadinessGateIDs.compactMap { byID[$0] }
+}
+
+func simulatorReadinessMissingGateIDs(_ statuses: [GateStatus]) -> [String] {
+    let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.id, $0) })
+    return simulatorReadinessGateIDs.filter { gateID in
+        guard let status = byID[gateID] else {
+            return true
+        }
+        return !status.currentlySimulatorReadinessSatisfied
+    }
+}
+
 func simulatorRuntimeGatesComplete(_ statuses: [GateStatus]) -> Bool {
-    let simulatorGates = simulatorRuntimeGates(statuses)
-    return !simulatorGates.isEmpty && simulatorGates.allSatisfy { $0.passed }
+    simulatorReadinessMissingGateIDs(statuses).isEmpty &&
+        simulatorReadinessStatuses(statuses).count == simulatorReadinessGateIDs.count
+}
+
+func physicalGateMissingSimulatorPrerequisites(_ gate: Gate) -> [String] {
+    let prerequisites = Set(gate.prerequisites)
+    return simulatorReadinessGateIDs.filter { !prerequisites.contains($0) }
+}
+
+func runtimeGateID(for simulatorReadinessGateID: String) -> String {
+    switch simulatorReadinessGateID {
+    case "simulator-tcti-runtime-stability":
+        return "tcti-simulator-stability"
+    case "simulator-tcti-linux-console-usability":
+        return "tcti-init-console-write"
+    default:
+        return simulatorReadinessGateID.replacingOccurrences(of: "simulator-", with: "")
+    }
+}
+
+func physicalGateMissingSimulatorReportPaths(_ gate: Gate) -> [String] {
+    let reports = Set(gate.expectedReportPaths)
+    return simulatorReadinessGateIDs.compactMap { gateID in
+        let runtimeGate = runtimeGateID(for: gateID)
+        let expected = "Build/Reports/runtime/\(runtimeGate)-*.json"
+        return reports.contains(expected) ? nil : expected
+    }
+}
+
+func physicalGateMissingSimulatorValidationCommands(_ gate: Gate) -> [String] {
+    simulatorReadinessGateIDs.compactMap { gateID in
+        let runtimeGate = runtimeGateID(for: gateID)
+        let hasCommand = gate.requiredValidationCommands.contains { command in
+            command.contains("DESTINATION=iphonesimulator") &&
+                command.contains("GATE=\(runtimeGate)") &&
+                command.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)") &&
+                command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)") &&
+                command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)")
+        }
+        return hasCommand ? nil : runtimeGate
+    }
+}
+
+func validateRoadmapSimulatorPolicy(_ roadmap: Roadmap) throws {
+    let gates = roadmapGatesWithRuntimePreflight(roadmap)
+    let ids = Set(gates.map(\.id))
+    let missingReadinessGates = simulatorReadinessGateIDs.filter { !ids.contains($0) }
+    if !missingReadinessGates.isEmpty {
+        throw HarnessError.invalid("roadmap missing simulator readiness gates: \(missingReadinessGates.joined(separator: ","))")
+    }
+
+    for gate in gates where gate.kind == "simulator-runtime" {
+        guard !gate.physicalDevice else {
+            throw HarnessError.invalid("simulator runtime gate \(gate.id) must not be marked physical_device")
+        }
+        guard gate.command.contains("DESTINATION=iphonesimulator"),
+              gate.command.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)"),
+              gate.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)"),
+              gate.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)") else {
+            throw HarnessError.invalid("simulator runtime gate \(gate.id) must target required simulator \(requiredSimulatorName) (\(requiredSimulatorID))")
+        }
+        guard !gate.command.contains("DESTINATION=iphoneos") else {
+            throw HarnessError.invalid("simulator runtime gate \(gate.id) must not contain iphoneos destination")
+        }
+    }
+
+    for gate in gates where gate.physicalDevice {
+        let missingPrerequisites = physicalGateMissingSimulatorPrerequisites(gate)
+        if !missingPrerequisites.isEmpty {
+            throw HarnessError.invalid("physical-device gate \(gate.id) is missing required simulator prerequisites: \(missingPrerequisites.joined(separator: ","))")
+        }
+        let missingReports = physicalGateMissingSimulatorReportPaths(gate)
+        if !missingReports.isEmpty {
+            throw HarnessError.invalid("physical-device gate \(gate.id) is missing required simulator report paths: \(missingReports.joined(separator: ","))")
+        }
+        let missingCommands = physicalGateMissingSimulatorValidationCommands(gate)
+        if !missingCommands.isEmpty {
+            throw HarnessError.invalid("physical-device gate \(gate.id) is missing required pinned simulator validation commands: \(missingCommands.joined(separator: ","))")
+        }
+    }
 }
 
 func simulatorRuntimeGateIsSelectable(_ statuses: [GateStatus]) -> Bool {
     simulatorRuntimeGates(statuses).contains { !$0.passed && $0.prerequisitesSatisfied }
+}
+
+func dirtyRuntimeOrHarnessWorktree() -> Bool {
+    let paths = [
+        ".agents/skills/orlix-tcti-next-step",
+        ".agents/skills/orlix-tcti-safety",
+        ".codex/rules",
+        "tools/runtime",
+        "tools/tcti",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
+        "docs/plans/active/orlix-tcti/PLAN.md",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+    ]
+    guard let output = run("/usr/bin/env", ["git", "status", "--short", "--"] + paths) else {
+        return true
+    }
+    return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+}
+
+func physicalBlockers(statuses: [GateStatus], preflightPassed: Bool) -> [String] {
+    var blockers: [String] = []
+    let missingSimulator = simulatorReadinessMissingGateIDs(statuses)
+    if !missingSimulator.isEmpty {
+        blockers.append("missing_or_failing_simulator_readiness_gates=\(missingSimulator.joined(separator: ","))")
+    }
+    if !preflightPassed {
+        blockers.append("autonomous_no_phone_preflight_not_passed")
+    }
+    if !noPhoneGatesPassedBeforeFirstPhysical(statuses) {
+        blockers.append("no_phone_gates_before_first_physical_not_passed")
+    }
+    if !physicalDeviceExplicitlyAllowed() {
+        blockers.append("explicit_physical_opt_in_missing")
+    }
+    if dirtyRuntimeOrHarnessWorktree() {
+        blockers.append("dirty_runtime_or_harness_worktree")
+    }
+    return blockers
 }
 
 func physicalDeviceExplicitlyAllowed() -> Bool {
@@ -3838,14 +7490,23 @@ func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
 }
 
 func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
-    let noPhonePassed = noPhoneGatesPassedBeforeFirstPhysical(statuses)
     let simulatorPassed = simulatorRuntimeGatesComplete(statuses)
-    let physicalAllowed = physicalDeviceExplicitlyAllowed()
+    let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
+    let preflightPassed = statuses
+        .filter { preflightGateIDs.contains($0.id) }
+        .allSatisfy { $0.satisfiesPrerequisite }
+    let physicalAllowed = physicalBlockers(
+        statuses: statuses,
+        preflightPassed: preflightPassed
+    ).isEmpty
     let eligible = statuses.filter { status in
-        guard !status.passed && status.prerequisitesSatisfied else {
+        guard !status.satisfiesPrerequisite && status.prerequisitesSatisfied else {
             return false
         }
-        if status.physicalDevice && (!physicalAllowed || !noPhonePassed || !simulatorPassed) {
+        if status.physicalDevice && !physicalAllowed {
+            return false
+        }
+        if status.gadget && !simulatorPassed {
             return false
         }
         return true
@@ -3853,6 +7514,12 @@ func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
     if eligible.contains(where: { $0.reason.contains("simulator stability report") && $0.reason.contains("stale") }),
        let simulatorStability = eligible.first(where: { $0.id == "simulator-tcti-runtime-stability" }) {
         return simulatorStability
+    }
+    if let currentReadyGate = eligible.first(where: { $0.state == "ready" }) {
+        return currentReadyGate
+    }
+    if let currentSimulatorFailure = eligible.first(where: { $0.kind == "simulator-runtime" && ($0.state == "fail" || $0.state == "missing") }) {
+        return currentSimulatorFailure
     }
     return eligible.first
 }
@@ -3878,18 +7545,23 @@ func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
 
 func statusDocument() throws -> StatusDocument {
     let roadmap = try loadRoadmap()
+    try validateRoadmapSimulatorPolicy(roadmap)
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
     let next = selectedStatusWithSafety(from: gateStatuses)
     let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
     let preflightPassed = gateStatuses
         .filter { preflightGateIDs.contains($0.id) }
-        .allSatisfy { $0.passed }
+        .allSatisfy { $0.satisfiesPrerequisite }
+    let missingSimulatorReadiness = simulatorReadinessMissingGateIDs(gateStatuses)
+    let blockers = physicalBlockers(statuses: gateStatuses, preflightPassed: preflightPassed)
+    let dirtyRuntimeOrHarness = dirtyRuntimeOrHarnessWorktree()
     let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
         preflightPassed &&
-        simulatorRuntimeGatesComplete(gateStatuses) &&
+        missingSimulatorReadiness.isEmpty &&
         noPhoneGatesPassedBeforeFirstPhysical(gateStatuses) &&
-        physicalDeviceExplicitlyAllowed()
+        physicalDeviceExplicitlyAllowed() &&
+        !dirtyRuntimeOrHarness
     let releaseEligible = physicalGate?.passed == true
     let readinessEligible = physicalGate?.passed == true
     return StatusDocument(
@@ -3900,10 +7572,14 @@ func statusDocument() throws -> StatusDocument {
         gates: gateStatuses,
         simulatorAllowed: simulatorRuntimeGateIsSelectable(gateStatuses) || simulatorRuntimeGatesComplete(gateStatuses),
         simulatorRequiredBeforePhysical: true,
-        simulatorGatesComplete: simulatorRuntimeGatesComplete(gateStatuses),
+        simulatorGatesComplete: missingSimulatorReadiness.isEmpty,
+        simulatorReadinessCapabilities: simulatorReadinessCapabilities,
+        simulatorReadinessGateIDs: simulatorReadinessGateIDs,
+        simulatorReadinessMissingGateIDs: missingSimulatorReadiness,
         requiredSimulatorID: requiredSimulatorID,
         requiredSimulatorName: requiredSimulatorName,
         physicalDeviceAllowed: physicalAllowed,
+        physicalDeviceBlockers: physicalAllowed ? [] : blockers,
         releaseGateEligible: releaseEligible,
         readinessGateEligible: readinessEligible,
         nextEligibleGate: next?.id,
@@ -3924,8 +7600,15 @@ func writeStatus(printHuman: Bool) throws -> StatusDocument {
         print("simulator_allowed: \(status.simulatorAllowed)")
         print("simulator_required_before_physical: \(status.simulatorRequiredBeforePhysical)")
         print("simulator_gates_complete: \(status.simulatorGatesComplete)")
+        print("simulator_readiness_gates: \(status.simulatorReadinessGateIDs.joined(separator: ","))")
+        print("simulator_readiness_missing: \(status.simulatorReadinessMissingGateIDs.joined(separator: ","))")
+        print("simulator_readiness_capabilities:")
+        for capability in status.simulatorReadinessCapabilities {
+            print("- \(capability.id): \(capability.gateID)")
+        }
         print("required_simulator: \(status.requiredSimulatorName) (\(status.requiredSimulatorID))")
         print("physical_device_allowed: \(status.physicalDeviceAllowed)")
+        print("physical_device_blockers: \(status.physicalDeviceBlockers.joined(separator: ","))")
         print("release_gate_eligible: \(status.releaseGateEligible)")
         print("readiness_gate_eligible: \(status.readinessGateEligible)")
         print("next_eligible_gate: \(status.nextEligibleGate ?? "none")")
@@ -3950,6 +7633,7 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         throw HarnessError.invalid("selected gate \(selectedID) does not exist in roadmap")
     }
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
+    let selectedStatus = byID[selectedID]
     let prerequisites = gate.prerequisites.map { prereqID in
         let fact = byID[prereqID]
         return PrerequisiteFact(
@@ -3965,7 +7649,7 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         gitSHA: status.gitSHA,
         roadmapPath: relativePath(roadmapURL),
         selectedGateID: gate.id,
-        selectedGateCommand: gate.command,
+        selectedGateCommand: selectedStatus?.command ?? gate.command,
         selectedGateKind: gate.kind,
         prerequisiteGates: prerequisites,
         whySelected: why,
@@ -3980,9 +7664,16 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         simulatorAllowed: status.simulatorAllowed,
         simulatorRequiredBeforePhysical: status.simulatorRequiredBeforePhysical,
         simulatorGatesComplete: status.simulatorGatesComplete,
+        simulatorReadinessCapabilities: status.simulatorReadinessCapabilities,
+        simulatorReadinessGateIDs: status.simulatorReadinessGateIDs,
+        simulatorReadinessMissingGateIDs: status.simulatorReadinessMissingGateIDs,
         selectedGateUsesSimulator: gateUsesRequiredSimulator(gate),
         requiredSimulatorID: status.requiredSimulatorID,
         requiredSimulatorName: status.requiredSimulatorName,
+        physicalDeviceAllowed: status.physicalDeviceAllowed,
+        physicalDeviceBlockers: status.physicalDeviceBlockers,
+        releaseGateEligible: status.releaseGateEligible,
+        readinessGateEligible: status.readinessGateEligible,
         physicalDevice: gate.physicalDevice,
         gadget: gate.gadget,
         nextTaskJSONPath: relativePath(nextTaskURL),
@@ -4018,7 +7709,7 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
         selectedGateCommand: "no-op: set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 only after explicit human approval",
         selectedGateKind: "blocked",
         prerequisiteGates: prerequisites,
-        whySelected: "All prerequisites for \(blockedGate.id) are satisfied, but physical-device gates require explicit opt-in. Set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 or ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1 only after human approval.",
+        whySelected: "The roadmap has no safer eligible non-phone gate. Phone work stays blocked until the full pinned simulator readiness ladder passes and explicit human opt-in is present. Missing simulator readiness gates: \(status.simulatorReadinessMissingGateIDs.isEmpty ? "none" : status.simulatorReadinessMissingGateIDs.joined(separator: ", ")).",
         allowedScope: [
             "docs/plans/active/orlix-tcti/IMPLEMENT.md",
             ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
@@ -4054,14 +7745,22 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
         stopConditions: [
             "Stop if a physical-device command would run without explicit human approval.",
             "Stop if agent-next selects a physical-device gate while physical_device_allowed is false.",
+            "Stop if any simulator readiness gate is missing, stale, failing, evidence-only, or emergency-override.",
             "Stop if the blocked envelope is missing machine-readable JSON or Markdown."
         ],
         simulatorAllowed: status.simulatorAllowed,
         simulatorRequiredBeforePhysical: status.simulatorRequiredBeforePhysical,
         simulatorGatesComplete: status.simulatorGatesComplete,
+        simulatorReadinessCapabilities: status.simulatorReadinessCapabilities,
+        simulatorReadinessGateIDs: status.simulatorReadinessGateIDs,
+        simulatorReadinessMissingGateIDs: status.simulatorReadinessMissingGateIDs,
         selectedGateUsesSimulator: false,
         requiredSimulatorID: status.requiredSimulatorID,
         requiredSimulatorName: status.requiredSimulatorName,
+        physicalDeviceAllowed: status.physicalDeviceAllowed,
+        physicalDeviceBlockers: status.physicalDeviceBlockers,
+        releaseGateEligible: status.releaseGateEligible,
+        readinessGateEligible: status.readinessGateEligible,
         physicalDevice: false,
         gadget: false,
         nextTaskJSONPath: relativePath(nextTaskURL),
@@ -4074,6 +7773,9 @@ func markdown(for envelope: TaskEnvelope) -> String {
         values.map { "- \($0)" }.joined(separator: "\n")
     }
     let prereqs = envelope.prerequisiteGates.map { "- \($0.id): \($0.state) (\($0.reportPaths.joined(separator: ", ")))" }.joined(separator: "\n")
+    let simulatorCapabilities = envelope.simulatorReadinessCapabilities
+        .map { "- \($0.id): \($0.gateID) - \($0.description)" }
+        .joined(separator: "\n")
     return """
     # Orlix TCTI Next Task
 
@@ -4087,8 +7789,16 @@ func markdown(for envelope: TaskEnvelope) -> String {
     - simulator_allowed: \(envelope.simulatorAllowed)
     - simulator_required_before_physical: \(envelope.simulatorRequiredBeforePhysical)
     - simulator_gates_complete: \(envelope.simulatorGatesComplete)
+    - simulator_readiness_gates: \(envelope.simulatorReadinessGateIDs.joined(separator: ", "))
+    - simulator_readiness_missing: \(envelope.simulatorReadinessMissingGateIDs.isEmpty ? "none" : envelope.simulatorReadinessMissingGateIDs.joined(separator: ", "))
+    - simulator_readiness_capabilities:
+    \(simulatorCapabilities)
     - selected_gate_uses_simulator: \(envelope.selectedGateUsesSimulator)
     - required_simulator: \(envelope.requiredSimulatorName) (\(envelope.requiredSimulatorID))
+    - physical_device_allowed: \(envelope.physicalDeviceAllowed)
+    - physical_device_blockers: \(envelope.physicalDeviceBlockers.isEmpty ? "none" : envelope.physicalDeviceBlockers.joined(separator: ", "))
+    - release_gate_eligible: \(envelope.releaseGateEligible)
+    - readiness_gate_eligible: \(envelope.readinessGateEligible)
 
     ## Prerequisites
     \(prereqs.isEmpty ? "- none" : prereqs)
@@ -4141,6 +7851,7 @@ func validateEnvelope() throws {
         throw HarnessError.invalid("missing \(relativePath(nextTaskURL)); run make agent-next AREA=orlix-tcti")
     }
     let roadmap = try loadRoadmap()
+    try validateRoadmapSimulatorPolicy(roadmap)
     let data = try Data(contentsOf: nextTaskURL)
     guard let text = String(data: data, encoding: .utf8) else {
         throw HarnessError.invalid("next-task JSON is not UTF-8")
@@ -4154,8 +7865,13 @@ func validateEnvelope() throws {
     guard task.area == "orlix-tcti" else {
         throw HarnessError.invalid("next-task area must be orlix-tcti")
     }
+    let freshStatus = try statusDocument()
+    if let selected = freshStatus.nextEligibleGate,
+       task.selectedGateID != selected {
+        throw HarnessError.invalid("next-task selected gate \(task.selectedGateID) is stale; run make agent-next AREA=orlix-tcti to regenerate \(selected)")
+    }
     if task.selectedGateID == physicalOptInBlockedGateID {
-        let status = try statusDocument()
+        let status = freshStatus
         guard status.nextEligibleGate == nil else {
             throw HarnessError.invalid("blocked physical opt-in envelope is invalid while another gate is eligible")
         }
@@ -4177,6 +7893,21 @@ func validateEnvelope() throws {
         if task.physicalDevice {
             throw HarnessError.invalid("blocked physical opt-in envelope must not be marked physical_device")
         }
+    if task.simulatorReadinessGateIDs != simulatorReadinessGateIDs {
+        throw HarnessError.invalid("blocked physical opt-in envelope simulator readiness gate list is stale or incomplete")
+    }
+    if task.simulatorReadinessCapabilities != simulatorReadinessCapabilities {
+        throw HarnessError.invalid("blocked physical opt-in envelope simulator readiness capabilities are stale or incomplete")
+    }
+    if task.simulatorReadinessMissingGateIDs != status.simulatorReadinessMissingGateIDs {
+        throw HarnessError.invalid("blocked physical opt-in envelope simulator missing list is stale; run make agent-next AREA=orlix-tcti")
+    }
+        if task.physicalDeviceAllowed != status.physicalDeviceAllowed ||
+            task.physicalDeviceBlockers != status.physicalDeviceBlockers ||
+            task.releaseGateEligible != status.releaseGateEligible ||
+            task.readinessGateEligible != status.readinessGateEligible {
+            throw HarnessError.invalid("blocked physical opt-in envelope physical/readiness state is stale; run make agent-next AREA=orlix-tcti")
+        }
         print("pass: \(relativePath(nextTaskURL))")
         print("selected_gate: \(task.selectedGateID)")
         return
@@ -4184,10 +7915,10 @@ func validateEnvelope() throws {
     guard let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == task.selectedGateID }) else {
         throw HarnessError.invalid("selected gate \(task.selectedGateID) does not exist in roadmap")
     }
-    let status = try statusDocument()
+    let status = freshStatus
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
     for prerequisite in gate.prerequisites {
-        guard byID[prerequisite]?.passed == true else {
+        guard byID[prerequisite]?.satisfiesPrerequisite == true else {
             throw HarnessError.invalid("prerequisite \(prerequisite) is not satisfied")
         }
     }
@@ -4202,6 +7933,21 @@ func validateEnvelope() throws {
     }
     if task.simulatorRequiredBeforePhysical != true {
         throw HarnessError.invalid("simulator_required_before_physical must be true for Orlix TCTI")
+    }
+    if task.simulatorReadinessGateIDs != simulatorReadinessGateIDs {
+        throw HarnessError.invalid("next-task simulator readiness gate list is stale or incomplete")
+    }
+    if task.simulatorReadinessCapabilities != simulatorReadinessCapabilities {
+        throw HarnessError.invalid("next-task simulator readiness capabilities are stale or incomplete")
+    }
+    if task.simulatorReadinessMissingGateIDs != status.simulatorReadinessMissingGateIDs {
+        throw HarnessError.invalid("next-task simulator readiness missing list is stale; run make agent-next AREA=orlix-tcti")
+    }
+    if task.physicalDeviceAllowed != status.physicalDeviceAllowed ||
+        task.physicalDeviceBlockers != status.physicalDeviceBlockers ||
+        task.releaseGateEligible != status.releaseGateEligible ||
+        task.readinessGateEligible != status.readinessGateEligible {
+        throw HarnessError.invalid("next-task physical/readiness state is stale; run make agent-next AREA=orlix-tcti")
     }
     if gate.kind == "simulator-runtime" {
         guard task.selectedGateUsesSimulator else {
@@ -4223,9 +7969,22 @@ func validateEnvelope() throws {
     if task.physicalDevice && !status.simulatorGatesComplete {
         throw HarnessError.invalid("physical-device gate selected before required simulator gates are complete")
     }
+    if task.physicalDevice && !status.simulatorReadinessMissingGateIDs.isEmpty {
+        throw HarnessError.invalid("physical-device gate selected before full simulator readiness ladder passed: \(status.simulatorReadinessMissingGateIDs.joined(separator: ","))")
+    }
+    if task.physicalDevice {
+        let missing = physicalGateMissingSimulatorPrerequisites(gate)
+        if !missing.isEmpty {
+            throw HarnessError.invalid("physical-device gate \(gate.id) is missing required simulator prerequisites: \(missing.joined(separator: ","))")
+        }
+    }
     if task.gadget {
-        guard byID["switch-init-001-exit"]?.passed == true,
-              byID["switch-init-002-write"]?.passed == true else {
+        guard status.simulatorGatesComplete,
+              status.simulatorReadinessMissingGateIDs.isEmpty else {
+            throw HarnessError.invalid("gadget gate selected before full pinned simulator readiness ladder passed: \(status.simulatorReadinessMissingGateIDs.joined(separator: ","))")
+        }
+        guard byID["switch-init-001-exit"]?.satisfiesPrerequisite == true,
+              byID["switch-init-002-write"]?.satisfiesPrerequisite == true else {
             throw HarnessError.invalid("gadget gate selected before switch-debug oracle coverage exists")
         }
     }

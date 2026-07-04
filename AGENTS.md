@@ -82,11 +82,12 @@ For TCTI work, use the Orlix TCTI agent harness before direct implementation:
 - Use `.agents/skills/orlix-tcti-next-step/SKILL.md` when asked to continue TCTI work, run the harness, or choose what is next.
 - To choose TCTI work autonomously, run `make agent-status AREA=orlix-tcti`, then `make agent-next AREA=orlix-tcti`, then `make agent-task-envelope-check AREA=orlix-tcti`.
 - The next task envelope under `Build/AgentHarness/orlix-tcti/` is the scope contract for selected gate, allowed files, forbidden work, verification commands, reducers, subagents, and commit message.
+- `Build/AgentHarness/orlix-tcti/status.json` and `next-task.json` must expose `simulator_readiness_gate_ids`, `simulator_readiness_missing_gate_ids`, and `physical_device_blockers`. If any simulator readiness gate is missing, stale, failing, evidence-only, preflight-only, or emergency-override, phone work is forbidden.
 - Use `.agents/skills/orlix-tcti-status/SKILL.md`, `.agents/skills/orlix-tcti-report-reader/SKILL.md`, `.agents/skills/orlix-tcti-reproducer/SKILL.md`, `.agents/skills/orlix-tcti-golden-elf/SKILL.md`, `.agents/skills/orlix-tcti-safety/SKILL.md`, `.agents/skills/orlix-tcti-plan-consistency/SKILL.md`, and `.agents/skills/orlix-tcti-debug/SKILL.md` for their named workflows.
 - Spawn or simulate `.codex/subagents/` planner, safety reviewer, LLVM inspector, oracle engineer, test reducer, gadget reviewer, and release-gate reviewer as the TCTI task requires.
 - Do not implement TCTI features directly without planner and safety reviewer scope.
-- Do not run physical device TCTI work unless runtime-validation preflight permits it or evidence mode is explicitly requested and reported as non-passing.
-- TCTI simulator runtime validation is mandatory before physical-device TCTI work. Use only the harness-selected pinned simulator gate and do not treat a no-phone pass as permission to use a phone.
+- Do not run physical phone or device TCTI work, including evidence mode, until the pinned simulator has current passing reports for first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+- TCTI simulator runtime validation is mandatory before physical-device TCTI work. Use only the harness-selected pinned simulator gate and do not treat a no-phone pass, first-syscall marker, or partial simulator pass as permission to use a phone.
 - Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.
 - Run `make agent-harness-check` after changing `.codex`, `.agents/skills`, `AGENTS.md`, or `docs/harness`.
 

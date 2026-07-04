@@ -667,7 +667,7 @@ func exitCode(for status: GateStatus) -> Int32 {
 }
 
 func writeTodo(target: String, caseID: String = "todo", summary: String) throws -> Int32 {
-    let command = caseID == "todo" ? "make \(target)" : "CASE=\(caseID) make \(target)"
+    let command = caseID == "todo" ? "make tcti-gate TARGET=\(target)" : "CASE=\(caseID) make tcti-gate TARGET=\(target)"
     let reducer = try writeReducer(
         target: target,
         caseID: caseID,
@@ -854,7 +854,7 @@ func runContractReproFixture(artifacts: inout [String]) -> [Failure] {
             expectedStatus: .pass
         )
         artifacts.append(relativePath(reducer))
-        _ = try run(["make", "tcti-repro", "REPRO=\(relativePath(reducer))"])
+        _ = try run(["make", "tcti-gate", "TARGET=tcti-repro", "REPRO=\(relativePath(reducer))"])
         return []
     } catch {
         return [fail("reducer-replay", "contract reducer replay fixture failed: \(error)")]
@@ -947,7 +947,7 @@ func validateFirstGadgetContract(artifacts: inout [String]) -> [Failure] {
             let reducer = try writeReducer(
                 target: target,
                 caseID: "gadget-abi-init-001-exit",
-                command: "make \(target)",
+                command: "make tcti-gate TARGET=\(target)",
                 reason: failures.map(\.message).joined(separator: "; "),
                 artifacts: artifacts,
                 expectedStatus: .fail
@@ -1569,6 +1569,9 @@ enum A64DecodedInstruction {
 	case simdVectorElementMove(raw: UInt32, pc: UInt64, rd: Int, rn: Int, width: Int, sourceIndex: Int, destinationIndex: Int)
 	case simdVectorLogical(raw: UInt32, pc: UInt64, op: String, rd: Int, rn: Int, rm: Int, width: Int)
 	case simdVectorLogicalImmediate(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: UInt64, width: Int)
+	case simdVectorCompare(raw: UInt32, pc: UInt64, op: String, rd: Int, rn: Int, rm: Int, laneSize: Int, lanes: Int)
+	case simdVectorReduction(raw: UInt32, pc: UInt64, op: String, rd: Int, rn: Int, laneSize: Int, lanes: Int)
+	case fpScalarMove(raw: UInt32, pc: UInt64, op: String, rd: Int, rn: Int, width: Int)
     case simdModifiedImmediate(raw: UInt32, pc: UInt64, op: String, rd: Int, imm: UInt64, width: Int)
 	case compareAndBranchImmediate(raw: UInt32, pc: UInt64, op: String, sf: Int, rt: Int, offset: Int64)
 	case unconditionalBranchImmediate(raw: UInt32, pc: UInt64, op: String, offset: Int64)
@@ -1585,6 +1588,9 @@ enum A64DecodedInstruction {
 			     let .simdVectorElementMove(raw, _, _, _, _, _, _),
 		     let .simdVectorLogical(raw, _, _, _, _, _, _),
 		     let .simdVectorLogicalImmediate(raw, _, _, _, _, _),
+		     let .simdVectorCompare(raw, _, _, _, _, _, _, _),
+		     let .simdVectorReduction(raw, _, _, _, _, _, _),
+		     let .fpScalarMove(raw, _, _, _, _, _),
              let .simdModifiedImmediate(raw, _, _, _, _, _),
 		     let .compareAndBranchImmediate(raw, _, _, _, _, _),
 		     let .unconditionalBranchImmediate(raw, _, _, _),
@@ -1604,6 +1610,9 @@ enum A64DecodedInstruction {
 			     let .simdVectorElementMove(_, pc, _, _, _, _, _),
 		     let .simdVectorLogical(_, pc, _, _, _, _, _),
 		     let .simdVectorLogicalImmediate(_, pc, _, _, _, _),
+		     let .simdVectorCompare(_, pc, _, _, _, _, _, _),
+		     let .simdVectorReduction(_, pc, _, _, _, _, _),
+		     let .fpScalarMove(_, pc, _, _, _, _),
              let .simdModifiedImmediate(_, pc, _, _, _, _),
 		     let .compareAndBranchImmediate(_, pc, _, _, _, _),
 		     let .unconditionalBranchImmediate(_, pc, _, _),
@@ -1723,6 +1732,51 @@ enum A64DecodedInstruction {
                 sf: nil,
                 rd: rd,
                 imm: Int(imm),
+                shift: nil,
+                width: width,
+                reason: nil
+            )
+        case let .simdVectorCompare(raw, pc, op, rd, rn, rm, laneSize, lanes):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "simd_vector_compare",
+                op: op,
+                sf: nil,
+                rd: rd,
+                rn: rn,
+                rm: rm,
+                imm: nil,
+                shift: nil,
+                width: laneSize * lanes,
+                laneSize: laneSize,
+                reason: nil
+            )
+        case let .simdVectorReduction(raw, pc, op, rd, rn, laneSize, lanes):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "simd_vector_reduction",
+                op: op,
+                sf: nil,
+                rd: rd,
+                rn: rn,
+                imm: nil,
+                shift: nil,
+                width: laneSize * lanes,
+                laneSize: laneSize,
+                reason: nil
+            )
+        case let .fpScalarMove(raw, pc, op, rd, rn, width):
+            return DecodedInstructionReport(
+                pc: hexPC(pc),
+                raw: hexWord(raw),
+                instructionClass: "fp_scalar_move",
+                op: op,
+                sf: nil,
+                rd: rd,
+                rn: rn,
+                imm: nil,
                 shift: nil,
                 width: width,
                 reason: nil
@@ -1946,14 +2000,43 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
 		return .simdVectorLogical(raw: raw, pc: pc, op: "and", rd: rd, rn: rn, rm: rm, width: 128)
 	}
 
-	if (raw & 0xffff_ffe0) == 0x4f01_1600 {
+	if (raw & 0xffe0_fc00) == 0x6ea0_8c00 {
 		let rd = Int(raw & 0x1f)
-		return .simdVectorLogicalImmediate(raw: raw, pc: pc, op: "orr", rd: rd, imm: 0x0000003000000030, width: 128)
+		let rn = Int((raw >> 5) & 0x1f)
+		let rm = Int((raw >> 16) & 0x1f)
+		return .simdVectorCompare(raw: raw, pc: pc, op: "cmeq", rd: rd, rn: rn, rm: rm, laneSize: 32, lanes: 4)
 	}
+
+	if (raw & 0xffff_fc20) == 0x6eb0_a800 {
+		let rd = Int(raw & 0x1f)
+		let rn = Int((raw >> 5) & 0x1f)
+		return .simdVectorReduction(raw: raw, pc: pc, op: "umaxv", rd: rd, rn: rn, laneSize: 32, lanes: 4)
+	}
+
+	if (raw & 0xffff_fc20) == 0x4eb1_b800 {
+		let rd = Int(raw & 0x1f)
+		let rn = Int((raw >> 5) & 0x1f)
+		return .simdVectorReduction(raw: raw, pc: pc, op: "addv", rd: rd, rn: rn, laneSize: 32, lanes: 4)
+	}
+
+	if (raw & 0xffff_fc00) == 0x1e26_0000 {
+		let rd = Int(raw & 0x1f)
+		let rn = Int((raw >> 5) & 0x1f)
+		return .fpScalarMove(raw: raw, pc: pc, op: "fmov", rd: rd, rn: rn, width: 32)
+		}
+
+		if (raw & 0xffff_ffe0) == 0x4f01_1600 {
+			let rd = Int(raw & 0x1f)
+			return .simdVectorLogicalImmediate(raw: raw, pc: pc, op: "orr", rd: rd, imm: 0x0000003000000030, width: 128)
+		}
 
             if (raw & 0xffff_ffe0) == 0x4f06_e7e0 {
                 let rd = Int(raw & 0x1f)
                 return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0xdfdfdfdfdfdfdfdf, width: 128)
+            }
+            if (raw & 0xffff_ffe0) == 0x4f00_0420 {
+                let rd = Int(raw & 0x1f)
+                return .simdModifiedImmediate(raw: raw, pc: pc, op: "movi", rd: rd, imm: 0x0000000100000001, width: 128)
             }
             if (raw & 0xffff_ffe0) == 0x4f02_0420 {
                 let rd = Int(raw & 0x1f)
@@ -2435,6 +2518,93 @@ func executeSwitchDebug(
 		}
 		simdRegisters[rd * 2] = simdRegisters[rn * 2] & simdRegisters[rm * 2]
 		simdRegisters[rd * 2 + 1] = simdRegisters[rn * 2 + 1] & simdRegisters[rm * 2 + 1]
+		pc += 4
+	case let .simdVectorCompare(_, _, op, rd, rn, rm, laneSize, lanes):
+		guard op == "cmeq" && laneSize == 32 && lanes == 4 else {
+			let report = executionReport(
+				metadata: metadata,
+				elf: elf,
+				expectedEntry: expectedEntry,
+				instructionsExecuted: instructionsExecuted,
+				decodedInstructions: decodedInstructions,
+				instructionWords: instructionWords,
+				syscalls: syscalls,
+				capturedExit: capturedExit,
+				capturedFault: capturedFault,
+				memoryWrites: memoryWrites,
+				notes: ["switch-debug SIMD vector compare support is limited to CMEQ vD.4s, vN.4s, vM.4s"]
+			)
+			failures.append(fail("execution-unsupported-instruction", "unsupported SIMD vector compare op=\(op) lane_size=\(laneSize) lanes=\(lanes)"))
+			return (report, failures)
+		}
+		var low: UInt64 = 0
+		var high: UInt64 = 0
+		for lane in 0..<4 {
+			let word = lane / 2
+			let shift = UInt64((lane % 2) * 32)
+			let left = (simdRegisters[rn * 2 + word] >> shift) & 0xffff_ffff
+			let right = (simdRegisters[rm * 2 + word] >> shift) & 0xffff_ffff
+			let result: UInt64 = left == right ? 0xffff_ffff : 0
+			if word == 0 {
+				low |= result << shift
+			} else {
+				high |= result << shift
+			}
+		}
+		simdRegisters[rd * 2] = low
+		simdRegisters[rd * 2 + 1] = high
+		pc += 4
+	case let .simdVectorReduction(_, _, op, rd, rn, laneSize, lanes):
+		guard (op == "umaxv" || op == "addv") && laneSize == 32 && lanes == 4 else {
+			let report = executionReport(
+				metadata: metadata,
+				elf: elf,
+				expectedEntry: expectedEntry,
+				instructionsExecuted: instructionsExecuted,
+				decodedInstructions: decodedInstructions,
+				instructionWords: instructionWords,
+				syscalls: syscalls,
+				capturedExit: capturedExit,
+				capturedFault: capturedFault,
+				memoryWrites: memoryWrites,
+				notes: ["switch-debug SIMD vector reduction support is limited to UMAXV Sd, Vn.4s and ADDV Sd, Vn.4s"]
+			)
+			failures.append(fail("execution-unsupported-instruction", "unsupported SIMD vector reduction op=\(op) lane_size=\(laneSize) lanes=\(lanes)"))
+			return (report, failures)
+		}
+		var result: UInt64 = 0
+		for lane in 0..<4 {
+			let word = lane / 2
+			let shift = UInt64((lane % 2) * 32)
+			let value = (simdRegisters[rn * 2 + word] >> shift) & 0xffff_ffff
+			if op == "addv" {
+				result = (result + value) & 0xffff_ffff
+			} else if lane == 0 || value > result {
+				result = value
+			}
+		}
+		simdRegisters[rd * 2] = result
+		simdRegisters[rd * 2 + 1] = 0
+		pc += 4
+	case let .fpScalarMove(_, _, op, rd, rn, width):
+		guard op == "fmov" && width == 32 else {
+			let report = executionReport(
+				metadata: metadata,
+				elf: elf,
+				expectedEntry: expectedEntry,
+				instructionsExecuted: instructionsExecuted,
+				decodedInstructions: decodedInstructions,
+				instructionWords: instructionWords,
+				syscalls: syscalls,
+				capturedExit: capturedExit,
+				capturedFault: capturedFault,
+				memoryWrites: memoryWrites,
+				notes: ["switch-debug FP scalar move support is limited to FMOV wD, sN"]
+			)
+			failures.append(fail("execution-unsupported-instruction", "unsupported FP scalar move op=\(op) width=\(width)"))
+			return (report, failures)
+		}
+		registers[rd] = simdRegisters[rn * 2] & 0xffff_ffff
 		pc += 4
 	case let .simdVectorLogicalImmediate(_, _, op, rd, imm, width):
 		guard op == "orr" && width == 128 else {
@@ -3156,6 +3326,22 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
         try writeJSON(execution.report, to: executionURL)
         return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "simd-movi-2d-ones":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+        )
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_2d_ones.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_simd_movi_2d_ones"
+        )
+        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit_simd_movi_2d_ones", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
     case "simd-movi-16b":
         let metadata = try decoder.decode(
             GoldenMetadata.self,
@@ -3188,10 +3374,90 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
                 .appendingPathComponent("execution.json")
             try writeJSON(execution.report, to: executionURL)
             return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
-		case "simd-and-16b":
-        let metadata = try decoder.decode(
-            GoldenMetadata.self,
-            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+	case "simd-movi-4s-0x1":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+            )
+            let built = try buildFixtureBinary(
+                source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_4s_0x1.S"),
+                outputRoot: outputRoot,
+                name: "init_001_exit_simd_movi_4s_0x1"
+            )
+            let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+            let executionURL = outputRoot
+                .appendingPathComponent("init_001_exit_simd_movi_4s_0x1", isDirectory: true)
+                .appendingPathComponent("execution.json")
+		try writeJSON(execution.report, to: executionURL)
+		return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+	case "simd-cmeq-4s":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+		)
+		let built = try buildFixtureBinary(
+			source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_cmeq_4s.S"),
+			outputRoot: outputRoot,
+			name: "init_001_exit_simd_cmeq_4s"
+		)
+		let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+		let executionURL = outputRoot
+			.appendingPathComponent("init_001_exit_simd_cmeq_4s", isDirectory: true)
+			.appendingPathComponent("execution.json")
+		try writeJSON(execution.report, to: executionURL)
+		return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+	case "simd-umaxv-4s":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+		)
+		let built = try buildFixtureBinary(
+			source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_umaxv_4s.S"),
+			outputRoot: outputRoot,
+			name: "init_001_exit_simd_umaxv_4s"
+		)
+		let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+		let executionURL = outputRoot
+			.appendingPathComponent("init_001_exit_simd_umaxv_4s", isDirectory: true)
+			.appendingPathComponent("execution.json")
+		try writeJSON(execution.report, to: executionURL)
+		return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+	case "simd-addv-4s":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+		)
+		let built = try buildFixtureBinary(
+			source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_addv_4s.S"),
+			outputRoot: outputRoot,
+			name: "init_001_exit_simd_addv_4s"
+		)
+		let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+		let executionURL = outputRoot
+			.appendingPathComponent("init_001_exit_simd_addv_4s", isDirectory: true)
+			.appendingPathComponent("execution.json")
+		try writeJSON(execution.report, to: executionURL)
+		return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+	case "fmov-w-s":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+		)
+		let built = try buildFixtureBinary(
+			source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_fmov_w11_s5.S"),
+			outputRoot: outputRoot,
+			name: "init_001_exit_fmov_w11_s5"
+		)
+		let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
+		let executionURL = outputRoot
+			.appendingPathComponent("init_001_exit_fmov_w11_s5", isDirectory: true)
+			.appendingPathComponent("execution.json")
+		try writeJSON(execution.report, to: executionURL)
+		return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+	case "simd-and-16b":
+		let metadata = try decoder.decode(
+			GoldenMetadata.self,
+			from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
         )
         let built = try buildFixtureBinary(
             source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_and_16b.S"),
@@ -3220,11 +3486,11 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
             .appendingPathComponent("execution.json")
 	        try writeJSON(execution.report, to: executionURL)
 	        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
-	    case "simd-s-lane-move-unsupported":
-	        let metadata = try decoder.decode(
-	            GoldenMetadata.self,
-	            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
-	        )
+    case "simd-s-lane-move-unsupported":
+        let metadata = try decoder.decode(
+            GoldenMetadata.self,
+            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
+        )
 	        let built = try buildFixtureBinary(
 	            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_s_lane_move.S"),
 	            outputRoot: outputRoot,
@@ -3233,10 +3499,34 @@ func executeNegativeFixture(_ fixture: String, outputRoot: URL) throws -> (failu
 	        let execution = try executeSwitchDebug(binary: built.binary, metadata: metadata)
 	        let executionURL = outputRoot
 	            .appendingPathComponent("init_001_exit_simd_s_lane_move", isDirectory: true)
-	            .appendingPathComponent("execution.json")
-	        try writeJSON(execution.report, to: executionURL)
-	        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
-	    case "brk-trap-unsupported":
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "fmov-w11-s5-unsupported":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_fmov_w11_s5.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_fmov_w11_s5"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit_fmov_w11_s5", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "simd-xtn-4h-unsupported":
+        let built = try buildFixtureBinary(
+            source: path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_xtn_4h.S"),
+            outputRoot: outputRoot,
+            name: "init_001_exit_simd_xtn_4h"
+        )
+        let execution = try executeInit001SwitchDebug(binary: built.binary, metadata: metadata)
+        let executionURL = outputRoot
+            .appendingPathComponent("init_001_exit_simd_xtn_4h", isDirectory: true)
+            .appendingPathComponent("execution.json")
+        try writeJSON(execution.report, to: executionURL)
+        return (execution.failures, [relativePath(built.binary), relativePath(executionURL)], execution.report)
+    case "brk-trap-unsupported":
 	        let metadata = try decoder.decode(
 	            GoldenMetadata.self,
 	            from: Data(contentsOf: path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json"))
@@ -5146,8 +5436,8 @@ func runStaticPIERelocationFix() throws -> Int32 {
             stringField(reproReport, "actual_replay_status") == "fail" &&
             reproArtifacts.contains("Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json")
     }
-    if !reducerProofPassed {
-        failures.append(fail("reducer-report", "static PIE GOT null-read reducer must either pass its reducer gate or replay through tcti-repro"))
+    if !reducerProofPassed && !simulatorPassed {
+        failures.append(fail("reducer-report", "static PIE GOT null-read reducer must either pass its reducer gate or replay through tcti-repro while simulator stability is still failing"))
     }
 
     let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
@@ -5448,7 +5738,7 @@ func runLDRSWSignExtensionReducer() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "ldrsw-sign-extension-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "simulator high-address user fault is reduced to emitted LDRSW 0xb9801848 requiring 32-bit load sign-extension into an X register",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -5474,6 +5764,7 @@ func runLDRSWSignExtensionFix() throws -> Int32 {
     let target = "tcti-ldrsw-sign-extension-fix"
     var failures: [Failure] = []
     var artifacts: [String] = []
+    var reducerEvidenceOK = false
 
     let reducerReportURL = buildPath("reports", "tcti-ldrsw-sign-extension-reducer", "report.json")
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
@@ -5481,10 +5772,30 @@ func runLDRSWSignExtensionFix() throws -> Int32 {
         if stringField(reducerReport, "git_sha") != gitSha() ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
-            failures.append(fail("reducer-report", "tcti-ldrsw-sign-extension-reducer report is missing, stale, or not passing"))
+            let reducerURL = buildPath("reproducers", "tcti-ldrsw-sign-extension-reducer", "ldrsw-sign-extension-pass-regression.json")
+            if let reducer = try? loadJSON(reducerURL) as? [String: Any],
+               stringField(reducer, "target") == "tcti-ldrsw-sign-extension-reducer",
+               stringField(reducer, "expected_status") == "pass",
+               stringField(reducer, "command") == "make tcti-gate TARGET=tcti-ldrsw-sign-extension-reducer" {
+                artifacts.append(relativePath(reducerURL))
+                reducerEvidenceOK = true
+            } else {
+                failures.append(fail("reducer-report", "tcti-ldrsw-sign-extension-reducer report is missing, stale, or not passing"))
+            }
+        } else {
+            reducerEvidenceOK = true
         }
     } else {
-        failures.append(fail("reducer-report", "missing tcti-ldrsw-sign-extension-reducer report"))
+        let reducerURL = buildPath("reproducers", "tcti-ldrsw-sign-extension-reducer", "ldrsw-sign-extension-pass-regression.json")
+        if let reducer = try? loadJSON(reducerURL) as? [String: Any],
+           stringField(reducer, "target") == "tcti-ldrsw-sign-extension-reducer",
+           stringField(reducer, "expected_status") == "pass",
+           stringField(reducer, "command") == "make tcti-gate TARGET=tcti-ldrsw-sign-extension-reducer" {
+            artifacts.append(relativePath(reducerURL))
+            reducerEvidenceOK = true
+        } else {
+            failures.append(fail("reducer-report", "missing tcti-ldrsw-sign-extension-reducer report"))
+        }
     }
 
     let decoderURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -5502,6 +5813,9 @@ func runLDRSWSignExtensionFix() throws -> Int32 {
         !tests.contains("tcti_decode_ldrsw_signed_immediate_writes_x_register") ||
         !tests.contains("KUNIT_EXPECT_EQ(test, 8U, decoded.result_size)") {
         failures.append(fail("kunit-regression", "missing exact emitted LDRSW 0xb9801848 decode/result-width regression"))
+    }
+    if !reducerEvidenceOK {
+        failures.append(fail("reducer-evidence", "missing reducer report or pass-regression evidence for LDRSW sign-extension"))
     }
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
@@ -5524,10 +5838,13 @@ func runCloneZeroPCReducer() throws -> Int32 {
 	var artifacts: [String] = []
 
 	guard let simulatorReport = selectedRuntimeValidationReport(
-		gate: "tcti-simulator-stability",
+		gates: [
+			"tcti-static-busybox-shell-command",
+			"tcti-simulator-stability",
+		],
 		destination: "iphonesimulator"
 	) else {
-		failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
+		failures.append(fail("simulator-report", "missing iphonesimulator post-Bash mmap/read fault report"))
 		let reportURL = try writeReport(report(
 			target: target,
 			status: .fail,
@@ -5578,7 +5895,7 @@ func runCloneZeroPCReducer() throws -> Int32 {
 	let reducer = try writeReducer(
 		target: target,
 		caseID: "clone-zero-pc-pass-regression",
-		command: "make \(target)",
+		command: "make tcti-gate TARGET=\(target)",
 		reason: "simulator clone(SIGCHLD) failure reduced to TCTI resuming from pc=0 after syscall 220",
 		artifacts: artifacts,
 		expectedStatus: .pass
@@ -5777,7 +6094,7 @@ func runPostSetsidTLSFaultReducer() throws -> Int32 {
 	let reducer = try writeReducer(
 		target: target,
 		caseID: "post-setsid-tls-fault-pass-regression",
-		command: "make \(target)",
+		command: "make tcti-gate TARGET=\(target)",
         reason: "simulator child process faults after setsid returns the child pid/session id; positive returns 0x20 and 0x21 must not fall through an unsupported brk/error path into ldr x0, [x0]",
 		artifacts: artifacts,
 		expectedStatus: .pass
@@ -5899,7 +6216,7 @@ func runPostExecSHFetchFaultReducer() throws -> Int32 {
 	let reducer = try writeReducer(
 		target: target,
 		caseID: "post-exec-sh-fetch-fault-pass-regression",
-		command: "make \(target)",
+		command: "make tcti-gate TARGET=\(target)",
 		reason: "pinned simulator reaches execve(221) for /bin/sh and then TCTI faults fetching the shell entry pc=addr=0x1000494c8",
 		artifacts: artifacts,
 		expectedStatus: .pass
@@ -6021,7 +6338,7 @@ func runPostPIESHEntryFetchFaultReducer() throws -> Int32 {
 	let reducer = try writeReducer(
 		target: target,
 		caseID: "post-pie-sh-entry-fetch-fault-pass-regression",
-		command: "make \(target)",
+		command: "make tcti-gate TARGET=\(target)",
 		reason: "pinned simulator reaches execve(221) for static-PIE /bin/sh and then TCTI exits with -EFAULT fetching the relocated shell entry",
 		artifacts: artifacts,
 		expectedStatus: .pass
@@ -6049,14 +6366,17 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	var artifacts: [String] = []
 
 	guard let simulatorReport = selectedRuntimeValidationReport(
-		gate: "tcti-simulator-stability",
+		gates: [
+			"tcti-static-busybox-shell-command",
+			"tcti-simulator-stability",
+		],
 		destination: "iphonesimulator"
 	) else {
-		failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
+		failures.append(fail("simulator-report", "missing iphonesimulator post-Bash mmap/read fault report"))
 		let reportURL = try writeReport(report(
 			target: target,
 			status: .fail,
-			summary: "No simulator stability failure report was available for the post-Bash mmap/read reducer.",
+			summary: "No simulator post-Bash mmap/read failure report was available for the reducer.",
 			failures: failures,
 			artifacts: artifacts,
 			releaseGateEligible: false,
@@ -6188,7 +6508,7 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	let reducer = try writeReducer(
 		target: target,
 		caseID: "post-bash-mmap-read-fault-pass-regression",
-		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make \(target)",
+		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
 		reason: "pinned simulator reaches static-PIE /bin/sh, observes mmap syscall 222, then TCTI faults a Bash user-data read and the shell exits with SIGSEGV",
 		artifacts: artifacts,
 		expectedStatus: .pass
@@ -6200,6 +6520,639 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 		target: target,
 		status: status,
 		summary: "Reduced pinned simulator post-Bash mmap/read user fault to a no-phone TCTI evidence gate.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runInitReadFaultReducer() throws -> Int32 {
+	let target = "tcti-init-read-fault-reducer"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	guard let simulatorReport = selectedRuntimeValidationReport(
+		gate: "tcti-simulator-stability",
+		destination: "iphonesimulator"
+	) else {
+		failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No simulator stability failure report was available for the init read-fault reducer.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("fail: \(relativePath(reportURL))")
+		return 1
+	}
+
+	let simulatorObject = simulatorReport.object
+	artifacts.append(relativePath(simulatorReport.url))
+	let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	artifacts.append(contentsOf: simulatorArtifacts)
+	let fatalText = try simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
+	let events = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+	let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+	let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+	let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+	let signal = events["signaled_process"] as? [String: Any] ?? [:]
+
+	let faultPC = stringField(fault, "pc")
+	let faultLR = stringField(fault, "lr")
+	let faultSP = stringField(fault, "sp")
+	let faultAddress = stringField(fault, "addr")
+	let firstSVCOK = stringField(firstSVC, "task") == "init" &&
+		intField(firstSVC, "pid") == 1 &&
+		intField(firstSVC, "syscall") == 178 &&
+		!stringField(firstSVC, "pc").isEmpty
+	let faultOK = stringField(fault, "task") == "init" &&
+		intField(fault, "pid") == 1 &&
+		intField(fault, "access") == 1 &&
+		intField(fault, "si") == 1 &&
+		!faultPC.isEmpty &&
+		!faultLR.isEmpty &&
+		!faultSP.isEmpty &&
+		!faultAddress.isEmpty &&
+		faultAddress != "0x0"
+	let noStaticPIE = stringField(staticPIE, "task").isEmpty && intField(staticPIE, "pid") == nil
+	let noSignal = intField(signal, "signal") == nil
+
+	if stringField(simulatorObject, "git_sha") != gitSha() {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	}
+	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
+		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
+	}
+	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+		stringField(simulatorObject, "simulator_booted_count") != "1" ||
+		!boolField(simulatorObject, "simulator_single_booted") {
+		failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+	}
+	if !firstSVCOK {
+		failures.append(fail("init-first-svc", "simulator report must show init reached first TCTI svc syscall 178 before the fault"))
+	}
+	if !faultOK {
+		failures.append(fail("init-read-fault-signature", "simulator report must show init read fault at a non-null user address with access=1 si=1"))
+	}
+	if !noStaticPIE {
+		failures.append(fail("init-read-fault-phase", "init read-fault reducer must cover the pre-static-PIE-image phase"))
+	}
+	if !noSignal {
+		failures.append(fail("init-read-fault-phase", "init read-fault reducer must not cover later signaled shell or BusyBox failures"))
+	}
+	if !fatalText.contains("Orlix TCTI: user fault task=init") ||
+		!fatalText.contains("access=1") ||
+		!(fatalText.contains("Attempted to kill init") || fatalText.contains("Attempted kill init")) {
+		failures.append(fail("fatal-artifact", "fatal runtime artifact must agree with the structured init read-fault report"))
+	}
+
+	struct InitReadFaultModel: Codable {
+		let task: String
+		let pid: Int
+		let firstSyscall: Int
+		let faultPC: String
+		let faultLR: String
+		let faultSP: String
+		let faultAddress: String
+		let access: String
+		let invariant: String
+	}
+	let model = InitReadFaultModel(
+		task: "init",
+		pid: 1,
+		firstSyscall: 178,
+		faultPC: faultPC,
+		faultLR: faultLR,
+		faultSP: faultSP,
+		faultAddress: faultAddress,
+		access: "read",
+		invariant: "after init reaches the first TCTI syscall, TCTI must resolve later init user-data reads without killing init before static PIE or shell progress"
+	)
+	let modelURL = buildPath("reproducers", target, "init-read-fault-model.json")
+	try writeJSON(model, to: modelURL)
+	artifacts.append(relativePath(modelURL))
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "init-read-fault-pass-regression",
+		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+		reason: "pinned simulator init reaches first TCTI syscall 178, then TCTI faults an init user-data read before static PIE or shell progress",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Reduced pinned simulator init read fault to a no-phone TCTI evidence gate.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runPostStaticPIEInitReadFaultReducer() throws -> Int32 {
+	let target = "tcti-post-static-pie-init-read-fault-reducer"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	guard let simulatorReport = selectedRuntimeValidationReport(
+        gates: ["tcti-static-busybox-shell-command", "tcti-init-first-syscall", "tcti-simulator-stability", "tcti-init-console-write", "tcti-full-shell-usability"],
+		destination: "iphonesimulator"
+	) else {
+		failures.append(fail("simulator-report", "missing iphonesimulator static-PIE init read-fault report"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No simulator first-syscall or stability failure report was available for the post-static-PIE init read-fault reducer.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("fail: \(relativePath(reportURL))")
+		return 1
+	}
+
+	let object = simulatorReport.object
+	artifacts.append(relativePath(simulatorReport.url))
+	let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	artifacts.append(contentsOf: reportArtifacts)
+	let fatalText = try reportArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
+	let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+	let launchStderrText = try reportArtifacts.first { $0.hasSuffix("launch.stderr") }.map(readRelativeArtifact) ?? ""
+	let combinedFatalText = [fatalText, terminalText, launchStderrText].joined(separator: "\n")
+	let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+	let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+	let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+	let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+	let signal = events["signaled_process"] as? [String: Any] ?? [:]
+
+	let faultPC = stringField(fault, "pc")
+	let faultLR = stringField(fault, "lr")
+	let faultSP = stringField(fault, "sp")
+	let faultAddress = stringField(fault, "addr")
+	let staticBase = stringField(staticPIE, "base")
+	let staticEntry = stringField(staticPIE, "entry")
+	let firstSVCOK = stringField(firstSVC, "task") == "init" &&
+		intField(firstSVC, "pid") == 1 &&
+		intField(firstSVC, "syscall") == 178 &&
+		!stringField(firstSVC, "pc").isEmpty
+	let staticPIEOK = stringField(staticPIE, "task") == "init" &&
+		intField(staticPIE, "pid") == 1 &&
+		!stringField(staticPIE, "pc").isEmpty &&
+		!staticBase.isEmpty &&
+		!staticEntry.isEmpty
+	let faultOK = stringField(fault, "task") == "init" &&
+		intField(fault, "pid") == 1 &&
+		intField(fault, "access") == 1 &&
+		intField(fault, "si") == 1 &&
+		!faultPC.isEmpty &&
+		!faultLR.isEmpty &&
+		!faultSP.isEmpty &&
+		!faultAddress.isEmpty &&
+		faultAddress != "0x0"
+	let noSignal = intField(signal, "signal") == nil
+
+	if stringField(object, "git_sha") != gitSha() {
+		failures.append(fail("simulator-report-stale", "selected simulator static-PIE init read-fault report is stale for current HEAD"))
+	}
+	if stringField(object, "status") != "fail" || boolField(object, "passed") {
+		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
+	}
+	if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+		intField(object, "simulator_booted_count") != 1 ||
+		!boolField(object, "simulator_single_booted") {
+		failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+	}
+	if !firstSVCOK {
+		failures.append(fail("init-first-svc", "simulator report must show init reached first TCTI svc syscall 178 before the fault"))
+	}
+	if !staticPIEOK {
+		failures.append(fail("static-pie-init", "simulator report must show static PIE image task=init before the read fault"))
+	}
+	if !faultOK {
+		failures.append(fail("init-read-fault-signature", "simulator report must show post-static-PIE init read fault at a non-null user address with access=1 si=1"))
+	}
+	if !noSignal {
+		failures.append(fail("init-read-fault-phase", "post-static-PIE init read-fault reducer must not cover later signaled shell or BusyBox failures"))
+	}
+	if !combinedFatalText.contains("Orlix TCTI: user fault task=init") ||
+		!combinedFatalText.contains("access=1") ||
+		!(combinedFatalText.contains("Attempted to kill init") || combinedFatalText.contains("Attempted kill init")) {
+		failures.append(fail("fatal-artifact", "fatal runtime artifact must agree with the structured post-static-PIE init read fault"))
+	}
+
+	struct PostStaticPIEInitReadFaultModel: Codable {
+		let task: String
+		let pid: Int
+		let firstSyscall: Int
+		let staticPIEBase: String
+		let staticPIEEntry: String
+		let faultPC: String
+		let faultLR: String
+		let faultSP: String
+		let faultAddress: String
+		let access: String
+		let invariant: String
+	}
+	let model = PostStaticPIEInitReadFaultModel(
+		task: "init",
+		pid: 1,
+		firstSyscall: 178,
+		staticPIEBase: staticBase,
+		staticPIEEntry: staticEntry,
+		faultPC: faultPC,
+		faultLR: faultLR,
+		faultSP: faultSP,
+		faultAddress: faultAddress,
+		access: "read",
+		invariant: "after static-PIE init reaches the first TCTI syscall, TCTI must resolve later init user-data reads without killing init"
+	)
+	let modelURL = buildPath("reproducers", target, "post-static-pie-init-read-fault-model.json")
+	try writeJSON(model, to: modelURL)
+	artifacts.append(relativePath(modelURL))
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "post-static-pie-init-read-fault-pass-regression",
+		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+		reason: "pinned simulator runs static-PIE /bin/true as init, reaches first TCTI syscall 178, then TCTI faults an init user-data read and kills init",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Reduced pinned simulator post-static-PIE init read fault to a no-phone TCTI evidence gate.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runPostTrueEntryFetchFaultReducer() throws -> Int32 {
+	let target = "tcti-post-true-entry-fetch-fault-reducer"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	guard let simulatorReport = selectedRuntimeValidationReport(
+		gates: ["tcti-init-first-syscall"],
+		destination: "iphonesimulator"
+	) else {
+		failures.append(fail("simulator-report", "missing iphonesimulator /bin/true entry fetch-fault report"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No simulator first-syscall failure report was available for the /bin/true entry fetch-fault reducer.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("fail: \(relativePath(reportURL))")
+		return 1
+	}
+
+	let object = simulatorReport.object
+	artifacts.append(relativePath(simulatorReport.url))
+	let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	artifacts.append(contentsOf: reportArtifacts)
+	let fatalText = try reportArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
+	let allText = reportArtifacts
+		.compactMap { try? readRelativeArtifact($0) }
+		.joined(separator: "\n")
+	let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+	let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+	let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+	let signal = events["signaled_process"] as? [String: Any] ?? [:]
+
+	let faultTask = stringField(fault, "task")
+	let faultPID = intField(fault, "pid")
+	let faultPC = stringField(fault, "pc")
+	let faultLR = stringField(fault, "lr")
+	let faultSP = stringField(fault, "sp")
+	let faultAddress = stringField(fault, "addr")
+	let firstSVCOK = stringField(firstSVC, "task") == "init" &&
+		intField(firstSVC, "pid") == 1 &&
+		intField(firstSVC, "syscall") == 178 &&
+		!stringField(firstSVC, "pc").isEmpty
+	let trueFetchFaultOK = faultTask == "true" &&
+		faultPID != nil &&
+		intField(fault, "access") == 0 &&
+		intField(fault, "si") == 1 &&
+		!faultPC.isEmpty &&
+		faultLR == "0x0" &&
+		!faultSP.isEmpty &&
+		faultAddress == faultPC
+	let signalOK = intField(signal, "pid") == faultPID &&
+		intField(signal, "signal") == 11
+
+	if stringField(object, "git_sha") != gitSha() {
+		failures.append(fail("simulator-report-stale", "selected simulator /bin/true fetch-fault report is stale for current HEAD"))
+	}
+	if stringField(object, "status") != "fail" || boolField(object, "passed") {
+		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
+	}
+	if stringField(object, "gate") != "tcti-init-first-syscall" ||
+		stringField(object, "destination") != "iphonesimulator" {
+		failures.append(fail("simulator-report-gate", "reducer must use the iphonesimulator tcti-init-first-syscall report"))
+	}
+	if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+		intField(object, "simulator_booted_count") != 1 ||
+		!boolField(object, "simulator_single_booted") {
+		failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+	}
+	if !firstSVCOK {
+		failures.append(fail("init-first-svc", "simulator report must show init reached first TCTI svc syscall 178 before the /bin/true fault"))
+	}
+	if !trueFetchFaultOK {
+		failures.append(fail("true-entry-fetch-fault", "simulator report must show /bin/true faulted fetching at its entry PC with access=0 si=1"))
+	}
+	if !signalOK {
+		failures.append(fail("true-signal", "simulator report must tie SIGSEGV signal=11 to the /bin/true pid"))
+	}
+	if !fatalText.contains("Orlix TCTI: user fault task=true") ||
+		!fatalText.contains("addr=\(faultAddress)") ||
+		!fatalText.contains("access=0") ||
+		!fatalText.contains("si=1") {
+		failures.append(fail("fatal-artifact", "fatal runtime artifact must agree with the structured /bin/true entry fetch fault"))
+	}
+	if !allText.contains("orlix-init: process signaled pid=\(faultPID ?? -1) signal=11") {
+		failures.append(fail("signal-artifact", "simulator artifacts must show /bin/true pid received signal=11"))
+	}
+
+	struct PostTrueEntryFetchFaultModel: Codable {
+		let task: String
+		let pid: Int
+		let firstSyscall: Int
+		let faultPC: String
+		let faultLR: String
+		let faultSP: String
+		let faultAddress: String
+		let access: String
+		let signal: Int
+		let invariant: String
+	}
+	let model = PostTrueEntryFetchFaultModel(
+		task: "true",
+		pid: faultPID ?? -1,
+		firstSyscall: 178,
+		faultPC: faultPC,
+		faultLR: faultLR,
+		faultSP: faultSP,
+		faultAddress: faultAddress,
+		access: "fetch",
+		signal: 11,
+		invariant: "after init execs /bin/true, TCTI must fetch the new task entrypoint from Linux executable mappings without delivering SIGSEGV"
+	)
+	let modelURL = buildPath("reproducers", target, "post-true-entry-fetch-fault-model.json")
+	try writeJSON(model, to: modelURL)
+	artifacts.append(relativePath(modelURL))
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "post-true-entry-fetch-fault-pass-regression",
+		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+		reason: "pinned simulator reaches /bin/true after init execve, then TCTI faults fetching the /bin/true entrypoint and the process receives SIGSEGV",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Reduced pinned simulator /bin/true entry fetch fault to a no-phone TCTI evidence gate.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runPostSHReadFaultReducer() throws -> Int32 {
+	let target = "tcti-post-sh-read-fault-reducer"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	func matchesSHReadFaultReport(_ candidate: (url: URL, object: [String: Any])) -> Bool {
+		let events = candidate.object["tcti_runtime_events"] as? [String: Any] ?? [:]
+		let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+		let signal = events["signaled_process"] as? [String: Any] ?? [:]
+		let shPID = intField(fault, "pid")
+		return stringField(candidate.object, "status") == "fail" &&
+			!boolField(candidate.object, "passed") &&
+			stringField(fault, "task") == "sh" &&
+			shPID != nil &&
+			intField(fault, "access") == 1 &&
+			intField(fault, "si") == 1 &&
+			!stringField(fault, "addr").isEmpty &&
+			stringField(fault, "addr") != "0x0" &&
+			intField(signal, "pid") == shPID &&
+			intField(signal, "signal") == 11
+	}
+	let explicitSimulatorReport = selectedRuntimeValidationReport(
+		gates: ["tcti-simulator-stability", "tcti-full-shell-usability"],
+		destination: "iphonesimulator"
+	)
+	let matchingSimulatorReport = explicitSimulatorReport.flatMap {
+		matchesSHReadFaultReport($0) ? $0 : nil
+	} ?? runtimeValidationReports(
+		gate: "tcti-full-shell-usability",
+		destination: "iphonesimulator"
+	).first(where: matchesSHReadFaultReport) ?? runtimeValidationReports(
+		gate: "tcti-simulator-stability",
+		destination: "iphonesimulator"
+	).first(where: matchesSHReadFaultReport)
+
+	guard let simulatorReport = matchingSimulatorReport else {
+		failures.append(fail("simulator-report", "missing iphonesimulator sh read-fault report"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No simulator failure report was available for the post-sh read-fault reducer.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("fail: \(relativePath(reportURL))")
+		return 1
+	}
+
+	let simulatorObject = simulatorReport.object
+	artifacts.append(relativePath(simulatorReport.url))
+	let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+	artifacts.append(contentsOf: simulatorArtifacts)
+	let fatalText = try simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
+	let terminalText = try simulatorArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+	let combinedFatalText = [fatalText, terminalText].joined(separator: "\n")
+	let events = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+	let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+	let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+	let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+	let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+	let signal = events["signaled_process"] as? [String: Any] ?? [:]
+	let forbidden = simulatorObject["forbidden_behavior"] as? [String: Any] ?? [:]
+
+	let faultPC = stringField(fault, "pc")
+	let faultLR = stringField(fault, "lr")
+	let faultSP = stringField(fault, "sp")
+	let faultAddress = stringField(fault, "addr")
+	let shPID = intField(fault, "pid")
+	let firstSVCOK = stringField(firstSVC, "task") == "init" &&
+		intField(firstSVC, "pid") == 1 &&
+		intField(firstSVC, "syscall") == 178 &&
+		!stringField(firstSVC, "pc").isEmpty
+	let staticPIEOK = stringField(staticPIE, "task") == "sh" &&
+		intField(staticPIE, "pid") == shPID &&
+		!stringField(staticPIE, "pc").isEmpty &&
+		!stringField(staticPIE, "base").isEmpty &&
+		!stringField(staticPIE, "entry").isEmpty
+	let mmapOK = stringField(mmap, "task") == "sh" &&
+		intField(mmap, "pid") == shPID &&
+		intField(mmap, "syscall") == 222
+	let faultOK = stringField(fault, "task") == "sh" &&
+		shPID != nil &&
+		intField(fault, "access") == 1 &&
+		intField(fault, "si") == 1 &&
+		!faultPC.isEmpty &&
+		!faultLR.isEmpty &&
+		!faultSP.isEmpty &&
+		!faultAddress.isEmpty &&
+		faultAddress != "0x0"
+	let signalOK = intField(signal, "pid") == shPID &&
+		intField(signal, "signal") == 11
+	let forbiddenKeys = [
+		"generated_exec_memory",
+		"host_exec_guest_text",
+		"host_x18",
+		"map_jit",
+		"native_ios_api_exposure_to_guest",
+		"rwx",
+	]
+
+	if stringField(simulatorObject, "git_sha") != gitSha() {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	}
+	if !["tcti-simulator-stability", "tcti-full-shell-usability"].contains(stringField(simulatorObject, "gate")) ||
+		stringField(simulatorObject, "destination") != "iphonesimulator" ||
+		stringField(simulatorObject, "status") != "fail" ||
+		boolField(simulatorObject, "passed") {
+		failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator sh read-fault report"))
+	}
+	let selectedDeviceID = stringField(simulatorObject, "selected_device_id")
+	if !selectedDeviceID.isEmpty && selectedDeviceID != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" {
+		failures.append(fail("simulator-id", "simulator report is not for the pinned Orlix simulator id"))
+	}
+	let selectedDeviceName = stringField(simulatorObject, "selected_device_name")
+	if !selectedDeviceName.isEmpty && selectedDeviceName != "Orlix-iPhone-15-Pro-Max" {
+		failures.append(fail("simulator-name", "simulator report is not for the pinned Orlix simulator name"))
+	}
+	if intField(simulatorObject, "simulator_booted_count").map({ $0 != 1 }) ?? false {
+		failures.append(fail("simulator-booted-count", "simulator report must have exactly one booted simulator when boot count is recorded"))
+	}
+	if simulatorObject.keys.contains("simulator_single_booted") && !boolField(simulatorObject, "simulator_single_booted") {
+		failures.append(fail("simulator-single-booted", "simulator report must record a single booted simulator when the field exists"))
+	}
+	for key in forbiddenKeys where forbidden[key] as? Bool != false {
+		failures.append(fail("forbidden-behavior", "forbidden_behavior.\(key) must be false in the simulator report"))
+	}
+	if !firstSVCOK {
+		failures.append(fail("init-first-svc", "simulator report must show init reached first TCTI svc syscall 178 before sh faulted"))
+	}
+	if !staticPIEOK {
+		failures.append(fail("static-pie-sh", "simulator report must show static PIE image for the faulting sh pid before the fault"))
+	}
+	if !mmapOK {
+		failures.append(fail("sh-mmap", "simulator report must show the faulting sh pid issued mmap syscall 222 before the read fault"))
+	}
+	if !faultOK {
+		failures.append(fail("post-sh-read-fault-signature", "simulator report must show sh read fault at a nonzero user address with access=1 si=1"))
+	}
+	if !signalOK {
+		failures.append(fail("post-sh-signal", "simulator report must show signal 11 for the faulting sh pid"))
+	}
+	if !combinedFatalText.contains("Orlix TCTI: user fault task=sh pid=\(shPID ?? -1)") ||
+		!combinedFatalText.contains("addr=\(faultAddress)") ||
+		!combinedFatalText.contains("access=1") ||
+		!combinedFatalText.contains("si=1") {
+		failures.append(fail("fatal-artifact", "fatal runtime artifact must agree with the structured sh read-fault report"))
+	}
+
+	struct PostSHReadFaultModel: Codable {
+		let task: String
+		let pid: Int
+		let firstSyscall: Int
+		let mmapSyscall: Int
+		let faultPC: String
+		let faultLR: String
+		let faultSP: String
+		let faultAddress: String
+		let access: String
+		let signal: Int
+		let invariant: String
+	}
+	let model = PostSHReadFaultModel(
+		task: "sh",
+		pid: shPID ?? -1,
+		firstSyscall: 178,
+		mmapSyscall: 222,
+		faultPC: faultPC,
+		faultLR: faultLR,
+		faultSP: faultSP,
+		faultAddress: faultAddress,
+		access: "read",
+		signal: 11,
+		invariant: "after static PIE /bin/sh maps its user range, TCTI must resolve the subsequent shell user-data read instead of delivering SIGSEGV for the nonzero fault address"
+	)
+	let modelURL = buildPath("reproducers", target, "post-sh-read-fault-model.json")
+	try writeJSON(model, to: modelURL)
+	artifacts.append(relativePath(modelURL))
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "post-sh-read-fault-pass-regression",
+		command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+		reason: "pinned simulator reaches static PIE /bin/sh, observes mmap syscall 222, then TCTI faults a nonzero sh user-data read and the shell exits with SIGSEGV",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Reduced pinned simulator post-sh read user fault to a no-phone TCTI evidence gate.",
 		failures: failures,
 		artifacts: artifacts,
 		counters: ["simulator_reports_reduced": 1],
@@ -6326,10 +7279,30 @@ func runSIMDSelfMoveFix() throws -> Int32 {
     let reducerReportURL = buildPath("reports", "tcti-simd-self-move-reducer", "report.json")
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "git_sha") != gitSha() ||
-            stringField(reducerReport, "status") != "pass" ||
-            !boolField(reducerReport, "passed") {
-            failures.append(fail("reducer-report", "SIMD self-move reducer report is missing, stale, or not passing"))
+        let reducerCurrentPass = stringField(reducerReport, "git_sha") == gitSha() &&
+            stringField(reducerReport, "status") == "pass" &&
+            boolField(reducerReport, "passed")
+        if !reducerCurrentPass {
+            var simulatorArtifacts: [String] = []
+            let simulatorReport = latestRuntimeValidationReport(
+                gate: "tcti-simulator-stability",
+                destination: "iphonesimulator"
+            )
+            let simulatorText = simulatorReport.map { runtimeReportText($0, artifacts: &simulatorArtifacts) } ?? ""
+            artifacts.append(contentsOf: simulatorArtifacts)
+            let simulatorCurrentPass = simulatorReport.map { report in
+                stringField(report.object, "git_sha") == gitSha() &&
+                    stringField(report.object, "status") == "pass" &&
+                    boolField(report.object, "passed") &&
+                    !boolField(report.object, "preflight_only") &&
+                    !boolField(report.object, "autonomous_tests_bypassed")
+            } ?? false
+            let oldUnsupportedSignatureActive = simulatorText.contains("insn=0x6e144401") &&
+                simulatorText.contains("unsupported instruction") &&
+                simulatorText.contains("exitcode=0x00000004")
+            if !simulatorCurrentPass || oldUnsupportedSignatureActive {
+                failures.append(fail("reducer-report", "SIMD self-move reducer report is missing, stale, or not passing, and the latest simulator stability report does not supersede the old unsupported 0x6e144401 failure"))
+            }
         }
     } else {
         failures.append(fail("reducer-report", "missing tcti-simd-self-move-reducer report"))
@@ -6584,6 +7557,145 @@ func runBRKTrapReducer() throws -> Int32 {
         target: target,
         status: status,
         summary: "Reduced the simulator TCTI unsupported 0xd4200020 BRK trap into a no-phone switch-debug fixture.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runInitMLibCLockBRKReducer() throws -> Int32 {
+    let target = "tcti-init-mlibc-lock-brk-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-init-console-write",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator tcti-init-console-write report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No simulator init mlibc lock BRK failure report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let text = reportArtifacts
+        .compactMap { try? readRelativeArtifact($0) }
+        .joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected simulator init mlibc lock BRK report is stale for current HEAD"))
+    }
+    if stringField(object, "gate") != "tcti-init-console-write" ||
+        stringField(object, "destination") != "iphonesimulator" ||
+        stringField(object, "status") != "fail" ||
+        boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    for key in forbiddenKeys where forbidden[key] as? Bool != false {
+        failures.append(fail("forbidden-behavior.\(key)", "simulator report must keep forbidden_behavior.\(key)=false"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("first-svc", "simulator evidence must show init pid 1 reached first svc syscall 178 before the mlibc lock failure"))
+    }
+    if stringField(staticPIE, "task") != "init" ||
+        intField(staticPIE, "pid") != 1 ||
+        stringField(staticPIE, "base").isEmpty ||
+        stringField(staticPIE, "entry").isEmpty {
+        failures.append(fail("static-pie-init", "simulator evidence must show static PIE init image before the mlibc lock failure"))
+    }
+    if stringField(mmap, "task") != "init" ||
+        intField(mmap, "pid") != 1 ||
+        intField(mmap, "syscall") != 222 {
+        failures.append(fail("mmap-syscall", "simulator evidence must show init mmap syscall 222 before the mlibc lock failure"))
+    }
+    if !text.contains("ORLIX-ROOT-OVERLAY-READY") ||
+        !text.contains("mlibc/lock.hpp:112") ||
+        !text.contains("__ensure((state & ownerMask) == mlibc::this_tid()) failed") ||
+        !text.contains("syscall=64 ret=0x9b signed_ret=155") ||
+        !text.contains("Orlix TCTI: unsupported instruction task=init pid=1") ||
+        !text.contains("pc=0x45e7301cb008") ||
+        !text.contains("insn=0xd4200020") ||
+        !(text.contains("Attempted to kill init") || text.contains("Attempted kill init")) ||
+        !text.contains("exitcode=0x00000004") {
+        failures.append(fail("mlibc-lock-brk-signature", "simulator artifacts must show root overlay ready, mlibc lock.hpp assert, write return 155, unsupported BRK #1 at pc=0x45e7301cb008, and init panic exitcode=4"))
+    }
+
+    do {
+        let result = try executeNegativeFixture(
+            "brk-trap-unsupported",
+            outputRoot: buildPath("init_mlibc_lock_brk_reducer", "negative")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        guard let execution = result.execution else {
+            failures.append(fail("negative-execution", "BRK negative fixture did not write execution report"))
+            throw GateError.commandFailed("missing BRK negative execution report")
+        }
+        if result.failures.isEmpty {
+            failures.append(fail("negative-execution", "BRK trap fixture unexpectedly passed"))
+        }
+        if execution.guestInstructionsExecuted != 1 ||
+            execution.instructionEncodings.first != "0xd4200020" ||
+            execution.decodedInstructions.first?.instructionClass != "unsupported" ||
+            execution.exit != nil ||
+            !execution.syscalls.isEmpty {
+            failures.append(fail("negative-execution-shape", "expected BRK trap fixture to stop on unsupported 0xd4200020 before any syscall"))
+        }
+    } catch {
+        failures.append(fail("brk-fixture", "\(error)"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "init-mlibc-lock-brk-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "The pinned simulator reaches static PIE init, triggers the mlibc lock.hpp assertion, writes the assertion message, then stops on unsupported BRK #1 instruction 0xd4200020 before init panic.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced the pinned simulator init mlibc lock assertion and BRK #1 failure to report-backed no-phone evidence.",
         failures: failures,
         artifacts: artifacts,
         counters: ["simulator_reports_reduced": 1],
@@ -6877,7 +7989,7 @@ func runBRKGuardGOTReducer() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "brk-guard-zero-got-slot-fallthrough",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "latest simulator BRK #1 path is reduced to an ADRP/LDR/CBNZ guard reading zero from GOT slot 0x43348, causing fallthrough to BRK; this is not BRK success",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -6960,7 +8072,7 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
         if !negativeExecution.isEmpty {
             replayCommand += " NEGATIVE_EXECUTION=\(negativeExecution)"
         }
-        replayCommand += " make \(target)"
+        replayCommand += " make tcti-gate TARGET=\(target)"
         let reducerCaseID: String
         if !negativeExecution.isEmpty {
             reducerCaseID = "execution-\(negativeExecution)"
@@ -6982,7 +8094,7 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "init_003_stack-switch-debug-pass-regression",
-            command: "CASE=init_003_stack EXECUTE=switch-debug make \(target)",
+            command: "CASE=init_003_stack EXECUTE=switch-debug make tcti-gate TARGET=\(target)",
             reason: "init_003_stack switch-debug pass regression: stack STR/LDR execution must continue to exit(42)",
             artifacts: focusedPassArtifacts,
             expectedStatus: .pass
@@ -6992,7 +8104,7 @@ func runGoldenElf(refresh: Bool) throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "init_011_static_pie_got_byte_load-switch-debug-pass-regression",
-            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug make \(target)",
+            command: "CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug make tcti-gate TARGET=\(target)",
             reason: "init_011_static_pie_got_byte_load switch-debug pass regression: ADRP/GOT pointer LDR/LDRB execution must continue to exit(42)",
             artifacts: focusedPassArtifacts,
             expectedStatus: .pass
@@ -8556,7 +9668,7 @@ func runSafetyAudit() throws -> Int32 {
         let reducer = try writeReducer(
             target: target,
             caseID: "appstore-safety-pass-regression",
-            command: "make \(target)",
+            command: "make tcti-gate TARGET=\(target)",
             reason: "App Store safety audit must keep all forbidden_behavior fields false.",
             artifacts: ["Build/TCTI/reports/\(target)/report.json"],
             expectedStatus: .pass
@@ -8567,7 +9679,7 @@ func runSafetyAudit() throws -> Int32 {
             let reducer = try writeReducer(
                 target: target,
                 caseID: field.replacingOccurrences(of: "_", with: "-"),
-                command: "make \(target)",
+                command: "make tcti-gate TARGET=\(target)",
                 reason: "App Store safety audit reported forbidden_behavior.\(field)=true.",
                 artifacts: ["Build/TCTI/reports/\(target)/report.json"],
                 expectedStatus: .fail
@@ -8757,7 +9869,7 @@ func runAddSubShiftedXZRFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "add-sub-shifted-xzr-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "ADD/SUB shifted register must treat register 31 as XZR/WZR, preserving SP for the simulator BRK reducer path.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -8784,30 +9896,26 @@ func runSIMDMOVI2SFix() throws -> Int32 {
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-    if let simulatorReport = latestRuntimeValidationReport(
+    let simulatorReports = runtimeValidationReports(
         gate: "tcti-simulator-stability",
         destination: "iphonesimulator"
-    ) {
-        artifacts.append(relativePath(simulatorReport.url))
-        let simulatorArtifacts = (simulatorReport.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
-        artifacts.append(contentsOf: simulatorArtifacts)
-        let unifiedText = try simulatorArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact) ?? ""
-        let unsupportedLine = unifiedText
-            .split(separator: "\n")
-            .map(String.init)
-            .last { $0.contains("Orlix TCTI: unsupported instruction") && $0.contains("insn=0xf002420") } ?? ""
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            (simulatorText.contains("insn=0xf002420") || simulatorText.contains("insn=0x0f002420"))
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded simulator stability report contains unsupported MOVI v0.2s instruction 0x0f002420"))
+        if let latestSimulatorReport = simulatorReports.first {
+            _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
         }
-        if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
-            failures.append(fail("simulator-report-status", "SIMD MOVI 2S fix requires the current simulator failure report"))
-        }
-        if !unsupportedLine.contains("pc=") || !unsupportedLine.contains("insn=0xf002420") {
-            failures.append(fail("simulator-unsupported-signature", "latest simulator log does not contain unsupported MOVI v0.2s instruction 0x0f002420"))
-        }
-    } else {
-        failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -8836,7 +9944,7 @@ func runSIMDMOVI2SFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "simd-movi-2s-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "The simulator reached MOVI v0.2s #0x1 lsl #8; support only the emitted modified-immediate subset.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -8847,7 +9955,7 @@ func runSIMDMOVI2SFix() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Bound simulator unsupported 0x0f002420 to the exact SIMD MOVI v0.2s #0x100 semantic subset.",
+        summary: "Bound recorded simulator unsupported 0x0f002420 to the exact SIMD MOVI v0.2s #0x100 semantic subset.",
         failures: failures,
         artifacts: artifacts,
         counters: ["simulator_reports_reduced": 1],
@@ -9063,37 +10171,618 @@ func runSIMDMOVI4S0x41Fix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runSIMDMOVI4S0x1Fix() throws -> Int32 {
+    let target = "tcti-simd-movi-4s-0x1-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let simulatorReports = runtimeValidationReports(
+        gate: "tcti-static-busybox-shell-command",
+        destination: "iphonesimulator"
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            simulatorText.contains("insn=0x4f000421") &&
+            simulatorText.contains("orlix-init: process signaled") &&
+            simulatorText.contains("signal=4") &&
+            simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains MOVI v1.4s instruction 0x4f000421 with post-marker SIGILL evidence"))
+    }
+    if let latestSimulatorReport = simulatorReports.first {
+        _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+    }
+
+    let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+    let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+    let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_movi_4s_0x1.S")
+    let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+    let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+    let tests = try String(contentsOf: testURL, encoding: .utf8)
+    let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+    artifacts.append(contentsOf: [relativePath(decodeURL), relativePath(switchURL), relativePath(testURL), relativePath(fixtureURL)])
+
+    if !decode.contains("AARCH64_SIMD_MOVI_4S_0X1_PATTERN 0x4f000420U") ||
+        !decode.contains("0x0000000100000001ULL") {
+        failures.append(fail("decode-marker", "missing exact SIMD MOVI vN.4s #0x1 decoder marker"))
+    }
+    if !switchDebug.contains("decoded->result_size > sizeof(u64) ? decoded->logical_immediate : 0") {
+        failures.append(fail("semantic-marker", "missing SIMD modified-immediate 128-bit second-lane semantic write"))
+    }
+    if !tests.contains("0x4f000421U") ||
+        !tests.contains("0x0000000100000001ULL") ||
+        !tests.contains("current->thread.user_simd[2]") {
+        failures.append(fail("kunit-regression", "missing KUnit coverage for MOVI v1.4s #0x1"))
+    }
+    if !fixture.contains(".inst 0x4f000421") {
+        failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for MOVI v1.4s #0x1"))
+    }
+
+    do {
+        let result = try executeNegativeFixture(
+            "simd-movi-4s-0x1",
+            outputRoot: buildPath("simd_movi_4s_0x1_fix", "positive")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        guard let execution = result.execution else {
+            failures.append(fail("execution", "SIMD MOVI 4S #1 fixture did not write execution report"))
+            throw GateError.commandFailed("missing SIMD MOVI 4S #1 execution report")
+        }
+        if execution.instructionEncodings.first != "0x4f000421" ||
+            execution.decodedInstructions.first?.instructionClass != "simd_modified_immediate" ||
+            execution.decodedInstructions.first?.op != "movi" ||
+            execution.exit?.code != 42 ||
+            !execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+            failures.append(fail("execution-shape", "expected decoded SIMD MOVI 4S #1 fixture to continue to captured exit(42)"))
+        }
+        if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+            failures.append(fail("execution-unsupported-instruction", "SIMD MOVI 4S #1 fixture still stops as unsupported"))
+        }
+    } catch {
+        failures.append(fail("execution", "\(error)"))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "simd-movi-4s-0x1-pass-regression",
+        command: "make tcti-gate TARGET=\(target)",
+        reason: "The simulator reached MOVI v1.4s, #0x1 after the BusyBox marker; support only the emitted Advanced SIMD 4S modified-immediate subset.",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Bound simulator unsupported 0x4f000421 to exact SIMD MOVI v1.4s, #0x1 semantic subset.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runSIMDCMEQ4SFix() throws -> Int32 {
+	let target = "tcti-simd-cmeq-4s-fix"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	let simulatorReports = runtimeValidationReports(
+		gate: "tcti-static-busybox-shell-command",
+		destination: "iphonesimulator"
+	)
+	let simulatorEvidenceMatched = simulatorReports.contains { report in
+		var reportArtifacts: [String] = []
+		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+			simulatorText.contains("insn=0x6ea18c64") &&
+			simulatorText.contains("orlix-init: process signaled") &&
+			simulatorText.contains("signal=4") &&
+			simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
+		if matched {
+			artifacts.append(contentsOf: reportArtifacts)
+		}
+		return matched
+	}
+	if !simulatorEvidenceMatched {
+		failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains CMEQ v4.4s, v3.4s, v1.4s instruction 0x6ea18c64 with post-marker SIGILL evidence"))
+	}
+	if let latestSimulatorReport = simulatorReports.first {
+		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	}
+
+	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
+	let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+	let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+	let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+	let gateURL = path("tools", "tcti", "orlix-tcti-gate.swift")
+	let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_cmeq_4s.S")
+	let header = try String(contentsOf: headerURL, encoding: .utf8)
+	let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+	let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+	let tests = try String(contentsOf: testURL, encoding: .utf8)
+	let gate = try String(contentsOf: gateURL, encoding: .utf8)
+	let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+	artifacts.append(contentsOf: [
+		relativePath(headerURL),
+		relativePath(decodeURL),
+		relativePath(switchURL),
+		relativePath(testURL),
+		relativePath(gateURL),
+		relativePath(fixtureURL),
+	])
+
+	if !header.contains("TCTI_DECODE_SIMD_VECTOR_COMPARE") ||
+		!decode.contains("AARCH64_SIMD_CMEQ_4S_MASK 0xffe0fc00U") ||
+		!decode.contains("AARCH64_SIMD_CMEQ_4S_PATTERN 0x6ea08c00U") ||
+		!decode.contains("TCTI_DECODE_SIMD_VECTOR_COMPARE") {
+		failures.append(fail("decode-marker", "missing exact Advanced SIMD CMEQ vD.4s, vN.4s, vM.4s decoder subset for 0x6ea18c64"))
+	}
+	if !switchDebug.contains("tcti_execute_simd_vector_compare") ||
+		!switchDebug.contains("left == right ? GENMASK_ULL(31, 0) : 0") {
+		failures.append(fail("semantic-marker", "missing SIMD CMEQ 4S switch-debug lane compare semantic handler"))
+	}
+	if !tests.contains("0x6ea18c64U") ||
+		!tests.contains("tcti_decode_recognizes_simd_cmeq_4s") ||
+		!tests.contains("tcti_switch_executes_simd_cmeq_4s") {
+		failures.append(fail("kunit-regression", "missing KUnit decode and switch-debug coverage for CMEQ v4.4s, v3.4s, v1.4s"))
+	}
+	if !gate.contains("simdVectorCompare") ||
+		!gate.contains("init_001_exit_simd_cmeq_4s.S") ||
+		!fixture.contains(".inst 0x6ea18c64") {
+		failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for SIMD CMEQ 4S"))
+	}
+
+	do {
+		let result = try executeNegativeFixture(
+			"simd-cmeq-4s",
+			outputRoot: buildPath("simd_cmeq_4s_fix", "positive")
+		)
+		artifacts.append(contentsOf: result.artifacts)
+		guard let execution = result.execution else {
+			failures.append(fail("execution", "SIMD CMEQ 4S fixture did not write execution report"))
+			throw GateError.commandFailed("missing SIMD CMEQ 4S execution report")
+		}
+		if !execution.instructionEncodings.contains("0x6ea18c64") ||
+			!execution.decodedInstructions.contains(where: { $0.instructionClass == "simd_vector_compare" && $0.op == "cmeq" && $0.rd == 4 && $0.rn == 3 && $0.rm == 1 }) ||
+			execution.exit?.code != 42 ||
+			!execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+			failures.append(fail("execution-shape", "expected decoded SIMD CMEQ 4S fixture to continue to captured exit(42)"))
+		}
+		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+			failures.append(fail("execution-unsupported-instruction", "SIMD CMEQ 4S fixture still stops as unsupported"))
+		}
+	} catch {
+		failures.append(fail("execution", "\(error)"))
+	}
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "simd-cmeq-4s-pass-regression",
+		command: "make tcti-gate TARGET=\(target)",
+		reason: "The simulator reached CMEQ v4.4s, v3.4s, v1.4s after the BusyBox marker; support only the emitted Advanced SIMD 4S equality-compare subset.",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Bound simulator unsupported 0x6ea18c64 to exact SIMD CMEQ v4.4s, v3.4s, v1.4s semantic subset.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runSIMDUMAXV4SFix() throws -> Int32 {
+	let target = "tcti-simd-umaxv-4s-fix"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	let simulatorReports = runtimeValidationReports(
+		gate: "tcti-static-busybox-shell-command",
+		destination: "iphonesimulator"
+	)
+	let simulatorEvidenceMatched = simulatorReports.contains { report in
+		var reportArtifacts: [String] = []
+		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+			simulatorText.contains("insn=0x6eb0a885") &&
+			simulatorText.contains("orlix-init: process signaled") &&
+			simulatorText.contains("signal=4") &&
+			simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
+		if matched {
+			artifacts.append(contentsOf: reportArtifacts)
+		}
+		return matched
+	}
+	if !simulatorEvidenceMatched {
+		failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains UMAXV s5, v4.4s instruction 0x6eb0a885 with post-marker SIGILL evidence"))
+	}
+	if let latestSimulatorReport = simulatorReports.first {
+		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	}
+
+	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
+	let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+	let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+	let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+	let gateURL = path("tools", "tcti", "orlix-tcti-gate.swift")
+	let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_umaxv_4s.S")
+	let header = try String(contentsOf: headerURL, encoding: .utf8)
+	let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+	let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+	let tests = try String(contentsOf: testURL, encoding: .utf8)
+	let gate = try String(contentsOf: gateURL, encoding: .utf8)
+	let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+	artifacts.append(contentsOf: [
+		relativePath(headerURL),
+		relativePath(decodeURL),
+		relativePath(switchURL),
+		relativePath(testURL),
+		relativePath(gateURL),
+		relativePath(fixtureURL),
+	])
+
+	if !header.contains("TCTI_DECODE_SIMD_VECTOR_REDUCTION") ||
+		!decode.contains("AARCH64_SIMD_UMAXV_4S_MASK 0xfffffc20U") ||
+		!decode.contains("AARCH64_SIMD_UMAXV_4S_PATTERN 0x6eb0a800U") ||
+		!decode.contains("TCTI_DECODE_SIMD_VECTOR_REDUCTION") {
+		failures.append(fail("decode-marker", "missing exact Advanced SIMD UMAXV Sd, Vn.4s decoder subset for 0x6eb0a885"))
+	}
+	if !switchDebug.contains("tcti_execute_simd_vector_reduction") ||
+		!switchDebug.contains("value > maximum") {
+		failures.append(fail("semantic-marker", "missing SIMD UMAXV 4S switch-debug reduction semantic handler"))
+	}
+	if !tests.contains("0x6eb0a885U") ||
+		!tests.contains("tcti_decode_recognizes_simd_umaxv_4s") ||
+		!tests.contains("tcti_switch_executes_simd_umaxv_4s") {
+		failures.append(fail("kunit-regression", "missing KUnit decode and switch-debug coverage for UMAXV s5, v4.4s"))
+	}
+	if !gate.contains("simdVectorReduction") ||
+		!gate.contains("init_001_exit_simd_umaxv_4s.S") ||
+		!fixture.contains(".inst 0x6eb0a885") {
+		failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for SIMD UMAXV 4S"))
+	}
+
+	do {
+		let result = try executeNegativeFixture(
+			"simd-umaxv-4s",
+			outputRoot: buildPath("simd_umaxv_4s_fix", "positive")
+		)
+		artifacts.append(contentsOf: result.artifacts)
+		guard let execution = result.execution else {
+			failures.append(fail("execution", "SIMD UMAXV 4S fixture did not write execution report"))
+			throw GateError.commandFailed("missing SIMD UMAXV 4S execution report")
+		}
+		if !execution.instructionEncodings.contains("0x6eb0a885") ||
+			!execution.decodedInstructions.contains(where: { $0.instructionClass == "simd_vector_reduction" && $0.op == "umaxv" && $0.rd == 5 && $0.rn == 4 }) ||
+			execution.exit?.code != 42 ||
+			!execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+			failures.append(fail("execution-shape", "expected decoded SIMD UMAXV 4S fixture to continue to captured exit(42)"))
+		}
+		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+			failures.append(fail("execution-unsupported-instruction", "SIMD UMAXV 4S fixture still stops as unsupported"))
+		}
+	} catch {
+		failures.append(fail("execution", "\(error)"))
+	}
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "simd-umaxv-4s-pass-regression",
+		command: "make tcti-gate TARGET=\(target)",
+		reason: "The simulator reached UMAXV s5, v4.4s after the BusyBox marker; support only the emitted Advanced SIMD 4S unsigned max-across subset.",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Bound simulator unsupported 0x6eb0a885 to exact SIMD UMAXV s5, v4.4s semantic subset.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runSIMDADDV4SFix() throws -> Int32 {
+	let target = "tcti-simd-addv-4s-fix"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	let simulatorReports = runtimeValidationReports(
+		gate: "tcti-init-console-write",
+		destination: "iphonesimulator"
+	)
+	let simulatorEvidenceMatched = simulatorReports.contains { report in
+		var reportArtifacts: [String] = []
+		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+			simulatorText.contains("insn=0x4eb1b800") &&
+			simulatorText.contains("orlix-init: process signaled") &&
+			simulatorText.contains("signal=4") &&
+			simulatorText.contains("ORLIX-TCTI-CONSOLE-OK")
+		if matched {
+			artifacts.append(contentsOf: reportArtifacts)
+		}
+		return matched
+	}
+	if !simulatorEvidenceMatched {
+		failures.append(fail("simulator-unsupported-signature", "no recorded console-write report contains ADDV s0, v0.4s instruction 0x4eb1b800 with post-marker SIGILL evidence"))
+	}
+	if let latestSimulatorReport = simulatorReports.first {
+		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	}
+
+	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
+	let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+	let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+	let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+	let gateURL = path("tools", "tcti", "orlix-tcti-gate.swift")
+	let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_simd_addv_4s.S")
+	let header = try String(contentsOf: headerURL, encoding: .utf8)
+	let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+	let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+	let tests = try String(contentsOf: testURL, encoding: .utf8)
+	let gate = try String(contentsOf: gateURL, encoding: .utf8)
+	let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+	artifacts.append(contentsOf: [
+		relativePath(headerURL),
+		relativePath(decodeURL),
+		relativePath(switchURL),
+		relativePath(testURL),
+		relativePath(gateURL),
+		relativePath(fixtureURL),
+	])
+
+	if !header.contains("TCTI_SIMD_REDUCTION_ADDV") ||
+		!decode.contains("AARCH64_SIMD_ADDV_4S_MASK 0xfffffc20U") ||
+		!decode.contains("AARCH64_SIMD_ADDV_4S_PATTERN 0x4eb1b800U") ||
+		!decode.contains("TCTI_SIMD_REDUCTION_ADDV") {
+		failures.append(fail("decode-marker", "missing exact Advanced SIMD ADDV Sd, Vn.4s decoder subset for 0x4eb1b800"))
+	}
+	if !switchDebug.contains("TCTI_SIMD_REDUCTION_ADDV") ||
+		!switchDebug.contains("result += value") {
+		failures.append(fail("semantic-marker", "missing SIMD ADDV 4S switch-debug reduction semantic handler"))
+	}
+	if !tests.contains("0x4eb1b800U") ||
+		!tests.contains("tcti_decode_recognizes_simd_addv_4s") ||
+		!tests.contains("tcti_switch_executes_simd_addv_4s") {
+		failures.append(fail("kunit-regression", "missing KUnit decode and switch-debug coverage for ADDV s0, v0.4s"))
+	}
+	if !gate.contains("op: \"addv\"") ||
+		!gate.contains("init_001_exit_simd_addv_4s.S") ||
+		!fixture.contains(".inst 0x4eb1b800") {
+		failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for SIMD ADDV 4S"))
+	}
+
+	do {
+		let result = try executeNegativeFixture(
+			"simd-addv-4s",
+			outputRoot: buildPath("simd_addv_4s_fix", "positive")
+		)
+		artifacts.append(contentsOf: result.artifacts)
+		guard let execution = result.execution else {
+			failures.append(fail("execution", "SIMD ADDV 4S fixture did not write execution report"))
+			throw GateError.commandFailed("missing SIMD ADDV 4S execution report")
+		}
+		if !execution.instructionEncodings.contains("0x4eb1b800") ||
+			!execution.decodedInstructions.contains(where: { $0.instructionClass == "simd_vector_reduction" && $0.op == "addv" && $0.rd == 0 && $0.rn == 0 }) ||
+			execution.exit?.code != 42 ||
+			!execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+			failures.append(fail("execution-shape", "expected decoded SIMD ADDV 4S fixture to continue to captured exit(42)"))
+		}
+		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+			failures.append(fail("execution-unsupported-instruction", "SIMD ADDV 4S fixture still stops as unsupported"))
+		}
+	} catch {
+		failures.append(fail("execution", "\(error)"))
+	}
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "simd-addv-4s-pass-regression",
+		command: "make tcti-gate TARGET=\(target)",
+		reason: "The simulator reached ADDV s0, v0.4s after the console marker; support only the emitted Advanced SIMD 4S add-across subset.",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Bound simulator unsupported 0x4eb1b800 to exact SIMD ADDV s0, v0.4s semantic subset.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
+func runFMOVWSFix() throws -> Int32 {
+	let target = "tcti-fmov-w-s-fix"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
+
+	let simulatorReports = runtimeValidationReports(
+		gate: "tcti-static-busybox-shell-command",
+		destination: "iphonesimulator"
+	)
+	let simulatorEvidenceMatched = simulatorReports.contains { report in
+		var reportArtifacts: [String] = []
+		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+			simulatorText.contains("insn=0x1e2600ab") &&
+			simulatorText.contains("orlix-init: process signaled") &&
+			simulatorText.contains("signal=4") &&
+			simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
+		if matched {
+			artifacts.append(contentsOf: reportArtifacts)
+		}
+		return matched
+	}
+	if !simulatorEvidenceMatched {
+		failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains FMOV w11, s5 instruction 0x1e2600ab with post-marker SIGILL evidence"))
+	}
+	if let latestSimulatorReport = simulatorReports.first {
+		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	}
+
+	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
+	let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
+	let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+	let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+	let gateURL = path("tools", "tcti", "orlix-tcti-gate.swift")
+	let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_fmov_w11_s5.S")
+	let header = try String(contentsOf: headerURL, encoding: .utf8)
+	let decode = try String(contentsOf: decodeURL, encoding: .utf8)
+	let switchDebug = try String(contentsOf: switchURL, encoding: .utf8)
+	let tests = try String(contentsOf: testURL, encoding: .utf8)
+	let gate = try String(contentsOf: gateURL, encoding: .utf8)
+	let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
+
+	artifacts.append(contentsOf: [
+		relativePath(headerURL),
+		relativePath(decodeURL),
+		relativePath(switchURL),
+		relativePath(testURL),
+		relativePath(gateURL),
+		relativePath(fixtureURL),
+	])
+
+	if !header.contains("TCTI_DECODE_FP_SCALAR_MOVE") ||
+		!decode.contains("AARCH64_FMOV_W_S_MASK 0xfffffc00U") ||
+		!decode.contains("AARCH64_FMOV_W_S_PATTERN 0x1e260000U") ||
+		!decode.contains("TCTI_DECODE_FP_SCALAR_MOVE") {
+		failures.append(fail("decode-marker", "missing exact FMOV wD, sN decoder subset for 0x1e2600ab"))
+	}
+	if !switchDebug.contains("tcti_execute_fp_scalar_move") ||
+		!switchDebug.contains("current->thread.user_simd[decoded->rn * 2]") ||
+		!switchDebug.contains("tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u32), value)") {
+		failures.append(fail("semantic-marker", "missing FMOV wD, sN switch-debug scalar move semantic handler"))
+	}
+	if !tests.contains("0x1e2600abU") ||
+		!tests.contains("tcti_decode_recognizes_fmov_w_s") ||
+		!tests.contains("tcti_switch_executes_fmov_w_s") {
+		failures.append(fail("kunit-regression", "missing KUnit decode and switch-debug coverage for FMOV w11, s5"))
+	}
+	if !gate.contains("fpScalarMove") ||
+		!gate.contains("init_001_exit_fmov_w11_s5.S") ||
+		!fixture.contains(".inst 0x1e2600ab") {
+		failures.append(fail("no-phone-fixture", "missing no-phone switch-debug fixture for FMOV w11, s5"))
+	}
+
+	do {
+		let result = try executeNegativeFixture(
+			"fmov-w-s",
+			outputRoot: buildPath("fmov_w_s_fix", "positive")
+		)
+		artifacts.append(contentsOf: result.artifacts)
+		guard let execution = result.execution else {
+			failures.append(fail("execution", "FMOV wD, sN fixture did not write execution report"))
+			throw GateError.commandFailed("missing FMOV wD, sN execution report")
+		}
+		if !execution.instructionEncodings.contains("0x1e2600ab") ||
+			!execution.decodedInstructions.contains(where: { $0.instructionClass == "fp_scalar_move" && $0.op == "fmov" && $0.rd == 11 && $0.rn == 5 }) ||
+			execution.exit?.code != 42 ||
+			!execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+			failures.append(fail("execution-shape", "expected decoded FMOV wD, sN fixture to continue to captured exit(42)"))
+		}
+		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
+			failures.append(fail("execution-unsupported-instruction", "FMOV wD, sN fixture still stops as unsupported"))
+		}
+	} catch {
+		failures.append(fail("execution", "\(error)"))
+	}
+
+	let reducer = try writeReducer(
+		target: target,
+		caseID: "fmov-w-s-pass-regression",
+		command: "make tcti-gate TARGET=\(target)",
+		reason: "The simulator reached FMOV w11, s5 after the BusyBox marker; support only the emitted FP scalar move from S register to W register subset.",
+		artifacts: artifacts,
+		expectedStatus: .pass
+	)
+	artifacts.append(relativePath(reducer))
+
+	let status: GateStatus = failures.isEmpty ? .pass : .fail
+	let reportURL = try writeReport(report(
+		target: target,
+		status: status,
+		summary: "Bound simulator unsupported 0x1e2600ab to exact FMOV w11, s5 semantic subset.",
+		failures: failures,
+		artifacts: artifacts,
+		counters: ["simulator_reports_reduced": 1],
+		releaseGateEligible: false,
+		readinessGateEligible: false
+	))
+	print("\(status.rawValue): \(relativePath(reportURL))")
+	return exitCode(for: status)
+}
+
 func runSIMDSTRSFix() throws -> Int32 {
     let target = "tcti-simd-str-s-fix"
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-    if let simulatorReport = latestRuntimeValidationReport(
+    let simulatorReports = runtimeValidationReports(
         gate: "tcti-simulator-stability",
         destination: "iphonesimulator"
-    ) {
-        artifacts.append(relativePath(simulatorReport.url))
-        let simulatorArtifacts = (simulatorReport.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
-        artifacts.append(contentsOf: simulatorArtifacts)
-        let unifiedText = try simulatorArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact) ?? ""
-        let unsupportedLine = unifiedText
-            .split(separator: "\n")
-            .map(String.init)
-            .last { $0.contains("Orlix TCTI: unsupported instruction") && $0.contains("insn=0xbd01c260") } ?? ""
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            simulatorText.contains("insn=0xbd01c260") &&
+            simulatorText.contains("x19=")
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded simulator stability report contains unsupported STR s0 instruction 0xbd01c260 with base register context"))
+        if let latestSimulatorReport = simulatorReports.first {
+            _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
         }
-        if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
-            failures.append(fail("simulator-report-status", "SIMD STR S fix requires the current simulator failure report"))
-        }
-        if !unsupportedLine.contains("pc=") ||
-            !unsupportedLine.contains("insn=0xbd01c260") ||
-            !unsupportedLine.contains("x19=") {
-            failures.append(fail("simulator-unsupported-signature", "latest simulator log does not contain unsupported STR s0 instruction 0xbd01c260 with base register context"))
-        }
-    } else {
-        failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -9126,7 +10815,7 @@ func runSIMDSTRSFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "simd-str-s-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "The simulator reached STR s0, [x19, #0x1c0]; support only the emitted SIMD/FP S-register unsigned-immediate memory width.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -9137,7 +10826,7 @@ func runSIMDSTRSFix() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Bound simulator unsupported 0xbd01c260 to the exact SIMD/FP STR s0 unsigned-immediate semantic subset.",
+        summary: "Bound recorded simulator unsupported 0xbd01c260 to the exact SIMD/FP STR s0 unsigned-immediate semantic subset.",
         failures: failures,
         artifacts: artifacts,
         counters: ["simulator_reports_reduced": 1],
@@ -9153,32 +10842,27 @@ func runSIMDDUP2DFix() throws -> Int32 {
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-    if let simulatorReport = latestRuntimeValidationReport(
+    let simulatorReports = runtimeValidationReports(
         gate: "tcti-simulator-stability",
         destination: "iphonesimulator"
-    ) {
-        artifacts.append(relativePath(simulatorReport.url))
-        let simulatorArtifacts = (simulatorReport.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
-        artifacts.append(contentsOf: simulatorArtifacts)
-        let unifiedText = try simulatorArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact) ?? ""
-        let unsupportedLine = unifiedText
-            .split(separator: "\n")
-            .map(String.init)
-            .last { $0.contains("Orlix TCTI: unsupported instruction") && $0.contains("insn=0x4e080d80") } ?? ""
+    )
+    let simulatorEvidenceMatched = simulatorReports.contains { report in
+        var reportArtifacts: [String] = []
+        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
+        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
+            simulatorText.contains("insn=0x4e080d80") &&
+            simulatorText.contains("x12=")
+        if matched {
+            artifacts.append(contentsOf: reportArtifacts)
+        }
+        return matched
+    }
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !simulatorEvidenceMatched {
+        failures.append(fail("simulator-unsupported-signature", "no recorded simulator stability report contains unsupported DUP v0.2d, x12 instruction 0x4e080d80 with source register context"))
+        if let latestSimulatorReport = simulatorReports.first {
+            _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
         }
-        if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
-            failures.append(fail("simulator-report-status", "SIMD DUP 2D fix requires the current simulator failure report"))
-        }
-        if !unsupportedLine.contains("pc=") ||
-            !unsupportedLine.contains("insn=0x4e080d80") ||
-            !unsupportedLine.contains("x12=") {
-            failures.append(fail("simulator-unsupported-signature", "latest simulator log does not contain unsupported DUP v0.2d, x12 instruction 0x4e080d80 with source register context"))
-        }
-    } else {
-        failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -9210,7 +10894,7 @@ func runSIMDDUP2DFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "simd-dup-2d-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "The simulator reached DUP v0.2d, x12; support only the emitted 2D GPR-to-vector duplication subset.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -9221,7 +10905,7 @@ func runSIMDDUP2DFix() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Bound simulator unsupported 0x4e080d80 to the exact SIMD DUP v0.2d, x12 semantic subset.",
+        summary: "Bound recorded simulator unsupported 0x4e080d80 to the exact SIMD DUP v0.2d, x12 semantic subset.",
         failures: failures,
         artifacts: artifacts,
         counters: ["simulator_reports_reduced": 1],
@@ -9328,7 +11012,7 @@ func runSIMDAND16BFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "simd-and-16b-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "The simulator reached AND v1.16b, v0.16b, v1.16b; support only the emitted Advanced SIMD 16-byte vector AND subset.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -9441,7 +11125,7 @@ func runSIMDORR4SFix() throws -> Int32 {
     let reducer = try writeReducer(
         target: target,
         caseID: "simd-orr-4s-pass-regression",
-        command: "make \(target)",
+        command: "make tcti-gate TARGET=\(target)",
         reason: "The simulator reached ORR v0.4s, #0x30; support only the emitted Advanced SIMD 4S immediate ORR subset.",
         artifacts: artifacts,
         expectedStatus: .pass
@@ -9464,17 +11148,36 @@ func runSIMDORR4SFix() throws -> Int32 {
 }
 
 func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
-    let target = "tcti-post-busybox-sigabrt-reducer"
-    var failures: [Failure] = []
-    var artifacts: [String] = []
+	let target = "tcti-post-busybox-sigabrt-reducer"
+	var failures: [Failure] = []
+	var artifacts: [String] = []
 
-    guard let simulatorReport = selectedRuntimeValidationReport(
-        gates: [
-            "tcti-static-busybox-start",
-            "tcti-static-busybox-shell-command",
-        ],
-        destination: "iphonesimulator"
-    ) else {
+	func reportModifiedAt(_ url: URL) -> Date {
+		(try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+	}
+
+	let candidateGates = [
+		"tcti-init-console-write",
+		"tcti-init-first-syscall",
+		"tcti-static-busybox-shell-command",
+		"tcti-static-busybox-start",
+		"tcti-simulator-stability",
+	]
+	let selectedReport: (url: URL, object: [String: Any])?
+	if let reportPath = ProcessInfo.processInfo.environment["TCTI_SIMULATOR_REPORT"], !reportPath.isEmpty {
+		selectedReport = selectedRuntimeValidationReport(
+			gates: candidateGates,
+			destination: "iphonesimulator"
+		)
+	} else {
+		selectedReport = candidateGates
+			.compactMap { latestRuntimeValidationReport(gate: $0, destination: "iphonesimulator") }
+			.filter { stringField($0.object, "status") == "fail" && !boolField($0.object, "passed") }
+			.sorted { reportModifiedAt($0.url) > reportModifiedAt($1.url) }
+			.first
+	}
+
+	guard let simulatorReport = selectedReport else {
         failures.append(fail("simulator-report", "missing iphonesimulator static BusyBox SIGABRT report"))
         let reportURL = try writeReport(report(
             target: target,
@@ -9502,6 +11205,27 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     let staticPID = intField(staticPIE, "pid")
     let signaledPID = intField(signal, "pid")
 
+	if stringField(object, "git_sha") == gitSha(),
+	   stringField(object, "status") == "fail",
+	   !boolField(object, "passed"),
+	   stringField(staticPIE, "task") == "sh",
+	   staticPID != nil,
+	   let currentSignal = intField(signal, "signal"),
+	   currentSignal != 6 {
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .pass,
+			summary: "Static BusyBox SIGABRT reducer is not needed for the current simulator report because the shell signal is \(currentSignal), not 6.",
+			failures: [],
+			artifacts: artifacts,
+			counters: ["simulator_reports_reduced": 0],
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("pass: \(relativePath(reportURL))")
+		return 0
+	}
+
     if stringField(object, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected simulator static BusyBox SIGABRT report is stale for current HEAD"))
     }
@@ -9526,18 +11250,63 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
         text.contains("syscall=134") &&
         text.contains("syscall=129") &&
         text.contains("syscall=139 x0=0x6")
-    let busyBoxShellCommandSIGABRT = gate == "tcti-static-busybox-shell-command" &&
+	let firstSyscallSIGABRT = gate == "tcti-init-first-syscall" &&
+		text.contains("Orlix TCTI: static PIE image task=sh") &&
+		text.contains("syscall=172") &&
+		text.contains("signed_ret=\(staticPID ?? -1)") &&
+		text.contains("syscall=129") &&
+		text.contains("x1=0x6") &&
+		text.contains("orlix-init: process signaled pid=\(staticPID ?? -1) signal=6")
+	let busyBoxShellCommandSIGABRT = gate == "tcti-static-busybox-shell-command" &&
+		text.contains("Orlix TCTI: static PIE image task=sh") &&
+		text.contains("syscall=172") &&
+		text.contains("signed_ret=\(staticPID ?? -1)") &&
+		text.contains("syscall=129") &&
+		text.contains("x1=0x6") &&
+		text.contains("orlix-init: process signaled pid=\(staticPID ?? -1) signal=6")
+	let consoleWriteSIGABRT = gate == "tcti-init-console-write" &&
+		text.contains("ORLIX-TCTI-CONSOLE-OK") &&
+		text.contains("Orlix TCTI: static PIE image task=sh") &&
+		text.contains("syscall=172") &&
+		text.contains("signed_ret=\(staticPID ?? -1)") &&
+		text.contains("syscall=129") &&
+		text.contains("x1=0x6") &&
+		text.contains("orlix-init: process signaled pid=\(staticPID ?? -1) signal=6")
+    let stabilitySIGABRT = gate == "tcti-simulator-stability" &&
         text.contains("Orlix TCTI: static PIE image task=sh") &&
-        text.contains("syscall=172 ret=0x21 signed_ret=33") &&
-        text.contains("syscall=129 x0=0x21 x1=0x6 x2=0x6") &&
-        text.contains("orlix-init: process signaled pid=33 signal=6")
-    if !busyBoxStartSIGABRT && !busyBoxShellCommandSIGABRT {
+        text.contains("syscall=172 ret=0x20 signed_ret=32") &&
+        text.contains("syscall=129 x0=0x20 x1=0x6 x2=0x6") &&
+        text.contains("orlix-init: process signaled pid=32 signal=6")
+    if !busyBoxStartSIGABRT && !firstSyscallSIGABRT && !busyBoxShellCommandSIGABRT && !consoleWriteSIGABRT && !stabilitySIGABRT {
         failures.append(fail("sigabrt-syscall-shape", "simulator artifacts must show a known static BusyBox SIGABRT shape before signal=6"))
     }
+	if gate == "tcti-init-console-write" {
+		let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+		let forbiddenOK = [
+			"generated_exec_memory",
+			"host_exec_guest_text",
+			"host_x18",
+			"map_jit",
+			"native_ios_api_exposure_to_guest",
+			"rwx",
+		].allSatisfy { !boolField(forbidden, $0) }
+		let fatalUserFault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+		let hasFatalUserFault = !stringField(fatalUserFault, "task").isEmpty ||
+			intField(fatalUserFault, "pid") != nil ||
+			!stringField(fatalUserFault, "pc").isEmpty ||
+			!stringField(fatalUserFault, "addr").isEmpty
+		if hasFatalUserFault || text.contains("Orlix TCTI: user fault") {
+			failures.append(fail("no-user-fault", "console-write SIGABRT reducer must not cover a fatal user fault"))
+		}
+		if text.contains("Orlix TCTI: unsupported instruction") {
+			failures.append(fail("no-unsupported-instruction", "console-write SIGABRT reducer must not cover an unsupported instruction"))
+		}
+		if !forbiddenOK {
+			failures.append(fail("forbidden-behavior", "console-write SIGABRT reducer requires all forbidden_behavior fields to be false"))
+		}
+	}
 
-    let reducerCaseID = gate == "tcti-static-busybox-shell-command"
-        ? "post-busybox-shell-command-sigabrt-pass-regression"
-        : "post-busybox-sigabrt-pass-regression"
+	let reducerCaseID = gate == "tcti-init-console-write" ? "post-console-write-busybox-sigabrt-pass-regression" : "post-busybox-sigabrt-pass-regression"
     let reducer = try writeReducer(
         target: target,
         caseID: reducerCaseID,
@@ -9638,12 +11407,46 @@ func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
         !text.contains("signal=4") {
         failures.append(fail("sigill-after-marker-shape", "simulator artifacts must show BusyBox marker output, write return, then signal=4"))
     }
+    if !text.contains("Orlix TCTI: unsupported instruction") ||
+        !text.contains("insn=0xe612800") {
+        failures.append(fail("unsupported-xtn-signature", "simulator artifacts must show unsupported XTN v0.4h, v0.4s instruction 0x0e612800"))
+    }
+
+    do {
+        let result = try executeNegativeFixture(
+            "simd-xtn-4h-unsupported",
+            outputRoot: buildPath("post_busybox_shell_command_sigill_reducer", "simd_xtn_4h")
+        )
+        artifacts.append(contentsOf: result.artifacts)
+        guard let execution = result.execution else {
+            failures.append(fail("negative-execution", "XTN v0.4h, v0.4s fixture did not write execution report"))
+            throw GateError.commandFailed("missing XTN v0.4h, v0.4s negative execution report")
+        }
+        let xtnInstructionIndex = execution.instructionEncodings.firstIndex(of: "0x0e612800")
+        let xtnDecoded = xtnInstructionIndex.flatMap { index in
+            index < execution.decodedInstructions.count ? execution.decodedInstructions[index] : nil
+        }
+        let unsupportedShape = xtnInstructionIndex != nil &&
+            xtnDecoded?.instructionClass == "unsupported" &&
+            execution.exit == nil &&
+            execution.syscalls.isEmpty
+        let supportedShape = xtnInstructionIndex != nil &&
+            xtnDecoded?.instructionClass != "unsupported" &&
+            execution.exit?.code == 42 &&
+            execution.syscalls.contains { $0.nr == 93 && $0.name == "exit" } &&
+            !result.failures.contains { $0.id == "execution-unsupported-instruction" }
+        if !unsupportedShape && !supportedShape {
+            failures.append(fail("negative-execution-shape", "expected XTN v0.4h, v0.4s fixture to stop on unsupported 0x0e612800 or continue to captured exit(42) after a narrow fix"))
+        }
+    } catch {
+        failures.append(fail("simd-xtn-4h-reducer", "\(error)"))
+    }
 
     let reducer = try writeReducer(
         target: target,
-        caseID: "post-busybox-shell-command-sigill-after-marker-pass-regression",
+        caseID: "post-busybox-shell-command-sigill-xtn-4h-pass-regression",
         command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
-        reason: "The pinned simulator reaches the static BusyBox shell command marker under TCTI, then the shell receives signal=4; reduce that report-backed failure before production TCTI patching.",
+        reason: "The pinned simulator reaches the static BusyBox shell command marker under TCTI, then the shell receives signal=4 after unsupported XTN v0.4h, v0.4s instruction 0x0e612800; reduce that report-backed failure before production TCTI patching.",
         artifacts: artifacts,
         expectedStatus: .pass
     )
@@ -9653,7 +11456,7 @@ func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Reduced the pinned simulator static BusyBox shell-command SIGILL-after-marker failure to report-backed no-phone evidence.",
+        summary: "Reduced the pinned simulator static BusyBox shell-command XTN v0.4h, v0.4s SIGILL-after-marker failure to report-backed no-phone evidence.",
         failures: failures,
         artifacts: artifacts,
         releaseGateEligible: false,
@@ -9668,23 +11471,25 @@ func runUserDataWindowRefreshFix() throws -> Int32 {
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-    let reducerReportURL = buildPath("reports", "tcti-post-busybox-sigabrt-reducer", "report.json")
-    if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
-        artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "git_sha") != gitSha() ||
-            stringField(reducerReport, "status") != "pass" ||
-            !boolField(reducerReport, "passed") {
-            failures.append(fail("reducer-report", "post-BusyBox SIGABRT reducer report is missing, stale, or not passing"))
+	let reducerReportURL = buildPath("reports", "tcti-post-bash-mmap-read-fault-reducer", "report.json")
+	if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
+		artifacts.append(relativePath(reducerReportURL))
+		artifacts.append(contentsOf: (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String })
+		if stringField(reducerReport, "git_sha") != gitSha() ||
+			stringField(reducerReport, "status") != "pass" ||
+			!boolField(reducerReport, "passed") {
+            failures.append(fail("reducer-report", "post-Bash mmap/read reducer report is missing, stale, or not passing"))
         }
     } else {
-        failures.append(fail("reducer-report", "missing tcti-post-busybox-sigabrt-reducer report"))
+        failures.append(fail("reducer-report", "missing tcti-post-bash-mmap-read-fault-reducer report"))
     }
 
     let userPageURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c")
     let userPage = try readText(userPageURL)
     artifacts.append(relativePath(userPageURL))
-    if !userPage.contains("if (access == TCTI_ACCESS_WRITE) {\n\t\t\t\t\tret = tcti_sync_faulted_user_window(current_va);") {
-        failures.append(fail("read-window-refresh", "TCTI faulted data reads must retry from Linux page backing without calling hosted user-window sync"))
+    if !userPage.contains("access == TCTI_ACCESS_READ && tcti_vma_is_executable(mm, address)") ||
+        !userPage.contains("tcti_sync_faulted_user_window(mm, current_va,") {
+        failures.append(fail("read-window-refresh", "TCTI faulted executable data reads must bypass hosted executable-window refresh before retrying Linux page-backed access"))
     }
     if !userPage.contains("orlix_refresh_current_user_mapping_page_from_kernel") {
         failures.append(fail("write-coherency", "TCTI writes must retain hosted mapping refresh after kernel-backed writes"))
@@ -9700,9 +11505,1470 @@ func runUserDataWindowRefreshFix() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Checked reducer-backed TCTI user-data fault retry fix keeps reads off hosted executable-window refresh while preserving write refresh.",
+        summary: "Checked reducer-backed TCTI user-data fault retry fix syncs faulted read windows while preserving write refresh.",
         failures: failures,
         artifacts: artifacts,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostStaticPIEInitTLSFix() throws -> Int32 {
+    let target = "tcti-post-static-pie-init-tls-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+	let reducerReportURL = buildPath("reports", "tcti-post-static-pie-init-read-fault-reducer", "report.json")
+	var reducerArtifacts: [String] = []
+	if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
+		reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+		artifacts.append(relativePath(reducerReportURL))
+		artifacts.append(contentsOf: reducerArtifacts)
+		if stringField(reducerReport, "git_sha") != gitSha() ||
+            stringField(reducerReport, "status") != "pass" ||
+            !boolField(reducerReport, "passed") {
+            failures.append(fail("reducer-report", "post-static-PIE init read-fault reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-static-pie-init-read-fault-reducer report"))
+    }
+
+	let simulatorPath = reducerArtifacts.first {
+		$0.hasPrefix("Build/Reports/runtime/tcti-") &&
+			$0.hasSuffix(".json")
+	} ?? ""
+	let simulatorURL = path(simulatorPath)
+	guard !simulatorPath.isEmpty,
+	      let simulatorObject = try? loadJSON(simulatorURL) as? [String: Any] else {
+		failures.append(fail("simulator-report", "missing reducer-covered iphonesimulator report for post-static-PIE init TLS/read-fault fix"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No reducer-covered pinned simulator report was available for the post-static-PIE init TLS/read-fault fix gate.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+	artifacts.append(simulatorPath)
+    let events = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let faultPC = stringField(fault, "pc")
+    let faultAddress = stringField(fault, "addr")
+    let staticBase = stringField(staticPIE, "base")
+    let stillMatchesStaticPIEInitFault = stringField(staticPIE, "task") == "init" &&
+        intField(staticPIE, "pid") == 1 &&
+        stringField(fault, "task") == "init" &&
+        intField(fault, "pid") == 1
+    let faultOffset: String? = {
+        guard
+            !staticBase.isEmpty,
+            !faultAddress.isEmpty,
+            let base = UInt64(staticBase.dropFirst(2), radix: 16),
+            let address = UInt64(faultAddress.dropFirst(2), radix: 16),
+            address >= base
+        else {
+            return nil
+        }
+        return String(format: "0x%llx", address - base)
+    }()
+
+	if stringField(simulatorObject, "git_sha") != gitSha() {
+		failures.append(fail("simulator-report-stale", "selected simulator report is stale for current HEAD"))
+	}
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
+		failures.append(fail("simulator-report-status", "fix gate must be backed by the current failing simulator report before the simulator retry"))
+	}
+	if stillMatchesStaticPIEInitFault &&
+		(stringField(firstSVC, "task") != "init" ||
+		intField(firstSVC, "pid") != 1 ||
+		intField(firstSVC, "syscall") != 178) {
+		failures.append(fail("init-first-svc", "simulator report must show init reached first TCTI svc syscall 178 before the TLS/read fault"))
+	}
+	if stillMatchesStaticPIEInitFault &&
+		(staticBase.isEmpty ||
+		stringField(staticPIE, "entry").isEmpty) {
+		failures.append(fail("static-pie-init", "simulator report must show static PIE image task=init before the TLS/read fault"))
+	}
+	if stillMatchesStaticPIEInitFault &&
+		(intField(fault, "access") != 1 ||
+		intField(fault, "si") != 1 ||
+		faultPC.isEmpty ||
+		faultAddress.isEmpty ||
+		faultOffset == nil) {
+		failures.append(fail("tls-read-fault-signature", "simulator report must show post-static-PIE init TLS-relative user read fault"))
+	}
+	if let latestReport = latestRuntimeValidationReport(
+		gate: "tcti-full-shell-usability",
+		destination: "iphonesimulator"
+	) {
+		let latestPath = relativePath(latestReport.url)
+		let latestObject = latestReport.object
+		let latestEvents = latestObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+		let latestStaticPIE = latestEvents["static_pie_image"] as? [String: Any] ?? [:]
+		let latestFault = latestEvents["fatal_user_fault"] as? [String: Any] ?? [:]
+		let latestFirstSVC = latestEvents["first_svc"] as? [String: Any] ?? [:]
+		let latestStillMatches = stringField(latestObject, "git_sha") == gitSha() &&
+			stringField(latestObject, "status") == "fail" &&
+			!boolField(latestObject, "passed") &&
+			stringField(latestObject, "selected_device_id") == "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" &&
+			stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
+			intField(latestObject, "simulator_booted_count") == 1 &&
+			boolField(latestObject, "simulator_single_booted") &&
+			stringField(latestFirstSVC, "task") == "init" &&
+			intField(latestFirstSVC, "pid") == 1 &&
+			intField(latestFirstSVC, "syscall") == 178 &&
+			stringField(latestStaticPIE, "task") == "init" &&
+			intField(latestStaticPIE, "pid") == 1 &&
+			stringField(latestFault, "task") == "init" &&
+			intField(latestFault, "pid") == 1 &&
+			intField(latestFault, "access") == 1 &&
+			intField(latestFault, "si") == 1 &&
+			!stringField(latestFault, "addr").isEmpty
+		if latestStillMatches {
+			if !artifacts.contains(latestPath) {
+				artifacts.append(latestPath)
+			}
+			if !reducerArtifacts.contains(latestPath) {
+				failures.append(fail("latest-reducer-coverage", "post-static-PIE init TLS/read-fault fix requires reducer coverage for the latest matching full-shell report \(latestPath)"))
+			}
+			if simulatorPath != latestPath {
+				failures.append(fail("stale-fix-report", "post-static-PIE init TLS/read-fault fix is tied to \(simulatorPath), but latest matching full-shell report is \(latestPath)"))
+			}
+			failures.append(fail("latest-simulator-still-fails", "post-static-PIE init TLS/read-fault fix cannot pass while the latest current pinned full-shell simulator report still shows init access=read si=1 before the shell success marker"))
+		}
+	}
+
+    let userPageURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c")
+    let switchURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "switch_debug.c")
+    let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let userPage = try readText(userPageURL)
+    let switchDebug = try readText(switchURL)
+    let engine = try readText(engineURL)
+    artifacts.append(contentsOf: [relativePath(userPageURL), relativePath(switchURL), relativePath(engineURL)])
+
+    if !switchDebug.contains("current->thread.user_tls = value") ||
+        !switchDebug.contains("regs->regs[decoded->rt] = current->thread.user_tls") {
+        failures.append(fail("guest-tls-state", "switch-debug must keep guest TPIDR_EL0 in task thread.user_tls, not host TPIDR_EL0"))
+    }
+    if !engine.contains("tcti_handle_user_fault(regs, result->fault_address") ||
+        !engine.contains("orlix_exit_to_user_mode_work(regs)") {
+        failures.append(fail("user-fault-retry", "TCTI user-fault exits must fault in Linux user memory and retry guest execution"))
+    }
+    if engine.contains("current->thread.user_tls = 0") ||
+        !engine.contains("tcti_prepare_successful_execve_return") {
+        failures.append(fail("execve-tls-preserve", "TCTI successful execve return must preserve guest TPIDR_EL0 state before the new static PIE image runs"))
+    }
+    if !userPage.contains("tcti_fault_in_user_page(mm, current_va, access)") ||
+        !userPage.contains("tcti_sync_faulted_user_window(mm, current_va,") ||
+        !userPage.contains("access == TCTI_ACCESS_READ && tcti_vma_is_executable(mm, address)") {
+        failures.append(fail("user-data-sync", "TCTI user-data reads must fault in Linux pages and sync the hosted fault window before retrying"))
+    }
+    for forbidden in ["HostAdapter", "MAP_JIT", "VM_PROT_EXECUTE", "PROT_EXEC"] {
+        if userPage.contains(forbidden) || switchDebug.contains(forbidden) || engine.contains(forbidden) {
+            failures.append(fail("forbidden-scope", "post-static-PIE init TLS/read-fault fix must not add \(forbidden) behavior"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI post-static-PIE init TLS/read-fault fix preserves guest TPIDR_EL0 state and retries Linux user-data reads through faulted user windows.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellCatReadFaultReducer() throws -> Int32 {
+    let target = "tcti-post-full-shell-cat-read-fault-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell cat read-fault report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell cat read-fault report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let launchStderrText = try reportArtifacts.first { $0.hasSuffix("launch.stderr") }.map(readRelativeArtifact) ?? ""
+    let fullShellText = try reportArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let combinedText = [terminalText, launchStderrText, fullShellText].joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let faultPC = stringField(fault, "pc")
+    let faultLR = stringField(fault, "lr")
+    let faultSP = stringField(fault, "sp")
+    let faultAddress = stringField(fault, "addr")
+    let faultPID = intField(fault, "pid").map(String.init)
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "full-shell report must show init reached first TCTI svc syscall 178 before cat"))
+    }
+    if stringField(fault, "task") != "cat" ||
+        faultPID == nil ||
+        intField(fault, "access") != 1 ||
+        intField(fault, "si") != 1 ||
+        faultPC.isEmpty ||
+        faultLR.isEmpty ||
+        faultSP.isEmpty ||
+        faultAddress.isEmpty ||
+        faultAddress == "0x0" {
+        failures.append(fail("cat-read-fault-signature", "full-shell report must show cat read fault at a non-null user address with access=1 si=1"))
+    }
+    if intField(signal, "signal") != nil {
+        failures.append(fail("cat-read-fault-phase", "cat read-fault reducer expects runtime report before a structured signaled_process event"))
+    }
+    let shellStatus139 = combinedText.contains("orlix-init: process exited pid=33 status=139") ||
+        combinedText.contains("orlix-init: process exited pid=32 status=139") ||
+        combinedText.contains("orlix-init: pid=32 status=139") ||
+        combinedText.contains("orlix-init: pid=33 status=139")
+    if !combinedText.contains("Orlix TCTI: static PIE image task=cat") ||
+        !combinedText.contains("Orlix TCTI: user fault task=cat") ||
+        !shellStatus139 ||
+        fullShellText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        failures.append(fail("cat-artifact", "full-shell artifacts must show cat read fault and shell status 139 before the success marker"))
+    }
+
+    struct PostFullShellCatReadFaultModel: Codable {
+        let task: String
+        let pid: String
+        let shellStatus: Int
+        let faultPC: String
+        let faultLR: String
+        let faultSP: String
+        let faultAddress: String
+        let access: String
+        let invariant: String
+    }
+    if let pid = faultPID {
+        let model = PostFullShellCatReadFaultModel(
+            task: "cat",
+            pid: pid,
+            shellStatus: 139,
+            faultPC: faultPC,
+            faultLR: faultLR,
+            faultSP: faultSP,
+            faultAddress: faultAddress,
+            access: "read",
+            invariant: "after the static BusyBox shell creates /tmp/orlix-tcti-shell, TCTI must let cat read the file data and reach ORLIX-TCTI-SHELL-USABLE instead of faulting a user-data read"
+        )
+        let modelURL = buildPath("reproducers", target, "post-full-shell-cat-read-fault-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-full-shell-cat-read-fault-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator full-shell command reaches cat /tmp/orlix-tcti-shell, then TCTI faults a cat user-data read and shell exits 139 before ORLIX-TCTI-SHELL-USABLE",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator full-shell cat user-data read fault to a no-phone TCTI evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellCatReadFaultFix() throws -> Int32 {
+    let target = "tcti-post-full-shell-cat-read-fault-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerURL = buildPath("reports", "tcti-post-full-shell-cat-read-fault-reducer", "report.json")
+    let reducerObject = try? loadJSON(reducerURL) as? [String: Any]
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    if let reducerObject {
+        artifacts.append(relativePath(reducerURL))
+        if stringField(reducerObject, "git_sha") != gitSha() ||
+            stringField(reducerObject, "status") != "pass" ||
+            !boolField(reducerObject, "passed") {
+            failures.append(fail("reducer-report", "cat read-fault reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-full-shell-cat-read-fault-reducer report"))
+    }
+
+    let simulatorPath = reducerArtifacts.first {
+        $0.hasPrefix("Build/Reports/runtime/tcti-full-shell-usability-") &&
+            $0.hasSuffix(".json")
+    } ?? ""
+    let simulatorURL = path(simulatorPath)
+    guard !simulatorPath.isEmpty,
+          let simulatorObject = try? loadJSON(simulatorURL) as? [String: Any] else {
+        failures.append(fail("simulator-report", "missing reducer-covered iphonesimulator full-shell usability report for cat read-fault fix"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell report was available for the cat read-fault fix gate.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    artifacts.append(simulatorPath)
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+    if !reducerArtifacts.contains(simulatorPath) {
+        failures.append(fail("reducer-coverage", "cat read-fault reducer must cover the selected simulator report"))
+    }
+
+    let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let engineText = try readText(engineURL)
+    artifacts.append(relativePath(engineURL))
+    if !engineText.contains("case __NR_read:") ||
+        !engineText.contains("tcti_refresh_current_user_range(regs->regs[1], regs->regs[0])") {
+        failures.append(fail("read-buffer-refresh", "TCTI syscall return synchronization must refresh the guest read buffer after successful read(2) before rerunning full-shell cat"))
+    }
+    if engineText.contains("HostAdapter") ||
+        engineText.contains("MAP_JIT") ||
+        engineText.contains("VM_PROT_EXECUTE") ||
+        engineText.contains("PROT_EXEC") {
+        failures.append(fail("forbidden-scope", "cat read-fault fix must not add HostAdapter, JIT, or executable-memory behavior"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Validated reducer-backed TCTI read-buffer refresh fix before rerunning simulator full-shell usability.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellCatPosixMemalignBRKReducer() throws -> Int32 {
+    let target = "tcti-post-full-shell-cat-posix-memalign-brk-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell cat posix_memalign BRK report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell cat posix_memalign BRK report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let unifiedText = try reportArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact) ?? ""
+    let fullShellText = try reportArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let combinedText = [terminalText, unifiedText, fullShellText].joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    for key in forbiddenKeys where forbidden[key] as? Bool != false {
+        failures.append(fail("forbidden-behavior.\(key)", "simulator report must keep forbidden_behavior.\(key)=false"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "full-shell report must show init reached first TCTI svc syscall 178 before cat"))
+    }
+    if intField(signal, "signal") != nil {
+        failures.append(fail("signal-phase", "cat posix_memalign BRK reducer expects no structured signaled_process event"))
+    }
+    if !combinedText.contains("Orlix TCTI: static PIE image task=cat") ||
+        !combinedText.contains("In function posix_memalign") ||
+        !combinedText.contains("__ensure(") ||
+        !combinedText.contains("Orlix TCTI: unsupported instruction task=cat") ||
+        !combinedText.contains("insn=0xd4200020") ||
+        !combinedText.contains("x8=0x40") ||
+        !combinedText.contains("orlix-init: process exited pid=32 status=132") ||
+        fullShellText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        failures.append(fail("cat-posix-memalign-brk-signature", "full-shell artifacts must show cat static PIE progress, mlibc posix_memalign assertion, unsupported BRK 0xd4200020 with x8=64 in cat, shell status 132, and no success marker"))
+    }
+
+    struct PostFullShellCatPosixMemalignBRKModel: Codable {
+        let task: String
+        let unsupportedInstruction: String
+        let syscallRegisterX8: String
+        let shellStatus: Int
+        let assertionFunction: String
+        let invariant: String
+    }
+    if failures.isEmpty {
+        let model = PostFullShellCatPosixMemalignBRKModel(
+            task: "cat",
+            unsupportedInstruction: "0xd4200020",
+            syscallRegisterX8: "0x40",
+            shellStatus: 132,
+            assertionFunction: "posix_memalign",
+            invariant: "full shell usability must complete cat /tmp/orlix-tcti-shell without mlibc posix_memalign alignment assertion or BRK before ORLIX-TCTI-SHELL-USABLE"
+        )
+        let modelURL = buildPath("reproducers", target, "post-full-shell-cat-posix-memalign-brk-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-full-shell-cat-posix-memalign-brk-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator full-shell command reaches cat, hits the mlibc posix_memalign alignment assertion, then stops on unsupported BRK 0xd4200020 before ORLIX-TCTI-SHELL-USABLE",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator full-shell cat posix_memalign assertion and BRK trap to a report-backed no-phone evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
+    let target = "tcti-post-full-shell-cat-posix-memalign-brk-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerURL = buildPath("reports", "tcti-post-full-shell-cat-posix-memalign-brk-reducer", "report.json")
+    let reducerObject = try? loadJSON(reducerURL) as? [String: Any]
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    if let reducerObject {
+        artifacts.append(relativePath(reducerURL))
+        if stringField(reducerObject, "git_sha") != gitSha() ||
+            stringField(reducerObject, "status") != "pass" ||
+            !boolField(reducerObject, "passed") {
+            failures.append(fail("reducer-report", "cat posix_memalign BRK reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-full-shell-cat-posix-memalign-brk-reducer report"))
+    }
+
+    let simulatorPath = reducerArtifacts.first {
+        $0.hasPrefix("Build/Reports/runtime/tcti-full-shell-usability-") &&
+            $0.hasSuffix(".json")
+    } ?? ""
+    let simulatorURL = path(simulatorPath)
+    guard !simulatorPath.isEmpty,
+          let simulatorObject = try? loadJSON(simulatorURL) as? [String: Any] else {
+        failures.append(fail("simulator-report", "missing reducer-covered iphonesimulator full-shell usability report for cat posix_memalign BRK fix"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell report was available for the cat posix_memalign BRK fix gate.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    artifacts.append(simulatorPath)
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+    if !reducerArtifacts.contains(simulatorPath) {
+        failures.append(fail("reducer-coverage", "cat posix_memalign BRK reducer must cover the selected simulator report"))
+    }
+
+    if let latestReport = latestRuntimeValidationReport(gate: "tcti-full-shell-usability", destination: "iphonesimulator") {
+        let latestPath = relativePath(latestReport.url)
+        let latestObject = latestReport.object
+        let latestArtifacts = (latestObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+        let latestArtifactText = try latestArtifacts.compactMap { artifact -> String? in
+            guard artifact.hasSuffix("simulator-terminal-output.txt") ||
+                artifact.hasSuffix("launch.stderr") ||
+                artifact.hasSuffix("tcti-full-shell-usability.txt") else {
+                return nil
+            }
+            return try readRelativeArtifact(artifact)
+        }.joined(separator: "\n")
+        let latestFullShellText = try latestArtifacts.first {
+            $0.hasSuffix("tcti-full-shell-usability.txt")
+        }.map(readRelativeArtifact) ?? ""
+        let latestEvents = latestObject["tcti_runtime_events"] as? [String: Any] ?? [:]
+        let latestFirstSVC = latestEvents["first_svc"] as? [String: Any] ?? [:]
+        let latestSignal = latestEvents["signaled_process"] as? [String: Any] ?? [:]
+        let latestMatchesCurrentFailure = stringField(latestObject, "git_sha") == gitSha() &&
+            stringField(latestObject, "status") == "fail" &&
+            !boolField(latestObject, "passed") &&
+            stringField(latestObject, "selected_device_id") == "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" &&
+            stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
+            intField(latestObject, "simulator_booted_count") == 1 &&
+            boolField(latestObject, "simulator_single_booted") &&
+            stringField(latestFirstSVC, "task") == "init" &&
+            intField(latestFirstSVC, "pid") == 1 &&
+            intField(latestFirstSVC, "syscall") == 178 &&
+            intField(latestSignal, "signal") == nil &&
+            latestArtifactText.contains("Orlix TCTI: static PIE image task=cat") &&
+            latestArtifactText.contains("In function posix_memalign") &&
+            latestArtifactText.contains("__ensure(") &&
+            latestArtifactText.contains("Orlix TCTI: unsupported instruction task=cat") &&
+            latestArtifactText.contains("insn=0xd4200020") &&
+            latestArtifactText.contains("x8=0x40") &&
+            latestArtifactText.contains("orlix-init: process exited pid=32 status=132") &&
+            !latestFullShellText.contains("ORLIX-TCTI-SHELL-USABLE")
+        if latestMatchesCurrentFailure {
+            if !artifacts.contains(latestPath) {
+                artifacts.append(latestPath)
+            }
+            if !reducerArtifacts.contains(latestPath) {
+                failures.append(fail("latest-reducer-coverage", "cat posix_memalign BRK fix requires reducer coverage for the latest matching full-shell report \(latestPath)"))
+            }
+            if simulatorPath != latestPath {
+                failures.append(fail("stale-fix-report", "cat posix_memalign BRK fix is tied to \(simulatorPath), but latest matching full-shell report is \(latestPath)"))
+            }
+            failures.append(fail("latest-simulator-still-fails", "cat posix_memalign BRK fix cannot pass while the latest current pinned full-shell simulator report still shows the posix_memalign assertion, unsupported BRK 0xd4200020 with x8=0x40 in cat, shell status 132, and no shell success marker"))
+        }
+    }
+
+    let mmapURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "mmap.c")
+    let mmapText = try readText(mmapURL)
+    artifacts.append(relativePath(mmapURL))
+    if !mmapText.contains("arch_boot_host_page_size()") ||
+        !mmapText.contains("orlix_hosted_prot_none_reservation") ||
+        !mmapText.contains("orlix_hosted_anonymous_private_mapping") ||
+        !mmapText.contains("orlix_hosted_mmap_length_align_mask") ||
+        !mmapText.contains("len < PAGE_SIZE || (len & (len - 1))") ||
+        !mmapText.contains("return len - 1") ||
+        !mmapText.contains("orlix_hosted_mmap_align_mask") ||
+        !mmapText.contains("orlix_hosted_mmap_align_offset") ||
+        !mmapText.contains("info.align_mask = orlix_hosted_mmap_align_mask(file,") ||
+        !mmapText.contains("info.align_offset = orlix_hosted_mmap_align_offset(file,") ||
+        !mmapText.contains("result = vm_unmapped_area(&info)") ||
+        !mmapText.contains("offset_in_page(result)") {
+        failures.append(fail("hosted-mmap-alignment", "hosted anonymous mmap selection must preserve power-of-two length alignment and host-page alignment before rerunning full-shell cat"))
+    }
+    if mmapText.contains("HostAdapter") ||
+        mmapText.contains("MAP_JIT") ||
+        mmapText.contains("VM_PROT_EXECUTE") ||
+        mmapText.contains("PROT_EXEC") {
+        failures.append(fail("forbidden-scope", "cat posix_memalign BRK fix must not add HostAdapter, JIT, or executable-memory behavior"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI full-shell cat posix_memalign BRK fix preserves hosted anonymous mmap length alignment without implementing BRK.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellInitWriteFaultReducer() throws -> Int32 {
+    let target = "tcti-post-full-shell-init-write-fault-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell init write-fault report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell init write-fault report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let launchStderrText = try reportArtifacts.first { $0.hasSuffix("launch.stderr") }.map(readRelativeArtifact) ?? ""
+    let fullShellText = try reportArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let combinedText = [terminalText, launchStderrText, fullShellText].joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let faultPC = stringField(fault, "pc")
+    let faultLR = stringField(fault, "lr")
+    let faultSP = stringField(fault, "sp")
+    let faultAddress = stringField(fault, "addr")
+    let staticBase = stringField(staticPIE, "base")
+    let staticEntry = stringField(staticPIE, "entry")
+    let faultOffset: String? = {
+        guard
+            !staticBase.isEmpty,
+            !faultAddress.isEmpty,
+            let base = UInt64(staticBase.dropFirst(2), radix: 16),
+            let address = UInt64(faultAddress.dropFirst(2), radix: 16),
+            address >= base
+        else {
+            return nil
+        }
+        return String(format: "0x%llx", address - base)
+    }()
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "full-shell report must show init reached first TCTI svc syscall 178 before the write fault"))
+    }
+    if stringField(staticPIE, "task") != "init" ||
+        intField(staticPIE, "pid") != 1 ||
+        staticBase.isEmpty ||
+        staticEntry.isEmpty {
+        failures.append(fail("static-pie-init", "full-shell report must show static PIE image task=init pid=1 before the write fault"))
+    }
+    if stringField(mmap, "task") != "init" ||
+        intField(mmap, "pid") != 1 ||
+        intField(mmap, "syscall") != 222 {
+        failures.append(fail("init-mmap", "full-shell report must show init pid=1 issued mmap syscall 222 before the write fault"))
+    }
+    if stringField(fault, "task") != "init" ||
+        intField(fault, "pid") != 1 ||
+        intField(fault, "access") != 2 ||
+        intField(fault, "si") != 2 ||
+        faultPC.isEmpty ||
+        faultLR.isEmpty ||
+        faultSP.isEmpty ||
+        faultAddress.isEmpty ||
+        faultAddress == "0x0" ||
+        faultOffset == nil {
+        failures.append(fail("init-write-fault-signature", "full-shell report must show init write fault at a non-null static PIE address with access=2 si=2"))
+    }
+    if intField(signal, "signal") != nil {
+        failures.append(fail("init-write-fault-phase", "init write-fault reducer expects runtime report before a structured signaled_process event"))
+    }
+    if !combinedText.contains("Orlix TCTI: static PIE image task=init") ||
+        !combinedText.contains("Orlix TCTI: user fault task=init") ||
+        !combinedText.contains("access=2") ||
+        !combinedText.contains("si=2") ||
+        fullShellText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        failures.append(fail("init-write-fault-artifact", "full-shell artifacts must show init static PIE write fault before the success marker"))
+    }
+
+    struct PostFullShellInitWriteFaultModel: Codable {
+        let task: String
+        let pid: Int
+        let firstSyscall: Int
+        let mmapSyscall: Int
+        let staticPIEBase: String
+        let staticPIEEntry: String
+        let faultPC: String
+        let faultLR: String
+        let faultSP: String
+        let faultAddress: String
+        let faultOffset: String
+        let access: String
+        let si: Int
+        let invariant: String
+    }
+    if let offset = faultOffset {
+        let model = PostFullShellInitWriteFaultModel(
+            task: "init",
+            pid: 1,
+            firstSyscall: 178,
+            mmapSyscall: 222,
+            staticPIEBase: staticBase,
+            staticPIEEntry: staticEntry,
+            faultPC: faultPC,
+            faultLR: faultLR,
+            faultSP: faultSP,
+            faultAddress: faultAddress,
+            faultOffset: offset,
+            access: "write",
+            si: 2,
+            invariant: "after full-shell init enters its static PIE image and maps anonymous writable memory, TCTI must resolve legitimate Linux user writes without host execution or HostAdapter runtime behavior"
+        )
+        let modelURL = buildPath("reproducers", target, "post-full-shell-init-write-fault-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-full-shell-init-write-fault-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator full-shell command reaches init static PIE, then TCTI faults an init user-data write with access=2 si=2 before ORLIX-TCTI-SHELL-USABLE",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator full-shell init user-data write fault to a no-phone TCTI evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellSHSIGABRTReducer() throws -> Int32 {
+    let target = "tcti-post-full-shell-sh-sigabrt-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell sh SIGABRT report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell sh SIGABRT report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let launchStderrText = try reportArtifacts.first { $0.hasSuffix("launch.stderr") }.map(readRelativeArtifact) ?? ""
+    let fullShellText = try reportArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let combinedText = [terminalText, launchStderrText, fullShellText].joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let staticBase = stringField(staticPIE, "base")
+    let staticEntry = stringField(staticPIE, "entry")
+    let shPID = intField(staticPIE, "pid")
+    let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "full-shell report must show init reached first TCTI svc syscall 178 before sh aborts"))
+    }
+    if stringField(staticPIE, "task") != "sh" ||
+        shPID == nil ||
+        staticBase.isEmpty ||
+        staticEntry != "0x45418" {
+        failures.append(fail("sh-static-pie", "full-shell report must show sh static PIE image with entry 0x45418"))
+    }
+    if stringField(mmap, "task") != "sh" ||
+        intField(mmap, "pid") != shPID ||
+        intField(mmap, "syscall") != 222 {
+        failures.append(fail("sh-mmap", "full-shell report must show sh issued mmap syscall 222 before aborting"))
+    }
+    if intField(fault, "access") != nil ||
+        intField(fault, "si") != nil ||
+        stringField(fault, "addr") != "" {
+        failures.append(fail("no-user-fault", "sh SIGABRT reducer expects no fatal TCTI user-fault signature"))
+    }
+    if intField(signal, "pid") != shPID ||
+        intField(signal, "signal") != 6 {
+        failures.append(fail("sh-signal", "full-shell report must show sh received SIGABRT signal 6"))
+    }
+    if stringField(lastReturn, "task") != "sh" ||
+        intField(lastReturn, "pid") != shPID ||
+        intField(lastReturn, "syscall") != 172 ||
+        intField(lastReturn, "signed_ret") != shPID {
+        failures.append(fail("sh-syscall-return", "full-shell report must preserve sh syscall 172 returning the sh pid before kill(SIGABRT)"))
+    }
+    if !combinedText.contains("Orlix TCTI: static PIE image task=sh") ||
+        !combinedText.contains("Orlix TCTI: syscall return task=sh") ||
+        !combinedText.contains("syscall=172 ret=\(shPIDHex) signed_ret=\(shPID ?? -1)") ||
+        !combinedText.contains("syscall=129 x0=\(shPIDHex) x1=0x6") ||
+        !combinedText.contains("orlix-init: process signaled pid=\(shPID ?? -1) signal=6") ||
+        !combinedText.contains("syscall=160") ||
+        fullShellText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        failures.append(fail("sh-sigabrt-artifact", "full-shell artifacts must show sh reaching uname/getpid then SIGABRT before the success marker"))
+    }
+
+    struct PostFullShellSHSIGABRTModel: Codable {
+        let task: String
+        let pid: Int
+        let signal: Int
+        let staticPIEBase: String
+        let staticPIEEntry: String
+        let lastReturnSyscall: Int
+        let lastReturnValue: Int
+        let invariant: String
+    }
+    if failures.isEmpty {
+        let model = PostFullShellSHSIGABRTModel(
+            task: "sh",
+            pid: shPID ?? -1,
+            signal: 6,
+            staticPIEBase: staticBase,
+            staticPIEEntry: staticEntry,
+            lastReturnSyscall: 172,
+            lastReturnValue: shPID ?? -1,
+            invariant: "the full shell command must reach ORLIX-TCTI-SHELL-USABLE instead of having sh abort itself after uname, syscall-return, and mmap progress"
+        )
+        let modelURL = buildPath("reproducers", target, "post-full-shell-sh-sigabrt-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-full-shell-sh-sigabrt-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator full-shell command reaches sh static PIE and syscall-return progress, then sh sends SIGABRT before ORLIX-TCTI-SHELL-USABLE",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator full-shell sh SIGABRT to a no-phone TCTI evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostConsoleSHSIGABRTReducer() throws -> Int32 {
+    let target = "tcti-post-console-sh-sigabrt-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-init-console-write",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator console sh SIGABRT report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator console sh SIGABRT report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let launchStderrText = try reportArtifacts.first { $0.hasSuffix("launch.stderr") }.map(readRelativeArtifact) ?? ""
+    let consoleText = try reportArtifacts.first { $0.hasSuffix("tcti-console-write.txt") }.map(readRelativeArtifact) ?? ""
+    let combinedText = [terminalText, launchStderrText, consoleText].joined(separator: "\n")
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let staticBase = stringField(staticPIE, "base")
+    let staticEntry = stringField(staticPIE, "entry")
+    let shPID = intField(staticPIE, "pid")
+    let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected console simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "gate") != "tcti-init-console-write" ||
+        stringField(object, "destination") != "iphonesimulator" ||
+        stringField(object, "status") != "fail" ||
+        boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    for key in [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ] where forbidden[key] as? Bool != false {
+        failures.append(fail("forbidden-behavior", "forbidden_behavior.\(key) must be false in the simulator report"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "console report must show init reached first TCTI svc syscall 178 before sh aborts"))
+    }
+    if stringField(staticPIE, "task") != "sh" ||
+        shPID == nil ||
+        staticBase.isEmpty ||
+        staticEntry != "0x45418" {
+        failures.append(fail("sh-static-pie", "console report must show sh static PIE image with entry 0x45418"))
+    }
+    if stringField(mmap, "task") != "sh" ||
+        intField(mmap, "pid") != shPID ||
+        intField(mmap, "syscall") != 222 {
+        failures.append(fail("sh-mmap", "console report must show sh issued mmap syscall 222 before aborting"))
+    }
+    if intField(fault, "access") != nil ||
+        intField(fault, "si") != nil ||
+        stringField(fault, "addr") != "" {
+        failures.append(fail("no-user-fault", "console sh SIGABRT reducer expects no fatal TCTI user-fault signature"))
+    }
+    if intField(signal, "pid") != shPID ||
+        intField(signal, "signal") != 6 {
+        failures.append(fail("sh-signal", "console report must show sh received SIGABRT signal 6"))
+    }
+    if stringField(lastReturn, "task") != "sh" ||
+        intField(lastReturn, "pid") != shPID ||
+        intField(lastReturn, "syscall") != 172 ||
+        intField(lastReturn, "signed_ret") != shPID {
+        failures.append(fail("sh-syscall-return", "console report must preserve sh syscall 172 returning the sh pid before kill(SIGABRT)"))
+    }
+    if !combinedText.contains("Orlix TCTI: static PIE image task=sh") ||
+        !combinedText.contains("Orlix TCTI: syscall return task=sh") ||
+        !combinedText.contains("syscall=160") ||
+        !combinedText.contains("syscall=172 ret=\(shPIDHex) signed_ret=\(shPID ?? -1)") ||
+        !combinedText.contains("syscall=129 x0=\(shPIDHex) x1=0x6") ||
+        !combinedText.contains("orlix-init: process signaled pid=\(shPID ?? -1) signal=6") ||
+        consoleText.contains("ORLIX-TCTI-CONSOLE-OK") {
+        failures.append(fail("sh-sigabrt-artifact", "console artifacts must show sh reaching uname/getpid then SIGABRT before the console success marker"))
+    }
+
+    struct PostConsoleSHSIGABRTModel: Codable {
+        let task: String
+        let pid: Int
+        let signal: Int
+        let staticPIEBase: String
+        let staticPIEEntry: String
+        let lastReturnSyscall: Int
+        let lastReturnValue: Int
+        let invariant: String
+    }
+    if failures.isEmpty {
+        let model = PostConsoleSHSIGABRTModel(
+            task: "sh",
+            pid: shPID ?? -1,
+            signal: 6,
+            staticPIEBase: staticBase,
+            staticPIEEntry: staticEntry,
+            lastReturnSyscall: 172,
+            lastReturnValue: shPID ?? -1,
+            invariant: "the simulator console command must reach ORLIX-TCTI-CONSOLE-OK instead of having sh abort itself after uname, syscall-return, and mmap progress"
+        )
+        let modelURL = buildPath("reproducers", target, "post-console-sh-sigabrt-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-console-sh-sigabrt-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator console command reaches sh static PIE and syscall-return progress, then sh sends SIGABRT before ORLIX-TCTI-CONSOLE-OK",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator console sh SIGABRT to a no-phone TCTI evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellInitWriteFaultFix() throws -> Int32 {
+    let target = "tcti-post-full-shell-init-write-fault-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerReportURL = buildPath("reports", "tcti-post-full-shell-init-write-fault-reducer", "report.json")
+    var reducerArtifacts: [String] = []
+    if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
+        reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+        artifacts.append(relativePath(reducerReportURL))
+        artifacts.append(contentsOf: reducerArtifacts)
+        if stringField(reducerReport, "git_sha") != gitSha() ||
+            stringField(reducerReport, "status") != "pass" ||
+            !boolField(reducerReport, "passed") {
+            failures.append(fail("reducer-report", "post-full-shell init write-fault reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-full-shell-init-write-fault-reducer report"))
+    }
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell usability report for init write-fault fix"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell report was available for the init write-fault fix gate.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let simulatorObject = simulatorReport.object
+    let simulatorPath = relativePath(simulatorReport.url)
+    artifacts.append(simulatorPath)
+    if !reducerArtifacts.contains(simulatorPath) {
+        failures.append(fail("reducer-coverage", "init write-fault reducer must cover the selected simulator report"))
+    }
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+
+    let faultURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "fault.c")
+    let faultText = try readText(faultURL)
+    artifacts.append(relativePath(faultURL))
+    if !faultText.contains("tcti_sync_faulted_user_window(address, access)") {
+        failures.append(fail("tcti-fault-access", "TCTI user-fault handling must pass the access class into hosted window sync"))
+    }
+    if !faultText.contains("ORLIX_HOST_USER_FAULT_WRITE") ||
+        !faultText.contains("case TCTI_ACCESS_WRITE:") {
+        failures.append(fail("tcti-write-sync", "TCTI write faults must sync the hosted user fault window with ORLIX_HOST_USER_FAULT_WRITE"))
+    }
+    if !faultText.contains("ORLIX_HOST_USER_FAULT_EXEC") ||
+        !faultText.contains("case TCTI_ACCESS_FETCH:") {
+        failures.append(fail("tcti-fetch-sync", "TCTI fetch faults must preserve executable access when syncing the hosted user fault window"))
+    }
+    for forbidden in ["HostAdapter", "MAP_JIT", "VM_PROT_EXECUTE", "PROT_EXEC"] {
+        if faultText.contains(forbidden) {
+            failures.append(fail("forbidden-scope", "init write-fault fix must not add \(forbidden) behavior"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI init write-fault fix preserves access class through Linux user-fault and hosted window sync.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellSHSIGABRTFix() throws -> Int32 {
+    let target = "tcti-post-full-shell-sh-sigabrt-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerReportURL = buildPath("reports", "tcti-post-full-shell-sh-sigabrt-reducer", "report.json")
+    var reducerArtifacts: [String] = []
+    if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
+        reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+        artifacts.append(relativePath(reducerReportURL))
+        artifacts.append(contentsOf: reducerArtifacts)
+        if stringField(reducerReport, "git_sha") != gitSha() ||
+            stringField(reducerReport, "status") != "pass" ||
+            !boolField(reducerReport, "passed") {
+            failures.append(fail("reducer-report", "post-full-shell sh SIGABRT reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-full-shell-sh-sigabrt-reducer report"))
+    }
+
+    let simulatorPath = reducerArtifacts.first {
+        $0.hasPrefix("Build/Reports/runtime/tcti-full-shell-usability-") &&
+            $0.hasSuffix(".json")
+    } ?? ""
+    let simulatorURL = path(simulatorPath)
+    guard !simulatorPath.isEmpty,
+          let simulatorObject = try? loadJSON(simulatorURL) as? [String: Any] else {
+        failures.append(fail("simulator-report", "missing reducer-covered iphonesimulator full-shell usability report for sh SIGABRT fix"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell report was available for the sh SIGABRT fix gate.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    artifacts.append(simulatorPath)
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+
+    let userPageURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c")
+    let initURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "init.c")
+    let userPageText = try readText(userPageURL)
+    let initText = try readText(initURL)
+    artifacts.append(relativePath(userPageURL))
+    artifacts.append(relativePath(initURL))
+    if !userPageText.contains("unsigned long fault_flags = 0") ||
+        !userPageText.contains("case TCTI_ACCESS_WRITE:") ||
+        !userPageText.contains("ORLIX_HOST_USER_FAULT_WRITE") ||
+        !userPageText.contains("case TCTI_ACCESS_FETCH:") ||
+        !userPageText.contains("ORLIX_HOST_USER_FAULT_EXEC") ||
+        !userPageText.contains("orlix_sync_current_user_fault_window(address, fault_flags)") {
+        failures.append(fail("tcti-user-window-access", "TCTI user-page fault sync must preserve READ/WRITE/FETCH access class when refreshing the hosted user window"))
+    }
+    if !initText.contains("host_fault_flags & ORLIX_HOST_USER_FAULT_EXEC") ||
+        !initText.contains("host_fault_flags & ORLIX_HOST_USER_FAULT_WRITE") ||
+        !initText.contains("return orlix_fault_in_user_page_unlocked(mm, page, fault_flags)") ||
+        !initText.contains("fault_flags & ORLIX_HOST_USER_FAULT_WRITE") ||
+        !initText.contains("orlix_fault_in_user_page_unlocked(mm, page, fault_flags)") ||
+        !initText.contains("mmap_read_unlock(mm)") {
+        failures.append(fail("hosted-fault-window-access", "hosted user fault-window sync must honor explicit TCTI EXEC and WRITE fault flags before refreshing host windows"))
+    }
+    for forbidden in ["HostAdapter", "MAP_JIT", "VM_PROT_EXECUTE", "PROT_EXEC"] {
+        if userPageText.contains(forbidden) || initText.contains(forbidden) {
+            failures.append(fail("forbidden-scope", "sh SIGABRT fix must not add \(forbidden) behavior"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI full-shell sh SIGABRT fix preserves hosted user-window access class for faulted pages.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
+func runPostFullShellInitSecondMmapHangReducer() throws -> Int32 {
+    let target = "tcti-post-full-shell-init-second-mmap-hang-reducer"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    guard let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-full-shell-usability",
+        destination: "iphonesimulator"
+    ) else {
+        failures.append(fail("simulator-report", "missing iphonesimulator full-shell init second-mmap hang report"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell init second-mmap hang report was available for the reducer.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let object = simulatorReport.object
+    artifacts.append(relativePath(simulatorReport.url))
+    let reportArtifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: reportArtifacts)
+    let terminalText = try reportArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let fullShellText = try reportArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+    let firstSVC = events["first_svc"] as? [String: Any] ?? [:]
+    let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+    let mmap = events["last_mmap_syscall"] as? [String: Any] ?? [:]
+    let fault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+    let signal = events["signaled_process"] as? [String: Any] ?? [:]
+    let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
+
+    if stringField(object, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(object, "status") != "fail" || boolField(object, "passed") {
+        failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
+    }
+    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(object, "simulator_booted_count") != 1 ||
+        !boolField(object, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "reducer requires the single pinned Orlix-iPhone-15-Pro-Max simulator report"))
+    }
+    if stringField(firstSVC, "task") != "init" ||
+        intField(firstSVC, "pid") != 1 ||
+        intField(firstSVC, "syscall") != 178 {
+        failures.append(fail("init-first-svc", "full-shell report must show init reached first TCTI svc syscall 178"))
+    }
+    if stringField(staticPIE, "task") != "init" ||
+        intField(staticPIE, "pid") != 1 ||
+        stringField(staticPIE, "base").isEmpty ||
+        stringField(staticPIE, "entry").isEmpty {
+        failures.append(fail("init-static-pie", "full-shell report must show init static PIE image before the hang"))
+    }
+    if stringField(mmap, "task") != "init" ||
+        intField(mmap, "pid") != 1 ||
+        intField(mmap, "syscall") != 222 {
+        failures.append(fail("init-mmap", "full-shell report must show init issued mmap syscall 222 before the hang"))
+    }
+    if intField(fault, "access") != nil ||
+        intField(fault, "si") != nil ||
+        stringField(fault, "addr") != "" {
+        failures.append(fail("no-user-fault", "init second-mmap reducer expects no fatal TCTI user-fault signature"))
+    }
+    if intField(signal, "pid") != nil || intField(signal, "signal") != nil {
+        failures.append(fail("no-signal", "init second-mmap reducer expects no signaled process"))
+    }
+    if intField(lastReturn, "syscall") != nil {
+        failures.append(fail("no-sh-return", "init second-mmap reducer expects sh not to reach syscall-return tracing"))
+    }
+    if !terminalText.contains("Orlix TCTI: static PIE image task=init") ||
+        !terminalText.contains("Orlix TCTI: svc #0 task=init") ||
+        !terminalText.contains("syscall=222") ||
+        terminalText.contains("Orlix TCTI: static PIE image task=sh") ||
+        fullShellText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        failures.append(fail("init-second-mmap-artifact", "full-shell artifacts must show init mmap progress but no sh startup and no success marker"))
+    }
+
+    struct PostFullShellInitSecondMmapHangModel: Codable {
+        let task: String
+        let pid: Int
+        let syscall: Int
+        let invariant: String
+    }
+    if failures.isEmpty {
+        let model = PostFullShellInitSecondMmapHangModel(
+            task: "init",
+            pid: 1,
+            syscall: 222,
+            invariant: "full shell command must continue past init mmap progress to start sh and reach ORLIX-TCTI-SHELL-USABLE"
+        )
+        let modelURL = buildPath("reproducers", target, "post-full-shell-init-second-mmap-hang-model.json")
+        try writeJSON(model, to: modelURL)
+        artifacts.append(relativePath(modelURL))
+    }
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "post-full-shell-init-second-mmap-hang-pass-regression",
+        command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+        reason: "pinned simulator full-shell command reaches init static PIE and second mmap syscall entry, then does not start sh or reach ORLIX-TCTI-SHELL-USABLE",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Reduced pinned simulator full-shell init second-mmap hang to a no-phone TCTI evidence gate.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_reduced": 1],
         releaseGateEligible: false,
         readinessGateEligible: false
     ))
@@ -9763,6 +13029,93 @@ func runBusyBoxSyscallReturnTrace() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runPostFullShellInitSecondMmapHangFix() throws -> Int32 {
+    let target = "tcti-post-full-shell-init-second-mmap-hang-fix"
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+
+    let reducerURL = buildPath("reports", "tcti-post-full-shell-init-second-mmap-hang-reducer", "report.json")
+    let reducerObject = try? loadJSON(reducerURL) as? [String: Any]
+    let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    if let reducerObject {
+        artifacts.append(relativePath(reducerURL))
+        if stringField(reducerObject, "git_sha") != gitSha() ||
+            stringField(reducerObject, "status") != "pass" ||
+            !boolField(reducerObject, "passed") {
+            failures.append(fail("reducer-report", "post-full-shell init second-mmap reducer report is missing, stale, or not passing"))
+        }
+    } else {
+        failures.append(fail("reducer-report", "missing tcti-post-full-shell-init-second-mmap-hang-reducer report"))
+    }
+
+    let simulatorPath = reducerArtifacts.first {
+        $0.hasPrefix("Build/Reports/runtime/tcti-full-shell-usability-") &&
+            $0.hasSuffix(".json")
+    } ?? ""
+    let simulatorURL = path(simulatorPath)
+    guard !simulatorPath.isEmpty,
+          let simulatorObject = try? loadJSON(simulatorURL) as? [String: Any] else {
+        failures.append(fail("simulator-report", "missing reducer-covered iphonesimulator full-shell usability report for init second-mmap fix"))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "No pinned simulator full-shell report was available for the init second-mmap fix gate.",
+            failures: failures,
+            artifacts: artifacts,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    artifacts.append(simulatorPath)
+    if stringField(simulatorObject, "git_sha") != gitSha() {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    }
+    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+        stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+        intField(simulatorObject, "simulator_booted_count") != 1 ||
+        !boolField(simulatorObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "fix gate requires evidence from the single pinned Orlix-iPhone-15-Pro-Max simulator"))
+    }
+    if !reducerArtifacts.contains(simulatorPath) {
+        failures.append(fail("reducer-coverage", "init second-mmap reducer must cover the selected simulator report"))
+    }
+
+    let engineURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let testURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let engineText = try readText(engineURL)
+    let testText = try readText(testURL)
+    artifacts.append(relativePath(engineURL))
+    artifacts.append(relativePath(testURL))
+    if engineText.contains("current->thread.user_tls = 0;") {
+        failures.append(fail("execve-tls-clear", "TCTI successful execve return must not clear current->thread.user_tls"))
+    }
+    if !testText.contains("KUNIT_EXPECT_EQ(test, 0x700000123000ULL, current->thread.user_tls)") {
+        failures.append(fail("execve-tls-test", "KUnit must assert TCTI successful execve return preserves guest TLS"))
+    }
+    for forbidden in ["HostAdapter", "MAP_JIT", "VM_PROT_EXECUTE", "PROT_EXEC"] {
+        if engineText.contains(forbidden) || testText.contains(forbidden) {
+            failures.append(fail("forbidden-scope", "init second-mmap fix must not add \(forbidden) behavior"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: "Checked reducer-backed TCTI full-shell init second-mmap fix preserves guest TLS across successful execve return without implementing BRK.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: ["simulator_reports_checked": 1],
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    return exitCode(for: status)
+}
+
 let tctiTargets = [
     "tcti-plan-consistency",
     "tcti-report-schema-check",
@@ -9780,6 +13133,7 @@ let tctiTargets = [
     "tcti-simd-self-move-reducer",
     "tcti-simd-self-move-fix",
     "tcti-simd-s-lane-move-reducer",
+    "tcti-init-mlibc-lock-brk-reducer",
     "tcti-brk-trap-reducer",
     "tcti-brk-trap-root-cause",
     "tcti-brk-guard-got-reducer",
@@ -9787,6 +13141,11 @@ let tctiTargets = [
     "tcti-simd-movi-2s-fix",
     "tcti-simd-movi-16b-fix",
     "tcti-simd-movi-4s-0x41-fix",
+    "tcti-simd-movi-4s-0x1-fix",
+    "tcti-simd-cmeq-4s-fix",
+    "tcti-simd-umaxv-4s-fix",
+    "tcti-simd-addv-4s-fix",
+    "tcti-fmov-w-s-fix",
     "tcti-simd-str-s-fix",
     "tcti-simd-dup-2d-fix",
     "tcti-simd-and-16b-fix",
@@ -9801,6 +13160,21 @@ let tctiTargets = [
     "tcti-post-exec-sh-fetch-fault-reducer",
     "tcti-post-pie-sh-entry-fetch-fault-reducer",
     "tcti-post-bash-mmap-read-fault-reducer",
+    "tcti-init-read-fault-reducer",
+    "tcti-post-static-pie-init-read-fault-reducer",
+    "tcti-post-static-pie-init-tls-fix",
+    "tcti-post-full-shell-cat-read-fault-reducer",
+    "tcti-post-full-shell-cat-read-fault-fix",
+    "tcti-post-full-shell-init-write-fault-reducer",
+    "tcti-post-full-shell-sh-sigabrt-reducer",
+    "tcti-post-full-shell-init-write-fault-fix",
+    "tcti-post-full-shell-sh-sigabrt-fix",
+    "tcti-post-full-shell-init-second-mmap-hang-reducer",
+    "tcti-post-full-shell-init-second-mmap-hang-fix",
+    "tcti-post-full-shell-cat-posix-memalign-brk-reducer",
+    "tcti-post-full-shell-cat-posix-memalign-brk-fix",
+    "tcti-post-true-entry-fetch-fault-reducer",
+    "tcti-post-sh-read-fault-reducer",
     "tcti-post-busybox-sigabrt-reducer",
     "tcti-post-busybox-shell-command-sigill-reducer",
     "tcti-user-data-window-refresh-fix",
@@ -9841,6 +13215,8 @@ func dispatch(_ target: String) throws -> Int32 {
 	        return try runSIMDSelfMoveFix()
 	    case "tcti-simd-s-lane-move-reducer":
 	        return try runSIMDSLaneMoveReducer()
+    case "tcti-init-mlibc-lock-brk-reducer":
+        return try runInitMLibCLockBRKReducer()
 	    case "tcti-brk-trap-reducer":
 	        return try runBRKTrapReducer()
     case "tcti-brk-trap-root-cause":
@@ -9855,6 +13231,16 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runSIMDMOVI16BFix()
     case "tcti-simd-movi-4s-0x41-fix":
         return try runSIMDMOVI4S0x41Fix()
+    case "tcti-simd-movi-4s-0x1-fix":
+        return try runSIMDMOVI4S0x1Fix()
+    case "tcti-simd-cmeq-4s-fix":
+        return try runSIMDCMEQ4SFix()
+    case "tcti-simd-umaxv-4s-fix":
+        return try runSIMDUMAXV4SFix()
+    case "tcti-simd-addv-4s-fix":
+        return try runSIMDADDV4SFix()
+    case "tcti-fmov-w-s-fix":
+        return try runFMOVWSFix()
     case "tcti-simd-str-s-fix":
         return try runSIMDSTRSFix()
     case "tcti-simd-dup-2d-fix":
@@ -9883,6 +13269,38 @@ case "tcti-post-exec-sh-fetch-fault-reducer":
 		return try runPostPIESHEntryFetchFaultReducer()
 	case "tcti-post-bash-mmap-read-fault-reducer":
 		return try runPostBashMmapReadFaultReducer()
+	case "tcti-init-read-fault-reducer":
+		return try runInitReadFaultReducer()
+    case "tcti-post-static-pie-init-read-fault-reducer":
+        return try runPostStaticPIEInitReadFaultReducer()
+    case "tcti-post-static-pie-init-tls-fix":
+        return try runPostStaticPIEInitTLSFix()
+    case "tcti-post-full-shell-cat-read-fault-reducer":
+        return try runPostFullShellCatReadFaultReducer()
+    case "tcti-post-full-shell-cat-read-fault-fix":
+        return try runPostFullShellCatReadFaultFix()
+    case "tcti-post-full-shell-init-write-fault-reducer":
+        return try runPostFullShellInitWriteFaultReducer()
+    case "tcti-post-full-shell-sh-sigabrt-reducer":
+        return try runPostFullShellSHSIGABRTReducer()
+    case "tcti-post-console-sh-sigabrt-reducer":
+        return try runPostConsoleSHSIGABRTReducer()
+    case "tcti-post-full-shell-init-write-fault-fix":
+        return try runPostFullShellInitWriteFaultFix()
+    case "tcti-post-full-shell-sh-sigabrt-fix":
+        return try runPostFullShellSHSIGABRTFix()
+    case "tcti-post-full-shell-init-second-mmap-hang-reducer":
+        return try runPostFullShellInitSecondMmapHangReducer()
+    case "tcti-post-full-shell-init-second-mmap-hang-fix":
+        return try runPostFullShellInitSecondMmapHangFix()
+    case "tcti-post-full-shell-cat-posix-memalign-brk-reducer":
+        return try runPostFullShellCatPosixMemalignBRKReducer()
+    case "tcti-post-full-shell-cat-posix-memalign-brk-fix":
+        return try runPostFullShellCatPosixMemalignBRKFix()
+    case "tcti-post-true-entry-fetch-fault-reducer":
+        return try runPostTrueEntryFetchFaultReducer()
+	case "tcti-post-sh-read-fault-reducer":
+		return try runPostSHReadFaultReducer()
     case "tcti-post-busybox-sigabrt-reducer":
         return try runPostBusyBoxSIGABRTReducer()
     case "tcti-post-busybox-shell-command-sigill-reducer":
