@@ -2,6 +2,62 @@
 
 ## 2026-07-04
 
+### Checkpoint: Kernel Syscall Dispatch Smoke Emits Real Fail Proof
+
+- Harness-selected work was overridden by the product direction to implement the real selected kernel gate body instead of adding more proof-tier contract work.
+- Implemented `tcti-kernel-syscall-dispatch-smoke` as a non-TODO gate body:
+  - Command: `make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke`.
+  - Kernel profile: `tcti_runtime`.
+  - Kernel config: `OrlixKernel/Sources/ports/orlix/configs/tcti_runtime_defconfig`.
+  - Report path: `Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json`.
+  - Evidence artifact: `Build/TCTI/kernel_syscall_dispatch_smoke/evidence.json`.
+  - Reducer: `Build/TCTI/reproducers/tcti-kernel-syscall-dispatch-smoke/kernel-syscall-dispatch-smoke-fail.json`.
+- Evidence recorded:
+  - `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`.
+  - `CONFIG_ORLIX_HOSTED_EXEC_NATIVE` disabled for the TCTI profile.
+  - hosted user entry routes to `orlix_tcti_enter_user(regs)`.
+  - TCTI decodes `svc #0` through `TCTI_DECODE_SVC` and returns `TCTI_EXIT_SYSCALL`.
+  - syscall number is sourced from guest `x8` through `regs->syscallno = regs->regs[8]`.
+  - syscall PC advances by `sizeof(u32)` before dispatch.
+  - TCTI syscall handling calls `orlix_syscall_dispatch(regs)`.
+  - Linux dispatch uses `sys_call_table[array_index_nospec(nr, __NR_syscalls)]`.
+  - Linux dispatch sets return values with `syscall_set_return_value(current, regs, 0, ret)`.
+  - HostAdapter sources do not contain Linux syscall dispatch ownership markers.
+- Current gate result:
+  - `status=fail`, not `todo`.
+  - `passed=false`.
+  - `proof_tier=kernel`.
+  - `acceptance_weight=blocker`.
+  - `real_stack_required=true`.
+  - `can_claim_runtime_readiness=false`.
+  - Runtime syscall number observed: false.
+  - Runtime `orlix_syscall_dispatch` entry observed: false.
+  - Blocker: no no-phone OrlixKernel workload hook currently executes an EL0 task through `orlix_tcti_enter_user` and observes `orlix_syscall_dispatch` at runtime from `tcti-gate`.
+- Required harness checker update:
+  - `agent-harness-check` no longer requires this gate to remain TODO.
+  - It now requires `tcti-kernel-syscall-dispatch-smoke` to emit roadmap-matching non-TODO pass/fail metadata.
+- Verification:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency && rtk proxy make agent-harness-check` passed before implementation.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` returned nonzero with a real fail report and reducer.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed after replacing the old TODO assertion.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `simulator-tcti-runtime-stability` because the kernel smoke has a current real fail report.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for the resulting simulator envelope.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-kernel-syscall-dispatch-smoke/kernel-syscall-dispatch-smoke-fail.json` passed and confirmed actual replay status `fail`.
+- Boundary:
+  - No simulator runtime gate run.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, wait, exec, scheduler, or Linux runtime semantics moved into the harness, app, OrlixOS, or HostAdapter.
+  - No generated Linux, mlibc, package, rootfs, or build tree edits.
+  - No product defconfig flip.
+  - No custom MCP or `tools/agent` added.
+
 ### Checkpoint: Proof-Tier Metadata Fails Closed
 
 - Harness gate-runner correction:
