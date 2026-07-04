@@ -21,6 +21,10 @@ struct Gate: Codable {
     let id: String
     let command: String
     let kind: String
+    let proofTier: String
+    let acceptanceWeight: String
+    let realStackRequired: Bool
+    let canClaimRuntimeReadiness: Bool
     let prerequisites: [String]
     let allowedScope: [String]
     let forbiddenScope: [String]
@@ -38,6 +42,10 @@ struct Gate: Codable {
         case id
         case command
         case kind
+        case proofTier = "proof_tier"
+        case acceptanceWeight = "acceptance_weight"
+        case realStackRequired = "real_stack_required"
+        case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case prerequisites
         case allowedScope = "allowed_scope"
         case forbiddenScope = "forbidden_scope"
@@ -51,6 +59,102 @@ struct Gate: Codable {
         case commitMessageTemplate = "commit_message_template"
         case stopConditions = "stop_conditions"
     }
+
+    init(
+        id: String,
+        command: String,
+        kind: String,
+        proofTier: String? = nil,
+        acceptanceWeight: String? = nil,
+        realStackRequired: Bool? = nil,
+        canClaimRuntimeReadiness: Bool? = nil,
+        prerequisites: [String],
+        allowedScope: [String],
+        forbiddenScope: [String],
+        expectedReportPaths: [String],
+        readinessEligible: Bool,
+        physicalDevice: Bool,
+        gadget: Bool,
+        requiredValidationCommands: [String],
+        reducerRequirements: [String],
+        requiredSubagentsOrSkills: [String],
+        commitMessageTemplate: String,
+        stopConditions: [String]
+    ) {
+        self.id = id
+        self.command = command
+        self.kind = kind
+        self.proofTier = proofTier ?? Gate.defaultProofTier(id: id, kind: kind, physicalDevice: physicalDevice)
+        self.acceptanceWeight = acceptanceWeight ?? Gate.defaultAcceptanceWeight(id: id, kind: kind, readinessEligible: readinessEligible, physicalDevice: physicalDevice)
+        self.realStackRequired = realStackRequired ?? Gate.defaultRealStackRequired(id: id, kind: kind, proofTier: self.proofTier, physicalDevice: physicalDevice)
+        self.canClaimRuntimeReadiness = canClaimRuntimeReadiness ?? (readinessEligible && self.realStackRequired && self.proofTier != "seed")
+        self.prerequisites = prerequisites
+        self.allowedScope = allowedScope
+        self.forbiddenScope = forbiddenScope
+        self.expectedReportPaths = expectedReportPaths
+        self.readinessEligible = readinessEligible
+        self.physicalDevice = physicalDevice
+        self.gadget = gadget
+        self.requiredValidationCommands = requiredValidationCommands
+        self.reducerRequirements = reducerRequirements
+        self.requiredSubagentsOrSkills = requiredSubagentsOrSkills
+        self.commitMessageTemplate = commitMessageTemplate
+        self.stopConditions = stopConditions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        let command = try container.decode(String.self, forKey: .command)
+        let kind = try container.decode(String.self, forKey: .kind)
+        let readinessEligible = try container.decode(Bool.self, forKey: .readinessEligible)
+        let physicalDevice = try container.decode(Bool.self, forKey: .physicalDevice)
+        self.init(
+            id: id,
+            command: command,
+            kind: kind,
+            proofTier: try container.decodeIfPresent(String.self, forKey: .proofTier),
+            acceptanceWeight: try container.decodeIfPresent(String.self, forKey: .acceptanceWeight),
+            realStackRequired: try container.decodeIfPresent(Bool.self, forKey: .realStackRequired),
+            canClaimRuntimeReadiness: try container.decodeIfPresent(Bool.self, forKey: .canClaimRuntimeReadiness),
+            prerequisites: try container.decode([String].self, forKey: .prerequisites),
+            allowedScope: try container.decode([String].self, forKey: .allowedScope),
+            forbiddenScope: try container.decode([String].self, forKey: .forbiddenScope),
+            expectedReportPaths: try container.decode([String].self, forKey: .expectedReportPaths),
+            readinessEligible: readinessEligible,
+            physicalDevice: physicalDevice,
+            gadget: try container.decode(Bool.self, forKey: .gadget),
+            requiredValidationCommands: try container.decode([String].self, forKey: .requiredValidationCommands),
+            reducerRequirements: try container.decode([String].self, forKey: .reducerRequirements),
+            requiredSubagentsOrSkills: try container.decode([String].self, forKey: .requiredSubagentsOrSkills),
+            commitMessageTemplate: try container.decode(String.self, forKey: .commitMessageTemplate),
+            stopConditions: try container.decode([String].self, forKey: .stopConditions)
+        )
+    }
+
+    static func defaultProofTier(id: String, kind: String, physicalDevice: Bool) -> String {
+        if physicalDevice { return "device" }
+        if id.hasPrefix("simulator-tcti-") { return "simulator" }
+        if kind == "simulator-runtime" { return "simulator" }
+        if kind == "safety" { return "release" }
+        if kind.contains("production") { return "kernel" }
+        return "seed"
+    }
+
+    static func defaultAcceptanceWeight(id: String, kind: String, readinessEligible: Bool, physicalDevice: Bool) -> String {
+        if physicalDevice { return "blocker" }
+        if kind == "safety" { return "blocker" }
+        if id.hasPrefix("simulator-tcti-") { return "readiness" }
+        if readinessEligible { return "readiness" }
+        return "probe"
+    }
+
+    static func defaultRealStackRequired(id: String, kind: String, proofTier: String, physicalDevice: Bool) -> Bool {
+        if physicalDevice { return true }
+        if id.hasPrefix("simulator-tcti-") { return true }
+        if kind == "simulator-runtime" { return true }
+        return !["seed"].contains(proofTier)
+    }
 }
 
 struct ReportFact: Codable {
@@ -58,6 +162,10 @@ struct ReportFact: Codable {
     let exists: Bool
     let status: String
     let passed: Bool
+    let proofTier: String?
+    let acceptanceWeight: String?
+    let realStackRequired: Bool?
+    let canClaimRuntimeReadiness: Bool?
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let gitSHA: String?
@@ -67,6 +175,10 @@ struct ReportFact: Codable {
         case exists
         case status
         case passed
+        case proofTier = "proof_tier"
+        case acceptanceWeight = "acceptance_weight"
+        case realStackRequired = "real_stack_required"
+        case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case gitSHA = "git_sha"
@@ -77,6 +189,10 @@ struct GateStatus: Encodable {
     let id: String
     let command: String
     let kind: String
+    let proofTier: String
+    let acceptanceWeight: String
+    let realStackRequired: Bool
+    let canClaimRuntimeReadiness: Bool
     let state: String
     let passed: Bool
     let satisfiesPrerequisite: Bool
@@ -93,6 +209,10 @@ struct GateStatus: Encodable {
         id: String,
         command: String,
         kind: String,
+        proofTier: String? = nil,
+        acceptanceWeight: String? = nil,
+        realStackRequired: Bool? = nil,
+        canClaimRuntimeReadiness: Bool? = nil,
         state: String,
         passed: Bool,
         satisfiesPrerequisite: Bool? = nil,
@@ -108,6 +228,10 @@ struct GateStatus: Encodable {
         self.id = id
         self.command = command
         self.kind = kind
+        self.proofTier = proofTier ?? Gate.defaultProofTier(id: id, kind: kind, physicalDevice: physicalDevice)
+        self.acceptanceWeight = acceptanceWeight ?? Gate.defaultAcceptanceWeight(id: id, kind: kind, readinessEligible: readinessEligible, physicalDevice: physicalDevice)
+        self.realStackRequired = realStackRequired ?? Gate.defaultRealStackRequired(id: id, kind: kind, proofTier: self.proofTier, physicalDevice: physicalDevice)
+        self.canClaimRuntimeReadiness = canClaimRuntimeReadiness ?? (readinessEligible && self.realStackRequired && self.proofTier != "seed")
         self.state = state
         self.passed = passed
         self.satisfiesPrerequisite = satisfiesPrerequisite ?? passed
@@ -163,6 +287,10 @@ struct GateStatus: Encodable {
         case id
         case command
         case kind
+        case proofTier = "proof_tier"
+        case acceptanceWeight = "acceptance_weight"
+        case realStackRequired = "real_stack_required"
+        case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case state
         case passed
         case satisfiesPrerequisite = "satisfies_prerequisite"
@@ -187,6 +315,10 @@ struct GateStatus: Encodable {
         try container.encode(id, forKey: .id)
         try container.encode(command, forKey: .command)
         try container.encode(kind, forKey: .kind)
+        try container.encode(proofTier, forKey: .proofTier)
+        try container.encode(acceptanceWeight, forKey: .acceptanceWeight)
+        try container.encode(realStackRequired, forKey: .realStackRequired)
+        try container.encode(canClaimRuntimeReadiness, forKey: .canClaimRuntimeReadiness)
         try container.encode(state, forKey: .state)
         try container.encode(passed, forKey: .passed)
         try container.encode(satisfiesPrerequisite, forKey: .satisfiesPrerequisite)
@@ -283,6 +415,10 @@ struct TaskEnvelope: Codable {
     let selectedGateID: String
     let selectedGateCommand: String
     let selectedGateKind: String
+    let selectedGateProofTier: String
+    let selectedGateAcceptanceWeight: String
+    let selectedGateRealStackRequired: Bool
+    let selectedGateCanClaimRuntimeReadiness: Bool
     let prerequisiteGates: [PrerequisiteFact]
     let whySelected: String
     let allowedScope: [String]
@@ -319,6 +455,10 @@ struct TaskEnvelope: Codable {
         case selectedGateID = "selected_gate_id"
         case selectedGateCommand = "selected_gate_command"
         case selectedGateKind = "selected_gate_kind"
+        case selectedGateProofTier = "selected_gate_proof_tier"
+        case selectedGateAcceptanceWeight = "selected_gate_acceptance_weight"
+        case selectedGateRealStackRequired = "selected_gate_real_stack_required"
+        case selectedGateCanClaimRuntimeReadiness = "selected_gate_can_claim_runtime_readiness"
         case prerequisiteGates = "prerequisite_gates"
         case whySelected = "why_selected"
         case allowedScope = "allowed_scope"
@@ -391,7 +531,9 @@ func repositoryRoot() -> URL {
 let root = repositoryRoot()
 let area = ProcessInfo.processInfo.environment["AREA"] ?? "orlix-tcti"
 let outputRoot = root.appendingPathComponent("Build/AgentHarness/orlix-tcti", isDirectory: true)
-let roadmapURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json")
+let roadmapURL = ProcessInfo.processInfo.environment["ORLIX_TCTI_ROADMAP_PATH"].map {
+    URL(fileURLWithPath: $0, relativeTo: root).standardizedFileURL
+} ?? root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json")
 let environmentPolicyURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/environment-policy.json")
 let statusURL = outputRoot.appendingPathComponent("status.json")
 let nextTaskURL = outputRoot.appendingPathComponent("next-task.json")
@@ -426,8 +568,8 @@ func relativePath(_ url: URL) -> String {
     return url.path
 }
 
-func loadRoadmap() throws -> Roadmap {
-    let data = try Data(contentsOf: roadmapURL)
+func loadRoadmap(from url: URL = roadmapURL) throws -> Roadmap {
+    let data = try Data(contentsOf: url)
     let roadmap = try JSONDecoder().decode(Roadmap.self, from: data)
     guard roadmap.area == "orlix-tcti" else {
         throw HarnessError.invalid("roadmap area must be orlix-tcti")
@@ -542,6 +684,10 @@ func reportFact(target: String) -> ReportFact {
             exists: false,
             status: "missing",
             passed: false,
+            proofTier: nil,
+            acceptanceWeight: nil,
+            realStackRequired: nil,
+            canClaimRuntimeReadiness: nil,
             releaseGateEligible: false,
             readinessGateEligible: false,
             gitSHA: nil
@@ -554,6 +700,10 @@ func reportFact(target: String) -> ReportFact {
             exists: true,
             status: stringValue(object["status"]) ?? "malformed",
             passed: boolValue(object["passed"]),
+            proofTier: stringValue(object["proof_tier"]),
+            acceptanceWeight: stringValue(object["acceptance_weight"]),
+            realStackRequired: object["real_stack_required"].map(boolValue),
+            canClaimRuntimeReadiness: object["can_claim_runtime_readiness"].map(boolValue),
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"])
@@ -564,6 +714,10 @@ func reportFact(target: String) -> ReportFact {
             exists: true,
             status: "error",
             passed: false,
+            proofTier: nil,
+            acceptanceWeight: nil,
+            realStackRequired: nil,
+            canClaimRuntimeReadiness: nil,
             releaseGateEligible: false,
             readinessGateEligible: false,
             gitSHA: nil
@@ -1125,6 +1279,10 @@ func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: state,
         passed: passed,
         reason: reason,
@@ -1526,6 +1684,10 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             exists: true,
             status: stringValue(object["status"]) ?? "malformed",
             passed: boolValue(object["passed"]),
+            proofTier: stringValue(object["proof_tier"]),
+            acceptanceWeight: stringValue(object["acceptance_weight"]),
+            realStackRequired: object["real_stack_required"].map(boolValue),
+            canClaimRuntimeReadiness: object["can_claim_runtime_readiness"].map(boolValue),
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"])
@@ -2487,7 +2649,19 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
             prerequisitesSatisfied: false,
             reportPaths: gate.expectedReportPaths,
             reports: [
-                ReportFact(path: relativePath(fixedMarker), exists: true, status: "pass", passed: true, releaseGateEligible: false, readinessGateEligible: false, gitSHA: gitSHA()),
+            ReportFact(
+                path: relativePath(fixedMarker),
+                exists: true,
+                status: "pass",
+                passed: true,
+                proofTier: gate.proofTier,
+                acceptanceWeight: gate.acceptanceWeight,
+                realStackRequired: gate.realStackRequired,
+                canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
+                releaseGateEligible: false,
+                readinessGateEligible: false,
+                gitSHA: gitSHA()
+            ),
                 stabilityReport,
                 reducerReport,
             ],
@@ -4091,6 +4265,10 @@ func artifactStatus(_ gate: Gate, passed: Bool, reason: String) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: passed ? "pass" : "missing",
         passed: passed,
         reason: reason,
@@ -4114,6 +4292,10 @@ func simulatorProofGate(id: String, runtimeGate: String, marker: String, prerequ
         id: id,
         command: command,
         kind: "simulator-runtime",
+        proofTier: "simulator",
+        acceptanceWeight: "readiness",
+        realStackRequired: true,
+        canClaimRuntimeReadiness: true,
         prerequisites: [prerequisite],
         allowedScope: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
@@ -7292,6 +7474,10 @@ func statuses(for roadmap: Roadmap) -> [GateStatus] {
             id: status.id,
             command: status.command,
             kind: status.kind,
+            proofTier: status.proofTier,
+            acceptanceWeight: status.acceptanceWeight,
+            realStackRequired: status.realStackRequired,
+            canClaimRuntimeReadiness: status.canClaimRuntimeReadiness,
             state: status.state,
             passed: status.passed,
             satisfiesPrerequisite: status.satisfiesPrerequisite,
@@ -7391,8 +7577,145 @@ func physicalGateMissingSimulatorValidationCommands(_ gate: Gate) -> [String] {
     }
 }
 
+let allowedProofTiers: Set<String> = [
+    "seed",
+    "kernel",
+    "kselftest",
+    "mlibc",
+    "mlibc-uapi",
+    "shell",
+    "coreutils",
+    "oci",
+    "simulator",
+    "device",
+    "release",
+]
+
+let allowedAcceptanceWeights: Set<String> = [
+    "probe",
+    "blocker",
+    "readiness",
+    "release",
+]
+
+func gatePolicyText(_ gate: Gate) -> String {
+    ([gate.id, gate.command, gate.kind] +
+        gate.prerequisites +
+        gate.allowedScope +
+        gate.forbiddenScope +
+        gate.expectedReportPaths +
+        gate.requiredValidationCommands +
+        gate.reducerRequirements +
+        gate.requiredSubagentsOrSkills +
+        gate.stopConditions).joined(separator: " ")
+}
+
+func gateHasRealStackPrerequisite(_ gate: Gate, byID: [String: Gate]) -> Bool {
+    gate.prerequisites.contains { prerequisite in
+        guard let prerequisiteGate = byID[prerequisite] else { return false }
+        return prerequisiteGate.realStackRequired && prerequisiteGate.proofTier != "seed"
+    }
+}
+
+func validateProofTierPolicy(_ gates: [Gate]) throws {
+    let byID = Dictionary(uniqueKeysWithValues: gates.map { ($0.id, $0) })
+    for gate in gates {
+        guard allowedProofTiers.contains(gate.proofTier) else {
+            throw HarnessError.invalid("gate \(gate.id) has unsupported proof_tier=\(gate.proofTier)")
+        }
+        guard allowedAcceptanceWeights.contains(gate.acceptanceWeight) else {
+            throw HarnessError.invalid("gate \(gate.id) has unsupported acceptance_weight=\(gate.acceptanceWeight)")
+        }
+        if gate.proofTier == "seed" {
+            if gate.readinessEligible || gate.canClaimRuntimeReadiness || gate.acceptanceWeight == "readiness" || gate.acceptanceWeight == "release" {
+                throw HarnessError.invalid("seed gate \(gate.id) must not claim runtime readiness")
+            }
+            if gate.realStackRequired {
+                throw HarnessError.invalid("seed gate \(gate.id) must not be marked real_stack_required")
+            }
+        }
+        if gate.canClaimRuntimeReadiness && !gate.realStackRequired {
+            throw HarnessError.invalid("gate \(gate.id) cannot claim runtime readiness without real_stack_required=true")
+        }
+        if gate.readinessEligible && !gate.canClaimRuntimeReadiness {
+            throw HarnessError.invalid("gate \(gate.id) is readiness_eligible but can_claim_runtime_readiness=false")
+        }
+        if gate.proofTier == "coreutils" {
+            let nonSeedPrerequisites = gate.prerequisites.compactMap { byID[$0] }.filter { $0.proofTier != "seed" }
+            if nonSeedPrerequisites.isEmpty {
+                throw HarnessError.invalid("Coreutils gate \(gate.id) must not depend only on seed or golden ELF probes")
+            }
+            let text = gatePolicyText(gate)
+            if !text.contains("Coreutils") && !text.contains("coreutils") {
+                throw HarnessError.invalid("Coreutils gate \(gate.id) must name real Coreutils or upstream package behavior")
+            }
+        }
+        if gate.proofTier == "oci" {
+            let text = gatePolicyText(gate)
+            guard text.contains("OrlixOS"),
+                  text.contains("rootfs"),
+                  text.contains("session") else {
+                throw HarnessError.invalid("OCI gate \(gate.id) must reference OrlixOS rootfs/session proof")
+            }
+        }
+        if gate.proofTier == "device" || gate.physicalDevice {
+            let missingPrerequisites = physicalGateMissingSimulatorPrerequisites(gate)
+            if !missingPrerequisites.isEmpty {
+                throw HarnessError.invalid("device gate \(gate.id) is missing simulator prerequisites: \(missingPrerequisites.joined(separator: ","))")
+            }
+            if !gateHasRealStackPrerequisite(gate, byID: byID) {
+                throw HarnessError.invalid("device gate \(gate.id) must depend on at least one real-stack prerequisite")
+            }
+        }
+        if gate.proofTier == "release" && gate.acceptanceWeight == "release" {
+            let prerequisiteGates = gate.prerequisites.compactMap { byID[$0] }
+            if !prerequisiteGates.contains(where: { $0.proofTier == "device" }) {
+                throw HarnessError.invalid("release gate \(gate.id) must depend on device proof")
+            }
+            if !prerequisiteGates.contains(where: { $0.kind == "safety" || $0.id.contains("safety") }) {
+                throw HarnessError.invalid("release gate \(gate.id) must depend on safety proof")
+            }
+        }
+        if gate.id.contains("product-default") || gate.id.contains("default-flip") {
+            let prerequisiteGates = gate.prerequisites.compactMap { byID[$0] }
+            if !gate.realStackRequired || !prerequisiteGates.contains(where: { $0.proofTier == "device" }) {
+                throw HarnessError.invalid("product-default gate \(gate.id) must require real-stack and device gates")
+            }
+        }
+    }
+}
+
+func validateReportProofTierMetadata(_ object: [String: Any], path: String) throws {
+    let status = stringValue(object["status"]) ?? "missing"
+    let passed = boolValue(object["passed"])
+    guard status == "pass" || passed else {
+        return
+    }
+    guard let proofTier = stringValue(object["proof_tier"]),
+          allowedProofTiers.contains(proofTier) else {
+        throw HarnessError.invalid("\(path) status=pass report lacks valid proof_tier")
+    }
+    guard let acceptanceWeight = stringValue(object["acceptance_weight"]),
+          allowedAcceptanceWeights.contains(acceptanceWeight) else {
+        throw HarnessError.invalid("\(path) status=pass report lacks valid acceptance_weight")
+    }
+    guard object["real_stack_required"] != nil else {
+        throw HarnessError.invalid("\(path) status=pass report lacks real_stack_required")
+    }
+    guard object["can_claim_runtime_readiness"] != nil else {
+        throw HarnessError.invalid("\(path) status=pass report lacks can_claim_runtime_readiness")
+    }
+    if proofTier == "seed" && boolValue(object["can_claim_runtime_readiness"]) {
+        throw HarnessError.invalid("\(path) seed report must not claim runtime readiness")
+    }
+    if boolValue(object["can_claim_runtime_readiness"]) && !boolValue(object["real_stack_required"]) {
+        throw HarnessError.invalid("\(path) report claims runtime readiness without real_stack_required=true")
+    }
+}
+
 func validateRoadmapSimulatorPolicy(_ roadmap: Roadmap) throws {
     let gates = roadmapGatesWithRuntimePreflight(roadmap)
+    try validateProofTierPolicy(gates)
     let ids = Set(gates.map(\.id))
     let missingReadinessGates = simulatorReadinessGateIDs.filter { !ids.contains($0) }
     if !missingReadinessGates.isEmpty {
@@ -7518,6 +7841,15 @@ func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
     if let currentReadyGate = eligible.first(where: { $0.state == "ready" }) {
         return currentReadyGate
     }
+    if let realStackGate = eligible.first(where: {
+        $0.realStackRequired &&
+            !$0.physicalDevice &&
+            $0.proofTier != "simulator" &&
+            $0.proofTier != "device" &&
+            $0.proofTier != "release"
+    }) {
+        return realStackGate
+    }
     if let currentSimulatorFailure = eligible.first(where: { $0.kind == "simulator-runtime" && ($0.state == "fail" || $0.state == "missing") }) {
         return currentSimulatorFailure
     }
@@ -7562,8 +7894,17 @@ func statusDocument() throws -> StatusDocument {
         noPhoneGatesPassedBeforeFirstPhysical(gateStatuses) &&
         physicalDeviceExplicitlyAllowed() &&
         !dirtyRuntimeOrHarness
-    let releaseEligible = physicalGate?.passed == true
-    let readinessEligible = physicalGate?.passed == true
+    let releaseEligible = gateStatuses.contains {
+        $0.proofTier == "release" &&
+            $0.acceptanceWeight == "release" &&
+            $0.passed &&
+            $0.prerequisitesSatisfied
+    }
+    let readinessEligible = gateStatuses.contains {
+        $0.canClaimRuntimeReadiness &&
+            $0.realStackRequired &&
+            $0.currentlyReadinessEligible
+    }
     return StatusDocument(
         area: roadmap.area,
         generatedAt: timestamp(),
@@ -7614,10 +7955,38 @@ func writeStatus(printHuman: Bool) throws -> StatusDocument {
         print("next_eligible_gate: \(status.nextEligibleGate ?? "none")")
         print("gates:")
         for gate in status.gates {
-            print("- \(gate.id): \(gate.state) prerequisites_satisfied=\(gate.prerequisitesSatisfied) report_paths=\(gate.reportPaths.joined(separator: ","))")
+            print("- \(gate.id): \(gate.state) proof_tier=\(gate.proofTier) acceptance_weight=\(gate.acceptanceWeight) real_stack_required=\(gate.realStackRequired) can_claim_runtime_readiness=\(gate.canClaimRuntimeReadiness) prerequisites_satisfied=\(gate.prerequisitesSatisfied) report_paths=\(gate.reportPaths.joined(separator: ","))")
         }
     }
     return status
+}
+
+func whySelected(for gate: Gate, prerequisites: [PrerequisiteFact]) -> String {
+    let evidence = prerequisites.isEmpty ? "none" : prerequisites.map { "\($0.id)=\($0.state)" }.joined(separator: ", ")
+    switch gate.proofTier {
+    case "seed":
+        return "Selected \(gate.id) as a seed probe or reducer. This can unlock implementation work but cannot claim Linux runtime readiness. Evidence: \(evidence)."
+    case "kernel":
+        return "Selected \(gate.id) because the next missing proof is Linux-owned kernel/TCTI behavior, not another golden ELF seed. Evidence: \(evidence)."
+    case "kselftest":
+        return "Selected \(gate.id) because kernel-interface proof must advance through a real kselftest subset after local kernel/TCTI probes. Evidence: \(evidence)."
+    case "mlibc", "mlibc-uapi":
+        return "Selected \(gate.id) because no current OrlixMLibC-linked binary proof at this tier satisfies the harness. Evidence: \(evidence)."
+    case "shell":
+        return "Selected \(gate.id) because ordinary POSIX shell behavior is the next missing real-userspace proof. Evidence: \(evidence)."
+    case "coreutils":
+        return "Selected \(gate.id) because upstream/Coreutils package behavior must run through the real stack before readiness claims. Evidence: \(evidence)."
+    case "oci":
+        return "Selected \(gate.id) because OrlixOS OCI/rootfs/session materialization is the next missing real-stack proof. Evidence: \(evidence)."
+    case "simulator":
+        return "Selected \(gate.id) because app-hosted simulator proof is required before any physical-device work. Evidence: \(evidence)."
+    case "device":
+        return "Selected \(gate.id) only after no-phone and simulator real-stack prerequisites are satisfied and explicit physical-device opt-in is present. Evidence: \(evidence)."
+    case "release":
+        return "Selected \(gate.id) because release gating must follow real-stack device and safety evidence. Evidence: \(evidence)."
+    default:
+        return "Selected \(gate.id) because it is the first eligible roadmap gate with proof_tier=\(gate.proofTier). Evidence: \(evidence)."
+    }
 }
 
 func envelope(from status: StatusDocument) throws -> TaskEnvelope {
@@ -7642,7 +8011,6 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
             reportPaths: fact?.reportPaths ?? []
         )
     }
-    let why = "Selected \(gate.id) because it is the first roadmap gate that is not pass and every prerequisite is pass. Evidence: \(prerequisites.map { "\($0.id)=\($0.state)" }.joined(separator: ", "))."
     return TaskEnvelope(
         area: roadmap.area,
         generatedAt: timestamp(),
@@ -7651,8 +8019,12 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         selectedGateID: gate.id,
         selectedGateCommand: selectedStatus?.command ?? gate.command,
         selectedGateKind: gate.kind,
+        selectedGateProofTier: gate.proofTier,
+        selectedGateAcceptanceWeight: gate.acceptanceWeight,
+        selectedGateRealStackRequired: gate.realStackRequired,
+        selectedGateCanClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         prerequisiteGates: prerequisites,
-        whySelected: why,
+        whySelected: whySelected(for: gate, prerequisites: prerequisites),
         allowedScope: gate.allowedScope,
         forbiddenScope: gate.forbiddenScope,
         requiredValidationCommands: gate.requiredValidationCommands,
@@ -7708,6 +8080,10 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
         selectedGateID: physicalOptInBlockedGateID,
         selectedGateCommand: "no-op: set ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 only after explicit human approval",
         selectedGateKind: "blocked",
+        selectedGateProofTier: "device",
+        selectedGateAcceptanceWeight: "blocker",
+        selectedGateRealStackRequired: true,
+        selectedGateCanClaimRuntimeReadiness: false,
         prerequisiteGates: prerequisites,
         whySelected: "The roadmap has no safer eligible non-phone gate. Phone work stays blocked until the full pinned simulator readiness ladder passes and explicit human opt-in is present. Missing simulator readiness gates: \(status.simulatorReadinessMissingGateIDs.isEmpty ? "none" : status.simulatorReadinessMissingGateIDs.joined(separator: ", ")).",
         allowedScope: [
@@ -7782,6 +8158,14 @@ func markdown(for envelope: TaskEnvelope) -> String {
     Selected gate: `\(envelope.selectedGateID)`
 
     Command: `\(envelope.selectedGateCommand)`
+
+    Proof tier: `\(envelope.selectedGateProofTier)`
+
+    Acceptance weight: `\(envelope.selectedGateAcceptanceWeight)`
+
+    Real stack required: \(envelope.selectedGateRealStackRequired)
+
+    Can claim runtime readiness: \(envelope.selectedGateCanClaimRuntimeReadiness)
 
     Why selected: \(envelope.whySelected)
 
@@ -8012,8 +8396,22 @@ do {
         _ = try writeNext()
     case "check":
         try validateEnvelope()
+    case "validate-roadmap":
+        let path = CommandLine.arguments.dropFirst(2).first
+        let url = path.map { URL(fileURLWithPath: $0, relativeTo: root).standardizedFileURL } ?? roadmapURL
+        let roadmap = try loadRoadmap(from: url)
+        try validateRoadmapSimulatorPolicy(roadmap)
+        print("pass: \(relativePath(url))")
+    case "validate-report":
+        guard let path = CommandLine.arguments.dropFirst(2).first else {
+            throw HarnessError.usage("usage: tcti-next-step.swift validate-report <report.json>")
+        }
+        let url = URL(fileURLWithPath: path, relativeTo: root).standardizedFileURL
+        let object = try loadJSONObject(url)
+        try validateReportProofTierMetadata(object, path: relativePath(url))
+        print("pass: \(relativePath(url))")
     default:
-        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check]")
+        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>]")
     }
 } catch {
     fputs("agent next-step error: \(error)\n", stderr)

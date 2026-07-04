@@ -2,6 +2,49 @@
 
 ## 2026-07-04
 
+### Checkpoint: Real-Stack Proof Tiers Added To TCTI Harness
+
+- Harness-only refactor:
+  - TCTI roadmap gates now declare `proof_tier`, `acceptance_weight`, `real_stack_required`, and `can_claim_runtime_readiness`.
+  - Existing golden ELF, switch-debug, switch-vs-gadget, gadget, and reducer gates are demoted to `proof_tier=seed`, `acceptance_weight=probe`, and cannot claim runtime readiness.
+  - Existing rail and safety gates are blockers, not runtime readiness proof.
+  - The physical first-syscall gate remains a device blocker and no longer drives aggregate release/readiness eligibility by itself.
+  - New real-stack roadmap families were added for kernel/TCTI, kselftest, OrlixMLibC, OrlixMLibC-linked syscall/UAPI programs, shell, Coreutils, OrlixOS OCI/rootfs/session, and app-hosted simulator proof.
+  - The next-task envelope now emits selected gate proof-tier fields and `why_selected` explains real-stack selection terms.
+  - `agent-harness-check` now runs fixture-backed negative tests for bad seed readiness, Coreutils depending only on seed probes, OCI missing OrlixOS rootfs/session proof, physical gates without simulator prerequisites, and passing reports without proof-tier metadata.
+- Current expected scheduler direction:
+  - The harness moves toward the first missing real-stack gate after safety rails.
+  - Final regenerated next task selected `tcti-kernel-syscall-dispatch-smoke`.
+  - Selected task metadata: `proof_tier=kernel`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`.
+  - Golden ELF remains available as a reducer/probe layer, but it is no longer an acceptance target for Linux runtime readiness.
+- Verification:
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check` passed.
+  - `rtk proxy jq empty .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json .agents/skills/orlix-tcti-next-step/fixtures/*.json` passed.
+  - `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift validate-roadmap .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` passed.
+  - Fixture checks confirmed the bad roadmap and bad report fixtures fail.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `tcti-kernel-syscall-dispatch-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+  - `rtk proxy make tcti-gate-list` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+- Boundary:
+  - No phone gate was run.
+  - No simulator runtime gate was run.
+  - No TCTI runtime feature was implemented.
+  - No production assembly was added.
+  - No gadget dispatch was added.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics were added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+  - This checkpoint does not complete the larger scheduler split or move gate-specific semantic recognizers out of `tcti-next-step.swift`.
+
 ### Checkpoint: Harness Status Separates Pass From Prerequisite Satisfaction
 
 - Harness-only correction:

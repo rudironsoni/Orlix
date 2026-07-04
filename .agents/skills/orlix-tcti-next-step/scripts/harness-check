@@ -25,6 +25,22 @@ expect_hook_allows() {
   fi
 }
 
+expect_command_fails() {
+  description="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    fail "$description unexpectedly passed"
+  fi
+}
+
+expect_command_passes() {
+  description="$1"
+  shift
+  if ! "$@" >/dev/null 2>&1; then
+    fail "$description failed"
+  fi
+}
+
 json_command_payload() {
   command="$1"
   printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$command"
@@ -328,6 +344,22 @@ check_skills() {
   expect_hook_allows 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
   expect_hook_allows_json_command 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
   expect_hook_allows 'rtk proxy jq -r ".gates[] | select(.id==\"physical-tcti-init-first-syscall\") | .prerequisites[]" .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json'
+
+  expect_command_passes "real roadmap proof-tier policy" \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    validate-roadmap "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json"
+  for fixture in \
+    roadmap.bad.seed-runtime-ready.json \
+    roadmap.bad.coreutils-only-seed.json \
+    roadmap.bad.oci-missing-rootfs-session.json \
+    roadmap.bad.physical-without-simulator.json; do
+    expect_command_fails "bad proof-tier roadmap fixture $fixture" \
+      "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+      validate-roadmap "$root/.agents/skills/orlix-tcti-next-step/fixtures/$fixture"
+  done
+  expect_command_fails "bad pass report without proof-tier metadata" \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    validate-report "$root/.agents/skills/orlix-tcti-next-step/fixtures/report.bad.pass-missing-proof-tier.json"
 }
 
 check_mcp() {
