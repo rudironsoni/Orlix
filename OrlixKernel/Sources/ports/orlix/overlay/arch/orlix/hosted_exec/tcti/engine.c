@@ -22,6 +22,7 @@
 #include "engine.h"
 #include "gadget_program.h"
 #include "report.h"
+#include "syscall_dispatch_smoke.h"
 
 #define TCTI_ELF_IMAGE_SCAN_GRANULE (64UL * 1024UL)
 #define TCTI_ELF_IMAGE_SCAN_LIMIT (16UL * 1024UL * 1024UL)
@@ -545,37 +546,13 @@ bool tcti_kernel_syscall_dispatch_smoke_for_tests(
 	struct pt_regs *regs,
 	struct tcti_kernel_syscall_dispatch_smoke_result *out)
 {
-	struct tcti_decoded_instruction decoded;
-	long ret;
-
 	if (!regs || !out)
 		return false;
 
 	memset(out, 0, sizeof(*out));
 
-	decoded = tcti_decode_aarch64(0xd4000001U);
-	out->decoded_svc = decoded.decode_class == TCTI_DECODE_SVC;
-	if (!out->decoded_svc)
-		return false;
-
-	out->svc_boundary_reached = true;
-	regs->regs[8] = __NR_getpid;
-	tcti_prepare_syscall_handoff(regs);
-	out->handoff_prepared = regs->syscallno == __NR_getpid;
-	out->observed_syscall_nr = regs->syscallno;
-	if (!out->handoff_prepared)
-		return false;
-
-	out->orlix_syscall_dispatch_entered = true;
-	ret = orlix_syscall_dispatch(regs);
-	out->return_value = ret;
-	out->return_x0 = regs->regs[0];
-	out->syscallno_after_dispatch = regs->syscallno;
-	out->linux_return_state_written =
-		regs->regs[0] == (unsigned long)ret &&
-		regs->syscallno == NO_SYSCALL;
-
-	return out->linux_return_state_written;
+	return tcti_kernel_syscall_dispatch_smoke_execute(
+		regs, out, orlix_syscall_dispatch);
 }
 #endif
 

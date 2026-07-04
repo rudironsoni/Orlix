@@ -950,6 +950,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let hostedExec = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "hosted_exec.c")
     let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
     let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
+    let tctiSyscallSmoke = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "syscall_dispatch_smoke.h")
     let tctiReport = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "report.c")
     let tctiTests = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
     let syscall = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "syscall.c")
@@ -965,6 +966,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let hostedExecText = try readText(hostedExec)
     let engineText = try readText(tctiEngine)
     let engineHeaderText = try readText(tctiEngineHeader)
+    let syscallSmokeText = try readText(tctiSyscallSmoke)
     let reportText = try readText(tctiReport)
     let testText = try readText(tctiTests)
     let syscallText = try readText(syscall)
@@ -1017,10 +1019,10 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     requireSourceFact("syscall_return_log_marker", reportText, #"Orlix TCTI: syscall return"#, tctiReport)
     requireSourceFact("kernel_workload_hook_result_struct", engineHeaderText, #"struct tcti_kernel_syscall_dispatch_smoke_result"#, tctiEngineHeader)
     requireSourceFact("kernel_workload_hook_entrypoint", engineText, #"tcti_kernel_syscall_dispatch_smoke_for_tests"#, tctiEngine)
-    requireSourceFact("kernel_workload_hook_decodes_svc", engineText, #"tcti_decode_aarch64\(0xd4000001U\)"#, tctiEngine)
-    requireSourceFact("kernel_workload_hook_uses_getpid", engineText, #"regs->regs\[8\] = __NR_getpid"#, tctiEngine)
-    requireSourceFact("kernel_workload_hook_calls_linux_dispatch", engineText, #"ret = orlix_syscall_dispatch\(regs\)"#, tctiEngine)
-    requireSourceFact("kernel_workload_hook_records_return_state", engineText, #"out->linux_return_state_written"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_decodes_svc", syscallSmokeText, #"tcti_decode_aarch64\(TCTI_SYSCALL_DISPATCH_SMOKE_INSTRUCTION\)"#, tctiSyscallSmoke)
+    requireSourceFact("kernel_workload_hook_uses_getpid", syscallSmokeText, #"regs->regs\[8\] = __NR_getpid"#, tctiSyscallSmoke)
+    requireSourceFact("kernel_workload_hook_calls_linux_dispatch", engineText, #"orlix_syscall_dispatch"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_records_return_state", syscallSmokeText, #"out->linux_return_state_written"#, tctiSyscallSmoke)
     requireSourceFact("kunit_workload_hook_case", testText, #"tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"#, tctiTests)
     requireSourceFact("kunit_asserts_dispatch_entered", testText, #"KUNIT_EXPECT_TRUE\(test, result\.orlix_syscall_dispatch_entered\)"#, tctiTests)
     requireSourceFact("kunit_asserts_return_state", testText, #"KUNIT_EXPECT_TRUE\(test, result\.linux_return_state_written\)"#, tctiTests)
@@ -13673,6 +13675,7 @@ let tctiTargets = [
     "tcti-report-schema-check",
     "tcti-toolchain-check",
     "tcti-kernel-syscall-dispatch-smoke",
+    "tcti-kernel-execve-binfmt-elf-smoke",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -13744,6 +13747,11 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runToolchainCheck()
     case "tcti-kernel-syscall-dispatch-smoke":
         return try runKernelSyscallDispatchSmoke()
+    case "tcti-kernel-execve-binfmt-elf-smoke":
+        return try writeTodo(
+            target: target,
+            summary: "Real OrlixKernel execve/binfmt_elf no-phone proof is not implemented yet. The next kernel worker must execute a Linux-owned execve/binfmt_elf workload and report entry-state facts."
+        )
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":

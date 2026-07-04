@@ -400,38 +400,42 @@ check_skills() {
   tmp="${TMPDIR:-/tmp}/orlix-tcti-harness-check-$$"
   rm -rf "$tmp"
   mkdir -p "$tmp"
-  ORLIX_TCTI_BUILD_ROOT="$tmp" make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1 || true
+  env -u MAKEFLAGS -u MFLAGS \
+    ORLIX_TCTI_BUILD_ROOT="$tmp" \
+    make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1 || true
   report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
   if ! test -f "$report"; then
     fail "tcti-kernel-syscall-dispatch-smoke did not emit report.json"
   else
     if ! jq -e '
-      .status != "todo" and
-      (
-        (.status == "pass" and .passed == true) or
-        (.status == "fail" and .passed == false)
-      ) and
+      .status == "pass" and
+      .passed == true and
       .proof_tier == "kernel" and
       .acceptance_weight == "blocker" and
-	      .real_stack_required == true and
-	      .can_claim_runtime_readiness == false and
+      .real_stack_required == true and
+      .can_claim_runtime_readiness == false and
       .readiness_gate_eligible == false and
       .release_gate_eligible == false and
       .evidence.workload_hook_compiled == "true" and
-      .evidence.workload_hook_executed == "false" and
-      .evidence.kunit_output_has_ktap == "false" and
+      .evidence.workload_hook_executed == "true" and
+      .evidence.kunit_output_has_ktap == "true" and
       .evidence.kunit_runner_attempted == "true" and
-      .evidence.kunit_runner_blocked == "true" and
+      .evidence.kunit_runner_blocked == "false" and
       .evidence.kunit_test_object_present == "true" and
       .evidence.kunit_test_symbol_present == "true" and
-      .evidence.kunit_named_test_executed == "false" and
-      .evidence.kunit_named_test_passed == "false" and
+      .evidence.kunit_named_test_executed == "true" and
+      .evidence.kunit_named_test_passed == "true" and
       .evidence.kunit_test_name == "tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch" and
-      (.evidence.blocker | contains("No no-phone KUnit executor is available for ARCH=orlix")) and
+      .evidence.svc_boundary_reached == "true" and
+      .evidence.syscall_number_observed == "__NR_getpid" and
+      .evidence.orlix_syscall_dispatch_entered == "true" and
+      .evidence.linux_syscall_return_state_written == "true" and
+      .counters.runtime_observed_syscalls >= 1 and
+      .counters.runtime_observed_orlix_syscall_dispatch_entries >= 1 and
       any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-run.txt" or endswith("/kernel_syscall_dispatch_smoke/kunit-run.txt")) and
       any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json" or endswith("/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json"))
     ' "$report" >/dev/null; then
-      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier and KUnit hook metadata"
+      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier and KUnit execution metadata"
     fi
     if ! roadmap_report_metadata_matches \
       "$report" \
@@ -449,16 +453,16 @@ check_skills() {
     elif ! jq -e '
       .gates[]
       | select(.id == "tcti-kernel-syscall-dispatch-smoke")
-      | .state == "fail" and
-        .passed == false and
-        .satisfies_prerequisite == false and
-        .reason == "tcti-kernel-syscall-dispatch-smoke report status=fail, passed=false" and
+      | .state == "pass" and
+        .passed == true and
+        .satisfies_prerequisite == true and
+        .reason == "tcti-kernel-syscall-dispatch-smoke report status=pass, passed=true, git_sha=current" and
         (.reports | length) == 1 and
-        .reports[0].status == "fail" and
-        .reports[0].passed == false and
+        .reports[0].status == "pass" and
+        .reports[0].passed == true and
         .reports[0].proof_tier == "kernel"
     ' "$root/Build/AgentHarness/orlix-tcti/status.json" >/dev/null; then
-      fail "agent status must consume tcti-kernel-syscall-dispatch-smoke as a failing report-backed blocker"
+      fail "agent status must consume tcti-kernel-syscall-dispatch-smoke as a passing report-backed kernel gate"
     fi
   fi
   rm -rf "$tmp"
