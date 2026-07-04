@@ -6,7 +6,9 @@
       "id": "rails-defconfig-safety",
       "command": "make tcti-gate TARGET=tcti-plan-consistency",
       "kind": "rail",
-      "prerequisites": [],
+      "prerequisites": [
+
+      ],
       "allowed_scope": [
         "OrlixKernel/Sources/ports/orlix/configs/**",
         "docs/adr/0022-use-hosted-linux-elf-execution.md",
@@ -21,7 +23,7 @@
       "expected_report_paths": [
         "Build/TCTI/reports/tcti-plan-consistency/report.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -40,7 +42,11 @@
       "stop_conditions": [
         "Stop if product defconfigs default to TCTI.",
         "Stop if ADR or PLAN stale references contradict the current TCTI ownership model."
-      ]
+      ],
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "report-schema",
@@ -61,7 +67,7 @@
       "expected_report_paths": [
         "Build/TCTI/reports/tcti-report-schema-check/report.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -79,7 +85,11 @@
       "commit_message_template": "test(tcti): harden report schema rail",
       "stop_conditions": [
         "Stop if status and passed semantics are ambiguous."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "blocker",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "toolchain",
@@ -100,7 +110,7 @@
       "expected_report_paths": [
         "Build/TCTI/reports/tcti-toolchain-check/report.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -117,7 +127,11 @@
       "commit_message_template": "test(tcti): record golden elf toolchain proof",
       "stop_conditions": [
         "Stop if the local toolchain cannot produce an AArch64 Linux ELF and no TODO report is emitted."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "appstore-safety",
@@ -150,7 +164,7 @@
       "expected_report_paths": [
         "Build/TCTI/reports/tcti-appstore-safety-audit/report.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -188,6 +202,1736 @@
         "Stop if the remediation requires product defconfigs to default to TCTI.",
         "Stop if the remediation would delete unrelated HostAdapter boot, memory mapping, terminal, or observability plumbing.",
         "Stop if the selected change cannot preserve native hosted execution behind an explicit non-product debug or test boundary."
+      ],
+      "proof_tier": "release",
+      "acceptance_weight": "blocker",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
+    },
+    {
+      "id": "tcti-kernel-syscall-dispatch-smoke",
+      "command": "make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke",
+      "kind": "real-stack-kernel",
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "appstore-safety"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report actual Linux syscall dispatch facts, git SHA, kernel profile, and no HostAdapter ownership of Linux syscall semantics."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel syscall dispatch smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-kernel-execve-binfmt-elf-smoke",
+      "command": "make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke",
+      "kind": "real-stack-kernel",
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-syscall-dispatch-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report real Linux execve/binfmt_elf facts, ELF path, entry state, git SHA, and reducer artifacts for failures."
+      ],
+      "required_subagents_or_skills": [
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel execve binfmt elf smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-kernel-fault-signal-smoke",
+      "command": "make tcti-gate TARGET=tcti-kernel-fault-signal-smoke",
+      "kind": "real-stack-kernel",
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-execve-binfmt-elf-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-fault-signal-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-fault-signal-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report Linux-owned fault and signal facts, fault address, signal result, git SHA, and reducer artifacts for failures."
+      ],
+      "required_subagents_or_skills": [
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel fault signal smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-kernel-wait-reaping-smoke",
+      "command": "make tcti-gate TARGET=tcti-kernel-wait-reaping-smoke",
+      "kind": "real-stack-kernel",
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-fault-signal-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-wait-reaping-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-wait-reaping-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report Linux wait/reaping facts, child process state, exit status, git SHA, and reducer artifacts for failures."
+      ],
+      "required_subagents_or_skills": [
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel wait reaping smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-kernel-pty-console-smoke",
+      "command": "make tcti-gate TARGET=tcti-kernel-pty-console-smoke",
+      "kind": "real-stack-kernel",
+      "proof_tier": "kernel",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-wait-reaping-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "OrlixHostAdapter/Sources/OrlixHostAdapter/terminal/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-pty-console-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-pty-console-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report Linux PTY/console facts, stdout/stderr artifacts, git SHA, and confirm HostAdapter is only a private console mirror."
+      ],
+      "required_subagents_or_skills": [
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel pty console smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-kernel-kselftest-subset",
+      "command": "make tcti-gate TARGET=tcti-kernel-kselftest-subset",
+      "kind": "real-stack-kernel-kselftest",
+      "proof_tier": "kselftest",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-pty-console-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-kernel-kselftest-subset/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-kernel-kselftest-subset",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report actual kselftest subset command, kernel config/profile, git SHA, pass/fail accounting, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "kernel-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti kernel kselftest subset proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-build-smoke",
+      "command": "make tcti-gate TARGET=tcti-mlibc-build-smoke",
+      "kind": "real-stack-mlibc",
+      "proof_tier": "mlibc",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-kernel-kselftest-subset"
+      ],
+      "allowed_scope": [
+        "OrlixMLibC/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-build-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-build-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report mlibc source/config revision, compiler/linker commands, binary metadata, stdout/stderr, exit status, and git SHA."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc build smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-sysdeps-smoke",
+      "command": "make tcti-gate TARGET=tcti-mlibc-sysdeps-smoke",
+      "kind": "real-stack-mlibc",
+      "proof_tier": "mlibc",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-build-smoke"
+      ],
+      "allowed_scope": [
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "OrlixMLibC/Sources/**",
+        "OrlixOS/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-sysdeps-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-sysdeps-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Failures must emit a report JSON current for HEAD with proof-tier metadata and a reducer when the failure can be minimized."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc sysdeps smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-libc-test-subset",
+      "command": "make tcti-gate TARGET=tcti-mlibc-libc-test-subset",
+      "kind": "real-stack-mlibc",
+      "proof_tier": "mlibc",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-sysdeps-smoke"
+      ],
+      "allowed_scope": [
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "OrlixMLibC/Sources/**",
+        "OrlixOS/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-libc-test-subset/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-libc-test-subset",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Failures must emit a report JSON current for HEAD with proof-tier metadata and a reducer when the failure can be minimized."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc libc test subset proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-dynamic-loader-smoke",
+      "command": "make tcti-gate TARGET=tcti-mlibc-dynamic-loader-smoke",
+      "kind": "real-stack-mlibc",
+      "proof_tier": "mlibc",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-libc-test-subset"
+      ],
+      "allowed_scope": [
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "OrlixMLibC/Sources/**",
+        "OrlixOS/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-dynamic-loader-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-dynamic-loader-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Failures must emit a report JSON current for HEAD with proof-tier metadata and a reducer when the failure can be minimized."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc dynamic loader smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-pthread-tls-smoke",
+      "command": "make tcti-gate TARGET=tcti-mlibc-pthread-tls-smoke",
+      "kind": "real-stack-mlibc",
+      "proof_tier": "mlibc",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-dynamic-loader-smoke"
+      ],
+      "allowed_scope": [
+        "tools/tcti/orlix-tcti-gate.swift",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/**",
+        "OrlixMLibC/Sources/**",
+        "OrlixOS/**",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-pthread-tls-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-pthread-tls-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Failures must emit a report JSON current for HEAD with proof-tier metadata and a reducer when the failure can be minimized."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc pthread tls smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-mlibc-linked-syscall-uapi-smoke",
+      "command": "make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke",
+      "kind": "real-stack-mlibc-uapi",
+      "proof_tier": "mlibc-uapi",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-pthread-tls-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixMLibC/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-mlibc-linked-syscall-uapi-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report real OrlixMLibC-linked syscall/UAPI binaries, commands, stdout/stderr, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti mlibc linked syscall uapi smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-shell-exec-simple-command",
+      "command": "make tcti-gate TARGET=tcti-shell-exec-simple-command",
+      "kind": "real-stack-shell",
+      "proof_tier": "shell",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-mlibc-linked-syscall-uapi-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-shell-exec-simple-command/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-shell-exec-simple-command",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report shell binary, command or script, stdout/stderr, exit status, child process facts, wait/reaping facts, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti shell exec simple command proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-shell-pipeline-smoke",
+      "command": "make tcti-gate TARGET=tcti-shell-pipeline-smoke",
+      "kind": "real-stack-shell",
+      "proof_tier": "shell",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-shell-exec-simple-command"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-shell-pipeline-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-shell-pipeline-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report shell binary, command or script, stdout/stderr, exit status, child process facts, wait/reaping facts, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti shell pipeline smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-shell-env-var-smoke",
+      "command": "make tcti-gate TARGET=tcti-shell-env-var-smoke",
+      "kind": "real-stack-shell",
+      "proof_tier": "shell",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-shell-pipeline-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-shell-env-var-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-shell-env-var-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report shell binary, command or script, stdout/stderr, exit status, child process facts, wait/reaping facts, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti shell env var smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-shell-redirection-smoke",
+      "command": "make tcti-gate TARGET=tcti-shell-redirection-smoke",
+      "kind": "real-stack-shell",
+      "proof_tier": "shell",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-shell-env-var-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-shell-redirection-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-shell-redirection-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report shell binary, command or script, stdout/stderr, exit status, child process facts, wait/reaping facts, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti shell redirection smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-shell-script-smoke",
+      "command": "make tcti-gate TARGET=tcti-shell-script-smoke",
+      "kind": "real-stack-shell",
+      "proof_tier": "shell",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-shell-redirection-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-shell-script-smoke/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-shell-script-smoke",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Report shell binary, command or script, stdout/stderr, exit status, child process facts, wait/reaping facts, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "mlibc-worker",
+        "kernel-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti shell script smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-true-false-echo",
+      "command": "make tcti-gate TARGET=tcti-coreutils-true-false-echo",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-shell-script-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-true-false-echo/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-true-false-echo",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils true false echo proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-cat-wc",
+      "command": "make tcti-gate TARGET=tcti-coreutils-cat-wc",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-true-false-echo"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-cat-wc/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-cat-wc",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils cat wc proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-ls-stat",
+      "command": "make tcti-gate TARGET=tcti-coreutils-ls-stat",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-cat-wc"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-ls-stat/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-ls-stat",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils ls stat proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-mkdir-rm-cp-ln",
+      "command": "make tcti-gate TARGET=tcti-coreutils-mkdir-rm-cp-ln",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-ls-stat"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-mkdir-rm-cp-ln/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-mkdir-rm-cp-ln",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils mkdir rm cp ln proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-env-path",
+      "command": "make tcti-gate TARGET=tcti-coreutils-env-path",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-mkdir-rm-cp-ln"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-env-path/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-env-path",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils env path proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-coreutils-test-subset",
+      "command": "make tcti-gate TARGET=tcti-coreutils-test-subset",
+      "kind": "real-stack-coreutils",
+      "proof_tier": "coreutils",
+      "acceptance_weight": "readiness",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-env-path"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-coreutils-test-subset/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-coreutils-test-subset",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Run real Coreutils or upstream-built package binaries, not fixture substitutes. Report package version/source, rootfs path, command line, stdout/stderr, exit status, filesystem side effects, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "coreutils-worker",
+        "orlix-upstream-conformance",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti coreutils test subset proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-image-layout-parse",
+      "command": "make tcti-gate TARGET=tcti-oci-image-layout-parse",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-coreutils-test-subset"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-image-layout-parse/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-image-layout-parse",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci image layout parse proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-rootfs-materialize",
+      "command": "make tcti-gate TARGET=tcti-oci-rootfs-materialize",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-image-layout-parse"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-rootfs-materialize/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-rootfs-materialize",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci rootfs materialize proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-rootfs-boot-session",
+      "command": "make tcti-gate TARGET=tcti-oci-rootfs-boot-session",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-rootfs-materialize"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-rootfs-boot-session/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-rootfs-boot-session",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci rootfs boot session proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-exec-coreutils-command",
+      "command": "make tcti-gate TARGET=tcti-oci-exec-coreutils-command",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-rootfs-boot-session"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-exec-coreutils-command",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci exec coreutils command proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-stdio-signal-wait",
+      "command": "make tcti-gate TARGET=tcti-oci-stdio-signal-wait",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-exec-coreutils-command"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-stdio-signal-wait/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-stdio-signal-wait",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci stdio signal wait proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-oci-lifecycle-create-start-exec-kill-wait-delete",
+      "command": "make tcti-gate TARGET=tcti-oci-lifecycle-create-start-exec-kill-wait-delete",
+      "kind": "real-stack-oci",
+      "proof_tier": "oci",
+      "acceptance_weight": "readiness",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-stdio-signal-wait"
+      ],
+      "allowed_scope": [
+        "OrlixOS/**",
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-oci-lifecycle-create-start-exec-kill-wait-delete/report.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make tcti-gate TARGET=tcti-oci-lifecycle-create-start-exec-kill-wait-delete",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti"
+      ],
+      "reducer_requirements": [
+        "Exercise the OrlixOS OCI/rootfs/session path. Report OCI image reference or layout, image digest, config digest, rootfs materialization path, OrlixOS session descriptor, command, stdout/stderr, lifecycle state, exit status, git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "oci-orlixos-worker",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer"
+      ],
+      "commit_message_template": "test(tcti): add tcti oci lifecycle create start exec kill wait delete proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-simulator-kernel-first-syscall",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "kind": "simulator-runtime-real-stack",
+      "proof_tier": "simulator",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-oci-lifecycle-create-start-exec-kill-wait-delete"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "OrlixTerminal/**",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-init-first-syscall-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+      ],
+      "reducer_requirements": [
+        "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "oci-orlixos-worker",
+        "coreutils-worker",
+        "mlibc-worker",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti simulator kernel first syscall proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-simulator-mlibc-smoke",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "kind": "simulator-runtime-real-stack",
+      "proof_tier": "simulator",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-simulator-kernel-first-syscall"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "OrlixTerminal/**",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-mlibc-smoke-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+      ],
+      "reducer_requirements": [
+        "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "oci-orlixos-worker",
+        "coreutils-worker",
+        "mlibc-worker",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti simulator mlibc smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-simulator-coreutils-smoke",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "kind": "simulator-runtime-real-stack",
+      "proof_tier": "simulator",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-simulator-mlibc-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "OrlixTerminal/**",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-coreutils-smoke-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+      ],
+      "reducer_requirements": [
+        "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "oci-orlixos-worker",
+        "coreutils-worker",
+        "mlibc-worker",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti simulator coreutils smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-simulator-oci-rootfs-command",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "kind": "simulator-runtime-real-stack",
+      "proof_tier": "simulator",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [
+        "tcti-simulator-coreutils-smoke"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "OrlixTerminal/**",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-oci-rootfs-command-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+      ],
+      "reducer_requirements": [
+        "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "oci-orlixos-worker",
+        "coreutils-worker",
+        "mlibc-worker",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti simulator oci rootfs command proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
+      ]
+    },
+    {
+      "id": "tcti-simulator-interactive-terminal-smoke",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "kind": "simulator-runtime-real-stack",
+      "proof_tier": "simulator",
+      "acceptance_weight": "readiness",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": true,
+      "prerequisites": [
+        "tcti-simulator-oci-rootfs-command"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/**",
+        "OrlixMLibC/**",
+        "OrlixOS/**",
+        "OrlixTerminal/**",
+        "tools/runtime/orlix-runtime-validation.sh",
+        "tools/tcti/orlix-tcti-gate.swift",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not use golden ELF fixtures as acceptance proof for real Linux userspace.",
+        "Do not move Linux syscall, VFS, fd table, signal, wait, exec, process, or scheduler semantics into HostAdapter, OrlixOS, the app, or the harness.",
+        "Do not add fake Linux behavior or a fake runtime to satisfy this gate.",
+        "Do not edit generated Linux, mlibc, package, rootfs, or build trees."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-interactive-terminal-smoke-*.json"
+      ],
+      "readiness_eligible": true,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+      ],
+      "reducer_requirements": [
+        "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "oci-orlixos-worker",
+        "coreutils-worker",
+        "mlibc-worker",
+        "kernel-worker"
+      ],
+      "commit_message_template": "test(tcti): add tcti simulator interactive terminal smoke proof",
+      "stop_conditions": [
+        "Stop if the gate only builds and does not execute the required real-stack workload.",
+        "Stop if the evidence lacks proof_tier, command, git_sha, report JSON, or forbidden_behavior fields where applicable."
       ]
     },
     {
@@ -195,7 +1939,7 @@
       "command": "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit",
       "kind": "golden-elf-structural",
       "prerequisites": [
-        "appstore-safety"
+        "tcti-simulator-interactive-terminal-smoke"
       ],
       "allowed_scope": [
         "OrlixKernel/Tests/TCTI/golden_elf/init_001_exit/**",
@@ -210,7 +1954,7 @@
         "Build/TCTI/reports/tcti-golden-elf/report.json",
         "Build/TCTI/golden_elf/init_001_exit/validation.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -227,7 +1971,11 @@
       "commit_message_template": "test(tcti): validate exit golden elf structure",
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or syscall shape diverges."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-001-exit",
@@ -251,7 +1999,7 @@
         "Build/TCTI/reports/tcti-golden-elf/report.json",
         "Build/TCTI/golden_elf/init_001_exit/execution.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -270,7 +2018,11 @@
       "commit_message_template": "test(tcti): execute seed elf in switch backend",
       "stop_conditions": [
         "Stop if execution depends on exact raw instruction words instead of decoded semantics."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-002-write-structural",
@@ -292,7 +2044,7 @@
         "Build/TCTI/reports/tcti-golden-elf/report.json",
         "Build/TCTI/golden_elf/init_002_write/validation.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -309,7 +2061,11 @@
       "commit_message_template": "test(tcti): add write golden elf fixture",
       "stop_conditions": [
         "Stop if message bytes or syscall shape diverge from golden metadata."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-002-write",
@@ -333,7 +2089,7 @@
         "Build/TCTI/reports/tcti-golden-elf/report.json",
         "Build/TCTI/golden_elf/init_002_write/execution.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
@@ -352,7 +2108,11 @@
       "commit_message_template": "test(tcti): execute write elf in switch backend",
       "stop_conditions": [
         "Stop if write capture calls host write or implements fd-table behavior."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-003-stack",
@@ -420,7 +2180,11 @@
         "Stop if the implementation would require production assembly or gadget dispatch.",
         "Stop if the failure is not reduced into a no-phone fixture first.",
         "Stop if the selected scope tries to implement package, shell, dynamic-loader, or physical-device behavior."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-004-tls",
@@ -466,7 +2230,11 @@
       "commit_message_template": "test(tcti): execute tls elf in switch backend",
       "stop_conditions": [
         "Stop if guest TLS state touches host TLS."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-005-branches-structural",
@@ -519,7 +2287,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected branch shape diverges.",
         "Stop if the task tries to execute branch semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-005-branches",
@@ -574,7 +2346,11 @@
       "stop_conditions": [
         "Stop if branch execution would require gadget dispatch or production assembly.",
         "Stop if branch failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-006-memory-structural",
@@ -627,7 +2403,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected memory shape diverges.",
         "Stop if task tries to execute memory semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-006-memory",
@@ -683,7 +2463,11 @@
       "stop_conditions": [
         "Stop if memory execution would require gadget dispatch or production assembly.",
         "Stop if memory failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-007-mprotect-structural",
@@ -736,7 +2520,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected mprotect shape diverges.",
         "Stop if task tries to execute mprotect semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-007-mprotect",
@@ -792,7 +2580,11 @@
       "stop_conditions": [
         "Stop if mprotect execution would require gadget dispatch or production assembly.",
         "Stop if failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-008-self-modify-structural",
@@ -845,7 +2637,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected self-modifying shape diverges.",
         "Stop if task tries to execute self-modifying semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-008-self-modify",
@@ -901,7 +2697,11 @@
       "stop_conditions": [
         "Stop if execution would require gadget dispatch or production assembly.",
         "Stop if failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-009-faults-structural",
@@ -954,7 +2754,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected fault shape diverges.",
         "Stop if task tries to execute fault semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-009-faults",
@@ -1010,7 +2814,11 @@
       "stop_conditions": [
         "Stop if execution would require gadget dispatch or production assembly.",
         "Stop if failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-010-cpu-model-structural",
@@ -1063,7 +2871,11 @@
       "stop_conditions": [
         "Stop if source hash, binary hash, entrypoint, or expected cpu-model shape diverges.",
         "Stop if task tries to execute CPU-model semantics before structural metadata passes."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-010-cpu-model",
@@ -1119,7 +2931,11 @@
       "stop_conditions": [
         "Stop if execution would require gadget dispatch or production assembly.",
         "Stop if failures are not reduced into no-phone fixtures."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "golden-init-011-static-pie-got-byte-load-structural",
@@ -1172,7 +2988,11 @@
       "stop_conditions": [
         "Stop if the fixture requires relocation types beyond R_AARCH64_RELATIVE.",
         "Stop if structural validation would require production runtime code."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "switch-init-011-static-pie-got-byte-load",
@@ -1234,7 +3054,11 @@
         "Stop if execution requires production assembly or gadget dispatch.",
         "Stop if failures are not reduced into no-phone fixtures.",
         "Stop if additional relocation or dynamic-loader behavior is required."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "diff-switch-init-001-exit",
@@ -1273,7 +3097,11 @@
       "commit_message_template": "test(tcti): add switch differential gate for exit elf",
       "stop_conditions": [
         "Stop if switch-debug oracle coverage is missing for the target case."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "first-gadget-init-001-exit",
@@ -1317,7 +3145,11 @@
       "stop_conditions": [
         "Stop if appstore-safety-audit cannot scan generated and object disassembly.",
         "Stop if switch-debug oracle coverage is incomplete."
-      ]
+      ],
+      "proof_tier": "seed",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
     },
     {
       "id": "physical-tcti-init-first-syscall",
@@ -1337,7 +3169,8 @@
         "simulator-tcti-vfs-completeness",
         "simulator-tcti-full-linux-runtime-readiness",
         "appstore-safety",
-        "report-schema"
+        "report-schema",
+        "tcti-simulator-interactive-terminal-smoke"
       ],
       "allowed_scope": [
         "tools/runtime/orlix-runtime-validation.sh",
@@ -1366,7 +3199,7 @@
         "Build/Reports/runtime/tcti-vfs-completeness-*.json",
         "Build/Reports/runtime/tcti-full-linux-runtime-readiness-*.json"
       ],
-      "readiness_eligible": true,
+      "readiness_eligible": false,
       "physical_device": true,
       "gadget": false,
       "required_validation_commands": [
@@ -1401,7 +3234,11 @@
         "Stop if any autonomous no-phone report is missing, todo, evidence, or fail.",
         "Stop if any current simulator proof report for first-syscall, stability, console usability, static BusyBox start, static BusyBox command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, or full Linux runtime readiness is missing or fails.",
         "Stop if emergency override is used and a pass is claimed."
-      ]
+      ],
+      "proof_tier": "device",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false
     }
   ]
 }

@@ -58,6 +58,21 @@ Do not add Codex-specific compatibility aliases for these targets.
 
 Use `$orlix-tcti-next-step` for TCTI continuation. The skill runs `agent-status`, `agent-next`, and `agent-task-envelope-check` so the repo selects the next eligible gate from `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` and current reports. The generated task envelope under `Build/AgentHarness/orlix-tcti/` is the scope contract.
 
+## Proof Tiers
+
+The roadmap is tiered so the harness manages proof toward real Linux userspace instead of treating golden ELF probes as acceptance. Every roadmap gate declares:
+
+- `proof_tier`: `seed`, `kernel`, `kselftest`, `mlibc`, `mlibc-uapi`, `shell`, `coreutils`, `oci`, `simulator`, `device`, or `release`
+- `acceptance_weight`: `probe`, `blocker`, `readiness`, or `release`
+- `real_stack_required`
+- `can_claim_runtime_readiness`
+
+Golden ELF, switch-debug, reducer, and switch-vs-gadget gates are `proof_tier=seed`, `acceptance_weight=probe`, `real_stack_required=false`, and `can_claim_runtime_readiness=false`. They are microscopes for decoder bring-up, exact regressions, no-phone reducers, and switch-vs-gadget differentials. They are not proof that Linux userspace works.
+
+Runtime readiness must move through the real stack: OrlixKernel syscall/exec/fault/wait/console behavior, kselftest or kernel-interface subsets, real OrlixMLibC-linked binaries, shell behavior, real Coreutils or upstream package commands, OrlixOS OCI/rootfs/session materialization, app-hosted simulator execution, device certification, and only then release/default-flip gates.
+
+`agent-task-envelope-check` and `agent-harness-check` enforce this contract. They reject seed gates that claim runtime readiness, Coreutils gates backed only by seed probes, OCI gates without OrlixOS rootfs/session proof, device gates without simulator and real-stack prerequisites, and passing report fixtures without proof-tier metadata.
+
 The standard autonomous workflow is:
 
 1. `orlix-tcti-next-step` runs `agent-status` and `agent-next`.
@@ -67,6 +82,6 @@ The standard autonomous workflow is:
 5. `tcti-test-reducer` handles failures before production changes.
 6. `tcti-release-gate-reviewer` decides whether the checkpoint advances readiness.
 
-The oracle skill owns no-phone switch-debug and golden ELF work. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
+The oracle skill owns no-phone switch-debug and golden ELF work. That work can unlock implementation and reduce failures, but it must not become the release gate. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
 
 Do not run physical-device TCTI work unless runtime-validation preflight permits it. Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.

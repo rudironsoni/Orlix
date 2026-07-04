@@ -1,0 +1,41 @@
+{
+  "area": "orlix-tcti",
+  "description": "Bad fixture: physical gates require simulator and real-stack prerequisites.",
+  "gates": [
+    {
+      "id": "bad-physical-device",
+      "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
+      "kind": "physical-device",
+      "proof_tier": "device",
+      "acceptance_weight": "blocker",
+      "real_stack_required": true,
+      "can_claim_runtime_readiness": false,
+      "prerequisites": [],
+      "allowed_scope": [
+        "tools/runtime/orlix-runtime-validation.sh"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates without simulator proof."
+      ],
+      "expected_report_paths": [
+        "Build/Reports/runtime/tcti-init-first-syscall-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": true,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall"
+      ],
+      "reducer_requirements": [
+        "This fixture must fail before any device command can run."
+      ],
+      "required_subagents_or_skills": [
+        "tcti-release-gate-reviewer"
+      ],
+      "commit_message_template": "test(tcti): bad physical fixture",
+      "stop_conditions": [
+        "This fixture must fail."
+      ]
+    }
+  ]
+}
