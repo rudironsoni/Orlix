@@ -911,16 +911,23 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
     let hostedExec = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "hosted_exec.c")
     let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
     let tctiReport = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "report.c")
+    let tctiTests = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
     let syscall = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "syscall.c")
     let hostAdapter = path("OrlixHostAdapter", "Sources")
     let outputRoot = buildPath("kernel_syscall_dispatch_smoke")
     let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let kunitOutputURL = outputRoot.appendingPathComponent("kunit-build.txt")
+    let kunitCommand = "make -f OrlixKernel/Makefile kunit PROFILE=\(kernelProfile)"
+    try ensureDirectory(outputRoot)
 
     let configText = try readText(kernelConfig)
     let hostedExecText = try readText(hostedExec)
     let engineText = try readText(tctiEngine)
+    let engineHeaderText = try readText(tctiEngineHeader)
     let reportText = try readText(tctiReport)
+    let testText = try readText(tctiTests)
     let syscallText = try readText(syscall)
     var failures: [Failure] = []
     var evidence: [String: String] = [
@@ -929,6 +936,14 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         "git_sha": gitSha(),
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
+        "workload_hook_command": kunitCommand,
+        "workload_hook_compiled": "false",
+        "workload_hook_executed": "false",
+        "tcti_entered": "false",
+        "svc_boundary_reached": "false",
+        "syscall_number_observed": "false",
+        "orlix_syscall_dispatch_entered": "false",
+        "linux_syscall_return_state_written": "false",
         "runtime_syscall_number_observed": "false",
         "runtime_orlix_syscall_dispatch_reached": "false",
     ]
@@ -960,6 +975,15 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     requireSourceFact("kernel_dispatch_runs_exit_to_user_work", syscallText, #"orlix_exit_to_user_mode_work\(regs\)"#, syscall)
     requireSourceFact("svc_log_marker", reportText, #"Orlix TCTI: svc #0"#, tctiReport)
     requireSourceFact("syscall_return_log_marker", reportText, #"Orlix TCTI: syscall return"#, tctiReport)
+    requireSourceFact("kernel_workload_hook_result_struct", engineHeaderText, #"struct tcti_kernel_syscall_dispatch_smoke_result"#, tctiEngineHeader)
+    requireSourceFact("kernel_workload_hook_entrypoint", engineText, #"tcti_kernel_syscall_dispatch_smoke_for_tests"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_decodes_svc", engineText, #"tcti_decode_aarch64\(0xd4000001U\)"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_uses_getpid", engineText, #"regs->regs\[8\] = __NR_getpid"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_calls_linux_dispatch", engineText, #"ret = orlix_syscall_dispatch\(regs\)"#, tctiEngine)
+    requireSourceFact("kernel_workload_hook_records_return_state", engineText, #"out->linux_return_state_written"#, tctiEngine)
+    requireSourceFact("kunit_workload_hook_case", testText, #"tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"#, tctiTests)
+    requireSourceFact("kunit_asserts_dispatch_entered", testText, #"KUNIT_EXPECT_TRUE\(test, result\.orlix_syscall_dispatch_entered\)"#, tctiTests)
+    requireSourceFact("kunit_asserts_return_state", testText, #"KUNIT_EXPECT_TRUE\(test, result\.linux_return_state_written\)"#, tctiTests)
 
     let hostAdapterOwnsLinuxSyscalls = !sourceFilesContainNone(
         root: hostAdapter,
@@ -978,7 +1002,32 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         evidence["hostadapter_linux_syscall_semantics"] = "absent"
     }
 
-    let blocker = "No no-phone OrlixKernel workload hook currently executes an EL0 task through orlix_tcti_enter_user and observes orlix_syscall_dispatch at runtime from tcti-gate."
+    var kunitBuildPassed = false
+    let kunitOutput: String
+    do {
+        kunitOutput = try run(["make", "-f", "OrlixKernel/Makefile", "kunit", "PROFILE=\(kernelProfile)"])
+        kunitBuildPassed = true
+        evidence["workload_hook_compiled"] = "true"
+        evidence["kunit_build_result"] = "pass"
+    } catch {
+        kunitOutput = String(describing: error)
+        evidence["kunit_build_result"] = "fail"
+        failures.append(fail("kernel-workload-hook-build", "KUnit workload hook did not compile: \(error)"))
+    }
+    try kunitOutput.write(to: kunitOutputURL, atomically: true, encoding: .utf8)
+
+    let blocker: String
+    if kunitBuildPassed {
+        evidence["tcti_entered"] = "tcti_kernel_syscall_dispatch_smoke_for_tests"
+        evidence["svc_boundary_reached"] = "hook compiled; no no-phone runner executed assertion"
+        evidence["syscall_number_observed"] = "__NR_getpid in kernel hook"
+        evidence["orlix_syscall_dispatch_entered"] = "hook compiled; no no-phone runner executed assertion"
+        evidence["linux_syscall_return_state_written"] = "hook compiled; no no-phone runner executed assertion"
+        blocker = "No no-phone KUnit/kernel runner currently executes tcti_kernel_syscall_dispatch_smoke_for_tests from tcti-gate; the kernel hook compiles but runtime syscall-dispatch observation is not available."
+        failures.append(fail("kernel-workload-hook-runner-missing", blocker))
+    } else {
+        blocker = "KUnit build could not compile the no-phone TCTI syscall dispatch workload hook."
+    }
     failures.append(fail("kernel-workload-execution-missing", blocker))
     evidence["blocker"] = blocker
     evidence["gate_result"] = "fail"
@@ -989,20 +1038,21 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         caseID: "kernel-syscall-dispatch-smoke-fail",
         command: command,
         reason: blocker,
-        artifacts: [relativePath(evidenceURL)],
+        artifacts: [relativePath(evidenceURL), relativePath(kunitOutputURL)],
         expectedStatus: .fail
     )
-    let artifacts = [relativePath(evidenceURL), relativePath(reducer)]
+    let artifacts = [relativePath(evidenceURL), relativePath(kunitOutputURL), relativePath(reducer)]
     let reportURL = try writeReport(report(
         target: target,
         status: .fail,
-        summary: "Kernel/TCTI syscall dispatch source path is present, but no executable no-phone kernel workload hook exists yet to observe runtime entry into orlix_syscall_dispatch. This is a real fail report, not a TODO.",
+        summary: "Kernel/TCTI syscall dispatch workload hook exists and is invoked through the KUnit build path, but no no-phone kernel runner executes it yet to observe runtime entry into orlix_syscall_dispatch.",
         command: command,
         failures: failures,
         artifacts: artifacts,
         counters: [
             "source_evidence_facts": evidence.count,
             "source_proof_failures": max(failures.count - 1, 0),
+            "kernel_workload_hook_compile_passes": kunitBuildPassed ? 1 : 0,
             "runtime_observed_syscalls": 0,
             "runtime_observed_orlix_syscall_dispatch_entries": 0,
         ],

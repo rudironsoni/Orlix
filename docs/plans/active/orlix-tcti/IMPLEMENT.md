@@ -4647,6 +4647,30 @@ Boundary:
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
 
+### Checkpoint: Kernel Syscall Dispatch Hook Compiles
+
+- Harness-selected gate: `tcti-kernel-syscall-dispatch-smoke`.
+- Selected command: `make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke`.
+- Added a kernel-owned KUnit workload hook:
+  - `tcti_kernel_syscall_dispatch_smoke_for_tests` in `arch/orlix/hosted_exec/tcti/engine.c`;
+  - result struct and prototype in `arch/orlix/hosted_exec/tcti/engine.h`;
+  - KUnit case `tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`.
+- Hook path:
+  - decode `svc #0` through `tcti_decode_aarch64(0xd4000001U)`;
+  - set guest `x8` to Linux `__NR_getpid`;
+  - call `tcti_prepare_syscall_handoff`;
+  - call real `orlix_syscall_dispatch(regs)`;
+  - record return value, `x0`, and `NO_SYSCALL` after dispatch.
+- Gate behavior:
+  - invokes `make -f OrlixKernel/Makefile kunit PROFILE=tcti_runtime`;
+  - writes `Build/TCTI/kernel_syscall_dispatch_smoke/kunit-build.txt`;
+  - still reports `fail`, not pass, because the current no-phone KUnit target compiles the hook but does not execute a kernel runner from `tcti-gate`.
+- Narrow blocker:
+  - `No no-phone KUnit/kernel runner currently executes tcti_kernel_syscall_dispatch_smoke_for_tests from tcti-gate; the kernel hook compiles but runtime syscall-dispatch observation is not available.`
+- Reducer:
+  - `Build/TCTI/reproducers/tcti-kernel-syscall-dispatch-smoke/kernel-syscall-dispatch-smoke-fail.json`.
+- Boundary: no simulator gate, phone gate, production assembly, gadget dispatch, HostAdapter Linux semantics, OrlixOS Linux semantics, app Linux semantics, generated tree edits, or product defconfig flip.
+
 ### Checkpoint: Failed Kernel Blocker Remains Selected
 
 - Harness issue: after PR #27, `agent-next` could select `simulator-tcti-runtime-stability` while `tcti-kernel-syscall-dispatch-smoke` had a current failing real-stack report.
