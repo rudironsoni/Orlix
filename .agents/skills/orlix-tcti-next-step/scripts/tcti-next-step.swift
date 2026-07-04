@@ -551,6 +551,9 @@ func repositoryRoot() -> URL {
 let root = repositoryRoot()
 let area = ProcessInfo.processInfo.environment["AREA"] ?? "orlix-tcti"
 let outputRoot = root.appendingPathComponent("Build/AgentHarness/orlix-tcti", isDirectory: true)
+let tctiBuildRoot = ProcessInfo.processInfo.environment["ORLIX_TCTI_BUILD_ROOT"].map {
+    URL(fileURLWithPath: $0, relativeTo: root).standardizedFileURL
+} ?? root.appendingPathComponent("Build/TCTI", isDirectory: true)
 let roadmapURL = ProcessInfo.processInfo.environment["ORLIX_TCTI_ROADMAP_PATH"].map {
     URL(fileURLWithPath: $0, relativeTo: root).standardizedFileURL
 } ?? root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json")
@@ -697,7 +700,7 @@ func runtimeReportFatalFree(_ object: [String: Any]) -> Bool {
 }
 
 func reportFact(target: String) -> ReportFact {
-    let url = root.appendingPathComponent("Build/TCTI/reports/\(target)/report.json")
+    let url = tctiBuildRoot.appendingPathComponent("reports/\(target)/report.json")
     guard fileManager.fileExists(atPath: url.path) else {
         return ReportFact(
             path: relativePath(url),
@@ -4276,6 +4279,9 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "physical-tcti-init-first-syscall":
         return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
     default:
+        if let target = tctiGateTarget(in: gate.command) {
+            return basicReportGate(gate, target: target)
+        }
         return missingGate(gate, reason: "unknown roadmap gate")
     }
 }

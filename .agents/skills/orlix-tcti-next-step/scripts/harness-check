@@ -430,6 +430,23 @@ check_skills() {
       "$root/.agents/skills/orlix-tcti-next-step/fixtures/roadmap.bad.target-prefix-only.json"; then
       fail "roadmap/report metadata check must not prefix-match TARGET tokens"
     fi
+    if ! ORLIX_TCTI_BUILD_ROOT="$tmp" \
+      "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" status >/dev/null 2>&1; then
+      fail "agent status must read temp tcti-kernel-syscall-dispatch-smoke report"
+    elif ! jq -e '
+      .gates[]
+      | select(.id == "tcti-kernel-syscall-dispatch-smoke")
+      | .state == "fail" and
+        .passed == false and
+        .satisfies_prerequisite == false and
+        .reason == "tcti-kernel-syscall-dispatch-smoke report status=fail, passed=false" and
+        (.reports | length) == 1 and
+        .reports[0].status == "fail" and
+        .reports[0].passed == false and
+        .reports[0].proof_tier == "kernel"
+    ' "$root/Build/AgentHarness/orlix-tcti/status.json" >/dev/null; then
+      fail "agent status must consume tcti-kernel-syscall-dispatch-smoke as a failing report-backed blocker"
+    fi
   fi
   rm -rf "$tmp"
 }
