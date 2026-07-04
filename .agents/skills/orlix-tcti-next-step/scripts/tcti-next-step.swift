@@ -113,10 +113,10 @@ struct Gate: Codable {
             id: id,
             command: command,
             kind: kind,
-            proofTier: try container.decodeIfPresent(String.self, forKey: .proofTier),
-            acceptanceWeight: try container.decodeIfPresent(String.self, forKey: .acceptanceWeight),
-            realStackRequired: try container.decodeIfPresent(Bool.self, forKey: .realStackRequired),
-            canClaimRuntimeReadiness: try container.decodeIfPresent(Bool.self, forKey: .canClaimRuntimeReadiness),
+            proofTier: try container.decode(String.self, forKey: .proofTier),
+            acceptanceWeight: try container.decode(String.self, forKey: .acceptanceWeight),
+            realStackRequired: try container.decode(Bool.self, forKey: .realStackRequired),
+            canClaimRuntimeReadiness: try container.decode(Bool.self, forKey: .canClaimRuntimeReadiness),
             prerequisites: try container.decode([String].self, forKey: .prerequisites),
             allowedScope: try container.decode([String].self, forKey: .allowedScope),
             forbiddenScope: try container.decode([String].self, forKey: .forbiddenScope),
@@ -136,8 +136,9 @@ struct Gate: Codable {
         if physicalDevice { return "device" }
         if id.hasPrefix("simulator-tcti-") { return "simulator" }
         if kind == "simulator-runtime" { return "simulator" }
-        if kind == "safety" { return "release" }
-        if kind.contains("production") { return "kernel" }
+        if kind == "safety" { return "safety" }
+        if kind == "rail" { return "rail" }
+        if kind.contains("production") { return "rail" }
         return "seed"
     }
 
@@ -153,7 +154,7 @@ struct Gate: Codable {
         if physicalDevice { return true }
         if id.hasPrefix("simulator-tcti-") { return true }
         if kind == "simulator-runtime" { return true }
-        return !["seed"].contains(proofTier)
+        return !["seed", "rail", "safety"].contains(proofTier)
     }
 }
 
@@ -519,6 +520,25 @@ func run(_ executable: String, _ arguments: [String]) -> String? {
     } catch {
         return nil
     }
+}
+
+func tctiGateTarget(in command: String) -> String? {
+    guard command.contains("tcti-gate") else { return nil }
+    for rawToken in command.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" }) {
+        let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        if token.hasPrefix("TARGET=") {
+            let value = String(token.dropFirst("TARGET=".count))
+            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        }
+    }
+    return nil
+}
+
+func supportedTCTIGateTargets() throws -> Set<String> {
+    guard let output = run("/usr/bin/env", ["make", "-s", "tcti-gate-list"]) else {
+        throw HarnessError.invalid("could not read supported tcti-gate targets from make tcti-gate-list")
+    }
+    return Set(output.split(whereSeparator: \.isNewline).map(String.init))
 }
 
 func repositoryRoot() -> URL {
@@ -7579,6 +7599,8 @@ func physicalGateMissingSimulatorValidationCommands(_ gate: Gate) -> [String] {
 
 let allowedProofTiers: Set<String> = [
     "seed",
+    "rail",
+    "safety",
     "kernel",
     "kselftest",
     "mlibc",
@@ -7637,6 +7659,11 @@ func validateProofTierPolicy(_ gates: [Gate]) throws {
         if gate.canClaimRuntimeReadiness && !gate.realStackRequired {
             throw HarnessError.invalid("gate \(gate.id) cannot claim runtime readiness without real_stack_required=true")
         }
+        if ["rail", "safety"].contains(gate.proofTier) {
+            if gate.realStackRequired || gate.canClaimRuntimeReadiness || gate.readinessEligible || gate.acceptanceWeight == "readiness" || gate.acceptanceWeight == "release" {
+                throw HarnessError.invalid("\(gate.proofTier) gate \(gate.id) must not claim real-stack runtime readiness")
+            }
+        }
         if gate.readinessEligible && !gate.canClaimRuntimeReadiness {
             throw HarnessError.invalid("gate \(gate.id) is readiness_eligible but can_claim_runtime_readiness=false")
         }
@@ -7668,6 +7695,9 @@ func validateProofTierPolicy(_ gates: [Gate]) throws {
             }
         }
         if gate.proofTier == "release" && gate.acceptanceWeight == "release" {
+            if !gate.realStackRequired {
+                throw HarnessError.invalid("release gate \(gate.id) must require real-stack proof")
+            }
             let prerequisiteGates = gate.prerequisites.compactMap { byID[$0] }
             if !prerequisiteGates.contains(where: { $0.proofTier == "device" }) {
                 throw HarnessError.invalid("release gate \(gate.id) must depend on device proof")
@@ -8298,6 +8328,12 @@ func validateEnvelope() throws {
     }
     guard let gate = roadmapGatesWithRuntimePreflight(roadmap).first(where: { $0.id == task.selectedGateID }) else {
         throw HarnessError.invalid("selected gate \(task.selectedGateID) does not exist in roadmap")
+    }
+    if let target = tctiGateTarget(in: task.selectedGateCommand) {
+        let supportedTargets = try supportedTCTIGateTargets()
+        if !supportedTargets.contains(target) {
+            throw HarnessError.invalid("selected gate command references unsupported tcti-gate target: \(target)")
+        }
     }
     let status = freshStatus
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })

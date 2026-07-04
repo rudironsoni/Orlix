@@ -18,12 +18,33 @@ struct Failure: Codable {
     let message: String
 }
 
+struct ProofTierMetadata {
+    let proofTier: String
+    let acceptanceWeight: String
+    let realStackRequired: Bool
+    let canClaimRuntimeReadiness: Bool
+
+    var defaultReleaseGateEligible: Bool {
+        acceptanceWeight == "release" && realStackRequired && canClaimRuntimeReadiness
+    }
+
+    var defaultReadinessGateEligible: Bool {
+        (acceptanceWeight == "readiness" || acceptanceWeight == "release") &&
+            realStackRequired &&
+            canClaimRuntimeReadiness
+    }
+}
+
 struct Report: Codable {
     let target: String
     let gate: String
     let status: String
     let passed: Bool
     let summary: String
+    let proofTier: String
+    let acceptanceWeight: String
+    let realStackRequired: Bool
+    let canClaimRuntimeReadiness: Bool
     let gitSha: String
     let backend: String
     let virtualCpuModel: String
@@ -48,6 +69,10 @@ struct Report: Codable {
         case status
         case passed
         case summary
+        case proofTier = "proof_tier"
+        case acceptanceWeight = "acceptance_weight"
+        case realStackRequired = "real_stack_required"
+        case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case gitSha = "git_sha"
         case backend
         case virtualCpuModel = "virtual_cpu_model"
@@ -552,6 +577,39 @@ func forbiddenDefaults(hostX18: Bool = false) -> [String: Bool] {
     ]
 }
 
+func proofTierMetadata(for target: String) -> ProofTierMetadata {
+    switch target {
+    case "tcti-plan-consistency", "tcti-report-schema-check":
+        return ProofTierMetadata(
+            proofTier: "rail",
+            acceptanceWeight: "blocker",
+            realStackRequired: false,
+            canClaimRuntimeReadiness: false
+        )
+    case "tcti-appstore-safety-audit":
+        return ProofTierMetadata(
+            proofTier: "safety",
+            acceptanceWeight: "blocker",
+            realStackRequired: false,
+            canClaimRuntimeReadiness: false
+        )
+    case "tcti-kernel-syscall-dispatch-smoke":
+        return ProofTierMetadata(
+            proofTier: "kernel",
+            acceptanceWeight: "blocker",
+            realStackRequired: true,
+            canClaimRuntimeReadiness: false
+        )
+    default:
+        return ProofTierMetadata(
+            proofTier: "seed",
+            acceptanceWeight: "probe",
+            realStackRequired: false,
+            canClaimRuntimeReadiness: false
+        )
+    }
+}
+
 func report(
     target: String,
     status: GateStatus,
@@ -569,12 +627,17 @@ func report(
     actualReplayStatus: String? = nil,
     execution: ExecutionReport? = nil
 ) -> Report {
-    Report(
+    let metadata = proofTierMetadata(for: target)
+    return Report(
         target: target,
         gate: target,
         status: status.rawValue,
         passed: status.passed,
         summary: summary,
+        proofTier: metadata.proofTier,
+        acceptanceWeight: metadata.acceptanceWeight,
+        realStackRequired: metadata.realStackRequired,
+        canClaimRuntimeReadiness: metadata.canClaimRuntimeReadiness,
         gitSha: gitSha(),
         backend: "tcti",
         virtualCpuModel: "orlix-aarch64-v1",
@@ -584,8 +647,8 @@ func report(
         counters: counters,
         failures: failures,
         artifacts: artifacts,
-        releaseGateEligible: releaseGateEligible ?? status.gateEligible,
-        readinessGateEligible: readinessGateEligible ?? status.gateEligible,
+        releaseGateEligible: releaseGateEligible ?? (status.gateEligible && metadata.defaultReleaseGateEligible),
+        readinessGateEligible: readinessGateEligible ?? (status.gateEligible && metadata.defaultReadinessGateEligible),
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
         coverageWarnings: coverageWarnings,
@@ -687,6 +750,13 @@ func writeTodo(target: String, caseID: String = "todo", summary: String) throws 
     return 1
 }
 
+func runKernelSyscallDispatchSmoke() throws -> Int32 {
+    try writeTodo(
+        target: "tcti-kernel-syscall-dispatch-smoke",
+        summary: "Real kernel/TCTI syscall dispatch smoke is not implemented yet. Required proof: execute the real OrlixKernel/TCTI workload, record the actual command, kernel profile or config, current git SHA, Linux-owned syscall dispatch facts through orlix_syscall_dispatch, forbidden_behavior fields, and reducer artifacts for failures. This target is supported so the roadmap command is executable, but it must not pass until that real-stack proof exists."
+    )
+}
+
 func validateReportObject(_ object: Any) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
@@ -697,6 +767,10 @@ func validateReportObject(_ object: Any) -> [String] {
         ("status", String.self),
         ("passed", Bool.self),
         ("summary", String.self),
+        ("proof_tier", String.self),
+        ("acceptance_weight", String.self),
+        ("real_stack_required", Bool.self),
+        ("can_claim_runtime_readiness", Bool.self),
         ("git_sha", String.self),
         ("backend", String.self),
         ("virtual_cpu_model", String.self),
@@ -733,8 +807,50 @@ func validateReportObject(_ object: Any) -> [String] {
     let status = dictionary["status"] as? String
     let passed = dictionary["passed"] as? Bool
     let allowed = ["pass", "fail", "todo", "skipped", "error", "evidence"]
+    let allowedProofTiers = [
+        "seed",
+        "rail",
+        "safety",
+        "kernel",
+        "kselftest",
+        "mlibc",
+        "mlibc-uapi",
+        "shell",
+        "coreutils",
+        "oci",
+        "simulator",
+        "device",
+        "release",
+    ]
+    let allowedAcceptanceWeights = ["probe", "blocker", "readiness", "release"]
+    let proofTier = dictionary["proof_tier"] as? String
+    let acceptanceWeight = dictionary["acceptance_weight"] as? String
+    let realStackRequired = dictionary["real_stack_required"] as? Bool
+    let canClaimRuntimeReadiness = dictionary["can_claim_runtime_readiness"] as? Bool
     if status == nil || !allowed.contains(status!) {
         errors.append("status must be one of \(allowed)")
+    }
+    if proofTier == nil || !allowedProofTiers.contains(proofTier!) {
+        errors.append("proof_tier must be one of \(allowedProofTiers)")
+    }
+    if acceptanceWeight == nil || !allowedAcceptanceWeights.contains(acceptanceWeight!) {
+        errors.append("acceptance_weight must be one of \(allowedAcceptanceWeights)")
+    }
+    if proofTier == "seed" && canClaimRuntimeReadiness == true {
+        errors.append("seed report must not claim runtime readiness")
+    }
+    if canClaimRuntimeReadiness == true && realStackRequired != true {
+        errors.append("report claims runtime readiness without real_stack_required=true")
+    }
+    if dictionary["readiness_gate_eligible"] as? Bool == true {
+        if status != "pass" || canClaimRuntimeReadiness != true || realStackRequired != true {
+            errors.append("readiness_gate_eligible requires pass, real_stack_required=true, and can_claim_runtime_readiness=true")
+        }
+    }
+    if dictionary["release_gate_eligible"] as? Bool == true {
+        if status != "pass" || acceptanceWeight != "release" || canClaimRuntimeReadiness != true || realStackRequired != true {
+            errors.append("release_gate_eligible requires pass, acceptance_weight=release, real_stack_required=true, and can_claim_runtime_readiness=true")
+        }
     }
     if status == "pass" && passed != true {
         errors.append("status=pass requires passed=true")
@@ -1197,6 +1313,9 @@ func runReportSchemaCheck() throws -> Int32 {
     let tctiReportRoot = buildPath("reports")
     if let enumerator = fileManager.enumerator(at: tctiReportRoot, includingPropertiesForKeys: nil) {
         for case let url as URL in enumerator where url.lastPathComponent == "report.json" {
+            if url.deletingLastPathComponent().lastPathComponent == target {
+                continue
+            }
             checked.append(relativePath(url))
             failures.append(contentsOf: checkReportFile(url).map { fail("report", $0) })
         }
@@ -13120,6 +13239,7 @@ let tctiTargets = [
     "tcti-plan-consistency",
     "tcti-report-schema-check",
     "tcti-toolchain-check",
+    "tcti-kernel-syscall-dispatch-smoke",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -13189,6 +13309,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runReportSchemaCheck()
     case "tcti-toolchain-check":
         return try runToolchainCheck()
+    case "tcti-kernel-syscall-dispatch-smoke":
+        return try runKernelSyscallDispatchSmoke()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
