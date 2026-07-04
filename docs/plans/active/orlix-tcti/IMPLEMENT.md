@@ -2,6 +2,37 @@
 
 ## 2026-07-04
 
+### Checkpoint: Kernel KUnit Run Target Fails Closed
+
+- Harness-selected gate remains `tcti-kernel-syscall-dispatch-smoke`.
+- Added `make -f OrlixKernel/Makefile kunit-run PROFILE=<profile>` as an explicit no-phone KUnit execution-attempt target.
+- The existing `kunit` target remains compile-only for selected Orlix KUnit objects.
+- `kunit-run` currently:
+  - builds the selected KUnit objects through the existing Kbuild path;
+  - verifies the `tcti_decode_test.o` object exists;
+  - verifies the named `tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch` KUnit test symbol is present;
+  - emits machine-readable `ORLIX-KUNIT-RUNNER-*` fields;
+  - fails closed with `reason=no-no-phone-kunit-executor` instead of echoing a pass marker.
+- Updated `tools/tcti/orlix-tcti-gate.swift` so `tcti-kernel-syscall-dispatch-smoke` calls `kunit-run`, writes `Build/TCTI/kernel_syscall_dispatch_smoke/kunit-run.txt`, parses the runner-attempt fields, and reports the narrower blocker.
+- Current result:
+  - `workload_hook_compiled=true`;
+  - `workload_hook_executed=false`;
+  - `kunit_runner_attempted=true`;
+  - `kunit_runner_blocked=true`;
+  - `kunit_test_object_present=true`;
+  - `kunit_test_symbol_present=true`;
+  - `kunit_named_test_executed=false`;
+  - `runtime_observed_syscalls=0`;
+  - `runtime_observed_orlix_syscall_dispatch_entries=0`.
+- Narrowed blocker:
+  - `No no-phone KUnit executor is available for ARCH=orlix; the run target verified the named test object and symbol, but object build is not runtime execution.`
+- Boundary:
+  - No simulator gate run.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, OrlixOS, app-owned Linux semantics, or generated-tree edits.
+
 ### Checkpoint: Kernel Syscall Dispatch Gate Parses KUnit Execution Evidence
 
 - Harness-selected gate remains `tcti-kernel-syscall-dispatch-smoke`.
