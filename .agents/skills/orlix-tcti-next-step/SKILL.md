@@ -16,10 +16,12 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 
 - Read `AGENTS.md`, `PLAN.md`, `IMPLEMENT.md`, and TCTI reports.
 - Read `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+- Read `.agents/skills/orlix-tcti-next-step/references/environment-policy.json`.
 - Run agent-neutral harness checks and TCTI no-phone status checks.
 - Generate `Build/AgentHarness/orlix-tcti/status.json`.
 - Generate `Build/AgentHarness/orlix-tcti/next-task.json` and `Build/AgentHarness/orlix-tcti/next-task.md`.
-- Expose simulator eligibility explicitly, including the pinned simulator ID/name and whether simulator gates are complete.
+- Expose simulator eligibility explicitly, including the pinned simulator ID/name from environment policy or `ORLIX_TCTI_REQUIRED_SIMULATOR_*` overrides and whether simulator gates are complete.
+- Expose full simulator readiness through `simulator_readiness_gate_ids`, `simulator_readiness_missing_gate_ids`, and `physical_device_blockers`.
 - Spawn or simulate planner, safety reviewer, LLVM inspector, oracle engineer, reducer, and release-gate reviewer roles.
 - Produce the next safe task, scope, forbidden work, verification gates, reducer requirements, and commit message.
 
@@ -30,7 +32,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Do not add production assembly or gadget dispatch.
 - Do not bypass planner and safety reviewer scope for TCTI work.
 - Do not hardcode a one-off human prompt as the next gate.
-- Do not skip the pinned simulator stability gate before physical-device work.
+- Do not skip the pinned simulator readiness ladder before physical-device work. The ladder is first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
 
 ## Commands It May Run
 
@@ -65,7 +67,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Stop if `agent-task-envelope-check` fails.
 - Stop if `tcti-plan-consistency` fails.
 - Stop if the next task needs production assembly or gadget work before no-phone prerequisites pass.
-- Stop if a physical-device gate is selected before the pinned simulator stability gate passes.
-- Stop if a physical-device gate is selected before the pinned simulator Linux console usability gate passes.
-- Stop if a physical-device gate is selected without explicit `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1`.
+- Stop if a physical-device gate is selected before the pinned simulator has current passing reports for first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+- Stop if physical-device opt-in variables are treated as an override for missing, stale, failing, evidence-only, or emergency-override simulator readiness reports.
+- Stop if a physical-device gate is selected without explicit `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1` after the full pinned simulator readiness ladder has passed.
 - Stop if a simulator-runtime gate does not target the pinned Orlix-iPhone-15-Pro-Max simulator.

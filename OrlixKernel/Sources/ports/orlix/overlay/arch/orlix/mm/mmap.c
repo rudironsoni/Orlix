@@ -18,11 +18,34 @@ static bool orlix_hosted_prot_none_reservation(struct file *file,
 	       !(vm_flags & VM_ACCESS_FLAGS);
 }
 
+static bool orlix_hosted_anonymous_private_mapping(struct file *file,
+						   unsigned long flags)
+{
+	return !file && !(flags & MAP_FIXED) && (flags & MAP_ANONYMOUS) &&
+	       !(flags & MAP_SHARED);
+}
+
+static unsigned long orlix_hosted_mmap_length_align_mask(struct file *file,
+							 unsigned long flags,
+							 unsigned long len)
+{
+	if (!orlix_hosted_anonymous_private_mapping(file, flags) ||
+	    len < PAGE_SIZE || (len & (len - 1)))
+		return 0;
+	return len - 1;
+}
+
 static unsigned long orlix_hosted_mmap_align_mask(struct file *file,
 						  unsigned long flags,
-						  vm_flags_t vm_flags)
+						  vm_flags_t vm_flags,
+						  unsigned long len)
 {
+	unsigned long length_mask;
 	unsigned long granule = arch_boot_host_page_size();
+
+	length_mask = orlix_hosted_mmap_length_align_mask(file, flags, len);
+	if (length_mask)
+		return length_mask;
 
 	if (granule <= PAGE_SIZE ||
 	    !orlix_hosted_prot_none_reservation(file, flags, vm_flags))
@@ -32,14 +55,37 @@ static unsigned long orlix_hosted_mmap_align_mask(struct file *file,
 
 static unsigned long orlix_hosted_mmap_align_offset(struct file *file,
 						    unsigned long flags,
-						    vm_flags_t vm_flags)
+						    vm_flags_t vm_flags,
+						    unsigned long len)
 {
-	unsigned long mask = orlix_hosted_mmap_align_mask(file, flags,
-							  vm_flags);
+	unsigned long length_mask;
+	unsigned long mask;
 
+	length_mask = orlix_hosted_mmap_length_align_mask(file, flags, len);
+	if (length_mask)
+		return 0;
+
+	mask = orlix_hosted_mmap_align_mask(file, flags, vm_flags, len);
 	if (!mask)
 		return 0;
 	return (mask + 1 - PAGE_SIZE) & mask;
+}
+
+static bool orlix_hosted_mmap_address_aligned(struct file *file,
+					      unsigned long flags,
+					      vm_flags_t vm_flags,
+					      unsigned long len,
+					      unsigned long addr)
+{
+	unsigned long mask = orlix_hosted_mmap_align_mask(file, flags,
+							  vm_flags, len);
+	unsigned long offset;
+
+	if (!mask)
+		return true;
+
+	offset = orlix_hosted_mmap_align_offset(file, flags, vm_flags, len);
+	return !((addr + offset) & mask);
 }
 
 static unsigned long orlix_mmap_low_limit(struct mm_struct *mm)
@@ -84,6 +130,8 @@ unsigned long arch_get_unmapped_area(struct file *file, unsigned long addr,
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma_prev(mm, addr, &prev);
 		if (mmap_end - len >= addr && addr >= mmap_floor &&
+		    orlix_hosted_mmap_address_aligned(file, flags, vm_flags,
+						      len, addr) &&
 		    (!vma || addr + len <= vm_start_gap(vma)) &&
 		    (!prev || addr >= vm_end_gap(prev)))
 			return addr;
@@ -93,9 +141,9 @@ unsigned long arch_get_unmapped_area(struct file *file, unsigned long addr,
 	info.low_limit = orlix_mmap_low_limit(mm);
 	info.high_limit = mmap_end;
 	info.align_mask = orlix_hosted_mmap_align_mask(file, flags,
-						       vm_flags);
+						       vm_flags, len);
 	info.align_offset = orlix_hosted_mmap_align_offset(file, flags,
-							   vm_flags);
+							   vm_flags, len);
 	return vm_unmapped_area(&info);
 }
 
@@ -127,6 +175,8 @@ unsigned long arch_get_unmapped_area_topdown(struct file *file,
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma_prev(mm, addr, &prev);
 		if (mmap_end - len >= addr && addr >= mmap_floor &&
+		    orlix_hosted_mmap_address_aligned(file, flags, vm_flags,
+						      len, addr) &&
 		    (!vma || addr + len <= vm_start_gap(vma)) &&
 		    (!prev || addr >= vm_end_gap(prev)))
 			return addr;
@@ -137,9 +187,9 @@ unsigned long arch_get_unmapped_area_topdown(struct file *file,
 	info.low_limit = TASK_UNMAPPED_BASE;
 	info.high_limit = arch_get_mmap_base(addr, mm->mmap_base);
 	info.align_mask = orlix_hosted_mmap_align_mask(file, flags,
-						       vm_flags);
+						       vm_flags, len);
 	info.align_offset = orlix_hosted_mmap_align_offset(file, flags,
-							   vm_flags);
+							   vm_flags, len);
 	result = vm_unmapped_area(&info);
 	if (offset_in_page(result)) {
 		VM_BUG_ON(result != -ENOMEM);

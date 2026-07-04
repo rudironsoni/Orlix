@@ -38,6 +38,9 @@ enum tcti_decode_class {
 	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+	TCTI_DECODE_SIMD_VECTOR_COMPARE,
+	TCTI_DECODE_SIMD_VECTOR_REDUCTION,
+	TCTI_DECODE_FP_SCALAR_MOVE,
 };
 
 enum tcti_memory_index_mode {
@@ -50,6 +53,16 @@ enum tcti_logical_op {
 	TCTI_LOGICAL_AND = 0,
 	TCTI_LOGICAL_ORR,
 	TCTI_LOGICAL_EOR,
+};
+
+enum tcti_simd_reduction_op {
+	TCTI_SIMD_REDUCTION_UMAXV = 0,
+	TCTI_SIMD_REDUCTION_ADDV,
+};
+
+enum tcti_simd_element_move_op {
+	TCTI_SIMD_ELEMENT_MOVE_DUP = 0,
+	TCTI_SIMD_ELEMENT_MOVE_XTN,
 };
 
 enum tcti_move_wide_op {
@@ -152,6 +165,8 @@ struct tcti_decoded_instruction {
 	enum tcti_data_processing_1source_op dp1_op;
 	enum tcti_data_processing_2source_op dp2_op;
 	enum tcti_multiply_add_sub_op mul_op;
+	enum tcti_simd_reduction_op simd_reduction_op;
+	enum tcti_simd_element_move_op simd_element_move_op;
 	bool system_register_write;
 	u8 bitfield_immr;
 	u8 bitfield_imms;

@@ -11,6 +11,44 @@ fail() {
   printf '%s\n' "FAIL: $*" >&2
 }
 
+expect_hook_blocks() {
+  payload="$1"
+  if printf '%s\n' "$payload" | "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" >/dev/null 2>&1; then
+    fail "pre-tool-use-policy allowed unsafe payload: $payload"
+  fi
+}
+
+expect_hook_allows() {
+  payload="$1"
+  if ! printf '%s\n' "$payload" | "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" >/dev/null 2>&1; then
+    fail "pre-tool-use-policy blocked safe payload: $payload"
+  fi
+}
+
+json_command_payload() {
+  command="$1"
+  printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$command"
+}
+
+check_codex_rules_parse() {
+  if ! command -v codex >/dev/null 2>&1; then
+    fail "codex CLI is required to validate .codex/rules/orlix.rules"
+    return
+  fi
+  codex execpolicy check --rules "$root/.codex/rules/orlix.rules" git status >/dev/null 2>&1 ||
+    fail ".codex/rules/orlix.rules must parse under codex execpolicy"
+}
+
+expect_hook_blocks_json_command() {
+  command="$1"
+  expect_hook_blocks "$(json_command_payload "$command")"
+}
+
+expect_hook_allows_json_command() {
+  command="$1"
+  expect_hook_allows "$(json_command_payload "$command")"
+}
+
 require_file() {
   test -f "$root/$1" || fail "missing file: $1"
 }
@@ -20,6 +58,7 @@ require_dir() {
 }
 
 check_hooks() {
+  check_codex_rules_parse
   for hook in pre_tool_use_policy post_tool_use_review session_start_context stop_guard; do
     require_file ".codex/hooks/$hook"
     test -x "$root/.codex/hooks/$hook" || fail ".codex/hooks/$hook is not executable"
@@ -77,23 +116,218 @@ check_skills() {
     fi
   done
   require_file ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json"
+  require_file ".agents/skills/orlix-tcti-next-step/references/environment-policy.json"
+  if command -v jq >/dev/null 2>&1; then
+    jq -e '.required_simulator_id | strings | length > 0' \
+      "$root/.agents/skills/orlix-tcti-next-step/references/environment-policy.json" >/dev/null ||
+      fail "environment policy must define required_simulator_id"
+    jq -e '.required_simulator_name | strings | length > 0' \
+      "$root/.agents/skills/orlix-tcti-next-step/references/environment-policy.json" >/dev/null ||
+      fail "environment policy must define required_simulator_name"
+  else
+    fail "agent harness check requires jq to validate environment policy"
+  fi
   for script in status next task-envelope-check tcti-next-step.swift; do
     require_file ".agents/skills/orlix-tcti-next-step/scripts/$script"
     test -x "$root/.agents/skills/orlix-tcti-next-step/scripts/$script" ||
       fail ".agents/skills/orlix-tcti-next-step/scripts/$script is not executable"
   done
+  ! grep -Eq 'let requiredSimulator(ID|Name) = "[^"]+"' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step scheduler must load simulator identity from environment policy or env vars"
+  if perl -0ne 'exit(/state: "(?:superseded|not_needed)",\s*passed: true/s ? 0 : 1)' \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift"; then
+    fail "superseded and not_needed states must not masquerade as passed=true"
+  fi
   grep -q 'simulator_allowed' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step status must expose simulator_allowed"
   grep -q 'simulator_required_before_physical' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step status must expose simulator_required_before_physical"
   grep -q 'simulator_gates_complete' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step status must expose simulator_gates_complete"
+  grep -q 'simulator_readiness_gate_ids' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose explicit simulator readiness gate ids"
+  grep -q 'simulator_readiness_capabilities' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose simulator readiness capability names"
+  grep -q 'simulator_readiness_missing_gate_ids' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose missing simulator readiness gates"
+  grep -q 'physical_device_blockers' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must expose physical device blockers"
   grep -q 'simulator-tcti-linux-console-usability' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step status must require simulator Linux console usability before physical gates"
+  for gate in \
+    tcti-init-first-syscall \
+    tcti-simulator-stability \
+    tcti-init-console-write \
+    tcti-static-busybox-start \
+    tcti-static-busybox-shell-command \
+    tcti-full-shell-usability \
+    tcti-package-behavior \
+    tcti-dynamic-loader-support \
+    tcti-signals \
+    tcti-vfs-completeness \
+    tcti-full-linux-runtime-readiness; do
+    grep -q "$gate" "$root/tools/runtime/orlix-runtime-validation.sh" ||
+      fail "runtime validation must include simulator readiness gate $gate"
+    grep -q "$gate" "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+      fail "next-step script must include simulator readiness gate $gate"
+  done
+  grep -q 'physicalGateMissingSimulatorPrerequisites' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "task-envelope check must reject physical gates missing simulator readiness prerequisites"
+  if command -v jq >/dev/null 2>&1; then
+    for pair in \
+      "simulator-tcti-init-first-syscall:tcti-init-first-syscall" \
+      "simulator-tcti-runtime-stability:tcti-simulator-stability" \
+      "simulator-tcti-linux-console-usability:tcti-init-console-write" \
+      "simulator-tcti-static-busybox-start:tcti-static-busybox-start" \
+      "simulator-tcti-static-busybox-shell-command:tcti-static-busybox-shell-command" \
+      "simulator-tcti-full-shell-usability:tcti-full-shell-usability" \
+      "simulator-tcti-package-behavior:tcti-package-behavior" \
+      "simulator-tcti-dynamic-loader-support:tcti-dynamic-loader-support" \
+      "simulator-tcti-signals:tcti-signals" \
+      "simulator-tcti-vfs-completeness:tcti-vfs-completeness" \
+      "simulator-tcti-full-linux-runtime-readiness:tcti-full-linux-runtime-readiness"; do
+      simulator_gate="${pair%%:*}"
+      runtime_gate="${pair#*:}"
+      jq -e --arg gate "$simulator_gate" \
+        '.gates[] | select(.id == "physical-tcti-init-first-syscall") | .prerequisites | index($gate)' \
+        "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" >/dev/null ||
+        fail "physical gate must require prerequisite $simulator_gate"
+      jq -e --arg gate "GATE=$runtime_gate" \
+        '.gates[] | select(.id == "physical-tcti-init-first-syscall") | .required_validation_commands | any(contains($gate) and contains("DESTINATION=iphonesimulator") and contains("ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D"))' \
+        "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" >/dev/null ||
+        fail "physical gate validation must rerun pinned simulator runtime gate $runtime_gate"
+    done
+  else
+    fail "agent harness check requires jq to validate physical gate simulator ladder"
+  fi
+  grep -q 'simulator_tcti_full_ladder_passed' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must enforce full simulator ladder before phone work"
+  grep -q 'tcti-\*) destination="iphonesimulator"' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must default TCTI gates to iphonesimulator, not iphoneos"
+  ! grep -q 'allow emergency evidence collection only' "$root/docs/plans/active/orlix-tcti/PLAN.md" ||
+    fail "PLAN.md must not allow physical emergency evidence collection before full simulator readiness"
+  grep -q 'refuse emergency evidence collection until the pinned simulator' "$root/docs/plans/active/orlix-tcti/PLAN.md" ||
+    fail "PLAN.md must refuse physical evidence collection until full pinned simulator readiness"
+  grep -q 'including evidence mode' "$root/.agents/skills/orlix-tcti-safety/SKILL.md" ||
+    fail "TCTI safety skill must block physical evidence mode before full simulator readiness"
+  grep -q 'runtimeReportFatalFree(object) &&' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "shared simulator marker gate predicate must reject fatal runtime evidence"
+  grep -q 'tcti-simulator-fatal-runtime.txt' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
+    fail "pre-tool safety hook must reject simulator reports with fatal runtime artifacts"
   grep -q 'tcti-init-console-write' "$root/tools/runtime/orlix-runtime-validation.sh" ||
     fail "runtime validation must expose tcti-init-console-write for simulator usability"
   grep -q 'ORLIX_TCTI_REQUIRED_SIMULATOR_ID' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "task-envelope check must require the pinned simulator"
+  for field in physical_device_allowed physical_device_blockers release_gate_eligible readiness_gate_eligible; do
+    grep -q "$field" "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+      fail "next-task envelope must expose $field"
+  done
+  grep -q 'tcti_runtime_validation_command' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" &&
+    grep -q 'runtime-validation' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
+    fail "pre-tool-use-policy must match TCTI runtime-validation commands"
+  grep -q 'simulator_tcti_full_ladder_passed' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
+    fail "pre-tool-use-policy must enforce full simulator ladder before physical/default-phone TCTI"
+  grep -Eq 'ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE|ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
+    fail "pre-tool-use-policy must require explicit physical-device opt-in"
+  grep -Eq 'ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE|ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must require explicit physical-device opt-in"
+  grep -q 'pattern = \["make", "runtime-validation", "DESTINATION=iphoneos"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid explicit physical TCTI runtime-validation"
+  ! grep -q 'Default TCTI runtime-validation' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must not treat destination-less TCTI runtime-validation as phone-default"
+  grep -q 'pattern = \["rtk", "proxy", "make", "runtime-validation", "DESTINATION=iphoneos"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk proxy physical TCTI runtime-validation"
+  grep -q 'pattern = \["rtk", "proxy", "xcrun", "devicectl"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk proxy direct device control"
+  grep -q 'pattern = \["xcrun", "xctrace"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid direct xctrace"
+  grep -q 'pattern = \["rtk", "proxy", "xcrun", "xctrace"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk proxy xctrace"
+  grep -q 'pattern = \["xcodebuild", "-destination", "generic/platform=iOS"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid direct physical xcodebuild generic destination"
+  grep -q 'pattern = \["rtk", "xcodebuild", "-destination", "generic/platform=iOS"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk physical xcodebuild generic destination"
+  grep -q 'pattern = \["rtk", "proxy", "xcodebuild", "-destination", "generic/platform=iOS"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk proxy physical xcodebuild generic destination"
+  grep -q 'pattern = \["rtk", "proxy", "ios-deploy"\]' "$root/.codex/rules/orlix.rules" ||
+    fail "Codex rules must forbid rtk proxy ios-deploy"
+
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall; grep . AGENTS.md'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos GATE="tcti-init-first-syscall"'
+  expect_hook_blocks "make runtime-validation DESTINATION=iphoneos GATE='tcti-init-first-syscall'"
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos'
+  expect_hook_blocks "make runtime-validation DESTINATION='generic/platform=iOS' GATE=tcti-init-first-syscall"
+  expect_hook_blocks 'ORLIX_RUNTIME_PREFLIGHT_ONLY=1 xcrun devicectl list devices'
+  expect_hook_blocks 'make -f Makefile runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphonesimulator DESTINATION=iphoneos GATE=tcti-init-first-syscall'
+  expect_hook_blocks 'rtk proxy xcrun devicectl list devices'
+  expect_hook_blocks 'rtk proxy ios-deploy --bundle Orlix.app'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=BAD'
+  expect_hook_allows 'make runtime-validation GATE=tcti-init-console-write'
+  expect_hook_allows 'make runtime-validation GATE=tcti-static-busybox-start'
+  expect_hook_allows 'make runtime-validation GATE=tcti-static-busybox-shell-command'
+  expect_hook_allows 'make runtime-validation GATE=tcti-full-shell-usability'
+  expect_hook_allows 'make runtime-validation GATE=tcti-package-behavior'
+  expect_hook_allows 'make runtime-validation GATE=tcti-dynamic-loader-support'
+  expect_hook_allows 'make runtime-validation GATE=tcti-signals'
+  expect_hook_allows 'make runtime-validation GATE=tcti-vfs-completeness'
+  expect_hook_allows 'make runtime-validation GATE=tcti-full-linux-runtime-readiness'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-init-console-write'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-static-busybox-start'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-static-busybox-shell-command'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-full-shell-usability'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-package-behavior'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-dynamic-loader-support'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-signals'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-vfs-completeness'
+  expect_hook_allows 'rtk make runtime-validation GATE=tcti-full-linux-runtime-readiness'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-init-console-write'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-static-busybox-start'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-static-busybox-shell-command'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-full-shell-usability'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-package-behavior'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-dynamic-loader-support'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-signals'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-vfs-completeness'
+  expect_hook_allows 'rtk proxy make runtime-validation GATE=tcti-full-linux-runtime-readiness'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall; /usr/bin/xcrun devicectl list devices'
+  expect_hook_blocks 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall; /tmp/ios-deploy --bundle Orlix.app'
+  expect_hook_blocks 'command /usr/bin/xcrun devicectl list devices'
+  expect_hook_blocks 'env FOO=1 /usr/local/bin/ios-deploy --bundle Orlix.app'
+  expect_hook_blocks 'xcodebuild -project Orlix.xcodeproj -scheme OrlixTestRunner -destination id=00008130-001E74A11193803A test'
+  expect_hook_blocks 'rtk proxy xcodebuild -project Orlix.xcodeproj -scheme OrlixTestRunner -destination id=00008130-001E74A11193803A test'
+  expect_hook_blocks 'xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_blocks 'xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS,id=00008130-001E74A11193803A test runtime-validation'
+  expect_hook_blocks 'rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_blocks 'rtk proxy xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_blocks 'xcrun xctrace list devices'
+  expect_hook_blocks 'rtk xcrun xctrace record --device 00008130-001E74A11193803A --template "Time Profiler"'
+  expect_hook_blocks 'xcrun xctrace record --device 00008130-001E74A11193803A --template "Time Profiler"'
+  expect_hook_blocks 'rtk proxy xcrun xctrace record --device 00008130-001E74A11193803A --template "Time Profiler"'
+  expect_hook_blocks_json_command 'make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-init-console-write'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-static-busybox-start'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-static-busybox-shell-command'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-full-shell-usability'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-package-behavior'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-dynamic-loader-support'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-signals'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-vfs-completeness'
+  expect_hook_allows_json_command 'make runtime-validation GATE=tcti-full-linux-runtime-readiness'
+  expect_hook_blocks_json_command 'make runtime-validation GATE=tcti-full-shell-usability ORLIX_SIMULATOR_ID=BAD'
+  expect_hook_blocks_json_command 'xcrun devicectl list devices'
+  expect_hook_blocks_json_command 'xcrun xctrace list devices'
+  expect_hook_blocks_json_command 'xcrun xctrace record --device 00008130-001E74A11193803A --template "Time Profiler"'
+  expect_hook_blocks_json_command 'ios-deploy --bundle Orlix.app'
+  expect_hook_blocks_json_command 'xcodebuild -project Orlix.xcodeproj -scheme OrlixTestRunner -destination id=00008130-001E74A11193803A test'
+  expect_hook_blocks_json_command 'xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_blocks_json_command 'xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS,id=00008130-001E74A11193803A test runtime-validation'
+  expect_hook_blocks_json_command 'rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_blocks_json_command 'rtk proxy xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
+  expect_hook_allows 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
+  expect_hook_allows_json_command 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
+  expect_hook_allows 'rtk proxy jq -r ".gates[] | select(.id==\"physical-tcti-init-first-syscall\") | .prerequisites[]" .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json'
 }
 
 check_mcp() {

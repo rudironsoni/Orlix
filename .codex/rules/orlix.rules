@@ -1,7 +1,7 @@
 # Project-local Codex command rules for OrlixSystem.
 #
-# `rtk` is an output-shrinking wrapper. Rules must cover both `cmd ...` and
-# `rtk cmd ...` forms because the underlying side effect is identical.
+# rtk only changes command output shape. Rules cover bare, rtk, and rtk proxy
+# forms when the side effect is the same.
 
 prefix_rule(
   pattern = ["git", "push"],
@@ -10,7 +10,6 @@ prefix_rule(
   match = [
     "git push",
     "git push origin main",
-    "git push --force-with-lease",
   ],
   not_match = [
     "git status",
@@ -24,7 +23,6 @@ prefix_rule(
   match = [
     "rtk git push",
     "rtk git push origin main",
-    "rtk git push --force-with-lease",
   ],
   not_match = [
     "rtk git status",
@@ -34,7 +32,7 @@ prefix_rule(
 prefix_rule(
   pattern = ["rm", "-rf"],
   decision = "forbidden",
-  justification = "Do not use broad destructive deletion. Use targeted apply_patch deletes or ask for explicit approval.",
+  justification = "Do not use broad destructive deletion. Use targeted deletes after explicit scope review.",
   match = [
     "rm -rf Build",
     "rm -rf .",
@@ -47,7 +45,7 @@ prefix_rule(
 prefix_rule(
   pattern = ["rtk", "rm", "-rf"],
   decision = "forbidden",
-  justification = "Do not use broad destructive deletion. Use targeted apply_patch deletes or ask for explicit approval.",
+  justification = "Do not use broad destructive deletion. Use targeted deletes after explicit scope review.",
   match = [
     "rtk rm -rf Build",
     "rtk rm -rf .",
@@ -58,66 +56,264 @@ prefix_rule(
 )
 
 prefix_rule(
-  pattern = ["timeout", "18000", "make"],
-  decision = "allow",
-  justification = "Long Orlix build and proof commands are expected project workflows.",
-  match = [
-    "timeout 18000 make -f OrlixOS/Makefile test PROFILE=release",
-    "timeout 18000 make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L",
-  ],
-  not_match = [
-    "timeout 1200 make test",
-  ],
-)
-
-prefix_rule(
-  pattern = ["rtk", "timeout", "18000", "make"],
-  decision = "allow",
-  justification = "Long Orlix build and proof commands are expected project workflows.",
-  match = [
-    "rtk timeout 18000 make -f OrlixOS/Makefile test PROFILE=release",
-    "rtk timeout 18000 make beta-archive ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L",
-  ],
-  not_match = [
-    "rtk timeout 1200 make test",
-  ],
-)
-
-prefix_rule(
   pattern = ["xcrun", "simctl"],
   decision = "allow",
-  justification = "Simulator inspection and control are required to verify the app-hosted runtime.",
-	match = [
-		"xcrun simctl list",
-		"xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
-	],
+  justification = "Simulator inspection and control are required to verify app-hosted runtime.",
+  match = [
+    "xcrun simctl list",
+    "xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+  ],
   not_match = [
-    "xcodebuild -version",
+    "xcrun devicectl list devices",
   ],
 )
 
 prefix_rule(
   pattern = ["rtk", "xcrun", "simctl"],
   decision = "allow",
-  justification = "Simulator inspection and control are required to verify the app-hosted runtime.",
-	match = [
-		"rtk xcrun simctl list",
-		"rtk xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
-	],
+  justification = "Simulator inspection and control are required to verify app-hosted runtime.",
+  match = [
+    "rtk xcrun simctl list",
+    "rtk xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+  ],
   not_match = [
-    "rtk xcodebuild -version",
+    "rtk xcrun devicectl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "xcrun", "simctl"],
+  decision = "allow",
+  justification = "Simulator inspection and control are required to verify app-hosted runtime.",
+  match = [
+    "rtk proxy xcrun simctl list devices",
+    "rtk proxy xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+  ],
+  not_match = [
+    "rtk proxy xcrun devicectl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["make", "runtime-validation", "DESTINATION=iphoneos"],
+  decision = "forbidden",
+  justification = "Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
+  match = [
+    "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
+  ],
+  not_match = [
+    "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "make", "runtime-validation", "DESTINATION=iphoneos"],
+  decision = "forbidden",
+  justification = "rtk does not change side effects. Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
+  match = [
+    "rtk make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
+  ],
+  not_match = [
+    "rtk make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "make", "runtime-validation", "DESTINATION=iphoneos"],
+  decision = "forbidden",
+  justification = "rtk proxy does not change side effects. Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
+  match = [
+    "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
+  ],
+  not_match = [
+    "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
+  ],
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+prefix_rule(
+  pattern = ["xcrun", "devicectl"],
+  decision = "forbidden",
+  justification = "Direct physical-device control is not part of the simulator-first TCTI workflow.",
+  match = [
+    "xcrun devicectl list devices",
+  ],
+  not_match = [
+    "xcrun simctl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "xcrun", "devicectl"],
+  decision = "forbidden",
+  justification = "Direct physical-device control is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk proxy xcrun devicectl list devices",
+  ],
+  not_match = [
+    "rtk proxy xcrun simctl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["xcrun", "xctrace"],
+  decision = "forbidden",
+  justification = "Direct physical-device tracing is not part of the simulator-first TCTI workflow.",
+  match = [
+    "xcrun xctrace list devices",
+  ],
+  not_match = [
+    "xcrun simctl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "xcrun", "xctrace"],
+  decision = "forbidden",
+  justification = "Direct physical-device tracing is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk proxy xcrun xctrace list devices",
+  ],
+  not_match = [
+    "rtk proxy xcrun simctl list devices",
+  ],
+)
+
+prefix_rule(
+  pattern = ["ios-deploy"],
+  decision = "forbidden",
+  justification = "Direct physical-device deployment is not part of the simulator-first TCTI workflow.",
+  match = [
+    "ios-deploy --bundle Orlix.app",
+  ],
+  not_match = [
+    "xcrun simctl install booted Orlix.app",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "ios-deploy"],
+  decision = "forbidden",
+  justification = "Direct physical-device deployment is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk proxy ios-deploy --bundle Orlix.app",
+  ],
+  not_match = [
+    "rtk proxy xcrun simctl install booted Orlix.app",
+  ],
+)
+
+prefix_rule(
+  pattern = ["xcodebuild", "-destination", "generic/platform=iOS"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "xcodebuild -destination generic/platform=iOS test",
+  ],
+  not_match = [
+    "xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "xcodebuild", "-destination", "generic/platform=iOS"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk xcodebuild -destination generic/platform=iOS test",
+  ],
+  not_match = [
+    "rtk xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "xcodebuild", "-destination", "generic/platform=iOS"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk proxy xcodebuild -destination generic/platform=iOS test",
+  ],
+  not_match = [
+    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+  ],
+)
+
+prefix_rule(
+  pattern = ["xcodebuild", "-destination", "platform=iOS,id=00008130-001E74A11193803A"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
+  ],
+  not_match = [
+    "xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "xcodebuild", "-destination", "platform=iOS,id=00008130-001E74A11193803A"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
+  ],
+  not_match = [
+    "rtk xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+  ],
+)
+
+prefix_rule(
+  pattern = ["rtk", "proxy", "xcodebuild", "-destination", "platform=iOS,id=00008130-001E74A11193803A"],
+  decision = "forbidden",
+  justification = "Direct physical-device xcodebuild is not part of the simulator-first TCTI workflow.",
+  match = [
+    "rtk proxy xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
+  ],
+  not_match = [
+    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
   ],
 )
 
 prefix_rule(
   pattern = ["xcodebuild"],
   decision = "allow",
-  justification = "Xcode build, package resolution, test, archive, and export commands are required project workflows.",
+  justification = "Xcode build, package resolution, simulator test, archive, and export commands are required project workflows. Device-oriented TCTI is separately blocked by hooks and runtime preflight.",
   match = [
     "xcodebuild -version",
-    "xcodebuild -resolvePackageDependencies -project Orlix.xcodeproj -scheme Orlix -skipPackageUpdates",
-    "xcodebuild -project Orlix.xcodeproj -scheme Orlix archive",
-    "xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757 test",
+    "xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
   ],
   not_match = [
     "git status",
@@ -127,12 +323,10 @@ prefix_rule(
 prefix_rule(
   pattern = ["rtk", "xcodebuild"],
   decision = "allow",
-  justification = "Xcode build, package resolution, test, archive, and export commands are required project workflows.",
+  justification = "Xcode build, package resolution, simulator test, archive, and export commands are required project workflows. Device-oriented TCTI is separately blocked by hooks and runtime preflight.",
   match = [
     "rtk xcodebuild -version",
-    "rtk xcodebuild -resolvePackageDependencies -project Orlix.xcodeproj -scheme Orlix -skipPackageUpdates",
-    "rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix archive",
-    "rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=E65F0D05-980C-4368-8CDC-2D2BF3E05757 test",
+    "rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
   ],
   not_match = [
     "rtk git status",

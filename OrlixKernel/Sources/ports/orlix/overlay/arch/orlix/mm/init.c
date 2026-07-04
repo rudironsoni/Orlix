@@ -273,7 +273,8 @@ int orlix_sync_hosted_kernel_fault(unsigned long address)
 }
 
 static int orlix_fault_in_user_page_locked(struct mm_struct *mm,
-					   unsigned long fault_address);
+					   unsigned long fault_address,
+					   unsigned long host_fault_flags);
 
 static int orlix_user_pte_window(struct mm_struct *mm,
 				 unsigned long page,
@@ -291,7 +292,7 @@ static int orlix_user_pte_window(struct mm_struct *mm,
 	if (page >= TASK_SIZE)
 		return -EFAULT;
 
-	ret = orlix_fault_in_user_page_locked(mm, page);
+	ret = orlix_fault_in_user_page_locked(mm, page, 0);
 	if (ret)
 		return ret;
 
@@ -386,7 +387,8 @@ void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
 }
 
 static int orlix_fault_in_user_page_locked(struct mm_struct *mm,
-					   unsigned long fault_address)
+					   unsigned long fault_address,
+					   unsigned long host_fault_flags)
 {
 	struct pt_regs *regs = task_pt_regs(current);
 	bool tried = false;
@@ -402,7 +404,13 @@ retry:
 		if (!vma)
 			return -EFAULT;
 
-		if (vma->vm_flags & VM_EXEC) {
+		if (host_fault_flags & ORLIX_HOST_USER_FAULT_EXEC) {
+			required = VM_EXEC;
+			fault_flags |= FAULT_FLAG_INSTRUCTION;
+		} else if (host_fault_flags & ORLIX_HOST_USER_FAULT_WRITE) {
+			required = VM_WRITE;
+			fault_flags |= FAULT_FLAG_WRITE;
+		} else if (vma->vm_flags & VM_EXEC) {
 			required = VM_EXEC;
 			fault_flags |= FAULT_FLAG_INSTRUCTION;
 		} else if (vma->vm_flags & VM_WRITE) {
@@ -438,6 +446,19 @@ retry:
 
 		return 0;
 	}
+}
+
+static int orlix_fault_in_user_page_unlocked(struct mm_struct *mm,
+					     unsigned long fault_address,
+					     unsigned long host_fault_flags)
+{
+	int ret = orlix_fault_in_user_page_locked(mm, fault_address,
+						  host_fault_flags);
+
+	if (!ret)
+		mmap_read_unlock(mm);
+
+	return ret;
 }
 
 static int orlix_sync_user_pte_page(struct mm_struct *mm, unsigned long page)
@@ -522,7 +543,7 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 		struct vm_area_struct *vma;
 		const void *source;
 
-		ret = orlix_fault_in_user_page_locked(mm, cursor);
+		ret = orlix_fault_in_user_page_locked(mm, cursor, 0);
 		if (ret) {
 			if (cursor == page)
 				page_ret = ret;
@@ -831,6 +852,8 @@ int orlix_sync_current_user_fault_window(unsigned long address,
 
 	if (fault_flags & ORLIX_HOST_USER_FAULT_BUS)
 		return orlix_sync_current_user_mapping_page(address);
+	if (fault_flags & ORLIX_HOST_USER_FAULT_EXEC)
+		return orlix_fault_in_user_page_unlocked(mm, page, fault_flags);
 
 	mmap_read_lock(mm);
 	vma = vma_lookup(mm, address);
@@ -855,6 +878,12 @@ int orlix_sync_current_user_fault_window(unsigned long address,
 	window_end = window_start + window_pages * PAGE_SIZE;
 	if (window_end > end || window_end < window_start)
 		window_end = end;
+
+	if (fault_flags & ORLIX_HOST_USER_FAULT_WRITE) {
+		ret = orlix_fault_in_user_page_unlocked(mm, page, fault_flags);
+		if (ret)
+			return ret;
+	}
 
 	ret = orlix_sync_user_host_window(mm, page);
 	if (ret)

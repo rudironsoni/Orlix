@@ -22,7 +22,7 @@ TCTI only executes guest AArch64 EL0 instructions until Linux needs control agai
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
 - Neither this plan nor the full TCTI objective can be marked complete by documentation, harness rails, or no-phone seed proofs alone. Completion requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, static audits, gadget readiness where required, and physical-device runtime evidence.
 - The repo can select the next eligible TCTI gate without a human naming it. `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti` must produce and validate a machine-readable next-task envelope from current reports and the skill-owned roadmap.
-- Simulator validation is mandatory before physical iPhone validation. The simulator must run on the dedicated `Orlix-iPhone-15-Pro-Max` simulator and must prove the first TCTI `svc #0` marker, post-launch TCTI runtime stability, and a simulator Linux console usability marker through `tcti-init-console-write`, with no kernel panic, init death, user fault, BUG, Oops, SIGSEGV, fatal error, or crash marker in the captured logs. Direct physical `runtime-validation` preflight must enforce the same simulator-stability and simulator-console prerequisites, not only the agent-next selector.
+- Simulator validation is mandatory before physical iPhone validation. The simulator must run on the dedicated `Orlix-iPhone-15-Pro-Max` simulator and must prove the full simulator ladder: first TCTI `svc #0` marker, post-launch TCTI runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness. Every report must be current, passing, non-preflight, non-emergency-override, and free of kernel panic, init death, user fault, BUG, Oops, SIGSEGV, fatal error, or crash markers. Direct physical `runtime-validation` preflight must enforce the same full simulator ladder, not only the agent-next selector.
 - Physical iPhone gate proves static `/init` reaches real `svc #0`, enters `orlix_syscall_dispatch`, writes one Linux console line, and emits HostAdapter console mirror evidence.
 - Performance claims include exact workload, device, build configuration, command, baseline, counters, wall-clock result, JSON report, and Markdown report.
 
@@ -39,7 +39,7 @@ Agents may mark only the exact scoped checkpoint they just verified. They must n
 - release or readiness eligibility is false
 - any required TCTI report is missing, `todo`, `fail`, `error`, `skipped`, or `evidence`
 - gadget prerequisites are incomplete for a gadget or physical-device claim
-- simulator `tcti-init-first-syscall`, `tcti-simulator-stability`, or `tcti-init-console-write` has not produced a current passing `DESTINATION=iphonesimulator` JSON report
+- any pinned simulator ladder report has not produced a current passing JSON report, including first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness
 - `make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall` has not produced a passing JSON report
 - the physical-device report does not prove real `/init` reaches `svc #0`, enters `orlix_syscall_dispatch`, writes a Linux console line, and has all forbidden-behavior fields false
 
@@ -95,11 +95,20 @@ The envelope validator must fail if:
 - validation commands are missing
 - expected report paths are missing
 - a physical-device gate is selected while no-phone gates are incomplete
+- a physical-device gate is selected while the explicit pinned simulator readiness list has any missing, stale, failing, evidence-only, preflight-only, or emergency-override report
 - a gadget gate is selected before switch-debug oracle coverage exists
 - custom Orlix MCP is referenced
 - `tools/agent` is referenced or exists
 - scripts live outside `.agents/skills/<skill-name>/scripts/`
 - JSON is not machine-parseable
+
+The status and next-task JSON must carry the full simulator-readiness contract:
+
+- `simulator_readiness_gate_ids`
+- `simulator_readiness_missing_gate_ids`
+- `physical_device_blockers`
+
+Those fields are not advisory. If `simulator_readiness_missing_gate_ids` is non-empty, no phone work may be selected, requested, or treated as evidence of progress toward release readiness.
 
 Standard autonomous workflow:
 
@@ -116,7 +125,8 @@ Current roadmap state after the latest no-phone proofs and simulator policy corr
 - `simulator-tcti-init-first-syscall` proves only that the simulator build reaches the first TCTI `svc #0` marker.
 - `simulator-tcti-runtime-stability` is mandatory after the first-syscall marker and before any phone gate. It fails on fatal post-launch TCTI runtime evidence and emits the fatal log artifact for reduction.
 - `simulator-tcti-linux-console-usability` is mandatory after simulator runtime stability and before any phone gate. It runs `runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write` on `Orlix-iPhone-15-Pro-Max` and requires a current passing JSON report plus the console marker artifact.
-- Physical-device gates remain blocked while simulator stability or simulator Linux console usability fails or is missing, even if the first-syscall marker report passes.
+- Static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness are also mandatory pinned-simulator gates before any phone work.
+- Physical-device gates remain blocked while any pinned simulator ladder report fails or is missing, even if the first-syscall marker, stability, or console marker report passes.
 - Gadget and production TCTI work remain blocked unless the selected harness envelope explicitly allows them.
 - This status is proof of sequencing only. It is not a completion claim for TCTI, product readiness, or physical-device support.
 
@@ -1239,21 +1249,40 @@ No patching by reading iPhone logs and guessing.
 
 ## Runtime Validation Gates
 
-First gate command:
+First simulator gate command:
 
 ```sh
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 rtk proxy make runtime-validation \
-  PROFILE=development \
+  DESTINATION=iphonesimulator \
   GATE=tcti-init-first-syscall \
-  DESTINATION=iphoneos \
-  REPORT_DIR="$(external-ssd-root)/Xcode/OrlixSystem/Reports/runtime"
+  ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D \
+  ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D \
+  ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max
 ```
 
-The target must:
+Simulator readiness gates, in harness order:
+
+- `tcti-init-first-syscall`
+- `tcti-simulator-stability`
+- `tcti-init-console-write`
+- `tcti-static-busybox-start`
+- `tcti-static-busybox-shell-command`
+- `tcti-full-shell-usability`
+- `tcti-package-behavior`
+- `tcti-dynamic-loader-support`
+- `tcti-signals`
+- `tcti-vfs-completeness`
+- `tcti-full-linux-runtime-readiness`
+
+Every simulator report must be current for `HEAD`, passing, selected on the pinned simulator, single-booted, non-preflight, non-emergency-override, `backend=tcti`, `profile=tcti_runtime`, and free of fatal runtime artifacts. Marker gates must write their expected marker artifact, including shell usability, package behavior, dynamic loader support, signal behavior, VFS completeness, and full runtime readiness.
+
+Phone work remains forbidden until `make agent-status AREA=orlix-tcti` reports `simulator_gates_complete=true` and `physical_device_allowed=true`, and until explicit human opt-in is present through `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1`.
+
+The physical target, when later eligible, must:
 
 - refuse to run on a physical iPhone unless the Autonomous Test Contract targets pass
-- allow emergency evidence collection only with `ORLIX_TCTI_DEVICE_OVERRIDE=I_ACCEPT_DEVICE_DEBUG_DEBT` and a non-empty `ORLIX_TCTI_DEVICE_OVERRIDE_REASON`
+- refuse emergency evidence collection until the pinned simulator has current passing reports for first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness
 - build the requested profile
 - auto-discover exactly one connected eligible physical iPhone through `xcrun devicectl --json-output`
 - fail if zero or multiple devices match unless `ORLIX_DEVICE_ID` is supplied
@@ -1758,7 +1787,7 @@ The current harness checkpoint is simulator-first and reducer-backed:
 
 - no-phone golden ELF and switch-debug oracle prerequisites have advanced past the early seed gates
 - simulator first-syscall evidence exists for the pinned `Orlix-iPhone-15-Pro-Max` simulator
-- physical-device work remains blocked while `simulator-tcti-runtime-stability` fails
+- physical-device work remains blocked while any required pinned simulator ladder report is missing or failing
 - the current simulator failure is reduced as clone/post-syscall return-frame preservation, not as an unreduced phone log
 - current scoped production edits are allowed only when they are tied to the reducer-backed simulator stability envelope
 - current next gate selected as `simulator-tcti-runtime-stability`
