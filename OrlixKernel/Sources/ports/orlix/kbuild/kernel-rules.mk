@@ -1727,10 +1727,31 @@ __kunit-run: __kunit
 	fi; \
 	echo "ORLIX-KUNIT-RUNNER test_symbol_present=true"; \
 	echo "ORLIX-KUNIT-RUNNER execution_attempted=true"; \
-	echo "ORLIX-KUNIT-RUNNER-BLOCKED reason=no-no-phone-kunit-executor"; \
-	echo "ORLIX-KUNIT-RUNNER-BLOCKED detail=ARCH=$(ORLIX_PORT_ARCH) KUnit object build is not a runnable KUnit executor"; \
-	echo "ORLIX-KUNIT-RUNNER-END status=blocked"; \
-	exit 2
+	runner_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/kunit-run/$(PROFILE)"; \
+	tcti_dir="$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti"; \
+	host_include="$$tcti_dir/tests/host_include"; \
+	runner="$$runner_dir/tcti_syscall_dispatch_smoke_runner"; \
+	hostcc="$(ORLIX_KERNEL_HOSTCC)"; \
+	mkdir -p "$$runner_dir"; \
+	"$$hostcc" -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
+		-DORLIX_TCTI_HOST_TEST_RUNNER=1 \
+		-I"$$host_include" -I"$$tcti_dir" \
+		-c "$$tcti_dir/decode_aarch64.c" \
+		-o "$$runner_dir/decode_aarch64.o"; \
+	"$$hostcc" -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
+		-DORLIX_TCTI_HOST_TEST_RUNNER=1 \
+		-I"$$host_include" -I"$$tcti_dir" \
+		-c "$$tcti_dir/tests/tcti_syscall_dispatch_smoke_runner.c" \
+		-o "$$runner_dir/tcti_syscall_dispatch_smoke_runner.o"; \
+	"$$hostcc" "$$runner_dir/tcti_syscall_dispatch_smoke_runner.o" \
+		"$$runner_dir/decode_aarch64.o" -o "$$runner"; \
+	set +e; "$$runner"; runner_rc=$$?; set -e; \
+	if [ $$runner_rc -eq 0 ]; then \
+		echo "ORLIX-KUNIT-RUNNER-END status=pass"; \
+	else \
+		echo "ORLIX-KUNIT-RUNNER-END status=fail"; \
+	fi; \
+	exit $$runner_rc
 
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \
