@@ -1131,7 +1131,7 @@ endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kunit-run kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-run __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1140,6 +1140,7 @@ help:
 	@printf '%s\n' '  build                     build the app-hosted OrlixKernel iOS artifact'
 	@printf '%s\n' '  test                      run test type(s), default: type=kunit'
 	@printf '%s\n' '  test type=kunit           build Linux KUnit-selected Orlix tests'
+	@printf '%s\n' '  kunit-run                 attempt no-phone execution of selected Orlix KUnit tests'
 	@printf '%s\n' '  test type=kunit,kselftest build KUnit and Linux kselftest artifacts'
 	@printf '%s\n' '  kselftest                 install OrlixMLibC-built kselftests'
 	@printf '%s\n' '  headers_install           install Linux UAPI headers for OrlixMLibC'
@@ -1156,6 +1157,8 @@ headers_install: __headers-install
 
 kunit: __kunit
 
+kunit-run: __kunit-run
+
 kselftest-install: __kselftest-install
 
 kselftest: kselftest-install __kselftest-initramfs
@@ -1169,8 +1172,9 @@ test:
 	for selected in $(TEST_TYPES); do \
 		case "$$selected" in \
 			kunit) $(MAKE) kunit PROFILE="$(PROFILE)" ;; \
+			kunit-run) $(MAKE) kunit-run PROFILE="$(PROFILE)" ;; \
 			kselftest) $(MAKE) kselftest PROFILE="$(PROFILE)" libc="$(libc)" ;; \
-			*) echo "unsupported test type: $$selected (expected kunit or kselftest)" >&2; exit 1 ;; \
+			*) echo "unsupported test type: $$selected (expected kunit, kunit-run, or kselftest)" >&2; exit 1 ;; \
 		esac; \
 	done
 
@@ -1695,6 +1699,38 @@ __kunit: __prepare-kbuild
 	"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$(ORLIX_KUNIT_BUILD_DIR)/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
+
+__kunit-run: __kunit
+	@set -euo pipefail; \
+	test_name="tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"; \
+	test_obj="$(ORLIX_KUNIT_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o"; \
+	nm_cmd="$(ORLIX_KERNEL_NM)"; \
+	if [ -z "$$nm_cmd" ] || ! command -v "$$nm_cmd" >/dev/null 2>&1; then \
+		if command -v llvm-nm >/dev/null 2>&1; then nm_cmd="llvm-nm"; \
+		elif command -v xcrun >/dev/null 2>&1; then nm_cmd="xcrun llvm-nm"; \
+		else echo "missing nm for Orlix KUnit run symbol audit" >&2; exit 1; fi; \
+	fi; \
+	echo "ORLIX-KUNIT-RUNNER-BEGIN"; \
+	echo "ORLIX-KUNIT-RUNNER profile=$(PROFILE) arch=$(ORLIX_PORT_ARCH)"; \
+	echo "ORLIX-KUNIT-RUNNER test=$$test_name"; \
+	echo "ORLIX-KUNIT-RUNNER test_object=$$test_obj"; \
+	if [ ! -s "$$test_obj" ]; then \
+		echo "ORLIX-KUNIT-RUNNER test_object_present=false"; \
+		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
+		exit 2; \
+	fi; \
+	echo "ORLIX-KUNIT-RUNNER test_object_present=true"; \
+	if ! $$nm_cmd "$$test_obj" | grep -q "$$test_name"; then \
+		echo "ORLIX-KUNIT-RUNNER test_symbol_present=false"; \
+		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
+		exit 2; \
+	fi; \
+	echo "ORLIX-KUNIT-RUNNER test_symbol_present=true"; \
+	echo "ORLIX-KUNIT-RUNNER execution_attempted=true"; \
+	echo "ORLIX-KUNIT-RUNNER-BLOCKED reason=no-no-phone-kunit-executor"; \
+	echo "ORLIX-KUNIT-RUNNER-BLOCKED detail=ARCH=$(ORLIX_PORT_ARCH) KUnit object build is not a runnable KUnit executor"; \
+	echo "ORLIX-KUNIT-RUNNER-END status=blocked"; \
+	exit 2
 
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \

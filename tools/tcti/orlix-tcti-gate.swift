@@ -909,6 +909,11 @@ func kernelSyscallDispatchKUnitEvidence(from output: String) -> [String: String]
     let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
         output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
         output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let runnerAttempted = output.contains("ORLIX-KUNIT-RUNNER-BEGIN") &&
+        output.contains("ORLIX-KUNIT-RUNNER-END")
+    let runnerBlocked = output.contains("ORLIX-KUNIT-RUNNER-BLOCKED")
+    let testObjectPresent = output.contains("ORLIX-KUNIT-RUNNER test_object_present=true")
+    let testSymbolPresent = output.contains("ORLIX-KUNIT-RUNNER test_symbol_present=true")
     let namedPass = output.range(
         of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
         options: .regularExpression
@@ -926,6 +931,10 @@ func kernelSyscallDispatchKUnitEvidence(from output: String) -> [String: String]
     return [
         "kunit_test_name": testName,
         "kunit_output_has_ktap": hasKTAP ? "true" : "false",
+        "kunit_runner_attempted": runnerAttempted ? "true" : "false",
+        "kunit_runner_blocked": runnerBlocked ? "true" : "false",
+        "kunit_test_object_present": testObjectPresent ? "true" : "false",
+        "kunit_test_symbol_present": testSymbolPresent ? "true" : "false",
         "kunit_named_test_mentioned": namedMentioned ? "true" : "false",
         "kunit_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
         "kunit_named_test_passed": namedPass ? "true" : "false",
@@ -947,9 +956,9 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let hostAdapter = path("OrlixHostAdapter", "Sources")
     let outputRoot = buildPath("kernel_syscall_dispatch_smoke")
     let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
-    let kunitOutputURL = outputRoot.appendingPathComponent("kunit-build.txt")
+    let kunitOutputURL = outputRoot.appendingPathComponent("kunit-run.txt")
     let kunitExecutionEvidenceURL = outputRoot.appendingPathComponent("kunit-execution-evidence.json")
-    let kunitCommand = "make -f OrlixKernel/Makefile kunit PROFILE=\(kernelProfile)"
+    let kunitCommand = "make -f OrlixKernel/Makefile kunit-run PROFILE=\(kernelProfile)"
     try ensureDirectory(outputRoot)
 
     let configText = try readText(kernelConfig)
@@ -1033,18 +1042,10 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         evidence["hostadapter_linux_syscall_semantics"] = "absent"
     }
 
-    var kunitBuildPassed = false
-    let kunitOutput: String
-    do {
-        kunitOutput = try run(["make", "-f", "OrlixKernel/Makefile", "kunit", "PROFILE=\(kernelProfile)"])
-        kunitBuildPassed = true
-        evidence["workload_hook_compiled"] = "true"
-        evidence["kunit_build_result"] = "pass"
-    } catch {
-        kunitOutput = String(describing: error)
-        evidence["kunit_build_result"] = "fail"
-        failures.append(fail("kernel-workload-hook-build", "KUnit workload hook did not compile: \(error)"))
-    }
+    let kunitOutput = try run(
+        ["sh", "-c", "\(kunitCommand) 2>&1"],
+        check: false
+    )
     try kunitOutput.write(to: kunitOutputURL, atomically: true, encoding: .utf8)
 
     let sourceFailureCount = failures.count
@@ -1055,6 +1056,12 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     }
 
     let namedKUnitTestPassed = kunitEvidence["kunit_named_test_passed"] == "true"
+    let kunitRunnerAttempted = kunitEvidence["kunit_runner_attempted"] == "true"
+    let kunitRunnerBlocked = kunitEvidence["kunit_runner_blocked"] == "true"
+    let kunitTestSymbolPresent = kunitEvidence["kunit_test_symbol_present"] == "true"
+    let kunitBuildPassed = kunitTestSymbolPresent
+    evidence["workload_hook_compiled"] = kunitTestSymbolPresent ? "true" : "false"
+    evidence["kunit_build_result"] = kunitTestSymbolPresent ? "pass" : "fail"
     let blocker: String
     if kunitBuildPassed && namedKUnitTestPassed {
         evidence["workload_hook_executed"] = "true"
@@ -1066,6 +1073,12 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         evidence["runtime_syscall_number_observed"] = "__NR_getpid"
         evidence["runtime_orlix_syscall_dispatch_reached"] = "true"
         blocker = ""
+    } else if kunitRunnerBlocked {
+        blocker = "No no-phone KUnit executor is available for ARCH=orlix; the run target verified the named test object and symbol, but object build is not runtime execution."
+        failures.append(fail("kernel-workload-kunit-runner-unavailable", blocker))
+    } else if kunitRunnerAttempted {
+        blocker = "No-phone KUnit runner attempted execution, but did not produce passing evidence for tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch."
+        failures.append(fail("kernel-workload-kunit-execution-failed", blocker))
     } else if kunitBuildPassed {
         blocker = "KUnit runner does not expose machine-readable execution evidence for tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch."
         failures.append(fail("kernel-workload-kunit-execution-evidence-missing", blocker))
@@ -1095,7 +1108,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         status: status,
         summary: status == .pass
             ? "Kernel/TCTI syscall dispatch KUnit smoke executed and passed the named hook test."
-            : "Kernel/TCTI syscall dispatch workload hook compiles, but the current no-phone KUnit path does not expose machine-readable execution evidence for the named hook test.",
+            : "Kernel/TCTI syscall dispatch workload hook compiles, and the current no-phone KUnit run target fails closed because ARCH=orlix has no runnable KUnit executor for the named hook test.",
         command: command,
         failures: failures,
         artifacts: artifacts,

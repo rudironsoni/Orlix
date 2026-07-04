@@ -420,11 +420,15 @@ check_skills() {
       .evidence.workload_hook_compiled == "true" and
       .evidence.workload_hook_executed == "false" and
       .evidence.kunit_output_has_ktap == "false" and
+      .evidence.kunit_runner_attempted == "true" and
+      .evidence.kunit_runner_blocked == "true" and
+      .evidence.kunit_test_object_present == "true" and
+      .evidence.kunit_test_symbol_present == "true" and
       .evidence.kunit_named_test_executed == "false" and
       .evidence.kunit_named_test_passed == "false" and
       .evidence.kunit_test_name == "tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch" and
-      (.evidence.blocker | contains("KUnit runner does not expose machine-readable execution evidence")) and
-      any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-build.txt" or endswith("/kernel_syscall_dispatch_smoke/kunit-build.txt")) and
+      (.evidence.blocker | contains("No no-phone KUnit executor is available for ARCH=orlix")) and
+      any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-run.txt" or endswith("/kernel_syscall_dispatch_smoke/kunit-run.txt")) and
       any(.artifacts[]; . == "Build/TCTI/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json" or endswith("/kernel_syscall_dispatch_smoke/kunit-execution-evidence.json"))
     ' "$report" >/dev/null; then
       fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier and KUnit hook metadata"
