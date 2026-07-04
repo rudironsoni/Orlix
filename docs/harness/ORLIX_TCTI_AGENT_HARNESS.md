@@ -62,7 +62,7 @@ Use `$orlix-tcti-next-step` for TCTI continuation. The skill runs `agent-status`
 
 The roadmap is tiered so the harness manages proof toward real Linux userspace instead of treating golden ELF probes as acceptance. Every roadmap gate declares:
 
-- `proof_tier`: `seed`, `kernel`, `kselftest`, `mlibc`, `mlibc-uapi`, `shell`, `coreutils`, `oci`, `simulator`, `device`, or `release`
+- `proof_tier`: `seed`, `rail`, `safety`, `kernel`, `kselftest`, `mlibc`, `mlibc-uapi`, `shell`, `coreutils`, `oci`, `simulator`, `device`, or `release`
 - `acceptance_weight`: `probe`, `blocker`, `readiness`, or `release`
 - `real_stack_required`
 - `can_claim_runtime_readiness`
@@ -81,6 +81,8 @@ The standard autonomous workflow is:
 4. The relevant implementer subagent works only inside allowed scope.
 5. `tcti-test-reducer` handles failures before production changes.
 6. `tcti-release-gate-reviewer` decides whether the checkpoint advances readiness.
+
+If `agent-next` selects a gate whose current report is `status=todo`, the manager assigns work to implement the selected gate body or the missing real workload hook. Rerunning the TODO command is not progress, and a TODO report is not runtime proof. The TODO report exists only to make the selected command executable, scoped, and honest until the real gate can run.
 
 The oracle skill owns no-phone switch-debug and golden ELF work. That work can unlock implementation and reduce failures, but it must not become the release gate. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
 

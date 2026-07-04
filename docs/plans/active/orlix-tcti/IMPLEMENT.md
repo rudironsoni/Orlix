@@ -2,6 +2,84 @@
 
 ## 2026-07-04
 
+### Checkpoint: Proof-Tier Metadata Fails Closed
+
+- Harness gate-runner correction:
+  - `tools/tcti/orlix-tcti-gate.swift` now builds a `RoadmapProofTierIndex` with explicit loader errors instead of treating missing, unreadable, malformed, or internally contradictory roadmap proof-tier metadata as an empty metadata map.
+  - Report schema validation now carries roadmap index errors into report validation, so malformed roadmap metadata fails `tcti-report-schema-check` instead of silently disabling roadmap/report comparison.
+  - Duplicate roadmap `TARGET=...` entries with conflicting proof-tier metadata are hard validation failures.
+  - Fallback proof-tier metadata remains only for non-roadmap or internal targets, not as a way for schema validation to ignore a broken roadmap index.
+- Harness fixture coverage:
+  - Added `tools/tcti/fixtures/roadmap.fail.missing-gates.json` to prove malformed roadmap structure fails proof-tier indexing.
+  - Added `tools/tcti/fixtures/roadmap.fail.duplicate-target-conflict.json` to prove conflicting duplicate target metadata fails proof-tier indexing.
+  - Added `.agents/skills/orlix-tcti-next-step/fixtures/roadmap.bad.target-prefix-only.json` and `report.bad.target-prefix.json` to prove `harness-check` does not prefix-match `TARGET=...` values.
+- `agent-harness-check` correction:
+  - Replaced jq substring matching on `contains("TARGET=" + $report.target)` with exact `TARGET=` token extraction before comparing report metadata to roadmap metadata.
+- Verification:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check` passed.
+  - `rtk proxy jq empty tools/tcti/fixtures/roadmap.fail.missing-gates.json` passed.
+  - `rtk proxy jq empty tools/tcti/fixtures/roadmap.fail.duplicate-target-conflict.json` passed.
+  - `rtk proxy jq empty .agents/skills/orlix-tcti-next-step/fixtures/roadmap.bad.target-prefix-only.json .agents/skills/orlix-tcti-next-step/fixtures/report.bad.target-prefix.json` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make tcti-gate-list` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-toolchain-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` still TODO-failed intentionally and wrote `Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json`.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed and selected `tcti-kernel-syscall-dispatch-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+- Boundary:
+  - No real kernel syscall dispatch workload implemented in this checkpoint.
+  - No phone gate run.
+  - No simulator runtime gate run.
+  - No TCTI runtime feature, production assembly, or gadget dispatch added.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, Linux runtime semantics added.
+  - No generated Linux, mlibc, package, rootfs, build tree edits.
+  - No custom MCP or `tools/agent` added.
+  - No product defconfig flip.
+
+### Checkpoint: Proof-Tier Metadata Drift Guard Added
+
+- Harness and gate-runner correction:
+  - `tools/tcti/orlix-tcti-gate.swift` now reads proof-tier metadata from `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` for any roadmap command shaped as `make tcti-gate TARGET=<target>`.
+  - The hardcoded `proofTierMetadata(for:)` switch remains only as a fallback for non-roadmap or internal targets.
+  - Report schema validation now compares roadmap-backed report targets against roadmap metadata and fails if `proof_tier`, `acceptance_weight`, `real_stack_required`, or `can_claim_runtime_readiness` drift.
+  - `report.md` now includes proof tier, acceptance weight, real-stack requirement, runtime-readiness claim capability, readiness eligibility, and release eligibility.
+  - `tools/tcti/fixtures/report.fail.roadmap-metadata-mismatch.json` proves a Coreutils roadmap target cannot emit a syntactically valid but semantically wrong `proof_tier=seed` report.
+  - `tools/tcti/fixtures/report.todo.kernel-roadmap-metadata.json` proves the kernel syscall TODO report shape matches roadmap metadata.
+  - `agent-harness-check` now compares the generated `tcti-kernel-syscall-dispatch-smoke` TODO report against roadmap metadata, not just hardcoded constants.
+  - `docs/harness/ORLIX_TCTI_AGENT_HARNESS.md` now documents that an `agent-next` selected `status=todo` gate means the next worker implements the selected gate body or missing real workload hook. Rerunning TODO is not progress and is not runtime proof.
+- Verification:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed before edits.
+  - `rtk proxy make agent-harness-check` passed before edits.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check` passed.
+  - `rtk proxy jq empty tools/tcti/fixtures/report.fail.roadmap-metadata-mismatch.json tools/tcti/fixtures/report.todo.kernel-roadmap-metadata.json .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - Direct Swift dispatch for `tcti-kernel-syscall-dispatch-smoke` exited `1` as the expected TODO.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed after edits.
+  - `rtk proxy make agent-harness-check` passed after edits.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after report refresh.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` wrote a TODO report and failed nonzero as expected.
+  - `rtk proxy make agent-status AREA=orlix-tcti && rtk proxy make agent-next AREA=orlix-tcti && rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed and selected `tcti-kernel-syscall-dispatch-smoke`.
+  - `rtk proxy git diff --check` passed.
+- Boundary:
+  - No real kernel syscall dispatch workload was implemented in this checkpoint.
+  - No phone gate was run.
+  - No simulator runtime gate was run.
+  - No TCTI runtime feature, production assembly, or gadget dispatch was added.
+  - No HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics were added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edits.
+  - No custom MCP or `tools/agent` was added.
+  - No product defconfig flip.
+
 ### Checkpoint: Proof-Tier Contract Made Executable
 
 - Harness and gate-runner correction:

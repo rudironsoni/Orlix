@@ -18,7 +18,7 @@ struct Failure: Codable {
     let message: String
 }
 
-struct ProofTierMetadata {
+struct ProofTierMetadata: Equatable {
     let proofTier: String
     let acceptanceWeight: String
     let realStackRequired: Bool
@@ -33,6 +33,11 @@ struct ProofTierMetadata {
             realStackRequired &&
             canClaimRuntimeReadiness
     }
+}
+
+struct RoadmapProofTierIndex {
+    let metadataByTarget: [String: ProofTierMetadata]
+    let errors: [String]
 }
 
 struct Report: Codable {
@@ -577,7 +582,107 @@ func forbiddenDefaults(hostX18: Bool = false) -> [String: Bool] {
     ]
 }
 
+func tctiGateTarget(in command: String) -> String? {
+    guard command.contains("tcti-gate") else { return nil }
+    for rawToken in command.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" }) {
+        let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        if token.hasPrefix("TARGET=") {
+            let value = String(token.dropFirst("TARGET=".count))
+            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        }
+    }
+    return nil
+}
+
+func proofTierMetadata(from gate: [String: Any]) -> ProofTierMetadata? {
+    guard let proofTier = gate["proof_tier"] as? String,
+          let acceptanceWeight = gate["acceptance_weight"] as? String,
+          let realStackRequired = gate["real_stack_required"] as? Bool,
+          let canClaimRuntimeReadiness = gate["can_claim_runtime_readiness"] as? Bool else {
+        return nil
+    }
+    return ProofTierMetadata(
+        proofTier: proofTier,
+        acceptanceWeight: acceptanceWeight,
+        realStackRequired: realStackRequired,
+        canClaimRuntimeReadiness: canClaimRuntimeReadiness
+    )
+}
+
+func roadmapProofTierURL() -> URL {
+    path(".agents", "skills", "orlix-tcti-next-step", "references", "tcti-roadmap.json")
+}
+
+func loadRoadmapProofTierMetadataByTarget(from roadmapURL: URL = roadmapProofTierURL()) -> RoadmapProofTierIndex {
+    let roadmapPath = relativePath(roadmapURL)
+    let data: Data
+    do {
+        data = try Data(contentsOf: roadmapURL)
+    } catch {
+        return RoadmapProofTierIndex(
+            metadataByTarget: [:],
+            errors: ["cannot read proof-tier roadmap \(roadmapPath): \(error)"]
+        )
+    }
+
+    let object: [String: Any]
+    do {
+        guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return RoadmapProofTierIndex(
+                metadataByTarget: [:],
+                errors: ["proof-tier roadmap \(roadmapPath) must be a JSON object"]
+            )
+        }
+        object = decoded
+    } catch {
+        return RoadmapProofTierIndex(
+            metadataByTarget: [:],
+            errors: ["cannot parse proof-tier roadmap \(roadmapPath): \(error)"]
+        )
+    }
+
+    guard let gates = object["gates"] as? [[String: Any]] else {
+        return RoadmapProofTierIndex(
+            metadataByTarget: [:],
+            errors: ["proof-tier roadmap \(roadmapPath) must contain a gates array"]
+        )
+    }
+
+    var metadataByTarget: [String: ProofTierMetadata] = [:]
+    var errors: [String] = []
+    for (index, gate) in gates.enumerated() {
+        guard let command = gate["command"] as? String,
+              let target = tctiGateTarget(in: command) else {
+            continue
+        }
+        guard let metadata = proofTierMetadata(from: gate) else {
+            errors.append("roadmap gate \(index) target \(target) is missing explicit proof-tier metadata")
+            continue
+        }
+        if let existing = metadataByTarget[target], existing != metadata {
+            errors.append("roadmap target \(target) has conflicting proof-tier metadata")
+            continue
+        }
+        metadataByTarget[target] = metadata
+    }
+    return RoadmapProofTierIndex(metadataByTarget: metadataByTarget, errors: errors)
+}
+
+func roadmapProofTierIndex() -> RoadmapProofTierIndex {
+    struct Cache {
+        static let value = loadRoadmapProofTierMetadataByTarget()
+    }
+    return Cache.value
+}
+
+func roadmapProofTierMetadata(for target: String) -> ProofTierMetadata? {
+    roadmapProofTierIndex().metadataByTarget[target]
+}
+
 func proofTierMetadata(for target: String) -> ProofTierMetadata {
+    if let metadata = roadmapProofTierMetadata(for: target) {
+        return metadata
+    }
     switch target {
     case "tcti-plan-consistency", "tcti-report-schema-check":
         return ProofTierMetadata(
@@ -679,6 +784,12 @@ func writeReport(_ value: Report) throws -> URL {
 
     - status: `\(value.status)`
     - passed: `\(value.passed)`
+    - proof tier: `\(value.proofTier)`
+    - acceptance weight: `\(value.acceptanceWeight)`
+    - real stack required: `\(value.realStackRequired)`
+    - can claim runtime readiness: `\(value.canClaimRuntimeReadiness)`
+    - readiness gate eligible: `\(value.readinessGateEligible)`
+    - release gate eligible: `\(value.releaseGateEligible)`
     - virtual CPU: `\(value.virtualCpuModel)`
 
     ## Summary
@@ -757,7 +868,7 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     )
 }
 
-func validateReportObject(_ object: Any) -> [String] {
+func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
     }
@@ -787,6 +898,7 @@ func validateReportObject(_ object: Any) -> [String] {
         ("coverage_warnings", NSArray.self),
     ]
     var errors: [String] = []
+    errors.append(contentsOf: roadmapIndex.errors.map { "roadmap proof-tier metadata: \($0)" })
     for (key, type) in required {
         guard let value = dictionary[key] else {
             errors.append("missing required field: \(key)")
@@ -827,6 +939,21 @@ func validateReportObject(_ object: Any) -> [String] {
     let acceptanceWeight = dictionary["acceptance_weight"] as? String
     let realStackRequired = dictionary["real_stack_required"] as? Bool
     let canClaimRuntimeReadiness = dictionary["can_claim_runtime_readiness"] as? Bool
+    if let target = dictionary["target"] as? String,
+       let expected = roadmapIndex.metadataByTarget[target] {
+        if proofTier != expected.proofTier {
+            errors.append("report target \(target) proof_tier=\(proofTier ?? "missing") does not match roadmap proof_tier=\(expected.proofTier)")
+        }
+        if acceptanceWeight != expected.acceptanceWeight {
+            errors.append("report target \(target) acceptance_weight=\(acceptanceWeight ?? "missing") does not match roadmap acceptance_weight=\(expected.acceptanceWeight)")
+        }
+        if realStackRequired != expected.realStackRequired {
+            errors.append("report target \(target) real_stack_required=\(realStackRequired.map(String.init) ?? "missing") does not match roadmap real_stack_required=\(expected.realStackRequired)")
+        }
+        if canClaimRuntimeReadiness != expected.canClaimRuntimeReadiness {
+            errors.append("report target \(target) can_claim_runtime_readiness=\(canClaimRuntimeReadiness.map(String.init) ?? "missing") does not match roadmap can_claim_runtime_readiness=\(expected.canClaimRuntimeReadiness)")
+        }
+    }
     if status == nil || !allowed.contains(status!) {
         errors.append("status must be one of \(allowed)")
     }
@@ -903,9 +1030,9 @@ func loadJSON(_ url: URL) throws -> Any {
     return try JSONSerialization.jsonObject(with: data)
 }
 
-func checkReportFile(_ url: URL) -> [String] {
+func checkReportFile(_ url: URL, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
     do {
-        return validateReportObject(try loadJSON(url)).map { "\(relativePath(url)): \($0)" }
+        return validateReportObject(try loadJSON(url), roadmapIndex: roadmapIndex).map { "\(relativePath(url)): \($0)" }
     } catch {
         return ["\(relativePath(url)): cannot parse JSON: \(error)"]
     }
@@ -1298,16 +1425,44 @@ func runReportSchemaCheck() throws -> Int32 {
     var failures: [Failure] = []
     var checked: [String] = []
 
-    let passFixture = fixtureRoot.appendingPathComponent("report.pass.json")
-    checked.append(relativePath(passFixture))
-    failures.append(contentsOf: checkReportFile(passFixture).map { fail("schema", $0) })
+    for name in [
+        "report.pass.json",
+        "report.todo.kernel-roadmap-metadata.json",
+    ] {
+        let fixture = fixtureRoot.appendingPathComponent(name)
+        checked.append(relativePath(fixture))
+        failures.append(contentsOf: checkReportFile(fixture).map { fail("schema", $0) })
+    }
 
-    for name in ["report.fail.missing-field.json", "report.fail.invalid-status.json"] {
+    for name in [
+        "report.fail.missing-field.json",
+        "report.fail.invalid-status.json",
+        "report.fail.roadmap-metadata-mismatch.json",
+    ] {
         let fixture = fixtureRoot.appendingPathComponent(name)
         checked.append(relativePath(fixture))
         if checkReportFile(fixture).isEmpty {
             failures.append(fail("schema-fixture", "\(relativePath(fixture)) was expected to fail validation"))
         }
+    }
+
+    for name in [
+        "roadmap.fail.missing-gates.json",
+        "roadmap.fail.duplicate-target-conflict.json",
+    ] {
+        let fixture = fixtureRoot.appendingPathComponent(name)
+        checked.append(relativePath(fixture))
+        let index = loadRoadmapProofTierMetadataByTarget(from: fixture)
+        if index.errors.isEmpty {
+            failures.append(fail("roadmap-fixture", "\(relativePath(fixture)) was expected to fail proof-tier metadata indexing"))
+        }
+    }
+
+    let missingGatesRoadmap = fixtureRoot.appendingPathComponent("roadmap.fail.missing-gates.json")
+    let missingGatesIndex = loadRoadmapProofTierMetadataByTarget(from: missingGatesRoadmap)
+    let kernelMetadataFixture = fixtureRoot.appendingPathComponent("report.todo.kernel-roadmap-metadata.json")
+    if checkReportFile(kernelMetadataFixture, roadmapIndex: missingGatesIndex).isEmpty {
+        failures.append(fail("schema-fixture", "\(relativePath(kernelMetadataFixture)) unexpectedly passed with malformed roadmap metadata"))
     }
 
     let tctiReportRoot = buildPath("reports")

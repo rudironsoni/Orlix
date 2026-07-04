@@ -41,6 +41,33 @@ expect_command_passes() {
   fi
 }
 
+roadmap_report_metadata_matches() {
+  report_file="$1"
+  roadmap_file="$2"
+  jq -n -e \
+    --slurpfile report "$report_file" \
+    --slurpfile roadmap "$roadmap_file" '
+      def tcti_gate_target:
+        (.command // "")
+        | split(" ")
+        | map(select(startswith("TARGET=")))
+        | first
+        | select(. != null)
+        | ltrimstr("TARGET=");
+
+      ($report[0]) as $report |
+      (
+        $roadmap[0].gates[]
+        | select((tcti_gate_target) == $report.target)
+        | select(.proof_tier != null)
+      ) as $gate |
+      $report.proof_tier == $gate.proof_tier and
+      $report.acceptance_weight == $gate.acceptance_weight and
+      $report.real_stack_required == $gate.real_stack_required and
+      $report.can_claim_runtime_readiness == $gate.can_claim_runtime_readiness
+    ' >/dev/null
+}
+
 json_command_payload() {
   command="$1"
   printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$command"
@@ -379,17 +406,29 @@ check_skills() {
   report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
   if ! test -f "$report"; then
     fail "tcti-kernel-syscall-dispatch-smoke did not emit report.json"
-  elif ! jq -e '
-    .status == "todo" and
-    .passed == false and
-    .proof_tier == "kernel" and
-    .acceptance_weight == "blocker" and
-    .real_stack_required == true and
-    .can_claim_runtime_readiness == false and
-    .readiness_gate_eligible == false and
-    .release_gate_eligible == false
-  ' "$report" >/dev/null; then
-    fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+  else
+    if ! jq -e '
+      .status == "todo" and
+      .passed == false and
+      .proof_tier == "kernel" and
+      .acceptance_weight == "blocker" and
+      .real_stack_required == true and
+      .can_claim_runtime_readiness == false and
+      .readiness_gate_eligible == false and
+      .release_gate_eligible == false
+    ' "$report" >/dev/null; then
+      fail "tcti-kernel-syscall-dispatch-smoke report lacks expected proof-tier TODO metadata"
+    fi
+    if ! roadmap_report_metadata_matches \
+      "$report" \
+      "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json"; then
+      fail "tcti-kernel-syscall-dispatch-smoke report metadata does not match roadmap metadata"
+    fi
+    if roadmap_report_metadata_matches \
+      "$root/.agents/skills/orlix-tcti-next-step/fixtures/report.bad.target-prefix.json" \
+      "$root/.agents/skills/orlix-tcti-next-step/fixtures/roadmap.bad.target-prefix-only.json"; then
+      fail "roadmap/report metadata check must not prefix-match TARGET tokens"
+    fi
   fi
   rm -rf "$tmp"
 }
