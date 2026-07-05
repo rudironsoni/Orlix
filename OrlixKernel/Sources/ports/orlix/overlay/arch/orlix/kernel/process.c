@@ -8,6 +8,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/panic.h>
+#include <linux/pid.h>
 #include <linux/stddef.h>
 #include <asm/hosted_exec.h>
 #include <asm/processor.h>
@@ -85,6 +86,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	flush_tlb_mm(current->mm);
 #if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
 	tcti_invalidate_mm(current->mm);
+	pr_info("Orlix TCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
+		current->comm, task_pid_nr(current), regs->pc, regs->sp,
+		regs->pstate, regs->syscallno);
 #endif
 	if (current->mm)
 		current->mm->context.orlix_tcti_static_pie_base = 0;
