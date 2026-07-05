@@ -1,5 +1,156 @@
 # IMPLEMENT.md
 
+## 2026-07-05
+
+### Checkpoint: Pinned Simulator Policy Repaired And First-Syscall Simulator Gate Passes
+
+- User-visible simulator opened through `xcode-offload`:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - State `Booted`, responsive.
+- Repaired stale pinned simulator policy after the only available correctly named simulator had moved from the previous UDID to `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Updated the current harness/runtime policy surfaces to the live pinned simulator:
+  - `.agents/skills/orlix-tcti-next-step/references/environment-policy.json`.
+  - `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
+  - `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
+  - `.agents/skills/orlix-tcti-next-step/scripts/harness-check`.
+  - `.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy`.
+  - `.codex/rules/orlix.rules`.
+  - `AGENTS.md`.
+  - `Makefile`.
+  - `tools/runtime/orlix-runtime-validation.sh`.
+  - `tools/tcti/orlix-tcti-gate.swift`.
+  - `docs/plans/active/orlix-tcti/PLAN.md`.
+- Fixed runtime-validation JSON reports to emit proof-tier metadata:
+  - `proof_tier=simulator` for `iphonesimulator`.
+  - `proof_tier=device` for `iphoneos`.
+  - `acceptance_weight=blocker`.
+  - `real_stack_required=true`.
+  - `can_claim_runtime_readiness=false`.
+- Fixed `tcti-report-schema-check` to tolerate legacy generated runtime reports that predate proof-tier metadata while still requiring full schema for durable TCTI reports and new runtime reports.
+- Fixed first-syscall status mapping so `simulator-tcti-init-first-syscall` checks the first TCTI `svc #0` marker artifact. Fatal-free runtime validation remains owned by the later `simulator-tcti-runtime-stability` gate.
+- `xcode-offload` environment validation:
+  - `xcode-offload doctor --root "$(external-ssd-root)" --strict --json` passed.
+  - `xcode-offload sim devices --all` showed only `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) (Booted)`.
+- Simulator runtime validation:
+  - Command:
+
+```text
+rtk proxy env PATH=/Users/rudironsoni/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin ORLIX_BUILD_ROOT=/Users/rudironsoni/src/github/rudironsoni/orlix/OrlixSystem/Build make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max
+```
+
+  - Result: passed.
+  - Report: `Build/Reports/runtime/tcti-init-first-syscall-20260705T062718Z-70950.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-init-first-syscall-20260705T062718Z-70950.md`.
+  - Artifact dir: `Build/Reports/runtime/tcti-init-first-syscall-20260705T062718Z-70950.artifacts`.
+  - JSON facts:
+    - `status=pass`.
+    - `passed=true`.
+    - `destination=iphonesimulator`.
+    - `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+    - `selected_device_name=Orlix-iPhone-15-Pro-Max`.
+    - `tcti_required_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+    - `simulator_booted_count=1`.
+    - `simulator_single_booted=true`.
+    - `proof_tier=simulator`.
+    - `acceptance_weight=blocker`.
+    - `real_stack_required=true`.
+    - `can_claim_runtime_readiness=false`.
+    - `readiness_gate_eligible=false`.
+    - `release_gate_eligible=false`.
+    - all `forbidden_behavior` fields false.
+  - Artifact facts:
+    - `tcti-first-syscall.txt` contains `Orlix TCTI: svc #0`.
+    - `tcti-simulator-fatal-runtime.txt` is empty.
+    - `host-exec-violations.txt` is empty.
+- Current harness-selected gate remains `tcti-kernel-execve-binfmt-elf-smoke`.
+- `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` still fails intentionally with real blocker:
+  - `No no-phone OrlixKernel workload currently drives a real Linux execve/binfmt_elf load of the ELF payload through Linux do_execve/load_elf_binary into TCTI entry; this gate now records the real ELF payload and arch start_thread entry-state hook, but runtime Linux exec remains unproven.`
+- Reducer replay:
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-kernel-execve-binfmt-elf-smoke/kernel-execve-binfmt-elf-smoke-fail.json`.
+  - Expected status `fail`, actual replay status `fail`, replay exit code `2`.
+- Boundary:
+  - This checkpoint proves the simulator environment and first TCTI syscall marker on the pinned simulator only.
+  - This checkpoint does not prove Linux `execve`/`binfmt_elf` reached TCTI.
+  - This checkpoint does not prove runtime readiness, package readiness, full simulator readiness, release readiness, or physical-device readiness.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, OrlixOS, app-owned, VFS, fd table, process, signal, wait, scheduler, broad Linux runtime semantics added.
+  - No generated Linux, mlibc, package, rootfs, build tree edited.
+  - No product defconfig flip.
+
+### Checkpoint: Kernel Execve/Binfmt ELF Smoke Emits Real Fail Proof
+
+- Harness-selected gate: `tcti-kernel-execve-binfmt-elf-smoke`.
+- Replaced the previous TODO report with an executable no-phone kernel gate body.
+- Added a real AArch64 Linux ELF payload source:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/execve_binfmt_elf_smoke_payload.S`.
+  - The payload issues Linux `write(1, "ORLIX-USERLAND-TCTI-OK\n", 23)` followed by `_exit(0)`.
+- Added an arch-owned execve/binfmt entry-state smoke helper:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/execve_binfmt_smoke.h`.
+  - `tcti_kernel_execve_binfmt_elf_smoke_for_tests()` records ELF class/data/machine/load-segment facts and the `start_thread()`-prepared PC, SP, EL0 mode, and cleared syscall state.
+- Added a no-phone host runner for the helper:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_execve_binfmt_smoke_runner.c`.
+  - The runner emits KTAP plus `ORLIX-EXECVE-BINFMT-RUNNER-*` fields.
+- Added KUnit coverage for the arch entry-state helper in `tcti_decode_test.c`.
+- Updated `tools/tcti/orlix-tcti-gate.swift` so the selected gate now:
+  - builds the payload as a real AArch64 Linux ELF;
+  - parses ELF class/data/type/machine/entry/program-header/load-segment facts;
+  - compiles and runs the arch entry-state helper runner;
+  - writes `Build/TCTI/kernel_execve_binfmt_elf_smoke/evidence.json`;
+  - writes `Build/TCTI/kernel_execve_binfmt_elf_smoke/elf-summary.json`;
+  - writes `Build/TCTI/kernel_execve_binfmt_elf_smoke/runner.txt`;
+  - writes `Build/TCTI/kernel_execve_binfmt_elf_smoke/runner-evidence.json`;
+  - emits a real fail report and reducer instead of a TODO report.
+- Current result:
+  - `make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` fails honestly.
+  - `elf_payload_is_real_aarch64_linux_elf=true`.
+  - `elf_class=2`.
+  - `elf_data=1`.
+  - `elf_machine=183`.
+  - `elf_type=2`.
+  - `elf_load_segment_count=2`.
+  - `workload_hook_compiled=true`.
+  - `workload_hook_executed=true`.
+  - `entry_pc_recorded=0x210120`.
+  - `stack_pointer_recorded=0x7ffffffffff8`.
+  - `linux_execve_binfmt_elf_path_entered=false`.
+  - `linux_program_headers_accepted=false`.
+  - `linux_task_mm_register_state_prepared=false`.
+  - `tcti_entry_reached=false`.
+- Narrowed blocker:
+  - No no-phone OrlixKernel workload currently drives a real Linux `execve`/`binfmt_elf` load of the ELF payload through Linux `do_execve`/`load_elf_binary` into TCTI entry.
+- Report path:
+  - `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`.
+- Reducer:
+  - `Build/TCTI/reproducers/tcti-kernel-execve-binfmt-elf-smoke/kernel-execve-binfmt-elf-smoke-fail.json`.
+  - Replay confirms actual status `fail`.
+- Verification:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed before implementation.
+  - `rtk proxy make agent-harness-check` passed before implementation.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` returned nonzero with the real fail report and reducer.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-kernel-execve-binfmt-elf-smoke/kernel-execve-binfmt-elf-smoke-fail.json` passed and confirmed actual replay status `fail`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed after implementation.
+  - `rtk proxy make agent-harness-check` passed after implementation.
+  - `rtk proxy make agent-status AREA=orlix-tcti` passed and still selects `tcti-kernel-execve-binfmt-elf-smoke`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+  - `rtk proxy make -f OrlixKernel/Makefile kunit PROFILE=tcti_runtime` passed and built `arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.o`.
+- Boundary:
+  - This is kernel proof-tier progress for the selected no-phone execve/binfmt smoke gate, not product runtime readiness.
+  - The gate does not claim Linux `execve`/`binfmt_elf` reached TCTI yet.
+  - No simulator runtime gate run.
+  - No phone or physical-device gate run.
+  - No production assembly added.
+  - No gadget dispatch added.
+  - No HostAdapter, OrlixOS, app-owned, VFS, fd table, process, signal, wait, scheduler, or broad Linux runtime semantics added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No product defconfig flip.
+
 ## 2026-07-04
 
 ### Checkpoint: No-Phone Kernel Syscall Dispatch Smoke Executes

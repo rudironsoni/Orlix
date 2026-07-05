@@ -12,6 +12,7 @@
 #include <linux/utsname.h>
 #include <internal/asm/host_memory.h>
 #include <asm/hosted_exec.h>
+#include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/signal.h>
 #include <asm/tcti.h>
@@ -20,6 +21,7 @@
 #include "block_cache.h"
 #include "decode_aarch64.h"
 #include "engine.h"
+#include "execve_binfmt_smoke.h"
 #include "gadget_program.h"
 #include "report.h"
 #include "syscall_dispatch_smoke.h"
@@ -553,6 +555,18 @@ bool tcti_kernel_syscall_dispatch_smoke_for_tests(
 
 	return tcti_kernel_syscall_dispatch_smoke_execute(
 		regs, out, orlix_syscall_dispatch);
+}
+
+bool tcti_kernel_execve_binfmt_elf_smoke_for_tests(
+	const struct tcti_kernel_execve_binfmt_elf_smoke_payload *payload,
+	struct pt_regs *regs,
+	struct tcti_kernel_execve_binfmt_elf_smoke_result *out)
+{
+	if (!payload || !regs || !out)
+		return false;
+
+	return tcti_kernel_execve_binfmt_elf_smoke_execute(
+		payload, regs, out, start_thread);
 }
 #endif
 
