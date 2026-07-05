@@ -241,6 +241,18 @@ static void orlix_hosted_preserve_captured_user_tls(unsigned long user_tls)
 	WRITE_ONCE(orlix_hosted_active_user_tls, user_tls);
 }
 
+void orlix_hosted_set_current_user_tls(unsigned long user_tls)
+{
+	if (!current->mm)
+		return;
+
+	if (!orlix_hosted_valid_user_tls(user_tls))
+		return;
+
+	current->thread.user_tls = user_tls;
+	orlix_hosted_restore_task_user_tls(current);
+}
+
 static void orlix_hosted_apply_frame_user_state(
 	const struct orlix_host_user_trap_frame *frame)
 {
