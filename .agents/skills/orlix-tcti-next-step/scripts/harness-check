@@ -236,7 +236,7 @@ check_skills() {
         "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" >/dev/null ||
         fail "physical gate must require prerequisite $simulator_gate"
       jq -e --arg gate "GATE=$runtime_gate" \
-        '.gates[] | select(.id == "physical-tcti-init-first-syscall") | .required_validation_commands | any(contains($gate) and contains("DESTINATION=iphonesimulator") and contains("ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D"))' \
+        '.gates[] | select(.id == "physical-tcti-init-first-syscall") | .required_validation_commands | any(contains($gate) and contains("DESTINATION=iphonesimulator") and contains("ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66"))' \
         "$root/.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json" >/dev/null ||
         fail "physical gate validation must rerun pinned simulator runtime gate $runtime_gate"
     done
@@ -368,8 +368,8 @@ check_skills() {
   expect_hook_blocks_json_command 'xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS,id=00008130-001E74A11193803A test runtime-validation'
   expect_hook_blocks_json_command 'rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
   expect_hook_blocks_json_command 'rtk proxy xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination generic/platform=iOS test runtime-validation'
-  expect_hook_allows 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
-  expect_hook_allows_json_command 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_ID=C47ED88D-0D0A-420D-8C78-D4C1D34A276D ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
+  expect_hook_allows 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
+  expect_hook_allows_json_command 'make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'
   expect_hook_allows 'rtk proxy jq -r ".gates[] | select(.id==\"physical-tcti-init-first-syscall\") | .prerequisites[]" .agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json'
 
   expect_command_passes "real roadmap proof-tier policy" \

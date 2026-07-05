@@ -23,7 +23,7 @@ bundle_id="${ORLIX_APP_BUNDLE_ID:-com.rudironsoni.Orlix}"
 report_dir="${REPORT_DIR:-${ORLIX_RUNTIME_REPORT_DIR:-Build/Reports/runtime}}"
 device_id="${ORLIX_DEVICE_ID:-}"
 simulator_id="${ORLIX_SIMULATOR_ID:-${ORLIX_BETA_SIMULATOR_ID:-}}"
-required_simulator_id="${ORLIX_TCTI_REQUIRED_SIMULATOR_ID:-C47ED88D-0D0A-420D-8C78-D4C1D34A276D}"
+required_simulator_id="${ORLIX_TCTI_REQUIRED_SIMULATOR_ID:-1E5553B0-203A-4A11-BAD7-EBDE46863F66}"
 required_simulator_name="${ORLIX_TCTI_REQUIRED_SIMULATOR_NAME:-Orlix-iPhone-15-Pro-Max}"
 capture_seconds="${ORLIX_RUNTIME_GATE_CAPTURE_SECONDS:-45}"
 simulator_boot_timeout_seconds="${ORLIX_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
@@ -412,6 +412,13 @@ write_json_report() {
 	local bypass_reason="$5"
 	local release_eligible="false"
 	local readiness_eligible="false"
+	local proof_tier="device"
+	local acceptance_weight="blocker"
+	local real_stack_required="true"
+	local can_claim_runtime_readiness="false"
+	if [ "$destination" = "iphonesimulator" ]; then
+		proof_tier="simulator"
+	fi
 	if [ "$status" = "pass" ] &&
 		[ "$destination" = "iphoneos" ] &&
 		[ "$gate" = "tcti-init-first-syscall" ] &&
@@ -461,10 +468,12 @@ write_json_report() {
   "bundle_id": "$escaped_bundle_id",
   "configuration": "$escaped_configuration",
   "counters": {},
-  "coverage_warnings": [],
-  "destination": "$escaped_destination",
-  "failure_context": $failure_context,
-  "failures": [],
+	"coverage_warnings": [],
+	"destination": "$escaped_destination",
+	"acceptance_weight": "$acceptance_weight",
+	"can_claim_runtime_readiness": $can_claim_runtime_readiness,
+	"failure_context": $failure_context,
+	"failures": [],
   "forbidden_behavior": {
     "generated_exec_memory": false,
     "host_exec_guest_text": false,
@@ -478,10 +487,12 @@ write_json_report() {
   "guest_page_size": 4096,
   "host_page_size": $(getconf PAGESIZE),
   "passed": $passed,
-  "preflight_only": $preflight_only,
-  "profile": "$escaped_profile",
-  "readiness_gate_eligible": $readiness_eligible,
-  "release_gate_eligible": $release_eligible,
+	"preflight_only": $preflight_only,
+	"proof_tier": "$proof_tier",
+	"profile": "$escaped_profile",
+	"readiness_gate_eligible": $readiness_eligible,
+	"real_stack_required": $real_stack_required,
+	"release_gate_eligible": $release_eligible,
 	  "scheme": "$escaped_scheme",
 	  "selected_device_id": $(json_string_or_null "$device_id"),
 	  "selected_device_name": $(json_string_or_null "$device_name"),

@@ -1563,6 +1563,45 @@ static void tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch(struct kun
 	KUNIT_EXPECT_GE(test, result.return_value, 0L);
 }
 
+static void tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry(struct kunit *test)
+{
+	struct tcti_kernel_execve_binfmt_elf_smoke_payload payload = {
+		.elf_class = ELFCLASS64,
+		.elf_data = ELFDATA2LSB,
+		.elf_type = ET_EXEC,
+		.elf_machine = EM_AARCH64,
+		.load_segment_count = 1,
+		.entry_pc = 0x210128,
+		.stack_top = STACK_TOP,
+	};
+	struct tcti_kernel_execve_binfmt_elf_smoke_result result;
+	struct pt_regs regs = { 0 };
+
+	regs.pc = 0xfeed0000;
+	regs.sp = 0xbeef0000;
+	regs.pstate = PSR_MODE_EL1h;
+	regs.syscallno = __NR_execve;
+
+	KUNIT_ASSERT_TRUE(test,
+			  tcti_kernel_execve_binfmt_elf_smoke_for_tests(
+				  &payload, &regs, &result));
+	KUNIT_EXPECT_TRUE(test, result.payload_is_elf64);
+	KUNIT_EXPECT_TRUE(test, result.payload_is_little_endian);
+	KUNIT_EXPECT_TRUE(test, result.payload_is_aarch64);
+	KUNIT_EXPECT_TRUE(test, result.payload_has_load_segment);
+	KUNIT_EXPECT_TRUE(test, result.payload_type_supported);
+	KUNIT_EXPECT_TRUE(test, result.arch_accepts_payload);
+	KUNIT_EXPECT_TRUE(test, result.start_thread_called);
+	KUNIT_EXPECT_TRUE(test, result.entry_pc_recorded);
+	KUNIT_EXPECT_TRUE(test, result.stack_pointer_recorded);
+	KUNIT_EXPECT_TRUE(test, result.user_mode_prepared);
+	KUNIT_EXPECT_TRUE(test, result.syscall_state_cleared);
+	KUNIT_EXPECT_EQ(test, payload.entry_pc, result.entry_pc);
+	KUNIT_EXPECT_EQ(test, payload.stack_top - sizeof(unsigned long),
+			result.stack_pointer);
+	KUNIT_EXPECT_EQ(test, NO_SYSCALL, result.syscallno_after_start_thread);
+}
+
 static void tcti_successful_execve_return_restores_el0_pstate(struct kunit *test)
 {
 	struct pt_regs regs = { 0 };
@@ -2996,6 +3035,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
 	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
 	KUNIT_CASE(tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch),
+	KUNIT_CASE(tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry),
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),

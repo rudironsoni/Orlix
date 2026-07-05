@@ -61,7 +61,7 @@ prefix_rule(
   justification = "Simulator inspection and control are required to verify app-hosted runtime.",
   match = [
     "xcrun simctl list",
-    "xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+    "xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b",
   ],
   not_match = [
     "xcrun devicectl list devices",
@@ -74,7 +74,7 @@ prefix_rule(
   justification = "Simulator inspection and control are required to verify app-hosted runtime.",
   match = [
     "rtk xcrun simctl list",
-    "rtk xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+    "rtk xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b",
   ],
   not_match = [
     "rtk xcrun devicectl list devices",
@@ -87,7 +87,7 @@ prefix_rule(
   justification = "Simulator inspection and control are required to verify app-hosted runtime.",
   match = [
     "rtk proxy xcrun simctl list devices",
-    "rtk proxy xcrun simctl bootstatus C47ED88D-0D0A-420D-8C78-D4C1D34A276D -b",
+    "rtk proxy xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b",
   ],
   not_match = [
     "rtk proxy xcrun devicectl list devices",
@@ -243,7 +243,7 @@ prefix_rule(
     "xcodebuild -destination generic/platform=iOS test",
   ],
   not_match = [
-    "xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -255,7 +255,7 @@ prefix_rule(
     "rtk xcodebuild -destination generic/platform=iOS test",
   ],
   not_match = [
-    "rtk xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "rtk xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -267,7 +267,7 @@ prefix_rule(
     "rtk proxy xcodebuild -destination generic/platform=iOS test",
   ],
   not_match = [
-    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -279,7 +279,7 @@ prefix_rule(
     "xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
   ],
   not_match = [
-    "xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -291,7 +291,7 @@ prefix_rule(
     "rtk xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
   ],
   not_match = [
-    "rtk xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "rtk xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -303,7 +303,7 @@ prefix_rule(
     "rtk proxy xcodebuild -destination platform=iOS,id=00008130-001E74A11193803A test",
   ],
   not_match = [
-    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "rtk proxy xcodebuild -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
 )
 
@@ -313,7 +313,7 @@ prefix_rule(
   justification = "Xcode build, package resolution, simulator test, archive, and export commands are required project workflows. Device-oriented TCTI is separately blocked by hooks and runtime preflight.",
   match = [
     "xcodebuild -version",
-    "xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
   not_match = [
     "git status",
@@ -326,7 +326,7 @@ prefix_rule(
   justification = "Xcode build, package resolution, simulator test, archive, and export commands are required project workflows. Device-oriented TCTI is separately blocked by hooks and runtime preflight.",
   match = [
     "rtk xcodebuild -version",
-    "rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=C47ED88D-0D0A-420D-8C78-D4C1D34A276D test",
+    "rtk xcodebuild -project Orlix.xcodeproj -scheme Orlix -destination platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66 test",
   ],
   not_match = [
     "rtk git status",

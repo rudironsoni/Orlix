@@ -942,6 +942,91 @@ func kernelSyscallDispatchKUnitEvidence(from output: String) -> [String: String]
     ]
 }
 
+func execveBinfmtRunnerEvidence(from output: String) -> [String: String] {
+    let testName = "tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry"
+    let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let runnerAttempted = output.contains("ORLIX-EXECVE-BINFMT-RUNNER-BEGIN") &&
+        output.contains("ORLIX-EXECVE-BINFMT-RUNNER-END")
+    let namedPass = output.range(
+        of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): pass") ||
+        output.contains("\(testName)=pass")
+    let namedFailure = output.range(
+        of: #"(?m)^not ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): fail") ||
+        output.contains("\(testName)=fail")
+    var evidence: [String: String] = [
+        "execve_binfmt_runner_test_name": testName,
+        "execve_binfmt_runner_output_has_ktap": hasKTAP ? "true" : "false",
+        "execve_binfmt_runner_attempted": runnerAttempted ? "true" : "false",
+        "execve_binfmt_runner_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
+        "execve_binfmt_runner_named_test_passed": namedPass ? "true" : "false",
+        "execve_binfmt_runner_named_test_failed": namedFailure ? "true" : "false",
+    ]
+    for line in output.components(separatedBy: .newlines) {
+        guard line.hasPrefix("ORLIX-EXECVE-BINFMT-RUNNER ") else { continue }
+        let payload = String(line.dropFirst("ORLIX-EXECVE-BINFMT-RUNNER ".count))
+        guard let separator = payload.firstIndex(of: "=") else { continue }
+        let key = String(payload[..<separator])
+        let value = String(payload[payload.index(after: separator)...])
+        evidence["execve_binfmt_runner_\(key)"] = value
+    }
+    return evidence
+}
+
+struct ElfHeaderSummary {
+    let elfClass: UInt8
+    let elfData: UInt8
+    let elfType: UInt16
+    let elfMachine: UInt16
+    let entrypoint: UInt64
+    let programHeaderCount: Int
+    let loadSegmentCount: Int
+}
+
+func parseElfHeaderSummary(binary: URL) throws -> ElfHeaderSummary {
+    let data = try Data(contentsOf: binary)
+    guard data.count >= 64 else {
+        throw GateError.commandFailed("ELF file too small: \(binary.path)")
+    }
+    guard data[0] == 0x7f, data[1] == 0x45, data[2] == 0x4c, data[3] == 0x46 else {
+        throw GateError.commandFailed("not an ELF file: \(binary.path)")
+    }
+    let elfClass = data[4]
+    let elfData = data[5]
+    let elfType = try littleEndianUInt16(data, 16)
+    let elfMachine = try littleEndianUInt16(data, 18)
+    let entrypoint = try littleEndianUInt64(data, 24)
+    let phoff = try littleEndianUInt64(data, 32)
+    let phentsize = Int(try littleEndianUInt16(data, 54))
+    let phnum = Int(try littleEndianUInt16(data, 56))
+    var loadSegmentCount = 0
+    for index in 0..<phnum {
+        let offset = Int(phoff) + index * phentsize
+        guard offset + 4 <= data.count else {
+            throw GateError.commandFailed("ELF program header outside file at index \(index)")
+        }
+        if try littleEndianUInt32(data, offset) == 1 {
+            loadSegmentCount += 1
+        }
+    }
+    return ElfHeaderSummary(
+        elfClass: elfClass,
+        elfData: elfData,
+        elfType: elfType,
+        elfMachine: elfMachine,
+        entrypoint: entrypoint,
+        programHeaderCount: phnum,
+        loadSegmentCount: loadSegmentCount
+    )
+}
+
 func runKernelSyscallDispatchSmoke() throws -> Int32 {
     let target = "tcti-kernel-syscall-dispatch-smoke"
     let command = "make tcti-gate TARGET=\(target)"
@@ -1134,6 +1219,227 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
+    let target = "tcti-kernel-execve-binfmt-elf-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
+    let elfHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "include", "asm", "elf.h")
+    let processor = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "process.c")
+    let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
+    let smokeHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "execve_binfmt_smoke.h")
+    let testSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let payloadSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "execve_binfmt_elf_smoke_payload.S")
+    let runnerSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_execve_binfmt_smoke_runner.c")
+    let hostInclude = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "host_include")
+    let tctiDir = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti")
+    let hostAdapter = path("OrlixHostAdapter", "Sources")
+    let outputRoot = buildPath("kernel_execve_binfmt_elf_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runnerOutputURL = outputRoot.appendingPathComponent("runner.txt")
+    let runnerEvidenceURL = outputRoot.appendingPathComponent("runner-evidence.json")
+    let elfSummaryURL = outputRoot.appendingPathComponent("elf-summary.json")
+    let runnerBinary = outputRoot.appendingPathComponent("tcti_execve_binfmt_smoke_runner")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "kernel_config": relativePath(kernelConfig),
+        "linux_execve_binfmt_elf_path_entered": "false",
+        "linux_program_headers_accepted": "false",
+        "linux_task_mm_register_state_prepared": "false",
+        "entry_pc_recorded": "false",
+        "stack_pointer_recorded": "false",
+        "tcti_entry_reached": "false",
+        "workload_hook_compiled": "false",
+        "workload_hook_executed": "false",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kernel-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let configText = try readText(kernelConfig)
+    let elfText = try readText(elfHeader)
+    let processText = try readText(processor)
+    let engineText = try readText(tctiEngine)
+    let engineHeaderText = try readText(tctiEngineHeader)
+    let smokeText = try readText(smokeHeader)
+    let testText = try readText(testSource)
+    let payloadText = try readText(payloadSource)
+
+    requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
+    requireSourceFact("native_hosted_exec_disabled", configText, #"# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"#, kernelConfig)
+    requireSourceFact("binfmt_elf_enabled", configText, #"CONFIG_BINFMT_ELF=y"#, kernelConfig)
+    requireSourceFact("arch_elf_class", elfText, #"ELF_CLASS\s+ELFCLASS64"#, elfHeader)
+    requireSourceFact("arch_elf_data", elfText, #"ELF_DATA\s+ELFDATA2LSB"#, elfHeader)
+    requireSourceFact("arch_elf_machine", elfText, #"ELF_ARCH\s+EM_AARCH64"#, elfHeader)
+    requireSourceFact("arch_elf_check", elfText, #"elf_check_arch\(hdr\)"#, elfHeader)
+    requireSourceFact("start_thread_symbol", processText, #"void start_thread\(struct pt_regs \*regs, unsigned long pc, unsigned long sp\)"#, processor)
+    requireSourceFact("start_thread_records_pc", processText, #"regs->pc = pc"#, processor)
+    requireSourceFact("start_thread_records_sp", processText, #"regs->sp = sp"#, processor)
+    requireSourceFact("start_thread_sets_el0", processText, #"regs->pstate = PSR_MODE_EL0t"#, processor)
+    requireSourceFact("start_thread_clears_syscall", processText, #"regs->syscallno = NO_SYSCALL"#, processor)
+    requireSourceFact("tcti_entry_declared", engineText, #"orlix_tcti_enter_user"#, tctiEngine)
+    requireSourceFact("execve_binfmt_result_struct", engineHeaderText, #"struct tcti_kernel_execve_binfmt_elf_smoke_result"#, tctiEngineHeader)
+    requireSourceFact("execve_binfmt_kernel_hook", engineText, #"tcti_kernel_execve_binfmt_elf_smoke_for_tests"#, tctiEngine)
+    requireSourceFact("execve_binfmt_hook_calls_start_thread", engineText, #"start_thread"#, tctiEngine)
+    requireSourceFact("execve_binfmt_helper_validates_aarch64", smokeText, #"payload->elf_machine == EM_AARCH64"#, smokeHeader)
+    requireSourceFact("execve_binfmt_helper_records_entry_pc", smokeText, #"out->entry_pc = regs->pc"#, smokeHeader)
+    requireSourceFact("execve_binfmt_helper_records_stack", smokeText, #"out->stack_pointer = regs->sp"#, smokeHeader)
+    requireSourceFact("execve_binfmt_kunit_case", testText, #"tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry"#, testSource)
+    requireSourceFact("execve_binfmt_payload_marker", payloadText, #"ORLIX-USERLAND-TCTI-OK"#, payloadSource)
+
+    let hostAdapterOwnsLinuxExec = !sourceFilesContainNone(
+        root: hostAdapter,
+        needles: [
+            #"load_elf_binary"#,
+            #"binfmt_elf"#,
+            #"start_thread"#,
+            #"do_execve"#,
+            #"execve"#,
+        ]
+    )
+    if hostAdapterOwnsLinuxExec {
+        failures.append(fail("hostadapter-exec-semantics", "HostAdapter sources must not own Linux execve/binfmt_elf semantics"))
+        evidence["hostadapter_linux_exec_semantics"] = "present"
+    } else {
+        evidence["hostadapter_linux_exec_semantics"] = "absent"
+    }
+
+    let built = try buildAarch64NoLibc(
+        source: payloadSource,
+        outputRoot: outputRoot,
+        binaryName: "execve_binfmt_elf_smoke_payload"
+    )
+    artifacts.append(relativePath(built.binary))
+    let elf = try parseElfHeaderSummary(binary: built.binary)
+    let elfSummary: [String: String] = [
+        "elf_payload_path": relativePath(built.binary),
+        "elf_source_path": relativePath(built.source),
+        "elf_class": "\(elf.elfClass)",
+        "elf_data": "\(elf.elfData)",
+        "elf_type": "\(elf.elfType)",
+        "elf_machine": "\(elf.elfMachine)",
+        "elf_entry_pc": String(format: "0x%llx", elf.entrypoint),
+        "elf_program_header_count": "\(elf.programHeaderCount)",
+        "elf_load_segment_count": "\(elf.loadSegmentCount)",
+        "elf_binary_sha256": try sha256(built.binary),
+        "elf_file_output": built.metadata["file_output"] ?? "",
+        "elf_objdump_header": built.metadata["objdump_header"] ?? "",
+    ]
+    try writeJSON(elfSummary, to: elfSummaryURL)
+    artifacts.append(relativePath(elfSummaryURL))
+    for (key, value) in elfSummary {
+        evidence[key] = value
+    }
+    evidence["elf_payload_is_real_aarch64_linux_elf"] =
+        elf.elfClass == 2 && elf.elfData == 1 && elf.elfMachine == 183 && elf.loadSegmentCount > 0 ? "true" : "false"
+
+    let hostcc: String
+    if let configuredHostCC = ProcessInfo.processInfo.environment["ORLIX_KERNEL_HOSTCC"],
+       !configuredHostCC.isEmpty {
+        hostcc = configuredHostCC
+    } else {
+        hostcc = try commandPath("cc")
+    }
+    _ = try run([
+        hostcc,
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-function",
+        "-DORLIX_TCTI_HOST_TEST_RUNNER=1",
+        "-I\(hostInclude.path)",
+        "-I\(tctiDir.path)",
+        runnerSource.path,
+        "-o",
+        runnerBinary.path,
+    ])
+    artifacts.append(relativePath(runnerBinary))
+    evidence["workload_hook_compiled"] = "true"
+
+    let runnerOutput = try run([
+        runnerBinary.path,
+        "\(elf.elfClass)",
+        "\(elf.elfData)",
+        "\(elf.elfType)",
+        "\(elf.elfMachine)",
+        "\(elf.loadSegmentCount)",
+        String(format: "0x%llx", elf.entrypoint),
+    ], check: false)
+    try runnerOutput.write(to: runnerOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runnerOutputURL))
+    let runnerEvidence = execveBinfmtRunnerEvidence(from: runnerOutput)
+    try writeJSON(runnerEvidence, to: runnerEvidenceURL)
+    artifacts.append(relativePath(runnerEvidenceURL))
+    for (key, value) in runnerEvidence {
+        evidence[key] = value
+    }
+
+    let helperPassed = runnerEvidence["execve_binfmt_runner_named_test_passed"] == "true"
+    if helperPassed {
+        evidence["workload_hook_executed"] = "true"
+        evidence["entry_pc_recorded"] = runnerEvidence["execve_binfmt_runner_entry_pc"] ?? "true"
+        evidence["stack_pointer_recorded"] = runnerEvidence["execve_binfmt_runner_stack_pointer"] ?? "true"
+    } else {
+        failures.append(fail("kernel-workload-hook-execution", "execve/binfmt entry-state helper runner did not pass"))
+    }
+
+    let blocker = "No no-phone OrlixKernel workload currently drives a real Linux execve/binfmt_elf load of the ELF payload through Linux do_execve/load_elf_binary into TCTI entry; this gate now records the real ELF payload and arch start_thread entry-state hook, but runtime Linux exec remains unproven."
+    failures.append(fail("kernel-execve-binfmt-runtime-missing", blocker))
+    evidence["blocker"] = blocker
+    evidence["gate_result"] = "fail"
+
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "kernel-execve-binfmt-elf-smoke-fail",
+        command: command,
+        reason: blocker,
+        artifacts: artifacts,
+        expectedStatus: .fail
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: .fail,
+        summary: "Kernel/TCTI execve/binfmt ELF smoke now builds a real AArch64 Linux ELF payload and executes the arch entry-state helper, but no no-phone workload proves Linux execve/binfmt_elf reaches TCTI entry yet.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "elf_payloads_built": 1,
+            "elf_load_segments": elf.loadSegmentCount,
+            "workload_hook_compile_passes": 1,
+            "workload_hook_executed": helperPassed ? 1 : 0,
+            "linux_execve_binfmt_runtime_entries": 0,
+            "tcti_entries_from_linux_execve": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: relativePath(kernelConfig),
+        evidence: evidence
+    ))
+    print("fail: \(relativePath(reportURL))")
+    print("blocker: \(blocker)")
+    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    return 1
+}
+
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
@@ -1310,9 +1616,39 @@ func loadJSON(_ url: URL) throws -> Any {
     return try JSONSerialization.jsonObject(with: data)
 }
 
+func isLegacyRuntimeReportWithoutProofTierMetadata(_ url: URL, object: Any, errors: [String]) -> Bool {
+    guard relativePath(url).hasPrefix("Build/Reports/runtime/"),
+          let dictionary = object as? [String: Any],
+          dictionary["proof_tier"] == nil,
+          dictionary["acceptance_weight"] == nil,
+          dictionary["real_stack_required"] == nil,
+          dictionary["can_claim_runtime_readiness"] == nil,
+          dictionary["gate"] is String,
+          dictionary["target"] is String,
+          dictionary["destination"] is String else {
+        return false
+    }
+    let legacyMetadataErrors = Set([
+        "missing required field: proof_tier",
+        "missing required field: acceptance_weight",
+        "missing required field: real_stack_required",
+        "missing required field: can_claim_runtime_readiness",
+    ])
+    return errors.allSatisfy { error in
+        legacyMetadataErrors.contains(error) ||
+            error.hasPrefix("proof_tier must be one of ") ||
+            error.hasPrefix("acceptance_weight must be one of ")
+    }
+}
+
 func checkReportFile(_ url: URL, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
     do {
-        return validateReportObject(try loadJSON(url), roadmapIndex: roadmapIndex).map { "\(relativePath(url)): \($0)" }
+        let object = try loadJSON(url)
+        let errors = validateReportObject(object, roadmapIndex: roadmapIndex)
+        if isLegacyRuntimeReportWithoutProofTierMetadata(url, object: object, errors: errors) {
+            return []
+        }
+        return errors.map { "\(relativePath(url)): \($0)" }
     } catch {
         return ["\(relativePath(url)): cannot parse JSON: \(error)"]
     }
@@ -6076,7 +6412,7 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
     if !simulatorPassed && !simulatorFailed {
         failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         stringField(simulatorObject, "simulator_booted_count") != "1" ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -6244,7 +6580,7 @@ func runLDRSWSignExtensionReducer() throws -> Int32 {
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         !boolField(simulatorObject, "simulator_single_booted") {
         failures.append(fail("simulator-scope", "latest failure must come from only Orlix-iPhone-15-Pro-Max"))
@@ -6426,7 +6762,7 @@ func runCloneZeroPCReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -6585,7 +6921,7 @@ func runPostSetsidTLSFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -6718,7 +7054,7 @@ func runPostExecSHFetchFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -6837,7 +7173,7 @@ func runPostPIESHEntryFetchFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -6988,7 +7324,7 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	if !simulatorPassed && !simulatorFailed {
 		failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -7144,7 +7480,7 @@ func runInitReadFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -7288,7 +7624,7 @@ func runPostStaticPIEInitReadFaultReducer() throws -> Int32 {
 	if stringField(object, "status") != "fail" || boolField(object, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
 	}
-	if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		intField(object, "simulator_booted_count") != 1 ||
 		!boolField(object, "simulator_single_booted") {
@@ -7434,7 +7770,7 @@ func runPostTrueEntryFetchFaultReducer() throws -> Int32 {
 		stringField(object, "destination") != "iphonesimulator" {
 		failures.append(fail("simulator-report-gate", "reducer must use the iphonesimulator tcti-init-first-syscall report"))
 	}
-	if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+	if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
 		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		intField(object, "simulator_booted_count") != 1 ||
 		!boolField(object, "simulator_single_booted") {
@@ -7624,7 +7960,7 @@ func runPostSHReadFaultReducer() throws -> Int32 {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator sh read-fault report"))
 	}
 	let selectedDeviceID = stringField(simulatorObject, "selected_device_id")
-	if !selectedDeviceID.isEmpty && selectedDeviceID != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" {
+	if !selectedDeviceID.isEmpty && selectedDeviceID != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
 		failures.append(fail("simulator-id", "simulator report is not for the pinned Orlix simulator id"))
 	}
 	let selectedDeviceName = stringField(simulatorObject, "selected_device_name")
@@ -8174,7 +8510,7 @@ func runInitMLibCLockBRKReducer() throws -> Int32 {
         boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -8300,8 +8636,8 @@ func runBRKTrapRootCause() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" {
-        failures.append(fail("simulator-device", "BRK root-cause inspection must use Orlix-iPhone-15-Pro-Max simulator C47ED88D-0D0A-420D-8C78-D4C1D34A276D"))
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
+        failures.append(fail("simulator-device", "BRK root-cause inspection must use Orlix-iPhone-15-Pro-Max simulator 1E5553B0-203A-4A11-BAD7-EBDE46863F66"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "BRK root-cause inspection requires the current failing simulator stability report"))
@@ -8371,7 +8707,7 @@ func runBRKTrapRootCause() throws -> Int32 {
         let rootCauseMarkdown = """
         # TCTI BRK Trap Root Cause
 
-        - simulator: Orlix-iPhone-15-Pro-Max `C47ED88D-0D0A-420D-8C78-D4C1D34A276D`
+        - simulator: Orlix-iPhone-15-Pro-Max `1E5553B0-203A-4A11-BAD7-EBDE46863F66`
         - runtime BRK PC: `\(runtimeBRKPC)`
         - ELF BRK VMA: `0x1be20`
         - instruction: `0xd4200020`, `brk #0x1`
@@ -8460,8 +8796,8 @@ func runBRKGuardGOTReducer() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" {
-        failures.append(fail("simulator-device", "BRK guard reducer must use Orlix-iPhone-15-Pro-Max simulator C47ED88D-0D0A-420D-8C78-D4C1D34A276D"))
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
+        failures.append(fail("simulator-device", "BRK guard reducer must use Orlix-iPhone-15-Pro-Max simulator 1E5553B0-203A-4A11-BAD7-EBDE46863F66"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "BRK guard reducer requires the current failing simulator stability report"))
@@ -11786,7 +12122,7 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "SIGABRT reducer requires a current simulator static BusyBox failure report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -11934,7 +12270,7 @@ func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
     if stringField(object, "gate") != "tcti-static-busybox-shell-command" {
         failures.append(fail("simulator-report-gate", "SIGILL reducer must use the static BusyBox shell-command gate report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -12138,7 +12474,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 	if stringField(simulatorObject, "git_sha") != gitSha() {
 		failures.append(fail("simulator-report-stale", "selected simulator report is stale for current HEAD"))
 	}
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -12179,7 +12515,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 		let latestStillMatches = stringField(latestObject, "git_sha") == gitSha() &&
 			stringField(latestObject, "status") == "fail" &&
 			!boolField(latestObject, "passed") &&
-			stringField(latestObject, "selected_device_id") == "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" &&
+			stringField(latestObject, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
 			stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
 			intField(latestObject, "simulator_booted_count") == 1 &&
 			boolField(latestObject, "simulator_single_booted") &&
@@ -12300,7 +12636,7 @@ func runPostFullShellCatReadFaultReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -12433,7 +12769,7 @@ func runPostFullShellCatReadFaultFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -12522,7 +12858,7 @@ func runPostFullShellCatPosixMemalignBRKReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -12641,7 +12977,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -12672,7 +13008,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
         let latestMatchesCurrentFailure = stringField(latestObject, "git_sha") == gitSha() &&
             stringField(latestObject, "status") == "fail" &&
             !boolField(latestObject, "passed") &&
-            stringField(latestObject, "selected_device_id") == "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" &&
+            stringField(latestObject, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
             stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
             intField(latestObject, "simulator_booted_count") == 1 &&
             boolField(latestObject, "simulator_single_booted") &&
@@ -12803,7 +13139,7 @@ func runPostFullShellInitWriteFaultReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -12960,7 +13296,7 @@ func runPostFullShellSHSIGABRTReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -13111,7 +13447,7 @@ func runPostConsoleSHSIGABRTReducer() throws -> Int32 {
         boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -13266,7 +13602,7 @@ func runPostFullShellInitWriteFaultFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -13353,7 +13689,7 @@ func runPostFullShellSHSIGABRTFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -13446,7 +13782,7 @@ func runPostFullShellInitSecondMmapHangReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -13627,7 +13963,7 @@ func runPostFullShellInitSecondMmapHangFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "C47ED88D-0D0A-420D-8C78-D4C1D34A276D" ||
+    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -13748,10 +14084,7 @@ func dispatch(_ target: String) throws -> Int32 {
     case "tcti-kernel-syscall-dispatch-smoke":
         return try runKernelSyscallDispatchSmoke()
     case "tcti-kernel-execve-binfmt-elf-smoke":
-        return try writeTodo(
-            target: target,
-            summary: "Real OrlixKernel execve/binfmt_elf no-phone proof is not implemented yet. The next kernel worker must execute a Linux-owned execve/binfmt_elf workload and report entry-state facts."
-        )
+        return try runKernelExecveBinfmtElfSmoke()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
