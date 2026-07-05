@@ -1230,6 +1230,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
     let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
     let smokeHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "execve_binfmt_smoke.h")
     let testSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let runtimeValidation = path("tools", "runtime", "orlix-runtime-validation.sh")
     let payloadSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "execve_binfmt_elf_smoke_payload.S")
     let runnerSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_execve_binfmt_smoke_runner.c")
     let hostInclude = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "host_include")
@@ -1257,6 +1258,8 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
         "entry_pc_recorded": "false",
         "stack_pointer_recorded": "false",
         "tcti_entry_reached": "false",
+        "simulator_execve_binfmt_report_current": "false",
+        "simulator_linux_exec_start_thread_recorded": "false",
         "workload_hook_compiled": "false",
         "workload_hook_executed": "false",
     ]
@@ -1277,6 +1280,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
     let engineHeaderText = try readText(tctiEngineHeader)
     let smokeText = try readText(smokeHeader)
     let testText = try readText(testSource)
+    let runtimeValidationText = try readText(runtimeValidation)
     let payloadText = try readText(payloadSource)
 
     requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
@@ -1299,6 +1303,8 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
     requireSourceFact("execve_binfmt_helper_records_entry_pc", smokeText, #"out->entry_pc = regs->pc"#, smokeHeader)
     requireSourceFact("execve_binfmt_helper_records_stack", smokeText, #"out->stack_pointer = regs->sp"#, smokeHeader)
     requireSourceFact("execve_binfmt_kunit_case", testText, #"tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry"#, testSource)
+    requireSourceFact("execve_binfmt_start_thread_log", processText, #"Orlix TCTI: linux exec start_thread"#, processor)
+    requireSourceFact("runtime_exec_start_thread_json", runtimeValidationText, #"linux_exec_start_thread"#, runtimeValidation)
     requireSourceFact("execve_binfmt_payload_marker", payloadText, #"ORLIX-USERLAND-TCTI-OK"#, payloadSource)
 
     let hostAdapterOwnsLinuxExec = !sourceFilesContainNone(
@@ -1398,27 +1404,86 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
         failures.append(fail("kernel-workload-hook-execution", "execve/binfmt entry-state helper runner did not pass"))
     }
 
-    let blocker = "No no-phone OrlixKernel workload currently drives a real Linux execve/binfmt_elf load of the ELF payload through Linux do_execve/load_elf_binary into TCTI entry; this gate now records the real ELF payload and arch start_thread entry-state hook, but runtime Linux exec remains unproven."
-    failures.append(fail("kernel-execve-binfmt-runtime-missing", blocker))
-    evidence["blocker"] = blocker
-    evidence["gate_result"] = "fail"
+    var simulatorArtifacts: [String] = []
+    if let simulatorReport = selectedRuntimeValidationReport(
+        gate: "tcti-init-first-syscall",
+        destination: "iphonesimulator"
+    ) {
+        artifacts.append(relativePath(simulatorReport.url))
+        simulatorArtifacts = (simulatorReport.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+        artifacts.append(contentsOf: simulatorArtifacts)
+        evidence["simulator_report"] = relativePath(simulatorReport.url)
+        let events = simulatorReport.object["tcti_runtime_events"] as? [String: Any] ?? [:]
+        let execStartThread = events["linux_exec_start_thread"] as? [String: Any] ?? [:]
+        let execTask = stringField(execStartThread, "task")
+        let execPID = intField(execStartThread, "pid")
+        let execPC = stringField(execStartThread, "pc")
+        let execSP = stringField(execStartThread, "sp")
+        let execPstate = stringField(execStartThread, "pstate")
+        let execSyscallno = intField(execStartThread, "syscallno")
+        let reportCurrent = stringField(simulatorReport.object, "git_sha") == gitSha() &&
+            stringField(simulatorReport.object, "status") == "pass" &&
+            boolField(simulatorReport.object, "passed") &&
+            stringField(simulatorReport.object, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
+            stringField(simulatorReport.object, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
+            intField(simulatorReport.object, "simulator_booted_count") == 1 &&
+            boolField(simulatorReport.object, "simulator_single_booted")
+        let execStartThreadRecorded = !execTask.isEmpty &&
+            execPID != nil &&
+            !execPC.isEmpty &&
+            !execSP.isEmpty &&
+            execPstate == "0x0" &&
+            execSyscallno == -1
+        evidence["simulator_execve_binfmt_report_current"] = reportCurrent ? "true" : "false"
+        evidence["simulator_linux_exec_start_thread_recorded"] = execStartThreadRecorded ? "true" : "false"
+        evidence["simulator_linux_exec_start_thread_task"] = execTask
+        evidence["simulator_linux_exec_start_thread_pid"] = execPID.map(String.init) ?? ""
+        evidence["simulator_linux_exec_start_thread_pc"] = execPC
+        evidence["simulator_linux_exec_start_thread_sp"] = execSP
+        evidence["simulator_linux_exec_start_thread_pstate"] = execPstate
+        evidence["simulator_linux_exec_start_thread_syscallno"] = execSyscallno.map(String.init) ?? ""
+        if reportCurrent && execStartThreadRecorded {
+            evidence["linux_execve_binfmt_elf_path_entered"] = "true"
+            evidence["linux_program_headers_accepted"] = "true"
+            evidence["linux_task_mm_register_state_prepared"] = "true"
+            evidence["tcti_entry_reached"] = "true"
+        } else {
+            if !reportCurrent {
+                failures.append(fail("simulator-report-current", "latest pinned simulator first-syscall report is missing, stale, failing, or not from the single required simulator"))
+            }
+            if !execStartThreadRecorded {
+                failures.append(fail("simulator-exec-start-thread", "pinned simulator report lacks structured linux_exec_start_thread evidence from arch start_thread"))
+            }
+        }
+    } else {
+        failures.append(fail("simulator-report-missing", "missing iphonesimulator tcti-init-first-syscall report with linux_exec_start_thread evidence"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "No current pinned-simulator report proves Linux execve/binfmt_elf reached arch start_thread and TCTI entry for the current HEAD."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
 
     try writeJSON(evidence, to: evidenceURL)
     artifacts.append(relativePath(evidenceURL))
     let reducer = try writeReducer(
         target: target,
-        caseID: "kernel-execve-binfmt-elf-smoke-fail",
+        caseID: status == .pass ? "kernel-execve-binfmt-elf-smoke-pass" : "kernel-execve-binfmt-elf-smoke-fail",
         command: command,
-        reason: blocker,
+        reason: blocker.isEmpty ? "Kernel execve/binfmt ELF smoke passed with pinned simulator start_thread evidence." : blocker,
         artifacts: artifacts,
-        expectedStatus: .fail
+        expectedStatus: status
     )
     artifacts.append(relativePath(reducer))
 
     let reportURL = try writeReport(report(
         target: target,
-        status: .fail,
-        summary: "Kernel/TCTI execve/binfmt ELF smoke now builds a real AArch64 Linux ELF payload and executes the arch entry-state helper, but no no-phone workload proves Linux execve/binfmt_elf reaches TCTI entry yet.",
+        status: status,
+        summary: status == .pass ?
+            "Kernel/TCTI execve/binfmt ELF smoke has current pinned simulator evidence that Linux ELF exec reached arch start_thread and TCTI entry." :
+            "Kernel/TCTI execve/binfmt ELF smoke builds a real AArch64 Linux ELF payload and executes the arch entry-state helper, but current pinned simulator exec evidence is missing.",
         command: command,
         failures: failures,
         artifacts: artifacts,
@@ -1427,17 +1492,19 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
             "elf_load_segments": elf.loadSegmentCount,
             "workload_hook_compile_passes": 1,
             "workload_hook_executed": helperPassed ? 1 : 0,
-            "linux_execve_binfmt_runtime_entries": 0,
-            "tcti_entries_from_linux_execve": 0,
+            "linux_execve_binfmt_runtime_entries": evidence["linux_execve_binfmt_elf_path_entered"] == "true" ? 1 : 0,
+            "tcti_entries_from_linux_execve": evidence["tcti_entry_reached"] == "true" ? 1 : 0,
         ],
         kernelProfile: kernelProfile,
         kernelConfig: relativePath(kernelConfig),
         evidence: evidence
     ))
-    print("fail: \(relativePath(reportURL))")
-    print("blocker: \(blocker)")
-    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
-    return 1
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
 }
 
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
@@ -14012,6 +14079,7 @@ let tctiTargets = [
     "tcti-toolchain-check",
     "tcti-kernel-syscall-dispatch-smoke",
     "tcti-kernel-execve-binfmt-elf-smoke",
+    "tcti-kernel-fault-signal-smoke",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -14085,6 +14153,11 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runKernelSyscallDispatchSmoke()
     case "tcti-kernel-execve-binfmt-elf-smoke":
         return try runKernelExecveBinfmtElfSmoke()
+    case "tcti-kernel-fault-signal-smoke":
+        return try writeTodo(
+            target: target,
+            summary: "TCTI kernel fault/signal smoke gate is selected next but not implemented yet; it must prove Linux-owned fault delivery and signal result through the real TCTI runtime path."
+        )
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":

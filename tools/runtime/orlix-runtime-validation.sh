@@ -217,6 +217,7 @@ log_field() {
 tcti_runtime_events_json() {
 	local first_svc_line=""
 	local static_pie_line=""
+	local exec_start_thread_line=""
 	local mmap_line=""
 	local fault_line=""
 	local signaled_line=""
@@ -230,6 +231,12 @@ tcti_runtime_events_json() {
 	local static_pie_pc=""
 	local static_pie_base=""
 	local static_pie_entry=""
+	local exec_start_thread_task=""
+	local exec_start_thread_pid=""
+	local exec_start_thread_pc=""
+	local exec_start_thread_sp=""
+	local exec_start_thread_pstate=""
+	local exec_start_thread_syscallno=""
 	local mmap_task=""
 	local mmap_pid=""
 	local mmap_pc=""
@@ -257,6 +264,7 @@ tcti_runtime_events_json() {
 
 	first_svc_line="$(grep -h -F 'Orlix TCTI: svc #0' "$artifact_dir"/tcti-first-syscall.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | head -1 || true)"
 	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=(init|sh) ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	exec_start_thread_line="$(grep -h -E 'Orlix TCTI: linux exec start_thread ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=(init|sh) .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	fault_line="$(grep -h -E 'Orlix TCTI: user fault ' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 	signaled_line="$(grep -h -E 'orlix-init: process signaled pid=[0-9]+ signal=[0-9]+' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
@@ -271,6 +279,12 @@ tcti_runtime_events_json() {
 	static_pie_pc="$(log_field "$static_pie_line" pc)"
 	static_pie_base="$(log_field "$static_pie_line" base)"
 	static_pie_entry="$(log_field "$static_pie_line" entry)"
+	exec_start_thread_task="$(log_field "$exec_start_thread_line" task)"
+	exec_start_thread_pid="$(log_field "$exec_start_thread_line" pid)"
+	exec_start_thread_pc="$(log_field "$exec_start_thread_line" pc)"
+	exec_start_thread_sp="$(log_field "$exec_start_thread_line" sp)"
+	exec_start_thread_pstate="$(log_field "$exec_start_thread_line" pstate)"
+	exec_start_thread_syscallno="$(log_field "$exec_start_thread_line" syscallno)"
 	mmap_task="$(log_field "$mmap_line" task)"
 	mmap_pid="$(log_field "$mmap_line" pid)"
 	mmap_pc="$(log_field "$mmap_line" pc)"
@@ -310,6 +324,14 @@ tcti_runtime_events_json() {
       "pc": $(json_string_or_null "$static_pie_pc"),
       "base": $(json_string_or_null "$static_pie_base"),
       "entry": $(json_string_or_null "$static_pie_entry")
+    },
+    "linux_exec_start_thread": {
+      "task": $(json_string_or_null "$exec_start_thread_task"),
+      "pid": $(json_number_or_null "$exec_start_thread_pid"),
+      "pc": $(json_string_or_null "$exec_start_thread_pc"),
+      "sp": $(json_string_or_null "$exec_start_thread_sp"),
+      "pstate": $(json_string_or_null "$exec_start_thread_pstate"),
+      "syscallno": $(json_number_or_null "$exec_start_thread_syscallno")
     },
     "last_mmap_syscall": {
       "task": $(json_string_or_null "$mmap_task"),

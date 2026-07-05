@@ -4904,7 +4904,6 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
-
 ### Checkpoint: Kernel Syscall Dispatch Hook Compiles
 
 - Harness-selected gate: `tcti-kernel-syscall-dispatch-smoke`.
@@ -5763,3 +5762,48 @@ Boundary:
 - No VFS, fd table, process, signal, scheduler, or Linux runtime semantics added.
 - No product defconfig flip.
 - Release and readiness gates remain ineligible.
+
+### Checkpoint: Kernel Execve/Binfmt ELF Reaches TCTI Entry
+
+Timestamp: `2026-07-05T07:15:03Z`.
+
+- Harness-selected gate at start: `tcti-kernel-execve-binfmt-elf-smoke`.
+- Product-path milestone advanced: a real Linux ELF exec reaches the Orlix arch `start_thread()` handoff and then TCTI entry on the pinned simulator.
+- Implemented evidence path:
+  - `arch/orlix/kernel/process.c` now emits a TCTI-only `Orlix TCTI: linux exec start_thread` marker from `start_thread()` after binfmt ELF has prepared the task register state.
+  - `tools/runtime/orlix-runtime-validation.sh` records that marker as `tcti_runtime_events.linux_exec_start_thread`.
+  - `tools/tcti/orlix-tcti-gate.swift` requires a current pinned-simulator `tcti-init-first-syscall` report with that structured marker before `tcti-kernel-execve-binfmt-elf-smoke` can pass.
+- Verified simulator evidence:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260705T070543Z-61143.json`
+  - selected simulator: `Orlix-iPhone-15-Pro-Max`
+  - UDID: `1E5553B0-203A-4A11-BAD7-EBDE46863F66`
+  - `status=pass`, `passed=true`, `simulator_single_booted=true`
+  - `tcti_runtime_events.linux_exec_start_thread.task=true`
+  - `pid=32`, `pstate=0x0`, `syscallno=-1`
+  - forbidden behavior remains false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Gate result:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` passed.
+  - `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`
+  - counters: `linux_execve_binfmt_runtime_entries=1`, `tcti_entries_from_linux_execve=1`.
+- Harness roadblock fixed:
+  - `agent-next` advanced to `tcti-kernel-fault-signal-smoke`.
+  - That target was present in the roadmap but unsupported by `tools/tcti/orlix-tcti-gate.swift`.
+  - Added an honest TODO target so `agent-task-envelope-check` validates the next envelope without claiming the next proof is implemented.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+  - `rtk proxy make agent-harness-check`
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
+  - `env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall`
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke`
+  - `rtk proxy make agent-next AREA=orlix-tcti`
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
+- Current next gate:
+  - `tcti-kernel-fault-signal-smoke`
+  - selected command: `make tcti-gate TARGET=tcti-kernel-fault-signal-smoke`
+  - current target support is TODO only; implementation still must prove Linux-owned fault delivery and signal result through the real TCTI runtime path.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter Linux semantics added.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
