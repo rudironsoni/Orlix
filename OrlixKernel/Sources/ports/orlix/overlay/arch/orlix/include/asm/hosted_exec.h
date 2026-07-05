@@ -12,6 +12,7 @@ void orlix_hosted_capture_host_context(void);
 void orlix_hosted_save_kernel_stack(unsigned long sp);
 void orlix_hosted_preserve_user_tls(void);
 void orlix_hosted_switch_user_tls(struct task_struct *next);
+void orlix_hosted_set_current_user_tls(unsigned long user_tls);
 unsigned long orlix_hosted_prepare_user_entry(unsigned long entry_user_tls);
 void orlix_hosted_note_user_entry_tls(unsigned long user_tls);
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs);

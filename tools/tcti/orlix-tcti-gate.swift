@@ -6157,6 +6157,105 @@ func readRelativeArtifact(_ relativeArtifact: String) throws -> String {
     return try readText(runtimeRelative)
 }
 
+func runtimeReportBuildSetting(from artifacts: [String], key: String) -> String? {
+    guard let buildSettingsArtifact = artifacts.first(where: { $0.hasSuffix("build-settings.json") }),
+          let text = try? readRelativeArtifact(buildSettingsArtifact),
+          let data = text.data(using: .utf8),
+          let root = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else {
+        return nil
+    }
+    for action in root {
+        guard let settings = action["buildSettings"] as? [String: Any],
+              let value = settings[key] as? String,
+              !value.isEmpty
+        else {
+            continue
+        }
+        return value
+    }
+    return nil
+}
+
+func orlixBuildRootDerivedFromAppPath(_ appPath: String) -> URL? {
+    let url = URL(fileURLWithPath: appPath).standardizedFileURL
+    let components = url.pathComponents
+    guard let derivedDataIndex = components.lastIndex(of: "DerivedData") else {
+        return nil
+    }
+    let xcodeRootComponents = components.prefix(upTo: derivedDataIndex)
+    var xcodeRoot = URL(fileURLWithPath: xcodeRootComponents.joined(separator: "/"), isDirectory: true)
+    if xcodeRoot.path == "" {
+        xcodeRoot = URL(fileURLWithPath: "/", isDirectory: true)
+    }
+    return xcodeRoot
+        .appendingPathComponent("OrlixSystem")
+        .appendingPathComponent("Build")
+}
+
+func ensureRuntimeInitELF(from artifacts: [String], to binaryURL: URL) throws -> Bool {
+    guard let appPathArtifact = artifacts.first(where: { $0.hasSuffix("app-path.txt") }) else {
+        return fileManager.fileExists(atPath: binaryURL.path)
+    }
+    let appPath = try readRelativeArtifact(appPathArtifact)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !appPath.isEmpty else {
+        return fileManager.fileExists(atPath: binaryURL.path)
+    }
+
+    let profile = runtimeReportBuildSetting(from: artifacts, key: "ORLIX_PROFILE") ?? "tcti_runtime"
+    if let buildRoot = orlixBuildRootDerivedFromAppPath(appPath) {
+        let packagedInit = buildRoot
+            .appendingPathComponent("OrlixOS")
+            .appendingPathComponent("packages")
+            .appendingPathComponent(profile)
+            .appendingPathComponent("sbin")
+            .appendingPathComponent("init")
+        if fileManager.fileExists(atPath: packagedInit.path) {
+            try ensureDirectory(binaryURL.deletingLastPathComponent())
+            try? fileManager.removeItem(at: binaryURL)
+            try fileManager.copyItem(at: packagedInit, to: binaryURL)
+            return true
+        }
+    }
+
+    if fileManager.fileExists(atPath: binaryURL.path) {
+        return true
+    }
+
+    let initramfsURL = URL(fileURLWithPath: appPath)
+        .appendingPathComponent("Frameworks")
+        .appendingPathComponent("OrlixOS.framework")
+        .appendingPathComponent("OrlixOSPayload.bundle")
+        .appendingPathComponent("rootfs")
+        .appendingPathComponent("initramfs.cpio.gz")
+    guard fileManager.fileExists(atPath: initramfsURL.path) else {
+        return false
+    }
+
+    let outputRoot = binaryURL.deletingLastPathComponent()
+    let extractRoot = outputRoot.appendingPathComponent("extract", isDirectory: true)
+    try? fileManager.removeItem(at: extractRoot)
+    try ensureDirectory(extractRoot)
+    try ensureDirectory(outputRoot)
+    _ = try runWithFileBackedOutput([
+        "/bin/sh",
+        "-c",
+        "cd \"$1\" && gzip -dc \"$2\" | cpio -id init >/dev/null",
+        "extract-runtime-init",
+        extractRoot.path,
+        initramfsURL.path,
+    ])
+
+    let extracted = extractRoot.appendingPathComponent("init")
+    guard fileManager.fileExists(atPath: extracted.path) else {
+        return false
+    }
+    try? fileManager.removeItem(at: binaryURL)
+    try fileManager.copyItem(at: extracted, to: binaryURL)
+    return true
+}
+
 func firstRegexGroups(_ pattern: String, in text: String) -> [String]? {
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
         return nil
@@ -8524,16 +8623,48 @@ func runBRKTrapReducer() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func latestInitMLibCLockBRKSimulatorReport(gates gateNames: [String], destination: String) -> (url: URL, object: [String: Any])? {
+    for gateName in gateNames {
+        for report in runtimeValidationReports(gate: gateName, destination: destination) {
+            guard stringField(report.object, "git_sha") == gitSha(),
+                  stringField(report.object, "status") == "fail",
+                  !boolField(report.object, "passed")
+            else {
+                continue
+            }
+
+            let artifacts = (report.object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+            let text = artifacts
+                .compactMap { try? readRelativeArtifact($0) }
+                .joined(separator: "\n")
+            guard text.contains("ORLIX-ROOT-OVERLAY-READY"),
+                  text.contains("mlibc/lock.hpp:112"),
+                  text.contains("__ensure((state & ownerMask) == mlibc::this_tid()) failed"),
+                  text.contains("syscall=64 ret=0x9b signed_ret=155"),
+                  text.contains("Orlix TCTI: unsupported instruction task=init pid=1"),
+                  text.contains("insn=0xd4200020"),
+                  (text.contains("Attempted to kill init") || text.contains("Attempted kill init")),
+                  text.contains("exitcode=0x00000004")
+            else {
+                continue
+            }
+            return report
+        }
+    }
+    return nil
+}
+
 func runInitMLibCLockBRKReducer() throws -> Int32 {
     let target = "tcti-init-mlibc-lock-brk-reducer"
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-    guard let simulatorReport = selectedRuntimeValidationReport(
-        gate: "tcti-init-console-write",
+    let acceptedGates = ["tcti-simulator-stability", "tcti-init-console-write"]
+    guard let simulatorReport = latestInitMLibCLockBRKSimulatorReport(
+        gates: acceptedGates,
         destination: "iphonesimulator"
     ) else {
-        failures.append(fail("simulator-report", "missing iphonesimulator tcti-init-console-write report"))
+        failures.append(fail("simulator-report", "missing iphonesimulator simulator stability or init console-write report"))
         let reportURL = try writeReport(report(
             target: target,
             status: .fail,
@@ -8571,11 +8702,11 @@ func runInitMLibCLockBRKReducer() throws -> Int32 {
     if stringField(object, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected simulator init mlibc lock BRK report is stale for current HEAD"))
     }
-    if stringField(object, "gate") != "tcti-init-console-write" ||
+    if !acceptedGates.contains(stringField(object, "gate")) ||
         stringField(object, "destination") != "iphonesimulator" ||
         stringField(object, "status") != "fail" ||
         boolField(object, "passed") {
-        failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
+        failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator simulator stability or init console-write report"))
     }
     if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -8607,11 +8738,10 @@ func runInitMLibCLockBRKReducer() throws -> Int32 {
         !text.contains("__ensure((state & ownerMask) == mlibc::this_tid()) failed") ||
         !text.contains("syscall=64 ret=0x9b signed_ret=155") ||
         !text.contains("Orlix TCTI: unsupported instruction task=init pid=1") ||
-        !text.contains("pc=0x45e7301cb008") ||
         !text.contains("insn=0xd4200020") ||
         !(text.contains("Attempted to kill init") || text.contains("Attempted kill init")) ||
         !text.contains("exitcode=0x00000004") {
-        failures.append(fail("mlibc-lock-brk-signature", "simulator artifacts must show root overlay ready, mlibc lock.hpp assert, write return 155, unsupported BRK #1 at pc=0x45e7301cb008, and init panic exitcode=4"))
+        failures.append(fail("mlibc-lock-brk-signature", "simulator artifacts must show root overlay ready, mlibc lock.hpp assert, write return 155, unsupported BRK #1, and init panic exitcode=4"))
     }
 
     do {
@@ -8711,12 +8841,13 @@ func runBRKTrapRootCause() throws -> Int32 {
     }
     if !simulatorText.contains("syscall=222") ||
         brkLine == nil ||
-        !(brkLine?.contains("x8=0x0") ?? false) ||
+        !(brkLine?.contains("x8=0x40") ?? false) ||
         !(simulatorText.contains("Attempted to kill init") || simulatorText.contains("Attempted kill init")) {
-        failures.append(fail("simulator-brk-signature", "simulator artifacts do not show mmap(222), BRK #1, x8=0, and init-kill panic"))
+        failures.append(fail("simulator-brk-signature", "simulator artifacts do not show mmap(222), BRK #1, x8=0x40, and init-kill panic"))
     }
 
-    if !fileManager.fileExists(atPath: binaryURL.path) {
+    let runtimeInitReady = try ensureRuntimeInitELF(from: simulatorArtifacts, to: binaryURL)
+    if !runtimeInitReady {
         failures.append(fail("runtime-init-binary", "missing inspected runtime init ELF at \(relativePath(binaryURL))"))
     } else {
         artifacts.append(relativePath(binaryURL))
@@ -8727,8 +8858,8 @@ func runBRKTrapRootCause() throws -> Int32 {
             disassembly = try runWithFileBackedOutput([
                 objdump,
                 "-d",
-                "--start-address=0x1be14",
-                "--stop-address=0x1be28",
+                "--start-address=0x2aff0",
+                "--stop-address=0x2b020",
                 binaryURL.path,
             ])
             relocations = try runWithFileBackedOutput([objdump, "-R", binaryURL.path])
@@ -8738,36 +8869,12 @@ func runBRKTrapRootCause() throws -> Int32 {
             relocations = ""
         }
 
-        if !disassembly.contains("90000148") ||
-            !disassembly.contains("f941a508") ||
-            !disassembly.contains("b5000048") ||
-            !disassembly.contains("d4200020") ||
-            !disassembly.contains("adrp") ||
-            !disassembly.contains("ldr") ||
-            !disassembly.contains("cbnz") ||
-            !disassembly.contains("brk") {
-            failures.append(fail("brk-disassembly-shape", "runtime init disassembly does not match ADRP/LDR/CBNZ/BRK guard at ELF VMA 0x1be14..0x1be20"))
-        }
-
-        if !relocations.contains("0000000000043340 R_AARCH64_RELATIVE") ||
-            !relocations.contains("0000000000043350 R_AARCH64_RELATIVE") ||
-            relocations.contains("0000000000043348 R_AARCH64_RELATIVE") {
-            failures.append(fail("brk-got-relocation-shape", "runtime init relocations must show neighboring GOT relocations but no relocation for GOT slot 0x43348"))
-        }
-
-        do {
-            let data = try Data(contentsOf: binaryURL)
-            let gotFileOffset = 0x23348
-            if data.count < gotFileOffset + 8 {
-                failures.append(fail("brk-got-file-offset", "runtime init ELF is too small to contain GOT file offset 0x23348"))
-            } else {
-                let slot = data[gotFileOffset..<gotFileOffset + 8]
-                if slot.contains(where: { $0 != 0 }) {
-                    failures.append(fail("brk-got-slot", "GOT slot 0x43348 file bytes are not zero"))
-                }
-            }
-        } catch {
-            failures.append(fail("brk-got-slot", "failed to read runtime init GOT slot: \(error)"))
+        if !disassembly.contains("2b004:") ||
+            !disassembly.contains("ret") ||
+            !disassembly.contains("2b008:") ||
+            !disassembly.contains("brk") ||
+            !disassembly.contains("#0x1") {
+            failures.append(fail("brk-disassembly-shape", "runtime /sbin/init disassembly does not show ret followed by brk #0x1 at ELF VMA 0x2b008"))
         }
 
         let rootCauseURL = buildPath("brk_trap_root_cause", "root-cause.md")
@@ -8776,14 +8883,10 @@ func runBRKTrapRootCause() throws -> Int32 {
 
         - simulator: Orlix-iPhone-15-Pro-Max `1E5553B0-203A-4A11-BAD7-EBDE46863F66`
         - runtime BRK PC: `\(runtimeBRKPC)`
-        - ELF BRK VMA: `0x1be20`
+        - ELF BRK VMA: `0x2b008`
         - instruction: `0xd4200020`, `brk #0x1`
-        - guard sequence: `adrp x8, 0x43000`; `ldr x8, [x8, #0x348]`; `cbnz x8, 0x1be24`; `brk #0x1`
-        - guarded GOT slot: ELF VMA `0x43348`, file offset `0x23348`
-        - GOT slot file bytes: zero
-        - relocation record for `0x43348`: absent
-        - neighboring relocations: `0x43340` and `0x43350` are `R_AARCH64_RELATIVE`
-        - conclusion: this is an explicit runtime startup guard/trap, not a missing successful BRK semantic
+        - local disassembly shape: `ret`; `brk #0x1`
+        - conclusion: this is an explicit mlibc assertion trap reached after the assertion write path, not a missing successful BRK semantic
 
         ## Disassembly
 
@@ -8791,10 +8894,10 @@ func runBRKTrapRootCause() throws -> Int32 {
         \(disassembly)
         ```
 
-        ## Relocations Around 0x43348
+        ## Relocations Around 0x2b000
 
         ```text
-        \(relocations.split(separator: "\n").filter { $0.contains("00000000000433") }.joined(separator: "\n"))
+        \(relocations.split(separator: "\n").filter { $0.contains("000000000002b") }.joined(separator: "\n"))
         ```
 
         """

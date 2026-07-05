@@ -7,6 +7,7 @@
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <linux/sched.h>
+#include <asm/hosted_exec.h>
 #include <asm/ptrace.h>
 #include <asm/tcti.h>
 
@@ -704,10 +705,15 @@ static int tcti_execute_system_register(struct pt_regs *regs,
 
 	switch (decoded->system_register) {
 	case TCTI_SYSTEM_REGISTER_TPIDR_EL0:
-		if (decoded->system_register_write)
+		if (decoded->system_register_write) {
+#if defined(ORLIX_APP_HOSTED_BOOT)
+			orlix_hosted_set_current_user_tls(value);
+#else
 			current->thread.user_tls = value;
-		else if (decoded->rt != 31)
+#endif
+		} else if (decoded->rt != 31) {
 			regs->regs[decoded->rt] = current->thread.user_tls;
+		}
 		break;
 	case TCTI_SYSTEM_REGISTER_NZCV:
 		if (decoded->system_register_write) {

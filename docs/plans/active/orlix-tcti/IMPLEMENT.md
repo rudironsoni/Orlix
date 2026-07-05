@@ -5806,4 +5806,59 @@ Timestamp: `2026-07-05T07:15:03Z`.
   - No production TCTI assembly or gadget dispatch added.
   - No generated Linux, mlibc, package, rootfs, or build tree edited.
   - No HostAdapter Linux semantics added.
+- No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
+### Checkpoint: Hosted TCTI TLS Synchronization Clears Simulator Stability
+
+Timestamp: `2026-07-05T08:15:52Z`.
+
+- Starting failure: pinned simulator `tcti-simulator-stability` reached real `/sbin/init` through Linux `execve` and TCTI, then failed after mlibc TLS state regressed across hosted boundaries.
+- Root cause narrowed: TCTI emulated guest `MSR TPIDR_EL0` updated `current->thread.user_tls`, but did not update hosted active/hardware TLS state. A later hosted boundary could preserve stale TLS back over the guest value.
+- Kernel fix:
+  - Added `orlix_hosted_set_current_user_tls()` in `arch/orlix/kernel/hosted_exec.c`.
+  - Declared it in `arch/orlix/include/asm/hosted_exec.h`.
+  - `hosted_exec/tcti/switch_debug.c` now calls it for guest `TPIDR_EL0` writes under `ORLIX_APP_HOSTED_BOOT`.
+  - Removed temporary TPIDR read/write diagnostic log spam.
+- Harness fix:
+  - `tcti-init-mlibc-lock-brk-reducer` now selects a simulator report by the actual mlibc lock assertion BRK signature instead of the newest stability report, so later diagnostic reports that progress to a different failure do not invalidate the reducer.
+  - `tcti-brk-trap-root-cause` inspects the current runtime `/sbin/init` BRK VMA `0x2b008` and derives runtime init from the app/build artifacts without hardcoding the external SSD path.
+- Xcode environment:
+  - `xcode-offload doctor --root "$(external-ssd-root)" --strict --json` passed.
+  - Installed missing Xcode shims with `xcode-offload install-shims --root "$(external-ssd-root)" --shim-dir "$HOME/.local/bin"`.
+  - Verified wrapped `xcrun` and `xcodebuild` resolve from `$HOME/.local/bin`.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-init-mlibc-lock-brk-reducer`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-brk-trap-reducer`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-brk-trap-root-cause`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke`: passed.
+  - `rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke`: passed.
+  - `rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy git diff --check`: passed.
+- Simulator evidence:
+  - First syscall report: `Build/Reports/runtime/tcti-init-first-syscall-20260705T081133Z-33838.json`.
+  - Stability report: `Build/Reports/runtime/tcti-simulator-stability-20260705T081552Z-72273.json`.
+  - Pinned simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - `status=pass`, `passed=true`, `simulator_single_booted=true`.
+  - `forbidden_behavior.generated_exec_memory=false`.
+  - `forbidden_behavior.host_exec_guest_text=false`.
+  - `forbidden_behavior.host_x18=false`.
+  - `forbidden_behavior.map_jit=false`.
+  - `forbidden_behavior.native_ios_api_exposure_to_guest=false`.
+  - `forbidden_behavior.rwx=false`.
+- Harness state after checkpoint:
+  - `agent-next` selects `tcti-kernel-fault-signal-smoke`.
+  - Selected command: `make tcti-gate TARGET=tcti-kernel-fault-signal-smoke`.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
   - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
