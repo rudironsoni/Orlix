@@ -6505,6 +6505,44 @@ Timestamp: `2026-07-06T22:22:51Z`.
   - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
   - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
 
+### Checkpoint: Execve/Binfmt Smoke Uses Current Simulator Stability Evidence
+
+Timestamp: `2026-07-06T22:52:03Z`.
+
+- Harness-selected gate: `tcti-kernel-execve-binfmt-elf-smoke`.
+- Starting failure:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` failed at `68ac9ee2aabd9e992105460f33763f86ac257a80`.
+  - The failure reason was not missing simulator runtime evidence. The fresh `tcti-simulator-stability` report already contained structured `linux_exec_start_thread` and TCTI entry facts.
+  - The gate was still selecting `tcti-init-first-syscall` as its simulator evidence source, so it ignored the current stability report and read stale first-syscall evidence.
+- Harness fix:
+  - `tools/tcti/orlix-tcti-gate.swift` now selects `tcti-simulator-stability` for execve/binfmt simulator evidence.
+  - Failure text was updated from first-syscall report wording to simulator stability report wording.
+  - This is a report selection fix only. It does not add Linux exec semantics to HostAdapter or harness code.
+- Evidence:
+  - `Build/Reports/runtime/tcti-simulator-stability-20260706T225203Z-85663.json`: `status=pass`, `passed=true`, `git_sha=68ac9ee2aabd9e992105460f33763f86ac257a80`.
+  - The stability terminal artifact captured `Orlix TCTI: linux exec start_thread` entries and `svc #0` entries.
+  - `tcti-simulator-fatal-runtime.txt` was empty.
+  - `host-exec-violations.txt` was empty.
+  - No recent `OrlixTestRunner`, `Orlix`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports` or `~/Library/Logs/CrashReporter`.
+- Gate result:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke`: passed.
+  - `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`: `status=pass`, `passed=true`.
+  - Evidence fields: `simulator_report=Build/Reports/runtime/tcti-simulator-stability-20260706T225203Z-85663.json`, `linux_execve_binfmt_elf_path_entered=true`, `linux_program_headers_accepted=true`, `linux_task_mm_register_state_prepared=true`, `tcti_entry_reached=true`, `hostadapter_linux_exec_semantics=absent`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-kernel-fault-signal-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Coreutils Test Subset Passes On Pinned Simulator
 
 Timestamp: `2026-07-06T22:37:34Z`.
