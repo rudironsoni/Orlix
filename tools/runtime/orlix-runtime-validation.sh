@@ -44,6 +44,10 @@ shell_redirection_marker="ORLIX-TCTI-SHELL-REDIRECTION-OK"
 shell_script_marker="ORLIX-TCTI-SHELL-SCRIPT-OK"
 coreutils_true_false_echo_marker="ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK"
 coreutils_cat_wc_marker="ORLIX-TCTI-COREUTILS-CAT-WC-OK"
+coreutils_ls_stat_marker="ORLIX-TCTI-COREUTILS-LS-STAT-OK"
+coreutils_mkdir_rm_cp_ln_marker="ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK"
+coreutils_env_path_marker="ORLIX-TCTI-COREUTILS-ENV-PATH-OK"
+coreutils_test_subset_marker="ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK"
 package_behavior_marker="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"
 dynamic_loader_marker="ORLIX-TCTI-DYNAMIC-LOADER-OK"
 signals_marker="ORLIX-TCTI-SIGNALS-OK"
@@ -432,7 +436,31 @@ simulator_launch_arguments() {
 	tcti-coreutils-cat-wc)
 		output_args=(
 			--orlix-kernel-command-line-append \
-			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20printf%20cat-wc-ok%5Cn%20%3E%20/tmp/orlix-coreutils-cat-wc%3B%20set%20--%20%24(/bin/wc%20-l%20/tmp/orlix-coreutils-cat-wc)%3B%20test%20%241%20%3D%201%3B%20/bin/cat%20/tmp/orlix-coreutils-cat-wc%3B%20printf%20$coreutils_cat_wc_marker%3B%20exit%200"
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20printf%20%27cat-wc-ok%5Cn%27%20%3E%20/tmp/orlix-coreutils-cat-wc%3B%20set%20--%20%24(/bin/wc%20-l%20/tmp/orlix-coreutils-cat-wc)%3B%20test%20%22%241%22%20%3D%201%3B%20/bin/cat%20/tmp/orlix-coreutils-cat-wc%3B%20printf%20$coreutils_cat_wc_marker%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-ls-stat)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20/bin/ls%20-ld%20/bin/sh%20%3E%20/tmp/orlix-coreutils-ls-stat%3B%20/bin/stat%20/bin/sh%20%3E%3E%20/tmp/orlix-coreutils-ls-stat%3B%20test%20-s%20/tmp/orlix-coreutils-ls-stat%3B%20/bin/cat%20/tmp/orlix-coreutils-ls-stat%3B%20printf%20$coreutils_ls_stat_marker%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-mkdir-rm-cp-ln)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20root%3D/tmp/orlix-coreutils-mkdir-rm-cp-ln%3B%20/bin/rm%20-rf%20%24root%3B%20/bin/mkdir%20-p%20%24root/src%20%24root/dst%3B%20printf%20%27mkdir-rm-cp-ln-ok%5Cn%27%20%3E%20%24root/src/input%3B%20/bin/cp%20%24root/src/input%20%24root/dst/output%3B%20/bin/ln%20%24root/dst/output%20%24root/hardlink%3B%20/bin/cat%20%24root/hardlink%3B%20/bin/rm%20%24root/hardlink%3B%20/bin/rm%20-r%20%24root%3B%20printf%20$coreutils_mkdir_rm_cp_ln_marker%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-env-path)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20PATH%3D/bin%3A/usr/bin%3B%20export%20PATH%3B%20/bin/env%20%3E%20/tmp/orlix-coreutils-env-path%3B%20/bin/printenv%20PATH%20%3E%3E%20/tmp/orlix-coreutils-env-path%3B%20test%20%22%24PATH%22%20%3D%20/bin%3A/usr/bin%3B%20/bin/cat%20/tmp/orlix-coreutils-env-path%3B%20printf%20%27env-path-ok%5Cn%27%3B%20printf%20$coreutils_env_path_marker%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-test-subset)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20root%3D/tmp/orlix-coreutils-test-subset%3B%20/bin/rm%20-rf%20%24root%3B%20/bin/mkdir%20-p%20%24root/src%20%24root/dst%3B%20printf%20%27subset-ok%5Cn%27%20%3E%20%24root/src/input%3B%20/bin/cp%20%24root/src/input%20%24root/dst/output%3B%20/bin/ln%20%24root/dst/output%20%24root/hardlink%3B%20/bin/cat%20%24root/hardlink%20%3E%20%24root/out%3B%20set%20--%20%24(/bin/wc%20-l%20%24root/out)%3B%20test%20%22%241%22%20%3D%201%3B%20/bin/ls%20-ld%20%24root/dst%20%3E%3E%20%24root/out%3B%20/bin/stat%20%24root/dst/output%20%3E%3E%20%24root/out%3B%20PATH%3D/bin%3A/usr/bin%3B%20export%20PATH%3B%20/bin/env%20%3E%3E%20%24root/out%3B%20/bin/printenv%20PATH%20%3E%3E%20%24root/out%3B%20/bin/cat%20%24root/out%3B%20/bin/rm%20%24root/hardlink%3B%20/bin/rm%20-r%20%24root%3B%20printf%20$coreutils_test_subset_marker%3B%20exit%200"
 		)
 		;;
 	tcti-package-behavior)
@@ -480,10 +508,13 @@ write_json_report() {
 	local acceptance_weight="blocker"
 	local real_stack_required="true"
 	local can_claim_runtime_readiness="false"
-	if [ "$destination" = "iphonesimulator" ]; then
-		proof_tier="simulator"
-	fi
-	if [ "$status" = "pass" ] &&
+if [ "$destination" = "iphonesimulator" ]; then
+proof_tier="simulator"
+fi
+if [ "$gate" = "tcti-coreutils-test-subset" ]; then
+acceptance_weight="readiness"
+fi
+if [ "$status" = "pass" ] &&
 		[ "$destination" = "iphoneos" ] &&
 		[ "$gate" = "tcti-init-first-syscall" ] &&
 		autonomous_tcti_reports_passed &&
@@ -793,7 +824,7 @@ physical_tcti_preflight() {
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -1593,6 +1624,22 @@ assert_gate_markers() {
 		;;
 	tcti-coreutils-cat-wc)
 		capture_guest_marker "$coreutils_cat_wc_marker" "tcti-coreutils-cat-wc.txt" "Coreutils cat/wc"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-ls-stat)
+		capture_guest_marker "$coreutils_ls_stat_marker" "tcti-coreutils-ls-stat.txt" "Coreutils ls/stat"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-mkdir-rm-cp-ln)
+		capture_guest_marker "$coreutils_mkdir_rm_cp_ln_marker" "tcti-coreutils-mkdir-rm-cp-ln.txt" "Coreutils mkdir/rm/cp/ln"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-env-path)
+		capture_guest_marker "$coreutils_env_path_marker" "tcti-coreutils-env-path.txt" "Coreutils env/PATH"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-test-subset)
+		capture_guest_marker "$coreutils_test_subset_marker" "tcti-coreutils-test-subset.txt" "Coreutils test subset"
 		assert_no_simulator_fatal_runtime
 		;;
 	tcti-package-behavior)

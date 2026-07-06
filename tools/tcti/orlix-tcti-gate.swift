@@ -4890,6 +4890,689 @@ func runCoreutilsCatWC() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runCoreutilsLsStat() throws -> Int32 {
+    let target = "tcti-coreutils-ls-stat"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-ls-stat"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_ls_stat")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/ls -ld /bin/sh; /bin/stat /bin/sh",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-ls-stat"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-LS-STAT-OK"#) &&
+        sourceTextContains(runtimeText, #"/bin/ls"#) &&
+        sourceTextContains(runtimeText, #"/bin/stat"#) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils ls/stat command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call /bin/ls and /bin/stat"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: ["ls", "stat"]) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and ls/stat programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and selected programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-ls-stat-fail", command: command, reason: "Coreutils ls/stat runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(target: target, status: status, summary: "Coreutils ls/stat gate could not find the runtime-validation report.", command: command, failures: failures, artifacts: artifacts, counters: ["coreutils_ls_stat_tests_executed": 0, "coreutils_ls_stat_tests_passed": 0, "coreutils_ls_stat_tests_failed": 1, "coreutils_ls_stat_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-ls-stat.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils ls/stat gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-LS-STAT-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-LS-STAT-OK"))
+    }
+    if terminalText.contains("/bin/sh") && (terminalText.contains("File:") || terminalText.contains("Size:")) {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include ls/stat output for /bin/sh"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if outputHasShellWaitStatusZero(terminalText) {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(target: target, caseID: status == .pass ? "coreutils-ls-stat-pass" : "coreutils-ls-stat-fail", command: command, reason: status == .pass ? "Coreutils ls/stat passed" : "Coreutils ls/stat failed", artifacts: artifacts, expectedStatus: status)
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(target: target, status: status, summary: status == .pass ? "Pinned simulator Coreutils ls/stat gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils ls/stat gate did not pass through OrlixOS runtime-validation.", command: command, failures: failures, artifacts: artifacts, forbiddenBehavior: forbiddenBehavior, counters: ["coreutils_ls_stat_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0, "coreutils_ls_stat_tests_passed": status == .pass ? 1 : 0, "coreutils_ls_stat_tests_failed": status == .pass ? 0 : 1, "coreutils_ls_stat_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runCoreutilsMkdirRmCpLn() throws -> Int32 {
+    let target = "tcti-coreutils-mkdir-rm-cp-ln"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-mkdir-rm-cp-ln"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_mkdir_rm_cp_ln")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/mkdir -p; /bin/cp; /bin/ln; /bin/rm",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-mkdir-rm-cp-ln"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK"#) &&
+        sourceTextContains(runtimeText, #"/bin/mkdir"#) &&
+        sourceTextContains(runtimeText, #"/bin/rm"#) &&
+        sourceTextContains(runtimeText, #"/bin/cp"#) &&
+        sourceTextContains(runtimeText, #"/bin/ln"#) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils mkdir/rm/cp/ln command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call /bin/mkdir, /bin/rm, /bin/cp, and /bin/ln"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: ["mkdir", "rm", "cp", "ln"]) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and mkdir/rm/cp/ln programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and selected programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-mkdir-rm-cp-ln-fail", command: command, reason: "Coreutils mkdir/rm/cp/ln runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(target: target, status: status, summary: "Coreutils mkdir/rm/cp/ln gate could not find the runtime-validation report.", command: command, failures: failures, artifacts: artifacts, counters: ["coreutils_mkdir_rm_cp_ln_tests_executed": 0, "coreutils_mkdir_rm_cp_ln_tests_passed": 0, "coreutils_mkdir_rm_cp_ln_tests_failed": 1, "coreutils_mkdir_rm_cp_ln_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-mkdir-rm-cp-ln.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils mkdir/rm/cp/ln gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK"))
+    }
+    if markerText.contains("mkdir-rm-cp-ln-ok") || terminalText.contains("mkdir-rm-cp-ln-ok") {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include /bin/cat output from the hardlink"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if outputHasShellWaitStatusZero(terminalText) {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(target: target, caseID: status == .pass ? "coreutils-mkdir-rm-cp-ln-pass" : "coreutils-mkdir-rm-cp-ln-fail", command: command, reason: status == .pass ? "Coreutils mkdir/rm/cp/ln passed" : "Coreutils mkdir/rm/cp/ln failed", artifacts: artifacts, expectedStatus: status)
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(target: target, status: status, summary: status == .pass ? "Pinned simulator Coreutils mkdir/rm/cp/ln gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils mkdir/rm/cp/ln gate did not pass through OrlixOS runtime-validation.", command: command, failures: failures, artifacts: artifacts, forbiddenBehavior: forbiddenBehavior, counters: ["coreutils_mkdir_rm_cp_ln_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0, "coreutils_mkdir_rm_cp_ln_tests_passed": status == .pass ? 1 : 0, "coreutils_mkdir_rm_cp_ln_tests_failed": status == .pass ? 0 : 1, "coreutils_mkdir_rm_cp_ln_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runCoreutilsEnvPath() throws -> Int32 {
+    let target = "tcti-coreutils-env-path"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-env-path"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_env_path")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/env; /bin/printenv PATH",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-env-path"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-ENV-PATH-OK"#) &&
+        sourceTextContains(runtimeText, #"/bin/env"#) &&
+        sourceTextContains(runtimeText, #"/bin/printenv"#) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils env/printenv command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call /bin/env and /bin/printenv"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: ["env", "printenv"]) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and env/printenv programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and env/printenv programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-env-path-fail", command: command, reason: "Coreutils env/PATH runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(target: target, status: status, summary: "Coreutils env/PATH gate could not find the runtime-validation report.", command: command, failures: failures, artifacts: artifacts, counters: ["coreutils_env_path_tests_executed": 0, "coreutils_env_path_tests_passed": 0, "coreutils_env_path_tests_failed": 1, "coreutils_env_path_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-env-path.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils env/PATH gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-ENV-PATH-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-ENV-PATH-OK"))
+    }
+    if terminalText.contains("PATH=/bin:/usr/bin") &&
+        terminalText.contains("/bin:/usr/bin") &&
+        terminalText.contains("env-path-ok") {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include env/printenv PATH output"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if outputHasShellWaitStatusZero(terminalText) {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(target: target, caseID: status == .pass ? "coreutils-env-path-pass" : "coreutils-env-path-fail", command: command, reason: status == .pass ? "Coreutils env/PATH passed" : "Coreutils env/PATH failed", artifacts: artifacts, expectedStatus: status)
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(target: target, status: status, summary: status == .pass ? "Pinned simulator Coreutils env/PATH gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils env/PATH gate did not pass through OrlixOS runtime-validation.", command: command, failures: failures, artifacts: artifacts, forbiddenBehavior: forbiddenBehavior, counters: ["coreutils_env_path_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0, "coreutils_env_path_tests_passed": status == .pass ? 1 : 0, "coreutils_env_path_tests_failed": status == .pass ? 0 : 1, "coreutils_env_path_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runCoreutilsTestSubset() throws -> Int32 {
+    let target = "tcti-coreutils-test-subset"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-test-subset"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_test_subset")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/rm; /bin/mkdir; /bin/cp; /bin/ln; /bin/cat; /bin/wc; /bin/ls; /bin/stat; /bin/env; /bin/printenv",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let requiredPrograms = ["rm", "mkdir", "cp", "ln", "cat", "wc", "ls", "stat", "env", "printenv"]
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-test-subset"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK"#) &&
+        requiredPrograms.allSatisfy({ sourceTextContains(runtimeText, "/bin/\($0)") }) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils test-subset command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call the selected Coreutils test subset commands"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: requiredPrograms) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and selected subset programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and selected subset programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-test-subset-fail", command: command, reason: "Coreutils test-subset runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(target: target, status: status, summary: "Coreutils test-subset gate could not find the runtime-validation report.", command: command, failures: failures, artifacts: artifacts, counters: ["coreutils_test_subset_tests_executed": 0, "coreutils_test_subset_tests_passed": 0, "coreutils_test_subset_tests_failed": 1, "coreutils_test_subset_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-test-subset.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils test-subset gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK"))
+    }
+    if terminalText.contains("subset-ok") &&
+        terminalText.contains("PATH=/bin:/usr/bin") &&
+        terminalText.contains("/bin:/usr/bin") &&
+        (terminalText.contains("File:") || terminalText.contains("Size:")) {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include the Coreutils subset stdout proof"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if outputHasShellWaitStatusZero(terminalText) {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(target: target, caseID: status == .pass ? "coreutils-test-subset-pass" : "coreutils-test-subset-fail", command: command, reason: status == .pass ? "Coreutils test-subset passed" : "Coreutils test-subset failed", artifacts: artifacts, expectedStatus: status)
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(target: target, status: status, summary: status == .pass ? "Pinned simulator Coreutils test-subset gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils test-subset gate did not pass through OrlixOS runtime-validation.", command: command, failures: failures, artifacts: artifacts, forbiddenBehavior: forbiddenBehavior, counters: ["coreutils_test_subset_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0, "coreutils_test_subset_tests_passed": status == .pass ? 1 : 0, "coreutils_test_subset_tests_failed": status == .pass ? 0 : 1, "coreutils_test_subset_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex(), sourcePath: String? = nil) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
@@ -17583,6 +18266,10 @@ let tctiTargets = [
     "tcti-shell-script-smoke",
     "tcti-coreutils-true-false-echo",
     "tcti-coreutils-cat-wc",
+    "tcti-coreutils-ls-stat",
+    "tcti-coreutils-mkdir-rm-cp-ln",
+    "tcti-coreutils-env-path",
+    "tcti-coreutils-test-subset",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -17690,6 +18377,14 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runCoreutilsTrueFalseEcho()
     case "tcti-coreutils-cat-wc":
         return try runCoreutilsCatWC()
+    case "tcti-coreutils-ls-stat":
+        return try runCoreutilsLsStat()
+    case "tcti-coreutils-mkdir-rm-cp-ln":
+        return try runCoreutilsMkdirRmCpLn()
+    case "tcti-coreutils-env-path":
+        return try runCoreutilsEnvPath()
+    case "tcti-coreutils-test-subset":
+        return try runCoreutilsTestSubset()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
