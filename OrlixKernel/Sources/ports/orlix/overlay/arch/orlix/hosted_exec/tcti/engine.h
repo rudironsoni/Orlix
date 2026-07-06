@@ -44,6 +44,50 @@ struct tcti_kernel_execve_binfmt_elf_smoke_result {
 	s32 syscallno_after_start_thread;
 };
 
+struct tcti_kernel_fault_signal_smoke_result {
+	bool tcti_user_fault_exit;
+	bool fault_address_recorded;
+	bool fault_access_recorded;
+	bool fault_pc_recorded;
+	bool fault_instruction_recorded;
+	bool linux_fault_handler_entered;
+	bool linux_signal_result_recorded;
+	unsigned long fault_address;
+	enum tcti_access fault_access;
+	unsigned long fault_pc;
+	u32 fault_instruction;
+	int handler_return;
+	int signal_number;
+	int signal_code;
+	unsigned long signaled_address;
+};
+
+struct tcti_kernel_wait_reaping_smoke_result {
+	bool tcti_task_exit_observed;
+	bool child_exit_state_recorded;
+	bool linux_wait_entered;
+	bool linux_wait_status_recorded;
+	bool linux_reaping_completed;
+	int child_pid;
+	int child_exit_code;
+	int wait_result_pid;
+	int wait_status;
+	int wait_return;
+};
+
+struct tcti_kernel_pty_console_smoke_result {
+	bool tcti_write_syscall_observed;
+	bool linux_stdout_source_recorded;
+	bool linux_stderr_source_recorded;
+	bool linux_pty_write_entered;
+	bool host_console_mirror_called;
+	int stdout_fd;
+	int stderr_fd;
+	unsigned long stdout_bytes;
+	unsigned long stderr_bytes;
+	unsigned long mirrored_bytes;
+};
+
 void tcti_prepare_syscall_handoff(struct pt_regs *regs);
 bool tcti_prepare_successful_execve_return(struct pt_regs *regs);
 bool tcti_static_pie_initial_tls(unsigned long base, const Elf64_Phdr *phdr,

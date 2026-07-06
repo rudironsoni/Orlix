@@ -888,6 +888,12 @@ func sourceTextContains(_ text: String, _ needle: String) -> Bool {
     text.range(of: needle, options: [.regularExpression]) != nil
 }
 
+func outputHasPassingTAPLabel(_ output: String, _ label: String) -> Bool {
+    let ok = output.range(of: #"(?m)(^|[^[:alpha:]])ok\s+[0-9]+\s+-\s+\#(label)"#, options: .regularExpression) != nil
+    let notOK = output.range(of: #"(?m)not ok\s+[0-9]+\s+-\s+\#(label)"#, options: .regularExpression) != nil
+    return ok && !notOK
+}
+
 func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
     guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: nil) else {
         return true
@@ -902,6 +908,31 @@ func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
         }
     }
     return true
+}
+
+func linuxKernelExitSource() -> URL? {
+    linuxPortSource(["kernel", "exit.c"])
+}
+
+func linuxPortSource(_ components: [String]) -> URL? {
+    let srcRoot = path("Build", "OrlixKernel", "src")
+    guard let entries = try? fileManager.contentsOfDirectory(at: srcRoot, includingPropertiesForKeys: nil) else {
+        return nil
+    }
+    for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        let name = entry.lastPathComponent
+        guard name.hasPrefix("linux-"), name.hasSuffix("-port") else {
+            continue
+        }
+        var candidate = entry
+        for component in components {
+            candidate = candidate.appendingPathComponent(component)
+        }
+        if fileManager.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+    }
+    return nil
 }
 
 func kernelSyscallDispatchKUnitEvidence(from output: String) -> [String: String] {
@@ -976,6 +1007,120 @@ func execveBinfmtRunnerEvidence(from output: String) -> [String: String] {
         let key = String(payload[..<separator])
         let value = String(payload[payload.index(after: separator)...])
         evidence["execve_binfmt_runner_\(key)"] = value
+    }
+    return evidence
+}
+
+func faultSignalRunnerEvidence(from output: String) -> [String: String] {
+    let testName = "tcti_kernel_fault_signal_smoke_reports_linux_signal"
+    let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let runnerAttempted = output.contains("ORLIX-FAULT-SIGNAL-RUNNER-BEGIN") &&
+        output.contains("ORLIX-FAULT-SIGNAL-RUNNER-END")
+    let namedPass = output.range(
+        of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): pass") ||
+        output.contains("\(testName)=pass")
+    let namedFailure = output.range(
+        of: #"(?m)^not ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): fail") ||
+        output.contains("\(testName)=fail")
+    var evidence: [String: String] = [
+        "fault_signal_runner_test_name": testName,
+        "fault_signal_runner_output_has_ktap": hasKTAP ? "true" : "false",
+        "fault_signal_runner_attempted": runnerAttempted ? "true" : "false",
+        "fault_signal_runner_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
+        "fault_signal_runner_named_test_passed": namedPass ? "true" : "false",
+        "fault_signal_runner_named_test_failed": namedFailure ? "true" : "false",
+    ]
+    for line in output.components(separatedBy: .newlines) {
+        guard line.hasPrefix("ORLIX-FAULT-SIGNAL-RUNNER ") else { continue }
+        let payload = String(line.dropFirst("ORLIX-FAULT-SIGNAL-RUNNER ".count))
+        guard let separator = payload.firstIndex(of: "=") else { continue }
+        let key = String(payload[..<separator])
+        let value = String(payload[payload.index(after: separator)...])
+        evidence["fault_signal_runner_\(key)"] = value
+    }
+    return evidence
+}
+
+func waitReapingRunnerEvidence(from output: String) -> [String: String] {
+    let testName = "tcti_kernel_wait_reaping_smoke_reports_linux_wait"
+    let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let runnerAttempted = output.contains("ORLIX-WAIT-REAPING-RUNNER-BEGIN") &&
+        output.contains("ORLIX-WAIT-REAPING-RUNNER-END")
+    let namedPass = output.range(
+        of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): pass") ||
+        output.contains("\(testName)=pass")
+    let namedFailure = output.range(
+        of: #"(?m)^not ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): fail") ||
+        output.contains("\(testName)=fail")
+    var evidence: [String: String] = [
+        "wait_reaping_runner_test_name": testName,
+        "wait_reaping_runner_output_has_ktap": hasKTAP ? "true" : "false",
+        "wait_reaping_runner_attempted": runnerAttempted ? "true" : "false",
+        "wait_reaping_runner_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
+        "wait_reaping_runner_named_test_passed": namedPass ? "true" : "false",
+        "wait_reaping_runner_named_test_failed": namedFailure ? "true" : "false",
+    ]
+    for line in output.components(separatedBy: .newlines) {
+        guard line.hasPrefix("ORLIX-WAIT-REAPING-RUNNER ") else { continue }
+        let payload = String(line.dropFirst("ORLIX-WAIT-REAPING-RUNNER ".count))
+        guard let separator = payload.firstIndex(of: "=") else { continue }
+        let key = String(payload[..<separator])
+        let value = String(payload[payload.index(after: separator)...])
+        evidence["wait_reaping_runner_\(key)"] = value
+    }
+    return evidence
+}
+
+func ptyConsoleRunnerEvidence(from output: String) -> [String: String] {
+    let testName = "tcti_kernel_pty_console_smoke_reports_output"
+    let hasKTAP = output.range(of: #"(?m)^(KTAP|TAP) version\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^ok\s+[0-9]+\b"#, options: .regularExpression) != nil ||
+        output.range(of: #"(?m)^not ok\s+[0-9]+\b"#, options: .regularExpression) != nil
+    let runnerAttempted = output.contains("ORLIX-PTY-CONSOLE-RUNNER-BEGIN") &&
+        output.contains("ORLIX-PTY-CONSOLE-RUNNER-END")
+    let namedPass = output.range(
+        of: #"(?m)^ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): pass") ||
+        output.contains("\(testName)=pass")
+    let namedFailure = output.range(
+        of: #"(?m)^not ok\s+[0-9]+(?:\s+-)?\s+(?:[A-Za-z0-9_.-]+\.)?\#(testName)(?:\s|$)"#,
+        options: .regularExpression
+    ) != nil ||
+        output.contains("\(testName): fail") ||
+        output.contains("\(testName)=fail")
+    var evidence: [String: String] = [
+        "pty_console_runner_test_name": testName,
+        "pty_console_runner_output_has_ktap": hasKTAP ? "true" : "false",
+        "pty_console_runner_attempted": runnerAttempted ? "true" : "false",
+        "pty_console_runner_named_test_executed": (namedPass || namedFailure) ? "true" : "false",
+        "pty_console_runner_named_test_passed": namedPass ? "true" : "false",
+        "pty_console_runner_named_test_failed": namedFailure ? "true" : "false",
+    ]
+    for line in output.components(separatedBy: .newlines) {
+        guard line.hasPrefix("ORLIX-PTY-CONSOLE-RUNNER ") else { continue }
+        let payload = String(line.dropFirst("ORLIX-PTY-CONSOLE-RUNNER ".count))
+        guard let separator = payload.firstIndex(of: "=") else { continue }
+        let key = String(payload[..<separator])
+        let value = String(payload[payload.index(after: separator)...])
+        evidence["pty_console_runner_\(key)"] = value
     }
     return evidence
 }
@@ -1507,7 +1652,3159 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
     return exitCode(for: status)
 }
 
-func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
+func runKernelFaultSignalSmoke() throws -> Int32 {
+    let target = "tcti-kernel-fault-signal-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
+    let tctiHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "include", "asm", "tcti.h")
+    let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
+    let faultSmoke = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "fault_signal_smoke.h")
+    let testSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let runnerSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_fault_signal_smoke_runner.c")
+    let hostInclude = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "host_include")
+    let tctiDir = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti")
+    let fault = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "fault.c")
+    let hostAdapter = path("OrlixHostAdapter", "Sources")
+    let outputRoot = buildPath("kernel_fault_signal_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runnerOutputURL = outputRoot.appendingPathComponent("runner.txt")
+    let runnerEvidenceURL = outputRoot.appendingPathComponent("runner-evidence.json")
+    let runnerBinary = outputRoot.appendingPathComponent("tcti_fault_signal_smoke_runner")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "kernel_config": relativePath(kernelConfig),
+        "workload_hook_compiled": "false",
+        "workload_hook_executed": "false",
+        "tcti_user_fault_exit": "false",
+        "linux_fault_handler_entered": "false",
+        "linux_signal_result_recorded": "false",
+        "signal_number_observed": "false",
+        "signal_code_observed": "false",
+        "fault_address_recorded": "false",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kernel-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let configText = try readText(kernelConfig)
+    let tctiHeaderText = try readText(tctiHeader)
+    let engineText = try readText(tctiEngine)
+    let engineHeaderText = try readText(tctiEngineHeader)
+    let faultSmokeText = try readText(faultSmoke)
+    let testText = try readText(testSource)
+    let faultText = try readText(fault)
+
+    requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
+    requireSourceFact("native_hosted_exec_disabled", configText, #"# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"#, kernelConfig)
+    requireSourceFact("tcti_user_fault_exit_reason", tctiHeaderText, #"TCTI_EXIT_USER_FAULT"#, tctiHeader)
+    requireSourceFact("tcti_result_fault_address", tctiHeaderText, #"fault_address"#, tctiHeader)
+    requireSourceFact("tcti_result_fault_access", tctiHeaderText, #"fault_access"#, tctiHeader)
+    requireSourceFact("tcti_resume_records_user_fault", engineText, #"result.reason = TCTI_EXIT_USER_FAULT"#, tctiEngine)
+    requireSourceFact("tcti_resume_records_fault_address", engineText, #"result.fault_address = fault_address"#, tctiEngine)
+    requireSourceFact("tcti_enter_handles_user_fault", engineText, #"orlix_tcti_handle_user_fault\(regs, &result\)"#, tctiEngine)
+    requireSourceFact("tcti_fault_fallback_kills_sigsegv", engineText, #"do_group_exit\(SIGSEGV\)"#, tctiEngine)
+    requireSourceFact("kernel_fault_handler_symbol", faultText, #"int tcti_handle_user_fault\(struct pt_regs \*regs, unsigned long address"#, fault)
+    requireSourceFact("kernel_fault_bad_area_signal", faultText, #"force_sig_fault\(SIGSEGV, si_code"#, fault)
+    requireSourceFact("kernel_fault_maperr_default", faultText, #"int si_code = SEGV_MAPERR"#, fault)
+    requireSourceFact("kernel_fault_log_marker", faultText, #"Orlix TCTI: user fault"#, fault)
+    requireSourceFact("fault_signal_result_struct", engineHeaderText, #"struct tcti_kernel_fault_signal_smoke_result"#, tctiEngineHeader)
+    requireSourceFact("fault_signal_helper_entrypoint", faultSmokeText, #"tcti_kernel_fault_signal_smoke_execute"#, faultSmoke)
+    requireSourceFact("fault_signal_helper_calls_linux_handler", faultSmokeText, #"handle_fault\(regs, fault->fault_address"#, faultSmoke)
+    requireSourceFact("fault_signal_helper_records_signal", faultSmokeText, #"linux_signal_result_recorded"#, faultSmoke)
+    requireSourceFact("fault_signal_kunit_case", testText, #"tcti_kernel_fault_signal_smoke_reports_linux_signal"#, testSource)
+
+    let hostAdapterOwnsFaultSignals = !sourceFilesContainNone(
+        root: hostAdapter,
+        needles: [
+            #"force_sig_fault"#,
+            #"tcti_handle_user_fault"#,
+        ]
+    )
+    if hostAdapterOwnsFaultSignals {
+        failures.append(fail("hostadapter-fault-signal-semantics", "HostAdapter sources must not own Linux fault/signal semantics"))
+        evidence["hostadapter_linux_fault_signal_semantics"] = "present"
+    } else {
+        evidence["hostadapter_linux_fault_signal_semantics"] = "absent"
+    }
+
+    let hostcc: String
+    if let configuredHostCC = ProcessInfo.processInfo.environment["ORLIX_KERNEL_HOSTCC"],
+       !configuredHostCC.isEmpty {
+        hostcc = configuredHostCC
+    } else {
+        hostcc = try commandPath("cc")
+    }
+    _ = try run([
+        hostcc,
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-function",
+        "-DORLIX_TCTI_HOST_TEST_RUNNER=1",
+        "-I\(hostInclude.path)",
+        "-I\(tctiDir.path)",
+        runnerSource.path,
+        "-o",
+        runnerBinary.path,
+    ])
+    artifacts.append(relativePath(runnerBinary))
+    evidence["workload_hook_compiled"] = "true"
+
+    let runnerOutput = try run([runnerBinary.path], check: false)
+    try runnerOutput.write(to: runnerOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runnerOutputURL))
+    let runnerEvidence = faultSignalRunnerEvidence(from: runnerOutput)
+    try writeJSON(runnerEvidence, to: runnerEvidenceURL)
+    artifacts.append(relativePath(runnerEvidenceURL))
+    for (key, value) in runnerEvidence {
+        evidence[key] = value
+    }
+
+    let runnerPassed = runnerEvidence["fault_signal_runner_named_test_passed"] == "true" &&
+        runnerEvidence["fault_signal_runner_workload_hook_executed"] == "true" &&
+        runnerEvidence["fault_signal_runner_tcti_user_fault_exit"] == "true" &&
+        runnerEvidence["fault_signal_runner_linux_fault_handler_entered"] == "true" &&
+        runnerEvidence["fault_signal_runner_linux_signal_result_recorded"] == "true" &&
+        runnerEvidence["fault_signal_runner_signal_number"] == "11" &&
+        runnerEvidence["fault_signal_runner_signal_code"] == "1"
+    if runnerPassed {
+        evidence["workload_hook_executed"] = "true"
+        evidence["tcti_user_fault_exit"] = "true"
+        evidence["linux_fault_handler_entered"] = "true"
+        evidence["linux_signal_result_recorded"] = "true"
+        evidence["signal_number_observed"] = "SIGSEGV"
+        evidence["signal_code_observed"] = "SEGV_MAPERR"
+        evidence["fault_address_recorded"] = runnerEvidence["fault_signal_runner_fault_address"] ?? "true"
+    } else {
+        failures.append(fail("kernel-workload-hook-execution", "fault/signal smoke runner did not produce passing Linux signal evidence"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "No no-phone OrlixKernel workload currently proves TCTI user fault exit reaches Linux-owned SIGSEGV fault delivery."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "kernel-fault-signal-smoke-pass" : "kernel-fault-signal-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "kernel fault/signal smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(runnerOutputURL), relativePath(runnerEvidenceURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Kernel/TCTI no-phone fault/signal smoke proved TCTI user fault reaches Linux-owned SIGSEGV delivery." : "Kernel/TCTI no-phone fault/signal smoke did not prove Linux-owned signal delivery.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "kernel-source-proof-missing" }.count,
+            "runtime_observed_faults": runnerPassed ? 1 : 0,
+            "runtime_observed_linux_signals": runnerPassed ? 1 : 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: relativePath(kernelConfig),
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runKernelWaitReapingSmoke() throws -> Int32 {
+    let target = "tcti-kernel-wait-reaping-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
+    let tctiHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "include", "asm", "tcti.h")
+    let tctiEngine = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.c")
+    let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
+    let waitSmoke = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "wait_reaping_smoke.h")
+    let testSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let runnerSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_wait_reaping_smoke_runner.c")
+    let hostInclude = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "host_include")
+    let tctiDir = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti")
+    let hostAdapter = path("OrlixHostAdapter", "Sources")
+    let outputRoot = buildPath("kernel_wait_reaping_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runnerOutputURL = outputRoot.appendingPathComponent("runner.txt")
+    let runnerEvidenceURL = outputRoot.appendingPathComponent("runner-evidence.json")
+    let runnerBinary = outputRoot.appendingPathComponent("tcti_wait_reaping_smoke_runner")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "kernel_config": relativePath(kernelConfig),
+        "workload_hook_compiled": "false",
+        "workload_hook_executed": "false",
+        "tcti_task_exit_observed": "false",
+        "child_exit_state_recorded": "false",
+        "linux_wait_entered": "false",
+        "linux_wait_status_recorded": "false",
+        "linux_reaping_completed": "false",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kernel-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let configText = try readText(kernelConfig)
+    let tctiHeaderText = try readText(tctiHeader)
+    let engineText = try readText(tctiEngine)
+    let engineHeaderText = try readText(tctiEngineHeader)
+    let waitSmokeText = try readText(waitSmoke)
+    let testText = try readText(testSource)
+
+    requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
+    requireSourceFact("native_hosted_exec_disabled", configText, #"# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"#, kernelConfig)
+    requireSourceFact("tcti_task_exit_reason", tctiHeaderText, #"TCTI_EXIT_TASK_EXIT"#, tctiHeader)
+    requireSourceFact("tcti_resume_task_exit_default", engineText, #"TCTI_EXIT_TASK_EXIT"#, tctiEngine)
+    requireSourceFact("tcti_resume_task_exit_handoff", engineText, #"case TCTI_EXIT_TASK_EXIT"#, tctiEngine)
+    requireSourceFact("wait_reaping_result_struct", engineHeaderText, #"struct tcti_kernel_wait_reaping_smoke_result"#, tctiEngineHeader)
+    requireSourceFact("wait_reaping_helper_entrypoint", waitSmokeText, #"tcti_kernel_wait_reaping_smoke_execute"#, waitSmoke)
+    requireSourceFact("wait_reaping_helper_calls_linux_wait", waitSmokeText, #"wait_child\(child_pid, task_exit->status"#, waitSmoke)
+    requireSourceFact("wait_reaping_helper_records_reap", waitSmokeText, #"linux_reaping_completed"#, waitSmoke)
+    requireSourceFact("wait_reaping_kunit_case", testText, #"tcti_kernel_wait_reaping_smoke_reports_linux_wait"#, testSource)
+
+    if let exitSource = linuxKernelExitSource(),
+       let exitText = try? readText(exitSource) {
+        evidence["linux_exit_source"] = relativePath(exitSource)
+        requireSourceFact("linux_wait_do_wait", exitText, #"long __do_wait"#, exitSource)
+        requireSourceFact("linux_wait_task_zombie", exitText, #"wait_task_zombie"#, exitSource)
+        requireSourceFact("linux_wait_release_task", exitText, #"release_task\(p\)"#, exitSource)
+        requireSourceFact("linux_wait_exit_zombie", exitText, #"EXIT_ZOMBIE"#, exitSource)
+        requireSourceFact("linux_wait_exit_dead", exitText, #"EXIT_DEAD"#, exitSource)
+    } else {
+        failures.append(fail("linux-exit-source-missing", "Build/OrlixKernel/src/linux-*-port/kernel/exit.c is required for wait/reaping source proof"))
+        evidence["linux_exit_source"] = "missing"
+    }
+
+    let hostAdapterOwnsWaitReaping = !sourceFilesContainNone(
+        root: hostAdapter,
+        needles: [
+            #"__do_wait"#,
+            #"wait_task_zombie"#,
+            #"release_task\(p\)"#,
+            #"SYSCALL_DEFINE4\(wait4"#,
+            #"SYSCALL_DEFINE3\(waitpid"#,
+        ]
+    )
+    if hostAdapterOwnsWaitReaping {
+        failures.append(fail("hostadapter-wait-reaping-semantics", "HostAdapter sources must not own Linux wait/reaping semantics"))
+        evidence["hostadapter_linux_wait_reaping_semantics"] = "present"
+    } else {
+        evidence["hostadapter_linux_wait_reaping_semantics"] = "absent"
+    }
+
+    let hostcc: String
+    if let configuredHostCC = ProcessInfo.processInfo.environment["ORLIX_KERNEL_HOSTCC"],
+       !configuredHostCC.isEmpty {
+        hostcc = configuredHostCC
+    } else {
+        hostcc = try commandPath("cc")
+    }
+    _ = try run([
+        hostcc,
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-function",
+        "-DORLIX_TCTI_HOST_TEST_RUNNER=1",
+        "-I\(hostInclude.path)",
+        "-I\(tctiDir.path)",
+        runnerSource.path,
+        "-o",
+        runnerBinary.path,
+    ])
+    artifacts.append(relativePath(runnerBinary))
+    evidence["workload_hook_compiled"] = "true"
+
+    let runnerOutput = try run([runnerBinary.path], check: false)
+    try runnerOutput.write(to: runnerOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runnerOutputURL))
+    let runnerEvidence = waitReapingRunnerEvidence(from: runnerOutput)
+    try writeJSON(runnerEvidence, to: runnerEvidenceURL)
+    artifacts.append(relativePath(runnerEvidenceURL))
+    for (key, value) in runnerEvidence {
+        evidence[key] = value
+    }
+
+    let runnerPassed = runnerEvidence["wait_reaping_runner_named_test_passed"] == "true" &&
+        runnerEvidence["wait_reaping_runner_workload_hook_executed"] == "true" &&
+        runnerEvidence["wait_reaping_runner_tcti_task_exit_observed"] == "true" &&
+        runnerEvidence["wait_reaping_runner_child_exit_state_recorded"] == "true" &&
+        runnerEvidence["wait_reaping_runner_linux_wait_entered"] == "true" &&
+        runnerEvidence["wait_reaping_runner_linux_wait_status_recorded"] == "true" &&
+        runnerEvidence["wait_reaping_runner_linux_reaping_completed"] == "true" &&
+        runnerEvidence["wait_reaping_runner_child_exit_code"] == "7" &&
+        runnerEvidence["wait_reaping_runner_wait_status"] == "1792"
+    if runnerPassed {
+        evidence["workload_hook_executed"] = "true"
+        evidence["tcti_task_exit_observed"] = "true"
+        evidence["child_exit_state_recorded"] = "true"
+        evidence["linux_wait_entered"] = "true"
+        evidence["linux_wait_status_recorded"] = "true"
+        evidence["linux_reaping_completed"] = "true"
+        evidence["child_pid_observed"] = runnerEvidence["wait_reaping_runner_child_pid"] ?? "true"
+        evidence["child_exit_code_observed"] = runnerEvidence["wait_reaping_runner_child_exit_code"] ?? "true"
+        evidence["wait_status_observed"] = runnerEvidence["wait_reaping_runner_wait_status"] ?? "true"
+    } else {
+        failures.append(fail("kernel-workload-hook-execution", "wait/reaping smoke runner did not produce passing Linux wait evidence"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "No no-phone OrlixKernel workload currently proves TCTI task exit reaches Linux-owned wait/reaping."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "kernel-wait-reaping-smoke-pass" : "kernel-wait-reaping-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "kernel wait/reaping smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(runnerOutputURL), relativePath(runnerEvidenceURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Kernel/TCTI no-phone wait/reaping smoke proved TCTI task exit reaches Linux-owned wait/reaping evidence." : "Kernel/TCTI no-phone wait/reaping smoke did not prove Linux-owned wait/reaping.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "kernel-source-proof-missing" }.count,
+            "runtime_observed_task_exits": runnerPassed ? 1 : 0,
+            "runtime_observed_linux_waits": runnerPassed ? 1 : 0,
+            "runtime_observed_reaped_children": runnerPassed ? 1 : 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: relativePath(kernelConfig),
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runKernelPtyConsoleSmoke() throws -> Int32 {
+    let target = "tcti-kernel-pty-console-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let kernelConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "tcti_runtime_defconfig")
+    let tctiEngineHeader = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "engine.h")
+    let ptyConsoleSmoke = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "pty_console_smoke.h")
+    let testSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
+    let runnerSource = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_pty_console_smoke_runner.c")
+    let hostInclude = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "host_include")
+    let tctiDir = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti")
+    let hostConsoleHeader = path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "terminal", "console.h")
+    let hostConsoleSource = path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "terminal", "console.c")
+    let outputRoot = buildPath("kernel_pty_console_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runnerOutputURL = outputRoot.appendingPathComponent("runner.txt")
+    let runnerEvidenceURL = outputRoot.appendingPathComponent("runner-evidence.json")
+    let runnerBinary = outputRoot.appendingPathComponent("tcti_pty_console_smoke_runner")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "kernel_config": relativePath(kernelConfig),
+        "workload_hook_compiled": "false",
+        "workload_hook_executed": "false",
+        "tcti_write_syscall_observed": "false",
+        "linux_stdout_source_recorded": "false",
+        "linux_stderr_source_recorded": "false",
+        "linux_pty_write_entered": "false",
+        "host_console_mirror_called": "false",
+        "acceptance_marker_used": "false",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kernel-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let configText = try readText(kernelConfig)
+    let engineHeaderText = try readText(tctiEngineHeader)
+    let ptyConsoleSmokeText = try readText(ptyConsoleSmoke)
+    let testText = try readText(testSource)
+    let runnerSourceText = try readText(runnerSource)
+    let hostConsoleHeaderText = try readText(hostConsoleHeader)
+    let hostConsoleSourceText = try readText(hostConsoleSource)
+
+    requireSourceFact("tcti_config_selected", configText, #"CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"#, kernelConfig)
+    requireSourceFact("native_hosted_exec_disabled", configText, #"# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"#, kernelConfig)
+    requireSourceFact("pty_console_result_struct", engineHeaderText, #"struct tcti_kernel_pty_console_smoke_result"#, tctiEngineHeader)
+    requireSourceFact("pty_console_helper_entrypoint", ptyConsoleSmokeText, #"tcti_kernel_pty_console_smoke_execute"#, ptyConsoleSmoke)
+    requireSourceFact("pty_console_helper_uses_write_syscall", ptyConsoleSmokeText, #"__NR_write"#, ptyConsoleSmoke)
+    requireSourceFact("pty_console_helper_stdout_marker", ptyConsoleSmokeText, #"ORLIX-PTY-CONSOLE-STDOUT"#, ptyConsoleSmoke)
+    requireSourceFact("pty_console_helper_stderr_marker", ptyConsoleSmokeText, #"ORLIX-PTY-CONSOLE-STDERR"#, ptyConsoleSmoke)
+    requireSourceFact("pty_console_kunit_case", testText, #"tcti_kernel_pty_console_smoke_reports_output"#, testSource)
+    requireSourceFact("host_console_private_spi", hostConsoleHeaderText, #"App-private HostAdapter SPI"#, hostConsoleHeader)
+    requireSourceFact("host_console_hidden_kernel_mirror", hostConsoleHeaderText, #"orlix_host_console_write"#, hostConsoleHeader)
+    requireSourceFact("host_console_recent_output_mirror", hostConsoleSourceText, #"OrlixHostConsoleRememberRecentOutput"#, hostConsoleSource)
+    requireSourceFact("host_console_fd_mirror", hostConsoleSourceText, #"OrlixHostConsoleWriteFileDescriptor"#, hostConsoleSource)
+    requireSourceFact("host_console_trace_mirror", hostConsoleSourceText, #"orlix_host_trace_bytes"#, hostConsoleSource)
+
+    if let readWriteSource = linuxPortSource(["fs", "read_write.c"]),
+       let readWriteText = try? readText(readWriteSource) {
+        evidence["linux_read_write_source"] = relativePath(readWriteSource)
+        requireSourceFact("linux_write_syscall", readWriteText, #"SYSCALL_DEFINE3\(write"#, readWriteSource)
+        requireSourceFact("linux_ksys_write", readWriteText, #"ssize_t ksys_write"#, readWriteSource)
+        requireSourceFact("linux_vfs_write", readWriteText, #"ssize_t vfs_write"#, readWriteSource)
+    } else {
+        failures.append(fail("linux-read-write-source-missing", "Build/OrlixKernel/src/linux-*-port/fs/read_write.c is required for write source proof"))
+        evidence["linux_read_write_source"] = "missing"
+    }
+
+    if let ptySource = linuxPortSource(["drivers", "tty", "pty.c"]),
+       let ptyText = try? readText(ptySource) {
+        evidence["linux_pty_source"] = relativePath(ptySource)
+        requireSourceFact("linux_pty_write", ptyText, #"static ssize_t pty_write"#, ptySource)
+        requireSourceFact("linux_pty_flip_buffer", ptyText, #"tty_insert_flip_string_and_push_buffer"#, ptySource)
+    } else {
+        failures.append(fail("linux-pty-source-missing", "Build/OrlixKernel/src/linux-*-port/drivers/tty/pty.c is required for PTY source proof"))
+        evidence["linux_pty_source"] = "missing"
+    }
+
+    if let nttySource = linuxPortSource(["drivers", "tty", "n_tty.c"]),
+       let nttyText = try? readText(nttySource) {
+        evidence["linux_n_tty_source"] = relativePath(nttySource)
+        requireSourceFact("linux_n_tty_write", nttyText, #"n_tty_write"#, nttySource)
+        requireSourceFact("linux_n_tty_ops", nttyText, #"\.write[[:space:]]*=[[:space:]]n_tty_write"#, nttySource)
+    } else {
+        failures.append(fail("linux-n-tty-source-missing", "Build/OrlixKernel/src/linux-*-port/drivers/tty/n_tty.c is required for line-discipline source proof"))
+        evidence["linux_n_tty_source"] = "missing"
+    }
+
+    if sourceTextContains(ptyConsoleSmokeText, #"ORLIX-USERLAND-TCTI-OK"#) ||
+        sourceTextContains(testText, #"ORLIX-USERLAND-TCTI-OK"#) ||
+        sourceTextContains(runnerSourceText, #"ORLIX-USERLAND-TCTI-OK"#) {
+        failures.append(fail("acceptance-marker-forbidden", "PTY/console smoke must not emit the final app-level ORLIX-USERLAND-TCTI-OK marker"))
+        evidence["acceptance_marker_used"] = "true"
+    }
+
+    let hostcc: String
+    if let configuredHostCC = ProcessInfo.processInfo.environment["ORLIX_KERNEL_HOSTCC"],
+       !configuredHostCC.isEmpty {
+        hostcc = configuredHostCC
+    } else {
+        hostcc = try commandPath("cc")
+    }
+    _ = try run([
+        hostcc,
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-function",
+        "-DORLIX_TCTI_HOST_TEST_RUNNER=1",
+        "-I\(hostInclude.path)",
+        "-I\(tctiDir.path)",
+        runnerSource.path,
+        "-o",
+        runnerBinary.path,
+    ])
+    artifacts.append(relativePath(runnerBinary))
+    evidence["workload_hook_compiled"] = "true"
+
+    let runnerOutput = try run([runnerBinary.path], check: false)
+    try runnerOutput.write(to: runnerOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runnerOutputURL))
+    let runnerEvidence = ptyConsoleRunnerEvidence(from: runnerOutput)
+    try writeJSON(runnerEvidence, to: runnerEvidenceURL)
+    artifacts.append(relativePath(runnerEvidenceURL))
+    for (key, value) in runnerEvidence {
+        evidence[key] = value
+    }
+
+    let runnerPassed = runnerEvidence["pty_console_runner_named_test_passed"] == "true" &&
+        runnerEvidence["pty_console_runner_workload_hook_executed"] == "true" &&
+        runnerEvidence["pty_console_runner_tcti_write_syscall_observed"] == "true" &&
+        runnerEvidence["pty_console_runner_linux_stdout_source_recorded"] == "true" &&
+        runnerEvidence["pty_console_runner_linux_stderr_source_recorded"] == "true" &&
+        runnerEvidence["pty_console_runner_linux_pty_write_entered"] == "true" &&
+        runnerEvidence["pty_console_runner_host_console_mirror_called"] == "true" &&
+        runnerEvidence["pty_console_runner_stdout_fd"] == "1" &&
+        runnerEvidence["pty_console_runner_stderr_fd"] == "2"
+    if runnerPassed {
+        evidence["workload_hook_executed"] = "true"
+        evidence["tcti_write_syscall_observed"] = "true"
+        evidence["linux_stdout_source_recorded"] = "true"
+        evidence["linux_stderr_source_recorded"] = "true"
+        evidence["linux_pty_write_entered"] = "true"
+        evidence["host_console_mirror_called"] = "true"
+        evidence["stdout_bytes_observed"] = runnerEvidence["pty_console_runner_stdout_bytes"] ?? "true"
+        evidence["stderr_bytes_observed"] = runnerEvidence["pty_console_runner_stderr_bytes"] ?? "true"
+        evidence["mirrored_bytes_observed"] = runnerEvidence["pty_console_runner_mirrored_bytes"] ?? "true"
+    } else {
+        failures.append(fail("kernel-workload-hook-execution", "PTY/console smoke runner did not produce passing stdout/stderr console evidence"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "No no-phone OrlixKernel workload currently proves Linux stdout/stderr reaches PTY/console mirror evidence."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "kernel-pty-console-smoke-pass" : "kernel-pty-console-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "kernel PTY/console smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(runnerOutputURL), relativePath(runnerEvidenceURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Kernel/TCTI no-phone PTY/console smoke proved stdout/stderr source and private HostAdapter mirror evidence." : "Kernel/TCTI no-phone PTY/console smoke did not prove stdout/stderr console evidence.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "kernel-source-proof-missing" }.count,
+            "runtime_observed_write_syscalls": runnerPassed ? 1 : 0,
+            "runtime_observed_stdout_streams": runnerPassed ? 1 : 0,
+            "runtime_observed_stderr_streams": runnerPassed ? 1 : 0,
+            "runtime_observed_console_mirrors": runnerPassed ? 1 : 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: relativePath(kernelConfig),
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runKernelKselftestSubset() throws -> Int32 {
+    let target = "tcti-kernel-kselftest-subset"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixKernel Conformance"
+    let xcodeTest = "OrlixKernelConformanceTests/OrlixKernelConformanceTests/testSignalWaitProbeCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixKernelConformanceTests", "OrlixKernelConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let kernelRules = path("OrlixKernel", "Sources", "ports", "orlix", "kbuild", "kernel-rules.mk")
+    let kselftestMakefile = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "tools", "testing", "selftests", "orlix", "Makefile")
+    let signalWaitProbe = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "tools", "testing", "selftests", "orlix", "signal_wait_probe.c")
+    let outputRoot = buildPath("kernel_kselftest_subset")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "kselftest_subset": "signal_wait_probe",
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "kselftest_completion_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("kselftest-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let kernelRulesText = try readText(kernelRules)
+    let kselftestMakefileText = try readText(kselftestMakefile)
+    let signalWaitText = try readText(signalWaitProbe)
+
+    requireSourceFact("xctest_uses_signal_wait_spec", testText, #"OrlixUpstreamXCTest.run\(.kernelSignalWait\)"#, testSource)
+    requireSourceFact("xctest_requires_probe_name", testText, #"signal_wait_probe"#, testSource)
+    requireSourceFact("xctest_requires_probe_marker", testText, #"ORLIX-SIGNAL-WAIT-PROBE"#, testSource)
+    requireSourceFact("xctest_requires_waitpid_status", testText, #"waitpid observes signal termination status"#, testSource)
+    requireSourceFact("runner_kernel_signal_wait_spec", runnerText, #"kernelSignalWait"#, runnerSource)
+    requireSourceFact("runner_kselftest_completion_marker", runnerText, #"ORLIX-KSELFTEST-END"#, runnerSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("kernel_rules_kselftest_target", kernelRulesText, #"kselftest: kselftest-install __kselftest-initramfs"#, kernelRules)
+    requireSourceFact("kernel_rules_kselftest_install", kernelRulesText, #"TARGETS=orlix"#, kernelRules)
+    requireSourceFact("kselftest_makefile_lists_signal_wait", kselftestMakefileText, #"signal_wait_probe"#, kselftestMakefile)
+    requireSourceFact("signal_wait_probe_marker", signalWaitText, #"ORLIX-SIGNAL-WAIT-PROBE"#, signalWaitProbe)
+    requireSourceFact("signal_wait_probe_waitpid", signalWaitText, #"waitpid"#, signalWaitProbe)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testSignalWaitProbeCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed {
+        evidence["xcode_test_passed"] = "true"
+        evidence["kselftest_completion_asserted_by_xctest"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("kselftest-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("kselftest-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator kselftest subset did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "kernel-kselftest-subset-pass" : "kernel-kselftest-subset-fail",
+        command: command,
+        reason: blocker.isEmpty ? "kernel kselftest subset passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator kselftest subset passed through the OrlixOS terminal-session XCTest surface." : "Pinned simulator kselftest subset did not pass through the OrlixOS terminal-session XCTest surface.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "kselftest-source-proof-missing" }.count,
+            "kselftest_subset_tests_executed": testExecuted ? 1 : 0,
+            "kselftest_subset_tests_passed": status == .pass ? 1 : 0,
+            "kselftest_subset_tests_failed": status == .pass ? 0 : 1,
+            "kselftest_subset_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCBuildSmoke() throws -> Int32 {
+    let target = "tcti-mlibc-build-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_build_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("mlibc-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    requireSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource)
+    requireSourceFact("runner_mlibc_completion_marker", runnerText, #"ORLIX-MLIBC-TEST-END"#, runnerSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("mlibc_makefile_builds_sysroot", makefileText, #"built OrlixMLibC sysroot"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_builds_static_pie_tests", makefileText, #"-static-pie"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_runs_orlix_kernel", makefileText, #"ORLIX_KERNEL_TEST_INITRAMFS_INPUT"#, mlibcMakefile)
+    requireSourceFact("mlibc_init_start_marker", initText, #"ORLIX-MLIBC-TEST-INIT"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_reads_test_list", initText, #"/mlibc-test-list.txt"#, mlibcInitSource)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed && completionSeen {
+        evidence["xcode_test_passed"] = "true"
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("mlibc-xctest-failed", "xcodebuild did not report a clean pass with ORLIX-MLIBC-TEST-END for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC smoke did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-build-smoke-pass" : "mlibc-build-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc build smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC smoke passed through the OrlixOS terminal-session XCTest surface." : "Pinned simulator OrlixMLibC smoke did not pass through the OrlixOS terminal-session XCTest surface.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-source-proof-missing" }.count,
+            "mlibc_smoke_tests_executed": testExecuted ? 1 : 0,
+            "mlibc_smoke_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_smoke_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_smoke_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCSysdepsSmoke() throws -> Int32 {
+    let target = "tcti-mlibc-sysdeps-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_sysdeps_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "sysdeps_completion_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("mlibc-sysdeps-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    requireSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource)
+    requireSourceFact("runner_mlibc_completion_marker", runnerText, #"ORLIX-MLIBC-TEST-END"#, runnerSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("mlibc_makefile_builds_sysroot", makefileText, #"built OrlixMLibC sysroot"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_selects_linux_sysdeps", makefileText, #"upstream mlibc sysdeps/linux"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_records_upstream_libc_lane", makefileText, #"proof_lane=mlibc-upstream-libc-tests"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_builds_static_pie_tests", makefileText, #"-static-pie"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_runs_orlix_kernel", makefileText, #"ORLIX_KERNEL_TEST_INITRAMFS_INPUT"#, mlibcMakefile)
+    requireSourceFact("mlibc_init_start_marker", initText, #"ORLIX-MLIBC-TEST-INIT"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_reads_test_list", initText, #"/mlibc-test-list.txt"#, mlibcInitSource)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    let sysdepsObserved = xcodeOutput.contains("/mlibc-tests/linux-") ||
+        xcodeOutput.contains("linux/cpuset") ||
+        xcodeOutput.contains("linux/getifaddrs") ||
+        xcodeOutput.contains("linux/pidfd")
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed && completionSeen && sysdepsObserved {
+        evidence["xcode_test_passed"] = "true"
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+        evidence["sysdeps_completion_asserted_by_xctest"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("mlibc-sysdeps-xctest-failed", "xcodebuild did not report a clean pass with ORLIX-MLIBC-TEST-END and linux sysdeps test output for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-sysdeps-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-sysdeps-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+    if !sysdepsObserved {
+        failures.append(fail("mlibc-sysdeps-output-missing", "xcodebuild output did not include linux sysdeps test execution lines"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC sysdeps smoke did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-sysdeps-smoke-pass" : "mlibc-sysdeps-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc sysdeps smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC sysdeps smoke passed through the OrlixOS terminal-session XCTest surface." : "Pinned simulator OrlixMLibC sysdeps smoke did not pass through the OrlixOS terminal-session XCTest surface.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-sysdeps-source-proof-missing" }.count,
+            "mlibc_sysdeps_tests_executed": testExecuted && sysdepsObserved ? 1 : 0,
+            "mlibc_sysdeps_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_sysdeps_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_sysdeps_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCLibcTestSubset() throws -> Int32 {
+    let target = "tcti-mlibc-libc-test-subset"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_libc_test_subset")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "libc_subset_completion_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("mlibc-libc-subset-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    requireSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource)
+    requireSourceFact("runner_mlibc_completion_marker", runnerText, #"ORLIX-MLIBC-TEST-END"#, runnerSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("mlibc_makefile_builds_sysroot", makefileText, #"built OrlixMLibC sysroot"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_builds_static_pie_tests", makefileText, #"-static-pie"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_records_upstream_libc_lane", makefileText, #"proof_lane=mlibc-upstream-libc-tests"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_runs_orlix_kernel", makefileText, #"ORLIX_KERNEL_TEST_INITRAMFS_INPUT"#, mlibcMakefile)
+    requireSourceFact("mlibc_init_start_marker", initText, #"ORLIX-MLIBC-TEST-INIT"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_reads_test_list", initText, #"/mlibc-test-list.txt"#, mlibcInitSource)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    let ansiObserved = xcodeOutput.contains("ansi/sprintf") || xcodeOutput.contains("ansi/sscanf")
+    let posixObserved = xcodeOutput.contains("posix/fdopen") || xcodeOutput.contains("posix/posix_memalign")
+    let linuxObserved = xcodeOutput.contains("linux/cpuset") || xcodeOutput.contains("linux/pidfd")
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed && completionSeen && ansiObserved && posixObserved && linuxObserved {
+        evidence["xcode_test_passed"] = "true"
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+        evidence["libc_subset_completion_asserted_by_xctest"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("mlibc-libc-subset-xctest-failed", "xcodebuild did not report a clean pass with ANSI, POSIX, Linux, and ORLIX-MLIBC-TEST-END output for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-libc-subset-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-libc-subset-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC libc test subset did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-libc-test-subset-pass" : "mlibc-libc-test-subset-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc libc test subset passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC libc test subset passed through the OrlixOS terminal-session XCTest surface." : "Pinned simulator OrlixMLibC libc test subset did not pass through the OrlixOS terminal-session XCTest surface.",
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-libc-subset-source-proof-missing" }.count,
+            "mlibc_libc_subset_tests_executed": testExecuted && ansiObserved && posixObserved && linuxObserved ? 1 : 0,
+            "mlibc_libc_subset_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_libc_subset_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_libc_subset_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCDynamicLoaderSmoke() throws -> Int32 {
+    let target = "tcti-mlibc-dynamic-loader-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_dynamic_loader_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "dynamic_loader_completion_asserted_by_xctest": "false",
+        "dynamic_loader_workload_configured": "false",
+        "dynamic_loader_pt_interp_source_proof": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func recordSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) -> Bool {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+            return true
+        }
+        evidence[key] = "missing"
+        return false
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    if !recordSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource) {
+        failures.append(fail("mlibc-dynamic-loader-source-proof-missing", "\(relativePath(testSource)) must run the mlibc OrlixUpstreamXCTest spec"))
+    }
+    if !recordSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource) {
+        failures.append(fail("mlibc-dynamic-loader-source-proof-missing", "\(relativePath(runnerSource)) must execute through OrlixLinuxSession"))
+    }
+    if !recordSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource) {
+        failures.append(fail("mlibc-dynamic-loader-source-proof-missing", "\(relativePath(mlibcInitSource)) must contain ORLIX-MLIBC-TEST-END"))
+    }
+
+    if sourceTextContains(makefileText, #"-static-pie"#) {
+        evidence["mlibc_makefile_current_link_mode"] = "\(relativePath(mlibcMakefile)) contains -static-pie"
+    } else {
+        evidence["mlibc_makefile_current_link_mode"] = "no -static-pie marker found"
+    }
+
+    let dynamicWorkloadConfigured = sourceTextContains(makefileText, #"PT_INTERP"#) ||
+        sourceTextContains(makefileText, #"dynamic-loader"#) ||
+        sourceTextContains(makefileText, #"ld.so"#) ||
+        sourceTextContains(makefileText, #"ldso"#) ||
+        sourceTextContains(initText, #"ORLIX-MLIBC-DYNAMIC-LOADER-OK"#)
+    if dynamicWorkloadConfigured {
+        evidence["dynamic_loader_workload_configured"] = "true"
+    } else {
+        failures.append(fail("mlibc-dynamic-loader-workload-missing", "No OrlixMLibC dynamic-loader workload is configured; static PIE mlibc execution is not sufficient"))
+    }
+
+    let ptInterpSourceProof = sourceTextContains(makefileText, #"PT_INTERP"#) ||
+        sourceTextContains(initText, #"PT_INTERP"#)
+    if ptInterpSourceProof {
+        evidence["dynamic_loader_pt_interp_source_proof"] = "true"
+    } else {
+        failures.append(fail("mlibc-dynamic-loader-pt-interp-missing", "No source proof requires a PT_INTERP-backed OrlixMLibC binary"))
+    }
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    let dynamicLoaderSeen = xcodeOutput.contains("ORLIX-MLIBC-DYNAMIC-LOADER-OK") ||
+        xcodeOutput.contains("PT_INTERP") ||
+        xcodeOutput.contains("ld.so") ||
+        xcodeOutput.contains("ldso")
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed {
+        evidence["xcode_test_passed"] = "true"
+    } else {
+        failures.append(fail("mlibc-dynamic-loader-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+    if completionSeen {
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+    }
+    if dynamicLoaderSeen {
+        evidence["dynamic_loader_completion_asserted_by_xctest"] = "true"
+    } else {
+        failures.append(fail("mlibc-dynamic-loader-output-missing", "xcodebuild output did not include a dynamic-loader marker or PT_INTERP-backed execution evidence"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-dynamic-loader-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-dynamic-loader-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+    if !(testSucceeded && !testFailed && completionSeen && dynamicLoaderSeen && dynamicWorkloadConfigured && ptInterpSourceProof) {
+        evidence["fail_count"] = "1"
+    } else {
+        evidence["pass_count"] = "1"
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC dynamic-loader smoke lacks a real PT_INTERP-backed dynamic-loader workload."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-dynamic-loader-smoke-pass" : "mlibc-dynamic-loader-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc dynamic-loader smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC dynamic-loader smoke passed through a PT_INTERP-backed OrlixOS terminal-session workload." : "Pinned simulator OrlixMLibC dynamic-loader smoke is blocked because the current workload is static PIE-only.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-dynamic-loader-source-proof-missing" }.count,
+            "mlibc_dynamic_loader_tests_executed": testExecuted && dynamicLoaderSeen ? 1 : 0,
+            "mlibc_dynamic_loader_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_dynamic_loader_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_dynamic_loader_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCPthreadTLSSmoke() throws -> Int32 {
+    let target = "tcti-mlibc-pthread-tls-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_pthread_tls_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "dynamic_loader_completion_asserted_by_xctest": "false",
+        "pthread_key_asserted_by_xctest": "false",
+        "pthread_thread_local_asserted_by_xctest": "false",
+        "pthread_create_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("mlibc-pthread-tls-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    requireSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("runner_mlibc_completion_marker", runnerText, #"ORLIX-MLIBC-TEST-END"#, runnerSource)
+    requireSourceFact("mlibc_makefile_includes_pthread_key", makefileText, #"posix/pthread_key"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_pthread_thread_local", makefileText, #"posix/pthread_thread_local"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_pthread_create", makefileText, #"posix/pthread_create"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_uses_dynamic_loader", makefileText, #"--dynamic-linker=/usr/lib/ld.so"#, mlibcMakefile)
+    requireSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_execs_test_list", initText, #"execve"#, mlibcInitSource)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    let dynamicLoaderSeen = xcodeOutput.contains("ORLIX-MLIBC-DYNAMIC-LOADER-OK")
+    let pthreadKeySeen = outputHasPassingTAPLabel(xcodeOutput, "posix/pthread_key")
+    let pthreadThreadLocalSeen = outputHasPassingTAPLabel(xcodeOutput, "posix/pthread_thread_local")
+    let pthreadCreateSeen = outputHasPassingTAPLabel(xcodeOutput, "posix/pthread_create")
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if completionSeen {
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+    }
+    if dynamicLoaderSeen {
+        evidence["dynamic_loader_completion_asserted_by_xctest"] = "true"
+    }
+    if pthreadKeySeen {
+        evidence["pthread_key_asserted_by_xctest"] = "true"
+    }
+    if pthreadThreadLocalSeen {
+        evidence["pthread_thread_local_asserted_by_xctest"] = "true"
+    }
+    if pthreadCreateSeen {
+        evidence["pthread_create_asserted_by_xctest"] = "true"
+    }
+    if testSucceeded && !testFailed && completionSeen && dynamicLoaderSeen && pthreadKeySeen && pthreadThreadLocalSeen && pthreadCreateSeen {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("mlibc-pthread-tls-xctest-failed", "xcodebuild did not report a clean pass with pthread TLS markers, dynamic-loader evidence, and ORLIX-MLIBC-TEST-END for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-pthread-tls-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-pthread-tls-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+    if !dynamicLoaderSeen {
+        failures.append(fail("mlibc-pthread-tls-dynamic-loader-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-DYNAMIC-LOADER-OK"))
+    }
+    if !pthreadKeySeen {
+        failures.append(fail("mlibc-pthread-tls-pthread-key-missing", "xcodebuild output did not include a passing posix/pthread_key result"))
+    }
+    if !pthreadThreadLocalSeen {
+        failures.append(fail("mlibc-pthread-tls-thread-local-missing", "xcodebuild output did not include a passing posix/pthread_thread_local result"))
+    }
+    if !pthreadCreateSeen {
+        failures.append(fail("mlibc-pthread-tls-pthread-create-missing", "xcodebuild output did not include a passing posix/pthread_create result"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC pthread/TLS smoke did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-pthread-tls-smoke-pass" : "mlibc-pthread-tls-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc pthread TLS smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC pthread/TLS smoke passed through dynamic-loader-backed OrlixOS terminal-session execution." : "Pinned simulator OrlixMLibC pthread/TLS smoke did not pass through the OrlixOS terminal-session XCTest surface.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-pthread-tls-source-proof-missing" }.count,
+            "mlibc_pthread_tls_tests_executed": testExecuted && pthreadKeySeen && pthreadThreadLocalSeen && pthreadCreateSeen ? 1 : 0,
+            "mlibc_pthread_tls_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_pthread_tls_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_pthread_tls_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runMLibCLinkedSyscallUAPISmoke() throws -> Int32 {
+    let target = "tcti-mlibc-linked-syscall-uapi-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixMLibC Conformance"
+    let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixMLibCConformanceTests", "OrlixMLibCConformanceTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let mlibcMakefile = path("OrlixMLibC", "Makefile")
+    let mlibcInitSource = path("OrlixMLibC", "Tests", "mlibc_test_init.c")
+    let outputRoot = buildPath("mlibc_linked_syscall_uapi_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    let requiredLabels = [
+        "glibc/linux-syscall",
+        "linux/getifaddrs",
+        "linux/pidfd",
+        "linux/process_vm_readv_writev",
+        "linux/timerfd",
+        "linux/xattr",
+    ]
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "real_stack_execution_surface": "OrlixOS terminal session through OrlixUpstreamXCTest",
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "mlibc_completion_asserted_by_xctest": "false",
+        "linked_syscall_uapi_completion_asserted_by_xctest": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func requireSourceFact(_ key: String, _ text: String, _ needle: String, _ url: URL) {
+        if sourceTextContains(text, needle) {
+            evidence[key] = "\(relativePath(url)) contains \(needle)"
+        } else {
+            failures.append(fail("mlibc-linked-syscall-uapi-source-proof-missing", "\(relativePath(url)) must contain \(needle)"))
+            evidence[key] = "missing"
+        }
+    }
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let makefileText = try readText(mlibcMakefile)
+    let initText = try readText(mlibcInitSource)
+
+    requireSourceFact("xctest_uses_mlibc_spec", testText, #"OrlixUpstreamXCTest.run\(.mlibc\)"#, testSource)
+    requireSourceFact("runner_uses_orlixos_session", runnerText, #"OrlixLinuxSession"#, runnerSource)
+    requireSourceFact("runner_mlibc_completion_marker", runnerText, #"ORLIX-MLIBC-TEST-END"#, runnerSource)
+    requireSourceFact("mlibc_makefile_installs_kernel_headers", makefileText, #"MLIBC_KERNEL_HEADERS"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_builds_with_kernel_headers", makefileText, #"-isystem"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_linux_syscall", makefileText, #"glibc/linux-syscall"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_getifaddrs", makefileText, #"linux/getifaddrs"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_pidfd", makefileText, #"linux/pidfd"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_process_vm", makefileText, #"linux/process_vm_readv_writev"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_timerfd", makefileText, #"linux/timerfd"#, mlibcMakefile)
+    requireSourceFact("mlibc_makefile_includes_xattr", makefileText, #"linux/xattr"#, mlibcMakefile)
+    requireSourceFact("mlibc_init_completion_marker", initText, #"ORLIX-MLIBC-TEST-END"#, mlibcInitSource)
+    requireSourceFact("mlibc_init_execs_test_list", initText, #"execve"#, mlibcInitSource)
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
+    var labelResults: [String: Bool] = [:]
+    for label in requiredLabels {
+        let seen = outputHasPassingTAPLabel(xcodeOutput, label)
+        labelResults[label] = seen
+        evidence["label_\(label.replacingOccurrences(of: "/", with: "_"))_asserted_by_xctest"] = seen ? "true" : "false"
+    }
+    let allLabelsSeen = requiredLabels.allSatisfy { labelResults[$0] == true }
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if completionSeen {
+        evidence["mlibc_completion_asserted_by_xctest"] = "true"
+    }
+    if allLabelsSeen {
+        evidence["linked_syscall_uapi_completion_asserted_by_xctest"] = "true"
+    }
+    if testSucceeded && !testFailed && completionSeen && allLabelsSeen {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("mlibc-linked-syscall-uapi-xctest-failed", "xcodebuild did not report a clean pass with linked syscall/UAPI markers and ORLIX-MLIBC-TEST-END for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("mlibc-linked-syscall-uapi-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if !completionSeen {
+        failures.append(fail("mlibc-linked-syscall-uapi-completion-marker-missing", "xcodebuild output did not include ORLIX-MLIBC-TEST-END"))
+    }
+    for label in requiredLabels where labelResults[label] != true {
+        failures.append(fail("mlibc-linked-syscall-uapi-label-missing", "xcodebuild output did not include a passing \(label) result"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC linked syscall/UAPI smoke did not produce a clean app-hosted OrlixOS terminal-session pass."
+    if !blocker.isEmpty {
+        evidence["blocker"] = blocker
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "mlibc-linked-syscall-uapi-smoke-pass" : "mlibc-linked-syscall-uapi-smoke-fail",
+        command: command,
+        reason: blocker.isEmpty ? "mlibc linked syscall/UAPI smoke passed" : blocker,
+        artifacts: [relativePath(evidenceURL), relativePath(xcodeOutputURL)],
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator OrlixMLibC linked syscall/UAPI smoke passed through OrlixOS terminal-session execution." : "Pinned simulator OrlixMLibC linked syscall/UAPI smoke did not pass through the OrlixOS terminal-session XCTest surface.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id == "mlibc-linked-syscall-uapi-source-proof-missing" }.count,
+            "mlibc_linked_syscall_uapi_tests_executed": testExecuted && allLabelsSeen ? 1 : 0,
+            "mlibc_linked_syscall_uapi_tests_passed": status == .pass ? 1 : 0,
+            "mlibc_linked_syscall_uapi_tests_failed": status == .pass ? 0 : 1,
+            "mlibc_linked_syscall_uapi_tests_skipped": 0,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if !blocker.isEmpty {
+        print("blocker: \(blocker)")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runShellExecSimpleCommand() throws -> Int32 {
+    let target = "tcti-shell-exec-simple-command"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-full-shell-usability"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let outputRoot = buildPath("shell_exec_simple_command")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "shell_marker_asserted": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-full-shell-usability"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-SHELL-USABLE"#) &&
+        sourceTextContains(runtimeText, #"shell-basic"#) {
+        evidence["runtime_script_shell_command_source_proof"] = "\(relativePath(runtimeScript)) contains tcti-full-shell-usability shell command markers"
+    } else {
+        failures.append(fail("shell-source-proof-missing", "\(relativePath(runtimeScript)) must define the tcti-full-shell-usability shell command workload"))
+        evidence["runtime_script_shell_command_source_proof"] = "missing"
+    }
+
+    let runtimeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+    let runtimeOutput = try runWithFileBackedOutput(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce a \(runtimeGate) iphonesimulator JSON report"))
+        evidence["fail_count"] = "1"
+        let reportURL = try writeReport(report(
+            target: target,
+            status: .fail,
+            summary: "Shell exec simple-command gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "shell_exec_simple_command_tests_executed": 0,
+                "shell_exec_simple_command_tests_passed": 0,
+                "shell_exec_simple_command_tests_failed": 1,
+                "shell_exec_simple_command_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("fail: \(relativePath(reportURL))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = (runtimeObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+    artifacts.append(contentsOf: runtimeArtifacts)
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-full-shell-usability.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "shell gate requires the single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-SHELL-USABLE") {
+        evidence["shell_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-USABLE"))
+    }
+    if terminalText.contains("shell-basic") || markerText.contains("shell-basic") {
+        evidence["shell_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-stdout-missing", "runtime artifacts did not include shell-basic output from the shell command"))
+    }
+    for key in forbiddenKeys {
+        if boolField(forbidden, key) {
+            failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+        }
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator shell simple-command runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "shell-exec-simple-command-pass" : "shell-exec-simple-command-fail",
+        command: command,
+        reason: status == .pass ? "shell simple command passed" : "shell simple command failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator shell simple-command gate passed through OrlixOS runtime-validation." : "Pinned simulator shell simple-command gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "shell_exec_simple_command_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "shell_exec_simple_command_tests_passed": status == .pass ? 1 : 0,
+            "shell_exec_simple_command_tests_failed": status == .pass ? 0 : 1,
+            "shell_exec_simple_command_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runShellPipelineSmoke() throws -> Int32 {
+    let target = "tcti-shell-pipeline-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-shell-pipeline-smoke"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let outputRoot = buildPath("shell_pipeline_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "shell_command": "echo beta | { read line; test $line = beta; printf $line; }",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "pipeline_marker_asserted": "false",
+        "pipeline_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-shell-pipeline-smoke"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-SHELL-PIPELINE-OK"#) &&
+        sourceTextContains(runtimeText, #"read%20line"#) {
+        evidence["runtime_script_shell_pipeline_source_proof"] = "\(relativePath(runtimeScript)) contains tcti-shell-pipeline-smoke command markers"
+    } else {
+        failures.append(fail("shell-pipeline-source-proof-missing", "\(relativePath(runtimeScript)) must contain the tcti-shell-pipeline-smoke workload"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "shell-pipeline-smoke-fail",
+            command: command,
+            reason: "shell pipeline runtime-validation report missing",
+            artifacts: artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Shell pipeline gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "shell_pipeline_tests_executed": 0,
+                "shell_pipeline_tests_passed": 0,
+                "shell_pipeline_tests_failed": 1,
+                "shell_pipeline_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-shell-pipeline-smoke.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "shell pipeline gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-SHELL-PIPELINE-OK") {
+        evidence["pipeline_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-pipeline-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-PIPELINE-OK"))
+    }
+    if terminalText.contains("beta") {
+        evidence["pipeline_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-pipeline-stdout-missing", "runtime artifacts did not include beta output from shell pipeline"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator shell pipeline runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "shell-pipeline-smoke-pass" : "shell-pipeline-smoke-fail",
+        command: command,
+        reason: status == .pass ? "shell pipeline passed" : "shell pipeline failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator shell pipeline gate passed through OrlixOS runtime-validation." : "Pinned simulator shell pipeline gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        forbiddenBehavior: forbiddenBehavior,
+        counters: [
+            "shell_pipeline_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "shell_pipeline_tests_passed": status == .pass ? 1 : 0,
+            "shell_pipeline_tests_failed": status == .pass ? 0 : 1,
+            "shell_pipeline_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runShellEnvVarSmoke() throws -> Int32 {
+    let target = "tcti-shell-env-var-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-shell-env-var-smoke"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let outputRoot = buildPath("shell_env_var_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "shell_command": "FOO=env-ok; export FOO; test $FOO = env-ok; printf $FOO",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "env_marker_asserted": "false",
+        "env_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-shell-env-var-smoke"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-SHELL-ENV-OK"#) &&
+        sourceTextContains(runtimeText, #"FOO%3Denv-ok"#) {
+        evidence["runtime_script_shell_env_source_proof"] = "\(relativePath(runtimeScript)) contains tcti-shell-env-var-smoke command markers"
+    } else {
+        failures.append(fail("shell-env-source-proof-missing", "\(relativePath(runtimeScript)) must contain the tcti-shell-env-var-smoke workload"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "shell-env-var-smoke-fail",
+            command: command,
+            reason: "shell env-var runtime-validation report missing",
+            artifacts: artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Shell env-var gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "shell_env_var_tests_executed": 0,
+                "shell_env_var_tests_passed": 0,
+                "shell_env_var_tests_failed": 1,
+                "shell_env_var_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-shell-env-var-smoke.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "shell env-var gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-SHELL-ENV-OK") {
+        evidence["env_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-env-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-ENV-OK"))
+    }
+    if terminalText.contains("env-ok") {
+        evidence["env_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-env-stdout-missing", "runtime artifacts did not include env-ok output from shell env-var command"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator shell env-var runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "shell-env-var-smoke-pass" : "shell-env-var-smoke-fail",
+        command: command,
+        reason: status == .pass ? "shell env-var passed" : "shell env-var failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator shell env-var gate passed through OrlixOS runtime-validation." : "Pinned simulator shell env-var gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        forbiddenBehavior: forbiddenBehavior,
+        counters: [
+            "shell_env_var_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "shell_env_var_tests_passed": status == .pass ? 1 : 0,
+            "shell_env_var_tests_failed": status == .pass ? 0 : 1,
+            "shell_env_var_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runShellRedirectionSmoke() throws -> Int32 {
+    let target = "tcti-shell-redirection-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-shell-redirection-smoke"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let outputRoot = buildPath("shell_redirection_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "shell_command": "echo redir-ok > /tmp/orlix-tcti-redir; read line < /tmp/orlix-tcti-redir; test $line = redir-ok; printf $line",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "redirection_marker_asserted": "false",
+        "redirection_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-shell-redirection-smoke"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-SHELL-REDIRECTION-OK"#) &&
+        sourceTextContains(runtimeText, #"%3E%20/tmp/orlix-tcti-redir"#) &&
+        sourceTextContains(runtimeText, #"%3C%20/tmp/orlix-tcti-redir"#) {
+        evidence["runtime_script_shell_redirection_source_proof"] = "\(relativePath(runtimeScript)) contains tcti-shell-redirection-smoke command markers"
+    } else {
+        failures.append(fail("shell-redirection-source-proof-missing", "\(relativePath(runtimeScript)) must contain the tcti-shell-redirection-smoke workload"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "shell-redirection-smoke-fail",
+            command: command,
+            reason: "shell redirection runtime-validation report missing",
+            artifacts: artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Shell redirection gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "shell_redirection_tests_executed": 0,
+                "shell_redirection_tests_passed": 0,
+                "shell_redirection_tests_failed": 1,
+                "shell_redirection_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-shell-redirection-smoke.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "shell redirection gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-SHELL-REDIRECTION-OK") {
+        evidence["redirection_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-redirection-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-REDIRECTION-OK"))
+    }
+    if markerText.contains("redir-okORLIX-TCTI-SHELL-REDIRECTION-OK") ||
+        terminalText.contains("redir-okORLIX-TCTI-SHELL-REDIRECTION-OK") {
+        evidence["redirection_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-redirection-stdout-missing", "runtime artifacts did not include redir-ok output immediately before the shell redirection marker"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator shell redirection runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "shell-redirection-smoke-pass" : "shell-redirection-smoke-fail",
+        command: command,
+        reason: status == .pass ? "shell redirection passed" : "shell redirection failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator shell redirection gate passed through OrlixOS runtime-validation." : "Pinned simulator shell redirection gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        forbiddenBehavior: forbiddenBehavior,
+        counters: [
+            "shell_redirection_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "shell_redirection_tests_passed": status == .pass ? 1 : 0,
+            "shell_redirection_tests_failed": status == .pass ? 0 : 1,
+            "shell_redirection_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runShellScriptSmoke() throws -> Int32 {
+    let target = "tcti-shell-script-smoke"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-shell-script-smoke"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let outputRoot = buildPath("shell_script_smoke")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "shell_command": "create /tmp/orlix-tcti-script through shell redirection, run /bin/sh /tmp/orlix-tcti-script, print script-ok and marker",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "script_marker_asserted": "false",
+        "script_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-shell-script-smoke"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-SHELL-SCRIPT-OK"#) &&
+        sourceTextContains(runtimeText, #"/tmp/orlix-tcti-script"#) &&
+        sourceTextContains(runtimeText, #"/bin/sh%20%24script"#) {
+        evidence["runtime_script_shell_script_source_proof"] = "\(relativePath(runtimeScript)) contains tcti-shell-script-smoke command markers"
+    } else {
+        failures.append(fail("shell-script-source-proof-missing", "\(relativePath(runtimeScript)) must contain the tcti-shell-script-smoke workload"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(
+            target: target,
+            caseID: "shell-script-smoke-fail",
+            command: command,
+            reason: "shell script runtime-validation report missing",
+            artifacts: artifacts,
+            expectedStatus: .fail
+        )
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Shell script gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "shell_script_tests_executed": 0,
+                "shell_script_tests_passed": 0,
+                "shell_script_tests_failed": 1,
+                "shell_script_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-shell-script-smoke.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "shell script gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-SHELL-SCRIPT-OK") {
+        evidence["script_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-script-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-SCRIPT-OK"))
+    }
+    if markerText.contains("script-okORLIX-TCTI-SHELL-SCRIPT-OK") ||
+        terminalText.contains("script-okORLIX-TCTI-SHELL-SCRIPT-OK") {
+        evidence["script_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("shell-script-stdout-missing", "runtime artifacts did not include script-ok output immediately before the shell script marker"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator shell script runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "shell-script-smoke-pass" : "shell-script-smoke-fail",
+        command: command,
+        reason: status == .pass ? "shell script passed" : "shell script failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator shell script gate passed through OrlixOS runtime-validation." : "Pinned simulator shell script gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        forbiddenBehavior: forbiddenBehavior,
+        counters: [
+            "shell_script_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "shell_script_tests_passed": status == .pass ? 1 : 0,
+            "shell_script_tests_failed": status == .pass ? 0 : 1,
+            "shell_script_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runCoreutilsTrueFalseEcho() throws -> Int32 {
+    let target = "tcti-coreutils-true-false-echo"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-true-false-echo"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_true_false_echo")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/true; /bin/false; /bin/echo coreutils-ok",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-true-false-echo"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK"#) &&
+        sourceTextContains(runtimeText, #"/bin/true"#) &&
+        sourceTextContains(runtimeText, #"/bin/false"#) &&
+        sourceTextContains(runtimeText, #"/bin/echo"#) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call /bin/true, /bin/false, and /bin/echo"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: ["true", "false", "echo"]) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and true/false/echo programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and selected programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-true-false-echo-fail", command: command, reason: "Coreutils runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(
+            target: target,
+            status: status,
+            summary: "Coreutils true/false/echo gate could not find the runtime-validation report.",
+            command: command,
+            failures: failures,
+            artifacts: artifacts,
+            counters: [
+                "coreutils_true_false_echo_tests_executed": 0,
+                "coreutils_true_false_echo_tests_passed": 0,
+                "coreutils_true_false_echo_tests_failed": 1,
+                "coreutils_true_false_echo_tests_skipped": 0,
+            ],
+            evidence: evidence,
+            releaseGateEligible: false,
+            readinessGateEligible: false
+        ))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-true-false-echo.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils true/false/echo gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK"))
+    }
+    if markerText.contains("coreutils-ok") || terminalText.contains("coreutils-ok") {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include /bin/echo output"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    if status == .pass {
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        evidence["blocker"] = "Pinned simulator Coreutils true/false/echo runtime-validation did not produce a clean OrlixOS session pass."
+    }
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "coreutils-true-false-echo-pass" : "coreutils-true-false-echo-fail",
+        command: command,
+        reason: status == .pass ? "Coreutils true/false/echo passed" : "Coreutils true/false/echo failed",
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ? "Pinned simulator Coreutils true/false/echo gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils true/false/echo gate did not pass through OrlixOS runtime-validation.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        forbiddenBehavior: forbiddenBehavior,
+        counters: [
+            "coreutils_true_false_echo_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0,
+            "coreutils_true_false_echo_tests_passed": status == .pass ? 1 : 0,
+            "coreutils_true_false_echo_tests_failed": status == .pass ? 0 : 1,
+            "coreutils_true_false_echo_tests_skipped": 0,
+        ],
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runCoreutilsCatWC() throws -> Int32 {
+    let target = "tcti-coreutils-cat-wc"
+    let command = "make tcti-gate TARGET=\(target)"
+    let runtimeGate = "tcti-coreutils-cat-wc"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
+    let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
+    let outputRoot = buildPath("coreutils_cat_wc")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let runtimeOutputURL = outputRoot.appendingPathComponent("runtime-validation-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "runtime_gate": runtimeGate,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixOS simulator runtime-validation app session",
+        "coreutils_commands": "/bin/wc -l /tmp/orlix-coreutils-cat-wc; /bin/cat /tmp/orlix-coreutils-cat-wc",
+        "runtime_validation_executed": "false",
+        "runtime_validation_passed": "false",
+        "coreutils_marker_asserted": "false",
+        "coreutils_stdout_asserted": "false",
+        "child_process_started": "false",
+        "child_process_exited": "false",
+        "wait_reaping_status_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let runtimeText = try readText(runtimeScript)
+    if sourceTextContains(runtimeText, #"tcti-coreutils-cat-wc"#) &&
+        sourceTextContains(runtimeText, #"ORLIX-TCTI-COREUTILS-CAT-WC-OK"#) &&
+        sourceTextContains(runtimeText, #"/bin/cat"#) &&
+        sourceTextContains(runtimeText, #"/bin/wc"#) {
+        evidence["runtime_script_coreutils_source_proof"] = "\(relativePath(runtimeScript)) contains absolute Coreutils cat/wc command markers"
+    } else {
+        failures.append(fail("coreutils-source-proof-missing", "\(relativePath(runtimeScript)) must call /bin/cat and /bin/wc"))
+    }
+
+    let coreutilsConfigText = try readText(coreutilsConfig)
+    let coreutilsProgramLine = coreutilsConfigText
+        .split(separator: "\n")
+        .first { $0.hasPrefix("ORLIXOS_COREUTILS_PROGRAMS :=") } ?? ""
+    let coreutilsProgramTokens = Set(coreutilsProgramLine
+        .replacingOccurrences(of: "ORLIXOS_COREUTILS_PROGRAMS :=", with: "")
+        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+        .map(String.init)
+        .filter { $0 != "[" })
+    if coreutilsConfigText.contains("COREUTILS_VERSION ?=") &&
+        coreutilsConfigText.contains("COREUTILS_GIT_COMMIT ?=") &&
+        coreutilsProgramTokens.isSuperset(of: ["cat", "wc"]) {
+        evidence["coreutils_package_source"] = "\(relativePath(coreutilsConfig)) declares Coreutils version, git commit, and cat/wc programs"
+    } else {
+        failures.append(fail("coreutils-config-proof-missing", "\(relativePath(coreutilsConfig)) must declare Coreutils version, commit, and selected programs"))
+    }
+
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+    let runtimeArguments = [
+        "PATH=\(home)/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(simulatorID)",
+        "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(simulatorName)",
+        "make",
+        "runtime-validation",
+        "DESTINATION=iphonesimulator",
+        "GATE=\(runtimeGate)",
+    ]
+    let runtimeOutput = try run(runtimeArguments, check: false)
+    try runtimeOutput.write(to: runtimeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(runtimeOutputURL))
+    evidence["runtime_validation_executed"] = "true"
+    evidence["runtime_validation_command"] = runtimeArguments.dropFirst(4).joined(separator: " ")
+
+    guard let runtimeReport = selectedRuntimeValidationReport(gate: runtimeGate, destination: "iphonesimulator") else {
+        failures.append(fail("runtime-report-missing", "runtime-validation did not produce \(runtimeGate) iphonesimulator JSON report"))
+        let status: GateStatus = .fail
+        evidence["fail_count"] = "1"
+        evidence["gate_result"] = status.rawValue
+        try writeJSON(evidence, to: evidenceURL)
+        artifacts.append(relativePath(evidenceURL))
+        let reducer = try writeReducer(target: target, caseID: "coreutils-cat-wc-fail", command: command, reason: "Coreutils cat/wc runtime-validation report missing", artifacts: artifacts, expectedStatus: .fail)
+        artifacts.append(relativePath(reducer))
+        let reportURL = try writeReport(report(target: target, status: status, summary: "Coreutils cat/wc gate could not find the runtime-validation report.", command: command, failures: failures, artifacts: artifacts, counters: ["coreutils_cat_wc_tests_executed": 0, "coreutils_cat_wc_tests_passed": 0, "coreutils_cat_wc_tests_failed": 1, "coreutils_cat_wc_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+        print("\(status.rawValue): \(relativePath(reportURL))")
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+        return 1
+    }
+
+    let runtimeObject = runtimeReport.object
+    let runtimeReportPath = relativePath(runtimeReport.url)
+    artifacts.append(runtimeReportPath)
+    let runtimeArtifacts = runtimeObject["artifacts"] as? [String] ?? []
+    artifacts.append(contentsOf: runtimeArtifacts)
+
+    let markerText = try runtimeArtifacts.first { $0.hasSuffix("tcti-coreutils-cat-wc.txt") }.map(readRelativeArtifact) ?? ""
+    let terminalText = try runtimeArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
+    let forbidden = runtimeObject["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenKeys = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+    var forbiddenBehavior = forbiddenDefaults()
+    for key in forbiddenKeys {
+        forbiddenBehavior[key] = boolField(forbidden, key)
+    }
+
+    if stringField(runtimeObject, "git_sha") != gitSha() {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    }
+    if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
+        evidence["runtime_validation_passed"] = "true"
+    } else {
+        failures.append(fail("runtime-report-status", "\(runtimeReportPath) did not pass"))
+    }
+    if stringField(runtimeObject, "selected_device_id") != simulatorID ||
+        stringField(runtimeObject, "selected_device_name") != simulatorName ||
+        stringField(runtimeObject, "simulator_booted_count") != "1" ||
+        !boolField(runtimeObject, "simulator_single_booted") {
+        failures.append(fail("simulator-scope", "Coreutils cat/wc gate requires single pinned \(simulatorName) simulator"))
+    }
+    if markerText.contains("ORLIX-TCTI-COREUTILS-CAT-WC-OK") {
+        evidence["coreutils_marker_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-marker-missing", "runtime artifacts did not include ORLIX-TCTI-COREUTILS-CAT-WC-OK"))
+    }
+    if markerText.contains("cat-wc-ok") || terminalText.contains("cat-wc-ok") {
+        evidence["coreutils_stdout_asserted"] = "true"
+    } else {
+        failures.append(fail("coreutils-stdout-missing", "runtime artifacts did not include /bin/cat output"))
+    }
+    if terminalText.contains("orlix-init: process started pid=") {
+        evidence["child_process_started"] = "true"
+    } else {
+        failures.append(fail("child-process-start-missing", "runtime artifacts did not include shell child process start"))
+    }
+    if terminalText.contains("orlix-init: process exited pid=") {
+        evidence["child_process_exited"] = "true"
+    } else {
+        failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
+    }
+    if terminalText.contains("orlix-init: shell exit status=0") {
+        evidence["wait_reaping_status_observed"] = "true"
+    } else {
+        failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
+    }
+    for key in forbiddenKeys where boolField(forbidden, key) {
+        failures.append(fail("forbidden-behavior", "runtime report sets forbidden_behavior.\(key)=true"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(target: target, caseID: status == .pass ? "coreutils-cat-wc-pass" : "coreutils-cat-wc-fail", command: command, reason: status == .pass ? "Coreutils cat/wc passed" : "Coreutils cat/wc failed", artifacts: artifacts, expectedStatus: status)
+    artifacts.append(relativePath(reducer))
+    let reportURL = try writeReport(report(target: target, status: status, summary: status == .pass ? "Pinned simulator Coreutils cat/wc gate passed through OrlixOS runtime-validation." : "Pinned simulator Coreutils cat/wc gate did not pass through OrlixOS runtime-validation.", command: command, failures: failures, artifacts: artifacts, forbiddenBehavior: forbiddenBehavior, counters: ["coreutils_cat_wc_tests_executed": evidence["runtime_validation_executed"] == "true" ? 1 : 0, "coreutils_cat_wc_tests_passed": status == .pass ? 1 : 0, "coreutils_cat_wc_tests_failed": status == .pass ? 0 : 1, "coreutils_cat_wc_tests_skipped": 0], evidence: evidence, releaseGateEligible: false, readinessGateEligible: false))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex(), sourcePath: String? = nil) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
     }
@@ -1578,9 +4875,10 @@ func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = r
     let acceptanceWeight = dictionary["acceptance_weight"] as? String
     let realStackRequired = dictionary["real_stack_required"] as? Bool
     let canClaimRuntimeReadiness = dictionary["can_claim_runtime_readiness"] as? Bool
+    let isRuntimeReport = sourcePath?.hasPrefix("Build/Reports/runtime/") == true
     if let target = dictionary["target"] as? String,
        let expected = roadmapIndex.metadataByTarget[target] {
-        if proofTier != expected.proofTier {
+        if !isRuntimeReport && proofTier != expected.proofTier {
             errors.append("report target \(target) proof_tier=\(proofTier ?? "missing") does not match roadmap proof_tier=\(expected.proofTier)")
         }
         if acceptanceWeight != expected.acceptanceWeight {
@@ -1711,7 +5009,7 @@ func isLegacyRuntimeReportWithoutProofTierMetadata(_ url: URL, object: Any, erro
 func checkReportFile(_ url: URL, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
     do {
         let object = try loadJSON(url)
-        let errors = validateReportObject(object, roadmapIndex: roadmapIndex)
+        let errors = validateReportObject(object, roadmapIndex: roadmapIndex, sourcePath: relativePath(url))
         if isLegacyRuntimeReportWithoutProofTierMetadata(url, object: object, errors: errors) {
             return []
         }
@@ -14183,6 +17481,22 @@ let tctiTargets = [
     "tcti-kernel-syscall-dispatch-smoke",
     "tcti-kernel-execve-binfmt-elf-smoke",
     "tcti-kernel-fault-signal-smoke",
+    "tcti-kernel-wait-reaping-smoke",
+    "tcti-kernel-pty-console-smoke",
+    "tcti-kernel-kselftest-subset",
+    "tcti-mlibc-build-smoke",
+    "tcti-mlibc-sysdeps-smoke",
+    "tcti-mlibc-libc-test-subset",
+    "tcti-mlibc-dynamic-loader-smoke",
+    "tcti-mlibc-pthread-tls-smoke",
+    "tcti-mlibc-linked-syscall-uapi-smoke",
+    "tcti-shell-exec-simple-command",
+    "tcti-shell-pipeline-smoke",
+    "tcti-shell-env-var-smoke",
+    "tcti-shell-redirection-smoke",
+    "tcti-shell-script-smoke",
+    "tcti-coreutils-true-false-echo",
+    "tcti-coreutils-cat-wc",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -14257,10 +17571,39 @@ func dispatch(_ target: String) throws -> Int32 {
     case "tcti-kernel-execve-binfmt-elf-smoke":
         return try runKernelExecveBinfmtElfSmoke()
     case "tcti-kernel-fault-signal-smoke":
-        return try writeTodo(
-            target: target,
-            summary: "TCTI kernel fault/signal smoke gate is selected next but not implemented yet; it must prove Linux-owned fault delivery and signal result through the real TCTI runtime path."
-        )
+        return try runKernelFaultSignalSmoke()
+    case "tcti-kernel-wait-reaping-smoke":
+        return try runKernelWaitReapingSmoke()
+    case "tcti-kernel-pty-console-smoke":
+        return try runKernelPtyConsoleSmoke()
+    case "tcti-kernel-kselftest-subset":
+        return try runKernelKselftestSubset()
+    case "tcti-mlibc-build-smoke":
+        return try runMLibCBuildSmoke()
+    case "tcti-mlibc-sysdeps-smoke":
+        return try runMLibCSysdepsSmoke()
+    case "tcti-mlibc-libc-test-subset":
+        return try runMLibCLibcTestSubset()
+    case "tcti-mlibc-dynamic-loader-smoke":
+        return try runMLibCDynamicLoaderSmoke()
+    case "tcti-mlibc-pthread-tls-smoke":
+        return try runMLibCPthreadTLSSmoke()
+    case "tcti-mlibc-linked-syscall-uapi-smoke":
+        return try runMLibCLinkedSyscallUAPISmoke()
+    case "tcti-shell-exec-simple-command":
+        return try runShellExecSimpleCommand()
+    case "tcti-shell-pipeline-smoke":
+        return try runShellPipelineSmoke()
+    case "tcti-shell-env-var-smoke":
+        return try runShellEnvVarSmoke()
+    case "tcti-shell-redirection-smoke":
+        return try runShellRedirectionSmoke()
+    case "tcti-shell-script-smoke":
+        return try runShellScriptSmoke()
+    case "tcti-coreutils-true-false-echo":
+        return try runCoreutilsTrueFalseEcho()
+    case "tcti-coreutils-cat-wc":
+        return try runCoreutilsCatWC()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":

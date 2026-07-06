@@ -1720,7 +1720,14 @@ __kunit-run: __kunit
 		exit 2; \
 	fi; \
 	echo "ORLIX-KUNIT-RUNNER test_object_present=true"; \
-	if ! $$nm_cmd "$$test_obj" | grep -q "$$test_name"; then \
+	symbols_file="$${TMPDIR:-/tmp}/orlix-kunit-symbols-$$$$.txt"; \
+	trap 'rm -f "$$symbols_file"' EXIT; \
+	if ! $$nm_cmd "$$test_obj" > "$$symbols_file"; then \
+		echo "ORLIX-KUNIT-RUNNER test_symbol_present=false"; \
+		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
+		exit 2; \
+	fi; \
+	if ! grep -q "$$test_name" "$$symbols_file"; then \
 		echo "ORLIX-KUNIT-RUNNER test_symbol_present=false"; \
 		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
 		exit 2; \
@@ -2017,8 +2024,10 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 	case "$$sysroot" in /*) ;; *) sysroot="$(CURDIR)/$$sysroot" ;; esac; \
 	[ -d "$$sysroot" ] || { echo "missing OrlixMLibC sysroot: $$sysroot; run make -f OrlixMLibC/Makefile build PROFILE=$(PROFILE)" >&2; exit 1; }; \
 	hosted_user_base="$(ORLIX_HOSTED_USER_BASE_ADDRESS)"; \
-	processor_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/asm/processor.h"; \
-	grep -Eq "^[[:space:]]*#define[[:space:]]+ORLIX_HOSTED_USER_BASE[[:space:]]+\\($$hosted_user_base" "$$processor_header" || { echo "Orlix kselftest link base $$hosted_user_base does not match ORLIX_HOSTED_USER_BASE in $$processor_header" >&2; exit 1; }; \
+	boot_source="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/boot/boot.c"; \
+	host_mapping_source="OrlixHostAdapter/Sources/OrlixHostAdapter/memory/kernel_mapping.c"; \
+	grep -Eq "orlix_hosted_user_base[[:space:]]*=[[:space:]]*$$hosted_user_base(UL|U|L)*;" "$$boot_source" || { echo "Orlix kselftest link base $$hosted_user_base does not match orlix_hosted_user_base default in $$boot_source" >&2; exit 1; }; \
+	grep -Eq "ORLIX_HOST_HOSTED_USER_BASE_DEFAULT[[:space:]]+$$hosted_user_base(UL|U|L)*" "$$host_mapping_source" || { echo "Orlix kselftest link base $$hosted_user_base does not match HostAdapter hosted user base default in $$host_mapping_source" >&2; exit 1; }; \
 	orlix_crt_flags="$$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o"; \
 	orlix_ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	linux_make="$(LINUX_MAKE)"; \
@@ -2035,8 +2044,8 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 		ARCH="$(ORLIX_KSELFTEST_ARCH)" \
 		LLVM=1 \
 		FORCE_TARGETS=1 \
-		USERCFLAGS="--sysroot=$$sysroot $$header_flags -fno-pie -DORLIX_HOSTED_USER_BASE_ADDRESS=$$hosted_user_base" \
-		USERLDFLAGS="--sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$$hosted_user_base $$orlix_crt_flags" \
+		USERCFLAGS="--sysroot=$$sysroot $$header_flags -fPIE -DORLIX_HOSTED_USER_BASE_ADDRESS=$$hosted_user_base" \
+		USERLDFLAGS="--sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$orlix_crt_flags" \
 		LDLIBS="$$orlix_ldlibs" \
 		install; \
 	printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
@@ -2051,10 +2060,10 @@ __kselftest-initramfs:
 	output="$(KSELFTEST_INITRAMFS_DIR)"; \
 	proof_label="$(KSELFTEST_PROOF_LABEL)"; \
 	case "$$output" in \
-		"$(CURDIR)"/Build/OrlixKernel/test-initramfs/*|Build/OrlixKernel/test-initramfs/*|"$(CURDIR)"/Build/OrlixMLibC/test-initramfs/*|Build/OrlixMLibC/test-initramfs/*) ;; \
-		*) echo "refusing to write test initramfs outside Build test-initramfs roots: $$output" >&2; exit 1 ;; \
+		"$(ORLIX_BUILD_ROOT)"/OrlixKernel/test-initramfs/*|"$(ORLIX_BUILD_ROOT)"/OrlixMLibC/test-initramfs/*) ;; \
+		*) echo "refusing to write test initramfs outside configured Build test-initramfs roots: $$output" >&2; exit 1 ;; \
 	esac; \
-	for path in Build Build/OrlixKernel Build/OrlixMLibC Build/OrlixKernel/test-initramfs Build/OrlixMLibC/test-initramfs "$$output"; do \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixMLibC" "$(ORLIX_BUILD_ROOT)/OrlixKernel/test-initramfs" "$(ORLIX_BUILD_ROOT)/OrlixMLibC/test-initramfs" "$$output"; do \
 		if [ -L "$$path" ]; then echo "refusing to package test initramfs through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	[ -d "$$install_dir" ] || { echo "missing kselftest install directory: $$install_dir" >&2; exit 1; }; \
