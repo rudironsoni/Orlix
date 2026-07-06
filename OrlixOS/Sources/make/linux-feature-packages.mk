@@ -1,4 +1,4 @@
-$(ORLIXOS_ATTR_STAMP): $(ORLIXOS_ATTR_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_ATTR_STAMP): $(ORLIXOS_ATTR_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/linux-feature-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -39,6 +39,12 @@ $(ORLIXOS_ATTR_STAMP): $(ORLIXOS_ATTR_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.or
 	"$(ORLIXOS_ATTR_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --disable-shared --enable-static; \
 	$(MAKE) -j1 all; \
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
+	for header in "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/attr/attributes.h" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/attr/libattr.h"; do \
+		[ -s "$$header" ] || { echo "missing installed attr header: $$header" >&2; exit 1; }; \
+		sed -i.bak 's/\<EXPORT\>/extern/g' "$$header"; \
+		rm -f "$$header.bak"; \
+		! grep -q '\<EXPORT\>' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
+	done; \
 	for program in getfattr setfattr; do \
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
 		file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" >&2; exit 1; }; \
@@ -54,7 +60,7 @@ $(ORLIXOS_GETFATTR_BINARY) $(ORLIXOS_SETFATTR_BINARY) $(ORLIXOS_LIBATTR_A): $(OR
 	[ -x "$(ORLIXOS_SETFATTR_BINARY)" ] || { echo "missing attr setfattr package input: $(ORLIXOS_SETFATTR_BINARY)" >&2; exit 1; }; \
 	[ -s "$(ORLIXOS_LIBATTR_A)" ] || { echo "missing libattr archive: $(ORLIXOS_LIBATTR_A)" >&2; exit 1; }
 
-$(ORLIXOS_ACL_STAMP): $(ORLIXOS_ACL_SOURCE_STAMP) $(ORLIXOS_ATTR_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_ACL_STAMP): $(ORLIXOS_ACL_SOURCE_STAMP) $(ORLIXOS_ATTR_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/linux-feature-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -96,6 +102,12 @@ $(ORLIXOS_ACL_STAMP): $(ORLIXOS_ACL_SOURCE_STAMP) $(ORLIXOS_ATTR_STAMP) $(ORLIXO
 	"$(ORLIXOS_ACL_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --disable-shared --enable-static; \
 	$(MAKE) -j1 all; \
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
+	for header in "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/sys/acl.h" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/acl/libacl.h"; do \
+		[ -s "$$header" ] || { echo "missing installed acl header: $$header" >&2; exit 1; }; \
+		sed -i.bak 's/\<EXPORT\>/extern/g' "$$header"; \
+		rm -f "$$header.bak"; \
+		! grep -q '\<EXPORT\>' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
+	done; \
 	for program in getfacl setfacl; do \
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
 		file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" >&2; exit 1; }; \

@@ -2,6 +2,45 @@
 
 ## 2026-07-06
 
+### Checkpoint: Kselftest Subset Gate Passes After ACL Header Sanitization
+
+- Harness-selected gate: `tcti-kernel-kselftest-subset`.
+- Initial failure:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-kselftest-subset` failed before the app-hosted kselftest workload completed because Coreutils rebuilt against installed OrlixOS ACL headers that still contained raw `EXPORT` declarations.
+  - Failure report: `Build/TCTI/reports/tcti-kernel-kselftest-subset/report.json`.
+  - Failure output: `Build/TCTI/kernel_kselftest_subset/xcodebuild-output.txt`.
+  - Concrete compiler error: installed `usr/include/sys/acl.h` reported `unknown type name 'EXPORT'`.
+- Durable package fix:
+  - `OrlixOS/Sources/make/linux-feature-packages.mk` now sanitizes installed attr headers `usr/include/attr/attributes.h` and `usr/include/attr/libattr.h` after attr install.
+  - `OrlixOS/Sources/make/linux-feature-packages.mk` now sanitizes installed ACL headers `usr/include/sys/acl.h` and `usr/include/acl/libacl.h` after ACL install.
+  - Attr and ACL package stamps now depend on `linux-feature-packages.mk`, so recipe changes invalidate stale package stamps instead of requiring manual cleanup.
+- Build validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixOS/Makefile build PROFILE=tcti_runtime ORLIXOS_FORCE_PACKAGE_RECONFIGURE=1` passed.
+  - Installed attr/ACL package headers under the generated `tcti_runtime` package sysroot no longer contain `EXPORT`.
+  - Repeated non-forced `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixOS/Makefile build PROFILE=tcti_runtime` passed with `make: Nothing to be done for 'build'.`
+- Gate validation before commit:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-kernel-kselftest-subset` passed.
+  - TCTI report: `Build/TCTI/reports/tcti-kernel-kselftest-subset/report.json`.
+  - Markdown report: `Build/TCTI/reports/tcti-kernel-kselftest-subset/report.md`.
+  - Reproducer: `Build/TCTI/reproducers/tcti-kernel-kselftest-subset/kernel-kselftest-subset-pass.json`.
+  - Evidence: `pass_count=1`, `fail_count=0`, `skip_count=0`, `xcode_test_executed=true`, `xcode_test_passed=true`, `kselftest_completion_asserted_by_xctest=true`, selected simulator `Orlix-iPhone-15-Pro-Max` with UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - Xcode output ended with `TEST SUCCEEDED`; selected XCTest executed 1 test with 0 failures.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 30 minutes returned no matching files.
+- Post-commit validation:
+  - After commit `81801bd3678123b7bc64f769bca3380dc7b7ac5b`, `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-kernel-kselftest-subset` passed again.
+  - Updated evidence recorded `git_sha=81801bd3678123b7bc64f769bca3380dc7b7ac5b`, `pass_count=1`, `fail_count=0`, `skip_count=0`, `xcode_test_executed=true`, `xcode_test_passed=true`.
+  - Xcode output ended with `TEST SUCCEEDED`; selected XCTest executed 1 test with 0 failures in 1.855 seconds.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 30 minutes returned no matching files.
+- Static validation:
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+- Boundary:
+  - This proves the targeted kernel kselftest subset through the OrlixOS terminal-session XCTest surface on the pinned simulator.
+  - This does not prove full shell usability, full package behavior, full runtime readiness, release readiness, or physical-device readiness.
+  - No generated source, package, rootfs, or build tree was edited.
+  - No physical-device gate was run.
+
 ### Checkpoint: Kernel Execve Binfmt ELF Smoke Passes With Current Simulator Evidence
 
 - Harness-selected gate: `tcti-kernel-execve-binfmt-elf-smoke`.
