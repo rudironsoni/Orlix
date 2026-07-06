@@ -1,6 +1,355 @@
 # IMPLEMENT.md
 
+## 2026-07-06
+
+### Checkpoint: OrlixOS Package Builds Stop Recleaning Bash And Coreutils
+
+- Scope:
+  - Improved `OrlixOS` package build incrementality for the high-churn TCTI runtime path.
+  - Bash and Coreutils package recipes now preserve configured build directories and use configure signatures.
+  - `ORLIXOS_FORCE_PACKAGE_RECONFIGURE=1` remains available for explicit package reconfiguration.
+  - Coreutils source readiness is no longer forced through `FORCE` on every normal build; its fast path refreshes the source stamp when the checked-out commit is already correct.
+- Behavior fixed:
+  - A package Makefile timestamp change no longer deletes Bash/Coreutils build directories or removes installed package outputs before checking whether the actual package/toolchain signature changed.
+  - A stale package Makefile timestamp now takes the explicit reuse path for Bash/Coreutils instead of clean rebuilding.
+- Build validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" time make -f OrlixOS/Makefile build PROFILE=tcti_runtime` passed after the one-time post-patch rebuild.
+  - Repeated build passed with `make: Nothing to be done for 'build'.` in about 4.7 seconds.
+  - Touching `OrlixOS/Sources/make/packages.mk` and rerunning `build PROFILE=tcti_runtime` passed through Bash/Coreutils reuse paths in about 5.4 seconds, without configure or compile output.
+  - Repeated `rootfs PROFILE=tcti_runtime` passed with `make: Nothing to be done for 'rootfs'.` in about 4.7 seconds.
+  - `kernel-payload PROFILE=tcti_runtime` reused the existing payload on the second run.
+- Static validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b` passed with the pinned simulator already booted.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-true-false-echo`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-coreutils-true-false-echo/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-coreutils-true-false-echo-20260706T112024Z-47726.json`.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `readiness_gate_eligible=false`.
+  - TCTI counters: `coreutils_true_false_echo_tests_executed=1`, `coreutils_true_false_echo_tests_passed=1`, `coreutils_true_false_echo_tests_failed=0`, `coreutils_true_false_echo_tests_skipped=0`.
+  - Forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner` and `xctest` reports in the last 15 minutes returned no matching files.
+- Boundary:
+  - This proves the targeted OrlixOS Bash/Coreutils incremental build behavior and one Coreutils simulator smoke after the package changes.
+  - This does not prove full Coreutils suite success, full package readiness, full runtime readiness, release readiness, or physical-device readiness.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Coreutils True/False/Echo Gate Passes On Pinned Simulator
+
+- Harness-selected gate: `tcti-coreutils-true-false-echo`.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Harness roadblock:
+  - After `tcti-shell-script-smoke` passed, `make agent-next AREA=orlix-tcti` selected `tcti-coreutils-true-false-echo`.
+  - `make agent-task-envelope-check AREA=orlix-tcti` initially failed because `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - Added runtime-validation support for `tcti-coreutils-true-false-echo` using absolute real Coreutils paths: `/bin/true`, `/bin/false`, and `/bin/echo coreutils-ok`.
+  - Added `runCoreutilsTrueFalseEcho()` in `tools/tcti/orlix-tcti-gate.swift`, target list support, dispatcher support, and source evidence that `OrlixOS/Sources/make/config.mk` declares Coreutils version, commit, and the selected `true`, `false`, and `echo` programs.
+  - Initial runtime execution passed, but the TCTI report failed because the Coreutils program-list source-proof check used brittle substring matching. Replaced it with token parsing of `ORLIXOS_COREUTILS_PROGRAMS`.
+- Validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make agent-task-envelope-check AREA=orlix-tcti` passed with selected gate `tcti-coreutils-true-false-echo`.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-true-false-echo`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-coreutils-true-false-echo/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-coreutils-true-false-echo-20260706T105040Z-63498.json`.
+  - Runtime terminal artifact: `Build/Reports/runtime/tcti-coreutils-true-false-echo-20260706T105040Z-63498.artifacts/simulator-terminal-output.txt`.
+  - Marker artifact: `Build/Reports/runtime/tcti-coreutils-true-false-echo-20260706T105040Z-63498.artifacts/tcti-coreutils-true-false-echo.txt`.
+  - Terminal output shows Linux `execve` through TCTI for `task=true`, `task=false`, and `task=echo`.
+  - Terminal output contains `coreutils-ok` and `ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK`.
+  - `orlix-init` records the shell process exit status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `coreutils_true_false_echo_tests_executed=1`, `coreutils_true_false_echo_tests_passed=1`, `coreutils_true_false_echo_tests_failed=0`, `coreutils_true_false_echo_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the targeted Coreutils `true`, `false`, and `echo` simulator gate only.
+  - This is not full Coreutils suite success.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Shell Script Smoke Gate Passes On Pinned Simulator
+
+- Harness-selected gate: `tcti-shell-script-smoke`.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Harness roadblock:
+  - After `tcti-shell-redirection-smoke` passed, `make agent-next AREA=orlix-tcti` selected `tcti-shell-script-smoke`.
+  - `make agent-task-envelope-check AREA=orlix-tcti` initially failed because `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - Added runtime-validation support for `tcti-shell-script-smoke` using a real `/bin/sh /tmp/orlix-tcti-script` workload. The parent shell writes a script file through shell redirection, then executes it with `/bin/sh`; the script asserts `VALUE=script-ok`, prints `script-ok`, prints `ORLIX-TCTI-SHELL-SCRIPT-OK`, and exits 0.
+  - Added `runShellScriptSmoke()` in `tools/tcti/orlix-tcti-gate.swift`, target list support, and dispatcher support.
+- Validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make agent-task-envelope-check AREA=orlix-tcti` passed with selected gate `tcti-shell-script-smoke`.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-script-smoke`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-shell-script-smoke/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-shell-script-smoke-20260706T104005Z-43122.json`.
+  - Runtime terminal artifact: `Build/Reports/runtime/tcti-shell-script-smoke-20260706T104005Z-43122.artifacts/simulator-terminal-output.txt`.
+  - Marker artifact: `Build/Reports/runtime/tcti-shell-script-smoke-20260706T104005Z-43122.artifacts/tcti-shell-script-smoke.txt`.
+  - Terminal output contains `script-okORLIX-TCTI-SHELL-SCRIPT-OK`.
+  - `orlix-init` records the shell process exit status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `shell_script_tests_executed=1`, `shell_script_tests_passed=1`, `shell_script_tests_failed=0`, `shell_script_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the shell script simulator gate only.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Shell Redirection Smoke Gate Passes On Pinned Simulator
+
+- Harness-selected gate: `tcti-shell-redirection-smoke`.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Harness roadblock:
+  - `make agent-next AREA=orlix-tcti` selected `tcti-shell-redirection-smoke`.
+  - `make agent-task-envelope-check AREA=orlix-tcti` initially failed because `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - Added runtime-validation support for `tcti-shell-redirection-smoke` using a POSIX shell workload that writes `redir-ok` through output redirection to `/tmp/orlix-tcti-redir`, reads it back through input redirection, asserts the value, prints it, prints `ORLIX-TCTI-SHELL-REDIRECTION-OK`, and exits 0.
+  - Added `runShellRedirectionSmoke()` in `tools/tcti/orlix-tcti-gate.swift`, target list support, and dispatcher support.
+- Workload correction:
+  - The first redirection run used `printf redir-ok > /tmp/orlix-tcti-redir`.
+  - The shell printed `redir-ok` but exited status 1 before the marker because `read line < /tmp/orlix-tcti-redir` did not see a newline-terminated record under `set -e`.
+  - Corrected the workload to use `echo redir-ok > /tmp/orlix-tcti-redir`, preserving the real output and input redirection proof while making the shell `read` operation Linux-shell correct.
+- Validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make agent-task-envelope-check AREA=orlix-tcti` passed with selected gate `tcti-shell-redirection-smoke`.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-redirection-smoke`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-shell-redirection-smoke/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-shell-redirection-smoke-20260706T103217Z-29877.json`.
+  - Runtime terminal artifact: `Build/Reports/runtime/tcti-shell-redirection-smoke-20260706T103217Z-29877.artifacts/simulator-terminal-output.txt`.
+  - Marker artifact: `Build/Reports/runtime/tcti-shell-redirection-smoke-20260706T103217Z-29877.artifacts/tcti-shell-redirection-smoke.txt`.
+  - Terminal output contains `redir-okORLIX-TCTI-SHELL-REDIRECTION-OK`.
+  - `orlix-init` records the shell process exit status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `shell_redirection_tests_executed=1`, `shell_redirection_tests_passed=1`, `shell_redirection_tests_failed=0`, `shell_redirection_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the shell redirection simulator gate only.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Shell Env Var Smoke Gate Passes On Pinned Simulator
+
+- Harness-selected gate: `tcti-shell-env-var-smoke`.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Harness roadblock:
+  - After `tcti-shell-pipeline-smoke` passed, `make agent-next AREA=orlix-tcti` selected `tcti-shell-env-var-smoke`.
+  - `make agent-task-envelope-check AREA=orlix-tcti` initially failed because `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - Added runtime-validation support for `tcti-shell-env-var-smoke` using a POSIX shell built-in workload: set/export `FOO=env-ok`, assert `$FOO`, print `env-ok`, print `ORLIX-TCTI-SHELL-ENV-OK`, and exit 0.
+  - Added `runShellEnvVarSmoke()` in `tools/tcti/orlix-tcti-gate.swift`, target list support, and dispatcher support.
+  - Fixed `tools/runtime/orlix-runtime-validation.sh` gate validation to recognize `tcti-shell-env-var-smoke`.
+- Validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make agent-task-envelope-check AREA=orlix-tcti` passed with selected gate `tcti-shell-env-var-smoke`.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-env-var-smoke`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-shell-env-var-smoke/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-shell-env-var-smoke-20260706T100639Z-97919.json`.
+  - Runtime terminal artifact: `Build/Reports/runtime/tcti-shell-env-var-smoke-20260706T100639Z-97919.artifacts/simulator-terminal-output.txt`.
+  - Marker artifact: `Build/Reports/runtime/tcti-shell-env-var-smoke-20260706T100639Z-97919.artifacts/tcti-shell-env-var-smoke.txt`.
+  - Terminal output contains `env-okORLIX-TCTI-SHELL-ENV-OK`.
+  - `orlix-init` records the shell process exit status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `shell_env_var_tests_executed=1`, `shell_env_var_tests_passed=1`, `shell_env_var_tests_failed=0`, `shell_env_var_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the shell env-var simulator gate only.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Shell Pipeline Smoke Gate Passes On Pinned Simulator
+
+- Harness-selected gate: `tcti-shell-pipeline-smoke`.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Starting failure:
+  - `Build/Reports/runtime/tcti-shell-pipeline-smoke-20260706T093023Z-72261.artifacts/simulator-terminal-output.txt` showed `/bin/sh` child exit status 132 after `Orlix TCTI: unsupported instruction task=sh ... insn=0x4d40c900`.
+  - LLVM disassembly identified `0x4d40c900` as `ld1r { v0.4s }, [x8]`.
+  - After adding that support, the next fresh simulator run reached a later unsupported instruction, `0x6e004001`, identified by LLVM as `ext v1.16b, v0.16b, v0.16b, #8`.
+- Kernel TCTI fixes:
+  - `decode_aarch64.c` now decodes the observed `ld1r { vN.4s }, [xM]` form as `TCTI_DECODE_SIMD_LOAD_REPLICATE`.
+  - `switch_debug.c` executes that load-replicate through the task `mm_struct` by reading the 32-bit source lane with the existing user-memory path, then replicating it into all four 32-bit SIMD lanes. No fake host mapping, generated executable memory, host-exec guest text, MAP_JIT, or RWX path was added.
+  - `decode_aarch64.c` now decodes the observed `EXT 16B` form as a SIMD element move with `TCTI_SIMD_ELEMENT_MOVE_EXT`.
+  - `switch_debug.c` executes that `EXT 16B` form by extracting bytes from the concatenated source SIMD vectors and writing the 128-bit result back to the destination SIMD register.
+  - KUnit coverage was added for both decode paths, for `ld1r` execution against a real mapped `current->mm` user page, and for `ext` SIMD register execution.
+- Validation before simulator rerun:
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit PROFILE=tcti_runtime ORLIX_BUILD_ROOT="$(external-ssd-root)/Xcode/OrlixSystem/Build"` built Orlix KUnit objects from the durable overlay inputs after both instruction fixes.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b` passed with the pinned simulator already booted.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-pipeline-smoke`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-shell-pipeline-smoke/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-shell-pipeline-smoke-20260706T095223Z-37958.json`.
+  - Runtime terminal artifact: `Build/Reports/runtime/tcti-shell-pipeline-smoke-20260706T095223Z-37958.artifacts/simulator-terminal-output.txt`.
+  - Marker artifact: `Build/Reports/runtime/tcti-shell-pipeline-smoke-20260706T095223Z-37958.artifacts/tcti-shell-pipeline-smoke.txt`.
+  - Terminal output contains `betaORLIX-TCTI-SHELL-PIPELINE-OK`.
+  - `orlix-init` records the shell process exit status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Runtime report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `shell_pipeline_tests_executed=1`, `shell_pipeline_tests_passed=1`, `shell_pipeline_tests_failed=0`, `shell_pipeline_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the shell pipeline simulator gate only.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: Full Shell Usability Gate Passes On Pinned Simulator
+
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Roadblock:
+  - `tcti-shell-exec-simple-command` initially failed in `cat /tmp/orlix-tcti-shell`.
+  - Runtime artifact `Build/Reports/runtime/tcti-full-shell-usability-20260706T085123Z-64320.artifacts/simulator-terminal-output.txt` showed the old mlibc allocator assertion:
+    - `In function posix_memalign, file ../../src/mlibc-43ab07732cdf/options/ansi/generic/stdlib.cpp:574`.
+    - `__ensure(!(reinterpret_cast<uintptr_t>(p) & (align - 1))) failed`.
+    - `Orlix TCTI: unsupported instruction task=cat ... insn=0xd4200020`.
+  - The blocker was real OrlixMLibC allocator behavior under the app-hosted Linux `mm_struct` mapping. It was not worked around with host-exec guest text, generated executable memory, MAP_JIT, RWX memory, or fake host mappings.
+- Ownership fixes:
+  - Added `OrlixMLibC/Sources/patches/0005-options-ansi-implement-freeable-posix-memalign.patch`.
+  - The patch implements freeable `posix_memalign()` by over-allocating with `AnonAllocate()`, returning an aligned pointer, tracking aligned allocations under `__mlibc_mutex`, and teaching `free()` to release tracked aligned allocations with `AnonFree()`.
+  - `tools/runtime/orlix-runtime-validation.sh` now packages the current `OrlixOS` payload with `make -f OrlixOS/Makefile kernel-payload PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root"` before Xcode builds and installs the app, preventing stale app-installed payloads after libc/rootfs changes.
+  - `tools/runtime/orlix-runtime-validation.sh` now lets `tcti-full-shell-usability` assert its dedicated `ORLIX-TCTI-SHELL-USABLE` marker plus fatal-free simulator runtime instead of failing first on a duplicate generic `svc #0` marker check.
+- Build and packaging validation:
+  - `rtk proxy git -C "$(external-ssd-root)/Xcode/OrlixSystem/Build/OrlixMLibC/src/mlibc-43ab07732cdf" apply --check "$PWD/OrlixMLibC/Sources/patches/0005-options-ansi-implement-freeable-posix-memalign.patch"` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixMLibC/Makefile build PROFILE=tcti_runtime` passed and applied 5 OrlixMLibC patches.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixOS/Makefile rootfs PROFILE=tcti_runtime` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixOS/Makefile kernel-payload PROFILE=tcti_runtime` passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh` passed after the harness edit.
+- Simulator validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-exec-simple-command`.
+  - Result: pass.
+  - TCTI report: `Build/TCTI/reports/tcti-shell-exec-simple-command/report.json`.
+  - Runtime report: `Build/Reports/runtime/tcti-full-shell-usability-20260706T091024Z-44497.json`.
+  - Runtime artifacts include `tcti-full-shell-usability-20260706T091024Z-44497.artifacts/payload-build.log`, proving payload packaging ran inside runtime-validation.
+  - Runtime artifact `tcti-full-shell-usability-20260706T091024Z-44497.artifacts/tcti-full-shell-usability.txt` contains `ORLIX-TCTI-SHELL-USABLE`.
+  - Runtime terminal output reaches `/`, executes `cat`, prints `shell-basic`, prints `ORLIX-TCTI-SHELL-USABLE`, and exits shell status 0.
+  - Runtime `tcti-simulator-fatal-runtime.txt` is empty.
+  - Report facts: `status=pass`, `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`.
+  - TCTI counters: `shell_exec_simple_command_tests_executed=1`, `shell_exec_simple_command_tests_passed=1`, `shell_exec_simple_command_tests_failed=0`, `shell_exec_simple_command_tests_skipped=0`.
+  - TCTI forbidden behavior flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, RWX.
+  - Fresh crash check for host and pinned-simulator `OrlixTestRunner`, `.ips`, and `xctest` reports in the last 60 minutes returned no matching files.
+- Boundary:
+  - This proves the full-shell simple-command simulator gate only.
+  - No full runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate was run.
+
+### Checkpoint: OrlixMLibC Dynamic Loader And Pthread TLS Gates Pass On Pinned Simulator
+
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID: `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+- Ownership and fixes:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/mmap.c` now preserves Linux `MAP_FIXED` placement in both bottom-up and top-down `arch_get_unmapped_area()` paths, so rtld fixed mappings land at the requested Linux `mm_struct` virtual addresses instead of being relocated by the arch helper.
+  - `OrlixMLibC/Sources/patches/0004-rtld-handle-aarch64-tlsdesc-rela.patch` adds AArch64 `R_TLSDESC` regular RELA handling in mlibc rtld.
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c` now uses `mm->saved_auxv` `AT_PHDR` and `AT_BASE` to leave the PT_INTERP image and rtld-loaded shared objects to rtld while keeping TCTI static PIE relative relocations scoped to the main executable.
+  - `tools/tcti/orlix-tcti-gate.swift` now supports the harness-selected `tcti-mlibc-pthread-tls-smoke` gate and validates app-hosted XCTest output for `posix/pthread_create`, `posix/pthread_key`, `posix/pthread_thread_local`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK`, and `ORLIX-MLIBC-TEST-END`.
+- Harness state:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-mlibc-pthread-tls-smoke`.
+  - Initial `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` failed because the roadmap selected `tcti-mlibc-pthread-tls-smoke` but `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - After adding the gate target, `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed with selected gate `tcti-mlibc-pthread-tls-smoke`.
+- Dynamic-loader regression validation after cleanup:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-dynamic-loader-smoke`.
+  - Result: pass.
+  - Report: `Build/TCTI/reports/tcti-mlibc-dynamic-loader-smoke/report.json`.
+  - Counters: `mlibc_dynamic_loader_tests_executed=1`, `mlibc_dynamic_loader_tests_passed=1`, `mlibc_dynamic_loader_tests_failed=0`, `mlibc_dynamic_loader_tests_skipped=0`.
+  - Log markers: `Orlix TCTI: leaving PT_INTERP image self-relocation to ld.so`, `Orlix TCTI: leaving shared object relocation to rtld`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK`, `ok 163 - orlix/dynamic-loader`, `ORLIX-MLIBC-TEST-END`, `** TEST SUCCEEDED **`.
+  - Forbidden behavior flags in the report are false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+- Pthread/TLS gate validation:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-pthread-tls-smoke`.
+  - Result: pass.
+  - Report: `Build/TCTI/reports/tcti-mlibc-pthread-tls-smoke/report.json`.
+  - Counters: `mlibc_pthread_tls_tests_executed=1`, `mlibc_pthread_tls_tests_passed=1`, `mlibc_pthread_tls_tests_failed=0`, `mlibc_pthread_tls_tests_skipped=0`.
+  - Log markers: `ok 98 - posix/pthread_create`, `ok 99 - posix/pthread_key`, `ok 103 - posix/pthread_thread_local`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK`, `ORLIX-MLIBC-TEST-END`, `** TEST SUCCEEDED **`.
+  - Forbidden behavior flags in the report are false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+- Linked syscall/UAPI gate validation:
+  - After `tcti-mlibc-pthread-tls-smoke` passed, `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-linked-syscall-uapi-smoke`.
+  - Initial `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` failed because the roadmap selected `tcti-mlibc-linked-syscall-uapi-smoke` but `tools/tcti/orlix-tcti-gate.swift` did not dispatch that target.
+  - Added the missing gate driver support without changing generated Linux, generated mlibc, package, rootfs, or runtime output trees.
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke`.
+  - Result: pass.
+  - Report: `Build/TCTI/reports/tcti-mlibc-linked-syscall-uapi-smoke/report.json`.
+  - Counters: `mlibc_linked_syscall_uapi_tests_executed=1`, `mlibc_linked_syscall_uapi_tests_passed=1`, `mlibc_linked_syscall_uapi_tests_failed=0`, `mlibc_linked_syscall_uapi_tests_skipped=0`.
+  - Log markers: `ok 146 - glibc/linux-syscall`, `ok 156 - linux/getifaddrs`, `ok 157 - linux/pidfd`, `ok 158 - linux/process_vm_readv_writev`, `ok 159 - linux/timerfd`, `ok 162 - linux/xattr`, `ORLIX-MLIBC-TEST-END`, `** TEST SUCCEEDED **`.
+  - Forbidden behavior flags in the report are false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+- Crash diagnostics:
+  - Checked host and pinned-simulator diagnostic report locations for recent `OrlixTestRunner`, `xctest`, and `.ips` reports after the simulator runs.
+  - No fresh matching crash report was found. The simulator-specific DiagnosticReports directory was absent.
+- Boundary:
+  - This proves the OrlixMLibC dynamic-loader and pthread/TLS TCTI gates on the pinned simulator through the app-hosted OrlixOS terminal-session XCTest path.
+  - This does not claim full runtime readiness, package readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+  - No HostAdapter-owned Linux policy, fake mappings, generated Linux/mlibc/rootfs edits, host-executable guest text, MAP_JIT, RWX, or production gadget dispatch was added.
+
 ## 2026-07-05
+
+### Checkpoint: OrlixMLibC Smoke Clears TCTI Unsupported FP/SIMD Instructions
+
+- Investigated the user-visible `OrlixTestRunner` quick close on the pinned simulator:
+  - Simulator: `Orlix-iPhone-15-Pro-Max`.
+  - UDID: `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - No fresh host or simulator `OrlixTestRunner` / `xctest` crash report was found.
+  - The app lifecycle matched XCTest exiting after app-hosted mlibc failures, not a runner crash.
+- Fixed TCTI decode/execution coverage for simulator-observed instructions from the OrlixMLibC smoke:
+  - `0x2f00e400`: `movi d0, #0`.
+  - `0x7ee1b801`: `fcvtzu d1, d0`.
+  - `0x7e61d821`: `ucvtf d1, d1`.
+- Validation:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make -f OrlixKernel/Makefile kunit PROFILE=tcti_runtime ORLIX_BUILD_ROOT="$(external-ssd-root)/Xcode/OrlixSystem/Build"`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: passed with `Device already booted, nothing to do.`
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke`: still fails honestly.
+- Latest simulator evidence:
+  - Report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`.
+  - Output: `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt`.
+  - `ORLIX-MLIBC-TEST-INIT` reached.
+  - No `unsupported instruction` lines remain in the latest run.
+  - Remaining failures are mlibc assertion failures:
+    - `ansi/sscanf`: `float_value >= 1.123f - 0.01 && float_value <= 1.123f + 0.01`.
+    - `ansi/sprintf`: `!strcmp(buf, "3.140000")`.
+- Boundary:
+  - This is OrlixMLibC proof-tier progress only.
+  - `tcti-mlibc-build-smoke` is still failing.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness is claimed.
+  - No phone or physical-device gate run.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
 
 ### Checkpoint: Pinned Simulator Policy Repaired And First-Syscall Simulator Gate Passes
 
