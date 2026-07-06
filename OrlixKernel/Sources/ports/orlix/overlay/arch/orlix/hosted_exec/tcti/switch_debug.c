@@ -693,7 +693,7 @@ static u32 tcti_u32_to_fp32_bits(u32 value)
 	if (!value)
 		return 0;
 
-	while ((value >> (top_bit + 1)) != 0)
+	while (top_bit < 31 && (value >> (top_bit + 1)) != 0)
 		top_bit++;
 
 	exponent = top_bit + 127;
@@ -710,6 +710,44 @@ static u32 tcti_u32_to_fp32_bits(u32 value)
 
 		mantissa = value >> shift;
 		if (remainder > halfway || (remainder == halfway && (mantissa & 1)))
+			mantissa++;
+		if (mantissa & BIT_ULL(24)) {
+			mantissa >>= 1;
+			exponent++;
+		}
+	}
+
+	return (exponent << 23) | (mantissa & GENMASK(22, 0));
+}
+
+static u32 tcti_u64_to_fp32_bits(u64 value)
+{
+	u8 top_bit = 0;
+	u32 exponent;
+	u64 mantissa;
+	u32 fraction;
+
+	if (!value)
+		return 0;
+
+	while (top_bit < 63 && (value >> (top_bit + 1)) != 0)
+		top_bit++;
+
+	exponent = top_bit + 127;
+	if (top_bit <= 23) {
+		fraction = (value ^ BIT_ULL(top_bit)) << (23 - top_bit);
+		return (exponent << 23) | fraction;
+	}
+
+	{
+		u8 shift = top_bit - 23;
+		u64 remainder_mask = BIT_ULL(shift) - 1;
+		u64 remainder = value & remainder_mask;
+		u64 halfway = BIT_ULL(shift - 1);
+
+		mantissa = value >> shift;
+		if (remainder > halfway ||
+		    (remainder == halfway && (mantissa & 1)))
 			mantissa++;
 		if (mantissa & BIT_ULL(24)) {
 			mantissa >>= 1;
@@ -756,6 +794,37 @@ static u64 tcti_u64_to_fp64_bits(u64 value)
 	}
 
 	return (exponent << 52) | (mantissa & GENMASK_ULL(51, 0));
+}
+
+static int tcti_fp32_bits_to_u64_zero(u32 value, u64 *result)
+{
+	bool negative = value & BIT(31);
+	u32 exponent_bits = (value >> 23) & 0xffU;
+	u32 fraction = value & GENMASK(22, 0);
+	u64 mantissa;
+	int exponent;
+
+	if (!result || exponent_bits == 0xffU)
+		return -EOPNOTSUPP;
+	if (negative || !exponent_bits) {
+		*result = 0;
+		return 0;
+	}
+
+	exponent = (int)exponent_bits - 127;
+	if (exponent < 0) {
+		*result = 0;
+		return 0;
+	}
+	if (exponent > 63) {
+		*result = U64_MAX;
+		return 0;
+	}
+
+	mantissa = BIT_ULL(23) | fraction;
+	*result = exponent >= 23 ? mantissa << (exponent - 23) :
+				    mantissa >> (23 - exponent);
+	return 0;
 }
 
 static int tcti_fp64_bits_to_u64_zero(u64 value, u64 *result)
@@ -2153,59 +2222,80 @@ static int tcti_execute_simd_vector_element_move(
 	}
 
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_UZP1) {
-		u64 left_low;
-		u64 right_low;
-		u64 result;
+		u64 source[4];
+		u64 low = 0;
+		u64 high = 0;
+		u8 lanes_per_source;
+		u8 lane;
 
 		if (decoded->access_size != sizeof(u16) ||
-		    decoded->result_size != sizeof(u64))
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)))
 			return -EOPNOTSUPP;
 
-		left_low = current->thread.user_simd[decoded->rn * 2];
-		right_low = current->thread.user_simd[decoded->rm * 2];
-		result = (left_low & GENMASK_ULL(15, 0)) |
-			 (((left_low >> 32) & GENMASK_ULL(15, 0)) << 16) |
-			 ((right_low & GENMASK_ULL(15, 0)) << 32) |
-			 (((right_low >> 32) & GENMASK_ULL(15, 0)) << 48);
-		current->thread.user_simd[decoded->rd * 2] = result;
-		current->thread.user_simd[decoded->rd * 2 + 1] = 0;
-		current->thread.user_simd_valid = 1;
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		source[2] = current->thread.user_simd[decoded->rm * 2];
+		source[3] = current->thread.user_simd[decoded->rm * 2 + 1];
+		lanes_per_source = decoded->result_size / (2 * sizeof(u16));
+
+		for (lane = 0; lane < decoded->result_size / sizeof(u16);
+		     lane++) {
+			u8 source_lane = (lane % lanes_per_source) * 2;
+			u8 source_word = (lane < lanes_per_source ? 0 : 2) +
+					 source_lane / 4;
+			u8 source_shift = (source_lane % 4) * 16;
+			u8 dest_shift = (lane % 4) * 16;
+			u64 value = (source[source_word] >> source_shift) &
+				    GENMASK_ULL(15, 0);
+
+			if (lane < 4)
+				low |= value << dest_shift;
+			else
+				high |= value << dest_shift;
+		}
+
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    low, high);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
 
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_USHLL) {
-		u64 source_low;
 		u64 low = 0;
 		u64 high = 0;
+		u8 lane_count;
 		u8 lane;
 
 		if ((decoded->access_size != sizeof(u8) &&
-		     decoded->access_size != sizeof(u16)) ||
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
 		    decoded->result_size != 2 * sizeof(u64))
 			return -EOPNOTSUPP;
 
-		source_low = current->thread.user_simd[decoded->rn * 2];
-		if (decoded->access_size == sizeof(u8)) {
-			for (lane = 0; lane < 8; lane++) {
-				u64 widened = (source_low >> (lane * 8)) &
-					      0xffU;
+		lane_count = sizeof(u64) / decoded->access_size;
 
-				if (lane < 4)
-					low |= widened << (lane * 16);
-				else
-					high |= widened << ((lane - 4) * 16);
-			}
-		} else {
-			for (lane = 0; lane < 4; lane++) {
-				u64 widened = (source_low >> (lane * 16)) &
-					      0xffffU;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_byte = (decoded->simd_source_index + lane) *
+					 decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u8 dest_byte = lane * decoded->access_size * 2;
+			u8 dest_word = dest_byte / sizeof(u64);
+			u8 dest_shift = (dest_byte % sizeof(u64)) * 8;
+			u64 widened;
 
-				if (lane < 2)
-					low |= widened << (lane * 32);
-				else
-					high |= widened << ((lane - 2) * 32);
-			}
+			if (source_byte + decoded->access_size >
+			    2 * sizeof(u64))
+				return -EOPNOTSUPP;
+
+			widened = (current->thread.user_simd[decoded->rn * 2 +
+				   source_word] >> source_shift) &
+				  GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			if (dest_word)
+				high |= widened << dest_shift;
+			else
+				low |= widened << dest_shift;
 		}
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 					    low, high);
@@ -2214,34 +2304,50 @@ static int tcti_execute_simd_vector_element_move(
 	}
 
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_XTN) {
-		u64 source_low;
-		u64 source_high;
+		u64 source[2];
 		u64 narrowed;
+		u8 lane_count;
+		u8 lane;
 
-		if (decoded->access_size != 2 * decoded->result_size)
+		if (decoded->access_size != 2 * decoded->result_size ||
+		    (decoded->result_size != sizeof(u8) &&
+		     decoded->result_size != sizeof(u16) &&
+		     decoded->result_size != sizeof(u32)))
 			return -EOPNOTSUPP;
 
-		source_low = current->thread.user_simd[decoded->rn * 2];
-		source_high = current->thread.user_simd[decoded->rn * 2 + 1];
-		if (decoded->result_size == sizeof(u16)) {
-			narrowed = (source_low & GENMASK_ULL(15, 0)) |
-				   (((source_low >> 32) & GENMASK_ULL(15, 0)) << 16) |
-				   ((source_high & GENMASK_ULL(15, 0)) << 32) |
-				   (((source_high >> 32) & GENMASK_ULL(15, 0)) << 48);
-		} else if (decoded->result_size == sizeof(u32)) {
-			narrowed = (source_low & GENMASK_ULL(31, 0)) |
-				   ((source_high & GENMASK_ULL(31, 0)) << 32);
-		} else {
-			return -EOPNOTSUPP;
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		lane_count = 2 * sizeof(u64) / decoded->access_size;
+		narrowed = 0;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_byte = lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u8 destination_shift = lane * decoded->result_size * 8;
+			u64 value = (source[source_word] >> source_shift) &
+				    GENMASK_ULL(decoded->result_size * 8 - 1, 0);
+
+			narrowed |= value << destination_shift;
 		}
-		current->thread.user_simd[decoded->rd * 2] = narrowed;
-		current->thread.user_simd[decoded->rd * 2 + 1] = 0;
-		current->thread.user_simd_valid = 1;
+		tcti_write_simd_fp_register(decoded->rd, sizeof(u64), narrowed,
+					    0);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
 
 	if (decoded->immediate) {
+		if (decoded->access_size == sizeof(u32) &&
+		    decoded->result_size == 2 * sizeof(u64)) {
+			value = tcti_read_gpr_or_zero(regs, decoded->rn,
+						      sizeof(u32));
+			word = value | (value << 32);
+			tcti_write_simd_fp_register(decoded->rd,
+						    decoded->result_size, word,
+						    word);
+			regs->pc += sizeof(u32);
+			return 0;
+		}
+
 		if (decoded->access_size != sizeof(u64))
 			return -EOPNOTSUPP;
 		value = tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u64));
@@ -2298,9 +2404,12 @@ static int tcti_execute_simd_vector_logical(
 	u64 left_high;
 	u64 right_low;
 	u64 right_high;
+	u64 destination_low;
+	u64 destination_high;
 	u8 lane;
 
-	if (decoded->logical_op != TCTI_LOGICAL_AND ||
+	if ((decoded->logical_op != TCTI_LOGICAL_AND &&
+	     decoded->logical_op != TCTI_LOGICAL_BIT) ||
 	    (decoded->access_size != sizeof(u64) &&
 	     decoded->access_size != 2 * sizeof(u64)))
 		return -EOPNOTSUPP;
@@ -2309,6 +2418,18 @@ static int tcti_execute_simd_vector_logical(
 	left_high = current->thread.user_simd[decoded->rn * 2 + 1];
 	right_low = current->thread.user_simd[decoded->rm * 2];
 	right_high = current->thread.user_simd[decoded->rm * 2 + 1];
+	if (decoded->logical_op == TCTI_LOGICAL_BIT) {
+		destination_low = current->thread.user_simd[decoded->rd * 2];
+		destination_high =
+			current->thread.user_simd[decoded->rd * 2 + 1];
+		tcti_write_simd_fp_register(
+			decoded->rd, decoded->access_size,
+			(destination_low & ~right_low) | (left_low & right_low),
+			(destination_high & ~right_high) |
+				(left_high & right_high));
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
 				    left_low & right_low,
 				    left_high & right_high);
@@ -2516,16 +2637,14 @@ static int tcti_execute_simd_vector_compare(
 	u64 high = 0;
 	u8 lane;
 
-	if (decoded->result_size != 2 * sizeof(u64))
-		return -EOPNOTSUPP;
-
 	if (decoded->simd_compare_op == TCTI_SIMD_COMPARE_CMHI) {
 		u64 left_low;
 		u64 left_high;
 		u64 right_low;
 		u64 right_high;
 
-		if (decoded->access_size != sizeof(u64))
+		if (decoded->access_size != sizeof(u64) ||
+		    decoded->result_size != 2 * sizeof(u64))
 			return -EOPNOTSUPP;
 		left_low = current->thread.user_simd[decoded->rn * 2];
 		left_high = current->thread.user_simd[decoded->rn * 2 + 1];
@@ -2555,8 +2674,12 @@ static int tcti_execute_simd_vector_compare(
 		u64 mask = GENMASK_ULL(lane_bits - 1, 0);
 		u64 left = (current->thread.user_simd[decoded->rn * 2 + word] >>
 			    shift) & mask;
-		u64 right = (current->thread.user_simd[decoded->rm * 2 + word] >>
-			     shift) & mask;
+		u64 right = decoded->immediate ?
+				    0 :
+				    (current->thread.user_simd[decoded->rm * 2 +
+							       word] >>
+				     shift) &
+					    mask;
 		u64 result = left == right ? mask : 0;
 
 		if (word)
@@ -2576,6 +2699,18 @@ static int tcti_execute_simd_vector_reduction(
 	u32 result = 0;
 	u8 lane_bits;
 	u8 lane;
+
+	if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_ADDP &&
+	    decoded->access_size == sizeof(u64) &&
+	    decoded->result_size == sizeof(u64)) {
+		u64 low = current->thread.user_simd[decoded->rn * 2];
+		u64 high = current->thread.user_simd[decoded->rn * 2 + 1];
+
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    low + high, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV &&
 	    decoded->access_size == sizeof(u16) &&
@@ -2942,9 +3077,18 @@ static int tcti_execute_fp_int_convert(
 	}
 
 	if (decoded->fp_int_op == TCTI_FP_INT_UCVTF &&
-	    decoded->access_size == sizeof(u32) &&
 	    decoded->result_size == sizeof(u32)) {
-		value = tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u32));
+		value = tcti_read_gpr_or_zero(regs, decoded->rn,
+					      decoded->access_size);
+		if (decoded->access_size == sizeof(u64)) {
+			tcti_write_simd_fp_register(
+				decoded->rd, decoded->result_size,
+				tcti_u64_to_fp32_bits(value), 0);
+			regs->pc += sizeof(u32);
+			return 0;
+		}
+		if (decoded->access_size != sizeof(u32))
+			return -EOPNOTSUPP;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 					    tcti_u32_to_fp32_bits((u32)value),
 					    0);
@@ -2967,6 +3111,23 @@ static int tcti_execute_fp_int_convert(
 		value = current->thread.user_simd[decoded->rn * 2];
 		if (tcti_fp64_bits_to_s64_zero(value, &result))
 			return -EOPNOTSUPP;
+		tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size,
+				       result);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZU &&
+	    decoded->access_size == sizeof(u32)) {
+		value = current->thread.user_simd[decoded->rn * 2] & GENMASK(31, 0);
+		if (tcti_fp32_bits_to_u64_zero((u32)value, &result))
+			return -EOPNOTSUPP;
+		if (decoded->result_size == sizeof(u32)) {
+			if (result > GENMASK_ULL(31, 0))
+				result = GENMASK_ULL(31, 0);
+		} else if (decoded->result_size != sizeof(u64)) {
+			return -EOPNOTSUPP;
+		}
 		tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size,
 				       result);
 		regs->pc += sizeof(u32);
