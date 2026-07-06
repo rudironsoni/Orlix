@@ -1,0 +1,41 @@
+diff --git a/options/internal/generic/threads.cpp b/options/internal/generic/threads.cpp
+index 5c1d2b3a..6e5a9284 100644
+--- a/options/internal/generic/threads.cpp
++++ b/options/internal/generic/threads.cpp
+@@ -5,6 +5,7 @@
+ #include <frg/mutex.hpp>
+ #include <mlibc/all-sysdeps.hpp>
+ #include <mlibc/allocator.hpp>
++#include <mlibc/arch-defs.hpp>
+ #include <mlibc/debug.hpp>
+ #include <mlibc/lock.hpp>
+ #include <mlibc/threads.hpp>
+@@ -211,6 +212,6 @@ void thread_exit(void *ret_val) {
+ }
+ 
+ static constexpr size_t default_stacksize = 0x200000;
+-static constexpr size_t default_guardsize = 4096;
++static constexpr size_t default_guardsize = mlibc::page_size;
+ 
+ int thread_attr_init(struct __mlibc_threadattr *attr) {
+ 	*attr = __mlibc_threadattr{};
+diff --git a/options/posix/generic/pthread.cpp b/options/posix/generic/pthread.cpp
+index a0cf460d..1bcd1134 100644
+--- a/options/posix/generic/pthread.cpp
++++ b/options/posix/generic/pthread.cpp
+@@ -16,6 +16,7 @@
+ #include <frg/spinlock.hpp>
+ #include <mlibc/all-sysdeps.hpp>
+ #include <mlibc/allocator.hpp>
++#include <mlibc/arch-defs.hpp>
+ #include <mlibc/debug.hpp>
+ #include <mlibc/thread.hpp>
+ #include <mlibc/tcb.hpp>
+@@ -60,6 +61,6 @@ static constexpr unsigned int rc_waiters_bit = static_cast<uint32_t>(1) << 31;
+ 
+ static constexpr size_t default_stacksize = 0x200000;
+-static constexpr size_t default_guardsize = 4096;
++static constexpr size_t default_guardsize = mlibc::page_size;
+ 
+ // ----------------------------------------------------------------------------
+ // pthread_attr and pthread functions.

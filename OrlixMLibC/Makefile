@@ -63,6 +63,7 @@ MLIBC_HOST_SDKROOT ?= $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
 MLIBC_HOST_TOOL_ENV = env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET -u PLATFORM_NAME -u EFFECTIVE_PLATFORM_NAME -u ARCHS -u CURRENT_ARCH -u VALID_ARCHS -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(MLIBC_HOST_SDKROOT)"
 MLIBC_AR ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-ar,llvm-ar)
 MLIBC_STRIP ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-strip,llvm-strip)
+MLIBC_READELF ?= $(if $(MLIBC_LLVM_PREFIX),$(MLIBC_LLVM_PREFIX)/llvm-readelf,llvm-readelf)
 MESON ?= meson
 NINJA ?= ninja
 MLIBC_TEST_ANSI_CASES := \
@@ -259,6 +260,9 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	floatunditf.c \
 	floatunsitf.c \
 	floatuntitf.c \
+	muldc3.c \
+	mulsc3.c \
+	multc3.c \
 	multf3.c \
 	powitf2.c \
 	subtf3.c \
@@ -268,7 +272,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	trunctfsf2.c \
 	trunctfxf2.c
 
-.PHONY: all help build headers_install test kselftest clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
+.PHONY: all help build headers_install test test-initramfs kselftest clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
 
 define orlix_mlibc_with_profile_lock
 	@set -euo pipefail; \
@@ -298,13 +302,14 @@ help:
 	@printf '%s\n' '  build             build OrlixMLibC from upstream mlibc sysdeps/linux'
 	@printf '%s\n' '  headers_install   install Linux UAPI headers for OrlixMLibC'
 	@printf '%s\n' '  test              run selected upstream mlibc tests as Orlix Linux ELF'
+	@printf '%s\n' '  test-initramfs    package selected upstream mlibc tests for OrlixOS XCTest'
 	@printf '%s\n' '  kselftest         package OrlixMLibC-built kselftests'
 	@printf '%s\n' '  clean             remove generated OrlixMLibC outputs'
 
 build:
 	$(call orlix_mlibc_with_profile_lock,__build)
 
-__build: __write-cross-file
+__build: __write-cross-file __build-compiler-rt
 	@set -euo pipefail; \
 	command -v "$(MESON)" >/dev/null 2>&1 || { echo "meson is required to build OrlixMLibC" >&2; exit 1; }; \
 	command -v "$(NINJA)" >/dev/null 2>&1 || { echo "ninja is required to build OrlixMLibC" >&2; exit 1; }; \
@@ -335,6 +340,7 @@ __build: __write-cross-file
 		printf 'host_sdkroot=%s\n' "$(MLIBC_HOST_SDKROOT)"; \
 		printf 'target=%s\n' "aarch64-linux-gnu"; \
 		printf 'page_size=%s\n' "$(ORLIX_OS_LINUX_PAGE_SIZE)"; \
+		printf 'rtlib=%s\n' "$(MLIBC_RTLIB)"; \
 	} > "$$meson_config_tmp"; \
 	if [ -s "$(MLIBC_BUILD_DIR)/build.ninja" ] && { [ ! -s "$(MLIBC_BUILD_DIR)/meson-private/coredata.dat" ] || [ ! -s "$(MLIBC_MESON_CONFIG_STAMP)" ] || ! cmp -s "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; }; then \
 		echo "OrlixMLibC Meson compiler configuration changed; wiping Meson build directory"; \
@@ -342,7 +348,7 @@ __build: __write-cross-file
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
-			-Ddefault_library=static \
+			-Ddefault_library=both \
 			-Dheaders_only=false \
 			-Dno_headers=false \
 			-Dbuild_tests=false \
@@ -357,7 +363,7 @@ __build: __write-cross-file
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
-			-Ddefault_library=static \
+			-Ddefault_library=both \
 			-Dheaders_only=false \
 			-Dno_headers=false \
 			-Dbuild_tests=false \
@@ -372,7 +378,7 @@ __build: __write-cross-file
 			--cross-file "$(MLIBC_CROSS_FILE)" \
 			--native-file "$(MLIBC_NATIVE_FILE)" \
 			--prefix /usr \
-			-Ddefault_library=static \
+			-Ddefault_library=both \
 			-Dheaders_only=false \
 			-Dno_headers=false \
 			-Dbuild_tests=false \
@@ -386,7 +392,6 @@ __build: __write-cross-file
 	mv "$$meson_config_tmp" "$(MLIBC_MESON_CONFIG_STAMP)"; \
 	$(MLIBC_HOST_TOOL_ENV) "$(MESON)" compile -C "$(MLIBC_BUILD_DIR)"; \
 	$(MLIBC_HOST_TOOL_ENV) DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
-	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __build-compiler-rt PROFILE="$(PROFILE)"; \
 	[ -d "$(MLIBC_SYSROOT)/usr/include" ] || { echo "missing OrlixMLibC installed headers: $(MLIBC_SYSROOT)/usr/include" >&2; exit 1; }; \
 	[ -d "$(MLIBC_SYSROOT)/usr/lib" ] || { echo "missing OrlixMLibC installed libraries: $(MLIBC_SYSROOT)/usr/lib" >&2; exit 1; }; \
 	[ -s "$(MLIBC_RTLIB)" ] || { echo "missing Orlix compiler runtime archive: $(MLIBC_RTLIB)" >&2; exit 1; }; \
@@ -412,6 +417,9 @@ kselftest: build
 
 test:
 	$(call orlix_mlibc_with_profile_lock,__test-run)
+
+test-initramfs:
+	$(call orlix_mlibc_with_profile_lock,__test-initramfs)
 
 __test-run: __test-initramfs
 	@set -euo pipefail; \
@@ -443,10 +451,13 @@ __test-build: build __build-compiler-rt
 	mkdir -p "$$test_build" "$$install_dir/mlibc-tests"; \
 	crt_flags="$$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o"; \
 	ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $(MLIBC_RTLIB) -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
-	cflags="--target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $(MLIBC_KERNEL_HEADERS) -D_GNU_SOURCE -DUSE_CROSS_LIBC -U__MLIBC_DEBUG -U__MLIBC_BUILDING_MLIBC -fhosted -fno-builtin $(MLIBC_HOSTED_EXEC_CODEGEN_FLAGS) -fno-pie -Wno-unknown-warning-option"; \
-	ldflags="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIX_HOSTED_USER_BASE_ADDRESS)"; \
+	cflags="--target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $(MLIBC_KERNEL_HEADERS) -D_GNU_SOURCE -DUSE_CROSS_LIBC -U__MLIBC_DEBUG -U__MLIBC_BUILDING_MLIBC -fhosted -fno-builtin $(MLIBC_HOSTED_EXEC_CODEGEN_FLAGS) -fPIE -Wno-unknown-warning-option"; \
+	ldflags="--target=aarch64-linux-gnu --sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000"; \
 	[ -s "$$sysroot/usr/lib/libc.a" ] || { echo "missing OrlixMLibC libc archive: $$sysroot/usr/lib/libc.a" >&2; exit 1; }; \
+	[ -s "$$sysroot/usr/lib/ld.so" ] || { echo "missing OrlixMLibC dynamic loader: $$sysroot/usr/lib/ld.so" >&2; exit 1; }; \
+	[ -s "$$sysroot/usr/lib/libc.so" ] || { echo "missing OrlixMLibC shared libc: $$sysroot/usr/lib/libc.so" >&2; exit 1; }; \
 	command -v "$(MLIBC_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package OrlixMLibC tests; set MLIBC_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
+	command -v "$(MLIBC_READELF)" >/dev/null 2>&1 || { echo "llvm-readelf is required to package OrlixMLibC dynamic-loader smoke; set MLIBC_READELF=/path/to/llvm-readelf" >&2; exit 1; }; \
 	for test_name in $(MLIBC_TEST_CASES); do \
 		case "$$test_name" in \
 			orlix/*) source="$(MLIBC_ORLIX_TEST_SRC_DIR)/$${test_name#orlix/}.c";; \
@@ -458,6 +469,16 @@ __test-build: build __build-compiler-rt
 		"$(MLIBC_STRIP)" "$$install_dir/mlibc-tests/$$binary_name"; \
 		printf '%s:%s\n' "$$test_name" "/mlibc-tests/$$binary_name" >> "$$install_dir/mlibc-test-list.txt"; \
 	done; \
+	dynamic_source="$(PROJECT_DIR)/Tests/dynamic_loader_smoke.c"; \
+	dynamic_binary="$$install_dir/mlibc-tests/orlix-dynamic-loader-smoke"; \
+	dynamic_ldflags="--target=aarch64-linux-gnu --sysroot=$$sysroot -pie -fuse-ld=lld -nostdlib -Wl,--dynamic-linker=/usr/lib/ld.so -Wl,--gc-sections -Wl,-z,max-page-size=0x4000"; \
+	dynamic_readelf="$$test_build/orlix-dynamic-loader-smoke.readelf.txt"; \
+	[ -s "$$dynamic_source" ] || { echo "missing OrlixMLibC dynamic-loader smoke source: $$dynamic_source" >&2; exit 1; }; \
+	"$(MLIBC_CC)" $$cflags $$dynamic_ldflags $$crt_flags "$$dynamic_source" -L"$$sysroot/usr/lib" -lc "$(MLIBC_RTLIB)" "$$sysroot/usr/lib/crtn.o" -o "$$dynamic_binary"; \
+	"$(MLIBC_READELF)" -l "$$dynamic_binary" > "$$dynamic_readelf"; \
+	grep -F -q 'INTERP' "$$dynamic_readelf" || { cat "$$dynamic_readelf" >&2; echo "OrlixMLibC dynamic-loader smoke must contain PT_INTERP" >&2; exit 1; }; \
+	"$(MLIBC_STRIP)" "$$dynamic_binary"; \
+	printf '%s:%s\n' "orlix/dynamic-loader" "/mlibc-tests/orlix-dynamic-loader-smoke" >> "$$install_dir/mlibc-test-list.txt"; \
 	"$(MLIBC_CC)" $$cflags $$ldflags $$crt_flags "$(PROJECT_DIR)/Tests/mlibc_test_init.c" $$ldlibs -o "$$install_dir/init"; \
 	"$(MLIBC_STRIP)" "$$install_dir/init"; \
 	printf 'proof_lane=mlibc-upstream-libc-tests\nprofile=%s\n' "$(PROFILE)" > "$$install_dir/proof_lane.txt"; \
@@ -500,6 +521,7 @@ __test-initramfs: __test-build __prepare-test-locale-data
 	@set -euo pipefail; \
 	output="$(MLIBC_TEST_INITRAMFS_DIR)"; \
 	install_dir="$(MLIBC_TEST_INSTALL_DIR)"; \
+	sysroot="$(MLIBC_SYSROOT)"; \
 	locale_root="$(MLIBC_TEST_LOCALE_ROOT)"; \
 	$(KERNEL_MAKE) prepare PROFILE="$(PROFILE)"; \
 	gen_init_cpio="$(ORLIX_BUILD_ROOT)/OrlixKernel/build/$(PROFILE)/usr/gen_init_cpio"; \
@@ -543,6 +565,8 @@ __test-initramfs: __test-build __prepare-test-locale-data
 		printf '%s\n' 'dir /proc 555 0 0'; \
 		printf '%s\n' 'dir /root 700 0 0'; \
 		printf '%s\n' 'dir /tmp 1777 0 0'; \
+		printf '%s\n' 'dir /usr 755 0 0'; \
+		printf '%s\n' 'dir /usr/lib 755 0 0'; \
 		printf '%s\n' 'dir /mlibc-tests 755 0 0'; \
 		printf '%s\n' 'nod /dev/console 600 0 0 c 5 1'; \
 		printf '%s\n' 'nod /dev/zero 666 0 0 c 1 5'; \
@@ -556,6 +580,9 @@ __test-initramfs: __test-build __prepare-test-locale-data
 		done; \
 		find "$$locale_root/usr" -type f -print | sort | while IFS= read -r path; do \
 			printf 'file /%s %s 644 0 0\n' "$${path#$$locale_root/}" "$$path"; \
+		done; \
+		find "$$sysroot/usr/lib" -maxdepth 1 -type f \( -name 'ld.so' -o -name '*.so' -o -name '*.so.*' \) -print | sort | while IFS= read -r path; do \
+			printf 'file /usr/lib/%s %s 755 0 0\n' "$${path##*/}" "$$path"; \
 		done; \
 		printf 'file /init %s 755 0 0\n' "$$install_dir/init"; \
 		printf 'file /mlibc-test-list.txt %s 644 0 0\n' "$$install_dir/mlibc-test-list.txt"; \
@@ -734,8 +761,8 @@ __write-cross-file: __apply-mlibc-patches
 		printf '%s\n' '[built-in options]'; \
 		printf "%s\n" "c_args = [$(MLIBC_HOSTED_EXEC_MESON_C_ARGS)]"; \
 		printf "%s\n" "cpp_args = [$(MLIBC_HOSTED_EXEC_MESON_CPP_ARGS)]"; \
-		printf "%s\n" "c_link_args = ['-fuse-ld=lld']"; \
-		printf "%s\n" "cpp_link_args = ['-fuse-ld=lld']"; \
+	printf "%s\n" "c_link_args = ['-fuse-ld=lld', '$(MLIBC_RTLIB)']"; \
+	printf "%s\n" "cpp_link_args = ['-fuse-ld=lld', '$(MLIBC_RTLIB)']"; \
 	} > "$(MLIBC_CROSS_FILE)"; \
 	echo "wrote OrlixMLibC mlibc cross file: $(MLIBC_CROSS_FILE)"
 	@echo "wrote OrlixMLibC Meson native file: $(MLIBC_NATIVE_FILE)"

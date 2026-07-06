@@ -1,0 +1,97 @@
+diff --git a/options/ansi/generic/stdlib.cpp b/options/ansi/generic/stdlib.cpp
+index 5c0d67f4..3f9f49c2 100644
+--- a/options/ansi/generic/stdlib.cpp
++++ b/options/ansi/generic/stdlib.cpp
+@@ -38,6 +38,52 @@ namespace {
+ 	thread_local __mlibc_mbstate mbtowc_state = __MLIBC_MBSTATE_INITIALIZER;
+ 
+ 	__mlibc_mutex exit_mutex = __MLIBC_THREAD_MUTEX_INITIALIZER;
++
++	struct AlignedAllocation {
++		void *base;
++		size_t length;
++		void *aligned;
++		AlignedAllocation *next;
++	};
++
++	__mlibc_mutex alignedAllocationMutex = __MLIBC_THREAD_MUTEX_INITIALIZER;
++	AlignedAllocation *alignedAllocations;
++
++	uintptr_t align_up(uintptr_t value, size_t align) {
++		return (value + align - 1) & ~(static_cast<uintptr_t>(align) - 1);
++	}
++
++	void remember_aligned_allocation(AlignedAllocation *entry) {
++		mlibc::thread_mutex_lock(&alignedAllocationMutex);
++		entry->next = alignedAllocations;
++		alignedAllocations = entry;
++		mlibc::thread_mutex_unlock(&alignedAllocationMutex);
++	}
++
++	bool free_aligned_allocation(void *ptr) {
++		AlignedAllocation **cursor;
++
++		mlibc::thread_mutex_lock(&alignedAllocationMutex);
++		cursor = &alignedAllocations;
++		while (*cursor) {
++			AlignedAllocation *entry = *cursor;
++
++			if (entry->aligned == ptr) {
++				void *base = entry->base;
++				size_t length = entry->length;
++
++				*cursor = entry->next;
++				mlibc::thread_mutex_unlock(&alignedAllocationMutex);
++				if (int e = mlibc::sysdep<AnonFree>(base, length))
++					mlibc::panicLogger() << "sys_anon_free failed in free (errno "
++							<< e << ")" << frg::endlog;
++				return true;
++			}
++			cursor = &entry->next;
++		}
++		mlibc::thread_mutex_unlock(&alignedAllocationMutex);
++		return false;
++	}
+ } // namespace
+ 
+ double atof(const char *string) {
+@@ -540,6 +586,8 @@ void free(void *ptr) {
+ 		if((uintptr_t)ptr & 1)
+ 			mlibc::infoLogger() << __builtin_return_address(0) << frg::endlog;
+ 	}
++	if (free_aligned_allocation(ptr))
++		return;
+ 	getAllocator().free(ptr);
+ }
+ 
+@@ -564,13 +612,24 @@ int posix_memalign(void **out, size_t align, size_t size) {
++	void *base;
++	uintptr_t aligned;
++	AlignedAllocation *entry;
++	size_t length;
++
+ 	if(align < sizeof(void *))
+ 		return EINVAL;
+ 	if(align & (align - 1)) // Make sure that align is a power of two.
+ 		return EINVAL;
+-	auto p = getAllocator().allocate(frg::max(align, size));
+-	if(!p)
++	if(size > SIZE_MAX - align - sizeof(AlignedAllocation))
++		return ENOMEM;
++	length = size + align - 1 + sizeof(AlignedAllocation);
++	if(mlibc::sysdep<AnonAllocate>(length, &base))
+ 		return ENOMEM;
+-	// Hope that the alignment was respected. This works on the current allocator.
+-	// TODO: Make the allocator alignment-aware.
+-	__ensure(!(reinterpret_cast<uintptr_t>(p) & (align - 1)));
+-	*out = p;
++
++	aligned = align_up(reinterpret_cast<uintptr_t>(base) + sizeof(AlignedAllocation), align);
++	entry = reinterpret_cast<AlignedAllocation *>(aligned - sizeof(AlignedAllocation));
++	entry->base = base;
++	entry->length = length;
++	entry->aligned = reinterpret_cast<void *>(aligned);
++	remember_aligned_allocation(entry);
++	*out = entry->aligned;
+ 	return 0;
+ }
