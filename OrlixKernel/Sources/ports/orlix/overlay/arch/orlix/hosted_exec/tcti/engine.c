@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <linux/kernel.h>
+#include <linux/auxvec.h>
 #include <linux/err.h>
 #include <linux/elf.h>
 #include <linux/mm.h>
@@ -198,6 +199,44 @@ static int tcti_read_dynamic_value(struct mm_struct *mm, unsigned long base,
 	return -ENOENT;
 }
 
+static unsigned long tcti_saved_auxv_value(struct mm_struct *mm,
+					   unsigned long type)
+{
+	size_t index;
+
+	if (!mm)
+		return 0;
+
+	for (index = 0; index + 1 < ARRAY_SIZE(mm->saved_auxv); index += 2) {
+		unsigned long tag = mm->saved_auxv[index];
+
+		if (tag == AT_NULL)
+			break;
+		if (tag == type)
+			return mm->saved_auxv[index + 1];
+	}
+
+	return 0;
+}
+
+static bool tcti_elf_base_is_main_executable(struct mm_struct *mm,
+					     unsigned long base,
+					     const Elf64_Ehdr *ehdr)
+{
+	unsigned long at_phdr;
+
+	if (!mm || !ehdr)
+		return false;
+
+	at_phdr = tcti_saved_auxv_value(mm, AT_PHDR);
+	if (!at_phdr)
+		return true;
+	if (base > ULONG_MAX - ehdr->e_phoff)
+		return false;
+
+	return at_phdr == base + ehdr->e_phoff;
+}
+
 static int tcti_apply_relative_relocations(struct mm_struct *mm,
 					   struct pt_regs *regs,
 					   unsigned long base,
@@ -310,6 +349,13 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 		return 0;
 	if (ret)
 		return ret;
+	if (base == tcti_saved_auxv_value(mm, AT_BASE)) {
+		pr_info_once("Orlix TCTI: leaving PT_INTERP image self-relocation to ld.so task=%s pid=%d base=%#lx\n",
+			     task->comm, task_pid_nr(task), base);
+		if (applied_base)
+			*applied_base = base;
+		return 0;
+	}
 	if (mm->context.orlix_tcti_static_pie_base == base)
 		return 0;
 	if (applied_base && *applied_base == base)
@@ -320,6 +366,15 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 		return ret;
 	if (ehdr.e_phentsize != sizeof(Elf64_Phdr) || !ehdr.e_phnum)
 		return -ENOEXEC;
+	if (!tcti_elf_base_is_main_executable(mm, base, &ehdr)) {
+		pr_info_once("Orlix TCTI: leaving shared object relocation to rtld task=%s pid=%d base=%#lx at_phdr=%#lx phoff=%#llx\n",
+			     task->comm, task_pid_nr(task), base,
+			     tcti_saved_auxv_value(mm, AT_PHDR),
+			     (unsigned long long)ehdr.e_phoff);
+		if (applied_base)
+			*applied_base = base;
+		return 0;
+	}
 	pr_info("Orlix TCTI: static PIE image task=%s pid=%d pc=%#llx base=%#lx entry=%#llx phoff=%#llx phnum=%u phentsize=%u\n",
 		task->comm, task_pid_nr(task), regs->pc, base,
 		(unsigned long long)ehdr.e_entry,

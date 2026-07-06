@@ -126,6 +126,9 @@ unsigned long arch_get_unmapped_area(struct file *file, unsigned long addr,
 	if (len > mmap_end - mmap_floor)
 		return -ENOMEM;
 
+	if (flags & MAP_FIXED)
+		return addr;
+
 	if (addr) {
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma_prev(mm, addr, &prev);
@@ -170,6 +173,9 @@ unsigned long arch_get_unmapped_area_topdown(struct file *file,
 
 	if (len > mmap_end - mmap_floor)
 		return -ENOMEM;
+
+	if (flags & MAP_FIXED)
+		return addr;
 
 	if (addr) {
 		addr = PAGE_ALIGN(addr);
