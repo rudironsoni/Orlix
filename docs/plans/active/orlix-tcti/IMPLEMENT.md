@@ -2,6 +2,41 @@
 
 ## 2026-07-06
 
+### Checkpoint: Kernel Execve Binfmt ELF Smoke Passes With Current Simulator Evidence
+
+- Harness-selected gate: `tcti-kernel-execve-binfmt-elf-smoke`.
+- Initial result:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` failed because the latest pinned-simulator first-syscall report was stale.
+  - Failure report: `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`.
+  - Reproducer: `Build/TCTI/reproducers/tcti-kernel-execve-binfmt-elf-smoke/kernel-execve-binfmt-elf-smoke-fail.json`.
+- Refresh command:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+  - Result: passed.
+  - Runtime report: `Build/Reports/runtime/tcti-init-first-syscall-20260706T123321Z-97721.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-init-first-syscall-20260706T123321Z-97721.md`.
+- Passing command:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke`.
+  - Result: passed.
+  - TCTI report: `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`.
+  - TCTI markdown report: `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.md`.
+  - Reproducer: `Build/TCTI/reproducers/tcti-kernel-execve-binfmt-elf-smoke/kernel-execve-binfmt-elf-smoke-pass.json`.
+- Report facts:
+  - `linux_execve_binfmt_runtime_entries=1`.
+  - `tcti_entries_from_linux_execve=1`.
+  - `workload_hook_executed=1`.
+  - `linux_execve_binfmt_elf_path_entered=true`.
+  - `linux_task_mm_register_state_prepared=true`.
+  - `tcti_entry_reached=true`.
+  - `simulator_execve_binfmt_report_current=true`.
+  - `simulator_report=Build/Reports/runtime/tcti-init-first-syscall-20260706T123321Z-97721.json`.
+  - `git_sha=5f09b4a1ee41e48b930925ee41695370b90e056c`.
+  - Forbidden flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+  - Fresh crash check under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 20 minutes returned no matching files.
+- Boundary:
+  - This proves the kernel/TCTI execve/binfmt ELF smoke with current pinned-simulator supporting evidence.
+  - It does not prove app-level userland marker output, full shell usability, package readiness, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: Simulator Linux Console Usability Gate Passes
 
 - Harness-selected gate: `simulator-tcti-linux-console-usability`.
