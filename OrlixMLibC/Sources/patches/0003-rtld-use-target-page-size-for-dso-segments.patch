@@ -1,0 +1,12 @@
+diff --git a/options/rtld/generic/linker.cpp b/options/rtld/generic/linker.cpp
+index e72193df..f69d3c1a 100644
+--- a/options/rtld/generic/linker.cpp
++++ b/options/rtld/generic/linker.cpp
+@@ -629,6 +629,6 @@ LinkerError SharedObject::_fetchFromFile(int fd) {
+ 
+ 	// Load all segments.
+-	constexpr size_t pageSize = 0x1000;
++	constexpr size_t pageSize = mlibc::page_size;
+ 	for(int i = 0; i < ehdr.e_phnum; i++) {
+ 		auto phdr = (elf_phdr *)(phdr_buffer + i * ehdr.e_phentsize);
+ 

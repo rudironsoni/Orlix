@@ -395,6 +395,23 @@ targets:
                 make -f "$SRCROOT/OrlixKernel/Makefile" kselftest PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT" libc=orlixmlibc
             fi
           }
+          rebuild_mlibc_if_stale() {
+            source_root="$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
+            archive="$source_root/rootfs/initramfs.cpio.gz"
+            needs_rebuild=0
+            if [ ! -s "$archive" ]; then
+                needs_rebuild=1
+            elif [ "$SRCROOT/OrlixMLibC/Makefile" -nt "$archive" ]; then
+                needs_rebuild=1
+            elif find "$SRCROOT/OrlixMLibC/Tests" "$SRCROOT/OrlixMLibC/Sources" -type f \( -name '*.c' -o -name '*.h' -o -name '*.hpp' -o -name '*.patch' -o -name Makefile \) -newer "$archive" -print -quit | grep -q .; then
+                needs_rebuild=1
+            elif [ -s "$ORLIX_BUILD_ROOT/OrlixMLibC/sysroot/$profile/.orlixmlibc-sysroot-ready" ] && [ "$ORLIX_BUILD_ROOT/OrlixMLibC/sysroot/$profile/.orlixmlibc-sysroot-ready" -nt "$archive" ]; then
+                needs_rebuild=1
+            fi
+            if [ "$needs_rebuild" -eq 1 ]; then
+                make -f "$SRCROOT/OrlixMLibC/Makefile" test-initramfs PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
+            fi
+          }
           copy_if_present() {
             source="$1"
             name="$2"
@@ -406,11 +423,14 @@ targets:
           }
           extension="${ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION:?}"
           rebuild_kselftest_if_stale
+          rebuild_mlibc_if_stale
           copy_if_present "$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"
           copy_if_present "$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME.$extension"
           copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/test-initramfs/$profile/$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension" "$ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME.$extension"
-          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
-          copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
+          if [ "${ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES:-NO}" != YES ]; then
+              "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
+              copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
+          fi
     settings:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES
