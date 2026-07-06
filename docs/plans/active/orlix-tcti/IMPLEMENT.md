@@ -2,6 +2,31 @@
 
 ## 2026-07-06
 
+### Checkpoint: Simulator Runtime Stability Refreshed On Current Commit
+
+- Harness-selected gate: `simulator-tcti-runtime-stability`.
+- Selected command:
+  - `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Preflight:
+  - `rtk proxy make agent-status AREA=orlix-tcti` refreshed status from pushed commit `96a50b5027adceff9644b427f287b38d01c2c063`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed.
+  - Simulator app was opened with `rtk proxy open -a Simulator`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b` reported `Device already booted, nothing to do.`
+- Runtime validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - Runtime report: `Build/Reports/runtime/tcti-simulator-stability-20260706T132011Z-14054.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260706T132011Z-14054.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260706T132011Z-14054.artifacts`.
+  - JSON evidence: `status=pass`, `passed=true`, `git_sha=96a50b5027adceff9644b427f287b38d01c2c063`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`.
+  - Runtime events included first TCTI syscall marker for `init`, Linux exec `start_thread` marker for `/bin/true`, and no fatal user fault or signaled process marker.
+  - Forbidden behavior flags were false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 30 minutes returned no matching files.
+- Boundary:
+  - This proves the targeted pinned-simulator runtime-stability gate on commit `96a50b5027adceff9644b427f287b38d01c2c063`.
+  - This does not prove full shell usability, full package behavior, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: Kselftest Subset Gate Passes After ACL Header Sanitization
 
 - Harness-selected gate: `tcti-kernel-kselftest-subset`.
