@@ -27,7 +27,7 @@ $(ORLIXOS_BASH_SOURCE_STAMP): $(ORLIXOS_BASH_ARCHIVE_STAMP)
 
 __coreutils-source: $(ORLIXOS_COREUTILS_SOURCE_STAMP)
 
-$(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
+$(ORLIXOS_COREUTILS_SOURCE_STAMP): $(PROJECT_DIR)/Sources/make/config.mk $(PROJECT_DIR)/Sources/make/sources.mk
 	@set -euo pipefail; \
 	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIXOS_BUILD_ROOT)" "$(ORLIXOS_UPSTREAM_DIR)" "$(ORLIXOS_SRC_DIR)" "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)" "$(ORLIXOS_COREUTILS_SRC_DIR)"; do \
 		if [ -e "$$path" ] && [ -L "$$path" ]; then echo "refusing to use symlinked OrlixOS package path: $$path" >&2; exit 1; fi; \
@@ -37,6 +37,7 @@ $(ORLIXOS_COREUTILS_SOURCE_STAMP): FORCE
 	if [ -e "$(ORLIXOS_COREUTILS_SOURCE_STAMP)" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/.git" ] && [ -x "$(ORLIXOS_COREUTILS_SRC_DIR)/configure" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/gnulib" ] && [ -d "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)/objects" ]; then \
 		actual="$$(git -C "$(ORLIXOS_COREUTILS_SRC_DIR)" rev-parse HEAD)"; \
 		if [ "$$actual" = "$(COREUTILS_GIT_COMMIT)" ]; then \
+			touch "$(ORLIXOS_COREUTILS_SOURCE_STAMP)"; \
 			echo "upstream Coreutils source already ready: $(ORLIXOS_COREUTILS_SRC_DIR) ($(COREUTILS_GIT_REF) $(COREUTILS_GIT_COMMIT))"; \
 			exit 0; \
 		fi; \
