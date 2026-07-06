@@ -2,6 +2,31 @@
 
 ## 2026-07-06
 
+### Checkpoint: Simulator Linux Console Usability Gate Passes
+
+- Harness-selected gate: `simulator-tcti-linux-console-usability`.
+- Command run:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Result: passed.
+- Pinned simulator:
+  - `Orlix-iPhone-15-Pro-Max`.
+  - UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - Single booted simulator: true.
+- Evidence:
+  - Runtime report: `Build/Reports/runtime/tcti-init-console-write-20260706T121902Z-74150.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-init-console-write-20260706T121902Z-74150.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-init-console-write-20260706T121902Z-74150.artifacts`.
+  - Console marker artifact: `Build/Reports/runtime/tcti-init-console-write-20260706T121902Z-74150.artifacts/tcti-console-write.txt`.
+  - Console marker captured: `ORLIX-TCTI-CONSOLE-OK`.
+  - Terminal output includes `Orlix TCTI: svc #0 task=sh pid=32`, `orlix-init: process exited pid=32 status=0`, and `orlix-init: shell exit status=0`.
+  - JSON report facts: `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`.
+  - Forbidden flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+  - Fresh crash check under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 20 minutes returned no matching files.
+- Boundary:
+  - This proves the targeted pinned-simulator console marker gate only.
+  - It does not prove full shell usability, package readiness, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: Restore TCTI First Syscall Runtime Marker
 
 - Harness-selected gate after pushing local commits: `simulator-tcti-runtime-stability`.
