@@ -2,6 +2,49 @@
 
 ## 2026-07-06
 
+### Checkpoint: Shell Script Smoke Accepts Interleaved TCTI Diagnostics
+
+- Harness progression:
+  - Required startup checks passed: `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` and `rtk proxy make agent-harness-check`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected and refreshed gates through the kernel, mlibc, mlibc-uapi, and shell ladder.
+  - Current next gate after this checkpoint: `tcti-coreutils-true-false-echo`.
+- Proofs refreshed at current HEAD `d6582b94084473ffd21545606366748e91a621be` before the shell script fix:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-pty-console-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-kernel-kselftest-subset` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-sysdeps-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-libc-test-subset` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-dynamic-loader-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-pthread-tls-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-exec-simple-command` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-pipeline-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-env-var-smoke` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-redirection-smoke` passed.
+- Failure found:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-script-smoke` failed with `shell-script-stdout-missing`.
+  - Runtime-validation itself passed and produced `Build/Reports/runtime/tcti-shell-script-smoke-20260706T181004Z-51699.json`.
+  - The terminal artifact showed `script-ok` and `ORLIX-TCTI-SHELL-SCRIPT-OK` in order, with TCTI syscall diagnostics interleaved between guest stdout writes.
+- Fix:
+  - `tools/tcti/orlix-tcti-gate.swift` now uses the existing `outputContainsInOrder()` helper for shell script stdout evidence.
+  - This keeps the assertion tied to ordered userland output while accepting real diagnostic interleaving from the TCTI runtime path.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-shell-script-smoke` passed.
+  - Fresh report: `Build/TCTI/reports/tcti-shell-script-smoke/report.json`.
+  - Report evidence: `script_stdout_asserted=true`, `script_marker_asserted=true`, `child_process_started=true`, `child_process_exited=true`, `wait_reaping_status_observed=true`, `fail_count=0`, `skip_count=0`.
+  - Runtime forbidden behavior remained false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` returned no matching files.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-shell-script-smoke/shell-script-smoke-pass.json` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-coreutils-true-false-echo`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-coreutils-true-false-echo`.
+- Boundary:
+  - This is a narrow harness assertion fix. It does not add fake shell behavior, HostAdapter Linux semantics, generated executable memory, host-executable guest text, physical-device work, or generated-tree edits.
+  - This does not prove full runtime readiness, package readiness, release readiness, or physical-device readiness.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed On Current Commit
 
 - Harness-selected gate: `simulator-tcti-runtime-stability`.
