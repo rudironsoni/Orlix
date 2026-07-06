@@ -38,6 +38,12 @@ build_root="${ORLIX_BUILD_ROOT:-}"
 busybox_shell_marker="ORLIX-TCTI-BUSYBOX-USABLE"
 console_marker="ORLIX-TCTI-CONSOLE-OK"
 full_shell_marker="ORLIX-TCTI-SHELL-USABLE"
+shell_pipeline_marker="ORLIX-TCTI-SHELL-PIPELINE-OK"
+shell_env_marker="ORLIX-TCTI-SHELL-ENV-OK"
+shell_redirection_marker="ORLIX-TCTI-SHELL-REDIRECTION-OK"
+shell_script_marker="ORLIX-TCTI-SHELL-SCRIPT-OK"
+coreutils_true_false_echo_marker="ORLIX-TCTI-COREUTILS-TRUE-FALSE-ECHO-OK"
+coreutils_cat_wc_marker="ORLIX-TCTI-COREUTILS-CAT-WC-OK"
 package_behavior_marker="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"
 dynamic_loader_marker="ORLIX-TCTI-DYNAMIC-LOADER-OK"
 signals_marker="ORLIX-TCTI-SIGNALS-OK"
@@ -391,6 +397,42 @@ simulator_launch_arguments() {
 		output_args=(
 			--orlix-kernel-command-line-append \
 			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20pwd%3B%20echo%20shell-basic%20%3E%20/tmp/orlix-tcti-shell%3B%20test%20-f%20/tmp/orlix-tcti-shell%3B%20cat%20/tmp/orlix-tcti-shell%3B%20printf%20$full_shell_marker%3B%20exit%200"
+		)
+		;;
+	tcti-shell-pipeline-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20echo%20beta%20%7C%20%7B%20read%20line%3B%20test%20%24line%20%3D%20beta%3B%20printf%20%24line%3B%20%7D%3B%20printf%20$shell_pipeline_marker%3B%20exit%200"
+		)
+		;;
+	tcti-shell-env-var-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20FOO%3Denv-ok%3B%20export%20FOO%3B%20test%20%24FOO%20%3D%20env-ok%3B%20printf%20%24FOO%3B%20printf%20$shell_env_marker%3B%20exit%200"
+		)
+		;;
+	tcti-shell-redirection-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20echo%20redir-ok%20%3E%20/tmp/orlix-tcti-redir%3B%20test%20-f%20/tmp/orlix-tcti-redir%3B%20read%20line%20%3C%20/tmp/orlix-tcti-redir%3B%20test%20%24line%20%3D%20redir-ok%3B%20printf%20%24line%3B%20printf%20$shell_redirection_marker%3B%20exit%200"
+		)
+		;;
+	tcti-shell-script-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20script%3D/tmp/orlix-tcti-script%3B%20echo%20VALUE%3Dscript-ok%20%3E%20%24script%3B%20echo%20%22test%20%5C%24VALUE%20%3D%20script-ok%22%20%3E%3E%20%24script%3B%20echo%20%22printf%20%5C%24VALUE%22%20%3E%3E%20%24script%3B%20echo%20%22printf%20$shell_script_marker%22%20%3E%3E%20%24script%3B%20/bin/sh%20%24script%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-true-false-echo)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20/bin/true%3B%20if%20/bin/false%3B%20then%20exit%201%3B%20fi%3B%20/bin/echo%20coreutils-ok%3B%20printf%20$coreutils_true_false_echo_marker%3B%20exit%200"
+		)
+		;;
+	tcti-coreutils-cat-wc)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20printf%20cat-wc-ok%5Cn%20%3E%20/tmp/orlix-coreutils-cat-wc%3B%20set%20--%20%24(/bin/wc%20-l%20/tmp/orlix-coreutils-cat-wc)%3B%20test%20%241%20%3D%201%3B%20/bin/cat%20/tmp/orlix-coreutils-cat-wc%3B%20printf%20$coreutils_cat_wc_marker%3B%20exit%200"
 		)
 		;;
 	tcti-package-behavior)
@@ -751,7 +793,7 @@ physical_tcti_preflight() {
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -1072,6 +1114,14 @@ build_kernel_for_gate() {
 		ORLIX_KERNEL_ARCHIVE_PLATFORMS="$platform" \
 		>"$artifact_dir/kernel-build.log" 2>&1 ||
 		die "TCTI kernel archive build failed."
+}
+
+build_payload_for_gate() {
+	make -f OrlixOS/Makefile kernel-payload \
+		PROFILE="$profile" \
+		ORLIX_BUILD_ROOT="$build_root" \
+		>"$artifact_dir/payload-build.log" 2>&1 ||
+		die "TCTI OrlixOS payload packaging failed."
 }
 
 assert_tcti_kernel_config() {
@@ -1516,15 +1566,38 @@ assert_gate_markers() {
 			capture_tcti_first_syscall
 			capture_guest_marker "$busybox_shell_marker" "tcti-static-busybox-shell-command.txt" "Static BusyBox shell command"
 			assert_no_simulator_fatal_runtime
-			;;
-		tcti-full-shell-usability)
-			capture_tcti_first_syscall
-			capture_guest_marker "$full_shell_marker" "tcti-full-shell-usability.txt" "Full shell usability"
-			assert_no_simulator_fatal_runtime
-			;;
-		tcti-package-behavior)
-			capture_tcti_first_syscall
-			capture_guest_marker "$package_behavior_marker" "tcti-package-behavior.txt" "Package behavior"
+		;;
+	tcti-full-shell-usability)
+		capture_guest_marker "$full_shell_marker" "tcti-full-shell-usability.txt" "Full shell usability"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-shell-pipeline-smoke)
+		capture_guest_marker "$shell_pipeline_marker" "tcti-shell-pipeline-smoke.txt" "Shell pipeline smoke"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-shell-env-var-smoke)
+		capture_guest_marker "$shell_env_marker" "tcti-shell-env-var-smoke.txt" "Shell env-var smoke"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-shell-redirection-smoke)
+		capture_guest_marker "$shell_redirection_marker" "tcti-shell-redirection-smoke.txt" "Shell redirection smoke"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-shell-script-smoke)
+		capture_guest_marker "$shell_script_marker" "tcti-shell-script-smoke.txt" "Shell script smoke"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-true-false-echo)
+		capture_guest_marker "$coreutils_true_false_echo_marker" "tcti-coreutils-true-false-echo.txt" "Coreutils true/false/echo"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-coreutils-cat-wc)
+		capture_guest_marker "$coreutils_cat_wc_marker" "tcti-coreutils-cat-wc.txt" "Coreutils cat/wc"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-package-behavior)
+		capture_tcti_first_syscall
+		capture_guest_marker "$package_behavior_marker" "tcti-package-behavior.txt" "Package behavior"
 			assert_no_simulator_fatal_runtime
 			;;
 		tcti-dynamic-loader-support)
@@ -1580,6 +1653,7 @@ main() {
 	assert_single_required_simulator_booted_top_level true
 	build_kernel_for_gate
 	assert_tcti_kernel_config
+	build_payload_for_gate
 	build_app_for_target
 	install_app "$app_path"
 	assert_single_required_simulator_booted_top_level false
