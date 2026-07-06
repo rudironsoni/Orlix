@@ -1,5 +1,49 @@
 # IMPLEMENT.md
 
+## 2026-07-07
+
+### Checkpoint: Execve/Binfmt ELF Revalidated With Current Simulator Stability
+
+- Harness startup and selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` refreshed simulator readiness state.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Xcode and simulator preflight:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)` booted.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" open -a Simulator --args -CurrentDeviceUDID 1E5553B0-203A-4A11-BAD7-EBDE46863F66` opened the pinned simulator for visibility.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --require-shims'` passed.
+- Required prerequisite reports:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit` passed.
+- Simulator runtime stability:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - Runtime report: `Build/Reports/runtime/tcti-simulator-stability-20260706T231859Z-29205.json`.
+  - Runtime report evidence: `status=pass`, `passed=true`, `git_sha=c9510b7aa9196fd153d8f3af7477d15227990d0b`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_booted_count=1`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Fatal runtime artifact `Build/Reports/runtime/tcti-simulator-stability-20260706T231859Z-29205.artifacts/tcti-simulator-fatal-runtime.txt` was empty.
+  - Host executable violation artifact `Build/Reports/runtime/tcti-simulator-stability-20260706T231859Z-29205.artifacts/host-exec-violations.txt` was empty.
+- Kernel syscall-dispatch refresh:
+  - After the simulator pass, `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-kernel-syscall-dispatch-smoke` because the prior report was stale.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-kernel-syscall-dispatch-smoke`.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` passed.
+  - Report: `Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=c9510b7aa9196fd153d8f3af7477d15227990d0b`, `hostadapter_linux_syscall_semantics=absent`, `svc_boundary_reached=true`, `orlix_syscall_dispatch_entered=true`, `linux_syscall_return_state_written=true`, `runtime_syscall_number_observed=__NR_getpid`, `workload_hook_executed=true`, and `kunit_named_test_passed=true`.
+- Execve/binfmt ELF milestone refresh:
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-kernel-execve-binfmt-elf-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-kernel-execve-binfmt-elf-smoke`.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke` passed.
+  - Report: `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=c9510b7aa9196fd153d8f3af7477d15227990d0b`, `elf_payload_is_real_aarch64_linux_elf=true`, `elf_class=2`, `elf_machine=183`, `elf_type=2`, `elf_payload_path=Build/TCTI/kernel_execve_binfmt_elf_smoke/execve_binfmt_elf_smoke_payload/execve_binfmt_elf_smoke_payload`, `linux_execve_binfmt_elf_path_entered=true`, `linux_task_mm_register_state_prepared=true`, `entry_pc_recorded=0x210120`, `stack_pointer_recorded=0x7ffffffffff8`, `simulator_report=Build/Reports/runtime/tcti-simulator-stability-20260706T231859Z-29205.json`, `simulator_execve_binfmt_report_current=true`, `simulator_linux_exec_start_thread_recorded=true`, and `tcti_entry_reached=true`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the refreshed reports.
+- Current next gate:
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-kernel-fault-signal-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-kernel-fault-signal-smoke`.
+- Boundary:
+  - This checkpoint advances Stage 2 of the product ladder: a real AArch64 Linux ELF payload reaches TCTI through Linux `execve/binfmt_elf` and Linux-prepared task/mm/register state.
+  - This checkpoint does not prove the full product goal, app terminal `ORLIX-USERLAND-TCTI-OK`, command execution, packaged userspace, rootfs/OCI materialization, runtime readiness, release readiness, or physical-device readiness.
+
 ## 2026-07-06
 
 ### Checkpoint: Shell Script Smoke Accepts Interleaved TCTI Diagnostics
