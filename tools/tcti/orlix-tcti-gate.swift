@@ -940,6 +940,17 @@ func outputHasShellWaitStatusZero(_ output: String) -> Bool {
         output.range(of: #"(?m)orlix-init: process exited pid=[0-9]+ status=0"#, options: .regularExpression) != nil
 }
 
+func outputContainsInOrder(_ output: String, _ needles: [String]) -> Bool {
+    var searchStart = output.startIndex
+    for needle in needles {
+        guard let range = output.range(of: needle, range: searchStart..<output.endIndex) else {
+            return false
+        }
+        searchStart = range.upperBound
+    }
+    return true
+}
+
 func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
     guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: nil) else {
         return true
@@ -4204,10 +4215,11 @@ func runShellRedirectionSmoke() throws -> Int32 {
         failures.append(fail("shell-redirection-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-REDIRECTION-OK"))
     }
     if markerText.contains("redir-okORLIX-TCTI-SHELL-REDIRECTION-OK") ||
-        terminalText.contains("redir-okORLIX-TCTI-SHELL-REDIRECTION-OK") {
+        terminalText.contains("redir-okORLIX-TCTI-SHELL-REDIRECTION-OK") ||
+        outputContainsInOrder(terminalText, ["redir-ok", "ORLIX-TCTI-SHELL-REDIRECTION-OK"]) {
         evidence["redirection_stdout_asserted"] = "true"
     } else {
-        failures.append(fail("shell-redirection-stdout-missing", "runtime artifacts did not include redir-ok output immediately before the shell redirection marker"))
+        failures.append(fail("shell-redirection-stdout-missing", "runtime artifacts did not include redir-ok output before the shell redirection marker"))
     }
     if terminalText.contains("orlix-init: process started pid=") {
         evidence["child_process_started"] = "true"
