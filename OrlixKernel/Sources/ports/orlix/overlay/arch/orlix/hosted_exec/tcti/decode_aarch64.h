@@ -11,6 +11,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_ADD_SUB_IMMEDIATE,
 	TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
 	TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER,
+	TCTI_DECODE_ADD_SUB_WITH_CARRY,
 	TCTI_DECODE_PC_RELATIVE_ADDRESS,
 	TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE,
 	TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER,
@@ -38,9 +39,17 @@ enum tcti_decode_class {
 	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+	TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 	TCTI_DECODE_SIMD_VECTOR_COMPARE,
 	TCTI_DECODE_SIMD_VECTOR_REDUCTION,
+	TCTI_DECODE_SIMD_LOAD_REPLICATE,
 	TCTI_DECODE_FP_SCALAR_MOVE,
+	TCTI_DECODE_FP_SCALAR_1SOURCE,
+	TCTI_DECODE_FP_SCALAR_2SOURCE,
+	TCTI_DECODE_FP_SCALAR_3SOURCE,
+	TCTI_DECODE_FP_SCALAR_COMPARE,
+	TCTI_DECODE_FP_CONDITIONAL_SELECT,
+	TCTI_DECODE_FP_INT_CONVERT,
 };
 
 enum tcti_memory_index_mode {
@@ -63,6 +72,11 @@ enum tcti_simd_reduction_op {
 enum tcti_simd_element_move_op {
 	TCTI_SIMD_ELEMENT_MOVE_DUP = 0,
 	TCTI_SIMD_ELEMENT_MOVE_XTN,
+	TCTI_SIMD_ELEMENT_MOVE_UZP1,
+	TCTI_SIMD_ELEMENT_MOVE_UMOV,
+	TCTI_SIMD_ELEMENT_MOVE_INS_GPR,
+	TCTI_SIMD_ELEMENT_MOVE_USHLL,
+	TCTI_SIMD_ELEMENT_MOVE_EXT,
 };
 
 enum tcti_move_wide_op {
@@ -80,6 +94,8 @@ enum tcti_branch_register_op {
 enum tcti_system_register {
 	TCTI_SYSTEM_REGISTER_TPIDR_EL0 = 0,
 	TCTI_SYSTEM_REGISTER_NZCV,
+	TCTI_SYSTEM_REGISTER_FPCR,
+	TCTI_SYSTEM_REGISTER_FPSR,
 };
 
 enum tcti_conditional_select_op {
@@ -106,6 +122,50 @@ enum tcti_data_processing_2source_op {
 
 enum tcti_data_processing_1source_op {
 	TCTI_DP1_CLZ = 0,
+	TCTI_DP1_RBIT,
+	TCTI_DP1_REV,
+	TCTI_DP1_REV16,
+};
+
+enum tcti_simd_vector_arithmetic_op {
+	TCTI_SIMD_ARITH_ADD = 0,
+	TCTI_SIMD_ARITH_USRA,
+	TCTI_SIMD_ARITH_USHL,
+	TCTI_SIMD_ARITH_USHR,
+};
+
+enum tcti_simd_vector_compare_op {
+	TCTI_SIMD_COMPARE_CMEQ = 0,
+	TCTI_SIMD_COMPARE_CMHI,
+};
+
+enum tcti_fp_scalar_move_op {
+	TCTI_FP_MOVE_SIMD_TO_GPR = 0,
+	TCTI_FP_MOVE_GPR_TO_SIMD,
+	TCTI_FP_MOVE_REGISTER,
+};
+
+enum tcti_fp_scalar_1source_op {
+	TCTI_FP1_FABS = 0,
+	TCTI_FP1_FCVT,
+	TCTI_FP1_FNEG,
+};
+
+enum tcti_fp_scalar_2source_op {
+	TCTI_FP2_FDIV = 0,
+	TCTI_FP2_FADD,
+	TCTI_FP2_FSUB,
+	TCTI_FP2_FMUL,
+};
+
+enum tcti_fp_int_convert_op {
+	TCTI_FP_INT_SCVTF = 0,
+	TCTI_FP_INT_UCVTF,
+	TCTI_FP_INT_FCVTZS,
+	TCTI_FP_INT_FCVTZU,
+	TCTI_FP_INT_FCVTZU_FIXED,
+	TCTI_FP_INT_FCVTZU_SIMD,
+	TCTI_FP_INT_UCVTF_SIMD,
 };
 
 enum tcti_multiply_add_sub_op {
@@ -157,6 +217,8 @@ struct tcti_decoded_instruction {
 	u64 logical_immediate;
 	enum tcti_memory_index_mode memory_index_mode;
 	enum tcti_logical_op logical_op;
+	enum tcti_simd_vector_arithmetic_op simd_arithmetic_op;
+	enum tcti_simd_vector_compare_op simd_compare_op;
 	enum tcti_move_wide_op move_wide_op;
 	enum tcti_branch_register_op branch_register_op;
 	enum tcti_system_register system_register;
@@ -164,6 +226,10 @@ struct tcti_decoded_instruction {
 	enum tcti_bitfield_op bitfield_op;
 	enum tcti_data_processing_1source_op dp1_op;
 	enum tcti_data_processing_2source_op dp2_op;
+	enum tcti_fp_scalar_move_op fp_move_op;
+	enum tcti_fp_scalar_1source_op fp1_op;
+	enum tcti_fp_scalar_2source_op fp2_op;
+	enum tcti_fp_int_convert_op fp_int_op;
 	enum tcti_multiply_add_sub_op mul_op;
 	enum tcti_simd_reduction_op simd_reduction_op;
 	enum tcti_simd_element_move_op simd_element_move_op;

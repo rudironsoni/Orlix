@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
+#include <linux/err.h>
+#include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/syscalls.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/unistd.h>
+#include <asm/tcti.h>
 
 #include "../block_cache.h"
 #include "../decode_aarch64.h"
 #include "../engine.h"
+#include "../fault_signal_smoke.h"
 #include "../gadget_program.h"
+#include "../pty_console_smoke.h"
 #include "../switch_debug.h"
 #include "../tlb.h"
+#include "../wait_reaping_smoke.h"
 
 static void tcti_decode_recognizes_svc_zero(struct kunit *test)
 {
@@ -300,6 +308,54 @@ static void tcti_decode_recognizes_conditional_compare_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
 	KUNIT_EXPECT_EQ(test, 2U, decoded.condition);
 	KUNIT_EXPECT_EQ(test, 8U, decoded.nzcv);
+
+	decoded = tcti_decode_aarch64(0xfa4a0100U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_CONDITIONAL_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.is_64bit);
+	KUNIT_EXPECT_TRUE(test, decoded.subtract);
+	KUNIT_EXPECT_FALSE(test, decoded.immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 10U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.condition);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.nzcv);
+
+	decoded = tcti_decode_aarch64(0xfa4019a4U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_CONDITIONAL_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.is_64bit);
+	KUNIT_EXPECT_TRUE(test, decoded.subtract);
+	KUNIT_EXPECT_TRUE(test, decoded.immediate);
+	KUNIT_EXPECT_EQ(test, 13U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.imm12);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.condition);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.nzcv);
+
+	decoded = tcti_decode_aarch64(0x7a401ae4U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_CONDITIONAL_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.is_64bit);
+	KUNIT_EXPECT_TRUE(test, decoded.subtract);
+	KUNIT_EXPECT_TRUE(test, decoded.immediate);
+	KUNIT_EXPECT_EQ(test, 23U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.imm12);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.condition);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.nzcv);
+
+	decoded = tcti_decode_aarch64(0x3a41b9c4U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_CONDITIONAL_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.is_64bit);
+	KUNIT_EXPECT_FALSE(test, decoded.subtract);
+	KUNIT_EXPECT_TRUE(test, decoded.immediate);
+	KUNIT_EXPECT_EQ(test, 14U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.imm12);
+	KUNIT_EXPECT_EQ(test, 11U, decoded.condition);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.nzcv);
 }
 
 static void tcti_decode_recognizes_conditional_select_class(struct kunit *test)
@@ -345,6 +401,21 @@ static void tcti_decode_recognizes_load_store_pair_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, -32LL, decoded.memory_offset);
 	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_PRE,
+			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0x69402c09U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.sign_extend_load);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 11U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
 			decoded.memory_index_mode);
 
 	decoded = tcti_decode_aarch64(0xa8c27bfdU);
@@ -412,6 +483,34 @@ static void tcti_decode_recognizes_load_store_pair_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
 	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 32LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0xadbf03e1U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, -32LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_PRE,
+			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0xad0583e1U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt2);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 176LL, decoded.memory_offset);
 	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
 			decoded.memory_index_mode);
 }
@@ -553,6 +652,21 @@ static void tcti_decode_recognizes_load_store_signed_immediate_class(struct kuni
 	KUNIT_EXPECT_EQ(test, 29U, decoded.rn);
 	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, -96LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
+
+	decoded = tcti_decode_aarch64(0x3c9f0fe0U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, -16LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, TCTI_MEMORY_INDEX_PRE,
+			decoded.memory_index_mode);
 
 	decoded = tcti_decode_aarch64(0x3cc383e0U);
 
@@ -617,6 +731,48 @@ static void tcti_decode_recognizes_load_store_register_offset_class(struct kunit
 	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
 	KUNIT_EXPECT_EQ(test, 3U, decoded.offset_extend);
 	KUNIT_EXPECT_FALSE(test, decoded.offset_shift);
+
+	decoded = tcti_decode_aarch64(0x3ce86920U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.offset_extend);
+	KUNIT_EXPECT_FALSE(test, decoded.offset_shift);
+
+	decoded = tcti_decode_aarch64(0x3ca97940U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 10U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.offset_extend);
+	KUNIT_EXPECT_TRUE(test, decoded.offset_shift);
+
+	decoded = tcti_decode_aarch64(0x3cead900U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 10U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.offset_extend);
+	KUNIT_EXPECT_TRUE(test, decoded.offset_shift);
 }
 
 static void tcti_decode_ldrsw_signed_immediate_writes_x_register(struct kunit *test)
@@ -810,6 +966,33 @@ static void tcti_decode_recognizes_data_processing_1source_class(struct kunit *t
 	KUNIT_EXPECT_EQ(test, TCTI_DP1_CLZ, decoded.dp1_op);
 	KUNIT_EXPECT_EQ(test, 10U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 10U, decoded.rn);
+
+	decoded = tcti_decode_aarch64(0x5ac00288U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_DATA_PROCESSING_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.is_64bit);
+	KUNIT_EXPECT_EQ(test, TCTI_DP1_RBIT, decoded.dp1_op);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 20U, decoded.rn);
+
+	decoded = tcti_decode_aarch64(0x5ac00503U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_DATA_PROCESSING_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.is_64bit);
+	KUNIT_EXPECT_EQ(test, TCTI_DP1_REV16, decoded.dp1_op);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+
+	decoded = tcti_decode_aarch64(0x5ac00909U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_DATA_PROCESSING_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.is_64bit);
+	KUNIT_EXPECT_EQ(test, TCTI_DP1_REV, decoded.dp1_op);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
 }
 
 static void tcti_decode_recognizes_data_processing_2source_class(struct kunit *test)
@@ -988,6 +1171,24 @@ static void tcti_decode_recognizes_system_register_class(struct kunit *test)
 			decoded.system_register);
 	KUNIT_EXPECT_FALSE(test, decoded.system_register_write);
 	KUNIT_EXPECT_EQ(test, 3U, decoded.rt);
+
+	decoded = tcti_decode_aarch64(0xd53b4401U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SYSTEM_REGISTER,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_REGISTER_FPCR,
+			decoded.system_register);
+	KUNIT_EXPECT_FALSE(test, decoded.system_register_write);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+
+	decoded = tcti_decode_aarch64(0xd51b4421U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SYSTEM_REGISTER,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_REGISTER_FPSR,
+			decoded.system_register);
+	KUNIT_EXPECT_TRUE(test, decoded.system_register_write);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
 }
 
 static void tcti_decode_recognizes_exclusive_monitor_clear(struct kunit *test)
@@ -1072,6 +1273,16 @@ static void tcti_decode_recognizes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 
+	decoded = tcti_decode_aarch64(0x2f00e400U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0ULL, decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
 	decoded = tcti_decode_aarch64(0x6f07e7e0U);
 
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
@@ -1090,6 +1301,17 @@ static void tcti_decode_recognizes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x0000010000000100ULL,
 			decoded.logical_immediate);
 	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x0f026441U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x4200000042000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 
 	decoded = tcti_decode_aarch64(0x4f000421U);
@@ -1112,6 +1334,17 @@ static void tcti_decode_recognizes_simd_movi_2d_zero(struct kunit *test)
 			decoded.logical_immediate);
 	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x0f00e548U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x0a0a0a0a0a0a0a0aULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 
 	decoded = tcti_decode_aarch64(0x4f020420U);
@@ -1165,6 +1398,24 @@ static void tcti_decode_recognizes_simd_dup_2d_gpr(struct kunit *test)
 	KUNIT_EXPECT_TRUE(test, decoded.immediate);
 }
 
+static void tcti_decode_recognizes_simd_mov_d1_d0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x6e180400U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.simd_destination_index);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.simd_source_index);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_FALSE(test, decoded.immediate);
+}
+
 static void tcti_decode_recognizes_simd_xtn_4h(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -1178,6 +1429,47 @@ static void tcti_decode_recognizes_simd_xtn_4h(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 2U, decoded.result_size);
 	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_XTN,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x0ea128a5U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_XTN,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_ushll_8h(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x2f08a421U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_USHLL,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x2f10a421U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_USHLL,
 			decoded.simd_element_move_op);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
@@ -1231,6 +1523,78 @@ static void tcti_decode_recognizes_simd_orr_4s_immediate(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x0000003000000030ULL,
 			decoded.logical_immediate);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f0717c2U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xffffff01ffffff01ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f0317c3U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xffffff81ffffff81ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f0117c4U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xffffffc1ffffffc1ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f0015c6U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xfffffff1fffffff1ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f0014c7U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 7U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xfffffff9fffffff9ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f001442U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_LOGICAL_AND, decoded.logical_op);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0xfffffffdfffffffdULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
 
 static void tcti_decode_recognizes_simd_cmeq_4s(struct kunit *test)
@@ -1246,11 +1610,139 @@ static void tcti_decode_recognizes_simd_cmeq_4s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
 	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_COMPARE_CMEQ, decoded.simd_compare_op);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 
 	decoded = tcti_decode_aarch64(0x2ea18c64U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_COMPARE_CMEQ, decoded.simd_compare_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x2e288c84U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_COMPARE_CMEQ, decoded.simd_compare_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_ld1r_4s(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x4d40c900U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_LOAD_REPLICATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+}
+
+static void tcti_decode_recognizes_simd_ext_16b(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x6e004001U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.shift_amount);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_EXT,
+			decoded.simd_element_move_op);
+}
+
+static void tcti_decode_recognizes_simd_uzp1_4h(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x0e4018a6U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UZP1,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_umov_w_h0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x0e023ccfU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 15U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.simd_source_index);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UMOV,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_umov_w_h1(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x0e063cafU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 15U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.simd_source_index);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UMOV,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_ins_gpr_s0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x4e041d00U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.simd_destination_index);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_INS_GPR,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
 
 static void tcti_decode_recognizes_simd_umaxv_4s(struct kunit *test)
@@ -1314,6 +1806,100 @@ static void tcti_decode_recognizes_simd_addv_4s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 }
 
+static void tcti_decode_recognizes_simd_add_2d(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x4ee18441U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_ADD, decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x4ea08440U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_ADD, decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6f391420U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_USRA,
+			decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 7U, decoded.shift_amount);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_cmhi_2d(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x6ee23405U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_COMPARE_CMHI, decoded.simd_compare_op);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
+static void tcti_decode_recognizes_simd_ushl_4s(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x6f3f0423U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_USHR,
+			decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.shift_amount);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6ea04421U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_USHL,
+			decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+	decoded = tcti_decode_aarch64(0x6ee04421U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+}
+
 static void tcti_decode_recognizes_fmov_w_s(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -1327,9 +1913,382 @@ static void tcti_decode_recognizes_fmov_w_s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
 	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_SIMD_TO_GPR, decoded.fp_move_op);
 
-	decoded = tcti_decode_aarch64(0x1e2700abU);
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(0x1e270100U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_MOVE, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_GPR_TO_SIMD, decoded.fp_move_op);
+
+	decoded = tcti_decode_aarch64(0x1e604001U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_MOVE, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_REGISTER, decoded.fp_move_op);
+
+	decoded = tcti_decode_aarch64(0x9e66003cU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_MOVE, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 28U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_SIMD_TO_GPR, decoded.fp_move_op);
+}
+
+static void tcti_decode_recognizes_fp_scalar_runtime_smoke_ops(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x1e211800U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FDIV, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e212800U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FADD, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e202908U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FADD, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e213800U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FSUB, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e620802U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FMUL, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e290900U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FMUL, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e603c40U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_CONDITIONAL_SELECT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.condition);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1f501cc7U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_3SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 7U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 7U, decoded.ra);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1f509623U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_3SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 17U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.ra);
+	KUNIT_EXPECT_TRUE(test, decoded.subtract);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e602000U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e602008U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_COMPARE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_TRUE(test, decoded.immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e60c020U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP1_FABS, decoded.fp1_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e214100U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP1_FNEG, decoded.fp1_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e201001U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x40000000ULL, decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e2e1001U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x3f800000ULL, decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e649000U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x4024000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e611006U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 6U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0x4008000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e711004U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0xc008000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e701004U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0xc000000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e7e1000U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0xbff0000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x1e7a1002U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0xbfd0000000000000ULL,
+			decoded.logical_immediate);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0xbc1fc3a0U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+			decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 29U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, -4LL, decoded.memory_offset);
+
+	decoded = tcti_decode_aarch64(0x1e22c000U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_1SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP1_FCVT, decoded.fp1_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x1e620101U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_SCVTF, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x1e230101U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_UCVTF, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x1e220101U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_SCVTF, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x9e630161U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_UCVTF, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 11U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x1e78001bU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_FCVTZS, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 27U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x9e790016U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_FCVTZU, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 22U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x9e59f00bU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_FCVTZU_FIXED, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 11U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 4U, decoded.shift_amount);
+
+	decoded = tcti_decode_aarch64(0x7ee1b801U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_FCVTZU_SIMD, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x7e61d821U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_UCVTF_SIMD, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x6e61d800U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_INT_UCVTF_SIMD, decoded.fp_int_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x6e62dc00U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP2_FMUL, decoded.fp2_op);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+}
+
+static void tcti_decode_recognizes_add_sub_with_carry(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0xfa03001fU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_ADD_SUB_WITH_CARRY,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.is_64bit);
+	KUNIT_EXPECT_TRUE(test, decoded.subtract);
+	KUNIT_EXPECT_TRUE(test, decoded.set_flags);
+	KUNIT_EXPECT_EQ(test, 31U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rm);
 }
 
 static void tcti_switch_executes_hint_as_noop(struct kunit *test)
@@ -1602,11 +2561,143 @@ static void tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry(struct kunit
 	KUNIT_EXPECT_EQ(test, NO_SYSCALL, result.syscallno_after_start_thread);
 }
 
+static int tcti_fault_signal_smoke_test_handler(
+	struct pt_regs *regs,
+	unsigned long address,
+	enum tcti_access access,
+	int *signal_number,
+	int *signal_code,
+	unsigned long *signal_address)
+{
+	(void)regs;
+	(void)access;
+	*signal_number = SIGSEGV;
+	*signal_code = SEGV_MAPERR;
+	*signal_address = address;
+	return 0;
+}
+
+static void tcti_kernel_fault_signal_smoke_reports_linux_signal(struct kunit *test)
+{
+	struct tcti_kernel_fault_signal_smoke_result result;
+	struct tcti_result fault = {
+		.reason = TCTI_EXIT_USER_FAULT,
+		.status = -EFAULT,
+		.fault_address = 0x4000,
+		.fault_access = TCTI_ACCESS_READ,
+		.pc = 0x210128,
+		.instruction = 0xf9400000,
+	};
+	struct pt_regs regs = { 0 };
+
+	regs.pc = fault.pc;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+
+	KUNIT_ASSERT_TRUE(test,
+			  tcti_kernel_fault_signal_smoke_execute(
+				  &regs, &fault, &result,
+				  tcti_fault_signal_smoke_test_handler,
+				  SIGSEGV, SEGV_MAPERR));
+	KUNIT_EXPECT_TRUE(test, result.tcti_user_fault_exit);
+	KUNIT_EXPECT_TRUE(test, result.fault_address_recorded);
+	KUNIT_EXPECT_TRUE(test, result.fault_access_recorded);
+	KUNIT_EXPECT_TRUE(test, result.fault_pc_recorded);
+	KUNIT_EXPECT_TRUE(test, result.fault_instruction_recorded);
+	KUNIT_EXPECT_TRUE(test, result.linux_fault_handler_entered);
+	KUNIT_EXPECT_TRUE(test, result.linux_signal_result_recorded);
+	KUNIT_EXPECT_EQ(test, SIGSEGV, result.signal_number);
+	KUNIT_EXPECT_EQ(test, SEGV_MAPERR, result.signal_code);
+	KUNIT_EXPECT_EQ(test, fault.fault_address, result.signaled_address);
+}
+
+static int tcti_wait_reaping_smoke_test_wait(int child_pid, int child_exit_code,
+					     int *wait_result_pid,
+					     int *wait_status,
+					     bool *child_reaped)
+{
+	*wait_result_pid = child_pid;
+	*wait_status = child_exit_code << 8;
+	*child_reaped = true;
+	return 0;
+}
+
+static void tcti_kernel_wait_reaping_smoke_reports_linux_wait(struct kunit *test)
+{
+	struct tcti_kernel_wait_reaping_smoke_result result;
+	struct tcti_result task_exit = {
+		.reason = TCTI_EXIT_TASK_EXIT,
+		.status = 7,
+	};
+
+	KUNIT_ASSERT_TRUE(test,
+			  tcti_kernel_wait_reaping_smoke_execute(
+				  &task_exit, &result,
+				  tcti_wait_reaping_smoke_test_wait, 31337,
+				  7));
+	KUNIT_EXPECT_TRUE(test, result.tcti_task_exit_observed);
+	KUNIT_EXPECT_TRUE(test, result.child_exit_state_recorded);
+	KUNIT_EXPECT_TRUE(test, result.linux_wait_entered);
+	KUNIT_EXPECT_TRUE(test, result.linux_wait_status_recorded);
+	KUNIT_EXPECT_TRUE(test, result.linux_reaping_completed);
+	KUNIT_EXPECT_EQ(test, 31337, result.child_pid);
+	KUNIT_EXPECT_EQ(test, 7, result.child_exit_code);
+	KUNIT_EXPECT_EQ(test, 31337, result.wait_result_pid);
+	KUNIT_EXPECT_EQ(test, 7 << 8, result.wait_status);
+	KUNIT_EXPECT_EQ(test, 0, result.wait_return);
+}
+
+static long tcti_pty_console_smoke_test_write(int fd, const char *bytes,
+					      unsigned long length,
+					      bool *pty_write_entered,
+					      bool *host_console_mirror_called)
+{
+	if ((fd != 1 && fd != 2) || !bytes || !length)
+		return -EINVAL;
+
+	*pty_write_entered = true;
+	*host_console_mirror_called = true;
+	return length;
+}
+
+static void tcti_kernel_pty_console_smoke_reports_output(struct kunit *test)
+{
+	struct tcti_kernel_pty_console_smoke_result result;
+	struct pt_regs regs = { 0 };
+
+	regs.pc = 0x210128;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[8] = __NR_write;
+
+	KUNIT_ASSERT_TRUE(test,
+			  tcti_kernel_pty_console_smoke_execute(
+				  &regs, &result,
+				  tcti_pty_console_smoke_test_write));
+	KUNIT_EXPECT_TRUE(test, result.tcti_write_syscall_observed);
+	KUNIT_EXPECT_TRUE(test, result.linux_stdout_source_recorded);
+	KUNIT_EXPECT_TRUE(test, result.linux_stderr_source_recorded);
+	KUNIT_EXPECT_TRUE(test, result.linux_pty_write_entered);
+	KUNIT_EXPECT_TRUE(test, result.host_console_mirror_called);
+	KUNIT_EXPECT_EQ(test, 1, result.stdout_fd);
+	KUNIT_EXPECT_EQ(test, 2, result.stderr_fd);
+	KUNIT_EXPECT_EQ(test, sizeof(tcti_pty_console_stdout_marker) - 1,
+			result.stdout_bytes);
+	KUNIT_EXPECT_EQ(test, sizeof(tcti_pty_console_stderr_marker) - 1,
+			result.stderr_bytes);
+	KUNIT_EXPECT_EQ(test, result.stdout_bytes + result.stderr_bytes,
+			result.mirrored_bytes);
+}
+
 static void tcti_successful_execve_return_restores_el0_pstate(struct kunit *test)
 {
 	struct pt_regs regs = { 0 };
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	unsigned long old_tls = current->thread.user_tls;
+	unsigned long old_fpsr = current->thread.user_fpsr;
+	unsigned long old_fpcr = current->thread.user_fpcr;
 #endif
 
 	regs.regs[0] = 0;
@@ -1615,6 +2706,23 @@ static void tcti_successful_execve_return_restores_el0_pstate(struct kunit *test
 	regs.pstate = 0;
 	regs.syscallno = 221;
 #if defined(ORLIX_APP_HOSTED_BOOT)
+	current->thread.user_fpcr = 0x300000ULL;
+	regs.pc = 0x5008;
+	decoded = tcti_decode_aarch64(0xd53b4401U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x300000ULL, regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, 0x500cULL, regs.pc);
+
+	regs.regs[1] = 0x1fU;
+	decoded = tcti_decode_aarch64(0xd51b4421U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x1fUL, current->thread.user_fpsr);
+	KUNIT_EXPECT_EQ(test, 0x5010ULL, regs.pc);
+
 	current->thread.user_tls = 0x700000123000ULL;
 #endif
 
@@ -1870,6 +2978,42 @@ static void tcti_switch_executes_add_sub_immediate_variants(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_NE(test, 0ULL, regs.pstate & PSR_Z_BIT);
 	KUNIT_EXPECT_EQ(test, 0x4010ULL, regs.pc);
+}
+
+static void tcti_switch_executes_add_sub_with_carry_flags(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	regs.regs[12] = 0x01000000ULL;
+	regs.regs[13] = 0x01000000ULL;
+	regs.pstate = PSR_C_BIT;
+	regs.pc = 0x4020;
+	decoded = tcti_decode_aarch64(0xfa0d019fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x01000000ULL, regs.regs[12]);
+	KUNIT_EXPECT_EQ(test, 0x01000000ULL, regs.regs[13]);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x4024ULL, regs.pc);
+
+	regs.regs[0] = 0;
+	regs.regs[1] = U64_MAX;
+	regs.pstate = 0;
+	decoded = tcti_decode_aarch64(0xfa01001fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x4028ULL, regs.pc);
 }
 
 static void tcti_switch_executes_add_sub_shifted_register(struct kunit *test)
@@ -2138,6 +3282,62 @@ static void tcti_switch_executes_conditional_compare(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x7210ULL, regs.pc);
 }
 
+static void tcti_switch_executes_mlibc_float_helper_conditional_compares(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	regs.regs[8] = 5;
+	regs.regs[10] = 7;
+	regs.pstate = PSR_Z_BIT;
+	regs.pc = 0x7300;
+	decoded = tcti_decode_aarch64(0xfa4a0100U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x7304ULL, regs.pc);
+
+	regs.pstate = 0;
+	decoded = tcti_decode_aarch64(0xfa4a0100U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x7308ULL, regs.pc);
+
+	regs.regs[13] = 0;
+	regs.pstate = 0;
+	decoded = tcti_decode_aarch64(0xfa4019a4U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x730cULL, regs.pc);
+
+	regs.regs[14] = U32_MAX;
+	regs.pstate = PSR_N_BIT;
+	decoded = tcti_decode_aarch64(0x3a41b9c4U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_V_BIT);
+	KUNIT_EXPECT_EQ(test, 0x7310ULL, regs.pc);
+}
+
 static void tcti_switch_executes_conditional_select(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -2171,6 +3371,30 @@ static void tcti_switch_executes_conditional_select(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[9]);
 	KUNIT_EXPECT_EQ(test, 0x1ad14ULL, regs.pc);
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	current->thread.user_simd[0] = 0x4008000000000000ULL;
+	current->thread.user_simd[4] = 0x4018000000000000ULL;
+	regs.pstate = 0;
+	decoded = tcti_decode_aarch64(0x1e603c40U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4018000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x1ad18ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x4008000000000000ULL;
+	current->thread.user_simd[4] = 0x4018000000000000ULL;
+	regs.pstate = PSR_C_BIT;
+	decoded = tcti_decode_aarch64(0x1e603c40U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4008000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x1ad1cULL, regs.pc);
+#endif
 }
 
 static void tcti_switch_executes_logical_shifted_register(struct kunit *test)
@@ -2320,8 +3544,17 @@ static void tcti_switch_executes_extract(struct kunit *test)
 	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
 
 	KUNIT_EXPECT_EQ(test, 0, ret);
-	KUNIT_EXPECT_EQ(test, 0x80000002ULL, regs.regs[12]);
+	KUNIT_EXPECT_EQ(test, 0x2ULL, regs.regs[12]);
 	KUNIT_EXPECT_EQ(test, 0x8008ULL, regs.pc);
+
+	regs.regs[16] = 0x8000000000000000ULL;
+	regs.regs[17] = 0x2ULL;
+	decoded = tcti_decode_aarch64(0x93d0fe2aU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x5ULL, regs.regs[10]);
+	KUNIT_EXPECT_EQ(test, 0x800cULL, regs.pc);
 }
 
 static void tcti_switch_executes_data_processing_1source(struct kunit *test)
@@ -2347,6 +3580,30 @@ static void tcti_switch_executes_data_processing_1source(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 23ULL, regs.regs[10]);
 	KUNIT_EXPECT_EQ(test, 0x8108ULL, regs.pc);
+
+	regs.regs[20] = 0x00000002U;
+	decoded = tcti_decode_aarch64(0x5ac00288U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40000000ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x810cULL, regs.pc);
+
+	regs.regs[8] = 0x11223344U;
+	decoded = tcti_decode_aarch64(0x5ac00503U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x22114433ULL, regs.regs[3]);
+	KUNIT_EXPECT_EQ(test, 0x8110ULL, regs.pc);
+
+	regs.regs[8] = 0x01020304U;
+	decoded = tcti_decode_aarch64(0x5ac00909U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x04030201ULL, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, 0x8114ULL, regs.pc);
 }
 
 static void tcti_switch_executes_data_processing_2source(struct kunit *test)
@@ -2585,6 +3842,8 @@ static void tcti_switch_executes_system_registers(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x1a9f0ULL, regs.pc);
 
 	current->thread.user_tls = old_tls;
+	current->thread.user_fpsr = old_fpsr;
+	current->thread.user_fpcr = old_fpcr;
 #endif
 }
 
@@ -2651,6 +3910,19 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8404ULL, regs.pc);
 
+	current->thread.user_simd[0] = 0x123456789abcdef0ULL;
+	current->thread.user_simd[1] = 0xfedcba9876543210ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x2f00e400U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8408ULL, regs.pc);
+
 	current->thread.user_simd[0] = 0;
 	current->thread.user_simd[1] = 0;
 	current->thread.user_simd_valid = 0;
@@ -2662,7 +3934,7 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ~0ULL, current->thread.user_simd[0]);
 	KUNIT_EXPECT_EQ(test, ~0ULL, current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
-	KUNIT_EXPECT_EQ(test, 0x8408ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x840cULL, regs.pc);
 
 	current->thread.user_simd[0] = 0;
 	current->thread.user_simd[1] = 0xfedcba9876543210ULL;
@@ -2676,7 +3948,21 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 			current->thread.user_simd[0]);
 	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
-	KUNIT_EXPECT_EQ(test, 0x840cULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x8410ULL, regs.pc);
+
+	current->thread.user_simd[2] = 0;
+	current->thread.user_simd[3] = 0xfedcba9876543210ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x0f026441U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4200000042000000ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8414ULL, regs.pc);
 
 	current->thread.user_simd[0] = 0;
 	current->thread.user_simd[1] = 0;
@@ -2691,7 +3977,7 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x0000000100000001ULL,
 			current->thread.user_simd[3]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
-	KUNIT_EXPECT_EQ(test, 0x8410ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x8418ULL, regs.pc);
 
 	current->thread.user_simd[0] = 0;
 	current->thread.user_simd[1] = 0;
@@ -2708,7 +3994,21 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0xdfdfdfdfdfdfdfdfULL,
 			current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
-	KUNIT_EXPECT_EQ(test, 0x8414ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x841cULL, regs.pc);
+
+	current->thread.user_simd[16] = 0;
+	current->thread.user_simd[17] = 0xfedcba9876543210ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x0f00e548U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0a0a0a0a0a0a0a0aULL,
+			current->thread.user_simd[16]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[17]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8420ULL, regs.pc);
 
 	current->thread.user_simd[0] = 0;
 	current->thread.user_simd[1] = 0;
@@ -2723,7 +4023,29 @@ static void tcti_switch_executes_simd_movi_2d_zero(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x0000004100000041ULL,
 			current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
-	KUNIT_EXPECT_EQ(test, 0x8418ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x8424ULL, regs.pc);
+}
+
+static void tcti_switch_executes_fmov_d_negative_one_immediate(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0;
+	current->thread.user_simd[1] = 0x123456789abcdef0ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8420;
+
+	decoded = tcti_decode_aarch64(0x1e7e1000U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xbff0000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8424ULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_dup_2d_gpr(struct kunit *test)
@@ -2748,6 +4070,29 @@ static void tcti_switch_executes_simd_dup_2d_gpr(struct kunit *test)
 			current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8504ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_mov_d1_d0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0x1122334455667788ULL;
+	current->thread.user_simd[1] = 0xaabbccddeeff0011ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8508;
+
+	decoded = tcti_decode_aarch64(0x6e180400U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x1122334455667788ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x1122334455667788ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x850cULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_and_16b(struct kunit *test)
@@ -2789,6 +4134,76 @@ static void tcti_switch_executes_simd_and_16b(struct kunit *test)
 			current->thread.user_simd[3]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8604ULL, regs.pc);
+
+	current->thread.user_simd[2] = 0xffffffffffffffffULL;
+	current->thread.user_simd[3] = 0x0000000000000004ULL;
+	current->thread.user_simd[4] = 0x0000000000000002ULL;
+	current->thread.user_simd[5] = 0x0000000000000003ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8604;
+
+	decoded = tcti_decode_aarch64(0x4ee18441U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 1ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 7ULL, current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8608ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x00000000ffffffffULL;
+	current->thread.user_simd[1] = 0xffffffff00000000ULL;
+	current->thread.user_simd[4] = 0x0000000100000001ULL;
+	current->thread.user_simd[5] = 0x0000000100000001ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8608;
+
+	decoded = tcti_decode_aarch64(0x4ea08440U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x0000000000000001ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x860cULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x0000000200000001ULL;
+	current->thread.user_simd[1] = 0x0000000400000003ULL;
+	current->thread.user_simd[2] = 0x0000010000000080ULL;
+	current->thread.user_simd[3] = 0xffffffff00000180ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x860c;
+
+	decoded = tcti_decode_aarch64(0x6f391420U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0000000400000002ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x0200000300000006ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8610ULL, regs.pc);
+
+	current->thread.user_simd[0] = 9;
+	current->thread.user_simd[1] = 2;
+	current->thread.user_simd[4] = 8;
+	current->thread.user_simd[5] = 3;
+	current->thread.user_simd[10] = 0;
+	current->thread.user_simd[11] = 0;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8610;
+
+	decoded = tcti_decode_aarch64(0x6ee23405U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, ~0ULL, current->thread.user_simd[10]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[11]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8614ULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_orr_4s_immediate(struct kunit *test)
@@ -2812,6 +4227,96 @@ static void tcti_switch_executes_simd_orr_4s_immediate(struct kunit *test)
 			current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8704ULL, regs.pc);
+
+	current->thread.user_simd[4] = 0xffffffff12345678ULL;
+	current->thread.user_simd[5] = 0x000000ff000000feULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f0717c2U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xffffff0112345600ULL,
+			current->thread.user_simd[4]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[5]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8708ULL, regs.pc);
+
+	current->thread.user_simd[6] = 0xffffffff12345678ULL;
+	current->thread.user_simd[7] = 0x0000007f0000007eULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f0317c3U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xffffff8112345600ULL,
+			current->thread.user_simd[6]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[7]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x870cULL, regs.pc);
+
+	current->thread.user_simd[8] = 0xffffffff12345678ULL;
+	current->thread.user_simd[9] = 0x0000003f0000003eULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f0117c4U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xffffffc112345640ULL,
+			current->thread.user_simd[8]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[9]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8710ULL, regs.pc);
+
+	current->thread.user_simd[12] = 0xffffffff12345678ULL;
+	current->thread.user_simd[13] = 0x0000000f0000000eULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f0015c6U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xfffffff112345670ULL,
+			current->thread.user_simd[12]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[13]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8714ULL, regs.pc);
+
+	current->thread.user_simd[14] = 0xffffffff12345678ULL;
+	current->thread.user_simd[15] = 0x0000000700000006ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f0014c7U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xfffffff912345678ULL,
+			current->thread.user_simd[14]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[15]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8718ULL, regs.pc);
+
+	current->thread.user_simd[4] = 0xffffffff12345678ULL;
+	current->thread.user_simd[5] = 0x0000000300000002ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x6f001442U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xfffffffd12345678ULL,
+			current->thread.user_simd[4]);
+	KUNIT_EXPECT_EQ(test, 0x0000000100000000ULL,
+			current->thread.user_simd[5]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x871cULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_cmeq_4s(struct kunit *test)
@@ -2839,6 +4344,108 @@ static void tcti_switch_executes_simd_cmeq_4s(struct kunit *test)
 			current->thread.user_simd[9]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8804ULL, regs.pc);
+
+	current->thread.user_simd[8] = 0x0a090a070a050a03ULL;
+	current->thread.user_simd[9] = 0x1111111111111111ULL;
+	current->thread.user_simd[16] = 0x0a0a0a0a0a0a0a0aULL;
+	current->thread.user_simd[17] = 0x2222222222222222ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x2e288c84U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xff00ff00ff00ff00ULL,
+			current->thread.user_simd[8]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[9]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8808ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_uzp1_4h(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[10] = 0x4444333322221111ULL;
+	current->thread.user_simd[11] = 0;
+	current->thread.user_simd[0] = 0x8888777766665555ULL;
+	current->thread.user_simd[1] = 0;
+	current->thread.user_simd[12] = 0;
+	current->thread.user_simd[13] = 0;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8808;
+
+	decoded = tcti_decode_aarch64(0x0e4018a6U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7777555533331111ULL,
+			current->thread.user_simd[12]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[13]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x880cULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_umov_w_h0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[12] = 0x7777555533331111ULL;
+	regs.regs[15] = 0xffffffffffffffffULL;
+	regs.pc = 0x8810;
+
+	decoded = tcti_decode_aarch64(0x0e023ccfU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x1111ULL, regs.regs[15]);
+	KUNIT_EXPECT_EQ(test, 0x8814ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_umov_w_h1(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[10] = 0x7777555533331111ULL;
+	regs.regs[15] = 0xffffffffffffffffULL;
+	regs.pc = 0x8820;
+
+	decoded = tcti_decode_aarch64(0x0e063cafU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x3333ULL, regs.regs[15]);
+	KUNIT_EXPECT_EQ(test, 0x8824ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_ins_gpr_s0(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0xaaaabbbbccccddddULL;
+	current->thread.user_simd[1] = 0x1111222233334444ULL;
+	current->thread.user_simd_valid = 0;
+	regs.regs[8] = 0x123456789abcdef0ULL;
+	regs.pc = 0x8828;
+
+	decoded = tcti_decode_aarch64(0x4e041d00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xaaaabbbb9abcdef0ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x1111222233334444ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x882cULL, regs.pc);
 }
 
 static void tcti_switch_executes_simd_umaxv_4s(struct kunit *test)
@@ -2908,6 +4515,49 @@ static void tcti_switch_executes_simd_addv_4s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8b04ULL, regs.pc);
 }
 
+static void tcti_switch_executes_simd_ushl_4s(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[2] = 0x8000000000000008ULL;
+	current->thread.user_simd[3] = 0x0000001000000001ULL;
+	current->thread.user_simd[6] = 0;
+	current->thread.user_simd[7] = 0;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8b04;
+
+	decoded = tcti_decode_aarch64(0x6f3f0423U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4000000000000004ULL,
+			current->thread.user_simd[6]);
+	KUNIT_EXPECT_EQ(test, 0x0000000800000000ULL,
+			current->thread.user_simd[7]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8b08ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0xffffffff00000001ULL;
+	current->thread.user_simd[1] = 0xfffffffc0000001fULL;
+	current->thread.user_simd[2] = 0x8000000000000008ULL;
+	current->thread.user_simd[3] = 0x0000001000000001ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8b08;
+
+	decoded = tcti_decode_aarch64(0x6ea04421U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4000000000000010ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x0000000180000000ULL,
+			current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8b0cULL, regs.pc);
+}
+
 static void tcti_switch_executes_simd_xtn_4h(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -2928,6 +4578,351 @@ static void tcti_switch_executes_simd_xtn_4h(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8d04ULL, regs.pc);
+
+	current->thread.user_simd[10] = 0x11223344aabbccddULL;
+	current->thread.user_simd[11] = 0x5566778801020304ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x0ea128a5U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x01020304aabbccddULL,
+			current->thread.user_simd[10]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[11]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8d08ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_ushll_8h(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[2] = 0x0807060504030201ULL;
+	current->thread.user_simd[3] = 0xaabbccddeeff0011ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8d10;
+
+	decoded = tcti_decode_aarch64(0x2f08a421U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0004000300020001ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x0008000700060005ULL,
+			current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8d14ULL, regs.pc);
+
+	current->thread.user_simd[2] = 0x0004000300020001ULL;
+	current->thread.user_simd[3] = 0xaabbccddeeff0011ULL;
+	current->thread.user_simd_valid = 0;
+
+	decoded = tcti_decode_aarch64(0x2f10a421U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0000000200000001ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x0000000400000003ULL,
+			current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8d18ULL, regs.pc);
+}
+
+static void tcti_switch_executes_simd_ext_16b(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0x0706050403020100ULL;
+	current->thread.user_simd[1] = 0x0f0e0d0c0b0a0908ULL;
+	current->thread.user_simd[2] = 0xffffffffffffffffULL;
+	current->thread.user_simd[3] = 0xffffffffffffffffULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8d18;
+
+	decoded = tcti_decode_aarch64(0x6e004001U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0f0e0d0c0b0a0908ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x0706050403020100ULL,
+			current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8d1cULL, regs.pc);
+}
+
+static void tcti_switch_executes_mlibc_cpuset_popcount_sequence(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0x2f08a421U, /* ushll v1.8h, v1.8b, #0 */
+		0x2f10a421U, /* ushll v1.4s, v1.4h, #0 */
+		0x4ea11c22U, /* mov v2.16b, v1.16b */
+		0x6f3f0423U, /* ushr v3.4s, v1.4s, #1 */
+		0x6f3e0424U, /* ushr v4.4s, v1.4s, #2 */
+		0x6f3d0425U, /* ushr v5.4s, v1.4s, #3 */
+		0x6f3c0426U, /* ushr v6.4s, v1.4s, #4 */
+		0x6f3b0427U, /* ushr v7.4s, v1.4s, #5 */
+		0x6f0717c2U, /* bic v2.4s, #0xfe */
+		0x6f0317c3U, /* bic v3.4s, #0x7e */
+		0x6f0117c4U, /* bic v4.4s, #0x3e */
+		0x6f0017c5U, /* bic v5.4s, #0x1e */
+		0x6f0015c6U, /* bic v6.4s, #0xe */
+		0x6f0014c7U, /* bic v7.4s, #0x6 */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f3a0422U, /* ushr v2.4s, v1.4s, #6 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea484a3U, /* add v3.4s, v5.4s, v4.4s */
+		0x4ea684e4U, /* add v4.4s, v7.4s, v6.4s */
+		0x6f001442U, /* bic v2.4s, #0x2 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea48442U, /* add v2.4s, v2.4s, v4.4s */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f391420U, /* usra v0.4s, v1.4s, #7 */
+		0x4eb1b800U, /* addv s0, v0.4s */
+	};
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+	u32 i;
+
+	current->thread.user_simd[0] = 0;
+	current->thread.user_simd[1] = 0;
+	current->thread.user_simd[2] = 0x0000000000000800ULL;
+	current->thread.user_simd[3] = 0;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8d20;
+
+	for (i = 0; i < ARRAY_SIZE(instructions); i++) {
+		decoded = tcti_decode_aarch64(instructions[i]);
+		KUNIT_ASSERT_NE(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+							&decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+
+	KUNIT_EXPECT_EQ(test, 1ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8d84ULL, regs.pc);
+}
+
+static void tcti_switch_executes_mlibc_cpuset_count_from_mapped_mm(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0x6f00e400U, /* movi v0.2d, #0 */
+		0xbc404541U, /* ldr s1, [x10], #0x4 */
+		0x2f08a421U, /* ushll v1.8h, v1.8b, #0 */
+		0x2f10a421U, /* ushll v1.4s, v1.4h, #0 */
+		0x4ea11c22U, /* mov v2.16b, v1.16b */
+		0x6f3f0423U, /* ushr v3.4s, v1.4s, #1 */
+		0x6f3e0424U, /* ushr v4.4s, v1.4s, #2 */
+		0x6f3d0425U, /* ushr v5.4s, v1.4s, #3 */
+		0x6f3c0426U, /* ushr v6.4s, v1.4s, #4 */
+		0x6f3b0427U, /* ushr v7.4s, v1.4s, #5 */
+		0x6f0717c2U, /* bic v2.4s, #0xfe */
+		0x6f0317c3U, /* bic v3.4s, #0x7e */
+		0x6f0117c4U, /* bic v4.4s, #0x3e */
+		0x6f0017c5U, /* bic v5.4s, #0x1e */
+		0x6f0015c6U, /* bic v6.4s, #0xe */
+		0x6f0014c7U, /* bic v7.4s, #0x6 */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f3a0422U, /* ushr v2.4s, v1.4s, #6 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea484a3U, /* add v3.4s, v5.4s, v4.4s */
+		0x4ea684e4U, /* add v4.4s, v7.4s, v6.4s */
+		0x6f001442U, /* bic v2.4s, #0x2 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea48442U, /* add v2.4s, v2.4s, v4.4s */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f391420U, /* usra v0.4s, v1.4s, #7 */
+		0x4eb1b800U, /* addv s0, v0.4s */
+		0x1e260008U, /* fmov w8, s0 */
+	};
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	u8 cpuset[8] = {};
+	u8 observed[8] = {};
+	unsigned long mapped;
+	int ret;
+	u32 i;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	cpuset[1] = 0x08;
+	ret = tcti_write_user_data(current->mm, mapped, cpuset, sizeof(cpuset));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	current->thread.user_simd[0] = 0xffffffffffffffffULL;
+	current->thread.user_simd[1] = 0xffffffffffffffffULL;
+	current->thread.user_simd[2] = 0;
+	current->thread.user_simd[3] = 0;
+	current->thread.user_simd_valid = 0;
+	regs.regs[10] = mapped;
+	regs.regs[8] = 0xffffffffffffffffULL;
+	regs.pc = 0x8da0;
+
+	for (i = 0; i < ARRAY_SIZE(instructions); i++) {
+		decoded = tcti_decode_aarch64(instructions[i]);
+		KUNIT_ASSERT_NE(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+		ret = tcti_switch_debug_execute_decoded(current->mm, &regs,
+							&decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+
+	ret = tcti_read_user_data(current->mm, mapped, observed,
+				  sizeof(observed));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x08U, observed[1]);
+	KUNIT_EXPECT_EQ(test, mapped + 4, regs.regs[10]);
+	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 1ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8e10ULL, regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_switch_executes_simd_ld1r_4s_from_mapped_mm(struct kunit *test)
+{
+	static const u8 lane[] = { 0x44, 0x33, 0x22, 0x11 };
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	u64 packed;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	ret = tcti_write_user_data(current->mm, mapped, lane, sizeof(lane));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	current->thread.user_simd[0] = 0xffffffffffffffffULL;
+	current->thread.user_simd[1] = 0xffffffffffffffffULL;
+	current->thread.user_simd_valid = 0;
+	regs.regs[8] = mapped;
+	regs.pc = 0x8e20;
+
+	decoded = tcti_decode_aarch64(0x4d40c900U);
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &decoded,
+						&fault_address);
+
+	packed = 0x1122334411223344ULL;
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, mapped, fault_address);
+	KUNIT_EXPECT_EQ(test, packed, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, packed, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8e24ULL, regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_switch_executes_mlibc_cpuset_count_small_loop(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0x6f00e400U, /* movi v0.2d, #0 */
+		0xaa0903eaU, /* mov x10, x9 */
+		0x927ef409U, /* and x9, x0, #0xfffffffffffffffc */
+		0x4e041d00U, /* mov v0.s[0], w8 */
+		0xcb090148U, /* sub x8, x10, x9 */
+		0x8b0a002aU, /* add x10, x1, x10 */
+		0xbc404541U, /* ldr s1, [x10], #0x4 */
+		0xb1001108U, /* adds x8, x8, #0x4 */
+		0x2f08a421U, /* ushll v1.8h, v1.8b, #0 */
+		0x2f10a421U, /* ushll v1.4s, v1.4h, #0 */
+		0x4ea11c22U, /* mov v2.16b, v1.16b */
+		0x6f3f0423U, /* ushr v3.4s, v1.4s, #1 */
+		0x6f3e0424U, /* ushr v4.4s, v1.4s, #2 */
+		0x6f3d0425U, /* ushr v5.4s, v1.4s, #3 */
+		0x6f3c0426U, /* ushr v6.4s, v1.4s, #4 */
+		0x6f3b0427U, /* ushr v7.4s, v1.4s, #5 */
+		0x6f0717c2U, /* bic v2.4s, #0xfe */
+		0x6f0317c3U, /* bic v3.4s, #0x7e */
+		0x6f0117c4U, /* bic v4.4s, #0x3e */
+		0x6f0017c5U, /* bic v5.4s, #0x1e */
+		0x6f0015c6U, /* bic v6.4s, #0xe */
+		0x6f0014c7U, /* bic v7.4s, #0x6 */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f3a0422U, /* ushr v2.4s, v1.4s, #6 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea484a3U, /* add v3.4s, v5.4s, v4.4s */
+		0x4ea684e4U, /* add v4.4s, v7.4s, v6.4s */
+		0x6f001442U, /* bic v2.4s, #0x2 */
+		0x4ea08460U, /* add v0.4s, v3.4s, v0.4s */
+		0x4ea48442U, /* add v2.4s, v2.4s, v4.4s */
+		0x4ea08440U, /* add v0.4s, v2.4s, v0.4s */
+		0x6f391420U, /* usra v0.4s, v1.4s, #7 */
+		0x54fffcc1U, /* b.ne back to ldr s1 */
+		0x4eb1b800U, /* addv s0, v0.4s */
+		0xeb09001fU, /* cmp x0, x9 */
+		0x1e260008U, /* fmov w8, s0 */
+	};
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	u8 cpuset[8] = {};
+	unsigned long mapped;
+	unsigned long base = 0x8e40;
+	int ret;
+	u32 step;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	cpuset[1] = 0x08;
+	ret = tcti_write_user_data(current->mm, mapped, cpuset, sizeof(cpuset));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	regs.regs[0] = sizeof(cpuset);
+	regs.regs[1] = mapped;
+	regs.regs[8] = 0;
+	regs.regs[9] = 0;
+	regs.pc = base;
+	current->thread.user_simd_valid = 0;
+
+	for (step = 0; step < 96 && regs.pc != base + sizeof(instructions);
+	     step++) {
+		unsigned long offset = regs.pc - base;
+		u32 index = offset / sizeof(u32);
+
+		KUNIT_ASSERT_EQ(test, 0UL, offset % sizeof(u32));
+		KUNIT_ASSERT_LT(test, index, (u32)ARRAY_SIZE(instructions));
+		decoded = tcti_decode_aarch64(instructions[index]);
+		KUNIT_ASSERT_NE(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+		ret = tcti_switch_debug_execute_decoded(current->mm, &regs,
+							&decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+
+	KUNIT_EXPECT_LT(test, step, 96U);
+	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 8ULL, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, mapped + 8, regs.regs[10]);
+	KUNIT_EXPECT_EQ(test, 1ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, base + sizeof(instructions), regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
 static void tcti_switch_executes_fmov_w_s(struct kunit *test)
@@ -2949,6 +4944,398 @@ static void tcti_switch_executes_fmov_w_s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0xaabbccddeeff0011ULL,
 			current->thread.user_simd[11]);
 	KUNIT_EXPECT_EQ(test, 0x8a04ULL, regs.pc);
+
+	regs.regs[8] = 0x428a0000ULL;
+	decoded = tcti_decode_aarch64(0x1e270100U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x428a0000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a08ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x7ff8000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e604001U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7ff8000000000000ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a0cULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x9e66003cU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7ff8000000000000ULL, regs.regs[28]);
+	KUNIT_EXPECT_EQ(test, 0x8a10ULL, regs.pc);
+
+	current->thread.user_simd[2] = 0xbff0000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e60c020U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x3ff0000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a14ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x1e602000U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_EQ(test, 0x8a18ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0xbff0000000000000ULL;
+	regs.pc = 0x8b00;
+	decoded = tcti_decode_aarch64(0x1e602008U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_EQ(test, 0x8b04ULL, regs.pc);
+
+	regs.pc = 0x8a18;
+	current->thread.user_simd[0] = 0x428a0000ULL;
+	current->thread.user_simd[2] = 0;
+	current->thread.user_fpsr = 0;
+	decoded = tcti_decode_aarch64(0x1e211800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7f800000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(1));
+	KUNIT_EXPECT_EQ(test, 0x8a1cULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x40c00000ULL;
+	current->thread.user_simd[20] = 0x40000000ULL;
+	current->thread.user_fpsr = 0;
+	decoded = tcti_decode_aarch64(0x1e2a1800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40400000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_FALSE(test, current->thread.user_fpsr & BIT(1));
+	KUNIT_EXPECT_EQ(test, 0x8a20ULL, regs.pc);
+
+	current->thread.user_simd[16] = 0x3f800000ULL;
+	current->thread.user_simd[0] = 0x40000000ULL;
+	current->thread.user_fpsr = 0;
+	decoded = tcti_decode_aarch64(0x1e202908U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40400000ULL, current->thread.user_simd[16]);
+	KUNIT_EXPECT_FALSE(test, current->thread.user_fpsr & BIT(4));
+	KUNIT_EXPECT_EQ(test, 0x8a24ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x40c00000ULL;
+	current->thread.user_simd[2] = 0x40000000ULL;
+	decoded = tcti_decode_aarch64(0x1e213800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40800000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a28ULL, regs.pc);
+
+	regs.pc = 0x8a1c;
+	current->thread.user_simd[0] = 0x3ffc0000ULL;
+	current->thread.user_simd[2] = 0x4b000000ULL;
+	current->thread.user_fpcr = BIT(22);
+	current->thread.user_fpsr = 0;
+	decoded = tcti_decode_aarch64(0x1e212800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4b000002ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(4));
+	KUNIT_EXPECT_EQ(test, 0x8a20ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x3ffc0000ULL;
+	current->thread.user_simd[2] = 0x4b000000ULL;
+	current->thread.user_fpcr = BIT(23);
+	current->thread.user_fpsr = 0;
+	decoded = tcti_decode_aarch64(0x1e212800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4b000001ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(4));
+	KUNIT_EXPECT_EQ(test, 0x8a24ULL, regs.pc);
+
+	current->thread.user_fpcr = 0;
+	current->thread.user_simd[0] = 0x4b000002ULL;
+	current->thread.user_simd[2] = 0x4b000000ULL;
+	decoded = tcti_decode_aarch64(0x1e213800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40000000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a28ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x4b000001ULL;
+	current->thread.user_simd[2] = 0x4b000000ULL;
+	decoded = tcti_decode_aarch64(0x1e213800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x3f800000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a2cULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x1e201001U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40000000ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a30ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x1e649000U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4024000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a34ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x4018000000000000ULL;
+	current->thread.user_simd[4] = 0x4024000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e620802U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x404e000000000000ULL,
+			current->thread.user_simd[4]);
+	KUNIT_EXPECT_EQ(test, 0x8a38ULL, regs.pc);
+
+	current->thread.user_simd[4] = 0x4018000000000000ULL;
+	current->thread.user_simd[6] = 0x4004000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e632840U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4021000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a3cULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x1e623865U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xc00c000000000000ULL,
+			current->thread.user_simd[10]);
+	KUNIT_EXPECT_EQ(test, 0x8a40ULL, regs.pc);
+
+	current->thread.user_simd[4] = 0x3ff8000000000000ULL;
+	current->thread.user_simd[6] = 0x3ff4000000040000ULL;
+	decoded = tcti_decode_aarch64(0x1e623865U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xbfcfffffffe00000ULL,
+			current->thread.user_simd[10]);
+	KUNIT_EXPECT_EQ(test, 0x8a44ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x3ff8000000000000ULL;
+	current->thread.user_simd[8] = 0x4008000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e601884U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4000000000000000ULL,
+			current->thread.user_simd[8]);
+	KUNIT_EXPECT_EQ(test, 0x8a48ULL, regs.pc);
+
+	current->thread.user_simd[16] = 0x40000000ULL;
+	current->thread.user_simd[18] = 0x40400000ULL;
+	decoded = tcti_decode_aarch64(0x1e290900U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x40c00000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a4cULL, regs.pc);
+
+	current->thread.user_simd[12] = 0x4000000000000000ULL;
+	current->thread.user_simd[14] = 0x4010000000000000ULL;
+	current->thread.user_simd[32] = 0x4008000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1f501cc7U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4024000000000000ULL,
+			current->thread.user_simd[14]);
+	KUNIT_EXPECT_EQ(test, 0x8a50ULL, regs.pc);
+
+	current->thread.user_simd[10] = 0x4024000000000000ULL;
+	current->thread.user_simd[32] = 0x4000000000000000ULL;
+	current->thread.user_simd[34] = 0x4008000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1f509623U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4010000000000000ULL,
+			current->thread.user_simd[6]);
+	KUNIT_EXPECT_EQ(test, 0x8a54ULL, regs.pc);
+
+	regs.regs[8] = 42;
+	decoded = tcti_decode_aarch64(0x1e220101U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x42280000ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a58ULL, regs.pc);
+
+	regs.regs[8] = 67;
+	decoded = tcti_decode_aarch64(0x1e230101U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x42860000ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a5cULL, regs.pc);
+
+	regs.pc = 0x8a58;
+	current->thread.user_simd[16] = 0x42280000ULL;
+	decoded = tcti_decode_aarch64(0x1e214100U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xc2280000ULL, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a5cULL, regs.pc);
+
+	regs.pc = 0x8a54;
+	current->thread.user_simd[0] = 0x3f800000ULL;
+	decoded = tcti_decode_aarch64(0x1e22c000U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x3ff0000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x8a54ULL, regs.pc);
+
+	regs.regs[8] = 6;
+	decoded = tcti_decode_aarch64(0x1e620101U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4018000000000000ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a58ULL, regs.pc);
+
+	regs.regs[11] = 42;
+	decoded = tcti_decode_aarch64(0x9e630161U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4045000000000000ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x8a5cULL, regs.pc);
+
+	current->thread.user_simd[0] = 0xc01a800000000000ULL;
+	regs.regs[27] = 0;
+	decoded = tcti_decode_aarch64(0x1e78001bU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, (u64)(u32)-6, regs.regs[27]);
+	KUNIT_EXPECT_EQ(test, 0x8a60ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x4018000000000000ULL;
+	regs.regs[22] = 0xffffffffffffffffULL;
+	decoded = tcti_decode_aarch64(0x9e790016U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 6ULL, regs.regs[22]);
+	KUNIT_EXPECT_EQ(test, 0x8a64ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x3ff8000000000000ULL;
+	regs.regs[11] = 0;
+	decoded = tcti_decode_aarch64(0x9e59f00bU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 24ULL, regs.regs[11]);
+	KUNIT_EXPECT_EQ(test, 0x8a68ULL, regs.pc);
+
+	current->thread.user_simd[2] = 0xffffffffffffffffULL;
+	current->thread.user_simd[3] = 0xffffffffffffffffULL;
+
+	decoded = tcti_decode_aarch64(0x7ee1b801U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 6ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 0x8a6cULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x7e61d821U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4018000000000000ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 0x8a70ULL, regs.pc);
+
+	regs.regs[0] = 3;
+	regs.regs[3] = 4;
+	regs.pstate = PSR_C_BIT;
+	decoded = tcti_decode_aarch64(0xfa03001fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_TRUE(test, regs.pstate & PSR_N_BIT);
+	KUNIT_EXPECT_FALSE(test, regs.pstate & PSR_C_BIT);
+	KUNIT_EXPECT_EQ(test, 0x8a74ULL, regs.pc);
+}
+
+static void tcti_switch_executes_ucvtf_2d(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 6;
+	current->thread.user_simd[1] = 42;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8e00;
+
+	decoded = tcti_decode_aarch64(0x6e61d800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4018000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x4045000000000000ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8e04ULL, regs.pc);
+}
+
+static void tcti_switch_executes_fmul_2d(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0x4018000000000000ULL;
+	current->thread.user_simd[1] = 0x4045000000000000ULL;
+	current->thread.user_simd[4] = 0x4000000000000000ULL;
+	current->thread.user_simd[5] = 0x4008000000000000ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8f00;
+
+	decoded = tcti_decode_aarch64(0x6e62dc00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4028000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x405f800000000000ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8f04ULL, regs.pc);
 }
 
 static void tcti_gadget_program_executes_simd_movi_2d_zero(struct kunit *test)
@@ -3017,14 +5404,27 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_load_store_exclusive_class),
 	KUNIT_CASE(tcti_decode_recognizes_simd_movi_2d_zero),
 	KUNIT_CASE(tcti_decode_recognizes_simd_dup_2d_gpr),
+	KUNIT_CASE(tcti_decode_recognizes_simd_mov_d1_d0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_xtn_4h),
+	KUNIT_CASE(tcti_decode_recognizes_simd_ushll_8h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_and_16b),
 	KUNIT_CASE(tcti_decode_recognizes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_decode_recognizes_simd_cmeq_4s),
+	KUNIT_CASE(tcti_decode_recognizes_simd_ld1r_4s),
+	KUNIT_CASE(tcti_decode_recognizes_simd_ext_16b),
+	KUNIT_CASE(tcti_decode_recognizes_simd_uzp1_4h),
+	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h0),
+	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h1),
+	KUNIT_CASE(tcti_decode_recognizes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_addv_4s),
+	KUNIT_CASE(tcti_decode_recognizes_simd_add_2d),
+	KUNIT_CASE(tcti_decode_recognizes_simd_cmhi_2d),
+	KUNIT_CASE(tcti_decode_recognizes_simd_ushl_4s),
 	KUNIT_CASE(tcti_decode_recognizes_fmov_w_s),
+	KUNIT_CASE(tcti_decode_recognizes_fp_scalar_runtime_smoke_ops),
+	KUNIT_CASE(tcti_decode_recognizes_add_sub_with_carry),
 	KUNIT_CASE(tcti_gadget_program_lowers_hint_as_data_stream),
 	KUNIT_CASE(tcti_gadget_program_executes_extract),
 	KUNIT_CASE(tcti_gadget_program_rejects_svc_lowering),
@@ -3036,6 +5436,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
 	KUNIT_CASE(tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch),
 	KUNIT_CASE(tcti_kernel_execve_binfmt_elf_smoke_prepares_tcti_entry),
+	KUNIT_CASE(tcti_kernel_fault_signal_smoke_reports_linux_signal),
+	KUNIT_CASE(tcti_kernel_wait_reaping_smoke_reports_linux_wait),
+	KUNIT_CASE(tcti_kernel_pty_console_smoke_reports_output),
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
@@ -3046,6 +5449,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_hint_as_noop),
 	KUNIT_CASE(tcti_switch_executes_add_immediate_with_sp_source),
 	KUNIT_CASE(tcti_switch_executes_add_sub_immediate_variants),
+	KUNIT_CASE(tcti_switch_executes_add_sub_with_carry_flags),
 	KUNIT_CASE(tcti_switch_executes_add_sub_shifted_register),
 	KUNIT_CASE(tcti_switch_executes_neg_with_xzr_source),
 	KUNIT_CASE(tcti_switch_executes_add_sub_extended_register),
@@ -3055,6 +5459,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_conditional_branches),
 	KUNIT_CASE(tcti_switch_cmp_equal_skips_heap_guard_branch),
 	KUNIT_CASE(tcti_switch_executes_conditional_compare),
+	KUNIT_CASE(tcti_switch_executes_mlibc_float_helper_conditional_compares),
 	KUNIT_CASE(tcti_switch_executes_conditional_select),
 	KUNIT_CASE(tcti_switch_executes_logical_shifted_register),
 	KUNIT_CASE(tcti_switch_executes_logical_immediate),
@@ -3069,15 +5474,30 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_fails_store_exclusive_without_reservation),
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	KUNIT_CASE(tcti_switch_executes_simd_movi_2d_zero),
+	KUNIT_CASE(tcti_switch_executes_fmov_d_negative_one_immediate),
 	KUNIT_CASE(tcti_switch_executes_simd_dup_2d_gpr),
+	KUNIT_CASE(tcti_switch_executes_simd_mov_d1_d0),
 	KUNIT_CASE(tcti_switch_executes_simd_and_16b),
 	KUNIT_CASE(tcti_switch_executes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_switch_executes_simd_cmeq_4s),
+	KUNIT_CASE(tcti_switch_executes_simd_uzp1_4h),
+	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
+	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),
+	KUNIT_CASE(tcti_switch_executes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_addv_4s),
+	KUNIT_CASE(tcti_switch_executes_simd_ushl_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_xtn_4h),
+	KUNIT_CASE(tcti_switch_executes_simd_ushll_8h),
+	KUNIT_CASE(tcti_switch_executes_simd_ext_16b),
+	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_popcount_sequence),
+	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_count_from_mapped_mm),
+	KUNIT_CASE(tcti_switch_executes_simd_ld1r_4s_from_mapped_mm),
+	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_count_small_loop),
 	KUNIT_CASE(tcti_switch_executes_fmov_w_s),
+	KUNIT_CASE(tcti_switch_executes_ucvtf_2d),
+	KUNIT_CASE(tcti_switch_executes_fmul_2d),
 #endif
 	{}
 };
