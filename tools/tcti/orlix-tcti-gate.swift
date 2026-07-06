@@ -1608,7 +1608,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
 
     var simulatorArtifacts: [String] = []
     if let simulatorReport = selectedRuntimeValidationReport(
-        gate: "tcti-init-first-syscall",
+        gate: "tcti-simulator-stability",
         destination: "iphonesimulator"
     ) {
         artifacts.append(relativePath(simulatorReport.url))
@@ -1651,14 +1651,14 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
             evidence["tcti_entry_reached"] = "true"
         } else {
             if !reportCurrent {
-                failures.append(fail("simulator-report-current", "latest pinned simulator first-syscall report is missing, stale, failing, or not from the single required simulator"))
+                failures.append(fail("simulator-report-current", "latest pinned simulator stability report is missing, stale, failing, or not from the single required simulator"))
             }
             if !execStartThreadRecorded {
                 failures.append(fail("simulator-exec-start-thread", "pinned simulator report lacks structured linux_exec_start_thread evidence from arch start_thread"))
             }
         }
     } else {
-        failures.append(fail("simulator-report-missing", "missing iphonesimulator tcti-init-first-syscall report with linux_exec_start_thread evidence"))
+        failures.append(fail("simulator-report-missing", "missing iphonesimulator tcti-simulator-stability report with linux_exec_start_thread evidence"))
     }
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
