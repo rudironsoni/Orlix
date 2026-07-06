@@ -1,5 +1,6 @@
 #!/usr/bin/env swift
 import Foundation
+import Darwin
 
 enum GateStatus: String, Codable {
     case pass
@@ -525,7 +526,12 @@ func run(_ arguments: [String], check: Bool = true) throws -> String {
     return output.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-func runWithFileBackedOutput(_ arguments: [String], check: Bool = true) throws -> String {
+func runWithFileBackedOutput(
+    _ arguments: [String],
+    check: Bool = true,
+    terminateAfterOutputContains successNeedles: [String] = [],
+    terminationGraceSeconds: TimeInterval = 10
+) throws -> String {
     let scratch = buildPath("tmp", "command-output")
     try ensureDirectory(scratch)
     let unique = UUID().uuidString
@@ -549,7 +555,42 @@ func runWithFileBackedOutput(_ arguments: [String], check: Bool = true) throws -
     process.standardOutput = stdoutHandle
     process.standardError = stderrHandle
     try process.run()
-    process.waitUntilExit()
+
+    func combinedOutput() -> String {
+        let output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
+        let error = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+        return output + error
+    }
+
+    if successNeedles.isEmpty {
+        process.waitUntilExit()
+    } else {
+        var successSeenAt: Date?
+        while process.isRunning {
+            let currentOutput = combinedOutput()
+            if successNeedles.allSatisfy({ currentOutput.contains($0) }) {
+                if successSeenAt == nil {
+                    successSeenAt = Date()
+                }
+                if let seenAt = successSeenAt,
+                   Date().timeIntervalSince(seenAt) >= terminationGraceSeconds {
+                    process.terminate()
+                    let deadline = Date().addingTimeInterval(5)
+                    while process.isRunning && Date() < deadline {
+                        Thread.sleep(forTimeInterval: 0.1)
+                    }
+                    if process.isRunning {
+                        Darwin.kill(process.processIdentifier, SIGKILL)
+                    }
+                    break
+                }
+            } else {
+                successSeenAt = nil
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        process.waitUntilExit()
+    }
 
     let output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
     let error = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
@@ -2323,7 +2364,11 @@ func runKernelKselftestSubset() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-KSELFTEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -2466,7 +2511,11 @@ func runMLibCBuildSmoke() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -2616,7 +2665,11 @@ func runMLibCSysdepsSmoke() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -2773,7 +2826,11 @@ func runMLibCLibcTestSubset() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -2952,7 +3009,11 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -3118,7 +3179,11 @@ func runMLibCPthreadTLSSmoke() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
@@ -3309,7 +3374,11 @@ func runMLibCLinkedSyscallUAPISmoke() throws -> Int32 {
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
-    let xcodeOutput = try runWithFileBackedOutput(xcodeArguments, check: false)
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+    )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
