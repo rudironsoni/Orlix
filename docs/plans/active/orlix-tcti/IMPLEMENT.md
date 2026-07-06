@@ -6417,5 +6417,181 @@ Timestamp: `2026-07-05T08:15:52Z`.
   - No production TCTI assembly or gadget dispatch added.
   - No generated Linux, mlibc, package, rootfs, or build tree edited.
   - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+- No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+- No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
+### Checkpoint: Coreutils Mkdir/Rm/Cp/Ln Passes On Pinned Simulator
+
+Timestamp: `2026-07-06T22:11:59Z`.
+
+- Harness-selected gate: `tcti-coreutils-mkdir-rm-cp-ln`.
+- Product-path milestone advanced: app-hosted OrlixOS simulator runtime now executes real packaged Coreutils `/bin/mkdir`, `/bin/rm`, `/bin/cp`, and `/bin/ln` through OrlixKernel/TCTI and captures the gate marker from the app-visible terminal/log path.
+- Starting blocker:
+  - `Build/Reports/runtime/tcti-coreutils-mkdir-rm-cp-ln-20260706T214521Z-17063.json` failed on unsupported `0x9e230280`, decoded as `ucvtf s0, x20`.
+  - `Build/Reports/runtime/tcti-coreutils-mkdir-rm-cp-ln-20260706T215550Z-32531.json` then failed on unsupported `0x9e390014`, decoded as `fcvtzu x20, s0`.
+- Kernel TCTI fixes retained in this checkpoint:
+  - Decode and execute `UCVTF S, Xn` for 64-bit unsigned integer to FP32 conversion.
+  - Decode and execute `FCVTZU X/W, Sn` for FP32 unsigned integer conversion with zero rounding and unsigned saturation.
+  - Keep the conversion work in `arch/orlix/hosted_exec/tcti`; no HostAdapter Linux semantics added.
+- Harness proof:
+  - `tools/runtime/orlix-runtime-validation.sh` added `tcti-coreutils-mkdir-rm-cp-ln` with absolute `/bin/mkdir`, `/bin/rm`, `/bin/cp`, `/bin/ln`, and `/bin/cat` commands.
+  - `tools/tcti/orlix-tcti-gate.swift` added the real-stack gate runner, Coreutils package source check, runtime report check, marker/stdout assertions, and pass/fail reducer generation.
+- Simulator evidence:
+  - Report: `Build/Reports/runtime/tcti-coreutils-mkdir-rm-cp-ln-20260706T221159Z-93131.json`.
+  - Artifact directory: `Build/Reports/runtime/tcti-coreutils-mkdir-rm-cp-ln-20260706T221159Z-93131.artifacts`.
+  - Pinned simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - `status=pass`, `passed=true`.
+  - Terminal artifact captured `mkdir-rm-cp-ln-ok`, `ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK`, `orlix-init: process started`, `orlix-init: process exited pid=33 status=0`, and shell exit status evidence.
+  - `tcti-simulator-fatal-runtime.txt` was empty.
+  - `host-exec-violations.txt` was empty.
+  - No recent `OrlixTestRunner`, `Orlix`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports` or `~/Library/Logs/CrashReporter`.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-mkdir-rm-cp-ln`: passed.
+  - `Build/TCTI/reports/tcti-coreutils-mkdir-rm-cp-ln/report.json`: `status=pass`, `passed=true`.
+  - Evidence fields: `runtime_validation_passed=true`, `coreutils_marker_asserted=true`, `coreutils_stdout_asserted=true`, `child_process_started=true`, `child_process_exited=true`, `wait_reaping_status_observed=true`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Reducer:
+  - Pass reducer: `Build/TCTI/reproducers/tcti-coreutils-mkdir-rm-cp-ln/coreutils-mkdir-rm-cp-ln-pass.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-coreutils-mkdir-rm-cp-ln/coreutils-mkdir-rm-cp-ln-pass.json`: passed.
+
+### Checkpoint: Coreutils Env/Path Passes On Pinned Simulator
+
+Timestamp: `2026-07-06T22:22:51Z`.
+
+- Harness-selected gate after mkdir/rm/cp/ln pass: `tcti-coreutils-env-path`.
+- Product-path milestone advanced: app-hosted OrlixOS simulator runtime now executes real packaged Coreutils `/bin/env` and `/bin/printenv PATH` through OrlixKernel/TCTI and captures PATH output from the app-visible terminal/log path.
+- Harness roadblock fixed:
+  - After `tcti-coreutils-mkdir-rm-cp-ln` passed, `make agent-next AREA=orlix-tcti` selected `tcti-coreutils-env-path`, but `make agent-task-envelope-check AREA=orlix-tcti` failed because the target was unsupported by `tools/tcti/orlix-tcti-gate.swift`.
+  - Added the minimal real-stack gate support instead of changing the roadmap or bypassing the selected gate.
+- Harness proof:
+  - `tools/runtime/orlix-runtime-validation.sh` added `tcti-coreutils-env-path` with absolute `/bin/env`, `/bin/printenv`, and `/bin/cat` commands.
+  - The command sets `PATH=/bin:/usr/bin`, exports it, captures `/bin/env` output, captures `/bin/printenv PATH`, asserts the shell PATH value, and emits `ORLIX-TCTI-COREUTILS-ENV-PATH-OK`.
+  - `tools/tcti/orlix-tcti-gate.swift` added the real-stack gate runner, Coreutils package source check for `env` and `printenv`, runtime report check, marker/stdout assertions, and pass/fail reducer generation.
+- Simulator evidence:
+  - Report: `Build/Reports/runtime/tcti-coreutils-env-path-20260706T222251Z-41865.json`.
+  - Artifact directory: `Build/Reports/runtime/tcti-coreutils-env-path-20260706T222251Z-41865.artifacts`.
+  - Pinned simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - `status=pass`, `passed=true`.
+  - Terminal artifact captured `PATH=/bin:/usr/bin`, `/bin:/usr/bin`, `env-path-ok`, `ORLIX-TCTI-COREUTILS-ENV-PATH-OK`, `orlix-init: process started`, `orlix-init: process exited pid=32 status=0`, and shell exit status evidence.
+  - `tcti-simulator-fatal-runtime.txt` was empty.
+  - `host-exec-violations.txt` was empty.
+  - No recent `OrlixTestRunner`, `Orlix`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports` or `~/Library/Logs/CrashReporter`.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-env-path`: passed.
+  - `Build/TCTI/reports/tcti-coreutils-env-path/report.json`: `status=pass`, `passed=true`.
+  - Evidence fields: `runtime_validation_passed=true`, `coreutils_marker_asserted=true`, `coreutils_stdout_asserted=true`, `child_process_started=true`, `child_process_exited=true`, `wait_reaping_status_observed=true`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Reducer:
+  - Pass reducer: `Build/TCTI/reproducers/tcti-coreutils-env-path/coreutils-env-path-pass.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-coreutils-env-path/coreutils-env-path-pass.json`: passed.
+- Additional validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed before implementation.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: passed with `Device already booted, nothing to do.`
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime`: passed the existing named syscall-dispatch runner and compiled the changed TCTI decode test object.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+- Current next roadblock:
+  - After env/PATH passed, `make agent-next AREA=orlix-tcti` selected `tcti-coreutils-test-subset`.
+  - The missing `tcti-coreutils-test-subset` target support was added and validated in the next checkpoint below.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
+### Checkpoint: Coreutils Test Subset Passes On Pinned Simulator
+
+Timestamp: `2026-07-06T22:37:34Z`.
+
+- Harness-selected gate: `tcti-coreutils-test-subset`.
+- Product-path milestone advanced: app-hosted OrlixOS simulator runtime now executes a combined real packaged Coreutils subset through OrlixKernel/TCTI and captures the subset marker from the app-visible terminal/log path.
+- Harness proof:
+  - `tools/runtime/orlix-runtime-validation.sh` added `tcti-coreutils-test-subset`.
+  - The command executes real `/bin/rm`, `/bin/mkdir`, `/bin/cp`, `/bin/ln`, `/bin/cat`, `/bin/wc`, `/bin/ls`, `/bin/stat`, `/bin/env`, and `/bin/printenv`.
+  - The command creates a real file tree under `/tmp`, copies and hardlinks a file, checks line count with `wc`, emits `ls`/`stat` output, exports `PATH=/bin:/usr/bin`, emits `env` and `printenv PATH` output, removes the test tree, and emits `ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK`.
+  - `tools/tcti/orlix-tcti-gate.swift` added the real-stack gate runner, package source checks for the subset programs, runtime report checks, stdout/marker assertions, and pass/fail reducer generation.
+  - `tools/runtime/orlix-runtime-validation.sh` now records `acceptance_weight=readiness` for `tcti-coreutils-test-subset`, matching the roadmap metadata.
+- Simulator evidence:
+  - Report: `Build/Reports/runtime/tcti-coreutils-test-subset-20260706T223734Z-63613.json`.
+  - Artifact directory: `Build/Reports/runtime/tcti-coreutils-test-subset-20260706T223734Z-63613.artifacts`.
+  - Pinned simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - `status=pass`, `passed=true`, `proof_tier=simulator`, `acceptance_weight=readiness`, `can_claim_runtime_readiness=false`.
+  - Terminal artifact captured `subset-ok`, `File: /tmp/orlix-coreutils-test-subset/dst/output`, `Size: 10`, `PATH=/bin:/usr/bin`, `/bin:/usr/bin`, `ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK`, `orlix-init: process started`, `orlix-init: process exited pid=33 status=0`, and shell exit status evidence.
+  - `tcti-simulator-fatal-runtime.txt` was empty.
+  - `host-exec-violations.txt` was empty.
+  - No recent `OrlixTestRunner`, `Orlix`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports` or `~/Library/Logs/CrashReporter`.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-test-subset`: passed.
+  - `Build/TCTI/reports/tcti-coreutils-test-subset/report.json`: `status=pass`, `passed=true`, `acceptance_weight=readiness`.
+  - Evidence fields: `runtime_validation_passed=true`, `coreutils_marker_asserted=true`, `coreutils_stdout_asserted=true`, `child_process_started=true`, `child_process_exited=true`, `wait_reaping_status_observed=true`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Reducer:
+  - Pass reducer: `Build/TCTI/reproducers/tcti-coreutils-test-subset/coreutils-test-subset-pass.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-coreutils-test-subset/coreutils-test-subset-pass.json`: passed.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed after removing stale generated runtime reports from before the acceptance-weight metadata fix.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-image-layout-parse`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: currently fails because `tcti-oci-image-layout-parse` is not yet supported by `tools/tcti/orlix-tcti-gate.swift`.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
+### Checkpoint: Coreutils Cat/Wc Passes On Pinned Simulator
+
+Timestamp: `2026-07-06T20:29:32Z`.
+
+- Harness-selected gate: `tcti-coreutils-cat-wc`.
+- Product-path milestone advanced: app-hosted OrlixOS simulator runtime now executes real Coreutils `wc` and `cat` through OrlixKernel/TCTI and captures the Coreutils gate marker from the app-visible terminal/log path.
+- Starting failure:
+  - `Build/Reports/runtime/tcti-coreutils-cat-wc-20260706T201616Z-60794.json` failed.
+  - Earlier unsupported SIMD blockers had been cleared, and the remaining failure was shell status 1 after `wc` wrote 30 bytes to stdout.
+  - The 30-byte write matched `0 /tmp/orlix-coreutils-cat-wc\n`, which meant the gate input file had no newline and `wc -l` was correctly returning zero.
+- Kernel TCTI fixes retained in this checkpoint:
+  - Decode and execute USHLL2 high-half widening for `8H.16B`, `4S.8H`, and `2D.4S`.
+  - Decode and execute `ADDP D, Vn.2D`.
+  - Allow `CMEQ` 8-byte vector compare results without requiring a 16-byte result for non-`CMHI` compares.
+- Harness fix:
+  - `tools/runtime/orlix-runtime-validation.sh` now quotes the `printf 'cat-wc-ok\n'` format in the cat/wc gate command and quotes `$1` in the `test` check.
+  - This fixes the gate input, not Coreutils or Linux semantics.
+- Simulator evidence:
+  - Report: `Build/Reports/runtime/tcti-coreutils-cat-wc-20260706T202932Z-16481.json`.
+  - Artifact directory: `Build/Reports/runtime/tcti-coreutils-cat-wc-20260706T202932Z-16481.artifacts`.
+  - Pinned simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - `status=pass`, `passed=true`.
+  - `Build/Reports/runtime/tcti-coreutils-cat-wc-20260706T202932Z-16481.artifacts/tcti-coreutils-cat-wc.txt` captured `ORLIX-TCTI-COREUTILS-CAT-WC-OK`.
+  - `tcti-simulator-fatal-runtime.txt` was empty.
+  - `host-exec-violations.txt` was empty.
+  - No recent `OrlixTestRunner`, `Orlix`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports` or `~/Library/Logs/CrashReporter`.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-coreutils-cat-wc`: passed.
+  - `Build/TCTI/reports/tcti-coreutils-cat-wc/report.json`: `status=pass`, `passed=true`.
+  - Evidence fields: `runtime_validation_passed=true`, `coreutils_marker_asserted=true`, `coreutils_stdout_asserted=true`, `wait_reaping_status_observed=true`, `fail_count=0`, `skip_count=0`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Reducer:
+  - Pass reducer: `Build/TCTI/reproducers/tcti-coreutils-cat-wc/coreutils-cat-wc-pass.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-coreutils-cat-wc/coreutils-cat-wc-pass.json`: passed.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime`: passed the existing named syscall-dispatch runner. Limitation: this runner executes `orlix-tcti-decode.tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`; the simulator gate is the decisive proof for the cat/wc checkpoint.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
   - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
   - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
