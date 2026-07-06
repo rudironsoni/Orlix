@@ -402,6 +402,8 @@ check_skills() {
   mkdir -p "$tmp"
   env -u MAKEFLAGS -u MFLAGS \
     ORLIX_TCTI_BUILD_ROOT="$tmp" \
+    ORLIX_BUILD_ROOT="$root/Build" \
+    CCACHE_DISABLE=1 \
     make -s -C "$root" tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke >/dev/null 2>&1 || true
   report="$tmp/reports/tcti-kernel-syscall-dispatch-smoke/report.json"
   if ! test -f "$report"; then
