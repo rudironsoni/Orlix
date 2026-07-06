@@ -30,6 +30,7 @@ void tcti_report_unsupported(struct task_struct *task, struct pt_regs *regs,
 void tcti_report_syscall(struct task_struct *task, struct pt_regs *regs,
 			 const struct tcti_result *result)
 {
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_SYSCALL_TRACE)
 	pr_info("Orlix TCTI: svc #0 task=%s pid=%d pc=%#lx syscall=%llu x0=%#llx x1=%#llx x2=%#llx x3=%#llx x4=%#llx x5=%#llx x30=%#llx sp=%#llx\n",
 		task ? task->comm : "<none>",
 		task ? task_pid_nr(task) : -1,
@@ -42,12 +43,14 @@ void tcti_report_syscall(struct task_struct *task, struct pt_regs *regs,
 		regs ? (unsigned long long)regs->regs[4] : 0,
 		regs ? (unsigned long long)regs->regs[5] : 0,
 		regs ? (unsigned long long)regs->regs[30] : 0,
-			regs ? (unsigned long long)regs->sp : 0);
+		regs ? (unsigned long long)regs->sp : 0);
+#endif
 }
 
 void tcti_report_syscall_return(struct task_struct *task, struct pt_regs *regs,
 				unsigned long nr, unsigned long pc)
 {
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_SYSCALL_TRACE)
 	pr_info("Orlix TCTI: syscall return task=%s pid=%d pc=%#lx syscall=%lu ret=%#llx signed_ret=%lld sp=%#llx\n",
 		task ? task->comm : "<none>",
 		task ? task_pid_nr(task) : -1,
@@ -56,6 +59,7 @@ void tcti_report_syscall_return(struct task_struct *task, struct pt_regs *regs,
 		regs ? (unsigned long long)regs->regs[0] : 0,
 		regs ? (long long)regs->regs[0] : 0,
 		regs ? (unsigned long long)regs->sp : 0);
+#endif
 }
 
 void tcti_report_exit(struct task_struct *task, struct pt_regs *regs,
