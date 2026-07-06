@@ -698,7 +698,11 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
         let bootStatus = BootStatusRecorder()
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
-            if self.parser.containsTerminalCondition(recorder.text, for: self.spec) {
+            let text = Self.combinedUpstreamOutput(
+                terminal: recorder.text,
+                session: session
+            )
+            if self.parser.containsTerminalCondition(text, for: self.spec) {
                 completion.signal()
             }
         }
@@ -714,7 +718,10 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
 
         let deadline = DispatchTime.now() + spec.timeout
         guard completion.wait(timeout: deadline) == .success else {
-            let text = recorder.text
+            let text = Self.combinedUpstreamOutput(
+                terminal: recorder.text,
+                session: session
+            )
             if parser.containsTerminalCondition(text, for: spec) {
                 try parser.validate(text, for: spec)
                 return text
@@ -729,9 +736,26 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             throw OrlixUpstreamTestRunError.bootFailed(status)
         }
 
-        let text = recorder.text
+        let text = Self.combinedUpstreamOutput(
+            terminal: recorder.text,
+            session: session
+        )
         try parser.validate(text, for: spec)
         return text
+    }
+
+    private static func combinedUpstreamOutput(
+        terminal: String,
+        session: OrlixLinuxSession
+    ) -> String {
+        let console = session.recentConsoleOutputText
+        if terminal.isEmpty {
+            return console
+        }
+        if console.isEmpty {
+            return terminal
+        }
+        return terminal + "\n" + console
     }
 
     private static func prepareHostDirectoryFixture(
