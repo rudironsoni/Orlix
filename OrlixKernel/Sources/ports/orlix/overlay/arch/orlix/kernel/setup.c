@@ -96,8 +96,15 @@ void __init setup_arch(char **cmdline_p)
 	strscpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
 	*cmdline_p = command_line;
 
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	if (params && params->memory_size &&
+	    (!memblock_end_of_DRAM() ||
+	     memblock_end_of_DRAM() <= memblock_start_of_DRAM()))
+		orlix_add_boot_memory(params);
+#else
 	if (!dt_ready && params && params->memory_size)
 		memblock_add(params->memory_base, params->memory_size);
+#endif
 	orlix_setup_initrd(params);
 	paging_init();
 
