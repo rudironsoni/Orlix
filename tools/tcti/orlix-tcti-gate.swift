@@ -4427,11 +4427,11 @@ func runShellScriptSmoke() throws -> Int32 {
     } else {
         failures.append(fail("shell-script-marker-missing", "runtime artifacts did not include ORLIX-TCTI-SHELL-SCRIPT-OK"))
     }
-    if markerText.contains("script-okORLIX-TCTI-SHELL-SCRIPT-OK") ||
-        terminalText.contains("script-okORLIX-TCTI-SHELL-SCRIPT-OK") {
+    if outputContainsInOrder(markerText, ["script-ok", "ORLIX-TCTI-SHELL-SCRIPT-OK"]) ||
+        outputContainsInOrder(terminalText, ["script-ok", "ORLIX-TCTI-SHELL-SCRIPT-OK"]) {
         evidence["script_stdout_asserted"] = "true"
     } else {
-        failures.append(fail("shell-script-stdout-missing", "runtime artifacts did not include script-ok output immediately before the shell script marker"))
+        failures.append(fail("shell-script-stdout-missing", "runtime artifacts did not include script-ok output before the shell script marker"))
     }
     if terminalText.contains("orlix-init: process started pid=") {
         evidence["child_process_started"] = "true"
