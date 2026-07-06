@@ -346,3 +346,4 @@ ORLIXOS_STRIP ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-strip,llvm-st
 ORLIXOS_READELF ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-readelf,llvm-readelf)
 ORLIXOS_OBJDUMP ?= $(if $(ORLIXOS_LLVM_BIN),$(ORLIXOS_LLVM_BIN)/llvm-objdump,llvm-objdump)
 ORLIXOS_PACKAGE_CFLAGS := -O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h
+ORLIXOS_FORCE_PACKAGE_RECONFIGURE ?= 0

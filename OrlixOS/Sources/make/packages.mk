@@ -13,9 +13,7 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	command -v "$(ORLIXOS_OBJDUMP)" >/dev/null 2>&1 || { echo "llvm-objdump is required to inspect Bash; set ORLIXOS_OBJDUMP=/path/to/llvm-objdump" >&2; exit 1; }; \
 	export PATH="$(ORLIXOS_PACKAGE_BOOTSTRAP_PATH)"; \
 	command -v bison >/dev/null 2>&1 || { echo "GNU bison is required to build Bash; set ORLIXOS_PACKAGE_BOOTSTRAP_PATH to include it" >&2; exit 1; }; \
-	rm -rf "$(ORLIXOS_BASH_BUILD_DIR)" "$(ORLIXOS_BASH_BINARY)"; \
 	mkdir -p "$(ORLIXOS_BASH_BUILD_DIR)" "$(dir $(ORLIXOS_BASH_BINARY))"; \
-	cd "$(ORLIXOS_BASH_BUILD_DIR)"; \
 	export CC="$(ORLIXOS_CC_COMMAND) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE"; \
 	export CFLAGS="-O2 -Wno-unknown-warning-option"; \
 	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
@@ -26,14 +24,29 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	export bash_cv_getenv_redef=no; \
 	export bash_cv_getcwd_malloc=yes; \
 	export bash_cv_func_strchrnul_works=yes; \
-	"$(ORLIXOS_BASH_SRC_DIR)/configure" --host=aarch64-linux-gnu --build="$$(uname -m)-apple-darwin" --prefix=/usr --without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses; \
+	configure_signature="$(ORLIXOS_BASH_BUILD_DIR)/.orlix-configure.signature"; \
+	current_signature="profile=$(PROFILE)|version=$(BASH_VERSION)|sha256=$(BASH_SHA256)|cc=$$CC|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS|configure=--without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses"; \
+	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" != 1 ] && [ -x "$(ORLIXOS_BASH_BINARY)" ] && [ -s "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp" ] && [ -s "$(ORLIXOS_BASH_BUILD_DIR)/Makefile" ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_BASH_SOURCE_STAMP)" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_RTLIB)" ]; then \
+		touch "$(ORLIXOS_BASH_BINARY)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp"; \
+		echo "reusing Orlix Linux Bash package input: $(ORLIXOS_BASH_BINARY)"; \
+		exit 0; \
+	fi; \
+	rm -f "$(ORLIXOS_BASH_BINARY)"; \
+	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" = 1 ] || [ ! -s "$(ORLIXOS_BASH_BUILD_DIR)/Makefile" ] || [ ! -s "$$configure_signature" ] || [ "$$(cat "$$configure_signature")" != "$$current_signature" ]; then \
+		rm -rf "$(ORLIXOS_BASH_BUILD_DIR)"; \
+		mkdir -p "$(ORLIXOS_BASH_BUILD_DIR)"; \
+		cd "$(ORLIXOS_BASH_BUILD_DIR)"; \
+		"$(ORLIXOS_BASH_SRC_DIR)/configure" --host=aarch64-linux-gnu --build="$$(uname -m)-apple-darwin" --prefix=/usr --without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses; \
+		printf '%s\n' "$$current_signature" > "$$configure_signature"; \
+	else \
+		cd "$(ORLIXOS_BASH_BUILD_DIR)"; \
+	fi; \
 	$(MAKE) -j1 bash; \
 	cp "$(ORLIXOS_BASH_BUILD_DIR)/bash" "$(ORLIXOS_BASH_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_BASH_BINARY)"; \
 	file "$(ORLIXOS_BASH_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_BASH_BINARY)" >&2; exit 1; }; \
 	"$(ORLIXOS_OBJDUMP)" -p "$(ORLIXOS_BASH_BINARY)" | awk '/^[[:space:]]*LOAD[[:space:]]/ && $$0 !~ /align 2\*\*14/ { print "Orlix Bash PT_LOAD is not 16 KiB aligned: " $$0 > "/dev/stderr"; bad=1 } END { exit bad }'; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=bash\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(BASH_VERSION)" "$(BASH_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp"; \
-	rm -rf "$(ORLIXOS_BASH_BUILD_DIR)"; \
 	echo "built Orlix Linux Bash package input: $(ORLIXOS_BASH_BINARY)"
 
 $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAMP) $(ORLIXOS_LIBCAP_STAMP) $(ORLIXOS_LIBSELINUX_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/packages.mk
@@ -49,8 +62,6 @@ $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAM
 	command -v "$(ORLIXOS_AR)" >/dev/null 2>&1 || { echo "llvm-ar is required to build coreutils; set ORLIXOS_AR=/path/to/llvm-ar" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_RANLIB)" >/dev/null 2>&1 || { echo "llvm-ranlib is required to build coreutils; set ORLIXOS_RANLIB=/path/to/llvm-ranlib" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package coreutils; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
-	rm -rf "$(ORLIXOS_COREUTILS_BUILD_DIR)" "$(ORLIXOS_COREUTILS_STAMP)"; \
-	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do rm -f "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; done; \
 	mkdir -p "$(ORLIXOS_COREUTILS_BUILD_DIR)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin"; \
 	cd "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
 	export CC="$(ORLIXOS_CC_COMMAND) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE"; \
@@ -66,7 +77,22 @@ $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAM
 	export gl_cv_func_getopt_gnu=yes; \
 	export gl_cv_func_getopt_long_gnu=yes; \
 	export gl_cv_func_strtod_works=yes; \
-	"$(ORLIXOS_COREUTILS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --with-selinux --enable-libcap --disable-gcc-warnings; \
+	configure_signature="$(ORLIXOS_COREUTILS_BUILD_DIR)/.orlix-configure.signature"; \
+	current_signature="profile=$(PROFILE)|version=$(COREUTILS_VERSION)|commit=$(COREUTILS_GIT_COMMIT)|cc=$$CC|cppflags=$$CPPFLAGS|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS"; \
+	outputs_ready=1; \
+	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do \
+		if [ ! -x "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" ]; then outputs_ready=0; fi; \
+	done; \
+	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" != 1 ] && [ "$$outputs_ready" = 1 ] && [ -x "$(ORLIXOS_GETLIMITS_BINARY)" ] && [ -s "$(ORLIXOS_COREUTILS_STAMP)" ] && [ -s Makefile ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_COREUTILS_SOURCE_STAMP)" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_ACL_STAMP)" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_LIBCAP_STAMP)" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_LIBSELINUX_STAMP)" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIXOS_COREUTILS_STAMP)" -nt "$(ORLIXOS_MLIBC_RTLIB)" ]; then \
+		touch "$(ORLIXOS_COREUTILS_STAMP)"; \
+		echo "reusing Orlix Linux coreutils package inputs: $(ORLIXOS_COREUTILS_PROGRAMS)"; \
+		exit 0; \
+	fi; \
+	rm -f "$(ORLIXOS_COREUTILS_STAMP)"; \
+	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" = 1 ] || [ ! -s Makefile ] || [ ! -s "$$configure_signature" ] || [ "$$(cat "$$configure_signature")" != "$$current_signature" ]; then \
+		"$(ORLIXOS_COREUTILS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --with-selinux --enable-libcap --disable-gcc-warnings; \
+		printf '%s\n' "$$current_signature" > "$$configure_signature"; \
+	fi; \
 	$(MAKE) -j1 all PROGRAMS= LIBRARIES= MANS= INFO_DEPS=; \
 	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do \
 		source_program="$$program"; \
@@ -134,7 +160,6 @@ $(ORLIXOS_COREUTILS_TEST_LIST): $(ORLIXOS_COREUTILS_STAMP) $(PROJECT_DIR)/Makefi
 	[ -s "$(ORLIXOS_COREUTILS_TEST_LIST)" ] || { echo "empty Coreutils upstream test list" >&2; exit 1; }; \
 	cp "$(ORLIXOS_COREUTILS_BUILD_DIR)/lib/config.h" "$(ORLIXOS_COREUTILS_CONFIG_HEADER)"; \
 	[ -s "$(ORLIXOS_COREUTILS_CONFIG_HEADER)" ] || { echo "missing Coreutils config snapshot: $(ORLIXOS_COREUTILS_CONFIG_HEADER)" >&2; exit 1; }; \
-	rm -rf "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
 	echo "wrote upstream Coreutils test list: $(ORLIXOS_COREUTILS_TEST_LIST) ($$(wc -l < "$(ORLIXOS_COREUTILS_TEST_LIST)") tests)"
 
 $(ORLIXOS_COREUTILS_TEST_ENV): $(ORLIXOS_COREUTILS_STAMP) $(PROJECT_DIR)/Makefile
