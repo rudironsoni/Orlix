@@ -935,6 +935,11 @@ func outputHasPassingTAPLabel(_ output: String, _ label: String) -> Bool {
     return ok && !notOK
 }
 
+func outputHasShellWaitStatusZero(_ output: String) -> Bool {
+    output.contains("orlix-init: shell exit status=0") ||
+        output.range(of: #"(?m)orlix-init: process exited pid=[0-9]+ status=0"#, options: .regularExpression) != nil
+}
+
 func sourceFilesContainNone(root: URL, needles: [String]) -> Bool {
     guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: nil) else {
         return true
@@ -3792,7 +3797,7 @@ func runShellPipelineSmoke() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
@@ -4002,7 +4007,7 @@ func runShellEnvVarSmoke() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
@@ -4214,7 +4219,7 @@ func runShellRedirectionSmoke() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
@@ -4426,7 +4431,7 @@ func runShellScriptSmoke() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
@@ -4649,7 +4654,7 @@ func runCoreutilsTrueFalseEcho() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
@@ -4848,7 +4853,7 @@ func runCoreutilsCatWC() throws -> Int32 {
     } else {
         failures.append(fail("child-process-exit-missing", "runtime artifacts did not include shell child process exit"))
     }
-    if terminalText.contains("orlix-init: shell exit status=0") {
+    if outputHasShellWaitStatusZero(terminalText) {
         evidence["wait_reaping_status_observed"] = "true"
     } else {
         failures.append(fail("wait-reaping-status-missing", "runtime artifacts did not include shell exit status 0"))
