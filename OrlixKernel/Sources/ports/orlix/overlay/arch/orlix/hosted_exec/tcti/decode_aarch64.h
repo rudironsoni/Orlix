@@ -62,11 +62,13 @@ enum tcti_logical_op {
 	TCTI_LOGICAL_AND = 0,
 	TCTI_LOGICAL_ORR,
 	TCTI_LOGICAL_EOR,
+	TCTI_LOGICAL_BIT,
 };
 
 enum tcti_simd_reduction_op {
 	TCTI_SIMD_REDUCTION_UMAXV = 0,
 	TCTI_SIMD_REDUCTION_ADDV,
+	TCTI_SIMD_REDUCTION_ADDP,
 };
 
 enum tcti_simd_element_move_op {
