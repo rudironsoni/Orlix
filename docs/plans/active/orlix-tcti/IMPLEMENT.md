@@ -6420,6 +6420,37 @@ Timestamp: `2026-07-05T08:15:52Z`.
 - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
 - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
 
+### Checkpoint: Fault/Signal Smoke Refreshed On Current Head
+
+Timestamp: `2026-07-06T23:09:52Z`.
+
+- Harness-selected gate: `tcti-kernel-fault-signal-smoke`.
+- Product-path stage advanced: kernel/TCTI fault handoff proof remains current after the latest TCTI/Coreutils and execve evidence commits.
+- Gate result:
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-fault-signal-smoke`: passed.
+  - Report: `Build/TCTI/reports/tcti-kernel-fault-signal-smoke/report.json`.
+  - `status=pass`, `passed=true`, `git_sha=f0bd2911e8695305e8a54cda938a32fdb7f247c6`.
+  - Summary: `Kernel/TCTI no-phone fault/signal smoke proved TCTI user fault reaches Linux-owned SIGSEGV delivery.`
+  - Counters: `runtime_observed_faults=1`, `runtime_observed_linux_signals=1`, `source_evidence_facts=51`, `source_proof_failures=0`.
+  - Evidence includes `fault_address_recorded=0x4000`, Linux `handle_fault()` handoff, `force_sig_fault(SIGSEGV, ...)`, `SEGV_MAPERR`, and no HostAdapter-owned Linux signal semantics.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Reducer:
+  - Pass reducer: `Build/TCTI/reproducers/tcti-kernel-fault-signal-smoke/kernel-fault-signal-smoke-pass.json`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-kernel-fault-signal-smoke/kernel-fault-signal-smoke-pass.json`: passed.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-kernel-wait-reaping-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Coreutils Mkdir/Rm/Cp/Ln Passes On Pinned Simulator
 
 Timestamp: `2026-07-06T22:11:59Z`.
