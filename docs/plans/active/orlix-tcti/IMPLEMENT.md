@@ -2,6 +2,47 @@
 
 ## 2026-07-06
 
+### Checkpoint: Restore TCTI First Syscall Runtime Marker
+
+- Harness-selected gate after pushing local commits: `simulator-tcti-runtime-stability`.
+- Command run:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+- Environment proof:
+  - `xcode-offload doctor --root "$(external-ssd-root)" --strict --json` passed all checks.
+  - `xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b` reported `Device already booted`.
+  - `xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max`.
+- Failure report:
+  - Runtime report: `Build/Reports/runtime/tcti-simulator-stability-20260706T120001Z-68527.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260706T120001Z-68527.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260706T120001Z-68527.artifacts`.
+  - Status: failed at `tcti-first-syscall-marker`.
+- Observed runtime facts:
+  - The app launched and produced terminal output.
+  - Linux booted, mounted the root overlay, and started `/bin/true`.
+  - Terminal output includes `Orlix TCTI: linux exec start_thread task=true pid=32` and `orlix-init: process exited pid=32 status=0`.
+  - Forbidden behavior flags in the JSON report remained false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+- Root cause:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/report.c` hid `Orlix TCTI: svc #0` syscall-entry markers behind `CONFIG_ORLIX_TCTI_SYSCALL_TRACE`.
+  - Runtime validation and TCTI gate evidence still require `svc #0` markers for first-syscall, shell, and package progress proofs.
+- Fix:
+  - Restore unconditional syscall-entry reporting in `tcti_report_syscall()`.
+  - Keep syscall-return tracing behind `CONFIG_ORLIX_TCTI_SYSCALL_TRACE`.
+- Fresh validation after fix:
+  - Command: `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+  - Result: passed.
+  - Runtime report: `Build/Reports/runtime/tcti-simulator-stability-20260706T121034Z-19577.json`.
+  - Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260706T121034Z-19577.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260706T121034Z-19577.artifacts`.
+  - Captured first syscall artifact: `Build/Reports/runtime/tcti-simulator-stability-20260706T121034Z-19577.artifacts/tcti-first-syscall.txt`.
+  - Terminal output includes `Orlix TCTI: svc #0 task=true pid=32` and `orlix-init: process exited pid=32 status=0`.
+  - JSON report facts: `passed=true`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `can_claim_runtime_readiness=false`.
+  - Forbidden flags false: generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure to guest, and RWX.
+  - Fresh crash check under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 30 minutes returned no matching files.
+- Boundary:
+  - This proves the targeted simulator runtime stability marker gate on the pinned simulator.
+  - It does not prove full runtime readiness, package readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: OrlixOS Package Builds Stop Recleaning Bash And Coreutils
 
 - Scope:
