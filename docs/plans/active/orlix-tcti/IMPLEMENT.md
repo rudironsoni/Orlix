@@ -2,6 +2,26 @@
 
 ## 2026-07-07
 
+### Checkpoint: MLibC Pidfd Smoke Avoids Slow Stdio Path Under TCTI
+
+- Harness startup and selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` refreshed current report state.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-build-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-build-smoke`.
+- Fix:
+  - `OrlixMLibC/Sources/patches/0006-sysdeps-linux-avoid-stdio-for-pidfd-getpid.patch` changes upstream mlibc `Sysdeps<PidfdGetpid>` to read `/proc/self/fdinfo/<fd>` through direct Linux syscalls and parse the `Pid:` line from a stack buffer.
+  - This keeps pidfd semantics in OrlixMLibC while avoiding the slow `asprintf` / `fopen` / `getline` / `sscanf` path during TCTI execution.
+- Validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke` applied 6 OrlixMLibC upstream mlibc patches.
+  - The previous first failing `linux/pidfd` test no longer appears as the first `not ok` in `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt`.
+  - The selected gate still fails. Current first failing test is `posix/pthread_mutex`, killed by signal 6 after `ret == ETIMEDOUT`.
+  - Current report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`, with `status=fail` and `passed=false`.
+- Boundary:
+  - This checkpoint advances the selected mlibc real-stack smoke by removing a TCTI-amplified libc-side pidfd bottleneck.
+  - This does not prove `tcti-mlibc-build-smoke`, `ORLIX-MLIBC-TEST-END`, app terminal `ORLIX-USERLAND-TCTI-OK`, runtime readiness, release readiness, or physical-device readiness.
+
 ### Checkpoint: OCI Image Layout And Copied Rootfs Boot Session Pass On Pinned Simulator
 
 - Harness startup and selection:

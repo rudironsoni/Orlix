@@ -1,0 +1,139 @@
+diff --git a/sysdeps/linux/generic/sysdeps.cpp b/sysdeps/linux/generic/sysdeps.cpp
+--- a/sysdeps/linux/generic/sysdeps.cpp
++++ b/sysdeps/linux/generic/sysdeps.cpp
+@@ -2606,43 +2606,108 @@ int Sysdeps<PidfdOpen>::operator()(pid_t pid, unsigned int flags, int *outfd) {
+ 	return 0;
+ }
+ 
+ namespace {
+ 
+-char *pidfdGetPidLine = nullptr;
+-size_t pidfdGetPidLineSize = 0;
++int formatPidfdFdinfoPath(int fd, char *path, size_t pathSize) {
++	const char prefix[] = "/proc/self/fdinfo/";
++	char digits[16];
++	size_t n = 0;
++	size_t pos = 0;
++	unsigned int value;
++
++	if(fd < 0)
++		return EBADF;
++
++	for(size_t i = 0; i < sizeof(prefix) - 1; i++) {
++		if(pos + 1 >= pathSize)
++			return ENAMETOOLONG;
++		path[pos++] = prefix[i];
++	}
++
++	value = static_cast<unsigned int>(fd);
++	do {
++		digits[n++] = static_cast<char>('0' + (value % 10));
++		value /= 10;
++	} while(value);
++
++	while(n) {
++		if(pos + 1 >= pathSize)
++			return ENAMETOOLONG;
++		path[pos++] = digits[--n];
++	}
++	path[pos] = 0;
++	return 0;
++}
++
++bool parsePidfdPidLine(const char *buffer, size_t size, pid_t *outpid) {
++	const char prefix[] = "Pid:";
++
++	for(size_t i = 0; i + sizeof(prefix) - 1 <= size; i++) {
++		if(i && buffer[i - 1] != '\n')
++			continue;
++		if(memcmp(buffer + i, prefix, sizeof(prefix) - 1))
++			continue;
++
++		i += sizeof(prefix) - 1;
++		while(i < size && (buffer[i] == ' ' || buffer[i] == '\t'))
++			i++;
++
++		bool negative = false;
++		if(i < size && buffer[i] == '-') {
++			negative = true;
++			i++;
++		}
++
++		long pid = 0;
++		bool sawDigit = false;
++		while(i < size && buffer[i] >= '0' && buffer[i] <= '9') {
++			sawDigit = true;
++			pid = pid * 10 + (buffer[i] - '0');
++			i++;
++		}
++		if(!sawDigit)
++			return false;
++
++		*outpid = negative ? -pid : pid;
++		return true;
++	}
++
++	return false;
++}
+ 
+ } // namespace
+ 
+ int Sysdeps<PidfdGetpid>::operator()(int fd, pid_t *outpid) {
+-	char *path = nullptr;
+-	asprintf(&path, "/proc/self/fdinfo/%d", fd);
+-	frg::scope_exit freePath{[&] {
+-		free(path);
+-	}};
++	char path[64];
++	char buffer[512];
+ 
+-	FILE *fdinfo = fopen(path, "r");
+-	if (!fdinfo)
+-		return errno;
++	if(int e = formatPidfdFdinfoPath(fd, path, sizeof(path)); e)
++		return e;
+ 
+-	frg::scope_exit closeFile{[&] {
+-		fclose(fdinfo);
++	auto fdinfoRet = do_syscall(SYS_openat, AT_FDCWD, path,
++			O_RDONLY | O_CLOEXEC, 0);
++	if(int e = sc_error(fdinfoRet); e)
++		return e;
++
++	int fdinfo = sc_int_result<int>(fdinfoRet);
++	frg::scope_exit closeFdinfo{[&] {
++		do_syscall(SYS_close, fdinfo);
+ 	}};
+ 
+-	while (getline(&pidfdGetPidLine, &pidfdGetPidLineSize, fdinfo) != -1) {
+-		pid_t pid;
+-		int ret = sscanf(pidfdGetPidLine, "Pid: %d\n", &pid);
+-
+-		if(ret != 1)
+-			continue;
+-
+-		if (pid == 0)
+-			return EREMOTE;
+-		else if (pid == -1)
+-			return ESRCH;
+-
+-		*outpid = pid;
+-		return 0;
+-	}
++	auto readRet = do_syscall(SYS_read, fdinfo, buffer, sizeof(buffer));
++	if(int e = sc_error(readRet); e)
++		return e;
++
++	pid_t pid;
++	if(parsePidfdPidLine(buffer, sc_int_result<size_t>(readRet), &pid)) {
++		if(pid == 0)
++			return EREMOTE;
++		else if(pid == -1)
++			return ESRCH;
++
++		*outpid = pid;
++		return 0;
++	}
+ 
+ 	return EBADF;
+ }
