@@ -2,6 +2,31 @@
 
 ## 2026-07-07
 
+### Checkpoint: Simulator Runtime Stability Refreshed After OCI Lifecycle Restore
+
+Timestamp: `2026-07-07T18:36:00Z`.
+
+- Harness-selected gate: `simulator-tcti-runtime-stability`.
+- Reason: after restoring and pushing `tcti-oci-lifecycle-create-start-exec-kill-wait-delete`, the previous pinned-simulator stability report was stale for the new `53c8942fa4646a7ba56cea59502eab452af26b86` commit.
+- Validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: pinned simulator already booted.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - Runtime JSON report: `Build/Reports/runtime/tcti-simulator-stability-20260707T183415Z-88413.json`.
+  - Runtime Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260707T183415Z-88413.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260707T183415Z-88413.artifacts`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=53c8942fa4646a7ba56cea59502eab452af26b86`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - `tcti-simulator-fatal-runtime.txt` and `host-exec-violations.txt` were empty.
+  - Recent crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no Orlix, OrlixTestRunner, xctest, or XCTest crash reports.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: OCI Lifecycle Gate Restored
 
 Timestamp: `2026-07-07T18:25:24Z`.
