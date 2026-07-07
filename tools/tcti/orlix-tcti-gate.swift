@@ -19003,7 +19003,9 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
         sourceTextContains(testText, #"/bin/true"#) &&
         sourceTextContains(testText, #"/bin/false"#) &&
         sourceTextContains(testText, #"ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"#) &&
-        sourceTextContains(testText, #"ORLIX_ENV_COREUTILS_COMMAND_DONE"#) {
+        sourceTextContains(testText, #"ORLIX_ENV_COREUTILS_COMMAND_DONE"#) &&
+        sourceTextContains(testText, #"orlix-init: process exited pid="#) &&
+        sourceTextContains(testText, #"status=0"#) {
         evidence["oci_coreutils_command_source_asserted"] = "true"
         evidence["oci_environment_id"] = "oci-imported-runtime-test-fixture"
         evidence["oci_copied_environment_id"] = "oci-imported-runtime-test-fixture-copy"
