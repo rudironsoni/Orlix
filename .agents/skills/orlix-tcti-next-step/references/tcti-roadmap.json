@@ -1527,6 +1527,7 @@
       ],
       "allowed_scope": [
         "OrlixOS/**",
+        "OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests.swift",
         "OrlixKernel/Sources/ports/orlix/**",
         "OrlixMLibC/**",
         "tools/tcti/orlix-tcti-gate.swift",

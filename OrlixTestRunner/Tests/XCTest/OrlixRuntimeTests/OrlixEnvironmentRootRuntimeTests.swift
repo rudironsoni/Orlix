@@ -220,6 +220,23 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_EXEC_DONE"))
     }
 
+    func testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand()
+        throws
+    {
+        let runner = OrlixEnvironmentRootRuntimeProofRunner(
+            fixture: .ociDerived,
+            proof: .coreutilsCommand
+        )
+        let output = try runner.runCopiedNamedEnvironmentThroughSessionSelection()
+
+        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_COMMAND_BEGIN"))
+        XCTAssertTrue(output.contains("coreutils-command-ok"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_STDOUT_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_STDERR_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"))
+        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_COMMAND_DONE"))
+    }
+
     func testTarDerivedNamedEnvironmentCrossBootWrite() throws {
         let runner = OrlixEnvironmentRootRuntimeProofRunner(
             fixture: .tarDerived,
@@ -1409,10 +1426,11 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         "ORLIX_ENV_CGROUP_PROOF_FAILED_PIDS_MAX",
         "ORLIX_ENV_CGROUP_PROOF_FAILED_PROCS",
         "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_WRITE",
-            "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
-            "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
-            "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_VERIFY",
-            "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_CLEANUP",
+        "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_SYNC",
+        "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_REREAD",
+        "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_VERIFY",
+        "ORLIX_ENV_CROSSBOOT_PROOF_FAILED_CLEANUP",
+        "ORLIX_ENV_COREUTILS_PROOF_FAILED_EXIT_STATUS",
         ].first { output.contains($0) }
     }
 
@@ -1447,6 +1465,7 @@ private enum RuntimeProof: Sendable {
     case cgroupPidsLimit
     case crossBootWrite
     case crossBootVerify
+    case coreutilsCommand
 
     var defaultCommand: [String] {
         switch self {
@@ -1492,6 +1511,12 @@ private enum RuntimeProof: Sendable {
 				"-c",
 				Self.stdioExecutionScript
 			]
+        case .coreutilsCommand:
+            return [
+                "/bin/sh",
+                "-c",
+                Self.coreutilsCommandScript
+            ]
 		case .userNamespaceMappings:
 			return [
 				"/bin/sh",
@@ -1548,7 +1573,7 @@ private enum RuntimeProof: Sendable {
 			.stdioExecution,
 			.runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
 			.maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
-			.crossBootVerify:
+			.crossBootVerify, .coreutilsCommand:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
             return "/tmp"
@@ -1565,7 +1590,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 1000
@@ -1579,7 +1604,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 100
@@ -1598,7 +1623,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .maskedReadonlyPaths,
              .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1613,7 +1638,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .timeNamespaceOffsets,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1628,7 +1653,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1643,7 +1668,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1658,7 +1683,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .maskedReadonlyPaths,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return nil
         }
     }
@@ -1673,7 +1698,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .maskedReadonlyPaths,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return nil
         }
     }
@@ -1691,7 +1716,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1706,7 +1731,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .timeNamespaceOffsets,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify:
+             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return []
         }
     }
@@ -1720,7 +1745,7 @@ private enum RuntimeProof: Sendable {
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.stdioExecution:
+			.stdioExecution, .coreutilsCommand:
             return false
         }
     }
@@ -1802,6 +1827,8 @@ private enum RuntimeProof: Sendable {
                 #"if /bin/rm /etc/orlix-crossboot-marker && /bin/sync; then printf '%s%s\n' ORLIX_ENV_ CROSSBOOT_CLEANUP_OK; else printf '%s%s\n' ORLIX_ENV_CROSSBOOT_ PROOF_FAILED_CLEANUP; fi"#,
                 #"printf '%s%s\n' ORLIX_ENV_ CROSSBOOT_VERIFY_DONE"#,
             ].joined(separator: "\r") + "\r"
+        case .coreutilsCommand:
+            return ""
 		case .descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
@@ -1841,6 +1868,8 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
             return "ORLIX_ENV_CROSSBOOT_VERIFY_DONE"
+        case .coreutilsCommand:
+            return "ORLIX_ENV_COREUTILS_COMMAND_DONE"
         }
     }
 
@@ -1854,7 +1883,8 @@ private enum RuntimeProof: Sendable {
 			.crossBootVerify,
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution:
+			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
+            .coreutilsCommand:
             return ""
         }
     }
@@ -1869,7 +1899,8 @@ private enum RuntimeProof: Sendable {
 			.crossBootVerify,
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution:
+			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
+            .coreutilsCommand:
             return nil
         }
     }
@@ -1884,7 +1915,8 @@ private enum RuntimeProof: Sendable {
 			.crossBootVerify,
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution:
+			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
+            .coreutilsCommand:
             return ""
         }
     }
@@ -1899,7 +1931,8 @@ private enum RuntimeProof: Sendable {
 			.crossBootVerify,
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
-			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution:
+			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
+            .coreutilsCommand:
             return nil
         }
     }
@@ -2049,6 +2082,15 @@ private enum RuntimeProof: Sendable {
                 "ORLIX_ENV_CROSSBOOT_CLEANUP_OK",
                 "ORLIX_ENV_CROSSBOOT_VERIFY_DONE"
             ]
+        case .coreutilsCommand:
+            return [
+                "ORLIX_ENV_COREUTILS_COMMAND_BEGIN",
+                "coreutils-command-ok",
+                "ORLIX_ENV_COREUTILS_STDOUT_OK",
+                "ORLIX_ENV_COREUTILS_STDERR_OK",
+                "ORLIX_ENV_COREUTILS_EXIT_STATUS_OK",
+                "ORLIX_ENV_COREUTILS_COMMAND_DONE"
+            ]
         }
     }
 
@@ -2061,7 +2103,7 @@ private enum RuntimeProof: Sendable {
 		case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
 			.stdioExecution, .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
 			.maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
-			.crossBootVerify:
+			.crossBootVerify, .coreutilsCommand:
             return ""
         }
     }
@@ -2086,7 +2128,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
             return ""
         }
     }
@@ -2138,6 +2180,19 @@ private enum RuntimeProof: Sendable {
 		#"printf 'stdio_tty=%s\n' "$tty_path""#,
 		#"case "$tty_path" in /dev/pts/*) printf '%s%s\n' ORLIX_ENV_STDIO_PROOF_ FAILED_PTY;; *) printf '%s%s\n' ORLIX_ENV_STDIO_ NOT_PTY_OK;; esac"#,
 		#"printf '%s%s\n' ORLIX_ENV_ STDIO_DONE"#,
+	].joined(separator: "\n")
+
+	private static let coreutilsCommandScript = [
+		#"printf '%s%s\n' ORLIX_ENV_ COREUTILS_COMMAND_BEGIN"#,
+		#"/bin/echo coreutils-command-ok"#,
+		#"/bin/echo ORLIX_ENV_COREUTILS_STDOUT_OK"#,
+		#"/bin/echo ORLIX_ENV_COREUTILS_STDERR_OK >&2"#,
+		#"/bin/true"#,
+		#"true_status=$?"#,
+		#"/bin/false"#,
+		#"false_status=$?"#,
+		#"if [ "$true_status:$false_status" = "0:1" ]; then printf '%s%s\n' ORLIX_ENV_ COREUTILS_EXIT_STATUS_OK; else printf '%s%s\n' ORLIX_ENV_COREUTILS_ PROOF_FAILED_EXIT_STATUS; fi"#,
+		#"printf '%s%s\n' ORLIX_ENV_ COREUTILS_COMMAND_DONE"#,
 	].joined(separator: "\n")
 
 	private static let descriptorExecutionLines = [
