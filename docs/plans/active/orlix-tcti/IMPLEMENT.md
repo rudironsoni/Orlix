@@ -21,8 +21,8 @@ Timestamp: `2026-07-07T11:50:31Z`.
 - Gate result:
   - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-exec-coreutils-command`: passed.
   - Report: `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json`.
-  - Report evidence: `status=pass`, `passed=true`, `git_sha=b04b3464a1ef8df2d606a548fee08206898b169d`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `oci_process_exit_observed=true`, `oci_process_exit_status=0`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
-  - Xcode artifact: `Build/TCTI/oci_exec_coreutils_command/xcodebuild-output.txt` captured `ORLIX_ENV_COREUTILS_COMMAND_BEGIN`, `coreutils-command-ok`, `ORLIX_ENV_COREUTILS_STDOUT_OK`, `ORLIX_ENV_COREUTILS_STDERR_OK`, `ORLIX_ENV_COREUTILS_EXIT_STATUS_OK`, `ORLIX_ENV_COREUTILS_COMMAND_DONE`, `orlix-init: process exited pid=32 status=0`, and `** TEST SUCCEEDED **`.
+  - Post-commit report evidence: `status=pass`, `passed=true`, `git_sha=b40b10f65dbde2a239daa43abe60f3b26aae1952`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `oci_process_exit_observed=true`, `oci_process_exit_status=0`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Xcode artifact: `Build/TCTI/oci_exec_coreutils_command/xcodebuild-output.txt` captured `ORLIX_ENV_COREUTILS_COMMAND_BEGIN`, `coreutils-command-ok`, `ORLIX_ENV_COREUTILS_STDOUT_OK`, `ORLIX_ENV_COREUTILS_STDERR_OK`, `ORLIX_ENV_COREUTILS_EXIT_STATUS_OK`, `ORLIX_ENV_COREUTILS_COMMAND_DONE`, `orlix-init: process exited pid=33 status=0`, and `** TEST SUCCEEDED **`.
   - Pass reducer: `Build/TCTI/reproducers/tcti-oci-exec-coreutils-command/oci-exec-coreutils-command-pass.json`.
 - Next blocker:
   - `rtk proxy make tcti-gate TARGET=tcti-oci-stdio-signal-wait` now writes `Build/TCTI/reports/tcti-oci-stdio-signal-wait/report.json`.
