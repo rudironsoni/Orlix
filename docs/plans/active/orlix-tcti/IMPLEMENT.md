@@ -2,6 +2,31 @@
 
 ## 2026-07-07
 
+### Checkpoint: MLibC Libc Test Subset Passes On Pinned Simulator
+
+- Harness selection:
+  - `rtk proxy make agent-status AREA=orlix-tcti` selected `tcti-mlibc-libc-test-subset` as the next eligible gate.
+  - `rtk proxy make agent-next AREA=orlix-tcti` generated `Build/AgentHarness/orlix-tcti/next-task.json` for `tcti-mlibc-libc-test-subset`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-libc-test-subset`.
+- Xcode and simulator preflight:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --strict --json && xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b && xcrun simctl list devices booted && open -a Simulator --args -CurrentDeviceUDID 1E5553B0-203A-4A11-BAD7-EBDE46863F66'` passed.
+  - The only booted simulator was `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)`.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-libc-test-subset` passed.
+  - Report: `Build/TCTI/reports/tcti-mlibc-libc-test-subset/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=f0b2ac078d3da513889aaaa729b90f7b0d38b97b`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `libc_subset_completion_asserted_by_xctest=true`, `pass_count=1`, `fail_count=0`, and `skip_count=0`.
+  - `Build/TCTI/mlibc_libc_test_subset/xcodebuild-output.txt` contains `ORLIX-MLIBC-TEST-INIT`, `ok 162 - linux/xattr`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK AT_BASE=0x14d94a3b0000`, `ok 163 - orlix/dynamic-loader`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
+  - Forbidden behavior flags remained false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 20 minutes returned no matching files.
+- Follow-up validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the report was written.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-dynamic-loader-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-dynamic-loader-smoke`.
+- Boundary:
+  - This checkpoint advances Stage 8 supporting evidence by proving the OrlixMLibC libc subset executes through the app-hosted OrlixOS terminal-session XCTest surface on the pinned simulator.
+  - This does not prove app terminal `ORLIX-USERLAND-TCTI-OK`, interactive command execution, packaged userspace, OCI command execution, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed At Dynamic Loader Commit
 
 - Harness selection:
