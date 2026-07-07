@@ -67,10 +67,11 @@ static bool tcti_address_has_vma(struct mm_struct *mm, unsigned long address,
 	return valid;
 }
 
-static int tcti_read_user_data_faulting(struct pt_regs *regs,
-					struct mm_struct *mm,
-					unsigned long address,
-					void *buffer, size_t size)
+static int tcti_read_user_data_faulting_impl(struct pt_regs *regs,
+					     struct mm_struct *mm,
+					     unsigned long address,
+					     void *buffer, size_t size,
+					     bool log_missing_vma)
 {
 	int ret;
 	int fault_ret;
@@ -79,8 +80,10 @@ static int tcti_read_user_data_faulting(struct pt_regs *regs,
 	if (ret != -EFAULT && ret != -EACCES)
 		return ret;
 	if (!tcti_address_has_vma(mm, address, TCTI_ACCESS_READ)) {
-		pr_info("Orlix TCTI: static PIE read has no readable VMA task=%s pid=%d addr=%#lx size=%zu ret=%d\n",
-			current->comm, task_pid_nr(current), address, size, ret);
+		if (log_missing_vma)
+			pr_info("Orlix TCTI: static PIE read has no readable VMA task=%s pid=%d addr=%#lx size=%zu ret=%d\n",
+				current->comm, task_pid_nr(current), address,
+				size, ret);
 		return ret;
 	}
 
@@ -98,6 +101,24 @@ static int tcti_read_user_data_faulting(struct pt_regs *regs,
 			current->comm, task_pid_nr(current), address, size, ret);
 
 	return ret;
+}
+
+static int tcti_read_user_data_faulting(struct pt_regs *regs,
+					struct mm_struct *mm,
+					unsigned long address,
+					void *buffer, size_t size)
+{
+	return tcti_read_user_data_faulting_impl(regs, mm, address, buffer,
+						 size, true);
+}
+
+static int tcti_scan_user_data_faulting(struct pt_regs *regs,
+					struct mm_struct *mm,
+					unsigned long address,
+					void *buffer, size_t size)
+{
+	return tcti_read_user_data_faulting_impl(regs, mm, address, buffer,
+						 size, false);
 }
 
 static int tcti_write_user_data_faulting(struct pt_regs *regs,
@@ -149,7 +170,7 @@ static int tcti_find_current_elf_base(struct mm_struct *mm,
 		candidate - TCTI_ELF_IMAGE_SCAN_LIMIT : 0;
 
 	for (;;) {
-		if (!tcti_read_user_data_faulting(regs, mm, candidate, &ehdr,
+		if (!tcti_scan_user_data_faulting(regs, mm, candidate, &ehdr,
 						  sizeof(ehdr)) &&
 		    memcmp(ehdr.e_ident, ELFMAG, SELFMAG) == 0 &&
 		    ehdr.e_ident[EI_CLASS] == ELFCLASS64 &&
