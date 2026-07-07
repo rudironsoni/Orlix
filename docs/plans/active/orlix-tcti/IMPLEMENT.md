@@ -2,6 +2,34 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Lifecycle Gate Restored
+
+Timestamp: `2026-07-07T18:25:24Z`.
+
+- Restored `tcti-oci-lifecycle-create-start-exec-kill-wait-delete` in `tools/tcti/orlix-tcti-gate.swift` after confirming its removal regressed a working OCI proof surface.
+- The gate is an aggregate real-stack proof over existing app-hosted OrlixOS OCI gates, not a fake lifecycle implementation and not a HostAdapter Linux semantics shortcut.
+- Evidence sources:
+  - `tcti-oci-exec-coreutils-command` proves OCI exec command completion with Linux process exit status `0`.
+  - `tcti-oci-stdio-signal-wait` proves copied OCI environment start, SIGINT delivery, wait status `130`, and cleanup through the OrlixOS lifecycle API.
+- Source checks assert the OrlixOS lifecycle API surface still exposes `start`, `exec`, `kill`, `wait`, and `delete`.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk git diff --check`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-lifecycle-create-start-exec-kill-wait-delete`: passed.
+  - `Build/TCTI/reports/tcti-oci-lifecycle-create-start-exec-kill-wait-delete/report.json`: `status=pass`, `passed=true`, `git_sha=cfa76a91b335fb7b9a92e50198c7efce6ac8b3c4`, `can_claim_runtime_readiness=false`.
+  - Report counters: `oci_lifecycle_real_stack_gates_executed=2`, `oci_lifecycle_real_stack_gates_passed=2`, `oci_lifecycle_real_stack_gates_failed=0`.
+  - Report evidence: `lifecycle_create_observed=true`, `lifecycle_start_observed=true`, `lifecycle_exec_observed=true`, `lifecycle_kill_observed=true`, `lifecycle_wait_observed=true`, `lifecycle_delete_observed=true`, `oci_process_exit_observed=true`, `oci_command_exit_status=0`, `oci_signal_number=2`, `oci_wait_exit_status=130`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - Recent crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no Orlix, OrlixTestRunner, xctest, or XCTest crash reports.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed After OCI Signal Wait
 
 Timestamp: `2026-07-07T18:00:47Z`.
