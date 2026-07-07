@@ -19361,6 +19361,182 @@ func runOCIStdioSignalWait() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runOCILifecycleCreateStartExecKillWaitDelete() throws -> Int32 {
+    let target = "tcti-oci-lifecycle-create-start-exec-kill-wait-delete"
+    let command = "make tcti-gate TARGET=\(target)"
+    let outputRoot = buildPath("oci_lifecycle_create_start_exec_kill_wait_delete")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    try ensureDirectory(outputRoot)
+
+    let execTarget = "tcti-oci-exec-coreutils-command"
+    let signalTarget = "tcti-oci-stdio-signal-wait"
+    let execReportURL = buildPath("reports", execTarget, "report.json")
+    let signalReportURL = buildPath("reports", signalTarget, "report.json")
+    var artifacts: [String] = []
+    var failures: [Failure] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "oci_source": "OrlixOS",
+        "real_stack_execution_surface": "aggregate of app-hosted OrlixOS OCI exec and stdio signal/wait gates",
+        "exec_gate": execTarget,
+        "signal_wait_gate": signalTarget,
+        "exec_gate_report": relativePath(execReportURL),
+        "signal_wait_gate_report": relativePath(signalReportURL),
+        "lifecycle_create_observed": "false",
+        "lifecycle_start_observed": "false",
+        "lifecycle_exec_observed": "false",
+        "lifecycle_kill_observed": "false",
+        "lifecycle_wait_observed": "false",
+        "lifecycle_delete_observed": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    func runPrerequisite(_ prerequisite: String) throws {
+        let outputURL = outputRoot.appendingPathComponent("\(prerequisite)-output.txt")
+        let output = try runWithFileBackedOutput(
+            ["make", "tcti-gate", "TARGET=\(prerequisite)"],
+            check: false
+        )
+        try output.write(to: outputURL, atomically: true, encoding: .utf8)
+        artifacts.append(relativePath(outputURL))
+        if !output.contains("pass: Build/TCTI/reports/\(prerequisite)/report.json") {
+            failures.append(fail(
+                "\(prerequisite)-rerun",
+                "nested \(prerequisite) run did not print a passing report"
+            ))
+        }
+    }
+
+    try runPrerequisite(execTarget)
+    try runPrerequisite(signalTarget)
+
+    func loadReport(_ url: URL, _ prerequisite: String) -> [String: Any]? {
+        do {
+            guard let object = try loadJSON(url) as? [String: Any] else {
+                failures.append(fail("\(prerequisite)-report-shape", "\(relativePath(url)) is not a JSON object"))
+                return nil
+            }
+            artifacts.append(relativePath(url))
+            return object
+        } catch {
+            failures.append(fail("\(prerequisite)-report-load", "could not read \(relativePath(url)): \(error)"))
+            return nil
+        }
+    }
+
+    let execReport = loadReport(execReportURL, execTarget)
+    let signalReport = loadReport(signalReportURL, signalTarget)
+
+    if let execReport {
+        if stringField(execReport, "status") == "pass" &&
+            boolField(execReport, "passed") &&
+            stringField(execReport, "git_sha") == gitSha() {
+            evidence["lifecycle_exec_observed"] = "true"
+            evidence["oci_command_exit_status"] = "\(intField(execReport, "oci_process_exit_status") ?? -1)"
+            evidence["oci_process_exit_observed"] = boolField(execReport, "oci_process_exit_observed") ? "true" : "false"
+        } else {
+            failures.append(fail("\(execTarget)-report-status", "\(relativePath(execReportURL)) must be current and passing"))
+        }
+        if intField(execReport, "oci_process_exit_status") != 0 ||
+            !boolField(execReport, "oci_process_exit_observed") {
+            failures.append(fail("\(execTarget)-exit-proof", "\(execTarget) must prove OCI exec command exit status 0"))
+        }
+        if let execEvidence = execReport["evidence"] as? [String: Any] {
+            evidence["oci_environment_id"] = stringField(execEvidence, "oci_environment_id")
+            evidence["oci_copied_environment_id"] = stringField(execEvidence, "oci_copied_environment_id")
+            evidence["oci_root_image_identifier"] = stringField(execEvidence, "oci_root_image_identifier")
+            evidence["oci_stdout_marker"] = stringField(execEvidence, "packaged_command_stdout_marker")
+            evidence["oci_stderr_marker"] = stringField(execEvidence, "packaged_command_stderr_marker")
+        }
+    }
+
+    if let signalReport {
+        if stringField(signalReport, "status") == "pass" &&
+            boolField(signalReport, "passed") &&
+            stringField(signalReport, "git_sha") == gitSha() {
+            evidence["lifecycle_create_observed"] = "true"
+            evidence["lifecycle_start_observed"] = "true"
+            evidence["lifecycle_kill_observed"] = "true"
+            evidence["lifecycle_wait_observed"] = "true"
+            evidence["lifecycle_delete_observed"] = "true"
+            evidence["oci_signal_number"] = "\(intField(signalReport, "oci_signal_number") ?? -1)"
+            evidence["oci_wait_exit_status"] = "\(intField(signalReport, "oci_wait_exit_status") ?? -1)"
+        } else {
+            failures.append(fail("\(signalTarget)-report-status", "\(relativePath(signalReportURL)) must be current and passing"))
+        }
+        if intField(signalReport, "oci_signal_number") != 2 ||
+            intField(signalReport, "oci_wait_exit_status") != 130 ||
+            !boolField(signalReport, "oci_signal_observed") {
+            failures.append(fail("\(signalTarget)-signal-wait-proof", "\(signalTarget) must prove SIGINT and wait exit status 130"))
+        }
+    }
+
+    let runtimeSource = try readText(path("OrlixOS", "Sources", "Session", "OrlixOS.swift"))
+    let environmentSource = try readText(path("OrlixOS", "Sources", "Session", "OrlixEnvironment.swift"))
+    if sourceTextContains(runtimeSource, #"public func start\("#) &&
+        sourceTextContains(runtimeSource, #"public func exec\("#) &&
+        sourceTextContains(runtimeSource, #"public func kill\("#) &&
+        sourceTextContains(runtimeSource, #"public func wait\("#) &&
+        sourceTextContains(environmentSource, #"public func delete\("#) {
+        evidence["oci_lifecycle_api_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-lifecycle-api-source-proof", "OrlixOS sources must expose create/start/exec/kill/wait/delete lifecycle APIs"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
+    evidence[status == .pass ? "pass_count" : "fail_count"] = "1"
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "oci-lifecycle-create-start-exec-kill-wait-delete-pass" : "oci-lifecycle-create-start-exec-kill-wait-delete-fail",
+        command: command,
+        reason: status == .pass ? "OCI lifecycle aggregate proof passed" : failures.map(\.message).joined(separator: "; "),
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ?
+            "OCI lifecycle create/start/exec/kill/wait/delete gate passed by rerunning current app-hosted OrlixOS OCI real-stack proofs." :
+            "OCI lifecycle create/start/exec/kill/wait/delete gate did not pass current app-hosted OrlixOS OCI real-stack proofs.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "oci_lifecycle_real_stack_gates_executed": 2,
+            "oci_lifecycle_real_stack_gates_passed": status == .pass ? 2 : 0,
+            "oci_lifecycle_real_stack_gates_failed": status == .pass ? 0 : failures.count,
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
+        ],
+        ociProcessExitObserved: evidence["oci_process_exit_observed"] == "true",
+        ociProcessExitStatus: Int(evidence["oci_command_exit_status"] ?? ""),
+        ociSignalObserved: evidence["lifecycle_kill_observed"] == "true",
+        ociSignalNumber: Int(evidence["oci_signal_number"] ?? ""),
+        ociWaitExitStatus: Int(evidence["oci_wait_exit_status"] ?? ""),
+        kernelProfile: "tcti_runtime",
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/tcti_runtime_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
 let tctiTargets = [
     "tcti-plan-consistency",
     "tcti-report-schema-check",
@@ -19393,6 +19569,7 @@ let tctiTargets = [
     "tcti-oci-rootfs-boot-session",
     "tcti-oci-exec-coreutils-command",
     "tcti-oci-stdio-signal-wait",
+    "tcti-oci-lifecycle-create-start-exec-kill-wait-delete",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -19518,6 +19695,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runOCIExecCoreutilsCommand()
     case "tcti-oci-stdio-signal-wait":
         return try runOCIStdioSignalWait()
+    case "tcti-oci-lifecycle-create-start-exec-kill-wait-delete":
+        return try runOCILifecycleCreateStartExecKillWaitDelete()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
