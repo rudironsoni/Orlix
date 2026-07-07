@@ -2,6 +2,24 @@
 
 ## 2026-07-07
 
+### Checkpoint: Simulator Runtime Stability Refreshed At Dynamic Loader Commit
+
+- Harness selection:
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Simulator runtime validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - Runtime JSON report: `Build/Reports/runtime/tcti-simulator-stability-20260707T061617Z-77759.json`.
+  - Runtime Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260707T061617Z-77759.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260707T061617Z-77759.artifacts`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=5887781c9371a4fa27d1161e743611c56f80f9c3`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior flags were false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Terminal artifact captured `Orlix TCTI: linux exec start_thread` and `Orlix TCTI: svc #0` entries for `init`.
+- Boundary:
+  - This refreshes the mandatory pinned-simulator stability proof at the pushed dynamic-loader checkpoint.
+  - This does not prove app terminal `ORLIX-USERLAND-TCTI-OK`, full shell usability, package behavior, full Linux runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: MLibC Dynamic Loader Smoke Passes On Pinned Simulator
 
 - Harness selection:
