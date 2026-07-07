@@ -2,6 +2,33 @@
 
 ## 2026-07-07
 
+### Checkpoint: Simulator Runtime Stability Refreshed After OCI Signal Wait
+
+Timestamp: `2026-07-07T18:00:47Z`.
+
+- Harness-selected gate: `simulator-tcti-runtime-stability`.
+- Validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - Runtime JSON report: `Build/Reports/runtime/tcti-simulator-stability-20260707T180047Z-41299.json`.
+  - Runtime Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260707T180047Z-41299.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260707T180047Z-41299.artifacts`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=d4fada62cac95112af094e058d29a7819f6e3365`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior flags were false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - `tcti-simulator-fatal-runtime.txt` and `host-exec-violations.txt` were empty.
+  - Fresh crash scans under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no recent `Orlix`, `OrlixTestRunner`, `xctest`, or `XCTest` crash reports.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+- Follow-up:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-lifecycle-create-start-exec-kill-wait-delete`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: currently fails because the newly selected target is not yet supported by `tools/tcti/orlix-tcti-gate.swift`.
+- Boundary:
+  - This refreshes mandatory pinned-simulator runtime stability after the OCI stdio/signal/wait proof.
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: OCI Stdio Signal Wait Passes On Pinned Simulator
 
 Timestamp: `2026-07-07T18:05:00Z`.
