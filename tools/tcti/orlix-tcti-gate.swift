@@ -600,6 +600,83 @@ func runWithFileBackedOutput(
     return output.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+func runWithFileBackedOutput(
+    _ arguments: [String],
+    check: Bool = true,
+    terminateAfterOutputContainsAny needleGroups: [[String]],
+    terminationGraceSeconds: TimeInterval = 10
+) throws -> String {
+    let scratch = buildPath("tmp", "command-output")
+    try ensureDirectory(scratch)
+    let unique = UUID().uuidString
+    let stdoutURL = scratch.appendingPathComponent("\(unique).stdout")
+    let stderrURL = scratch.appendingPathComponent("\(unique).stderr")
+    fileManager.createFile(atPath: stdoutURL.path, contents: nil)
+    fileManager.createFile(atPath: stderrURL.path, contents: nil)
+    let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+    let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+    defer {
+        try? stdoutHandle.close()
+        try? stderrHandle.close()
+        try? fileManager.removeItem(at: stdoutURL)
+        try? fileManager.removeItem(at: stderrURL)
+    }
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = arguments
+    process.currentDirectoryURL = repoRoot()
+    process.standardOutput = stdoutHandle
+    process.standardError = stderrHandle
+    try process.run()
+
+    func combinedOutput() -> String {
+        let output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
+        let error = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+        return output + error
+    }
+
+    if needleGroups.isEmpty {
+        process.waitUntilExit()
+    } else {
+        var matchedSeenAt: Date?
+        while process.isRunning {
+            let currentOutput = combinedOutput()
+            let matched = needleGroups.contains { needles in
+                !needles.isEmpty && needles.allSatisfy { currentOutput.contains($0) }
+            }
+            if matched {
+                if matchedSeenAt == nil {
+                    matchedSeenAt = Date()
+                }
+                if let seenAt = matchedSeenAt,
+                   Date().timeIntervalSince(seenAt) >= terminationGraceSeconds {
+                    process.terminate()
+                    let deadline = Date().addingTimeInterval(5)
+                    while process.isRunning && Date() < deadline {
+                        Thread.sleep(forTimeInterval: 0.1)
+                    }
+                    if process.isRunning {
+                        Darwin.kill(process.processIdentifier, SIGKILL)
+                    }
+                    break
+                }
+            } else {
+                matchedSeenAt = nil
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        process.waitUntilExit()
+    }
+
+    let output = (try? String(contentsOf: stdoutURL, encoding: .utf8)) ?? ""
+    let error = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+    if check && process.terminationStatus != 0 {
+        throw GateError.commandFailed((output + error).trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+    return output.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 func commandPath(_ name: String) throws -> String {
     try run(["command", "-v", name])
 }
@@ -2530,7 +2607,11 @@ func runMLibCBuildSmoke() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"],
+            ["** TEST FAILED **", "Test Suite 'Selected tests' failed"],
+            ["not ok ", "Test Case '-[OrlixMLibCConformanceTests.OrlixMLibCConformanceTests testMLibCRootfsCompletesThroughOrlixOSTerminalSession]' failed"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))

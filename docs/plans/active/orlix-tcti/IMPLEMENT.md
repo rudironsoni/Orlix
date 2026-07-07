@@ -2,6 +2,29 @@
 
 ## 2026-07-07
 
+### Checkpoint: MLibC Build Smoke Passes On Pinned Simulator
+
+- Harness progression:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-build-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-build-smoke`.
+- Harness reliability fix:
+  - `tools/tcti/orlix-tcti-gate.swift` now lets the mlibc smoke command terminate file-backed `xcodebuild` capture after either success markers or known XCTest failure markers.
+  - This preserves failure reporting and prevents the wrapper from hanging when `OrlixTestRunner` keeps the XCTest process alive after a failed mlibc test.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke` passed.
+  - Report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=67e163c5a56e4b265e2f330bf437c1ddbf7fc9c3`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `pass_count=1`, `fail_count=0`, `skip_count=0`, and `source_proof_failures=0`.
+  - `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt` shows `ok 100 - posix/pthread_mutex`, `ok 157 - linux/pidfd`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
+  - After the pass, `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Boundary:
+  - This checkpoint advances Stage 8 supporting evidence by proving the OrlixMLibC upstream test rootfs completes through the app-hosted OrlixOS terminal-session XCTest surface on the pinned simulator.
+  - This does not prove the app terminal `ORLIX-USERLAND-TCTI-OK`, command execution, packaged userspace, OCI command execution, full runtime readiness, release readiness, or physical-device readiness.
+
 ### Checkpoint: MLibC Pidfd Smoke Avoids Slow Stdio Path Under TCTI
 
 - Harness startup and selection:
