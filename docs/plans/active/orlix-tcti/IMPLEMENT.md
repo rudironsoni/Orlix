@@ -2,6 +2,49 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Image Layout And Copied Rootfs Boot Session Pass On Pinned Simulator
+
+- Harness startup and selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` refreshed simulator readiness and selected OCI work with dirty-worktree blockers still preventing physical-device eligibility.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-oci-image-layout-parse`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-oci-image-layout-parse`.
+- Xcode and simulator preflight:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --require-shims && xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b && open -a Simulator --args -CurrentDeviceUDID 1E5553B0-203A-4A11-BAD7-EBDE46863F66'` passed and kept the pinned simulator visible.
+- Fixes:
+  - HostAdapter console mirroring now retries `EINTR` and bounded `EAGAIN`/`EWOULDBLOCK` backpressure when writing app-visible terminal output to its nonblocking pipe. This is private console mirroring only, not Linux syscall, VFS, fd, process, wait, signal, or exec semantics.
+  - `OrlixEnvironmentRootRuntimeTests` resolves materialized runtime fixtures from the explicit fixture override, app/test bundle resources, or the repo build root, and verifies freshness against the active `ORLIX_PROFILE` / external build root instead of only the repo-local `Build` path.
+  - Descriptor proof validation accepts ordered `pwd=` then `/tmp` fragments so real TCTI syscall diagnostics can interleave between guest stdout writes while still proving cwd `/tmp`.
+  - OCI gates now fail skipped Xcode tests and pass external build-root fixture environment variables through the xcode-offload-backed build root.
+- OCI image-layout parse:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-image-layout-parse` passed.
+  - Report: `Build/TCTI/reports/tcti-oci-image-layout-parse/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=fd749ba74ce5fa423bb69e6ab0ed1533095a268a`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `xcode_test_executed=true`, `xcode_test_passed=true`, `pass_count=1`, `skip_count=0`, `oci_image_layout_parse_tests_executed=1`, `oci_image_layout_parse_tests_passed=1`, and `source_proof_failures=0`.
+  - App-visible proof artifact `Build/TCTI/oci_image_layout_parse/xcodebuild-output.txt` shows `testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession` passed, with `pwd=` and `/tmp` ordered in the terminal output and `ORLIX_ENV_EXEC_DONE` present.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-oci-image-layout-parse/oci-image-layout-parse-pass.json` replayed with `actual replay status: pass`.
+- OCI copied rootfs boot-session:
+  - After schema refresh and `agent-next`, the harness selected `tcti-oci-rootfs-boot-session`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-oci-rootfs-boot-session`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-rootfs-boot-session` passed.
+  - Report: `Build/TCTI/reports/tcti-oci-rootfs-boot-session/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=fd749ba74ce5fa423bb69e6ab0ed1533095a268a`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `xcode_test_executed=true`, `xcode_test_passed=true`, `pass_count=1`, `skip_count=0`, `oci_boot_session_source_asserted=true`, `oci_registry_source_asserted=true`, `oci_runtime_session_source_asserted=true`, `oci_rootfs_boot_session_tests_executed=1`, `oci_rootfs_boot_session_tests_passed=1`, and `source_proof_failures=0`.
+  - App-visible proof artifact `Build/TCTI/oci_rootfs_boot_session/xcodebuild-output.txt` shows `testCopiedNamedEnvironmentSessionSelectionEntersRootAndDescriptor` passed, with copied OCI environment session selection entering the materialized root and descriptor. The terminal output contains ordered `pwd=` then `/tmp`, `ID=orlix-oci-runtime-test-fixture`, and `ORLIX_ENV_EXEC_DONE`.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-oci-rootfs-boot-session/oci-rootfs-boot-session-pass.json` replayed with `actual replay status: pass`.
+- Follow-up validation:
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-oci-exec-coreutils-command`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed before the selected boot-session proof; the next checkpoint must rerun it for `tcti-oci-exec-coreutils-command`.
+  - After adding the missing selected target dispatch, `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-oci-exec-coreutils-command`.
+  - `rtk proxy sh -c 'make tcti-gate TARGET=tcti-oci-exec-coreutils-command; status=$?; echo exit=$status; test $status -ne 0'` produced the expected structured fail report at `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json`.
+  - Current next-gate blocker: `status=fail`, `passed=false`, `failure_id=oci-coreutils-command-proof-missing`, `oci_exec_coreutils_command_tests_executed=0`, and `source_proof_failures=1`. The missing proof is an app-hosted OrlixOS OCI session that runs real packaged Coreutils and records stdout/stderr/exit status.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed with the current `tcti-oci-exec-coreutils-command` fail report present.
+- Boundary:
+  - This checkpoint advances Stage 5 evidence for OrlixOS-provided OCI payload/rootfs/session materialization and copied environment session selection into an app-hosted simulator terminal session.
+  - This checkpoint does not prove `ORLIX-USERLAND-TCTI-OK`, coreutils command execution from the packaged OCI environment, full app terminal readiness, package readiness, release readiness, physical-device readiness, or the full TCTI product goal.
+
 ### Checkpoint: Execve/Binfmt ELF Revalidated With Current Simulator Stability
 
 - Harness startup and selection:

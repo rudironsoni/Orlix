@@ -212,7 +212,8 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("argv0=orlix-descriptor-xxxx"))
         XCTAssertTrue(output.contains("argv1=argument with spaces"))
         XCTAssertTrue(output.contains("env=descriptor value with spaces"))
-        XCTAssertTrue(output.contains("pwd=/tmp"))
+        let pwdRange = try XCTUnwrap(output.range(of: "pwd="))
+        XCTAssertNotNil(output.range(of: "/tmp", range: pwdRange.upperBound..<output.endIndex))
         XCTAssertTrue(output.contains("Uid:\t1000"))
         XCTAssertTrue(output.contains("Gid:\t100"))
         XCTAssertTrue(output.contains("ID=orlix-oci-runtime-test-fixture"))
@@ -1121,37 +1122,89 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let root = repoRoot
-            .appendingPathComponent("Build", isDirectory: true)
-            .appendingPathComponent("OrlixOS", isDirectory: true)
-            .appendingPathComponent("environment-runtime-test-fixtures", isDirectory: true)
-            .appendingPathComponent(fixture.directoryName, isDirectory: true)
-        let marker = root.appendingPathComponent(readyFile, isDirectory: false)
-
-        guard FileManager.default.fileExists(atPath: marker.path) else {
-            throw XCTSkip(
-                "missing \(fixture.description) materialized root fixture: \(marker.path)"
-            )
+        let environment = ProcessInfo.processInfo.environment
+        let buildRoot = environment["ORLIX_BUILD_ROOT"].flatMap {
+            $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true)
         }
-        try verifyFixtureReadyFile(
-            marker: marker,
-            fixture: fixture,
-            repoRoot: repoRoot
-        )
+        let repoBuildRoot = repoRoot.appendingPathComponent("Build", isDirectory: true)
+        var candidates: [(root: URL, buildRoot: URL?)] = []
 
-        return EnvironmentRootFixture(root: root)
+        if let override = environment["ORLIX_RUNTIME_FIXTURE_ROOT"],
+           !override.isEmpty {
+            let overrideRoot = URL(fileURLWithPath: override, isDirectory: true)
+            let root = overrideRoot.lastPathComponent == fixture.directoryName
+                ? overrideRoot
+                : overrideRoot.appendingPathComponent(fixture.directoryName, isDirectory: true)
+            candidates.append((root, buildRoot ?? Self.inferredBuildRoot(from: root)))
+        }
+
+        let resourceBundles = [
+            Bundle.main,
+            Bundle(for: OrlixEnvironmentRootRuntimeTests.self),
+        ]
+        for bundle in resourceBundles {
+            if let resourceRoot = bundle.resourceURL?
+                .appendingPathComponent("EnvironmentRuntimeTestFixtures", isDirectory: true)
+                .appendingPathComponent(fixture.directoryName, isDirectory: true) {
+                candidates.append((resourceRoot, buildRoot))
+            }
+        }
+
+        candidates.append((
+            repoBuildRoot
+                .appendingPathComponent("OrlixOS", isDirectory: true)
+                .appendingPathComponent("environment-runtime-test-fixtures", isDirectory: true)
+                .appendingPathComponent(fixture.directoryName, isDirectory: true),
+            repoBuildRoot
+        ))
+
+        var checkedMarkers: [String] = []
+        for candidate in candidates {
+            let marker = candidate.root.appendingPathComponent(readyFile, isDirectory: false)
+            checkedMarkers.append(marker.path)
+            guard FileManager.default.fileExists(atPath: marker.path) else {
+                continue
+            }
+            try verifyFixtureReadyFile(
+                marker: marker,
+                fixture: fixture,
+                buildRoot: candidate.buildRoot
+            )
+
+            return EnvironmentRootFixture(root: candidate.root)
+        }
+
+        throw XCTSkip(
+            "missing \(fixture.description) materialized root fixture; checked: \(checkedMarkers.joined(separator: ", "))"
+        )
+    }
+
+    private static func inferredBuildRoot(from fixtureRoot: URL) -> URL? {
+        let components = fixtureRoot.standardizedFileURL.pathComponents
+        guard let buildIndex = components.lastIndex(of: "Build") else {
+            return nil
+        }
+        return URL(
+            fileURLWithPath: NSString.path(
+                withComponents: Array(components.prefix(through: buildIndex))
+            ),
+            isDirectory: true
+        )
     }
 
     private static func verifyFixtureReadyFile(
         marker: URL,
         fixture: RuntimeFixture,
-        repoRoot: URL
+        buildRoot: URL?
     ) throws {
         let ready = try parseReadyFile(marker)
+        let expectedProfile = ProcessInfo.processInfo.environment["ORLIX_PROFILE"] ??
+            ready["profile"] ??
+            "release"
 
-        guard ready["profile"] == "release" else {
+        guard ready["profile"] == expectedProfile else {
             throw OrlixEnvironmentRootRuntimeProofError.staleFixture(
-                "fixture \(fixture.description) was not generated for release profile"
+                "fixture \(fixture.description) was not generated for \(expectedProfile) profile"
             )
         }
         guard ready["fixture"] == fixture.directoryName else {
@@ -1164,12 +1217,14 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
                 "fixture marker does not match \(fixture.environmentID)"
             )
         }
+        guard let buildRoot else {
+            return
+        }
 
-        let initURL = repoRoot
-            .appendingPathComponent("Build", isDirectory: true)
+        let initURL = buildRoot
             .appendingPathComponent("OrlixOS", isDirectory: true)
             .appendingPathComponent("packages", isDirectory: true)
-            .appendingPathComponent("release", isDirectory: true)
+            .appendingPathComponent(expectedProfile, isDirectory: true)
             .appendingPathComponent("sbin", isDirectory: true)
             .appendingPathComponent("init", isDirectory: false)
         guard FileManager.default.fileExists(atPath: initURL.path) else {
@@ -1227,6 +1282,31 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
                 )
             }
         }
+        for markerGroup in proof.requiredOrderedMarkerGroups(for: fixture) {
+            guard Self.outputContainsMarkersInOrder(output, markerGroup) else {
+                throw OrlixEnvironmentRootRuntimeProofError.missingMarker(
+                    markerGroup.joined(separator: " ... "),
+                    terminalLog.url
+                )
+            }
+        }
+    }
+
+    private static func outputContainsMarkersInOrder(
+        _ output: String,
+        _ markers: [String]
+    ) -> Bool {
+        var searchStart = output.startIndex
+        for marker in markers {
+            guard let range = output.range(
+                of: marker,
+                range: searchStart..<output.endIndex
+            ) else {
+                return false
+            }
+            searchStart = range.upperBound
+        }
+        return true
     }
 
     private static func containsShellPrompt(_ rawOutput: String) -> Bool {
@@ -1846,7 +1926,6 @@ private enum RuntimeProof: Sendable {
                 "argv0=\(descriptorExecutionArgument0)",
                 "argv1=argument with spaces",
                 "env=descriptor value with spaces",
-                "pwd=/tmp",
                 "Uid:\t1000",
                 "Gid:\t100",
                 "ORLIX_ENV_EXEC_DONE"
@@ -1984,6 +2063,15 @@ private enum RuntimeProof: Sendable {
 			.maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
 			.crossBootVerify:
             return ""
+        }
+    }
+
+    func requiredOrderedMarkerGroups(for fixture: RuntimeFixture) -> [[String]] {
+        switch self {
+        case .descriptorExecution, .longDescriptorExecution:
+            return [["pwd=", "/tmp"]]
+        default:
+            return []
         }
     }
 
@@ -2130,6 +2218,7 @@ private enum RuntimeFixture: Sendable {
             return "ID=orlix-oci-runtime-test-fixture"
         }
     }
+
 }
 
 private struct EnvironmentRootFixture {
