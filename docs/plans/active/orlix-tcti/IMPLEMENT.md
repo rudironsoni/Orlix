@@ -2,6 +2,24 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Coreutils Report Exposes Process Exit Proof
+
+Timestamp: `2026-07-07T15:18:00Z`.
+
+- Harness-selected gate: `tcti-oci-exec-coreutils-command`.
+- Implementation:
+  - `tools/tcti/orlix-tcti-gate.swift` now lifts `oci_process_exit_observed` and `oci_process_exit_status` into the top-level `report.json` for `tcti-oci-exec-coreutils-command`.
+  - This preserves the existing XCTest and Linux workload behavior while making the exit-status proof directly machine-readable to status/report readers.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-exec-coreutils-command`: passed.
+  - `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json`: `status=pass`, `passed=true`, `git_sha=54be4cd9c44d49cbbcb8f09c9015d7cd8f778ba2`, `oci_process_exit_observed=true`, `oci_process_exit_status=0`.
+  - `Build/TCTI/oci_exec_coreutils_command/xcodebuild-output.txt` contains `ORLIX_ENV_COREUTILS_EXIT_STATUS_OK` and `orlix-init: process exited pid=32 status=0`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+
+## 2026-07-07
+
 ### Checkpoint: OCI Coreutils Command Waits For Linux Exit Status
 
 Timestamp: `2026-07-07T13:27:29Z`.
