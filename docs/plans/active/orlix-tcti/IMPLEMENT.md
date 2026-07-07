@@ -2,6 +2,42 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Stdio Signal Wait Passes On Pinned Simulator
+
+Timestamp: `2026-07-07T18:05:00Z`.
+
+- Harness-selected gate: `tcti-oci-stdio-signal-wait`.
+- User-visible simulator concern:
+  - The product app initially appeared to return to SpringBoard shortly after launch, but a fresh launch on the pinned simulator returned PID `6595`, stayed alive past 10 seconds, and the 10-second screenshot showed the Orlix terminal foregrounded at `sh-5.3#` with TCTI Linux exec logs.
+  - Fresh crash scans under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no recent `Orlix`, `OrlixTestRunner`, `xctest`, or `XCTest` crash reports.
+  - This is not a final product marker claim. It only rejects the specific "opening and closing means it crashed" hypothesis for the checked run.
+- Implementation:
+  - `OrlixEnvironmentRootRuntimeTests.swift` now adds `testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait`.
+  - The test starts a copied OCI-derived OrlixOS environment, records stdout and stderr markers through the terminal recorder, sends Linux signal `2` through the OCI lifecycle API, waits for completion, and asserts stopped lifecycle state with exit status `130`.
+  - The assertion now matches the actual Linux signal path: `orlix-init: process signaled pid=... signal=2` plus shell exit status `130`, not a fake normal process-exit line.
+  - `tools/tcti/orlix-tcti-gate.swift` now runs the focused Xcode test on `Orlix-iPhone-15-Pro-Max`, writes evidence/reducer artifacts, reports `oci_signal_observed=true`, `oci_signal_number=2`, and `oci_wait_exit_status=130`, and avoids claiming a normal `oci_process_exit_observed` line for the signal case.
+  - The gate treats the focused XCTest's normalized terminal recorder as the stdio/signal marker proof because raw Xcode console output can interleave Linux console mirror timestamps into terminal bytes.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy swiftc -parse OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests.swift`: passed.
+  - `rtk git diff --check`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-stdio-signal-wait`: passed.
+  - Report: `Build/TCTI/reports/tcti-oci-stdio-signal-wait/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `oci_stdio_observed=true`, `oci_signal_observed=true`, `oci_signal_number=2`, `oci_wait_exit_status=130`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Xcode artifact: `Build/TCTI/oci_stdio_signal_wait/xcodebuild-output.txt` contains the focused test start, `orlix-init: process signaled pid=... signal=2`, `Test Case '-[OrlixRuntimeTests.OrlixEnvironmentRootRuntimeTests testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait]' passed`, and `** TEST SUCCEEDED **`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+- Follow-up:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-lifecycle-create-start-exec-kill-wait-delete`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: currently fails because the newly selected target is not yet supported by `tools/tcti/orlix-tcti-gate.swift`.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: OCI Coreutils Report Exposes Process Exit Proof
 
 Timestamp: `2026-07-07T15:18:00Z`.

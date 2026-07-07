@@ -70,6 +70,9 @@ struct Report: Codable {
     let coverageWarnings: [String]
     let ociProcessExitObserved: Bool?
     let ociProcessExitStatus: Int?
+    let ociSignalObserved: Bool?
+    let ociSignalNumber: Int?
+    let ociWaitExitStatus: Int?
     let evidence: [String: String]?
     let expectedStatus: String?
     let actualReplayStatus: String?
@@ -104,6 +107,9 @@ struct Report: Codable {
         case coverageWarnings = "coverage_warnings"
         case ociProcessExitObserved = "oci_process_exit_observed"
         case ociProcessExitStatus = "oci_process_exit_status"
+        case ociSignalObserved = "oci_signal_observed"
+        case ociSignalNumber = "oci_signal_number"
+        case ociWaitExitStatus = "oci_wait_exit_status"
         case evidence
         case expectedStatus = "expected_status"
         case actualReplayStatus = "actual_replay_status"
@@ -857,6 +863,9 @@ func report(
     coverageWarnings: [String] = [],
     ociProcessExitObserved: Bool? = nil,
     ociProcessExitStatus: Int? = nil,
+    ociSignalObserved: Bool? = nil,
+    ociSignalNumber: Int? = nil,
+    ociWaitExitStatus: Int? = nil,
     kernelProfile: String? = nil,
     kernelConfig: String? = nil,
     evidence: [String: String]? = nil,
@@ -898,6 +907,9 @@ func report(
         coverageWarnings: coverageWarnings,
         ociProcessExitObserved: ociProcessExitObserved,
         ociProcessExitStatus: ociProcessExitStatus,
+        ociSignalObserved: ociSignalObserved,
+        ociSignalNumber: ociSignalNumber,
+        ociWaitExitStatus: ociWaitExitStatus,
         evidence: evidence,
         expectedStatus: expectedStatus,
         actualReplayStatus: actualReplayStatus,
@@ -19152,63 +19164,201 @@ func runOCIStdioSignalWait() throws -> Int32 {
     let target = "tcti-oci-stdio-signal-wait"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixRuntime Tests"
+    let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixRuntimeTests", "OrlixEnvironmentRootRuntimeTests.swift")
+    let ociRuntimeSource = path("OrlixOS", "Sources", "Session", "OrlixOS.swift")
     let outputRoot = buildPath("oci_stdio_signal_wait")
     let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
     try ensureDirectory(outputRoot)
 
-    let failure = fail(
-        "oci-stdio-signal-wait-proof-missing",
-        "selected OCI stdio/signal/wait gate needs an app-hosted OrlixOS OCI session proof that records stdout, stderr, lifecycle state, signal/wait behavior, and exit status"
-    )
     var evidence: [String: String] = [
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
         "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
         "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS OCI environment stdio signal wait execution",
+        "oci_source": "OrlixOS",
+        "oci_runtime_source": relativePath(ociRuntimeSource),
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "oci_stdio_signal_wait_source_asserted": "false",
+        "oci_runtime_signal_wait_source_asserted": "false",
         "required_command": "run real OCI/rootfs session workload that records stdout, stderr, signal/wait behavior, lifecycle state, and exit status",
-        "gate_result": "fail",
+        "oci_signal_observed": "false",
         "pass_count": "0",
-        "fail_count": "1",
+        "fail_count": "0",
         "skip_count": "0",
     ]
-    try writeJSON(evidence, to: evidenceURL)
 
-    var artifacts = [relativePath(evidenceURL)]
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    let testText = try readText(testSource)
+    let ociRuntimeText = try readText(ociRuntimeSource)
+
+    if sourceTextContains(testText, #"testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait"#) &&
+        sourceTextContains(testText, #"fixture: \.ociDerived"#) &&
+	        sourceTextContains(testText, #"proof: \.stdioSignalWait"#) &&
+	        sourceTextContains(testText, #"runCopiedNamedEnvironmentStdioSignalWait"#) &&
+	        sourceTextContains(testText, #"OrlixOCIRuntimeLinuxSessionObservationDriver"#) &&
+	        sourceTextContains(testText, #"start\(\s*(id:\s*)?descriptor\.id"#) &&
+	        sourceTextContains(testText, #"kill\(\s*id:\s*descriptor\.id"#) &&
+	        sourceTextContains(testText, #"wait\(\s*id:\s*descriptor\.id"#) &&
+        sourceTextContains(testText, #"signal:\s*2"#) &&
+	        sourceTextContains(testText, #"ORLIX_ENV_STDIO_SIGNAL_WAIT_STDOUT_OK"#) &&
+	        sourceTextContains(testText, #"ORLIX_ENV_STDIO_SIGNAL_WAIT_STDERR_OK"#) &&
+	        sourceTextContains(testText, #"ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT"#) &&
+	        sourceTextContains(testText, #"orlix-init: process signaled pid="#) &&
+	        sourceTextContains(testText, #"signal=2"#) &&
+	        sourceTextContains(testText, #"orlix-init: shell exit status="#) &&
+	        sourceTextContains(testText, #"exitStatus, 130"#) {
+        evidence["oci_stdio_signal_wait_source_asserted"] = "true"
+        evidence["oci_environment_id"] = "oci-imported-runtime-test-fixture"
+        evidence["oci_copied_environment_id"] = "oci-imported-runtime-test-fixture-copy"
+        evidence["oci_signal_number"] = "2"
+        evidence["oci_wait_expected_exit_status"] = "130"
+        evidence["stdio_stdout_marker"] = "ORLIX_ENV_STDIO_SIGNAL_WAIT_STDOUT_OK"
+        evidence["stdio_stderr_marker"] = "ORLIX_ENV_STDIO_SIGNAL_WAIT_STDERR_OK"
+        evidence["signal_caught_marker"] = "ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT"
+    } else {
+        failures.append(fail("oci-stdio-signal-wait-source-proof", "\(relativePath(testSource)) must prove copied OCI session start/signal/wait with stdout, stderr, lifecycle, signal 2, and exit status 130 markers"))
+    }
+
+    if sourceTextContains(ociRuntimeText, #"OrlixOCIRuntimeLinuxSessionObservationDriver"#) &&
+        sourceTextContains(ociRuntimeText, #"func\s+signal\(processSession"#) &&
+	        sourceTextContains(ociRuntimeText, #"terminalControlCharacter\(forLinuxSignal"#) &&
+	        sourceTextContains(ociRuntimeText, #"return 0x03"#) &&
+	        sourceTextContains(ociRuntimeText, #"func\s+wait\(processSession"#) &&
+	        sourceTextContains(ociRuntimeText, #"orlix-init: .*pid=.*status="#) &&
+	        sourceTextContains(ociRuntimeText, #"orlix-init: .*pid=.*signal="#) {
+        evidence["oci_runtime_signal_wait_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-runtime-signal-wait-source-proof", "\(relativePath(ociRuntimeSource)) must expose terminal signal delivery and Linux init wait observation"))
+    }
+
+    let xcodeArguments = ociXcodeEnvironmentArguments(kernelProfile: kernelProfile) + [
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeCommandString(xcodeArguments)
+
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+    )
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)^Test Case '.*' failed"#, options: .regularExpression) != nil ||
+        xcodeOutput.range(of: #"(?m)^/.+\.swift:[0-9]+: error:"#, options: .regularExpression) != nil
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSkipped {
+        evidence["skip_count"] = "1"
+        failures.append(fail("oci-stdio-signal-wait-xctest-skipped", "xcodebuild skipped \(xcodeTest)"))
+    }
+    if testSucceeded && !testFailed && !testSkipped {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("oci-stdio-signal-wait-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+	    if !testExecuted {
+	        failures.append(fail("oci-stdio-signal-wait-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+	    }
+	    if testSucceeded && evidence["oci_stdio_signal_wait_source_asserted"] == "true" {
+	        evidence["oci_stdio_observed"] = "true"
+	        evidence["oci_stdio_observation_source"] = "xctest-normalized-terminal-recorder"
+	    } else {
+	        failures.append(fail("oci-stdio-signal-wait-stdio-missing", "focused XCTest did not prove OCI stdout and stderr markers through the normalized terminal recorder"))
+	    }
+	    if testSucceeded &&
+	        evidence["oci_stdio_signal_wait_source_asserted"] == "true" &&
+	        xcodeOutput.contains("orlix-init: process signaled pid=") &&
+	        xcodeOutput.contains("signal=2") {
+	        evidence["oci_signal_observed"] = "true"
+	        evidence["oci_signal_number"] = "2"
+	        evidence["oci_signal_observation_source"] = "xctest-normalized-terminal-recorder-and-init-observation"
+	    } else {
+	        failures.append(fail("oci-stdio-signal-wait-signal-missing", "focused XCTest did not prove SIGINT trap handling with init signal observation"))
+	    }
+	    if testSucceeded &&
+	        xcodeOutput.contains("orlix-init: process signaled pid=") &&
+	        xcodeOutput.contains("signal=2") &&
+	        xcodeOutput.contains("orlix-init: shell exit status=") &&
+	        xcodeOutput.contains("130") {
+	        evidence["oci_wait_exit_status"] = "130"
+	    } else {
+	        failures.append(fail("oci-stdio-signal-wait-status-missing", "xcodebuild output did not record SIGINT signal delivery and shell wait status 130 for \(xcodeTest)"))
+	    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
     let reducer = try writeReducer(
         target: target,
-        caseID: "oci-stdio-signal-wait-fail",
+        caseID: status == .pass ? "oci-stdio-signal-wait-pass" : "oci-stdio-signal-wait-fail",
         command: command,
-        reason: failure.message,
+        reason: status == .pass ? "OCI stdio signal wait proof passed" : failures.map(\.message).joined(separator: "; "),
         artifacts: artifacts,
-        expectedStatus: .fail
+        expectedStatus: status
     )
     artifacts.append(relativePath(reducer))
 
     let reportURL = try writeReport(report(
         target: target,
-        status: .fail,
-        summary: "OCI stdio/signal/wait gate is selected but still needs the real app-hosted OrlixOS OCI stdio signal wait proof implementation.",
+        status: status,
+        summary: status == .pass ?
+            "Pinned simulator OCI stdio/signal/wait gate passed through OrlixOS copied environment lifecycle XCTest surface." :
+            "Pinned simulator OCI stdio/signal/wait gate did not pass through OrlixOS copied environment lifecycle XCTest surface.",
         command: command,
-        failures: [failure],
+        failures: failures,
         artifacts: artifacts,
         counters: [
-            "oci_stdio_signal_wait_tests_executed": 0,
-            "oci_stdio_signal_wait_tests_passed": 0,
-            "oci_stdio_signal_wait_tests_failed": 1,
-            "oci_stdio_signal_wait_tests_skipped": 0,
+            "oci_stdio_signal_wait_tests_executed": testExecuted ? 1 : 0,
+            "oci_stdio_signal_wait_tests_passed": status == .pass ? 1 : 0,
+            "oci_stdio_signal_wait_tests_failed": status == .pass ? 0 : 1,
+            "oci_stdio_signal_wait_tests_skipped": testSkipped ? 1 : 0,
             "source_evidence_facts": evidence.count,
-            "source_proof_failures": 1,
+            "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
         ],
+        ociProcessExitObserved: evidence["oci_process_exit_observed"] == "true",
+        ociProcessExitStatus: Int(evidence["oci_process_exit_status"] ?? ""),
+        ociSignalObserved: evidence["oci_signal_observed"] == "true",
+        ociSignalNumber: Int(evidence["oci_signal_number"] ?? ""),
+        ociWaitExitStatus: Int(evidence["oci_wait_exit_status"] ?? ""),
         kernelProfile: kernelProfile,
         kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
         evidence: evidence,
         releaseGateEligible: false,
         readinessGateEligible: false
     ))
-    print("fail: \(relativePath(reportURL))")
-    print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
-    return 1
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
 }
 
 let tctiTargets = [
