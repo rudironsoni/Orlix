@@ -2,6 +2,32 @@
 
 ## 2026-07-07
 
+### Checkpoint: Simulator Runtime Stability Refreshed After Bounded TCTI Diagnostics
+
+- Harness selection:
+  - After the bounded syscall trace diagnostic fix was pushed, `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Simulator runtime validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - Runtime JSON report: `Build/Reports/runtime/tcti-simulator-stability-20260707T095441Z-28312.json`.
+  - Runtime Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260707T095441Z-28312.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260707T095441Z-28312.artifacts`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=d4a442cc02cf2edaec1dbd6c5741335e11732447`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior flags were false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Terminal artifact captured `Orlix TCTI: linux exec start_thread` and `Orlix TCTI: svc #0` entries.
+  - `Build/Reports/runtime/tcti-simulator-stability-20260707T095441Z-28312.artifacts/tcti-simulator-fatal-runtime.txt` and `host-exec-violations.txt` were empty.
+  - Fresh crash scans under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` found no recent matching reports.
+- Follow-up selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the runtime report was written.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `rails-defconfig-safety`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `rails-defconfig-safety`.
+- Boundary:
+  - This checkpoint refreshes mandatory pinned-simulator runtime stability after the diagnostic throttling fix.
+  - This does not prove the final app terminal `ORLIX-USERLAND-TCTI-OK` marker, full runtime readiness, package readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+  - No generated Linux, mlibc, package, rootfs, or build tree was edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics were added.
+
 ### Checkpoint: MLibC Build Smoke Timerfd Passes With Bounded TCTI Diagnostics
 
 - Harness startup:
