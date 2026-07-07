@@ -2,6 +2,48 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Coreutils Command Runs Through Copied OrlixOS Session
+
+Timestamp: `2026-07-07T11:50:31Z`.
+
+- Harness-selected gate: `tcti-oci-exec-coreutils-command`.
+- Product-path milestone advanced: app-hosted `OrlixRuntime` XCTest now runs a real packaged Coreutils command workload from the copied OrlixOS OCI/rootfs session-selection path and records stdout, stderr, and exit-status evidence.
+- Starting failure:
+  - `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json` previously failed with `oci-coreutils-command-proof-missing`.
+  - The gate needed app-hosted OrlixOS OCI session proof that ran real packaged Coreutils and recorded stdout, stderr, and exit status.
+- Implementation:
+  - `OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests.swift` added `testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand`.
+  - The test uses fixture `.ociDerived`, proof `.coreutilsCommand`, and `runCopiedNamedEnvironmentThroughSessionSelection()`.
+  - The workload executes `/bin/echo coreutils-command-ok`, `/bin/echo ORLIX_ENV_COREUTILS_STDOUT_OK`, `/bin/echo ORLIX_ENV_COREUTILS_STDERR_OK >&2`, `/bin/true`, and `/bin/false`.
+  - `tools/tcti/orlix-tcti-gate.swift` replaced the missing-proof placeholder with an Xcode-backed real-stack gate and records pass/fail reducers.
+  - The roadmap scope for `tcti-oci-exec-coreutils-command` now includes the focused XCTest source it must verify.
+  - `tools/tcti/orlix-tcti-gate.swift` now also exposes an honest fail report for the newly selected `tcti-oci-stdio-signal-wait` gate, so the next roadmap step is runnable instead of an unsupported target.
+- Gate result:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-exec-coreutils-command`: passed.
+  - Report: `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=b04b3464a1ef8df2d606a548fee08206898b169d`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `oci_process_exit_observed=true`, `oci_process_exit_status=0`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Xcode artifact: `Build/TCTI/oci_exec_coreutils_command/xcodebuild-output.txt` captured `ORLIX_ENV_COREUTILS_COMMAND_BEGIN`, `coreutils-command-ok`, `ORLIX_ENV_COREUTILS_STDOUT_OK`, `ORLIX_ENV_COREUTILS_STDERR_OK`, `ORLIX_ENV_COREUTILS_EXIT_STATUS_OK`, `ORLIX_ENV_COREUTILS_COMMAND_DONE`, `orlix-init: process exited pid=32 status=0`, and `** TEST SUCCEEDED **`.
+  - Pass reducer: `Build/TCTI/reproducers/tcti-oci-exec-coreutils-command/oci-exec-coreutils-command-pass.json`.
+- Next blocker:
+  - `rtk proxy make tcti-gate TARGET=tcti-oci-stdio-signal-wait` now writes `Build/TCTI/reports/tcti-oci-stdio-signal-wait/report.json`.
+  - The report is an honest fail with `oci-stdio-signal-wait-proof-missing`.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-oci-stdio-signal-wait`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-oci-stdio-signal-wait`.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk git diff --check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - No recent `Orlix`, `OrlixTestRunner`, or `xctest` crash reports were found under `~/Library/Logs/DiagnosticReports`.
+- Boundary:
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed After Bounded TCTI Diagnostics
 
 - Harness selection:

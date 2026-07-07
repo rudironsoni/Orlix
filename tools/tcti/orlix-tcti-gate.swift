@@ -18951,21 +18951,210 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
     let target = "tcti-oci-exec-coreutils-command"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixRuntime Tests"
+    let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixRuntimeTests", "OrlixEnvironmentRootRuntimeTests.swift")
+    let registrySource = path("OrlixOS", "Sources", "Session", "OrlixEnvironment.swift")
+    let ociRuntimeSource = path("OrlixOS", "Sources", "Session", "OrlixOS.swift")
     let outputRoot = buildPath("oci_exec_coreutils_command")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS OCI environment command execution",
+        "oci_source": "OrlixOS",
+        "oci_registry_source": relativePath(registrySource),
+        "oci_runtime_source": relativePath(ociRuntimeSource),
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "oci_coreutils_command_source_asserted": "false",
+        "oci_registry_source_asserted": "false",
+        "oci_runtime_session_source_asserted": "false",
+        "required_command": "run real packaged Coreutils from the OCI/rootfs session path",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let testText = try readText(testSource)
+    let registryText = try readText(registrySource)
+    let ociRuntimeText = try readText(ociRuntimeSource)
+
+    if sourceTextContains(testText, #"testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand"#) &&
+        sourceTextContains(testText, #"fixture: \.ociDerived"#) &&
+        sourceTextContains(testText, #"proof: \.coreutilsCommand"#) &&
+        sourceTextContains(testText, #"runCopiedNamedEnvironmentThroughSessionSelection"#) &&
+        sourceTextContains(testText, #"/bin/echo coreutils-command-ok"#) &&
+        sourceTextContains(testText, #"/bin/echo ORLIX_ENV_COREUTILS_STDOUT_OK"#) &&
+        sourceTextContains(testText, #"/bin/echo ORLIX_ENV_COREUTILS_STDERR_OK >&2"#) &&
+        sourceTextContains(testText, #"/bin/true"#) &&
+        sourceTextContains(testText, #"/bin/false"#) &&
+        sourceTextContains(testText, #"ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"#) &&
+        sourceTextContains(testText, #"ORLIX_ENV_COREUTILS_COMMAND_DONE"#) {
+        evidence["oci_coreutils_command_source_asserted"] = "true"
+        evidence["oci_environment_id"] = "oci-imported-runtime-test-fixture"
+        evidence["oci_copied_environment_id"] = "oci-imported-runtime-test-fixture-copy"
+        evidence["oci_root_image_identifier"] = "orlix.test.environment.oci-runtime-test-fixture"
+        evidence["packaged_command_stdout"] = "/bin/echo coreutils-command-ok"
+        evidence["packaged_command_stdout_marker"] = "ORLIX_ENV_COREUTILS_STDOUT_OK"
+        evidence["packaged_command_stderr_marker"] = "ORLIX_ENV_COREUTILS_STDERR_OK"
+        evidence["packaged_command_exit_status_marker"] = "ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"
+        evidence["packaged_command_exit_status"] = "0"
+        evidence["oci_command_done_marker"] = "ORLIX_ENV_COREUTILS_COMMAND_DONE"
+    } else {
+        failures.append(fail("oci-coreutils-command-source-proof", "\(relativePath(testSource)) must prove copied OCI session selection runs packaged /bin/echo, /bin/true, and /bin/false with stdout/stderr/exit-status markers"))
+    }
+
+    if sourceTextContains(registryText, #"struct\s+OrlixEnvironmentRegistry"#) &&
+        sourceTextContains(registryText, #"func\s+copyEnvironment"#) &&
+        sourceTextContains(registryText, #"rootImageIdentifier"#) &&
+        sourceTextContains(registryText, #"layout\(forEnvironmentID"#) &&
+        sourceTextContains(registryText, #"baseImageURL"#) &&
+        sourceTextContains(registryText, #"stateImageURL"#) {
+        evidence["oci_registry_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-registry-source-proof", "\(relativePath(registrySource)) must expose copied OCI environment layout support for command execution"))
+    }
+
+    if sourceTextContains(ociRuntimeText, #"terminalSession"#) &&
+        sourceTextContains(ociRuntimeText, #"OrlixOCIRuntime\(registry:\s*registry\)"#) &&
+        sourceTextContains(ociRuntimeText, #"OrlixOCIRuntimeLinuxSessionObservationDriver"#) &&
+        sourceTextContains(ociRuntimeText, #"processSession"#) &&
+        sourceTextContains(ociRuntimeText, #"start\(using:\s*driver\)"#) &&
+        sourceTextContains(ociRuntimeText, #"wait\(using:\s*driver\)"#) {
+        evidence["oci_runtime_session_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-runtime-session-source-proof", "\(relativePath(ociRuntimeSource)) must expose OCI runtime terminal-session start/wait execution"))
+    }
+
+    let xcodeArguments = ociXcodeEnvironmentArguments(kernelProfile: kernelProfile) + [
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeCommandString(xcodeArguments)
+
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+    )
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)^Test Case '.*' failed"#, options: .regularExpression) != nil ||
+        xcodeOutput.range(of: #"(?m)^/.+\.swift:[0-9]+: error:"#, options: .regularExpression) != nil
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSkipped {
+        evidence["skip_count"] = "1"
+        failures.append(fail("oci-coreutils-command-xctest-skipped", "xcodebuild skipped \(xcodeTest)"))
+    }
+    if testSucceeded && !testFailed && !testSkipped {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("oci-coreutils-command-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("oci-coreutils-command-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+    if xcodeOutput.contains("orlix-init: process exited pid=") &&
+        xcodeOutput.contains("status=0") {
+        evidence["oci_process_exit_observed"] = "true"
+        evidence["oci_process_exit_status"] = "0"
+    } else {
+        failures.append(fail("oci-coreutils-command-exit-status-missing", "xcodebuild output did not record orlix-init process exit status 0 for \(xcodeTest)"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "oci-exec-coreutils-command-pass" : "oci-exec-coreutils-command-fail",
+        command: command,
+        reason: status == .pass ? "OCI Coreutils command proof passed" : failures.map(\.message).joined(separator: "; "),
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ?
+            "Pinned simulator OCI Coreutils command gate passed through OrlixOS copied environment session-selection XCTest surface." :
+            "Pinned simulator OCI Coreutils command gate did not pass through OrlixOS copied environment session-selection XCTest surface.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "oci_exec_coreutils_command_tests_executed": testExecuted ? 1 : 0,
+            "oci_exec_coreutils_command_tests_passed": status == .pass ? 1 : 0,
+            "oci_exec_coreutils_command_tests_failed": status == .pass ? 0 : 1,
+            "oci_exec_coreutils_command_tests_skipped": testSkipped ? 1 : 0,
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runOCIStdioSignalWait() throws -> Int32 {
+    let target = "tcti-oci-stdio-signal-wait"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let outputRoot = buildPath("oci_stdio_signal_wait")
     let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
     try ensureDirectory(outputRoot)
 
     let failure = fail(
-        "oci-coreutils-command-proof-missing",
-        "selected OCI Coreutils command gate needs an app-hosted OrlixOS OCI session proof that runs real packaged Coreutils and records stdout/stderr/exit status"
+        "oci-stdio-signal-wait-proof-missing",
+        "selected OCI stdio/signal/wait gate needs an app-hosted OrlixOS OCI session proof that records stdout, stderr, lifecycle state, signal/wait behavior, and exit status"
     )
     var evidence: [String: String] = [
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
         "kernel_profile": kernelProfile,
-        "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS OCI environment command execution",
-        "required_command": "run real packaged Coreutils from the OCI/rootfs session path",
+        "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS OCI environment stdio signal wait execution",
+        "required_command": "run real OCI/rootfs session workload that records stdout, stderr, signal/wait behavior, lifecycle state, and exit status",
         "gate_result": "fail",
         "pass_count": "0",
         "fail_count": "1",
@@ -18976,7 +19165,7 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
     var artifacts = [relativePath(evidenceURL)]
     let reducer = try writeReducer(
         target: target,
-        caseID: "oci-exec-coreutils-command-fail",
+        caseID: "oci-stdio-signal-wait-fail",
         command: command,
         reason: failure.message,
         artifacts: artifacts,
@@ -18987,15 +19176,15 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: .fail,
-        summary: "OCI Coreutils command gate is selected but still needs the real app-hosted OrlixOS OCI command proof implementation.",
+        summary: "OCI stdio/signal/wait gate is selected but still needs the real app-hosted OrlixOS OCI stdio signal wait proof implementation.",
         command: command,
         failures: [failure],
         artifacts: artifacts,
         counters: [
-            "oci_exec_coreutils_command_tests_executed": 0,
-            "oci_exec_coreutils_command_tests_passed": 0,
-            "oci_exec_coreutils_command_tests_failed": 1,
-            "oci_exec_coreutils_command_tests_skipped": 0,
+            "oci_stdio_signal_wait_tests_executed": 0,
+            "oci_stdio_signal_wait_tests_passed": 0,
+            "oci_stdio_signal_wait_tests_failed": 1,
+            "oci_stdio_signal_wait_tests_skipped": 0,
             "source_evidence_facts": evidence.count,
             "source_proof_failures": 1,
         ],
@@ -19041,6 +19230,7 @@ let tctiTargets = [
     "tcti-oci-rootfs-materialize",
     "tcti-oci-rootfs-boot-session",
     "tcti-oci-exec-coreutils-command",
+    "tcti-oci-stdio-signal-wait",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -19164,6 +19354,8 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runOCIRootfsBootSession()
     case "tcti-oci-exec-coreutils-command":
         return try runOCIExecCoreutilsCommand()
+    case "tcti-oci-stdio-signal-wait":
+        return try runOCIStdioSignalWait()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
