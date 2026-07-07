@@ -5573,6 +5573,370 @@ func runCoreutilsTestSubset() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func runOCIImageLayoutParse() throws -> Int32 {
+    let target = "tcti-oci-image-layout-parse"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixRuntime Tests"
+    let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixRuntimeTests", "OrlixEnvironmentRootRuntimeTests.swift")
+    let runnerSource = path("OrlixTestRunner", "Sources", "OrlixUpstreamTestRunner.swift")
+    let ociLayoutSource = path("OrlixOS", "Sources", "Session", "OrlixOCIImageLayout.swift")
+    let ociRuntimeSource = path("OrlixOS", "Sources", "Session", "OrlixOS.swift")
+    let outputRoot = buildPath("oci_image_layout_parse")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS terminal-session OCI fixture",
+        "oci_source": "OrlixOS",
+        "oci_layout_source": relativePath(ociLayoutSource),
+        "oci_runtime_source": relativePath(ociRuntimeSource),
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "oci_descriptor_source_asserted": "false",
+        "oci_layout_parser_source_asserted": "false",
+        "oci_runtime_source_asserted": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let testText = try readText(testSource)
+    let runnerText = try readText(runnerSource)
+    let ociLayoutText = try readText(ociLayoutSource)
+    let ociRuntimeText = try readText(ociRuntimeSource)
+
+    if sourceTextContains(testText, #"testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession"#) &&
+        sourceTextContains(testText, #"fixture: \.ociDerived"#) &&
+        sourceTextContains(testText, #"proof: \.descriptorExecution"#) &&
+        sourceTextContains(testText, #"ORLIX_ENV_EXEC_BEGIN"#) &&
+        sourceTextContains(testText, #"descriptor\.defaultCommand"#) &&
+        sourceTextContains(testText, #"\["/bin/sh"\]"#) &&
+        sourceTextContains(testText, #"descriptor\.defaultWorkingDirectory"#) &&
+        sourceTextContains(testText, #""/tmp""#) &&
+        sourceTextContains(testText, #"descriptor\.defaultUserID"#) &&
+        sourceTextContains(testText, #"descriptor\.defaultGroupID"#) &&
+        sourceTextContains(testText, #"case \.ociDerived:"#) &&
+        sourceTextContains(testText, #"return \.ociLayout"#) &&
+        sourceTextContains(testText, #"oci-imported-runtime-test-fixture"#) &&
+        sourceTextContains(testText, #"orlix\.test\.environment\.oci-runtime-test-fixture"#) {
+        evidence["oci_descriptor_source_asserted"] = "true"
+        evidence["oci_layout_fixture"] = "OrlixEnvironmentRootRuntimeTests uses .ociDerived/.ociLayout descriptorExecution and asserts ORLIX_ENV_EXEC_BEGIN"
+        evidence["oci_environment_id"] = "oci-imported-runtime-test-fixture"
+        evidence["oci_root_image_identifier"] = "orlix.test.environment.oci-runtime-test-fixture"
+        evidence["oci_default_command"] = "/bin/sh"
+        evidence["oci_default_cwd"] = "/tmp"
+        evidence["oci_default_uid"] = "1000"
+        evidence["oci_default_gid"] = "100"
+    } else {
+        failures.append(fail("oci-descriptor-source-proof", "\(relativePath(testSource)) must prove OCI-derived descriptor execution through the OrlixOS terminal session"))
+    }
+
+    if sourceTextContains(runnerText, #"ORLIX_RUNTIME_TEST_SPEC"#) &&
+        sourceTextContains(runnerText, #"OrlixOCIDerivedStdioRuntimeProof"#) &&
+        sourceTextContains(runnerText, #"OrlixEnvironmentDescriptor"#) &&
+        sourceTextContains(runnerText, #"source: \.ociLayout"#) &&
+        sourceTextContains(runnerText, #"OrlixOCIEnvironmentInstaller"#) &&
+        sourceTextContains(runnerText, #"ORLIX_OCI_LIFECYCLE_RUNNING_OK"#) &&
+        sourceTextContains(runnerText, #"ORLIX_OCI_LIFECYCLE_STOPPED_OK"#) &&
+        sourceTextContains(runnerText, #"ORLIX_OCI_LIFECYCLE_DELETE_OK"#) {
+        evidence["oci_runtime_runner_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-runtime-runner-source-proof", "\(relativePath(runnerSource)) must expose OCI-derived runtime execution and lifecycle markers"))
+    }
+
+    if sourceTextContains(ociLayoutText, #"struct OrlixOCIRuntimeConfigParser"#) &&
+        sourceTextContains(ociLayoutText, #"func parse"#) &&
+        sourceTextContains(ociLayoutText, #"ociVersion"#) &&
+        sourceTextContains(ociLayoutText, #"rootfs"#) &&
+        sourceTextContains(ociLayoutText, #"root\.path"#) {
+        evidence["oci_layout_parser_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-layout-parser-source-proof", "\(relativePath(ociLayoutSource)) must expose OCI runtime config parsing"))
+    }
+
+    if sourceTextContains(ociRuntimeText, #"struct OrlixOCIEnvironmentInstaller"#) &&
+        sourceTextContains(ociRuntimeText, #"struct OrlixOCIRuntime"#) &&
+        sourceTextContains(ociRuntimeText, #"terminalSession"#) &&
+        sourceTextContains(ociRuntimeText, #"OrlixOCIRuntimeLinuxSessionObservationDriver"#) &&
+        sourceTextContains(ociRuntimeText, #"materializedRoot"#) {
+        evidence["oci_runtime_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-runtime-source-proof", "\(relativePath(ociRuntimeSource)) must expose OCI installer/runtime terminal-session materialization"))
+    }
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+    )
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("oci-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("oci-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "oci-image-layout-parse-pass" : "oci-image-layout-parse-fail",
+        command: command,
+        reason: status == .pass ? "OCI image layout parse proof passed" : failures.map(\.message).joined(separator: "; "),
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ?
+            "Pinned simulator OCI image-layout parse gate passed through OrlixOS terminal-session XCTest surface." :
+            "Pinned simulator OCI image-layout parse gate did not pass through OrlixOS terminal-session XCTest surface.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "oci_image_layout_parse_tests_executed": testExecuted ? 1 : 0,
+            "oci_image_layout_parse_tests_passed": status == .pass ? 1 : 0,
+            "oci_image_layout_parse_tests_failed": status == .pass ? 0 : 1,
+            "oci_image_layout_parse_tests_skipped": 0,
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
+func runOCIRootfsMaterialize() throws -> Int32 {
+    let target = "tcti-oci-rootfs-materialize"
+    let command = "make tcti-gate TARGET=\(target)"
+    let kernelProfile = "tcti_runtime"
+    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorName = "Orlix-iPhone-15-Pro-Max"
+    let xcodeScheme = "OrlixRuntime Tests"
+    let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBootsAndExposesOSRelease"
+    let testSource = path("OrlixTestRunner", "Tests", "XCTest", "OrlixRuntimeTests", "OrlixEnvironmentRootRuntimeTests.swift")
+    let ociLayoutSource = path("OrlixOS", "Sources", "Session", "OrlixOCIImageLayout.swift")
+    let ociRuntimeSource = path("OrlixOS", "Sources", "Session", "OrlixOS.swift")
+    let outputRoot = buildPath("oci_rootfs_materialize")
+    let evidenceURL = outputRoot.appendingPathComponent("evidence.json")
+    let xcodeOutputURL = outputRoot.appendingPathComponent("xcodebuild-output.txt")
+    try ensureDirectory(outputRoot)
+
+    var failures: [Failure] = []
+    var artifacts: [String] = []
+    var evidence: [String: String] = [
+        "actual_command": command,
+        "backend": "tcti",
+        "git_sha": gitSha(),
+        "kernel_profile": kernelProfile,
+        "selected_simulator_id": simulatorID,
+        "selected_simulator_name": simulatorName,
+        "real_stack_execution_surface": "OrlixRuntime XCTest through OrlixOS OCI materialized-root terminal session",
+        "oci_source": "OrlixOS",
+        "oci_layout_source": relativePath(ociLayoutSource),
+        "oci_runtime_source": relativePath(ociRuntimeSource),
+        "xcode_scheme": xcodeScheme,
+        "xcode_test": xcodeTest,
+        "xcode_test_executed": "false",
+        "xcode_test_passed": "false",
+        "oci_materialized_root_source_asserted": "false",
+        "oci_import_plan_source_asserted": "false",
+        "oci_runtime_materialization_source_asserted": "false",
+        "pass_count": "0",
+        "fail_count": "0",
+        "skip_count": "0",
+    ]
+
+    let testText = try readText(testSource)
+    let ociLayoutText = try readText(ociLayoutSource)
+    let ociRuntimeText = try readText(ociRuntimeSource)
+
+    if sourceTextContains(testText, #"testOCIDerivedMaterializedRootBootsAndExposesOSRelease"#) &&
+        sourceTextContains(testText, #"fixture: \.ociDerived"#) &&
+        sourceTextContains(testText, #"ORLIX_ENV_OS_RELEASE_BEGIN"#) &&
+        sourceTextContains(testText, #"ID=orlix-oci-runtime-test-fixture"#) &&
+        sourceTextContains(testText, #"ORLIX_ENV_OS_RELEASE_DONE"#) &&
+        sourceTextContains(testText, #"case \.ociDerived:"#) &&
+        sourceTextContains(testText, #"return \.ociLayout"#) &&
+        sourceTextContains(testText, #"oci-imported-runtime-test-fixture"#) &&
+        sourceTextContains(testText, #"orlix\.test\.environment\.oci-runtime-test-fixture"#) {
+        evidence["oci_materialized_root_source_asserted"] = "true"
+        evidence["oci_environment_id"] = "oci-imported-runtime-test-fixture"
+        evidence["oci_root_image_identifier"] = "orlix.test.environment.oci-runtime-test-fixture"
+        evidence["oci_materialized_root_marker_begin"] = "ORLIX_ENV_OS_RELEASE_BEGIN"
+        evidence["oci_materialized_root_os_release"] = "ID=orlix-oci-runtime-test-fixture"
+        evidence["oci_materialized_root_marker_done"] = "ORLIX_ENV_OS_RELEASE_DONE"
+    } else {
+        failures.append(fail("oci-materialized-root-source-proof", "\(relativePath(testSource)) must prove OCI-derived materialized root execution through the OrlixOS terminal session"))
+    }
+
+    if sourceTextContains(ociLayoutText, #"struct OrlixOCIRuntimeBundleImportPlan"#) &&
+        sourceTextContains(ociLayoutText, #"stagingRootDirectory: rootfsURL"#) &&
+        sourceTextContains(ociLayoutText, #"materializationPlan"#) &&
+        sourceTextContains(ociLayoutText, #"prepareInputTrees"#) &&
+        sourceTextContains(ociLayoutText, #"writeBaseImageMetadataCommands"#) &&
+        sourceTextContains(ociLayoutText, #"writeStateImageMetadataCommands"#) &&
+        sourceTextContains(ociLayoutText, #"materialize"#) {
+        evidence["oci_import_plan_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-import-plan-source-proof", "\(relativePath(ociLayoutSource)) must expose OCI rootfs import and materialization planning"))
+    }
+
+    if sourceTextContains(ociRuntimeText, #"createMaterialized"#) &&
+        sourceTextContains(ociRuntimeText, #"OrlixOCIRuntimeMaterializedRunResult"#) &&
+        sourceTextContains(ociRuntimeText, #"materializedRunResult"#) &&
+        sourceTextContains(ociRuntimeText, #"OrlixOCIRuntimeLinuxSessionObservationDriver"#) &&
+        sourceTextContains(ociRuntimeText, #"terminalSession"#) &&
+        sourceTextContains(ociRuntimeText, #"baseImageURL"#) &&
+        sourceTextContains(ociRuntimeText, #"stateImageURL"#) {
+        evidence["oci_runtime_materialization_source_asserted"] = "true"
+    } else {
+        failures.append(fail("oci-runtime-materialization-source-proof", "\(relativePath(ociRuntimeSource)) must expose OCI materialized-root session execution"))
+    }
+
+    let xcodeArguments = [
+        "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "xcodebuild",
+        "-project", "Orlix.xcodeproj",
+        "-scheme", xcodeScheme,
+        "-configuration", "Debug",
+        "-destination", "platform=iOS Simulator,id=\(simulatorID)",
+        "-only-testing:\(xcodeTest)",
+        "ORLIX_PROFILE=\(kernelProfile)",
+        "test",
+    ]
+    evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")
+
+    let xcodeOutput = try runWithFileBackedOutput(
+        xcodeArguments,
+        check: false,
+        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+    )
+    try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
+    artifacts.append(relativePath(xcodeOutputURL))
+
+    let testExecuted = xcodeOutput.contains("testOCIDerivedMaterializedRootBootsAndExposesOSRelease")
+    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
+        xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
+    if testExecuted {
+        evidence["xcode_test_executed"] = "true"
+    }
+    if testSucceeded && !testFailed {
+        evidence["xcode_test_passed"] = "true"
+        evidence["pass_count"] = "1"
+    } else {
+        evidence["fail_count"] = "1"
+        failures.append(fail("oci-rootfs-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+    }
+    if !testExecuted {
+        failures.append(fail("oci-rootfs-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
+    }
+
+    let status: GateStatus = failures.isEmpty ? .pass : .fail
+    evidence["gate_result"] = status.rawValue
+    try writeJSON(evidence, to: evidenceURL)
+    artifacts.append(relativePath(evidenceURL))
+
+    let reducer = try writeReducer(
+        target: target,
+        caseID: status == .pass ? "oci-rootfs-materialize-pass" : "oci-rootfs-materialize-fail",
+        command: command,
+        reason: status == .pass ? "OCI rootfs materialization proof passed" : failures.map(\.message).joined(separator: "; "),
+        artifacts: artifacts,
+        expectedStatus: status
+    )
+    artifacts.append(relativePath(reducer))
+
+    let reportURL = try writeReport(report(
+        target: target,
+        status: status,
+        summary: status == .pass ?
+            "Pinned simulator OCI rootfs materialization gate passed through OrlixOS terminal-session XCTest surface." :
+            "Pinned simulator OCI rootfs materialization gate did not pass through OrlixOS terminal-session XCTest surface.",
+        command: command,
+        failures: failures,
+        artifacts: artifacts,
+        counters: [
+            "oci_rootfs_materialize_tests_executed": testExecuted ? 1 : 0,
+            "oci_rootfs_materialize_tests_passed": status == .pass ? 1 : 0,
+            "oci_rootfs_materialize_tests_failed": status == .pass ? 0 : 1,
+            "oci_rootfs_materialize_tests_skipped": 0,
+            "source_evidence_facts": evidence.count,
+            "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
+        ],
+        kernelProfile: kernelProfile,
+        kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
+        evidence: evidence,
+        releaseGateEligible: false,
+        readinessGateEligible: false
+    ))
+    print("\(status.rawValue): \(relativePath(reportURL))")
+    if status != .pass {
+        print("reproduce with: make tcti-gate TARGET=tcti-repro REPRO=\(relativePath(reducer))")
+    }
+    return exitCode(for: status)
+}
+
 func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex(), sourcePath: String? = nil) -> [String] {
     guard let dictionary = object as? [String: Any] else {
         return ["report must be a JSON object"]
@@ -18270,6 +18634,8 @@ let tctiTargets = [
     "tcti-coreutils-mkdir-rm-cp-ln",
     "tcti-coreutils-env-path",
     "tcti-coreutils-test-subset",
+    "tcti-oci-image-layout-parse",
+    "tcti-oci-rootfs-materialize",
     "tcti-golden-elf",
     "tcti-golden-elf-refresh",
     "tcti-appstore-safety-audit",
@@ -18385,6 +18751,10 @@ func dispatch(_ target: String) throws -> Int32 {
         return try runCoreutilsEnvPath()
     case "tcti-coreutils-test-subset":
         return try runCoreutilsTestSubset()
+    case "tcti-oci-image-layout-parse":
+        return try runOCIImageLayoutParse()
+    case "tcti-oci-rootfs-materialize":
+        return try runOCIRootfsMaterialize()
     case "tcti-golden-elf":
         return try runGoldenElf(refresh: false)
     case "tcti-golden-elf-refresh":
