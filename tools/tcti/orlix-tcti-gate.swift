@@ -1012,6 +1012,16 @@ func outputHasPassingTAPLabel(_ output: String, _ label: String) -> Bool {
     return ok && !notOK
 }
 
+func firstUpstreamNotOKLine(_ output: String) -> String? {
+    for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
+        let text = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.range(of: #"(^|[^[:alnum:]])not ok[[:space:]][0-9]+[[:space:]]+-[[:space:]].*"#, options: .regularExpression) != nil {
+            return text
+        }
+    }
+    return nil
+}
+
 func outputHasShellWaitStatusZero(_ output: String) -> Bool {
     output.contains("orlix-init: shell exit status=0") ||
         output.range(of: #"(?m)orlix-init: process exited pid=[0-9]+ status=0"#, options: .regularExpression) != nil
@@ -3109,7 +3119,11 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"],
+            ["** TEST FAILED **", "Test Suite 'Selected tests' failed"],
+            ["not ok ", "Test Case '-[OrlixMLibCConformanceTests.OrlixMLibCConformanceTests testMLibCRootfsCompletesThroughOrlixOSTerminalSession]' failed"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
@@ -3123,6 +3137,13 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
         xcodeOutput.contains("PT_INTERP") ||
         xcodeOutput.contains("ld.so") ||
         xcodeOutput.contains("ldso")
+    let upstreamFailure = firstUpstreamNotOKLine(xcodeOutput)
+    if let upstreamFailure {
+        evidence["dynamic_loader_blocked_by_upstream_failure"] = "true"
+        evidence["upstream_failure_marker"] = upstreamFailure
+    } else {
+        evidence["dynamic_loader_blocked_by_upstream_failure"] = "false"
+    }
     if testExecuted {
         evidence["xcode_test_executed"] = "true"
     }
@@ -3152,7 +3173,16 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
     }
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
-    let blocker = failures.isEmpty ? "" : "Pinned simulator OrlixMLibC dynamic-loader smoke lacks a real PT_INTERP-backed dynamic-loader workload."
+    let blocker: String
+    if failures.isEmpty {
+        blocker = ""
+    } else if let upstreamFailure {
+        blocker = "Pinned simulator OrlixMLibC dynamic-loader smoke did not reach the dynamic-loader workload because an upstream mlibc test failed first: \(upstreamFailure)"
+    } else if dynamicWorkloadConfigured && ptInterpSourceProof && !dynamicLoaderSeen {
+        blocker = "Pinned simulator OrlixMLibC dynamic-loader smoke has a PT_INTERP-backed workload configured but did not produce the dynamic-loader marker."
+    } else {
+        blocker = "Pinned simulator OrlixMLibC dynamic-loader smoke lacks a real PT_INTERP-backed dynamic-loader workload."
+    }
     if !blocker.isEmpty {
         evidence["blocker"] = blocker
     }
@@ -3171,7 +3201,7 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: status == .pass ? "Pinned simulator OrlixMLibC dynamic-loader smoke passed through a PT_INTERP-backed OrlixOS terminal-session workload." : "Pinned simulator OrlixMLibC dynamic-loader smoke is blocked because the current workload is static PIE-only.",
+        summary: status == .pass ? "Pinned simulator OrlixMLibC dynamic-loader smoke passed through a PT_INTERP-backed OrlixOS terminal-session workload." : blocker,
         command: command,
         failures: failures,
         artifacts: artifacts,
