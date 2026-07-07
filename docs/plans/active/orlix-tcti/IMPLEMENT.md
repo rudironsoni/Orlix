@@ -2,6 +2,36 @@
 
 ## 2026-07-07
 
+### Checkpoint: Linux Execve Binfmt ELF Reaches TCTI Entry
+
+Timestamp: `2026-07-07T18:58:34Z`.
+
+- Harness-selected gate: `tcti-kernel-execve-binfmt-elf-smoke`.
+- App-level stage advanced: Stage 2, Linux `execve`/`binfmt_elf` reaches TCTI entry for a real AArch64 Linux ELF payload.
+- Evidence:
+  - `Build/TCTI/reports/tcti-kernel-execve-binfmt-elf-smoke/report.json`: `status=pass`, `passed=true`, `git_sha=c24158ff97bb88f57d958b3ff4897280045ca441`.
+  - Built ELF payload: `Build/TCTI/kernel_execve_binfmt_elf_smoke/execve_binfmt_elf_smoke_payload/execve_binfmt_elf_smoke_payload`.
+  - ELF evidence: `elf_class=2`, `elf_machine=183`, `elf_type=2`, `elf_entry_pc=0x210120`, `elf_load_segment_count=2`, `elf_payload_is_real_aarch64_linux_elf=true`, `elf_binary_sha256=221c0e781dd1f05a783d0322a236f6f9bf7ea65249b60cf3bb7dc31bad22361b`.
+  - Helper runner evidence: `execve_binfmt_runner_named_test_passed=true`, `execve_binfmt_runner_start_thread_called=true`, `execve_binfmt_runner_entry_pc=0x210120`, `execve_binfmt_runner_stack_pointer=0x7ffffffffff8`, `execve_binfmt_runner_user_mode_prepared=true`, `execve_binfmt_runner_syscall_state_cleared=true`.
+  - Current pinned-simulator evidence source: `Build/Reports/runtime/tcti-simulator-stability-20260707T183849Z-99199.json`.
+  - Simulator start-thread evidence: `simulator_linux_exec_start_thread_pc=0xce9cb7821f0`, `simulator_linux_exec_start_thread_sp=0xce9db52be40`, `simulator_linux_exec_start_thread_pstate=0x0`, `simulator_linux_exec_start_thread_syscallno=-1`.
+  - Report evidence: `linux_execve_binfmt_elf_path_entered=true`, `linux_program_headers_accepted=true`, `linux_task_mm_register_state_prepared=true`, `tcti_entry_reached=true`, `hostadapter_linux_exec_semantics=absent`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Recent crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no Orlix, OrlixTestRunner, xctest, or XCTest crash reports.
+- Validation:
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-kernel-execve-binfmt-elf-smoke` before this gate, then advanced after the gate.
+- Boundary:
+  - This proves Linux ELF exec reaches TCTI entry, not that the ELF payload has executed the final userland marker.
+  - No physical-device gate run.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed After OCI Lifecycle Restore
 
 Timestamp: `2026-07-07T18:36:00Z`.
