@@ -68,6 +68,8 @@ struct Report: Codable {
     let autonomousTestsBypassed: Bool
     let bypassReason: String
     let coverageWarnings: [String]
+    let ociProcessExitObserved: Bool?
+    let ociProcessExitStatus: Int?
     let evidence: [String: String]?
     let expectedStatus: String?
     let actualReplayStatus: String?
@@ -100,6 +102,8 @@ struct Report: Codable {
         case autonomousTestsBypassed = "autonomous_tests_bypassed"
         case bypassReason = "bypass_reason"
         case coverageWarnings = "coverage_warnings"
+        case ociProcessExitObserved = "oci_process_exit_observed"
+        case ociProcessExitStatus = "oci_process_exit_status"
         case evidence
         case expectedStatus = "expected_status"
         case actualReplayStatus = "actual_replay_status"
@@ -851,6 +855,8 @@ func report(
     forbiddenBehavior: [String: Bool] = forbiddenDefaults(),
     counters: [String: Int] = [:],
     coverageWarnings: [String] = [],
+    ociProcessExitObserved: Bool? = nil,
+    ociProcessExitStatus: Int? = nil,
     kernelProfile: String? = nil,
     kernelConfig: String? = nil,
     evidence: [String: String]? = nil,
@@ -890,6 +896,8 @@ func report(
         autonomousTestsBypassed: autonomousTestsBypassed,
         bypassReason: bypassReason,
         coverageWarnings: coverageWarnings,
+        ociProcessExitObserved: ociProcessExitObserved,
+        ociProcessExitStatus: ociProcessExitStatus,
         evidence: evidence,
         expectedStatus: expectedStatus,
         actualReplayStatus: actualReplayStatus,
@@ -19125,6 +19133,8 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
             "source_evidence_facts": evidence.count,
             "source_proof_failures": failures.filter { $0.id.contains("source-proof") }.count,
         ],
+        ociProcessExitObserved: evidence["oci_process_exit_observed"] == "true",
+        ociProcessExitStatus: Int(evidence["oci_process_exit_status"] ?? ""),
         kernelProfile: kernelProfile,
         kernelConfig: "OrlixKernel/Sources/ports/orlix/configs/\(kernelProfile)_defconfig",
         evidence: evidence,
