@@ -2,6 +2,32 @@
 
 ## 2026-07-07
 
+### Checkpoint: Simulator Runtime Stability Refreshed After MLibC Smoke
+
+- Harness selection:
+  - After `tcti-mlibc-build-smoke` passed, `rtk proxy make agent-next AREA=orlix-tcti` selected `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Xcode and simulator preflight:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --require-shims && xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b && xcrun simctl list devices booted && open -a Simulator --args -CurrentDeviceUDID 1E5553B0-203A-4A11-BAD7-EBDE46863F66'` passed.
+  - The only booted simulator was `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)`.
+- Runtime validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` passed.
+  - Runtime JSON report: `Build/Reports/runtime/tcti-simulator-stability-20260707T042729Z-36214.json`.
+  - Runtime Markdown report: `Build/Reports/runtime/tcti-simulator-stability-20260707T042729Z-36214.md`.
+  - Artifact directory: `Build/Reports/runtime/tcti-simulator-stability-20260707T042729Z-36214.artifacts`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=2c37502402968935dbc0d90580f8b59811c90451`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior flags were false for generated executable memory, host-executable guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Fatal runtime artifact `Build/Reports/runtime/tcti-simulator-stability-20260707T042729Z-36214.artifacts/tcti-simulator-fatal-runtime.txt` was empty.
+  - Host executable violation artifact `Build/Reports/runtime/tcti-simulator-stability-20260707T042729Z-36214.artifacts/host-exec-violations.txt` was empty.
+  - Terminal artifact captured `Orlix TCTI: linux exec start_thread` and `Orlix TCTI: svc #0` entries for `init`.
+- Follow-up selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the runtime report was written.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `rails-defconfig-safety`, whose command is `make tcti-gate TARGET=tcti-plan-consistency`.
+- Boundary:
+  - This checkpoint refreshes the mandatory pinned-simulator runtime stability proof after the mlibc smoke pass.
+  - This does not prove app terminal `ORLIX-USERLAND-TCTI-OK`, full shell usability, full package behavior, full Linux runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: MLibC Build Smoke Passes On Pinned Simulator
 
 - Harness progression:
