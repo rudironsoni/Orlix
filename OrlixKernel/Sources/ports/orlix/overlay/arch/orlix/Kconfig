@@ -66,6 +66,15 @@ config ORLIX_TCTI_DEBUG_SWITCH
 	  decoding, fault, syscall, and register semantics. It is not the
 	  physical-iPhone performance backend.
 
+config ORLIX_TCTI_SYSCALL_TRACE
+	bool "Trace every Orlix TCTI syscall entry and return"
+	depends on ORLIX_HOSTED_EXEC_TCTI
+	default n
+	help
+	  Enable full per-syscall TCTI tracing. The default TCTI runtime keeps
+	  syscall-entry reporting bounded so app-hosted Linux workloads are not
+	  throttled by console mirroring.
+
 config ORLIX_TCTI_KUNIT_TEST
 	bool "Enable Orlix TCTI KUnit tests"
 	depends on ORLIX_HOSTED_EXEC_TCTI && KUNIT

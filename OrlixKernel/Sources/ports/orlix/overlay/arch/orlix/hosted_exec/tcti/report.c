@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <linux/atomic.h>
 #include <linux/kernel.h>
 #include <linux/pid.h>
 #include <linux/sched.h>
@@ -6,6 +7,19 @@
 #include <asm/tcti.h>
 
 #include "report.h"
+
+#define TCTI_DEFAULT_SYSCALL_REPORT_BUDGET 32
+
+static bool tcti_should_report_syscall_entry(void)
+{
+	static atomic_t budget =
+		ATOMIC_INIT(TCTI_DEFAULT_SYSCALL_REPORT_BUDGET);
+
+	if (IS_ENABLED(CONFIG_ORLIX_TCTI_SYSCALL_TRACE))
+		return true;
+
+	return atomic_dec_if_positive(&budget) >= 0;
+}
 
 void tcti_report_unsupported(struct task_struct *task, struct pt_regs *regs,
 			     const struct tcti_result *result)
@@ -30,6 +44,9 @@ void tcti_report_unsupported(struct task_struct *task, struct pt_regs *regs,
 void tcti_report_syscall(struct task_struct *task, struct pt_regs *regs,
 			 const struct tcti_result *result)
 {
+	if (!tcti_should_report_syscall_entry())
+		return;
+
 	pr_info("Orlix TCTI: svc #0 task=%s pid=%d pc=%#lx syscall=%llu x0=%#llx x1=%#llx x2=%#llx x3=%#llx x4=%#llx x5=%#llx x30=%#llx sp=%#llx\n",
 		task ? task->comm : "<none>",
 		task ? task_pid_nr(task) : -1,

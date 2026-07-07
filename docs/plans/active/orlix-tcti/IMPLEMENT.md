@@ -2,6 +2,38 @@
 
 ## 2026-07-07
 
+### Checkpoint: MLibC Build Smoke Timerfd Passes With Bounded TCTI Diagnostics
+
+- Harness startup:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-sysdeps-smoke` after the current mlibc build smoke report passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-sysdeps-smoke`.
+- Starting failure:
+  - `tcti-mlibc-build-smoke` previously failed with `not ok 159 - linux/timerfd` and missing `ORLIX-MLIBC-TEST-END`.
+  - The upstream mlibc `linux/timerfd` test arms a 100 ms timer and immediately calls `timerfd_gettime`.
+  - The failing app-hosted run spent about 1.9 seconds between `timerfd_settime` and the next `timerfd_gettime` because every TCTI syscall entry was mirrored through the app-visible console/log path.
+  - The timer expired before the immediate `timerfd_gettime` assertion, so the upstream test aborted even though the owning Linux timerfd semantics were not the root blocker.
+- Kernel TCTI diagnostic fix:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/report.c` now bounds default syscall-entry reporting to the first 32 entries.
+  - `CONFIG_ORLIX_TCTI_SYSCALL_TRACE` keeps full per-syscall entry reporting available when an explicit debug profile needs it.
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c` keeps real static PIE data-read failures logged while quieting expected missing-VMA probes from ELF-base scanning.
+- Validation:
+  - `rtk proxy make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime` passed, including `orlix-tcti-decode.tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke` passed on the pinned simulator.
+  - Report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=59e916bbd66948677027e5e1b73370f687a83b2f`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `pass_count=1`, `fail_count=0`, and `skip_count=0`.
+  - `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt` contains `ok 159 - linux/timerfd`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK AT_BASE=0x22178a300000`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
+  - Fresh crash scans under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` found no recent matching reports.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the mlibc build smoke report.
+  - `rtk proxy git diff --check` passed before this checkpoint was recorded.
+- Boundary:
+  - This checkpoint advances Stage 8 supporting evidence by removing app-console diagnostic throttling as a blocker for app-hosted OrlixMLibC rootfs execution through OrlixKernel/TCTI.
+  - This does not prove the final app terminal `ORLIX-USERLAND-TCTI-OK` marker, interactive command execution, packaged userspace readiness, OCI command execution, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+  - No generated Linux, mlibc, package, rootfs, or build tree was edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics were added.
+
 ### Checkpoint: Shell Simple Command And Pipeline Pass On Pinned Simulator
 
 - Harness startup:
