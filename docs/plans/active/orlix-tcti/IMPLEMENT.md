@@ -2,6 +2,39 @@
 
 ## 2026-07-07
 
+### Checkpoint: MLibC Dynamic Loader Smoke Passes On Pinned Simulator
+
+- Harness selection:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency` passed.
+  - `rtk proxy make agent-harness-check` passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti` refreshed current report state.
+  - `rtk proxy make agent-next AREA=orlix-tcti` selected `tcti-mlibc-dynamic-loader-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `tcti-mlibc-dynamic-loader-smoke`.
+- Harness fix:
+  - `tools/tcti/orlix-tcti-gate.swift` now lets the dynamic-loader smoke command terminate file-backed `xcodebuild` capture after either success markers or known XCTest/upstream failure markers.
+  - The dynamic-loader smoke report now records whether an upstream `not ok` marker blocked the dynamic-loader workload and no longer reports every failure as static PIE-only when the PT_INTERP workload is configured.
+  - This is a reporting and runner-lifecycle fix only. It does not skip upstream failures, weaken the dynamic-loader marker requirement, add HostAdapter-owned Linux semantics, or edit generated mlibc sources.
+- Xcode and simulator preflight:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --strict --json'` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b` reported `Device already booted, nothing to do.`
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted` showed only `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" open -a Simulator --args -CurrentDeviceUDID 1E5553B0-203A-4A11-BAD7-EBDE46863F66` opened the pinned simulator for visibility.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift` passed.
+  - `rtk proxy git diff --check` passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-dynamic-loader-smoke` passed.
+  - Report: `Build/TCTI/reports/tcti-mlibc-dynamic-loader-smoke/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=0059275d9877d40760d3ee1025bc330a1d9d0f03`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `dynamic_loader_completion_asserted_by_xctest=true`, `dynamic_loader_workload_configured=true`, `dynamic_loader_pt_interp_source_proof=true`, `dynamic_loader_blocked_by_upstream_failure=false`, `pass_count=1`, `fail_count=0`, and `source_proof_failures=0`.
+  - `Build/TCTI/mlibc_dynamic_loader_smoke/xcodebuild-output.txt` shows `ok 100 - posix/pthread_mutex`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK AT_BASE=...`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` in the last 30 minutes returned no matching files.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed with the dynamic-loader report present.
+  - After the post-smoke schema refresh and `rtk proxy make agent-next AREA=orlix-tcti`, the next selected gate is `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
+- Boundary:
+  - This checkpoint advances Stage 8 supporting evidence by proving a PT_INTERP-backed OrlixMLibC dynamic-loader smoke binary executes through the app-hosted OrlixOS terminal-session XCTest surface on the pinned simulator.
+  - This does not prove app terminal `ORLIX-USERLAND-TCTI-OK`, interactive command execution, packaged userspace, OCI command execution, full runtime readiness, release readiness, or physical-device readiness.
+  - No physical-device gate was run.
+
 ### Checkpoint: Simulator Runtime Stability Refreshed After MLibC Smoke
 
 - Harness selection:
