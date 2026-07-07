@@ -22,10 +22,12 @@
   - `rtk proxy make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime` passed, including `orlix-tcti-decode.tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`.
   - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke` passed on the pinned simulator.
   - Report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`.
-  - Report evidence: `status=pass`, `passed=true`, `git_sha=59e916bbd66948677027e5e1b73370f687a83b2f`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `pass_count=1`, `fail_count=0`, and `skip_count=0`.
-  - `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt` contains `ok 159 - linux/timerfd`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK AT_BASE=0x22178a300000`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
+  - Post-commit rerun report evidence: `status=pass`, `passed=true`, `git_sha=c3fbdf992a8c64bfd2517a092ad079a9c0e33b16`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `selected_simulator_name=Orlix-iPhone-15-Pro-Max`, `xcode_test_executed=true`, `xcode_test_passed=true`, `mlibc_completion_asserted_by_xctest=true`, `pass_count=1`, `fail_count=0`, and `skip_count=0`.
+  - `Build/TCTI/mlibc_build_smoke/xcodebuild-output.txt` contains `ok 159 - linux/timerfd`, `ORLIX-MLIBC-DYNAMIC-LOADER-OK AT_BASE=0x1ed83aa0000`, `ORLIX-MLIBC-TEST-END`, and `** TEST SUCCEEDED **`.
   - Fresh crash scans under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` for `OrlixTestRunner`, `Orlix`, and `xctest` found no recent matching reports.
   - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check` passed after the mlibc build smoke report.
+  - `rtk proxy make agent-next AREA=orlix-tcti` regenerated the next selected gate as `simulator-tcti-runtime-stability`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed for `simulator-tcti-runtime-stability`.
   - `rtk proxy git diff --check` passed before this checkpoint was recorded.
 - Boundary:
   - This checkpoint advances Stage 8 supporting evidence by removing app-console diagnostic throttling as a blocker for app-hosted OrlixMLibC rootfs execution through OrlixKernel/TCTI.
