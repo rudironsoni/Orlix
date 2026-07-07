@@ -3,9 +3,11 @@
 #include "OrlixHostAdapter/observability/log.h"
 #include "OrlixHostAdapter/runtime/host_tls.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <os/lock.h>
+#include <poll.h>
 #include <stddef.h>
 #include <string.h>
 #include <unistd.h>
@@ -32,6 +34,7 @@ static void OrlixHostConsoleWriteFileDescriptor(const void *bytes,
     const char *cursor = bytes;
     unsigned long offset = 0;
     int fd = OrlixHostConsoleOutputFD;
+    unsigned int backpressure_retries = 0;
 
     if (fd < 0 || !bytes || length == 0) {
         return;
@@ -43,10 +46,29 @@ static void OrlixHostConsoleWriteFileDescriptor(const void *bytes,
             (unsigned long)SSIZE_MAX : remaining;
         ssize_t written = write(fd, cursor + offset, (size_t)chunk);
 
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            struct pollfd poll_fd = {
+                .fd = fd,
+                .events = POLLOUT,
+            };
+            int ready = poll(&poll_fd, 1, 100);
+            if (ready > 0 && (poll_fd.revents & POLLOUT) != 0) {
+                backpressure_retries = 0;
+                continue;
+            }
+            if (++backpressure_retries < 100) {
+                continue;
+            }
+            break;
+        }
         if (written <= 0) {
             break;
         }
 
+        backpressure_retries = 0;
         offset += (unsigned long)written;
     }
 }
