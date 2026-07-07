@@ -235,6 +235,8 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_STDERR_OK"))
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"))
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_COMMAND_DONE"))
+        XCTAssertTrue(output.contains("orlix-init: process exited pid="))
+        XCTAssertTrue(output.contains("status=0"))
     }
 
     func testTarDerivedNamedEnvironmentCrossBootWrite() throws {
@@ -1279,8 +1281,14 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         proof: RuntimeProof
     ) -> Bool {
         let output = normalized(rawOutput)
+        let proofCompleted = output.contains(proof.doneMarker) &&
+            (!proof.requiresProcessExitStatus ||
+                output.range(
+                    of: #"(?m)orlix-init: process exited pid=[0-9]+ status=0"#,
+                    options: .regularExpression
+                ) != nil)
 
-        return output.contains(proof.doneMarker) ||
+        return proofCompleted ||
             firstFatalMarker(in: output) != nil
     }
 
@@ -1746,6 +1754,21 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
 			.stdioExecution, .coreutilsCommand:
+            return false
+        }
+    }
+
+    var requiresProcessExitStatus: Bool {
+        switch self {
+        case .coreutilsCommand:
+            return true
+        case .osRelease, .overlayMutation, .descriptorExecution,
+             .longDescriptorExecution, .linuxPathDescriptorExecution,
+             .pathLookupDescriptorExecution,
+             .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
+             .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
+             .timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
+             .crossBootWrite, .crossBootVerify:
             return false
         }
     }

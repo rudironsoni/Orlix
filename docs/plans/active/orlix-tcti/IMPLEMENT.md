@@ -2,6 +2,35 @@
 
 ## 2026-07-07
 
+### Checkpoint: OCI Coreutils Command Waits For Linux Exit Status
+
+Timestamp: `2026-07-07T13:27:29Z`.
+
+- Harness-selected gate: `tcti-oci-exec-coreutils-command`.
+- Starting failure:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-exec-coreutils-command` failed at `beabfd9eed052f8b3a115e08b143acfd68a22d20`.
+  - The Linux/Coreutils workload itself ran: `ORLIX_ENV_COREUTILS_COMMAND_BEGIN`, `coreutils-command-ok`, `ORLIX_ENV_COREUTILS_STDOUT_OK`, `ORLIX_ENV_COREUTILS_STDERR_OK`, `ORLIX_ENV_COREUTILS_EXIT_STATUS_OK`, and `ORLIX_ENV_COREUTILS_COMMAND_DONE` were present, and XCTest reported `** TEST SUCCEEDED **`.
+  - The gate correctly failed because the captured output did not include `orlix-init: process exited pid=... status=0`.
+- Implementation:
+  - `OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests.swift` now makes the `.coreutilsCommand` proof wait for the Linux process exit-status line before completing.
+  - The focused Coreutils command XCTest now asserts both `orlix-init: process exited pid=` and `status=0`.
+  - `tools/tcti/orlix-tcti-gate.swift` now requires those source assertions as part of the OCI Coreutils command source proof.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-exec-coreutils-command`: passed.
+  - Report: `Build/TCTI/reports/tcti-oci-exec-coreutils-command/report.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=beabfd9eed052f8b3a115e08b143acfd68a22d20`, `selected_simulator_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `oci_process_exit_observed=true`, `oci_process_exit_status=0`, `pass_count=1`, `fail_count=0`, `skip_count=0`.
+  - Xcode artifact: `Build/TCTI/oci_exec_coreutils_command/xcodebuild-output.txt` contains `orlix-init: process exited pid=32 status=0`, `Test Case '-[OrlixRuntimeTests.OrlixEnvironmentRootRuntimeTests testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand]' passed`, and `** TEST SUCCEEDED **`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - Fresh crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no recent `Orlix`, `OrlixTestRunner`, or `xctest` crash reports.
+- Follow-up:
+  - `rtk proxy make agent-next AREA=orlix-tcti && rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: selected `tcti-oci-stdio-signal-wait`.
+- Boundary:
+  - No physical-device gate run.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker, runtime readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: OCI Coreutils Command Runs Through Copied OrlixOS Session
 
 Timestamp: `2026-07-07T11:50:31Z`.
