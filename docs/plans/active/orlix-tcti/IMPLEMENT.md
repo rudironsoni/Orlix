@@ -6464,6 +6464,46 @@ Timestamp: `2026-07-05T08:15:52Z`.
 - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
 - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
 
+## 2026-07-07T01:10:51Z OCI gate export checkpoint
+
+- Harness startup:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency && rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected OCI lane after Coreutils subset, with simulator readiness still incomplete and physical-device blockers present.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-rootfs-materialize`.
+- Starting roadblock:
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` failed because `tcti-oci-rootfs-materialize` was referenced by the selected command but not exported by `tools/tcti/orlix-tcti-gate.swift`.
+  - Existing local support for `tcti-oci-image-layout-parse` was kept and extended in the same TCTI gate tool checkpoint.
+- Harness fix:
+  - `tools/tcti/orlix-tcti-gate.swift` now exports `tcti-oci-image-layout-parse`.
+  - `tools/tcti/orlix-tcti-gate.swift` now exports `tcti-oci-rootfs-materialize`.
+  - `tcti-oci-rootfs-materialize` runs real pinned-simulator XCTest through `OrlixRuntime Tests`, not a parser-only proof:
+    - `OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBootsAndExposesOSRelease`
+    - pinned simulator `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`
+    - source proof checks `.ociDerived`, `.ociLayout`, OCI import/materialization planning, OrlixOS materialized root runtime execution, and `/etc/os-release` marker `ID=orlix-oci-runtime-test-fixture`
+- Environment:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" sh -c 'ROOT="$(external-ssd-root)"; xcode-offload doctor --root "$ROOT" --require-shims'`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: already booted.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted`: only `Orlix-iPhone-15-Pro-Max` booted.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make tcti-gate-list | tr ' ' '\n' | rg '^tcti-oci-rootfs-materialize$'`: passed.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-rootfs-materialize`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for `tcti-oci-rootfs-materialize`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-oci-rootfs-materialize`: passed.
+  - `Build/TCTI/reports/tcti-oci-rootfs-materialize/report.json`: `status=pass`, `passed=true`, `git_sha=b2fd66cc5050cd89970d0dd4b810e263d4894d17`, one XCTest executed, one passed, zero failed, zero skipped, forbidden behavior false.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-oci-rootfs-materialize/oci-rootfs-materialize-pass.json`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+- Next selected blocker:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-oci-rootfs-boot-session`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: failed because `tcti-oci-rootfs-boot-session` is not yet exported by the TCTI gate tool.
+- Boundaries:
+  - No HostAdapter-owned Linux syscall, VFS, fd, process, signal, wait, exec, or scheduler semantics added.
+  - No production TCTI assembly, gadget dispatch, MAP_JIT, RWX, host-executable guest text, native iOS guest API, or physical-device work added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ### Checkpoint: Fault/Signal Smoke Refreshed On Current Head
 
 Timestamp: `2026-07-06T23:09:52Z`.
