@@ -234,12 +234,45 @@ final class OrlixEnvironmentRootRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_STDOUT_OK"))
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_STDERR_OK"))
         XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_EXIT_STATUS_OK"))
-        XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_COMMAND_DONE"))
-        XCTAssertTrue(output.contains("orlix-init: process exited pid="))
-        XCTAssertTrue(output.contains("status=0"))
-    }
+		XCTAssertTrue(output.contains("ORLIX_ENV_COREUTILS_COMMAND_DONE"))
+		XCTAssertTrue(output.contains("orlix-init: process exited pid="))
+		XCTAssertTrue(output.contains("status=0"))
+	}
 
-    func testTarDerivedNamedEnvironmentCrossBootWrite() throws {
+	func testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait()
+		throws
+	{
+		let runner = OrlixEnvironmentRootRuntimeProofRunner(
+			fixture: .ociDerived,
+			proof: .stdioSignalWait
+		)
+		let result = try runner.runCopiedNamedEnvironmentStdioSignalWait()
+		let output = result.output
+
+		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_SIGNAL_WAIT_BEGIN"))
+		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_SIGNAL_WAIT_STDOUT_OK"))
+		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_SIGNAL_WAIT_STDERR_OK"))
+		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_SIGNAL_WAIT_WAITING"))
+		XCTAssertTrue(output.contains("ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT"))
+		XCTAssertTrue(output.contains("orlix-init: process signaled pid="))
+		XCTAssertTrue(output.contains("signal=2"))
+		XCTAssertTrue(output.contains("orlix-init: shell exit status="))
+		XCTAssertTrue(output.contains("130"))
+		XCTAssertEqual(result.started.stateReport.status, .running)
+		XCTAssertNotNil(result.started.stateReport.pid)
+		XCTAssertEqual(result.signaled.signal, 2)
+		XCTAssertEqual(result.signaled.stateReport.status, .running)
+		XCTAssertEqual(result.signaled.stateReport.pid, result.started.stateReport.pid)
+		XCTAssertEqual(result.completed.stateReport.status, .stopped)
+		XCTAssertEqual(result.completed.stateReport.pid, result.started.stateReport.pid)
+		XCTAssertEqual(result.completed.stateReport.exitStatus, 130)
+		XCTAssertEqual(result.finalState, result.completed.stateReport)
+		XCTAssertEqual(result.deletedEnvironment.lifecycleState, .deleted)
+		XCTAssertFalse(FileManager.default.fileExists(atPath: result.lifecycleRecordURL.path))
+		XCTAssertFalse(FileManager.default.fileExists(atPath: result.environmentDirectoryURL.path))
+	}
+
+	func testTarDerivedNamedEnvironmentCrossBootWrite() throws {
         let runner = OrlixEnvironmentRootRuntimeProofRunner(
             fixture: .tarDerived,
             proof: .crossBootWrite
@@ -526,6 +559,17 @@ private struct OrlixEnvironmentObservedRuntimeResult {
 	let environmentDirectoryURL: URL
 }
 
+private struct OrlixEnvironmentStdioSignalWaitResult {
+	let output: String
+	let started: OrlixOCIEnvironmentStartResult
+	let signaled: OrlixOCIEnvironmentSignalResult
+	let completed: OrlixOCIEnvironmentWaitResult
+	let finalState: OrlixOCIRuntimeStateReport
+	let deletedEnvironment: OrlixOCIEnvironmentDeleteResult
+	let lifecycleRecordURL: URL
+	let environmentDirectoryURL: URL
+}
+
 private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable {
     private static let readyFile = ".ready"
     private static let firstOutputTimeout: TimeInterval = 30
@@ -719,11 +763,11 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         return output
     }
 
-    func runCopiedNamedEnvironmentThroughSessionSelection() throws -> String {
-        let sourceRoot = try Self.fixtureRoot(for: fixture)
-        let copiedRoot = try Self.mutableFixtureCopy(of: sourceRoot, fixture: fixture)
-        defer {
-            try? FileManager.default.removeItem(at: copiedRoot.root)
+	func runCopiedNamedEnvironmentThroughSessionSelection() throws -> String {
+		let sourceRoot = try Self.fixtureRoot(for: fixture)
+		let copiedRoot = try Self.mutableFixtureCopy(of: sourceRoot, fixture: fixture)
+		defer {
+			try? FileManager.default.removeItem(at: copiedRoot.root)
         }
 
         let registry = OrlixEnvironmentRegistry(
@@ -746,9 +790,41 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
         return try run(
             fixtureRoot: copiedRoot,
             descriptor: copiedDescriptor,
-            launchThroughSessionSelection: true
-        )
-    }
+			launchThroughSessionSelection: true
+		)
+	}
+
+	func runCopiedNamedEnvironmentStdioSignalWait()
+		throws -> OrlixEnvironmentStdioSignalWaitResult
+	{
+		let sourceRoot = try Self.fixtureRoot(for: fixture)
+		let copiedRoot = try Self.mutableFixtureCopy(of: sourceRoot, fixture: fixture)
+		defer {
+			try? FileManager.default.removeItem(at: copiedRoot.root)
+		}
+
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: copiedRoot.linuxStateRoot,
+			cacheRoot: copiedRoot.cacheRoot,
+			scratchRoot: copiedRoot.scratchRoot
+		)
+		let parentDescriptor = descriptor(
+			environmentID: fixture.environmentID,
+			source: fixture.source,
+			rootImageIdentifier: fixture.rootImageIdentifier
+		)
+		try registry.save(parentDescriptor)
+		let copiedDescriptor = try registry.copyEnvironment(
+			from: fixture.environmentID,
+			to: fixture.copiedEnvironmentID,
+			rootImageIdentifier: fixture.copiedRootImageIdentifier
+		)
+
+		return try runStdioSignalWait(
+			fixtureRoot: copiedRoot,
+			descriptor: copiedDescriptor
+		)
+	}
 
     func runPersistentCopiedNamedEnvironmentCrossBootWrite() throws -> String {
         let fixtureRoot = try Self.preparePersistentCrossBootFixtureCopy(
@@ -1017,6 +1093,120 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 			deletedEnvironment: deletedEnvironment,
 			lifecycleRecordURL: lifecycleRecordURL,
 			environmentDirectoryURL: environmentDirectoryURL
+		)
+	}
+
+	private func runStdioSignalWait(
+		fixtureRoot: EnvironmentRootFixture,
+		descriptor: OrlixEnvironmentDescriptor
+	) throws -> OrlixEnvironmentStdioSignalWaitResult {
+		let registry = OrlixEnvironmentRegistry(
+			linuxStateRoot: fixtureRoot.linuxStateRoot,
+			cacheRoot: fixtureRoot.cacheRoot,
+			scratchRoot: fixtureRoot.scratchRoot
+		)
+		let layout = try OrlixEnvironmentStorageLayout.layout(
+			forEnvironmentID: descriptor.id,
+			linuxStateRoot: fixtureRoot.linuxStateRoot,
+			cacheRoot: fixtureRoot.cacheRoot,
+			scratchRoot: fixtureRoot.scratchRoot
+		)
+		let terminal = OrlixTerminalSession()
+		let terminalLog = EnvironmentRootTerminalLog()
+		terminalLog.writeLine("fixture=\(fixtureRoot.root.path)")
+		terminalLog.writeLine("base=\(layout.baseImageURL.path)")
+		terminalLog.writeLine("state=\(layout.stateImageURL.path)")
+		terminalLog.writeLine(
+			"rootImageIdentifier=\(descriptor.rootImageIdentifier)"
+		)
+		let recorder = EnvironmentRootOutputRecorder(terminalLog: terminalLog)
+		let output = terminal.attachOutput { data in
+			recorder.append(data)
+		}
+		defer { output.cancel() }
+
+		try registry.save(descriptor)
+		try writeOCIRuntimeConfig(
+			terminal: true,
+			rootPath: "imported-root",
+			to: fixtureRoot.root
+		)
+		let runtime = OrlixOCIRuntime(registry: registry)
+		let lifecycle = try OrlixOCIRuntimeBundle
+			.load(from: fixtureRoot.root)
+			.lifecycleController(id: descriptor.id)
+			.create()
+		try runtime.lifecycleStore.save(lifecycle)
+		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
+		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 60)
+
+		let started = try installer.start(
+			id: descriptor.id,
+			terminal: terminal,
+			using: driver
+		)
+		try Self.waitForText(
+			"ORLIX_ENV_STDIO_SIGNAL_WAIT_WAITING",
+			recorder: recorder,
+			terminalLog: terminalLog,
+			timeout: 60
+		)
+		Thread.sleep(forTimeInterval: 0.25)
+		let signaled = try installer.kill(
+			id: descriptor.id,
+			signal: 2,
+			terminal: terminal,
+			using: driver
+		)
+		let completed = try installer.wait(
+			id: descriptor.id,
+			terminal: terminal,
+			using: driver
+		)
+		let finalState = try installer.state(id: descriptor.id)
+		let lifecycleRecordURL = try runtime.lifecycleStore.recordURL(
+			forID: descriptor.id
+		)
+		let environmentDirectoryURL = layout.rootDirectory
+		let deletedEnvironment = try installer.delete(id: descriptor.id)
+		let text = Self.normalized(recorder.text)
+		try validate(text, terminalLog: terminalLog)
+
+		return OrlixEnvironmentStdioSignalWaitResult(
+			output: text,
+			started: started,
+			signaled: signaled,
+			completed: completed,
+			finalState: finalState,
+			deletedEnvironment: deletedEnvironment,
+			lifecycleRecordURL: lifecycleRecordURL,
+			environmentDirectoryURL: environmentDirectoryURL
+		)
+	}
+
+	private static func waitForText(
+		_ marker: String,
+		recorder: EnvironmentRootOutputRecorder,
+		terminalLog: EnvironmentRootTerminalLog,
+		timeout: TimeInterval
+	) throws {
+		let deadline = Date().addingTimeInterval(timeout)
+		while Date() < deadline {
+			let text = recorder.text
+			if text.contains(marker) {
+				return
+			}
+			if let marker = firstFatalMarker(in: text) {
+				throw OrlixEnvironmentRootRuntimeProofError.fatalMarker(marker)
+			}
+			Thread.sleep(forTimeInterval: 0.1)
+		}
+		let text = recorder.text
+		throw OrlixEnvironmentRootRuntimeProofError.timeout(
+			timeout,
+			text,
+			terminalLog.url,
+			terminalLog.tail()
 		)
 	}
 
@@ -1471,9 +1661,10 @@ private enum RuntimeProof: Sendable {
     case timeNamespaceOffsets
     case maskedReadonlyPaths
     case cgroupPidsLimit
-    case crossBootWrite
-    case crossBootVerify
-    case coreutilsCommand
+	case crossBootWrite
+	case crossBootVerify
+	case coreutilsCommand
+	case stdioSignalWait
 
     var defaultCommand: [String] {
         switch self {
@@ -1519,12 +1710,18 @@ private enum RuntimeProof: Sendable {
 				"-c",
 				Self.stdioExecutionScript
 			]
-        case .coreutilsCommand:
-            return [
-                "/bin/sh",
-                "-c",
-                Self.coreutilsCommandScript
-            ]
+		case .coreutilsCommand:
+			return [
+				"/bin/sh",
+				"-c",
+				Self.coreutilsCommandScript
+			]
+		case .stdioSignalWait:
+			return [
+				"/bin/sh",
+				"-c",
+				Self.stdioSignalWaitScript
+			]
 		case .userNamespaceMappings:
 			return [
 				"/bin/sh",
@@ -1581,7 +1778,7 @@ private enum RuntimeProof: Sendable {
 			.stdioExecution,
 			.runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
 			.maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
-			.crossBootVerify, .coreutilsCommand:
+			.crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return "/"
         case .descriptorExecution, .longDescriptorExecution:
             return "/tmp"
@@ -1598,7 +1795,8 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand,
+			.stdioSignalWait:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 1000
@@ -1612,7 +1810,8 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand,
+			.stdioSignalWait:
             return 0
         case .descriptorExecution, .longDescriptorExecution:
             return 100
@@ -1631,7 +1830,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .maskedReadonlyPaths,
              .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1646,7 +1845,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .timeNamespaceOffsets,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1661,7 +1860,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1676,7 +1875,7 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1691,7 +1890,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .maskedReadonlyPaths,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return nil
         }
     }
@@ -1706,7 +1905,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .timeNamespaceOffsets, .maskedReadonlyPaths,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return nil
         }
     }
@@ -1724,7 +1923,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1739,7 +1938,7 @@ private enum RuntimeProof: Sendable {
              .pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
  .ptyStdio, .stdioExecution, .runtimeTmpfs, .timeNamespaceOffsets,
              .maskedReadonlyPaths, .cgroupPidsLimit,
-             .crossBootWrite, .crossBootVerify, .coreutilsCommand:
+ .crossBootWrite, .crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return []
         }
     }
@@ -1753,14 +1952,14 @@ private enum RuntimeProof: Sendable {
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.stdioExecution, .coreutilsCommand:
+			.stdioExecution, .coreutilsCommand, .stdioSignalWait:
             return false
         }
     }
 
     var requiresProcessExitStatus: Bool {
         switch self {
-        case .coreutilsCommand:
+ case .coreutilsCommand, .stdioSignalWait:
             return true
         case .osRelease, .overlayMutation, .descriptorExecution,
              .longDescriptorExecution, .linuxPathDescriptorExecution,
@@ -1850,8 +2049,10 @@ private enum RuntimeProof: Sendable {
                 #"if /bin/rm /etc/orlix-crossboot-marker && /bin/sync; then printf '%s%s\n' ORLIX_ENV_ CROSSBOOT_CLEANUP_OK; else printf '%s%s\n' ORLIX_ENV_CROSSBOOT_ PROOF_FAILED_CLEANUP; fi"#,
                 #"printf '%s%s\n' ORLIX_ENV_ CROSSBOOT_VERIFY_DONE"#,
             ].joined(separator: "\r") + "\r"
-        case .coreutilsCommand:
-            return ""
+		case .coreutilsCommand:
+			return ""
+		case .stdioSignalWait:
+			return ""
 		case .descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .userNamespaceMappings,
@@ -1891,8 +2092,10 @@ private enum RuntimeProof: Sendable {
             return "ORLIX_ENV_CROSSBOOT_WRITE_DONE"
         case .crossBootVerify:
             return "ORLIX_ENV_CROSSBOOT_VERIFY_DONE"
-        case .coreutilsCommand:
-            return "ORLIX_ENV_COREUTILS_COMMAND_DONE"
+		case .coreutilsCommand:
+			return "ORLIX_ENV_COREUTILS_COMMAND_DONE"
+		case .stdioSignalWait:
+			return "ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT"
         }
     }
 
@@ -1907,7 +2110,7 @@ private enum RuntimeProof: Sendable {
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
-            .coreutilsCommand:
+ .coreutilsCommand, .stdioSignalWait:
             return ""
         }
     }
@@ -1923,7 +2126,7 @@ private enum RuntimeProof: Sendable {
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
-            .coreutilsCommand:
+ .coreutilsCommand, .stdioSignalWait:
             return nil
         }
     }
@@ -1939,7 +2142,7 @@ private enum RuntimeProof: Sendable {
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
-            .coreutilsCommand:
+ .coreutilsCommand, .stdioSignalWait:
             return ""
         }
     }
@@ -1955,7 +2158,7 @@ private enum RuntimeProof: Sendable {
 			.descriptorExecution, .longDescriptorExecution,
 			.linuxPathDescriptorExecution, .pathLookupDescriptorExecution,
 			.pathLookupWithoutPATHDescriptorExecution, .stdioExecution,
-            .coreutilsCommand:
+ .coreutilsCommand, .stdioSignalWait:
             return nil
         }
     }
@@ -2105,17 +2308,25 @@ private enum RuntimeProof: Sendable {
                 "ORLIX_ENV_CROSSBOOT_CLEANUP_OK",
                 "ORLIX_ENV_CROSSBOOT_VERIFY_DONE"
             ]
-        case .coreutilsCommand:
-            return [
-                "ORLIX_ENV_COREUTILS_COMMAND_BEGIN",
-                "coreutils-command-ok",
-                "ORLIX_ENV_COREUTILS_STDOUT_OK",
-                "ORLIX_ENV_COREUTILS_STDERR_OK",
-                "ORLIX_ENV_COREUTILS_EXIT_STATUS_OK",
-                "ORLIX_ENV_COREUTILS_COMMAND_DONE"
-            ]
-        }
-    }
+		case .coreutilsCommand:
+			return [
+				"ORLIX_ENV_COREUTILS_COMMAND_BEGIN",
+				"coreutils-command-ok",
+				"ORLIX_ENV_COREUTILS_STDOUT_OK",
+				"ORLIX_ENV_COREUTILS_STDERR_OK",
+				"ORLIX_ENV_COREUTILS_EXIT_STATUS_OK",
+				"ORLIX_ENV_COREUTILS_COMMAND_DONE"
+			]
+		case .stdioSignalWait:
+			return [
+				"ORLIX_ENV_STDIO_SIGNAL_WAIT_BEGIN",
+				"ORLIX_ENV_STDIO_SIGNAL_WAIT_STDOUT_OK",
+				"ORLIX_ENV_STDIO_SIGNAL_WAIT_STDERR_OK",
+				"ORLIX_ENV_STDIO_SIGNAL_WAIT_WAITING",
+				"ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT"
+			]
+		}
+	}
 
     private var descriptorExecutionScript: String {
         switch self {
@@ -2126,7 +2337,7 @@ private enum RuntimeProof: Sendable {
 		case .osRelease, .overlayMutation, .pseudoFilesystems, .ptyStdio,
 			.stdioExecution, .runtimeTmpfs, .userNamespaceMappings, .timeNamespaceOffsets,
 			.maskedReadonlyPaths, .cgroupPidsLimit, .crossBootWrite,
-			.crossBootVerify, .coreutilsCommand:
+			.crossBootVerify, .coreutilsCommand, .stdioSignalWait:
             return ""
         }
     }
@@ -2151,7 +2362,8 @@ private enum RuntimeProof: Sendable {
 			.pathLookupWithoutPATHDescriptorExecution, .pseudoFilesystems,
 			.ptyStdio, .stdioExecution, .runtimeTmpfs, .userNamespaceMappings,
 			.timeNamespaceOffsets, .maskedReadonlyPaths, .cgroupPidsLimit,
-			.crossBootWrite, .crossBootVerify, .coreutilsCommand:
+			.crossBootWrite, .crossBootVerify, .coreutilsCommand,
+			.stdioSignalWait:
             return ""
         }
     }
@@ -2216,6 +2428,15 @@ private enum RuntimeProof: Sendable {
 		#"false_status=$?"#,
 		#"if [ "$true_status:$false_status" = "0:1" ]; then printf '%s%s\n' ORLIX_ENV_ COREUTILS_EXIT_STATUS_OK; else printf '%s%s\n' ORLIX_ENV_COREUTILS_ PROOF_FAILED_EXIT_STATUS; fi"#,
 		#"printf '%s%s\n' ORLIX_ENV_ COREUTILS_COMMAND_DONE"#,
+	].joined(separator: "\n")
+
+	private static let stdioSignalWaitScript = [
+		#"trap 'printf "ORLIX_ENV_STDIO_SIGNAL_WAIT_SIGNAL_CAUGHT\n"; exit 130' INT"#,
+		#"printf "ORLIX_ENV_STDIO_SIGNAL_WAIT_BEGIN\n""#,
+		#"printf "ORLIX_ENV_STDIO_SIGNAL_WAIT_STDOUT_OK\n""#,
+		#"printf "ORLIX_ENV_STDIO_SIGNAL_WAIT_STDERR_OK\n" >&2"#,
+		#"printf "ORLIX_ENV_STDIO_SIGNAL_WAIT_WAITING\n""#,
+		#"while :; do read orlix_signal_wait_line; done"#,
 	].joined(separator: "\n")
 
 	private static let descriptorExecutionLines = [
