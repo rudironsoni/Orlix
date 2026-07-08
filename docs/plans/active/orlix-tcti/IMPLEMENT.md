@@ -7483,3 +7483,32 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - No physical-device gate was run.
   - No product runtime readiness, package readiness, release readiness, or `ORLIX-USERLAND-TCTI-OK` claim is made.
   - Remaining simulator readiness gaps include Linux console usability, static BusyBox start, static BusyBox shell command, package behavior freshness, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+## 2026-07-08 Simulator mlibc/coreutils/OCI Smoke Checkpoint
+
+- Roadblock:
+  - `tcti-simulator-mlibc-smoke` produced a valid runtime-validation report, but `agent-status` kept selecting it because the next-step dispatcher treated the roadmap gate as unknown.
+  - `tcti-simulator-coreutils-smoke` and `tcti-simulator-oci-rootfs-command` were selected roadmap gates, but `tools/runtime/orlix-runtime-validation.sh` did not implement those app-hosted simulator gates yet.
+- Fix:
+  - Routed `tcti-simulator-mlibc-smoke`, `tcti-simulator-coreutils-smoke`, and `tcti-simulator-oci-rootfs-command` through the shared pinned-simulator marker report validator in `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`.
+  - Preserved simulator proof metadata in the shared runtime marker helper so real-stack simulator reports are not downgraded to seed/probe metadata.
+  - Added `tcti-coreutils-smoke` runtime-validation support. It runs packaged `/bin/sh`, `/bin/true`, `/bin/false`, and `/bin/echo` through the app-hosted simulator path and captures `ORLIX-TCTI-COREUTILS-SMOKE-OK`.
+  - Added `tcti-oci-rootfs-command` runtime-validation support. It verifies the OrlixOS rootfs marker file `/usr/share/orlixos/package-behavior.txt` with `/bin/grep`, then captures `ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK`.
+- Simulator evidence:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260708T151910Z-17441.json`: `status=pass`, `passed=true`, selected simulator `Orlix-iPhone-15-Pro-Max` / `1E5553B0-203A-4A11-BAD7-EBDE46863F66`, forbidden behavior fields false.
+  - `Build/Reports/runtime/tcti-mlibc-smoke-20260708T152154Z-22923.json`: `status=pass`, `passed=true`, selected simulator `Orlix-iPhone-15-Pro-Max`, forbidden behavior fields false.
+  - `Build/Reports/runtime/tcti-mlibc-smoke-20260708T152154Z-22923.artifacts/tcti-mlibc-smoke.txt`: captured `ORLIX-TCTI-MLIBC-SMOKE-OK`.
+  - `Build/Reports/runtime/tcti-coreutils-smoke-20260708T153211Z-43110.json`: `status=pass`, `passed=true`, selected simulator `Orlix-iPhone-15-Pro-Max`, forbidden behavior fields false.
+  - `Build/Reports/runtime/tcti-coreutils-smoke-20260708T153211Z-43110.artifacts/tcti-coreutils-smoke.txt`: captured `ORLIX-TCTI-COREUTILS-SMOKE-OK`.
+  - `Build/Reports/runtime/tcti-oci-rootfs-command-20260708T153730Z-50084.json`: `status=pass`, `passed=true`, selected simulator `Orlix-iPhone-15-Pro-Max`, forbidden behavior fields false.
+  - `Build/Reports/runtime/tcti-oci-rootfs-command-20260708T153730Z-50084.artifacts/tcti-oci-rootfs-command.txt`: captured `ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK`.
+  - `Build/Reports/runtime/tcti-oci-rootfs-command-20260708T153730Z-50084.artifacts/host-exec-violations.txt`: 0 bytes.
+  - `Build/Reports/runtime/tcti-oci-rootfs-command-20260708T153730Z-50084.artifacts/tcti-simulator-fatal-runtime.txt`: 0 bytes.
+- Harness state after the checkpoint:
+  - `make agent-status AREA=orlix-tcti`: `next_eligible_gate=tcti-simulator-interactive-terminal-smoke`.
+  - Remaining simulator readiness gaps include Linux console usability, static BusyBox start, static BusyBox shell command, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+  - Physical-device TCTI remains forbidden.
+- Boundary:
+  - This advances the app-hosted simulator proof ladder for libc, packaged Coreutils, and OrlixOS rootfs command execution.
+  - This does not prove full TCTI completion.
+  - This does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
+  - This does not prove runtime readiness, release readiness, or physical-device readiness.

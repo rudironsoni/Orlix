@@ -39,6 +39,7 @@ busybox_shell_marker="ORLIX-TCTI-BUSYBOX-USABLE"
 console_marker="ORLIX-TCTI-CONSOLE-OK"
 full_shell_marker="ORLIX-TCTI-SHELL-USABLE"
 mlibc_smoke_marker="ORLIX-TCTI-MLIBC-SMOKE-OK"
+coreutils_smoke_marker="ORLIX-TCTI-COREUTILS-SMOKE-OK"
 shell_pipeline_marker="ORLIX-TCTI-SHELL-PIPELINE-OK"
 shell_env_marker="ORLIX-TCTI-SHELL-ENV-OK"
 shell_redirection_marker="ORLIX-TCTI-SHELL-REDIRECTION-OK"
@@ -50,6 +51,7 @@ coreutils_mkdir_rm_cp_ln_marker="ORLIX-TCTI-COREUTILS-MKDIR-RM-CP-LN-OK"
 coreutils_env_path_marker="ORLIX-TCTI-COREUTILS-ENV-PATH-OK"
 coreutils_test_subset_marker="ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK"
 package_behavior_marker="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"
+oci_rootfs_command_marker="ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK"
 dynamic_loader_marker="ORLIX-TCTI-DYNAMIC-LOADER-OK"
 signals_marker="ORLIX-TCTI-SIGNALS-OK"
 vfs_marker="ORLIX-TCTI-VFS-OK"
@@ -472,6 +474,12 @@ simulator_launch_arguments() {
 			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=printf%20$mlibc_smoke_marker%3B%20exit%200"
 		)
 		;;
+	tcti-coreutils-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20/bin/true%3B%20if%20/bin/false%3B%20then%20exit%201%3B%20fi%3B%20/bin/echo%20coreutils-smoke-ok%3B%20printf%20$coreutils_smoke_marker%3B%20exit%200"
+		)
+		;;
 	tcti-shell-pipeline-smoke)
 		output_args=(
 			--orlix-kernel-command-line-append \
@@ -536,6 +544,12 @@ simulator_launch_arguments() {
 		output_args=(
 			--orlix-kernel-command-line-append \
 			"orlix.exec=/bin/grep orlix.argv0=/bin/grep orlix.argv1=-F orlix.argv2=$package_behavior_marker orlix.argv3=/usr/share/orlixos/package-behavior.txt"
+		)
+		;;
+	tcti-oci-rootfs-command)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20/bin/grep%20-F%20$package_behavior_marker%20/usr/share/orlixos/package-behavior.txt%20%3E/dev/null%3B%20/bin/echo%20oci-rootfs-command-ok%3B%20printf%20$oci_rootfs_command_marker%3B%20exit%200"
 		)
 		;;
 	tcti-dynamic-loader-support)
@@ -893,7 +907,7 @@ physical_tcti_preflight() {
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-mlibc-smoke|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-mlibc-smoke|tcti-coreutils-smoke|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-oci-rootfs-command|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -1677,6 +1691,11 @@ assert_gate_markers() {
 		capture_guest_marker "$mlibc_smoke_marker" "tcti-mlibc-smoke.txt" "OrlixMLibC smoke"
 		assert_no_simulator_fatal_runtime
 		;;
+	tcti-coreutils-smoke)
+		capture_tcti_first_syscall
+		capture_guest_marker "$coreutils_smoke_marker" "tcti-coreutils-smoke.txt" "Coreutils smoke"
+		assert_no_simulator_fatal_runtime
+		;;
 	tcti-shell-pipeline-smoke)
 		capture_guest_marker "$shell_pipeline_marker" "tcti-shell-pipeline-smoke.txt" "Shell pipeline smoke"
 		assert_no_simulator_fatal_runtime
@@ -1720,9 +1739,14 @@ assert_gate_markers() {
 	tcti-package-behavior)
 		capture_tcti_first_syscall
 		capture_guest_marker "$package_behavior_marker" "tcti-package-behavior.txt" "Package behavior"
-			assert_no_simulator_fatal_runtime
-			;;
-		tcti-dynamic-loader-support)
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-oci-rootfs-command)
+		capture_tcti_first_syscall
+		capture_guest_marker "$oci_rootfs_command_marker" "tcti-oci-rootfs-command.txt" "OCI rootfs command"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-dynamic-loader-support)
 			capture_tcti_first_syscall
 			capture_guest_marker "$dynamic_loader_marker" "tcti-dynamic-loader-support.txt" "Dynamic loader support"
 			assert_no_simulator_fatal_runtime
