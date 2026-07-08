@@ -7540,39 +7540,48 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - It does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
   - It does not prove full Linux runtime readiness, release readiness, or physical-device readiness.
   - Physical-device TCTI remains forbidden until the full pinned simulator readiness ladder is current and passing and explicit physical opt-in is present.
-## 2026-07-08 Shell Proof Refresh Checkpoint
+## 2026-07-08 Current-Head MLibC UAPI And Shell Proof Refresh Checkpoint
 
 - Context:
-  - The harness selected `tcti-shell-exec-simple-command` after the current `tcti-mlibc-linked-syscall-uapi-smoke` pass at HEAD `56a0aa19868d326c19993ea9b641f69a7d8cf45f`.
+  - The harness selected `tcti-mlibc-linked-syscall-uapi-smoke` because the existing linked-UAPI report was stale after the docs checkpoint at HEAD `b863d4af1d7738e1bbc1349f7b7c49e560788284`.
   - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
   - `rtk proxy make agent-harness-check`: passed.
-  - `rtk proxy make agent-status AREA=orlix-tcti`: selected the shell proof ladder and kept physical-device work blocked.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected the mlibc-UAPI refresh, then the shell proof ladder, and kept physical-device work blocked.
+- Linked-UAPI evidence:
+  - `rtk proxy make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke`: passed.
+    - Report: `Build/TCTI/reports/tcti-mlibc-linked-syscall-uapi-smoke/report.json`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=mlibc-uapi`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Summary: pinned simulator OrlixMLibC linked syscall/UAPI smoke passed through OrlixOS terminal-session execution.
 - Shell gate evidence:
   - `rtk proxy make tcti-gate TARGET=tcti-shell-exec-simple-command`: passed.
     - Report: `Build/TCTI/reports/tcti-shell-exec-simple-command/report.json`.
-    - Result: `status=pass`, `passed=true`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
     - Summary: pinned simulator shell simple-command gate passed through OrlixOS runtime-validation.
   - `rtk proxy make tcti-gate TARGET=tcti-shell-pipeline-smoke`: passed.
     - Report: `Build/TCTI/reports/tcti-shell-pipeline-smoke/report.json`.
-    - Result: `status=pass`, `passed=true`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
     - Summary: pinned simulator shell pipeline gate passed through OrlixOS runtime-validation.
   - `rtk proxy make tcti-gate TARGET=tcti-shell-env-var-smoke`: passed.
     - Report: `Build/TCTI/reports/tcti-shell-env-var-smoke/report.json`.
-    - Result: `status=pass`, `passed=true`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
     - Summary: pinned simulator shell env-var gate passed through OrlixOS runtime-validation.
   - `rtk proxy make tcti-gate TARGET=tcti-shell-redirection-smoke`: passed.
     - Report: `Build/TCTI/reports/tcti-shell-redirection-smoke/report.json`.
-    - Result: `status=pass`, `passed=true`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
     - Summary: pinned simulator shell redirection gate passed through OrlixOS runtime-validation.
   - `rtk proxy make tcti-gate TARGET=tcti-shell-script-smoke`: passed.
     - Report: `Build/TCTI/reports/tcti-shell-script-smoke/report.json`.
-    - Result: `status=pass`, `passed=true`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
+    - Result: `status=pass`, `passed=true`, `git_sha=b863d4af1d7738e1bbc1349f7b7c49e560788284`, `proof_tier=shell`, `acceptance_weight=blocker`, `real_stack_required=true`.
     - Summary: pinned simulator shell script gate passed through OrlixOS runtime-validation.
+- Runtime artifact checks:
+  - `host-exec-violations.txt`: 0 bytes for the current full-shell, pipeline, env-var, redirection, and script runtime artifacts.
+  - `tcti-simulator-fatal-runtime.txt`: 0 bytes for the current full-shell, pipeline, env-var, redirection, and script runtime artifacts.
+  - Recent crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no Orlix, OrlixTestRunner, xctest, or XCTest crash reports from this checkpoint window.
 - Harness state after the checkpoint:
-  - The next product-path proof tier should move into Coreutils if no shell gate goes stale.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-coreutils-true-false-echo`.
   - Simulator readiness remains incomplete.
   - Physical-device TCTI remains forbidden.
 - Boundary:
-  - This proves the current shell proof ladder through the harness-selected app-hosted OrlixOS runtime-validation path.
+  - This proves the current OrlixMLibC-linked syscall/UAPI checkpoint and shell proof ladder through the harness-selected app-hosted OrlixOS runtime-validation path.
   - This does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
   - This does not prove full Linux runtime readiness, release readiness, or physical-device readiness.
