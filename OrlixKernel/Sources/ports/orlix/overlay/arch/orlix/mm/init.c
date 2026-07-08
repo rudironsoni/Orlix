@@ -637,6 +637,81 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	return ret;
 }
 
+static int orlix_refresh_user_host_window_from_kernel(struct mm_struct *mm,
+						      unsigned long page,
+						      const void *source_page)
+{
+	unsigned long window_start = orlix_host_window_start(page);
+	unsigned long window_end = orlix_host_window_end(window_start);
+	unsigned long window_pages;
+	unsigned long cursor;
+	struct orlix_host_user_page_segment *segments;
+	unsigned long segment_count = 0;
+	int page_ret = -EFAULT;
+	int ret;
+
+	if (!source_page)
+		return -EINVAL;
+	if (window_end > TASK_SIZE || window_end < window_start)
+		window_end = TASK_SIZE;
+
+	window_pages = (window_end - window_start) / PAGE_SIZE;
+	if (!window_pages)
+		return -EFAULT;
+
+	segments = kcalloc(window_pages, sizeof(*segments), GFP_KERNEL);
+	if (!segments)
+		return -ENOMEM;
+
+	for (cursor = window_start; cursor < window_end; cursor += PAGE_SIZE) {
+		struct orlix_host_pte_window window;
+		struct vm_area_struct *vma;
+		const void *source;
+
+		ret = orlix_fault_in_user_page_locked(mm, cursor, 0);
+		if (ret) {
+			if (cursor == page)
+				page_ret = ret;
+			continue;
+		}
+
+		ret = orlix_user_present_pte_window(mm, cursor, &window);
+		vma = ret ? NULL : vma_lookup(mm, cursor);
+		if (!ret && vma && (vma->vm_flags & VM_WRITE))
+			window.writable = true;
+		mmap_read_unlock(mm);
+		if (ret) {
+			if (cursor == page)
+				page_ret = ret;
+			continue;
+		}
+
+		source = cursor == page ? source_page :
+			__va(PFN_PHYS(window.pfn));
+		segments[segment_count++] =
+			(struct orlix_host_user_page_segment) {
+				.target_address = window.target,
+				.source_page = source,
+				.length = window.length,
+				.writable = window.writable,
+				.executable = window.executable,
+			};
+		if (cursor == page)
+			page_ret = 0;
+	}
+
+	if (page_ret) {
+		kfree(segments);
+		return page_ret;
+	}
+
+	ret = orlix_host_user_refresh_window(window_start,
+					     window_end - window_start,
+					     segments, segment_count);
+	kfree(segments);
+	return ret;
+}
+
 static int orlix_sync_user_stack_page(struct mm_struct *mm, unsigned long page)
 {
 	return orlix_sync_user_host_window(mm, page);
@@ -793,8 +868,10 @@ int orlix_refresh_current_user_mapping_page(unsigned long address)
 int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 							const void *source_page)
 {
+	static atomic_t refresh_report_budget = ATOMIC_INIT(16);
 	struct mm_struct *mm = current->mm;
 	unsigned long page = address & PAGE_MASK;
+	int ret;
 
 	if (!mm)
 		return -EINVAL;
@@ -802,7 +879,48 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 	if (!page || page >= TASK_SIZE)
 		return 0;
 
-	return orlix_refresh_user_pte_page_from_kernel(mm, page, source_page);
+	ret = orlix_refresh_user_pte_page_from_kernel(mm, page, source_page);
+	if (!ret)
+		return 0;
+
+	if (atomic_dec_if_positive(&refresh_report_budget) >= 0) {
+		struct orlix_host_user_mapping_failure failure;
+		int failure_ret = orlix_host_user_mapping_last_failure(&failure);
+
+		if (!failure_ret)
+			pr_info("Orlix: hosted user page from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d op=%lu host_status=%ld target=%#lx length=%#lx mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
+				current->comm, task_pid_nr(current), page,
+				source_page, ret, failure.operation,
+				failure.host_status, failure.target_address,
+				failure.length, failure.mapping_address,
+				failure.mapping_length, failure.requested_protection,
+				failure.attempted_protection);
+		else
+			pr_info("Orlix: hosted user page from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d\n",
+				current->comm, task_pid_nr(current), page,
+				source_page, ret);
+	}
+
+	ret = orlix_refresh_user_host_window_from_kernel(mm, page, source_page);
+	if (ret && atomic_dec_if_positive(&refresh_report_budget) >= 0) {
+		struct orlix_host_user_mapping_failure failure;
+		int failure_ret = orlix_host_user_mapping_last_failure(&failure);
+
+		if (!failure_ret)
+			pr_info("Orlix: hosted user window from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d op=%lu host_status=%ld target=%#lx length=%#lx mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
+				current->comm, task_pid_nr(current), page,
+				source_page, ret, failure.operation,
+				failure.host_status, failure.target_address,
+				failure.length, failure.mapping_address,
+				failure.mapping_length, failure.requested_protection,
+				failure.attempted_protection);
+		else
+			pr_info("Orlix: hosted user window from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d\n",
+				current->comm, task_pid_nr(current), page,
+				source_page, ret);
+	}
+
+	return ret;
 }
 
 static int orlix_sync_current_user_stack_window(unsigned long start,
