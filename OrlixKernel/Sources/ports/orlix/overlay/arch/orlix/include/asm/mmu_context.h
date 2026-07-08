@@ -3,20 +3,43 @@
 #define _ASM_ORLIX_MMU_CONTEXT_H
 
 #include <asm-generic/mm_hooks.h>
+#include <asm/tcti.h>
 #include <asm/tlbflush.h>
 
 struct mm_struct;
 struct task_struct;
 
+#define init_new_context init_new_context
+static inline int init_new_context(struct task_struct *tsk,
+				   struct mm_struct *mm)
+{
+	(void)tsk;
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	if (mm)
+		tcti_invalidate_mm(mm);
+#endif
+	return 0;
+}
+
+#define destroy_context destroy_context
+static inline void destroy_context(struct mm_struct *mm)
+{
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_invalidate_mm(mm);
+#else
+	(void)mm;
+#endif
+}
+
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
-				     struct task_struct *tsk)
+			     struct task_struct *tsk)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	/*
-	 * Hosted user mappings live in the single Darwin process address space,
-	 * not in per-Linux-mm hardware page tables.  Drop the host-side user
-	 * view whenever Linux switches address spaces so stale mappings from a
-	 * previous task cannot satisfy faults for the next task.
+	 * Hosted user mappings live in single Darwin process address space,
+	 * not in per-Linux-mm hardware page tables. Drop host-side user
+	 * view whenever Linux switches address spaces so stale mappings
+	 * from the previous task cannot satisfy faults in the next task.
 	 */
 	if (prev != next)
 		flush_tlb_mm(next);

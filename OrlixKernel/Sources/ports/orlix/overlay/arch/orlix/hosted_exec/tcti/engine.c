@@ -963,6 +963,7 @@ static void tcti_sync_syscall_user_ranges(struct pt_regs *regs,
 static bool tcti_syscall_changes_user_mappings(unsigned long nr)
 {
 	switch (nr) {
+	case __NR_brk:
 	case __NR_mmap:
 	case __NR_mprotect:
 	case __NR_munmap:
@@ -972,6 +973,13 @@ static bool tcti_syscall_changes_user_mappings(unsigned long nr)
 		return false;
 	}
 }
+
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_KUNIT_TEST)
+bool tcti_syscall_changes_user_mappings_for_tests(unsigned long nr)
+{
+	return tcti_syscall_changes_user_mappings(nr);
+}
+#endif
 
 static void tcti_trace_execve_user_argv(const struct pt_regs *regs)
 {
@@ -1033,7 +1041,6 @@ static void orlix_tcti_handle_syscall(struct pt_regs *regs)
 	struct pt_regs *task_regs;
 
 	static atomic_t post_dispatch_report_budget = ATOMIC_INIT(32);
-
 	if (nr == __NR_execve)
 		tcti_trace_execve_user_argv(regs);
 	tcti_prepare_syscall_handoff(regs);

@@ -92,6 +92,7 @@ void tcti_prepare_syscall_handoff(struct pt_regs *regs);
 bool tcti_prepare_successful_execve_return(struct pt_regs *regs);
 bool tcti_static_pie_initial_tls(unsigned long base, const Elf64_Phdr *phdr,
 				 unsigned long *initial_tls);
+bool tcti_syscall_changes_user_mappings_for_tests(unsigned long nr);
 bool tcti_kernel_syscall_dispatch_smoke_for_tests(
 	struct pt_regs *regs,
 	struct tcti_kernel_syscall_dispatch_smoke_result *out);
