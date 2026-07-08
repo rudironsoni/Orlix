@@ -1813,6 +1813,24 @@ static void tcti_decode_recognizes_simd_umov_w_h1(struct kunit *test)
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
 
+static void tcti_decode_recognizes_simd_umov_x_d1(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x4e183c6fU);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 15U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.simd_source_index);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UMOV,
+			decoded.simd_element_move_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+}
+
 static void tcti_decode_recognizes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -2925,11 +2943,39 @@ static void tcti_block_cache_returns_cached_program(struct kunit *test)
 	tcti_block_cache_reset_for_tests();
 }
 
+static void tcti_gadget_program_executes_multiple_decoded_instructions(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_PROGRAM_WORDS_FOR_INSTRUCTIONS(2)];
+	struct tcti_decoded_instruction decoded;
+	unsigned long fault_address = 0;
+	struct pt_regs regs = {};
+	size_t word_count = 0;
+	int ret;
+
+	decoded = tcti_decode_aarch64(0xd503201fU);
+	ret = tcti_append_decoded_instruction(&decoded, program,
+					      ARRAY_SIZE(program),
+					      &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_append_decoded_instruction(&decoded, program,
+					      ARRAY_SIZE(program),
+					      &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	regs.pc = 0x8000;
+	ret = tcti_execute_gadget_program(current->mm, &regs, program,
+					  word_count, &fault_address);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x8008ULL, regs.pc);
+}
+
 static void tcti_block_cache_is_bounded(struct kunit *test)
 {
 	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
 	struct tcti_decoded_instruction decoded;
 	struct mm_struct *mm = (struct mm_struct *)0x2000UL;
+	struct tcti_block *block;
 	size_t word_count = 0;
 	u32 generation;
 	u32 index;
@@ -2955,7 +3001,18 @@ static void tcti_block_cache_is_bounded(struct kunit *test)
 			tcti_block_cache_count_for_tests());
 	ret = tcti_block_cache_insert(mm, 0x200000, 0x200004, generation, 1,
 				      program, word_count, NULL);
-	KUNIT_EXPECT_EQ(test, -ENOSPC, ret);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, TCTI_BLOCK_CACHE_MAX_BLOCKS,
+			tcti_block_cache_count_for_tests());
+
+	block = tcti_block_cache_lookup(mm, 0x100000, generation);
+	KUNIT_EXPECT_NULL(test, block);
+	if (block)
+		tcti_block_put(block);
+	block = tcti_block_cache_lookup(mm, 0x200000, generation);
+	KUNIT_EXPECT_NOT_NULL(test, block);
+	if (block)
+		tcti_block_put(block);
 
 	tcti_block_cache_reset_for_tests();
 }
@@ -4614,6 +4671,25 @@ static void tcti_switch_executes_simd_umov_w_h1(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8824ULL, regs.pc);
 }
 
+static void tcti_switch_executes_simd_umov_x_d1(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[6] = 0x1111222233334444ULL;
+	current->thread.user_simd[7] = 0xaaaabbbbccccddddULL;
+	regs.regs[15] = 0xffffffffffffffffULL;
+	regs.pc = 0x8828;
+
+	decoded = tcti_decode_aarch64(0x4e183c6fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xaaaabbbbccccddddULL, regs.regs[15]);
+	KUNIT_EXPECT_EQ(test, 0x882cULL, regs.pc);
+}
+
 static void tcti_switch_executes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -5773,6 +5849,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h1),
+	KUNIT_CASE(tcti_decode_recognizes_simd_umov_x_d1),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4h),
@@ -5801,6 +5878,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
+	KUNIT_CASE(tcti_gadget_program_executes_multiple_decoded_instructions),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),
 	KUNIT_CASE(tcti_tlb_separates_access_classes),
@@ -5842,6 +5920,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),
+	KUNIT_CASE(tcti_switch_executes_simd_umov_x_d1),
 	KUNIT_CASE(tcti_switch_executes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4h),

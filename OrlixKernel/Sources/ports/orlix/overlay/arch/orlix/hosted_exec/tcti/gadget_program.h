@@ -19,12 +19,19 @@ struct tcti_gadget_word {
 		     sizeof(struct tcti_gadget_word))
 #define TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS \
 	(1U + TCTI_DECODED_INSTRUCTION_WORDS + 1U)
+#define TCTI_PROGRAM_WORDS_FOR_INSTRUCTIONS(_count) \
+	((_count) * (1U + TCTI_DECODED_INSTRUCTION_WORDS) + 1U)
 
 typedef int (*tcti_gadget_fn)(struct mm_struct *mm, struct pt_regs *regs,
 			      const struct tcti_gadget_word **cursor,
 			      unsigned long *fault_address);
 
 int tcti_lower_decoded_instruction(
+	const struct tcti_decoded_instruction *decoded,
+	struct tcti_gadget_word *program,
+	size_t capacity,
+	size_t *word_count);
+int tcti_append_decoded_instruction(
 	const struct tcti_decoded_instruction *decoded,
 	struct tcti_gadget_word *program,
 	size_t capacity,

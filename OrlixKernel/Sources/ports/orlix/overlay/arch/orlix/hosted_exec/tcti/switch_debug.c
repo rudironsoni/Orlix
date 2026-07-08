@@ -2206,11 +2206,16 @@ static int tcti_execute_simd_vector_element_move(
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_UMOV) {
 		u8 byte_offset;
 
-		if (decoded->access_size != sizeof(u16) ||
-		    decoded->result_size != sizeof(u32))
+		if (!((decoded->access_size == sizeof(u16) &&
+		       decoded->result_size == sizeof(u32)) ||
+		      (decoded->access_size == sizeof(u64) &&
+		       decoded->result_size == sizeof(u64))))
 			return -EOPNOTSUPP;
 
 		byte_offset = decoded->simd_source_index * decoded->access_size;
+		if (byte_offset + decoded->access_size > 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+
 		source_word = decoded->rn * 2 + byte_offset / sizeof(u64);
 		source_shift = (byte_offset % sizeof(u64)) * 8;
 		value = (current->thread.user_simd[source_word] >> source_shift) &
