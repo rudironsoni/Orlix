@@ -2,6 +2,44 @@
 
 ## 2026-07-08
 
+### Checkpoint: OrlixMLibC Build Smoke Preserves TCTI Fork mm Context
+
+Timestamp: `2026-07-08T09:50:22Z`.
+
+- Harness-selected gate:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: current simulator ladder still incomplete, physical-device work forbidden.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-mlibc-build-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for `tcti-mlibc-build-smoke`.
+- Fix:
+  - Added `brk` to TCTI mapping-changing syscall invalidation so heap growth invalidates translated user blocks and page windows.
+  - Added Orlix `init_new_context()` / `destroy_context()` hooks for TCTI block-cache invalidation on real Linux `mm_struct` lifecycle.
+  - Preserved copied `mm->context.orlix_tcti_static_pie_base` across fork. Resetting that field in `init_new_context()` caused forked children to reapply static PIE relocations to already-relocated copied memory and fail with `-EEXIST`.
+  - Kept static-PIE base reset owned by exec/start-thread setup, not fork/mm-copy setup.
+  - Removed temporary fork/clone diagnostics before final validation.
+- Validation:
+  - `rtk proxy make -f OrlixKernel/Makefile test PROFILE=tcti_runtime`: passed after cleanup.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: passed with `Device already booted, nothing to do.`
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted`: only `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)` booted.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make tcti-gate TARGET=tcti-mlibc-build-smoke`: passed after cleanup.
+  - Report: `Build/TCTI/reports/tcti-mlibc-build-smoke/report.json`.
+  - Reproducer: `Build/TCTI/reproducers/tcti-mlibc-build-smoke/mlibc-build-smoke-pass.json`.
+  - Report counters: `mlibc_smoke_tests_executed=1`, `mlibc_smoke_tests_passed=1`, `mlibc_smoke_tests_failed=0`, `mlibc_smoke_tests_skipped=0`.
+  - XCTest asserted `ORLIX-MLIBC-TEST-END`: `mlibc_completion_asserted_by_xctest=true`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime`: passed existing TCTI KUnit runner, including `orlix-tcti-decode.tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected next gate `tcti-mlibc-sysdeps-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for regenerated `Build/AgentHarness/orlix-tcti/next-task.json`.
+  - No fresh `OrlixTestRunner` or `Orlix` crash report found in the host diagnostic locations for the last 30 minutes after the final simulator run.
+- Boundary:
+  - This proves the harness-selected OrlixMLibC build-smoke blocker through the app-hosted OrlixOS terminal-session path on the pinned simulator.
+  - This does not claim full TCTI runtime readiness, package readiness, release readiness, full simulator readiness ladder completion, or physical-device readiness.
+  - No physical-device gate was run.
+  - No HostAdapter-owned Linux policy, fake syscall/runtime behavior, generated Linux/mlibc/rootfs edit, host-executable guest text, MAP_JIT, RWX, or production gadget dispatch was added.
+
 ### Checkpoint: Golden ELF Switch Oracle Covers Static PIE GOT
 
 Timestamp: `2026-07-08T04:29:46Z`.

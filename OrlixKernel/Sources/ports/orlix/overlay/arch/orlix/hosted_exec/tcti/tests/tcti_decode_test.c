@@ -220,6 +220,15 @@ static void tcti_decode_recognizes_branch_register_class(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
 
+	decoded = tcti_decode_aarch64(0xd61f00a0U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_BRANCH_REGISTER_BR,
+			decoded.branch_register_op);
+	KUNIT_EXPECT_FALSE(test, decoded.link);
+	KUNIT_EXPECT_EQ(test, 5U, decoded.rn);
+
 	decoded = tcti_decode_aarch64(0xd63f0260U);
 
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER,
@@ -2970,6 +2979,71 @@ static void tcti_gadget_program_executes_multiple_decoded_instructions(struct ku
 	KUNIT_EXPECT_EQ(test, 0x8008ULL, regs.pc);
 }
 
+static void tcti_gadget_program_executes_branch_register(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	unsigned long fault_address = 0;
+	struct pt_regs regs = {};
+	size_t word_count = 0;
+	int ret;
+
+	decoded = tcti_decode_aarch64(0xd61f00a0U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program),
+					     &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	regs.regs[5] = 0x2427c;
+	regs.regs[30] = 0xfeedface;
+	regs.pc = 0x242f8;
+
+	ret = tcti_execute_gadget_program(current->mm, &regs, program,
+					  word_count, &fault_address);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xfeedfaceULL, regs.regs[30]);
+	KUNIT_EXPECT_EQ(test, 0x2427cULL, regs.pc);
+}
+
+static void tcti_gadget_program_preserves_flags_between_subs_and_branch(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_PROGRAM_WORDS_FOR_INSTRUCTIONS(3)];
+	unsigned int instructions[] = {
+		0xf1000442U, /* subs x2, x2, #1 */
+		0x91000421U, /* add x1, x1, #1 */
+		0x54000620U, /* b.eq 0x24348 */
+	};
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	size_t word_count = 0;
+	int i;
+	int ret;
+
+	regs.pc = 0x2427c;
+	regs.regs[1] = 0x1000;
+	regs.regs[2] = 1;
+
+	for (i = 0; i < ARRAY_SIZE(instructions); i++) {
+		struct tcti_decoded_instruction decoded;
+
+		decoded = tcti_decode_aarch64(instructions[i]);
+		ret = tcti_append_decoded_instruction(&decoded, program,
+						      ARRAY_SIZE(program),
+						      &word_count);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+
+	ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+					  &fault_address);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x1001ULL, regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[2]);
+	KUNIT_EXPECT_NE(test, 0ULL, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_EQ(test, 0x24348ULL, regs.pc);
+}
+
 static void tcti_block_cache_is_bounded(struct kunit *test)
 {
 	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
@@ -3049,6 +3123,22 @@ static void tcti_block_cache_invalidation_bumps_generation(struct kunit *test)
 	KUNIT_EXPECT_NULL(test, block);
 
 	tcti_block_cache_reset_for_tests();
+}
+
+static void tcti_syscall_mapping_changes_include_brk(struct kunit *test)
+{
+	KUNIT_EXPECT_TRUE(test,
+			  tcti_syscall_changes_user_mappings_for_tests(__NR_brk));
+	KUNIT_EXPECT_TRUE(test,
+			  tcti_syscall_changes_user_mappings_for_tests(__NR_mmap));
+	KUNIT_EXPECT_TRUE(test,
+			  tcti_syscall_changes_user_mappings_for_tests(__NR_mprotect));
+	KUNIT_EXPECT_TRUE(test,
+			  tcti_syscall_changes_user_mappings_for_tests(__NR_munmap));
+	KUNIT_EXPECT_TRUE(test,
+			  tcti_syscall_changes_user_mappings_for_tests(__NR_mremap));
+	KUNIT_EXPECT_FALSE(test,
+			   tcti_syscall_changes_user_mappings_for_tests(__NR_read));
 }
 
 static void tcti_tlb_separates_access_classes(struct kunit *test)
@@ -3353,6 +3443,18 @@ static void tcti_switch_executes_branch_register(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 0x23408ULL, regs.regs[30]);
 	KUNIT_EXPECT_EQ(test, 0x1a9b4ULL, regs.pc);
+
+	regs = (struct pt_regs) {};
+	regs.regs[5] = 0x2427c;
+	regs.regs[30] = 0xfeedface;
+	regs.pc = 0x242f8;
+
+	decoded = tcti_decode_aarch64(0xd61f00a0U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xfeedfaceULL, regs.regs[30]);
+	KUNIT_EXPECT_EQ(test, 0x2427cULL, regs.pc);
 }
 
 static void tcti_switch_executes_conditional_branches(struct kunit *test)
@@ -5879,8 +5981,11 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
 	KUNIT_CASE(tcti_gadget_program_executes_multiple_decoded_instructions),
+	KUNIT_CASE(tcti_gadget_program_executes_branch_register),
+	KUNIT_CASE(tcti_gadget_program_preserves_flags_between_subs_and_branch),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),
+	KUNIT_CASE(tcti_syscall_mapping_changes_include_brk),
 	KUNIT_CASE(tcti_tlb_separates_access_classes),
 	KUNIT_CASE(tcti_tlb_flushes_on_generation_change),
 	KUNIT_CASE(tcti_switch_executes_hint_as_noop),
