@@ -1736,6 +1736,10 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
             id: gate.id,
             command: gate.command,
             kind: gate.kind,
+            proofTier: gate.proofTier,
+            acceptanceWeight: gate.acceptanceWeight,
+            realStackRequired: gate.realStackRequired,
+            canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
             state: "missing",
             passed: false,
             reason: "missing iphonesimulator runtime-validation report for tcti-init-first-syscall",
@@ -1790,6 +1794,10 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
@@ -4132,7 +4140,7 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return basicReportGate(gate, target: "tcti-memory-fuzz")
     case "tcti-direct-chain-fuzz":
         return basicReportGate(gate, target: "tcti-direct-chain-fuzz")
-    case "simulator-tcti-init-first-syscall":
+    case "tcti-simulator-kernel-first-syscall", "simulator-tcti-init-first-syscall":
         return simulatorFirstSyscallPass(gate)
     case "no-phone-tcti-simulator-user-fault-reducer":
         return supersededSimulatorReducerGate(
@@ -4499,7 +4507,7 @@ func runtimePreflightGates() -> [Gate] {
             id: "simulator-tcti-init-first-syscall",
             command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             kind: "simulator-runtime",
-            prerequisites: ["tcti-direct-chain-fuzz"],
+            prerequisites: ["tcti-simulator-kernel-first-syscall"],
             allowedScope: [
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",

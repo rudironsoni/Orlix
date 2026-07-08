@@ -7425,3 +7425,28 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - This does not prove full TCTI completion.
   - This does not prove `ORLIX-USERLAND-TCTI-OK`.
   - This does not prove runtime readiness, release readiness, or physical-device readiness.
+## 2026-07-08 Harness First-Syscall Alias Checkpoint
+
+- Roadblock:
+  - The pinned simulator first-syscall runtime report already existed and passed at current HEAD:
+    `Build/Reports/runtime/tcti-init-first-syscall-20260708T115126Z-22166.json`.
+  - `make agent-status AREA=orlix-tcti` still selected `tcti-simulator-kernel-first-syscall` because the harness only routed `simulator-tcti-init-first-syscall` through `simulatorFirstSyscallPass`.
+  - The readiness member also depended on stale `tcti-direct-chain-fuzz` instead of the real-stack roadmap proof, so first syscall stayed listed as missing in the simulator readiness ladder.
+- Fix:
+  - Routed both `tcti-simulator-kernel-first-syscall` and `simulator-tcti-init-first-syscall` through the same pinned simulator report reader.
+  - Changed the readiness member prerequisite to `tcti-simulator-kernel-first-syscall`.
+  - Preserved the roadmap gate proof metadata when materializing the simulator first-syscall status, so the pass remains `proof_tier=simulator`, `acceptance_weight=blocker`, and `real_stack_required=true`.
+- Validation:
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk git diff --check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: first syscall is no longer in `simulator_readiness_missing`; `next_eligible_gate=tcti-simulator-mlibc-smoke`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simulator-mlibc-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Boundary:
+  - No simulator runtime gate was rerun for this harness checkpoint.
+  - No physical-device gate was run.
+  - No product runtime readiness, package readiness, release readiness, or `ORLIX-USERLAND-TCTI-OK` claim is made.
+  - Remaining simulator readiness gaps include Linux console usability, static BusyBox start, static BusyBox shell command, package behavior freshness, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
