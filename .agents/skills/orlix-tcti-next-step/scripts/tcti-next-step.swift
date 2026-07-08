@@ -1877,6 +1877,10 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
@@ -2243,6 +2247,10 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
         id: gate.id,
         command: gate.command,
         kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: runtimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
@@ -4272,6 +4280,12 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return simulatorStaticBusyBoxStartPass(gate)
     case "simulator-tcti-static-busybox-shell-command":
         return simulatorStaticBusyBoxShellCommandPass(gate)
+    case "tcti-simulator-mlibc-smoke":
+        return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-mlibc-smoke", marker: "ORLIX-TCTI-MLIBC-SMOKE-OK", artifactSuffix: "tcti-mlibc-smoke.txt")
+    case "tcti-simulator-coreutils-smoke":
+        return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-coreutils-smoke", marker: "ORLIX-TCTI-COREUTILS-SMOKE-OK", artifactSuffix: "tcti-coreutils-smoke.txt")
+    case "tcti-simulator-oci-rootfs-command":
+        return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-oci-rootfs-command", marker: "ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK", artifactSuffix: "tcti-oci-rootfs-command.txt")
     case "simulator-tcti-full-shell-usability":
         return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-full-shell-usability", marker: "ORLIX-TCTI-SHELL-USABLE", artifactSuffix: "tcti-full-shell-usability.txt")
     case "simulator-tcti-package-behavior":
