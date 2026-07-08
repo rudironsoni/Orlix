@@ -2,6 +2,29 @@
 
 ## 2026-07-08
 
+### Checkpoint: Golden Structural Validation Carries Current Git SHA
+
+Timestamp: `2026-07-08T21:30:00Z`.
+
+- Harness-selected gate:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `golden-init-001-structural`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for `golden-init-001-structural`.
+- Fix:
+  - Added `git_sha` to golden structural `validation.json` payloads written by `tools/tcti/orlix-tcti-gate.swift`.
+  - Kept the next-step status contract strict: structural artifacts must carry current `git_sha`; the status check was not weakened.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit`: passed and wrote `Build/TCTI/golden_elf/init_001_exit/validation.json` with current `git_sha=d02e6b11c75fd0cccb1c05a46547c9c7896dcede`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: `golden-init-001-structural` became `state=pass`.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write`: passed and wrote `Build/TCTI/golden_elf/init_002_write/validation.json` with current `git_sha=d02e6b11c75fd0cccb1c05a46547c9c7896dcede`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: `golden-init-002-write-structural` became `state=pass`.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed, selecting `golden-init-005-branches-structural`.
+- Boundary:
+  - This is a seed/probe metadata fix only. It does not claim runtime readiness, release readiness, simulator ladder completion, or physical-device readiness.
+  - No Linux semantics moved into HostAdapter, OrlixOS, app code, or the harness.
+
 ### Checkpoint: Simulator OrlixMLibC Smoke Gate Uses Real Runtime Marker
 
 Timestamp: `2026-07-08T13:39:28Z`.

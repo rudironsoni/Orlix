@@ -10530,6 +10530,7 @@ func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failure
         .appendingPathComponent("init_001_exit", isDirectory: true)
         .appendingPathComponent("validation.json")
     let validationPayload = [
+        "git_sha": gitSha(),
         "binary": relativePath(built.binary),
         "source_sha256": sourceHash,
         "binary_sha256": binaryHash,
@@ -10567,6 +10568,7 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
         .appendingPathComponent(caseID, isDirectory: true)
         .appendingPathComponent("validation.json")
     let validationPayload = [
+        "git_sha": gitSha(),
         "binary": relativePath(built.binary),
         "source_sha256": sourceHash,
         "binary_sha256": binaryHash,
