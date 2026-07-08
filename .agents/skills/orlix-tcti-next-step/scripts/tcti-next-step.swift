@@ -4325,6 +4325,8 @@ func simulatorProofGate(id: String, runtimeGate: String, marker: String, prerequ
         prerequisites: [prerequisite],
         allowedScope: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
+            "OrlixOS/Sources/make/**",
             "tools/runtime/orlix-runtime-validation.sh",
             "tools/tcti/orlix-tcti-gate.swift",
             "tools/tcti/fixtures/**",
@@ -6134,6 +6136,8 @@ func runtimePreflightGates() -> [Gate] {
             prerequisites: ["no-phone-tcti-post-console-sh-sigabrt-reducer"],
             allowedScope: [
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
+                "OrlixOS/Sources/make/**",
                 "tools/runtime/orlix-runtime-validation.sh",
                 "tools/tcti/orlix-tcti-gate.swift",
                 "tools/tcti/fixtures/**",

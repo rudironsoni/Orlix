@@ -67,6 +67,7 @@ failure_exit_status=""
 failure_timeout_seconds=""
 failure_stdout_empty=""
 failure_stderr_empty=""
+runtime_failure_reducer=""
 
 mkdir -p "$report_dir"
 report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
@@ -85,6 +86,7 @@ fi
 
 die() {
 	local message="$1"
+	write_runtime_failure_reducer "$message"
 	write_json_report "fail" "false" "$message" "false" ""
 	write_report "failed" "$message"
 	printf 'runtime validation failed, report: %s\n' "$report" >&2
@@ -190,6 +192,66 @@ json_artifacts_array() {
 		printf '"%s"' "$(json_escape "$(artifact_rel "$path")")"
 	done
 	printf ']'
+}
+
+write_runtime_failure_reducer() {
+	local message="$1"
+	case "$gate:$destination" in
+	tcti-package-behavior:iphonesimulator|tcti-package-behavior:"iOS Simulator") ;;
+	*) return 0 ;;
+	esac
+	if [ -n "$runtime_failure_reducer" ]; then
+		return 0
+	fi
+
+	local reducer_root="${ORLIX_TCTI_BUILD_ROOT:-Build/TCTI}/reproducers/simulator-tcti-package-behavior"
+	local report_base case_id reducer_copy
+	report_base="$(basename "$json_report" .json)"
+	case_id="package-behavior-fail-${report_base#tcti-package-behavior-}"
+	runtime_failure_reducer="$reducer_root/$case_id.json"
+	reducer_copy="$artifact_dir/tcti-package-behavior-reducer.json"
+	mkdir -p "$reducer_root"
+
+	local replay_command
+	replay_command="env PATH=\"\$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" ORLIX_RUNTIME_GATE_CAPTURE_SECONDS=$capture_seconds make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=$required_simulator_id ORLIX_TCTI_REQUIRED_SIMULATOR_ID=$required_simulator_id ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=$required_simulator_name"
+
+	python3 - "$runtime_failure_reducer" "$PWD" "$case_id" "$replay_command" "$message" \
+		"$json_report" \
+		"$report" \
+		"$artifact_dir/simulator-terminal-output.txt" \
+		"$artifact_dir/tcti-package-behavior.txt" \
+		"$artifact_dir/tcti-first-syscall.txt" \
+		"$artifact_dir/host-exec-violations.txt" \
+		"$artifact_dir/launch-console.log" \
+		"$artifact_dir/launch.log" \
+		"$artifact_dir/simulator-unified.log" <<'PY'
+import json
+import os
+import sys
+
+output, cwd, case_id, command, message, *candidates = sys.argv[1:]
+artifacts = []
+for candidate in candidates:
+    if candidate and (os.path.exists(candidate) or candidate.endswith(".json") or candidate.endswith(".md")):
+        artifacts.append(os.path.relpath(candidate, cwd))
+
+payload = {
+    "target": "simulator-tcti-package-behavior",
+    "case_id": case_id,
+    "command": command,
+    "working_directory": cwd,
+    "artifacts": artifacts,
+    "reason": message,
+    "expected_status": "fail",
+}
+
+tmp = output + ".tmp"
+with open(tmp, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+os.replace(tmp, output)
+PY
+	cp "$runtime_failure_reducer" "$reducer_copy"
 }
 
 failure_context_json() {
@@ -466,7 +528,7 @@ simulator_launch_arguments() {
 	tcti-package-behavior)
 		output_args=(
 			--orlix-kernel-command-line-append \
-			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20command%20-v%20sh%3B%20command%20-v%20ls%3B%20command%20-v%20grep%3B%20ls%20/bin%20%3E/dev/null%3B%20grep%20--version%20%3E/dev/null%202%3E/dev/null%20%7C%7C%20grep%20-h%20%5E%20/dev/null%3B%20printf%20$package_behavior_marker%3B%20exit%200"
+			"orlix.exec=/bin/grep orlix.argv0=/bin/grep orlix.argv1=-F orlix.argv2=$package_behavior_marker orlix.argv3=/usr/share/orlixos/package-behavior.txt"
 		)
 		;;
 	tcti-dynamic-loader-support)
