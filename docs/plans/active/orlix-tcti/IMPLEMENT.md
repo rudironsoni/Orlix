@@ -1,5 +1,55 @@
 # IMPLEMENT.md
 
+## 2026-07-08
+
+### Checkpoint: Golden ELF Switch Oracle Covers Static PIE GOT
+
+Timestamp: `2026-07-08T04:29:46Z`.
+
+- Active proof lane: no-phone golden ELF and switch-debug oracle before gadget or device work.
+- Product-path relevance: this extends the decoded TCTI oracle used to reduce app-hosted userland failures, including the static PIE GOT byte-load shape that blocks packaged Linux userspace progress.
+- Golden/switch coverage refreshed:
+  - `init_001_exit`: switch-debug pass.
+  - `init_002_write`: structural and switch-debug pass. Captures `write(1, "hello\n", 6)` and `exit(0)` as guest syscall events without host syscalls.
+  - `init_003_stack`: structural and switch-debug pass. Covers stack-relative `STR`/`LDR` and SP updates.
+  - `init_004_tls`: structural and switch-debug pass. Keeps `TPIDR_EL0` in guest switch-debug state only.
+  - `init_005_branches`: structural and switch-debug pass. Covers `CBZ` and `B`.
+  - `init_006_memory`: structural and switch-debug pass. Covers PC-relative data load.
+  - `init_007_mprotect`: structural and switch-debug pass. Captures guest `mprotect` as a test event only.
+  - `init_008_self_modify`: structural and switch-debug pass. Records guest memory write as data.
+  - `init_009_faults`: structural and switch-debug pass. Stops on captured null guest-memory read fault.
+  - `init_010_cpu_model`: structural and switch-debug pass. Captures fixed virtual CPU model payload.
+  - `init_011_static_pie_got_byte_load`: structural and switch-debug pass. Covers `ADRP`, GOT pointer `LDR`, `LDRB`, and `exit(42)`.
+- Differential seed:
+  - `Build/TCTI/reports/tcti-diff-switch/report.json`: `status=pass`, `passed=true`, `git_sha=de3ccb92ea975fed13aee96ac2ea387e2695b23b`.
+  - Report summary: prepared switch-debug differential baseline for `init_001_exit` without gadget dispatch.
+  - Counters: `differential_fields_checked=10`, `divergent_fields=0`, `guest_instructions_executed=3`.
+- Reducer replay:
+  - `Build/TCTI/reports/tcti-repro/report.json`: `status=pass`, `passed=true`.
+  - Replayed `Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json`.
+  - `expected_status=pass`, `actual_replay_status=pass`, `replay_exit_code=0`.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_003_stack EXECUTE=switch-debug`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_003_stack-switch-debug-pass-regression.json`: passed when replayed sequentially.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/init_011_static_pie_got_byte_load-switch-debug-pass-regression.json`: passed when replayed sequentially.
+  - `rtk proxy make tcti-gate TARGET=tcti-diff-switch CASE=init_001_exit`: passed.
+- Notes:
+  - Two reducer replays failed when launched in parallel because they shared the same no-phone negative-fixture output root. Sequential replay passed both reducers. Do not use parallel reducer replay as proof of a semantic failure.
+- Boundary:
+  - No simulator or physical-device gate run for this checkpoint.
+  - No production TCTI assembly or gadget dispatch added.
+  - No generated Linux, mlibc, package, rootfs, or build tree edited.
+  - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
+  - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
+  - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+
 ## 2026-07-07
 
 ### Checkpoint: Linux Execve Binfmt ELF Reaches TCTI Entry
@@ -7269,3 +7319,71 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - No HostAdapter-owned Linux syscall, VFS, fd table, process, signal, wait, exec, scheduler, or runtime semantics added.
   - No `ORLIX-USERLAND-TCTI-OK` app-terminal marker claimed yet.
   - No runtime readiness, package readiness, release readiness, or physical-device readiness claimed.
+## 2026-07-08 Package Behavior Checkpoint
+
+- Harness-selected gate before implementation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected simulator path still incomplete, next eligible gate `simulator-tcti-package-behavior`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `simulator-tcti-package-behavior`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Starting failure:
+  - Latest failing report before the fix: `Build/Reports/runtime/tcti-package-behavior-20260708T055030Z-75214.json`.
+  - Status: `status=fail`, `passed=false`.
+  - Summary: package behavior marker was not captured from `iphonesimulator`.
+  - Kernel command line correctly carried `/bin/grep`, `-F`, `ORLIX-TCTI-PACKAGE-BEHAVIOR-OK`, and `/usr/share/orlixos/package-behavior.txt`.
+  - Linux execve trace for `/bin/grep` showed `argv0="/bin/grep"` followed by `argv1_ptr=NULL`.
+- Owning-layer fix:
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/uaccess.c` now refreshes the hosted user mapping from the kernel page after `copy_to_user`.
+  - This restores the correct direction for Linux user-page coherency. Kernel writes into the real Linux user page stay authoritative, then the hosted mirror is refreshed from that page.
+  - `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c` keeps TCTI writes refreshing hosted mappings from kernel-backed user pages and has the copy loop indentation normalized for review.
+  - No HostAdapter-owned argv injection, Linux syscall semantics, VFS behavior, fd behavior, process behavior, signal behavior, or wait behavior was added.
+- No-phone validation after the fix:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `Build/TCTI/reports/tcti-report-schema-check/report.json`: `status=pass`, `passed=true`.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`: passed.
+  - `Build/TCTI/reports/tcti-golden-elf/report.json`: `status=pass`, `passed=true`.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `Build/TCTI/reports/tcti-appstore-safety-audit/report.json`: `status=pass`, `passed=true`.
+  - `rtk proxy make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime`: passed.
+  - KUnit runner evidence: `orlix-tcti-decode.tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch` passed, `workload_hook_executed=true`, `svc_boundary_reached=true`, `orlix_syscall_dispatch_entered=true`, `linux_return_state_written=true`, `return_value=4242`.
+- Simulator validation:
+  - Command:
+    - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" bash -lc 'open -a Simulator || true; xcode-offload doctor --root "$(external-ssd-root)" --strict --json >/tmp/orlix-xcode-offload-doctor.json; xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b; xcrun simctl list devices booted; ORLIX_RUNTIME_GATE_CAPTURE_SECONDS=60 make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max'`
+  - Required simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - Runtime report: `Build/Reports/runtime/tcti-package-behavior-20260708T060831Z-41937.json`.
+  - Artifact directory: `Build/Reports/runtime/tcti-package-behavior-20260708T060831Z-41937.artifacts`.
+  - Result: `status=pass`, `passed=true`.
+  - Summary: `Gate tcti-package-behavior captured the required iphonesimulator marker.`
+  - App build evidence: `Build/Reports/runtime/tcti-package-behavior-20260708T060831Z-41937.artifacts/xcodebuild.log` ended with `BUILD SUCCEEDED`.
+  - Kernel command line evidence: `simulator-terminal-output.txt` line 14 includes `/bin/grep`, `-F`, `ORLIX-TCTI-PACKAGE-BEHAVIOR-OK`, and `/usr/share/orlixos/package-behavior.txt`.
+  - Linux execve argv evidence:
+    - `argv0="/bin/grep"`.
+    - `argv1="-F"`.
+    - `argv2="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"`.
+    - `argv3="/usr/share/orlixos/package-behavior.txt"`.
+    - `argv4_ptr=NULL`.
+  - Userland marker evidence:
+    - `simulator-terminal-output.txt` includes `ORLIX-TCTI-PACKAGE-BEHAVIOR-OK`.
+    - `orlix-init: process exited pid=32 status=0`.
+    - `orlix-init: shell exit status=0`.
+  - Safety evidence:
+    - `generated_exec_memory=false`.
+    - `host_exec_guest_text=false`.
+    - `host_x18=false`.
+    - `map_jit=false`.
+    - `native_ios_api_exposure_to_guest=false`.
+    - `rwx=false`.
+    - `host-exec-violations.txt` is empty.
+- Harness state after simulator pass:
+  - `rtk proxy make agent-status AREA=orlix-tcti`: package behavior is now pass, simulator readiness is still incomplete.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `simulator-tcti-dynamic-loader-support`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+  - Remaining missing or stale simulator readiness gates include first syscall, Linux console usability, static BusyBox start, static BusyBox shell command, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
+  - Physical-device TCTI remains forbidden because the pinned simulator readiness ladder is incomplete, no physical opt-in is present, and the worktree is still dirty pending commits.
+- Boundary:
+  - This proves the app-hosted simulator package-behavior gate for a packaged `/bin/grep` command through OrlixOS, OrlixKernel Linux execve, and TCTI.
+  - This does not prove full TCTI completion.
+  - This does not prove `ORLIX-USERLAND-TCTI-OK`.
+  - This does not prove runtime readiness, release readiness, or physical-device readiness.
