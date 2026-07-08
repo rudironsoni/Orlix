@@ -52,6 +52,7 @@ coreutils_env_path_marker="ORLIX-TCTI-COREUTILS-ENV-PATH-OK"
 coreutils_test_subset_marker="ORLIX-TCTI-COREUTILS-TEST-SUBSET-OK"
 package_behavior_marker="ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"
 oci_rootfs_command_marker="ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK"
+interactive_terminal_marker="ORLIX-TCTI-INTERACTIVE-TERMINAL-OK"
 dynamic_loader_marker="ORLIX-TCTI-DYNAMIC-LOADER-OK"
 signals_marker="ORLIX-TCTI-SIGNALS-OK"
 vfs_marker="ORLIX-TCTI-VFS-OK"
@@ -552,6 +553,12 @@ simulator_launch_arguments() {
 			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20/bin/grep%20-F%20$package_behavior_marker%20/usr/share/orlixos/package-behavior.txt%20%3E/dev/null%3B%20/bin/echo%20oci-rootfs-command-ok%3B%20printf%20$oci_rootfs_command_marker%3B%20exit%200"
 		)
 		;;
+	tcti-interactive-terminal-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20printf%20interactive-terminal-ok%3B%20printf%20$interactive_terminal_marker%3B%20exit%200"
+		)
+		;;
 	tcti-dynamic-loader-support)
 		output_args=(
 			--orlix-kernel-command-line-append \
@@ -591,14 +598,19 @@ write_json_report() {
 	local acceptance_weight="blocker"
 	local real_stack_required="true"
 	local can_claim_runtime_readiness="false"
-if [ "$destination" = "iphonesimulator" ]; then
-proof_tier="simulator"
-fi
-if [ "$gate" = "tcti-coreutils-test-subset" ]; then
-acceptance_weight="readiness"
-fi
+	if [ "$destination" = "iphonesimulator" ]; then
+		proof_tier="simulator"
+	fi
+	if [ "$gate" = "tcti-coreutils-test-subset" ]; then
+		acceptance_weight="readiness"
+	fi
+	if [ "$gate" = "tcti-interactive-terminal-smoke" ]; then
+		acceptance_weight="readiness"
+		can_claim_runtime_readiness="true"
+		readiness_eligible="true"
+	fi
 if [ "$status" = "pass" ] &&
-		[ "$destination" = "iphoneos" ] &&
+[ "$destination" = "iphoneos" ] &&
 		[ "$gate" = "tcti-init-first-syscall" ] &&
 		autonomous_tcti_reports_passed &&
 		simulator_tcti_full_ladder_passed; then
@@ -907,7 +919,7 @@ physical_tcti_preflight() {
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-mlibc-smoke|tcti-coreutils-smoke|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-oci-rootfs-command|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-mlibc-smoke|tcti-coreutils-smoke|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-oci-rootfs-command|tcti-interactive-terminal-smoke|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -1744,6 +1756,11 @@ assert_gate_markers() {
 	tcti-oci-rootfs-command)
 		capture_tcti_first_syscall
 		capture_guest_marker "$oci_rootfs_command_marker" "tcti-oci-rootfs-command.txt" "OCI rootfs command"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-interactive-terminal-smoke)
+		capture_tcti_first_syscall
+		capture_guest_marker "$interactive_terminal_marker" "tcti-interactive-terminal-smoke.txt" "Interactive terminal smoke"
 		assert_no_simulator_fatal_runtime
 		;;
 	tcti-dynamic-loader-support)

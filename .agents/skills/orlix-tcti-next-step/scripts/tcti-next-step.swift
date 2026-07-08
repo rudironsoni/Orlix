@@ -4286,6 +4286,8 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
         return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-coreutils-smoke", marker: "ORLIX-TCTI-COREUTILS-SMOKE-OK", artifactSuffix: "tcti-coreutils-smoke.txt")
     case "tcti-simulator-oci-rootfs-command":
         return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-oci-rootfs-command", marker: "ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK", artifactSuffix: "tcti-oci-rootfs-command.txt")
+    case "tcti-simulator-interactive-terminal-smoke":
+        return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-interactive-terminal-smoke", marker: "ORLIX-TCTI-INTERACTIVE-TERMINAL-OK", artifactSuffix: "tcti-interactive-terminal-smoke.txt")
     case "simulator-tcti-full-shell-usability":
         return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-full-shell-usability", marker: "ORLIX-TCTI-SHELL-USABLE", artifactSuffix: "tcti-full-shell-usability.txt")
     case "simulator-tcti-package-behavior":
