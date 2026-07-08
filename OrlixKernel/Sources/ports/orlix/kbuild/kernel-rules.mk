@@ -1692,11 +1692,16 @@ __kunit: __prepare-kbuild
 	PATH="$$linux_sed_dir:$$coreutils_dir:$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
 	export PATH; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux KUnit builds" >&2; exit 1; }; \
-	rm -rf "$(ORLIX_KUNIT_BUILD_DIR)"; \
 	mkdir -p "$(ORLIX_KUNIT_BUILD_DIR)"; \
 	[ -n "$(ORLIX_KERNEL_HOST_SDKROOT)" ] || { echo "macOS SDK is required for Linux KUnit host tools; set ORLIX_KERNEL_HOST_SDKROOT=/path/to/MacOSX.sdk" >&2; exit 1; }; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
-	"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$(ORLIX_KUNIT_BUILD_DIR)/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
+	kunit_config="$(ORLIX_KUNIT_BUILD_DIR)/.config"; \
+	kunit_fragment="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
+	if [ ! -s "$$kunit_config" ] || [ "$(ORLIX_PROFILE_CONFIG)" -nt "$$kunit_config" ] || [ "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" -nt "$$kunit_config" ] || [ "$$kunit_fragment" -nt "$$kunit_config" ]; then \
+		env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
+		"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$$kunit_config" "$$kunit_fragment"; \
+	else \
+		echo "reusing Orlix KUnit config: $$kunit_config"; \
+	fi; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
