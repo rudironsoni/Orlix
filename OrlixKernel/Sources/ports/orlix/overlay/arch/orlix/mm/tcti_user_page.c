@@ -375,8 +375,8 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		size_t chunk = min(size - copied,
 				   (size_t)(PAGE_SIZE -
 					    offset_in_page(current_va)));
-		void *host_data = NULL;
 		void *host_page = NULL;
+		void *host_data = NULL;
 		int ret;
 
 		mmap_read_lock(mm);
