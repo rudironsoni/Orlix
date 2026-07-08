@@ -2,6 +2,39 @@
 
 ## 2026-07-08
 
+### Checkpoint: Simulator OrlixMLibC Smoke Gate Uses Real Runtime Marker
+
+Timestamp: `2026-07-08T13:39:28Z`.
+
+- Harness-selected gate:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected simulator work remained allowed and physical-device work remained forbidden.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simulator-mlibc-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for `tcti-simulator-mlibc-smoke`.
+- Fix:
+  - Added `tcti-mlibc-smoke` to `tools/runtime/orlix-runtime-validation.sh`.
+  - Added a simulator launch command that runs the packaged `/bin/sh` Linux ELF through OrlixKernel/TCTI and emits `ORLIX-TCTI-MLIBC-SMOKE-OK`.
+  - Tightened runtime marker capture so gate markers are not accepted from `Kernel command line:` or `Orlix TCTI: execve argv` trace lines.
+- Validation:
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --strict --json`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b`: passed with `Device already booted, nothing to do.`
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted`: only `Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66)` booted.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - First-syscall report: `Build/Reports/runtime/tcti-init-first-syscall-20260708T132805Z-74567.json`.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed.
+  - OrlixMLibC simulator report: `Build/Reports/runtime/tcti-mlibc-smoke-20260708T133928Z-95558.json`.
+  - Report evidence: `status=pass`, `passed=true`, `git_sha=bc635d19c101b27b5a7987d0757a10d21cb1ce57`, `selected_device_id=1E5553B0-203A-4A11-BAD7-EBDE46863F66`, `simulator_single_booted=true`, `proof_tier=simulator`, `acceptance_weight=blocker`, `real_stack_required=true`, `preflight_only=false`, `autonomous_tests_bypassed=false`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+  - Marker artifact: `Build/Reports/runtime/tcti-mlibc-smoke-20260708T133928Z-95558.artifacts/tcti-mlibc-smoke.txt` captured `ORLIX-TCTI-MLIBC-SMOKE-OK` followed by `orlix-init: process exited pid=32 status=0`.
+  - Recent crash scan under `~/Library/Logs/DiagnosticReports` and `~/Library/Logs/CrashReporter` found no Orlix, OrlixTestRunner, xctest, or XCTest crash reports.
+- Boundary:
+  - This advances the app-hosted simulator ladder through the OrlixMLibC smoke blocker.
+  - This does not claim full TCTI runtime readiness, package readiness, release readiness, full simulator readiness ladder completion, or physical-device readiness.
+  - No physical-device gate was run.
+  - No HostAdapter-owned Linux policy, fake syscall/runtime behavior, generated Linux/mlibc/rootfs edit, host-executable guest text, MAP_JIT, RWX, or production gadget dispatch was added.
+
 ### Checkpoint: OrlixMLibC Build Smoke Preserves TCTI Fork mm Context
 
 Timestamp: `2026-07-08T09:50:22Z`.
