@@ -7512,3 +7512,31 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - This does not prove full TCTI completion.
   - This does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
   - This does not prove runtime readiness, release readiness, or physical-device readiness.
+## 2026-07-08 Simulator Interactive Terminal Smoke Checkpoint
+
+- Roadblock:
+  - `make agent-status AREA=orlix-tcti` selected `tcti-simulator-interactive-terminal-smoke`, but `tools/runtime/orlix-runtime-validation.sh` rejected the runtime gate as unknown.
+  - The roadmap gate also needed status mapping to the runtime-validation gate/report shape so the harness could advance from the app-hosted simulator evidence.
+- Fix:
+  - Added `tcti-interactive-terminal-smoke` runtime-validation support.
+  - The gate launches packaged `/bin/sh` through the OrlixKernel/TCTI app-hosted simulator path with `orlix.exec=/bin/sh`, `argv0=/bin/sh`, `argv1=-c`, and a shell command that emits `ORLIX-TCTI-INTERACTIVE-TERMINAL-OK`.
+  - The gate now captures the first TCTI syscall marker, captures the interactive terminal marker into `tcti-interactive-terminal-smoke.txt`, and rejects simulator fatal-runtime markers.
+  - Routed `tcti-simulator-interactive-terminal-smoke` through the next-step runtime marker report validator.
+- Simulator evidence:
+  - Report: `Build/Reports/runtime/tcti-interactive-terminal-smoke-20260708T174103Z-39033.json`.
+  - Artifact: `Build/Reports/runtime/tcti-interactive-terminal-smoke-20260708T174103Z-39033.artifacts/tcti-interactive-terminal-smoke.txt`.
+  - Result: `status=pass`, `passed=true`, `proof_tier=simulator`, `acceptance_weight=readiness`, `can_claim_runtime_readiness=true`, `readiness_gate_eligible=true`, `release_gate_eligible=false`.
+  - Required simulator: `Orlix-iPhone-15-Pro-Max`, UDID `1E5553B0-203A-4A11-BAD7-EBDE46863F66`.
+  - Marker evidence included `interactive-terminal-okORLIX-TCTI-INTERACTIVE-TERMINAL-OK` and `orlix-init: process exited pid=32 status=0`.
+  - Forbidden behavior fields were false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Validation:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy bash -n tools/runtime/orlix-runtime-validation.sh`: passed.
+  - `rtk proxy swift -frontend -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk git diff --check`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+- Boundary:
+  - This checkpoint wires and records the app-hosted simulator interactive terminal smoke proof.
+  - It does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
+  - It does not prove full Linux runtime readiness, release readiness, or physical-device readiness.
+  - Physical-device TCTI remains forbidden until the full pinned simulator readiness ladder is current and passing and explicit physical opt-in is present.
