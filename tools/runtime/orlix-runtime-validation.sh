@@ -38,6 +38,7 @@ build_root="${ORLIX_BUILD_ROOT:-}"
 busybox_shell_marker="ORLIX-TCTI-BUSYBOX-USABLE"
 console_marker="ORLIX-TCTI-CONSOLE-OK"
 full_shell_marker="ORLIX-TCTI-SHELL-USABLE"
+mlibc_smoke_marker="ORLIX-TCTI-MLIBC-SMOKE-OK"
 shell_pipeline_marker="ORLIX-TCTI-SHELL-PIPELINE-OK"
 shell_env_marker="ORLIX-TCTI-SHELL-ENV-OK"
 shell_redirection_marker="ORLIX-TCTI-SHELL-REDIRECTION-OK"
@@ -465,6 +466,12 @@ simulator_launch_arguments() {
 			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=set%20-e%3B%20cd%20/%3B%20pwd%3B%20echo%20shell-basic%20%3E%20/tmp/orlix-tcti-shell%3B%20test%20-f%20/tmp/orlix-tcti-shell%3B%20cat%20/tmp/orlix-tcti-shell%3B%20printf%20$full_shell_marker%3B%20exit%200"
 		)
 		;;
+	tcti-mlibc-smoke)
+		output_args=(
+			--orlix-kernel-command-line-append \
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=printf%20$mlibc_smoke_marker%3B%20exit%200"
+		)
+		;;
 	tcti-shell-pipeline-smoke)
 		output_args=(
 			--orlix-kernel-command-line-append \
@@ -886,7 +893,7 @@ physical_tcti_preflight() {
 
 validate_gate() {
 	case "$gate" in
-	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
+	tcti-init-first-syscall|tcti-simulator-stability|tcti-init-console-write|tcti-static-busybox-start|tcti-static-busybox-shell-command|tcti-full-shell-usability|tcti-mlibc-smoke|tcti-shell-pipeline-smoke|tcti-shell-env-var-smoke|tcti-shell-redirection-smoke|tcti-shell-script-smoke|tcti-coreutils-true-false-echo|tcti-coreutils-cat-wc|tcti-coreutils-ls-stat|tcti-coreutils-mkdir-rm-cp-ln|tcti-coreutils-env-path|tcti-coreutils-test-subset|tcti-package-behavior|tcti-dynamic-loader-support|tcti-signals|tcti-vfs-completeness|tcti-full-linux-runtime-readiness|tcti-dynamic-loader-start|tcti-alpine-sh-start|tcti-benchmark)
 		;;
 	*)
 		die "Unknown runtime validation gate \`$gate\`."
@@ -1622,7 +1629,8 @@ assert_gate_markers() {
 			"$artifact_dir/launch.log" \
 			"$artifact_dir/simulator-terminal-output.txt" \
 			"$artifact_dir/simulator-unified.log" |
-			grep -v 'Kernel command line:' \
+			grep -v 'Kernel command line:' |
+			grep -v 'Orlix TCTI: execve argv' \
 			>"$artifact_dir/$artifact_name" 2>/dev/null || {
 			failure_stage="${artifact_name%.txt}-marker"
 			die "$description marker was not captured from \`$destination\`."
@@ -1662,6 +1670,11 @@ assert_gate_markers() {
 		;;
 	tcti-full-shell-usability)
 		capture_guest_marker "$full_shell_marker" "tcti-full-shell-usability.txt" "Full shell usability"
+		assert_no_simulator_fatal_runtime
+		;;
+	tcti-mlibc-smoke)
+		capture_tcti_first_syscall
+		capture_guest_marker "$mlibc_smoke_marker" "tcti-mlibc-smoke.txt" "OrlixMLibC smoke"
 		assert_no_simulator_fatal_runtime
 		;;
 	tcti-shell-pipeline-smoke)
