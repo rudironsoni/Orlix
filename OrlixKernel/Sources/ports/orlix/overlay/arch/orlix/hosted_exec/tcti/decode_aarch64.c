@@ -104,6 +104,8 @@
 #define AARCH64_SIMD_UZP1_8H_PATTERN 0x4e401800U
 #define AARCH64_SIMD_UMOV_W_H_MASK 0xffe3fc00U
 #define AARCH64_SIMD_UMOV_W_H_PATTERN 0x0e023c00U
+#define AARCH64_SIMD_UMOV_X_D_MASK 0xffe3fc00U
+#define AARCH64_SIMD_UMOV_X_D_PATTERN 0x4e003c00U
 #define AARCH64_SIMD_INS_GPR_MASK 0xffe0fc00U
 #define AARCH64_SIMD_INS_GPR_PATTERN 0x4e001c00U
 #define AARCH64_SIMD_EXT_16B_MASK 0xffe08400U
@@ -1342,6 +1344,24 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.access_size = sizeof(u16);
 		decoded.result_size = sizeof(u32);
 		decoded.simd_source_index = imm5 >> 2;
+		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UMOV;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_UMOV_X_D_MASK) ==
+	    AARCH64_SIMD_UMOV_X_D_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+
+		if (imm5 != 8 && imm5 != 24)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.simd_source_index = imm5 == 24 ? 1 : 0;
 		decoded.simd_fp = true;
 		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UMOV;
 		return decoded;

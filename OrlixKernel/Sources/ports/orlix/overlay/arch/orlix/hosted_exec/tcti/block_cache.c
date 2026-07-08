@@ -46,6 +46,21 @@ static void tcti_block_free(struct tcti_block *block)
 	kfree(block);
 }
 
+static void tcti_block_cache_evict_oldest_locked(void)
+{
+	struct tcti_block *block;
+
+	if (list_empty(&tcti_global_blocks))
+		return;
+
+	block = list_first_entry(&tcti_global_blocks, struct tcti_block,
+				 mm_node);
+	hlist_del_init(&block->hash_node);
+	list_del_init(&block->mm_node);
+	tcti_global_block_count--;
+	tcti_block_put(block);
+}
+
 u32 tcti_translation_generation(struct mm_struct *mm)
 {
 	(void)mm;
@@ -138,6 +153,8 @@ int tcti_block_cache_insert(struct mm_struct *mm,
 		return 0;
 	}
 
+	if (tcti_global_block_count >= TCTI_BLOCK_CACHE_MAX_BLOCKS)
+		tcti_block_cache_evict_oldest_locked();
 	if (tcti_global_block_count >= TCTI_BLOCK_CACHE_MAX_BLOCKS) {
 		spin_unlock_irqrestore(&tcti_global_cache_lock, flags);
 		tcti_block_free(block);

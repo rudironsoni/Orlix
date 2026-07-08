@@ -39,22 +39,49 @@ int tcti_lower_decoded_instruction(
 	size_t capacity,
 	size_t *word_count)
 {
-	size_t words = TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS;
+	int ret;
 
 	if (!decoded || !program || !word_count)
 		return -EINVAL;
 	if (decoded->decode_class == TCTI_DECODE_UNSUPPORTED ||
 	    decoded->decode_class == TCTI_DECODE_SVC)
 		return -EOPNOTSUPP;
+
+	*word_count = 0;
+	ret = tcti_append_decoded_instruction(decoded, program, capacity,
+					      word_count);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+int tcti_append_decoded_instruction(
+	const struct tcti_decoded_instruction *decoded,
+	struct tcti_gadget_word *program,
+	size_t capacity,
+	size_t *word_count)
+{
+	size_t start;
+	size_t words;
+
+	if (!decoded || !program || !word_count)
+		return -EINVAL;
+	if (decoded->decode_class == TCTI_DECODE_UNSUPPORTED ||
+	    decoded->decode_class == TCTI_DECODE_SVC)
+		return -EOPNOTSUPP;
+
+	start = *word_count ? *word_count - 1 : 0;
+	words = start + 1 + TCTI_DECODED_INSTRUCTION_WORDS + 1;
 	if (capacity < words)
 		return -ENOSPC;
 
-	memset(program, 0, words * sizeof(*program));
-	program[0].value = (unsigned long)tcti_gadget_execute_decoded;
-	memcpy(&program[1], decoded, sizeof(*decoded));
-	program[1 + TCTI_DECODED_INSTRUCTION_WORDS].value =
+	program[start].value = (unsigned long)tcti_gadget_execute_decoded;
+	memcpy(&program[start + 1], decoded, sizeof(*decoded));
+	program[start + 1 + TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)tcti_gadget_halt;
 	*word_count = words;
+
 	return 0;
 }
 
