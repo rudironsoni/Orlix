@@ -1740,7 +1740,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
         let reportCurrent = stringField(simulatorReport.object, "git_sha") == gitSha() &&
             stringField(simulatorReport.object, "status") == "pass" &&
             boolField(simulatorReport.object, "passed") &&
-            stringField(simulatorReport.object, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
+            stringField(simulatorReport.object, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
             stringField(simulatorReport.object, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
             intField(simulatorReport.object, "simulator_booted_count") == 1 &&
             boolField(simulatorReport.object, "simulator_single_booted")
@@ -2418,7 +2418,7 @@ func runKernelKselftestSubset() throws -> Int32 {
     let target = "tcti-kernel-kselftest-subset"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixKernel Conformance"
     let xcodeTest = "OrlixKernelConformanceTests/OrlixKernelConformanceTests/testSignalWaitProbeCompletesThroughOrlixOSTerminalSession"
@@ -2570,7 +2570,7 @@ func runMLibCBuildSmoke() throws -> Int32 {
     let target = "tcti-mlibc-build-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -2725,7 +2725,7 @@ func runMLibCSysdepsSmoke() throws -> Int32 {
     let target = "tcti-mlibc-sysdeps-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -2887,7 +2887,7 @@ func runMLibCLibcTestSubset() throws -> Int32 {
     let target = "tcti-mlibc-libc-test-subset"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -3044,7 +3044,7 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
     let target = "tcti-mlibc-dynamic-loader-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -3258,7 +3258,7 @@ func runMLibCPthreadTLSSmoke() throws -> Int32 {
     let target = "tcti-mlibc-pthread-tls-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -3444,7 +3444,7 @@ func runMLibCLinkedSyscallUAPISmoke() throws -> Int32 {
     let target = "tcti-mlibc-linked-syscall-uapi-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixMLibC Conformance"
     let xcodeTest = "OrlixMLibCConformanceTests/OrlixMLibCConformanceTests/testMLibCRootfsCompletesThroughOrlixOSTerminalSession"
@@ -3624,7 +3624,7 @@ func runShellExecSimpleCommand() throws -> Int32 {
     let target = "tcti-shell-exec-simple-command"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-full-shell-usability"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let outputRoot = buildPath("shell_exec_simple_command")
@@ -3795,7 +3795,7 @@ func runShellPipelineSmoke() throws -> Int32 {
     let target = "tcti-shell-pipeline-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-shell-pipeline-smoke"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let outputRoot = buildPath("shell_pipeline_smoke")
@@ -4005,7 +4005,7 @@ func runShellEnvVarSmoke() throws -> Int32 {
     let target = "tcti-shell-env-var-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-shell-env-var-smoke"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let outputRoot = buildPath("shell_env_var_smoke")
@@ -4215,7 +4215,7 @@ func runShellRedirectionSmoke() throws -> Int32 {
     let target = "tcti-shell-redirection-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-shell-redirection-smoke"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let outputRoot = buildPath("shell_redirection_smoke")
@@ -4428,7 +4428,7 @@ func runShellScriptSmoke() throws -> Int32 {
     let target = "tcti-shell-script-smoke"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-shell-script-smoke"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let outputRoot = buildPath("shell_script_smoke")
@@ -4640,7 +4640,7 @@ func runCoreutilsTrueFalseEcho() throws -> Int32 {
     let target = "tcti-coreutils-true-false-echo"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-true-false-echo"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -4863,7 +4863,7 @@ func runCoreutilsCatWC() throws -> Int32 {
     let target = "tcti-coreutils-cat-wc"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-cat-wc"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -5032,7 +5032,7 @@ func runCoreutilsLsStat() throws -> Int32 {
     let target = "tcti-coreutils-ls-stat"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-ls-stat"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -5201,7 +5201,7 @@ func runCoreutilsMkdirRmCpLn() throws -> Int32 {
     let target = "tcti-coreutils-mkdir-rm-cp-ln"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-mkdir-rm-cp-ln"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -5372,7 +5372,7 @@ func runCoreutilsEnvPath() throws -> Int32 {
     let target = "tcti-coreutils-env-path"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-env-path"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -5543,7 +5543,7 @@ func runCoreutilsTestSubset() throws -> Int32 {
     let target = "tcti-coreutils-test-subset"
     let command = "make tcti-gate TARGET=\(target)"
     let runtimeGate = "tcti-coreutils-test-subset"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let runtimeScript = path("tools", "runtime", "orlix-runtime-validation.sh")
     let coreutilsConfig = path("OrlixOS", "Sources", "make", "config.mk")
@@ -5753,7 +5753,7 @@ func runOCIImageLayoutParse() throws -> Int32 {
     let target = "tcti-oci-image-layout-parse"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixRuntime Tests"
     let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession"
@@ -5947,7 +5947,7 @@ func runOCIRootfsMaterialize() throws -> Int32 {
     let target = "tcti-oci-rootfs-materialize"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixRuntime Tests"
     let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBootsAndExposesOSRelease"
@@ -6123,7 +6123,7 @@ func runOCIRootfsBootSession() throws -> Int32 {
     let target = "tcti-oci-rootfs-boot-session"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixRuntime Tests"
     let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testCopiedNamedEnvironmentSessionSelectionEntersRootAndDescriptor"
@@ -11374,7 +11374,7 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
     if !simulatorPassed && !simulatorFailed {
         failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         stringField(simulatorObject, "simulator_booted_count") != "1" ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -11542,7 +11542,7 @@ func runLDRSWSignExtensionReducer() throws -> Int32 {
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         !boolField(simulatorObject, "simulator_single_booted") {
         failures.append(fail("simulator-scope", "latest failure must come from only Orlix-iPhone-15-Pro-Max"))
@@ -11724,7 +11724,7 @@ func runCloneZeroPCReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -11883,7 +11883,7 @@ func runPostSetsidTLSFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -12016,7 +12016,7 @@ func runPostExecSHFetchFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -12135,7 +12135,7 @@ func runPostPIESHEntryFetchFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -12286,7 +12286,7 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 	if !simulatorPassed && !simulatorFailed {
 		failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -12442,7 +12442,7 @@ func runInitReadFaultReducer() throws -> Int32 {
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
 	}
-	if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		stringField(simulatorObject, "simulator_booted_count") != "1" ||
 		!boolField(simulatorObject, "simulator_single_booted") {
@@ -12586,7 +12586,7 @@ func runPostStaticPIEInitReadFaultReducer() throws -> Int32 {
 	if stringField(object, "status") != "fail" || boolField(object, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
 	}
-	if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		intField(object, "simulator_booted_count") != 1 ||
 		!boolField(object, "simulator_single_booted") {
@@ -12732,7 +12732,7 @@ func runPostTrueEntryFetchFaultReducer() throws -> Int32 {
 		stringField(object, "destination") != "iphonesimulator" {
 		failures.append(fail("simulator-report-gate", "reducer must use the iphonesimulator tcti-init-first-syscall report"))
 	}
-	if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+	if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
 		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
 		intField(object, "simulator_booted_count") != 1 ||
 		!boolField(object, "simulator_single_booted") {
@@ -12922,7 +12922,7 @@ func runPostSHReadFaultReducer() throws -> Int32 {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator sh read-fault report"))
 	}
 	let selectedDeviceID = stringField(simulatorObject, "selected_device_id")
-	if !selectedDeviceID.isEmpty && selectedDeviceID != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
+	if !selectedDeviceID.isEmpty && selectedDeviceID != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" {
 		failures.append(fail("simulator-id", "simulator report is not for the pinned Orlix simulator id"))
 	}
 	let selectedDeviceName = stringField(simulatorObject, "selected_device_name")
@@ -13504,7 +13504,7 @@ func runInitMLibCLockBRKReducer() throws -> Int32 {
         boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator simulator stability or init console-write report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -13629,8 +13629,8 @@ func runBRKTrapRootCause() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
-        failures.append(fail("simulator-device", "BRK root-cause inspection must use Orlix-iPhone-15-Pro-Max simulator 1E5553B0-203A-4A11-BAD7-EBDE46863F66"))
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" {
+        failures.append(fail("simulator-device", "BRK root-cause inspection must use Orlix-iPhone-15-Pro-Max simulator ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "BRK root-cause inspection requires the current failing simulator stability report"))
@@ -13677,7 +13677,7 @@ func runBRKTrapRootCause() throws -> Int32 {
         let rootCauseMarkdown = """
         # TCTI BRK Trap Root Cause
 
-        - simulator: Orlix-iPhone-15-Pro-Max `1E5553B0-203A-4A11-BAD7-EBDE46863F66`
+        - simulator: Orlix-iPhone-15-Pro-Max `ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`
         - runtime BRK PC: `\(runtimeBRKPC)`
         - ELF BRK VMA: `0x2b008`
         - instruction: `0xd4200020`, `brk #0x1`
@@ -13762,8 +13762,8 @@ func runBRKGuardGOTReducer() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" {
-        failures.append(fail("simulator-device", "BRK guard reducer must use Orlix-iPhone-15-Pro-Max simulator 1E5553B0-203A-4A11-BAD7-EBDE46863F66"))
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" {
+        failures.append(fail("simulator-device", "BRK guard reducer must use Orlix-iPhone-15-Pro-Max simulator ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "BRK guard reducer requires the current failing simulator stability report"))
@@ -17186,7 +17186,7 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "SIGABRT reducer requires a current simulator static BusyBox failure report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -17334,7 +17334,7 @@ func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
     if stringField(object, "gate") != "tcti-static-busybox-shell-command" {
         failures.append(fail("simulator-report-gate", "SIGILL reducer must use the static BusyBox shell-command gate report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -17538,7 +17538,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 	if stringField(simulatorObject, "git_sha") != gitSha() {
 		failures.append(fail("simulator-report-stale", "selected simulator report is stale for current HEAD"))
 	}
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -17579,7 +17579,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 		let latestStillMatches = stringField(latestObject, "git_sha") == gitSha() &&
 			stringField(latestObject, "status") == "fail" &&
 			!boolField(latestObject, "passed") &&
-			stringField(latestObject, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
+			stringField(latestObject, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
 			stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
 			intField(latestObject, "simulator_booted_count") == 1 &&
 			boolField(latestObject, "simulator_single_booted") &&
@@ -17700,7 +17700,7 @@ func runPostFullShellCatReadFaultReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -17833,7 +17833,7 @@ func runPostFullShellCatReadFaultFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -17922,7 +17922,7 @@ func runPostFullShellCatPosixMemalignBRKReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -18041,7 +18041,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -18072,7 +18072,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
         let latestMatchesCurrentFailure = stringField(latestObject, "git_sha") == gitSha() &&
             stringField(latestObject, "status") == "fail" &&
             !boolField(latestObject, "passed") &&
-            stringField(latestObject, "selected_device_id") == "1E5553B0-203A-4A11-BAD7-EBDE46863F66" &&
+            stringField(latestObject, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
             stringField(latestObject, "selected_device_name") == "Orlix-iPhone-15-Pro-Max" &&
             intField(latestObject, "simulator_booted_count") == 1 &&
             boolField(latestObject, "simulator_single_booted") &&
@@ -18203,7 +18203,7 @@ func runPostFullShellInitWriteFaultReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -18360,7 +18360,7 @@ func runPostFullShellSHSIGABRTReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -18511,7 +18511,7 @@ func runPostConsoleSHSIGABRTReducer() throws -> Int32 {
         boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing iphonesimulator tcti-init-console-write report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -18666,7 +18666,7 @@ func runPostFullShellInitWriteFaultFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -18753,7 +18753,7 @@ func runPostFullShellSHSIGABRTFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -18846,7 +18846,7 @@ func runPostFullShellInitSecondMmapHangReducer() throws -> Int32 {
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
     }
-    if stringField(object, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(object, "simulator_booted_count") != 1 ||
         !boolField(object, "simulator_single_booted") {
@@ -19027,7 +19027,7 @@ func runPostFullShellInitSecondMmapHangFix() throws -> Int32 {
     if stringField(simulatorObject, "git_sha") != gitSha() {
         failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
     }
-    if stringField(simulatorObject, "selected_device_id") != "1E5553B0-203A-4A11-BAD7-EBDE46863F66" ||
+    if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
         intField(simulatorObject, "simulator_booted_count") != 1 ||
         !boolField(simulatorObject, "simulator_single_booted") {
@@ -19074,7 +19074,7 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
     let target = "tcti-oci-exec-coreutils-command"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixRuntime Tests"
     let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand"
@@ -19267,7 +19267,7 @@ func runOCIStdioSignalWait() throws -> Int32 {
     let target = "tcti-oci-stdio-signal-wait"
     let command = "make tcti-gate TARGET=\(target)"
     let kernelProfile = "tcti_runtime"
-    let simulatorID = "1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+    let simulatorID = "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
     let simulatorName = "Orlix-iPhone-15-Pro-Max"
     let xcodeScheme = "OrlixRuntime Tests"
     let xcodeTest = "OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait"

@@ -7732,3 +7732,31 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Recreated Pinned Simulator
+
+- Environment/policy update:
+  - Deleted and recreated the pinned simulator as `Orlix-iPhone-15-Pro-Max`.
+  - New pinned simulator UDID: `ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`.
+  - Updated active TCTI environment policy, harness commands, simulator guards, Codex command rules, runtime-validation fallback, and active plan command examples to use the recreated simulator UDID.
+  - Historical evidence entries above remain unchanged because they record proof runs against the previous pinned simulator.
+- Validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcrun simctl list devices booted`: only `Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3)` booted.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy sh -n tools/runtime/orlix-runtime-validation.sh .agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy .agents/skills/orlix-tcti-next-step/scripts/harness-check`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`: passed and wrote `Build/Reports/runtime/tcti-simulator-stability-20260709T181148Z-58492.json`.
+  - Simulator stability report evidence: `status=pass`, `passed=true`, `selected_device_id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`, `selected_device_name=Orlix-iPhone-15-Pro-Max`, `simulator_single_booted=true`, `acceptance_weight=readiness`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`, `rtk proxy make agent-next AREA=orlix-tcti`, and `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed after serial regeneration.
+  - Refreshed next gate: `simulator-tcti-full-shell-usability`.
+  - Refreshed action policy: `selected_gate_result_classification=proof_tier_report_status_metadata_drift`, `runtime_patch_allowed=false`, `harness_patch_allowed=true`, `continue_refresh_allowed=false`, `must_stop=true`, `owning_layer=TCTI harness/report contract`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti DRY_RUN=1 MAX_ITERATIONS=5`: stopped at iteration 1 with `would_execute=false` under the harness/report metadata stop policy.
+  - `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=5`: stopped at iteration 1 with `command_count=0`; it did not execute product runtime work.
+- Boundary:
+  - This is a local environment and harness pin update only.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
