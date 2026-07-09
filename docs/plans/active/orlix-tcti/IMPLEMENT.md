@@ -7655,3 +7655,25 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - The rail now requires current positive no-phone MOVI execution, a replayable pass regression, and current simulator stability without the old unsupported/SIGILL signature.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+
+### Checkpoint: Selected Gate Result Policy Added To TCTI Harness
+
+- Harness-only policy change:
+  - `agent-next` now emits selected gate result/action fields in `Build/AgentHarness/orlix-tcti/next-task.json` and `next-task.md`.
+  - `status.json` gate entries now include `result_policy` so every gate exposes its current classification and allowed next action.
+  - `agent-task-envelope-check` recomputes the selected gate policy from current status and rejects stale or missing action-policy fields.
+  - Stale reports classify as `stale_proof_refresh` before report metadata drift checks, because stale generated proof must be refreshed before its old metadata can authorize or block implementation work.
+- Classification surface:
+  - `stale_proof_refresh`
+  - `missing_generated_artifact`
+  - `rail_evidence_contract_bug`
+  - `proof_tier_report_status_metadata_drift`
+  - `current_runtime_product_failure`
+  - `environment_only_failure`
+  - `forbidden_behavior_violation`
+  - `readiness_gate_pass`
+- Boundary:
+  - Runtime edits still require `runtime_patch_allowed=true` in the selected envelope.
+  - Stale proof refreshes, missing generated artifacts, rail contract bugs, proof metadata drift, environment-only failures, and forbidden behavior violations do not authorize OrlixKernel/TCTI runtime patches.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

@@ -158,6 +158,11 @@ struct Gate: Codable {
     }
 }
 
+struct ReportFailureFact: Codable {
+    let id: String
+    let message: String
+}
+
 struct ReportFact: Codable {
     let path: String
     let exists: Bool
@@ -170,6 +175,38 @@ struct ReportFact: Codable {
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let gitSHA: String?
+    let failures: [ReportFailureFact]
+    let forbiddenBehaviorViolations: [String]
+
+    init(
+        path: String,
+        exists: Bool,
+        status: String,
+        passed: Bool,
+        proofTier: String?,
+        acceptanceWeight: String?,
+        realStackRequired: Bool?,
+        canClaimRuntimeReadiness: Bool?,
+        releaseGateEligible: Bool,
+        readinessGateEligible: Bool,
+        gitSHA: String?,
+        failures: [ReportFailureFact] = [],
+        forbiddenBehaviorViolations: [String] = []
+    ) {
+        self.path = path
+        self.exists = exists
+        self.status = status
+        self.passed = passed
+        self.proofTier = proofTier
+        self.acceptanceWeight = acceptanceWeight
+        self.realStackRequired = realStackRequired
+        self.canClaimRuntimeReadiness = canClaimRuntimeReadiness
+        self.releaseGateEligible = releaseGateEligible
+        self.readinessGateEligible = readinessGateEligible
+        self.gitSHA = gitSHA
+        self.failures = failures
+        self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
+    }
 
     enum CodingKeys: String, CodingKey {
         case path
@@ -183,6 +220,30 @@ struct ReportFact: Codable {
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case gitSHA = "git_sha"
+        case failures
+        case forbiddenBehaviorViolations = "forbidden_behavior_violations"
+    }
+}
+
+struct GateResultPolicy: Codable, Equatable {
+    let classification: String
+    let runtimePatchAllowed: Bool
+    let harnessPatchAllowed: Bool
+    let continueRefreshAllowed: Bool
+    let mustStop: Bool
+    let requiredNextAction: String
+    let reason: String
+    let owningLayer: String
+
+    enum CodingKeys: String, CodingKey {
+        case classification = "result_classification"
+        case runtimePatchAllowed = "runtime_patch_allowed"
+        case harnessPatchAllowed = "harness_patch_allowed"
+        case continueRefreshAllowed = "continue_refresh_allowed"
+        case mustStop = "must_stop"
+        case requiredNextAction = "required_next_action"
+        case reason
+        case owningLayer = "owning_layer"
     }
 }
 
@@ -284,6 +345,10 @@ struct GateStatus: Encodable {
             !doesNotAdvanceRuntimeReadiness
     }
 
+    var resultPolicy: GateResultPolicy {
+        classifyGateResult(self)
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case command
@@ -309,6 +374,7 @@ struct GateStatus: Encodable {
         case currentlySimulatorReadinessSatisfied = "currently_simulator_readiness_satisfied"
         case physicalDevice = "physical_device"
         case gadget
+        case resultPolicy = "result_policy"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -337,6 +403,7 @@ struct GateStatus: Encodable {
         try container.encode(currentlySimulatorReadinessSatisfied, forKey: .currentlySimulatorReadinessSatisfied)
         try container.encode(physicalDevice, forKey: .physicalDevice)
         try container.encode(gadget, forKey: .gadget)
+        try container.encode(resultPolicy, forKey: .resultPolicy)
     }
 }
 
@@ -420,6 +487,14 @@ struct TaskEnvelope: Codable {
     let selectedGateAcceptanceWeight: String
     let selectedGateRealStackRequired: Bool
     let selectedGateCanClaimRuntimeReadiness: Bool
+    let selectedGateResultClassification: String
+    let runtimePatchAllowed: Bool
+    let harnessPatchAllowed: Bool
+    let continueRefreshAllowed: Bool
+    let mustStop: Bool
+    let requiredNextAction: String
+    let resultClassificationReason: String
+    let owningLayer: String
     let prerequisiteGates: [PrerequisiteFact]
     let whySelected: String
     let allowedScope: [String]
@@ -460,6 +535,14 @@ struct TaskEnvelope: Codable {
         case selectedGateAcceptanceWeight = "selected_gate_acceptance_weight"
         case selectedGateRealStackRequired = "selected_gate_real_stack_required"
         case selectedGateCanClaimRuntimeReadiness = "selected_gate_can_claim_runtime_readiness"
+        case selectedGateResultClassification = "selected_gate_result_classification"
+        case runtimePatchAllowed = "runtime_patch_allowed"
+        case harnessPatchAllowed = "harness_patch_allowed"
+        case continueRefreshAllowed = "continue_refresh_allowed"
+        case mustStop = "must_stop"
+        case requiredNextAction = "required_next_action"
+        case resultClassificationReason = "result_classification_reason"
+        case owningLayer = "owning_layer"
         case prerequisiteGates = "prerequisite_gates"
         case whySelected = "why_selected"
         case allowedScope = "allowed_scope"
@@ -639,6 +722,271 @@ func intValue(_ value: Any?) -> Int? {
     return nil
 }
 
+func reportFailures(_ value: Any?) -> [ReportFailureFact] {
+    guard let rawFailures = value as? [Any] else { return [] }
+    return rawFailures.enumerated().map { index, raw in
+        if let string = raw as? String {
+            return ReportFailureFact(id: "failure-\(index + 1)", message: string)
+        }
+        if let dictionary = raw as? [String: Any] {
+            let id = stringValue(dictionary["id"]) ??
+                stringValue(dictionary["kind"]) ??
+                stringValue(dictionary["name"]) ??
+                "failure-\(index + 1)"
+            let message = stringValue(dictionary["message"]) ??
+                stringValue(dictionary["summary"]) ??
+                stringValue(dictionary["reason"]) ??
+                id
+            return ReportFailureFact(id: id, message: message)
+        }
+        return ReportFailureFact(id: "failure-\(index + 1)", message: "\(raw)")
+    }
+}
+
+func forbiddenBehaviorViolations(_ value: Any?) -> [String] {
+    guard let forbidden = value as? [String: Any] else { return [] }
+    return forbidden.keys.sorted().filter { boolValue(forbidden[$0]) }
+}
+
+func lowercasedEvidenceText(_ status: GateStatus) -> String {
+    let failures = status.reports.flatMap(\.failures).map { "\($0.id) \($0.message)" }
+    let reportPaths = status.reports.map(\.path)
+    return ([status.id, status.kind, status.state, status.reason] + failures + reportPaths)
+        .joined(separator: " ")
+        .lowercased()
+}
+
+func reportMetadataDrift(_ status: GateStatus) -> [String] {
+    let existingReports = status.reports.filter(\.exists)
+    return existingReports.flatMap { report -> [String] in
+        var drift: [String] = []
+        if let value = report.proofTier, value != status.proofTier {
+            drift.append("\(report.path): proof_tier=\(value) expected \(status.proofTier)")
+        }
+        if let value = report.acceptanceWeight, value != status.acceptanceWeight {
+            drift.append("\(report.path): acceptance_weight=\(value) expected \(status.acceptanceWeight)")
+        }
+        if let value = report.realStackRequired, value != status.realStackRequired {
+            drift.append("\(report.path): real_stack_required=\(value) expected \(status.realStackRequired)")
+        }
+        if let value = report.canClaimRuntimeReadiness, value != status.canClaimRuntimeReadiness {
+            drift.append("\(report.path): can_claim_runtime_readiness=\(value) expected \(status.canClaimRuntimeReadiness)")
+        }
+        if report.releaseGateEligible && status.proofTier != "release" {
+            drift.append("\(report.path): release_gate_eligible=true for non-release gate")
+        }
+        if report.readinessGateEligible && !status.readinessEligible {
+            drift.append("\(report.path): readiness_gate_eligible=true but roadmap gate is not readiness-eligible")
+        }
+        return drift
+    }
+}
+
+func policy(
+    classification: String,
+    runtimePatchAllowed: Bool,
+    harnessPatchAllowed: Bool,
+    continueRefreshAllowed: Bool,
+    mustStop: Bool,
+    requiredNextAction: String,
+    reason: String,
+    owningLayer: String
+) -> GateResultPolicy {
+    GateResultPolicy(
+        classification: classification,
+        runtimePatchAllowed: runtimePatchAllowed,
+        harnessPatchAllowed: harnessPatchAllowed,
+        continueRefreshAllowed: continueRefreshAllowed,
+        mustStop: mustStop,
+        requiredNextAction: requiredNextAction,
+        reason: reason,
+        owningLayer: owningLayer
+    )
+}
+
+func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
+    if status.state == "stale" {
+        return policy(
+            classification: "stale_proof_refresh",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: true,
+            mustStop: false,
+            requiredNextAction: "refresh the selected gate report at current HEAD",
+            reason: status.reason,
+            owningLayer: "proof refresh"
+        )
+    }
+
+    let forbidden = status.reports.flatMap(\.forbiddenBehaviorViolations)
+    if !forbidden.isEmpty {
+        return policy(
+            classification: "forbidden_behavior_violation",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "stop and reduce forbidden behavior before any implementation work",
+            reason: "Forbidden behavior fields were true: \(Array(Set(forbidden)).sorted().joined(separator: ", ")).",
+            owningLayer: "safety boundary"
+        )
+    }
+
+    let drift = reportMetadataDrift(status)
+    if !drift.isEmpty {
+        return policy(
+            classification: "proof_tier_report_status_metadata_drift",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: true,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "repair the harness/report metadata contract before rerunning product work",
+            reason: drift.joined(separator: "; "),
+            owningLayer: "TCTI harness/report contract"
+        )
+    }
+
+    if status.passed && status.currentlySimulatorReadinessSatisfied {
+        return policy(
+            classification: "readiness_gate_pass",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: true,
+            mustStop: false,
+            requiredNextAction: "regenerate harness state and continue only if the next selected gate is stale or missing proof refresh",
+            reason: status.reason,
+            owningLayer: "readiness proof"
+        )
+    }
+
+    if status.passed {
+        return policy(
+            classification: "stale_proof_refresh",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: true,
+            mustStop: false,
+            requiredNextAction: "regenerate harness state and follow the next selected gate",
+            reason: status.reason,
+            owningLayer: "proof refresh"
+        )
+    }
+
+    let evidenceText = lowercasedEvidenceText(status)
+    let environmentTerms = [
+        "environment",
+        "coresimulator",
+        "simctl",
+        "xcodebuild",
+        "bootstatus",
+        "booted simulator",
+        "storage",
+        "runner attach",
+        "preflight",
+        "destination",
+        "selected_device",
+        "required simulator",
+    ]
+    if environmentTerms.contains(where: { evidenceText.contains($0) }) {
+        return policy(
+            classification: "environment_only_failure",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "fix or rerun the environment/simulator setup before changing product code",
+            reason: status.reason,
+            owningLayer: "environment"
+        )
+    }
+
+    let railContractTerms = [
+        "historical",
+        "non-durable",
+        "obsolete",
+        "superseded",
+        "stale generated",
+        "simulator-unsupported-signature",
+        "dynamic-loader-scope",
+        "simulator-static-pie-event",
+        "no recorded simulator stability report",
+        "does not include structured",
+        "expected reducer/report path",
+    ]
+    let railLike = status.kind == "rail" || status.kind.contains("production")
+    if railLike && railContractTerms.contains(where: { evidenceText.contains($0) }) {
+        return policy(
+            classification: "rail_evidence_contract_bug",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: true,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "repair the selected rail evidence contract or map it to durable current evidence",
+            reason: status.reason,
+            owningLayer: "TCTI harness/report contract"
+        )
+    }
+
+    let missingReports = status.reports.contains { !$0.exists } ||
+        status.reportPaths.contains { $0.contains("/reproducers/") || $0.contains("*.json") }
+    let reducerLike = status.kind.contains("reducer") || evidenceText.contains("reducer")
+    if status.state == "missing" && (missingReports || reducerLike) {
+        return policy(
+            classification: "missing_generated_artifact",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "generate or refresh the required proof artifact before selecting implementation work",
+            reason: status.reason,
+            owningLayer: "proof artifact"
+        )
+    }
+
+    let currentFailure = status.reports.contains {
+        $0.exists && !$0.passed && $0.gitSHA == gitSHA()
+    }
+    let realProductFailure = status.realStackRequired ||
+        status.kind == "simulator-runtime" ||
+        status.kind.contains("production")
+    if ["fail", "ready"].contains(status.state) && currentFailure && realProductFailure {
+        return policy(
+            classification: "current_runtime_product_failure",
+            runtimePatchAllowed: true,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "stop, reduce the current failure, and patch only the owning runtime/product layer",
+            reason: status.reason,
+            owningLayer: status.kind == "simulator-runtime" ? "runtime-validation selected stack" : "selected gate owning layer"
+        )
+    }
+
+    if status.state == "missing" {
+        return policy(
+            classification: "missing_generated_artifact",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "produce the missing report or artifact named by the selected gate",
+            reason: status.reason,
+            owningLayer: "proof artifact"
+        )
+    }
+
+    return policy(
+        classification: "current_runtime_product_failure",
+        runtimePatchAllowed: false,
+        harnessPatchAllowed: false,
+        continueRefreshAllowed: false,
+        mustStop: true,
+        requiredNextAction: "stop and classify the selected gate manually because the evidence did not match a known safe policy",
+        reason: status.reason,
+        owningLayer: "unclassified selected gate"
+    )
+}
+
 func runtimeArtifactURL(_ artifact: String) -> URL {
     let directURL = root.appendingPathComponent(artifact)
     if fileManager.fileExists(atPath: directURL.path) {
@@ -729,7 +1077,9 @@ func reportFact(target: String) -> ReportFact {
             canClaimRuntimeReadiness: object["can_claim_runtime_readiness"].map(boolValue),
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
-            gitSHA: stringValue(object["git_sha"])
+            gitSHA: stringValue(object["git_sha"]),
+            failures: reportFailures(object["failures"]),
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
     } catch {
         return ReportFact(
@@ -1713,7 +2063,9 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             canClaimRuntimeReadiness: object["can_claim_runtime_readiness"].map(boolValue),
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
-            gitSHA: stringValue(object["git_sha"])
+            gitSHA: stringValue(object["git_sha"]),
+            failures: reportFailures(object["failures"]),
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
         return (fact, object)
     }
@@ -8061,7 +8413,10 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         throw HarnessError.invalid("selected gate \(selectedID) does not exist in roadmap")
     }
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
-    let selectedStatus = byID[selectedID]
+    guard let selectedStatus = byID[selectedID] else {
+        throw HarnessError.invalid("selected gate \(selectedID) has no status entry")
+    }
+    let selectedPolicy = selectedStatus.resultPolicy
     let prerequisites = gate.prerequisites.map { prereqID in
         let fact = byID[prereqID]
         return PrerequisiteFact(
@@ -8076,12 +8431,20 @@ func envelope(from status: StatusDocument) throws -> TaskEnvelope {
         gitSHA: status.gitSHA,
         roadmapPath: relativePath(roadmapURL),
         selectedGateID: gate.id,
-        selectedGateCommand: selectedStatus?.command ?? gate.command,
+        selectedGateCommand: selectedStatus.command,
         selectedGateKind: gate.kind,
         selectedGateProofTier: gate.proofTier,
         selectedGateAcceptanceWeight: gate.acceptanceWeight,
         selectedGateRealStackRequired: gate.realStackRequired,
         selectedGateCanClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
+        selectedGateResultClassification: selectedPolicy.classification,
+        runtimePatchAllowed: selectedPolicy.runtimePatchAllowed,
+        harnessPatchAllowed: selectedPolicy.harnessPatchAllowed,
+        continueRefreshAllowed: selectedPolicy.continueRefreshAllowed,
+        mustStop: selectedPolicy.mustStop,
+        requiredNextAction: selectedPolicy.requiredNextAction,
+        resultClassificationReason: selectedPolicy.reason,
+        owningLayer: selectedPolicy.owningLayer,
         prerequisiteGates: prerequisites,
         whySelected: whySelected(for: gate, prerequisites: prerequisites),
         allowedScope: gate.allowedScope,
@@ -8131,6 +8494,16 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
             reportPaths: fact?.reportPaths ?? []
         )
     }
+    let blockedPolicy = GateResultPolicy(
+        classification: "physical_device_blocked",
+        runtimePatchAllowed: false,
+        harnessPatchAllowed: false,
+        continueRefreshAllowed: false,
+        mustStop: true,
+        requiredNextAction: "stop before physical-device work until simulator readiness and explicit human opt-in are present",
+        reason: "physical_device_allowed=false; blockers=\(status.physicalDeviceBlockers.joined(separator: ", "))",
+        owningLayer: "physical-device gate policy"
+    )
     return TaskEnvelope(
         area: roadmap.area,
         generatedAt: timestamp(),
@@ -8143,6 +8516,14 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
         selectedGateAcceptanceWeight: "blocker",
         selectedGateRealStackRequired: true,
         selectedGateCanClaimRuntimeReadiness: false,
+        selectedGateResultClassification: blockedPolicy.classification,
+        runtimePatchAllowed: blockedPolicy.runtimePatchAllowed,
+        harnessPatchAllowed: blockedPolicy.harnessPatchAllowed,
+        continueRefreshAllowed: blockedPolicy.continueRefreshAllowed,
+        mustStop: blockedPolicy.mustStop,
+        requiredNextAction: blockedPolicy.requiredNextAction,
+        resultClassificationReason: blockedPolicy.reason,
+        owningLayer: blockedPolicy.owningLayer,
         prerequisiteGates: prerequisites,
         whySelected: "The roadmap has no safer eligible non-phone gate. Phone work stays blocked until the full pinned simulator readiness ladder passes and explicit human opt-in is present. Missing simulator readiness gates: \(status.simulatorReadinessMissingGateIDs.isEmpty ? "none" : status.simulatorReadinessMissingGateIDs.joined(separator: ", ")).",
         allowedScope: [
@@ -8226,6 +8607,22 @@ func markdown(for envelope: TaskEnvelope) -> String {
 
     Can claim runtime readiness: \(envelope.selectedGateCanClaimRuntimeReadiness)
 
+    Result classification: `\(envelope.selectedGateResultClassification)`
+
+    Runtime patch allowed: \(envelope.runtimePatchAllowed)
+
+    Harness patch allowed: \(envelope.harnessPatchAllowed)
+
+    Continue refresh allowed: \(envelope.continueRefreshAllowed)
+
+    Must stop: \(envelope.mustStop)
+
+    Required next action: \(envelope.requiredNextAction)
+
+    Owning layer: \(envelope.owningLayer)
+
+    Classification reason: \(envelope.resultClassificationReason)
+
     Why selected: \(envelope.whySelected)
 
     ## Simulator Gate
@@ -8284,6 +8681,19 @@ func writeNext() throws -> TaskEnvelope {
     print("selected_command: \(task.selectedGateCommand)")
     print("commit_message: \(task.commitMessage)")
     return task
+}
+
+func validateTaskPolicy(_ task: TaskEnvelope, expected policy: GateResultPolicy) throws {
+    if task.selectedGateResultClassification != policy.classification ||
+        task.runtimePatchAllowed != policy.runtimePatchAllowed ||
+        task.harnessPatchAllowed != policy.harnessPatchAllowed ||
+        task.continueRefreshAllowed != policy.continueRefreshAllowed ||
+        task.mustStop != policy.mustStop ||
+        task.requiredNextAction != policy.requiredNextAction ||
+        task.resultClassificationReason != policy.reason ||
+        task.owningLayer != policy.owningLayer {
+        throw HarnessError.invalid("next-task result classification/action policy is stale; run make agent-next AREA=orlix-tcti")
+    }
 }
 
 func validateEnvelope() throws {
@@ -8351,6 +8761,17 @@ func validateEnvelope() throws {
             task.readinessGateEligible != status.readinessGateEligible {
             throw HarnessError.invalid("blocked physical opt-in envelope physical/readiness state is stale; run make agent-next AREA=orlix-tcti")
         }
+        let blockedPolicy = GateResultPolicy(
+            classification: "physical_device_blocked",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "stop before physical-device work until simulator readiness and explicit human opt-in are present",
+            reason: "physical_device_allowed=false; blockers=\(status.physicalDeviceBlockers.joined(separator: ", "))",
+            owningLayer: "physical-device gate policy"
+        )
+        try validateTaskPolicy(task, expected: blockedPolicy)
         print("pass: \(relativePath(nextTaskURL))")
         print("selected_gate: \(task.selectedGateID)")
         return
@@ -8366,6 +8787,10 @@ func validateEnvelope() throws {
     }
     let status = freshStatus
     let byID = Dictionary(uniqueKeysWithValues: status.gates.map { ($0.id, $0) })
+    guard let selectedStatus = byID[gate.id] else {
+        throw HarnessError.invalid("selected gate \(gate.id) has no status entry")
+    }
+    try validateTaskPolicy(task, expected: selectedStatus.resultPolicy)
     for prerequisite in gate.prerequisites {
         guard byID[prerequisite]?.satisfiesPrerequisite == true else {
             throw HarnessError.invalid("prerequisite \(prerequisite) is not satisfied")

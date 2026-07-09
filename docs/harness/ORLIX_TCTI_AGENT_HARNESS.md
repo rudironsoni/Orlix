@@ -87,3 +87,29 @@ If `agent-next` selects a gate whose current report is `status=todo`, the manage
 The oracle skill owns no-phone switch-debug and golden ELF work. That work can unlock implementation and reduce failures, but it must not become the release gate. The debug skill owns LLVM and LLDB inspection. The reproducer skill owns reducer replay. The safety skill owns App Store, x18, JIT, MAP_JIT, RWX, PROT_EXEC, HostAdapter, defconfig, and generated-tree checks.
 
 Do not run physical-device TCTI work unless runtime-validation preflight permits it. Do not add production TCTI assembly or gadget dispatch until switch-debug oracle coverage exists for the target and safety reports pass.
+
+## Selected Gate Result Policy
+
+`agent-next` must emit a post-run action policy for the selected gate in
+`Build/AgentHarness/orlix-tcti/next-task.json` and `next-task.md`.
+`agent-task-envelope-check` must recompute that policy from current
+`status.json` and reject stale or missing policy fields.
+
+The selected gate policy classifies the latest generated evidence before any
+agent decides whether to refresh proof, repair harness evidence, stop, or patch
+runtime code. The envelope exposes:
+
+- `selected_gate_result_classification`
+- `runtime_patch_allowed`
+- `harness_patch_allowed`
+- `continue_refresh_allowed`
+- `must_stop`
+- `required_next_action`
+- `result_classification_reason`
+- `owning_layer`
+
+Runtime code edits require `runtime_patch_allowed=true` from the current
+envelope. Stale proof refresh, missing generated artifacts, rail evidence
+contract bugs, proof-tier/report metadata drift, environment-only failures,
+and forbidden behavior violations must not be treated as permission to patch
+OrlixKernel/TCTI runtime code.
