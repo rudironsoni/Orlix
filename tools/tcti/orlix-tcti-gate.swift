@@ -841,6 +841,13 @@ func proofTierMetadata(for target: String) -> ProofTierMetadata {
             realStackRequired: true,
             canClaimRuntimeReadiness: false
         )
+    case "tcti-static-pie-relocation-fix":
+        return ProofTierMetadata(
+            proofTier: "rail",
+            acceptanceWeight: "probe",
+            realStackRequired: false,
+            canClaimRuntimeReadiness: false
+        )
     default:
         return ProofTierMetadata(
             proofTier: "seed",
