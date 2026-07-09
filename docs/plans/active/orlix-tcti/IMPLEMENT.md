@@ -7643,4 +7643,15 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - Add explicit `tcti-static-pie-relocation-fix` metadata in `tools/tcti/orlix-tcti-gate.swift`: `proof_tier=rail`, `acceptance_weight=probe`, `real_stack_required=false`, `can_claim_runtime_readiness=false`.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
-  - This does not prove full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, or app-visible `ORLIX-USERLAND-TCTI-OK`.
+- This does not prove full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, or app-visible `ORLIX-USERLAND-TCTI-OK`.
+
+### Checkpoint: SIMD MOVI 16B Rail Evidence Contract Repair
+
+- Classification:
+  - This was not a product runtime fix.
+  - The old generated simulator SIGILL report was non-durable historical evidence.
+- Fix:
+  - `tcti-simd-movi-16b-fix` no longer requires the stale historical simulator report that recorded unsupported `0x4f06e7e0` plus SIGILL.
+  - The rail now requires current positive no-phone MOVI execution, a replayable pass regression, and current simulator stability without the old unsupported/SIGILL signature.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
