@@ -586,6 +586,41 @@ simulator_launch_arguments() {
 	esac
 }
 
+simulator_readiness_acceptance_gate() {
+	[ "$destination" = "iphonesimulator" ] || return 1
+	case "$gate" in
+	tcti-init-first-syscall | \
+		tcti-simulator-stability | \
+		tcti-init-console-write | \
+		tcti-static-busybox-start | \
+		tcti-static-busybox-shell-command | \
+		tcti-full-shell-usability | \
+		tcti-package-behavior | \
+		tcti-dynamic-loader-support | \
+		tcti-signals | \
+		tcti-vfs-completeness | \
+		tcti-full-linux-runtime-readiness)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+simulator_readiness_runtime_claim_gate() {
+	[ "$destination" = "iphonesimulator" ] || return 1
+	case "$gate" in
+	tcti-full-shell-usability | \
+		tcti-package-behavior)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 write_json_report() {
 	local status="$1"
 	local passed="$2"
@@ -604,8 +639,11 @@ write_json_report() {
 	if [ "$gate" = "tcti-coreutils-test-subset" ]; then
 		acceptance_weight="readiness"
 	fi
-	if [ "$gate" = "tcti-simulator-stability" ]; then
+	if simulator_readiness_acceptance_gate; then
 		acceptance_weight="readiness"
+	fi
+	if simulator_readiness_runtime_claim_gate; then
+		can_claim_runtime_readiness="true"
 	fi
 	if [ "$gate" = "tcti-interactive-terminal-smoke" ]; then
 		acceptance_weight="readiness"

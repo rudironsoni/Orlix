@@ -7760,3 +7760,26 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - This is a local environment and harness pin update only.
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Simulator Readiness Report Metadata
+
+- Harness/report metadata fix:
+  - Added a centralized `simulator_readiness_acceptance_gate()` table in `tools/runtime/orlix-runtime-validation.sh`.
+  - Simulator runtime-validation reports now emit `acceptance_weight=readiness` for the scheduler-owned simulator readiness ladder when `DESTINATION=iphonesimulator`.
+  - Added `simulator_readiness_runtime_claim_gate()` for the two scheduler gates that can claim runtime-readiness metadata: `tcti-full-shell-usability` and `tcti-package-behavior`.
+  - Preserved `readiness_gate_eligible=false` and `release_gate_eligible=false` for the regenerated full-shell report.
+  - Kept existing `tcti-interactive-terminal-smoke` special handling unchanged.
+- Guard coverage:
+  - Updated `.agents/skills/orlix-tcti-next-step/scripts/harness-check` to require the runtime-validation helper, the `iphonesimulator` scope guard, the full simulator readiness runtime-gate table, and the runtime-readiness claim helper.
+- Evidence:
+  - Regenerated `Build/Reports/runtime/tcti-full-shell-usability-20260709T191444Z-17124.json`.
+  - The regenerated full-shell report emitted `proof_tier=simulator`, `acceptance_weight=readiness`, `real_stack_required=true`, `can_claim_runtime_readiness=true`, `readiness_gate_eligible=false`, and `release_gate_eligible=false`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`, `rtk proxy make agent-next AREA=orlix-tcti`, and `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed after regeneration.
+  - `agent-goal` advanced past `simulator-tcti-full-shell-usability`; the current selected gate after refresh is `tcti-mlibc-sysdeps-smoke` with `classification=stale_proof_refresh`, `continue_refresh_allowed=true`, `must_stop=false`, `runtime_patch_allowed=false`, and `harness_patch_allowed=false`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti DRY_RUN=1 MAX_ITERATIONS=5`: selected `tcti-mlibc-sysdeps-smoke` for all five dry-run iterations with `classification=stale_proof_refresh`, `continue_refresh_allowed=true`, `must_stop=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `would_execute=true`; stopped on `MAX_ITERATIONS reached`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=10`: executed and passed `tcti-mlibc-sysdeps-smoke`, `tcti-mlibc-libc-test-subset`, `tcti-mlibc-dynamic-loader-smoke`, `tcti-mlibc-pthread-tls-smoke`, and `tcti-mlibc-linked-syscall-uapi-smoke`.
+  - The bounded real loop then stopped at `tcti-shell-exec-simple-command` with `classification=current_runtime_product_failure`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=false`, `must_stop=true`, `owning_layer=unclassified selected gate`, and `result_classification_reason=tcti-shell-exec-simple-command report status=fail, passed=false`.
+  - An inherited `agent-goal AREA=orlix-tcti MAX_ITERATIONS=10` process refreshed stale gates through `tcti-kernel-kselftest-subset`; it was terminated after compaction left the old output pipe undrained and before it spawned the next selected command.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
