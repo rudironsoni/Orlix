@@ -604,6 +604,9 @@ write_json_report() {
 	if [ "$gate" = "tcti-coreutils-test-subset" ]; then
 		acceptance_weight="readiness"
 	fi
+	if [ "$gate" = "tcti-simulator-stability" ]; then
+		acceptance_weight="readiness"
+	fi
 	if [ "$gate" = "tcti-interactive-terminal-smoke" ]; then
 		acceptance_weight="readiness"
 		can_claim_runtime_readiness="true"
