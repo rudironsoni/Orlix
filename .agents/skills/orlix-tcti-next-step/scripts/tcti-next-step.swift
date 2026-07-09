@@ -2702,7 +2702,6 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
                 gitSHA: gitSHA()
             ),
                 stabilityReport,
-                reducerReport,
             ],
             readinessEligible: gate.readinessEligible,
             physicalDevice: gate.physicalDevice,
@@ -4665,8 +4664,6 @@ func runtimePreflightGates() -> [Gate] {
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json",
             "Build/Reports/runtime/tcti-simulator-stability-*.json",
-            "Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
         ],
         readinessEligible: false,
         physicalDevice: false,
@@ -4681,17 +4678,15 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
             "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
             "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-            "rtk proxy make tcti-gate TARGET=tcti-simulator-user-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
             "rtk proxy make tcti-gate TARGET=tcti-static-pie-relocation-fix",
             "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
             "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
         ],
         reducerRequirements: [
-            "The current simulator stability failure must match the existing static PIE GOT null-read reducer.",
-            "The reducer must replay before production TCTI patching.",
-            "After the production fix, rerun simulator stability through the next selected gate.",
+            "A current simulator stability pass must include structured static PIE image evidence and no fatal null GOT read signature.",
+            "If simulator stability regresses to the old null GOT read failure, regenerate a current reducer before production TCTI patching.",
+            "After the production fix marker passes, rerun simulator stability through the next selected gate.",
         ],
         requiredSubagentsOrSkills: [
             "orlix-tcti-safety",

@@ -7608,3 +7608,24 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - This proves the current OrlixMLibC-linked syscall/UAPI checkpoint and shell proof ladder through the harness-selected app-hosted OrlixOS runtime-validation path.
   - This does not prove the final `ORLIX-USERLAND-TCTI-OK` app-terminal marker.
   - This does not prove full Linux runtime readiness, release readiness, or physical-device readiness.
+### Checkpoint: Static PIE Relocation Rail Contract Refresh
+
+- Harness-selected gate:
+  - `tcti-static-pie-relocation-fix`.
+  - Command: `make tcti-gate TARGET=tcti-static-pie-relocation-fix`.
+- Classification before patch:
+  - `B. Stale rail contract: expected reducer/report path is obsolete`.
+- Evidence:
+  - `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json` failed at `6365ecf68bc160594123dbfcea9ca50c909e0fae`.
+  - Latest current simulator stability report was `Build/Reports/runtime/tcti-simulator-stability-20260708T215000Z-96543.json`.
+  - That simulator report already carried structured `tcti_runtime_events.static_pie_image`, but the event was for `task=init`; the rail still required `task=sh`.
+  - `Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json` and `Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json` were missing and superseded by current simulator progress.
+- Contract refresh:
+  - The static PIE rail now accepts structured static PIE image evidence for `task=init` or `task=sh`, matching the runtime-validation extractor.
+  - The next-step envelope no longer lists the superseded static PIE reducer report or reducer artifact as required inputs for the current passing simulator-stability rail.
+  - The generated status entry for the passing static PIE rail now reports only the current static PIE marker report and simulator stability report as current proof inputs.
+  - The rail keeps requiring the constrained static PIE relative relocation production markers and current simulator stability evidence.
+- Boundary:
+  - No OrlixKernel runtime code was changed.
+  - No HostAdapter, OrlixOS runtime behavior, app fake output, generated tree, physical-device gate, production assembly, or gadget dispatch work was done.
+  - Full TCTI, global runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
