@@ -7699,5 +7699,20 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=3`: executed `make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke`, which passed and refreshed `Build/TCTI/reports/tcti-mlibc-linked-syscall-uapi-smoke/report.json` at `ebbcf7794104fff6d81f46f49abfc7d3b385da09`; regenerated the envelope, then executed `make tcti-gate TARGET=tcti-shell-exec-simple-command`, which failed and stopped with `stop_reason=selected command failed`.
   - `Build/TCTI/reports/tcti-shell-exec-simple-command/report.json`: `status=fail`, `passed=false`, `git_sha=ebbcf7794104fff6d81f46f49abfc7d3b385da09`, `failures` count `3`.
 - Boundary:
+- No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+- Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Goal Loop Failure Classifier Refresh
+
+- Harness-only loop fix:
+  - `agent-goal` now refreshes `agent-status`, `agent-next`, and `agent-task-envelope-check` after a selected command exits non-zero before printing the final handoff.
+  - The loop reloads the refreshed `Build/AgentHarness/orlix-tcti/next-task.json` fields so `/goal` can transition from proof refresh into classified runtime, harness, environment, or forbidden-action stop states.
+  - `.agents/skills/orlix-tcti-next-step/scripts/harness-check` now requires the selected-command failure refresh helper.
+- Validation:
+  - `rtk proxy make agent-goal AREA=orlix-tcti DRY_RUN=1 MAX_ITERATIONS=5` selected `simulator-tcti-runtime-stability` for five dry-run iterations with `classification=stale_proof_refresh`, `continue_refresh_allowed=true`, `must_stop=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `would_execute=true`; stopped on `MAX_ITERATIONS reached`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=3` executed the current selected stale refresh command `make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max`.
+  - The selected command failed and wrote `Build/Reports/runtime/tcti-simulator-stability-20260709T165325Z-9544.md`; `agent-goal` then regenerated status, next-task, and envelope before stopping.
+  - Refreshed classifier: `selected_gate=simulator-tcti-runtime-stability`, `selected_gate_result_classification=proof_tier_report_status_metadata_drift`, `runtime_patch_allowed=false`, `harness_patch_allowed=true`, `continue_refresh_allowed=false`, `must_stop=true`, `required_next_action=repair harness/report metadata contract before rerunning product work`, `owning_layer=TCTI harness/report contract`, `result_classification_reason=Build/Reports/runtime/tcti-simulator-stability-20260709T165325Z-9544.json: acceptance_weight=blocker expected readiness`.
+- Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

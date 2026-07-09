@@ -186,6 +186,10 @@ check_skills() {
     fail "orlix-tcti-next-step skill must document agent-goal"
   grep -q 'goal-loop' "$root/.agents/skills/orlix-tcti-next-step/SKILL.md" ||
     fail "orlix-tcti-next-step skill must document goal-loop"
+  grep -q 'refresh_after_selected_command_failure' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
+    grep -q 'selected command failed after classifier refresh' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
+    grep -q 'refresh_envelope' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" ||
+    fail "goal-loop must refresh and reload classifier policy after selected command failure"
   grep -q 'agent-goal' "$root/.codex/agents/orlix-implementer.toml" ||
     fail "Codex implementer agent must mention agent-goal"
   grep -q 'selected-gate action policy' "$root/.codex/agents/orlix-implementer.toml" ||
