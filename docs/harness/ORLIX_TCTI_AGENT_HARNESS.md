@@ -51,12 +51,15 @@ Use agent-neutral targets:
 - `make agent-status AREA=orlix-tcti`
 - `make agent-next AREA=orlix-tcti`
 - `make agent-task-envelope-check AREA=orlix-tcti`
+- `make agent-goal AREA=orlix-tcti`
 
 Do not add Codex-specific compatibility aliases for these targets.
 
 ## Workflow
 
-Use `$orlix-tcti-next-step` for TCTI continuation. The skill runs `agent-status`, `agent-next`, and `agent-task-envelope-check` so the repo selects the next eligible gate from `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` and current reports. The generated task envelope under `Build/AgentHarness/orlix-tcti/` is the scope contract.
+Use `$orlix-tcti-next-step` for TCTI continuation. `agent-status`, `agent-next`, and `agent-task-envelope-check` are one-shot selector and envelope commands. They select the next eligible gate from `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json` and current reports, then write the task envelope under `Build/AgentHarness/orlix-tcti/`.
+
+Use `agent-goal` for autonomous goal execution. It is the bounded loop that repeatedly runs the one-shot selector/envelope commands, consumes the selected-gate action policy in `next-task.json`, executes the exact selected command when refresh continuation is allowed, regenerates the envelope, and stops on policy stop or budget exhaustion.
 
 ## Proof Tiers
 
@@ -113,3 +116,12 @@ envelope. Stale proof refresh, missing generated artifacts, rail evidence
 contract bugs, proof-tier/report metadata drift, environment-only failures,
 and forbidden behavior violations must not be treated as permission to patch
 OrlixKernel/TCTI runtime code.
+
+`agent-goal` continues only when all of these selected-gate policy fields are true for continuation:
+
+- `continue_refresh_allowed=true`
+- `must_stop=false`
+- `runtime_patch_allowed=false`
+- `harness_patch_allowed=false`
+
+The loop stops and prints a structured handoff when the policy says to stop, when runtime or harness patching is required, when forbidden behavior or environment-only failure appears, when a selected command fails, when tracked source changes appear, or when `MAX_ITERATIONS` or `MAX_COMMANDS` is reached. The handoff must include readiness truth for full TCTI completion, global runtime readiness, package readiness, release-gate eligibility, physical-device allowance, simulator gate completion, and the app-visible `ORLIX-USERLAND-TCTI-OK` marker. The loop does not patch runtime code unless `runtime_patch_allowed=true`; it does not patch harness code unless `harness_patch_allowed=true`.

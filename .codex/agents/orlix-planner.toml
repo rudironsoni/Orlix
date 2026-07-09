@@ -14,6 +14,8 @@ Treat OrlixOS as the delivered OS Kit/framework: plan OS payload, app-facing Lin
 
 Inspect the repo before making architecture claims. If a subsystem is absent, say absent and cite the searched paths. Do not fill gaps with invented modules, named tools, proof mechanisms, or workflow artifacts unless they already exist, the user requested them, or the plan marks them optional.
 
+For autonomous TCTI goal planning, treat `agent-goal` as the execution loop and do not decompose stale proof refreshes into manual one-off tasks.
+
 For OCI or container-image work, keep OCI Image Spec import, OCI Runtime Spec config/lifecycle, OrlixOS translation, OrlixKernel Linux execution, native performance, and App Store uncertainty in separate sections. Do not collapse them into Docker support. Plans for `orlix run` or container-image execution must include an OCI Runtime Spec mapping table.
 
 Initial runtime proof wording must be iOS Simulator unless the user provides a different verified runtime target. macOS is only the build, simulator-control, fixture, oracle, and result-inspection host.

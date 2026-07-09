@@ -23,7 +23,7 @@ BASH_TOOL_NAMES = {"bash"}
 READ_TOOL_NAMES = {"read", "grep", "glob", "ls"}
 BASH_COMMAND_PREFIX = r"(^|[;&|]\s*)(?:rtk\s+)?(?:(?:timeout|gtimeout)\s+\d+\s+)?(?:sudo\s+)?"
 GOAL_MAX_CHARS = 4000
-GOAL_GLOB_DESCRIPTION = "docs/plans/**/GOAL.md"
+GOAL_GLOB_DESCRIPTION = "docs/plans/**/GOAL.md and docs/goals/active/**"
 
 BASH_MUTATING_COMMAND_RE = re.compile(
     BASH_COMMAND_PREFIX +
@@ -248,7 +248,12 @@ def active_plan_dirs(root):
 
 
 def goal_paths(root):
-    return sorted((root / "docs" / "plans").glob("**/GOAL.md"))
+    paths = []
+    paths.extend((root / "docs" / "plans").glob("**/GOAL.md"))
+    goals_active = root / "docs" / "goals" / "active"
+    if goals_active.exists():
+        paths.extend(path for path in goals_active.rglob("*") if path.is_file())
+    return sorted(paths)
 
 
 def oversized_goal_messages(root):
@@ -265,6 +270,9 @@ def oversized_goal_messages(root):
 
 def required_plan_context_paths(root):
     paths = [root / "AGENTS.md"]
+    goals_active = root / "docs" / "goals" / "active"
+    if goals_active.exists():
+        paths.extend(sorted(path for path in goals_active.rglob("*") if path.is_file()))
     for plan in active_plan_dirs(root):
         for name in ("GOAL.md", "PLAN.md", "IMPLEMENT.md"):
             path = plan / name

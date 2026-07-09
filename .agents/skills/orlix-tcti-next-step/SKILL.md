@@ -11,6 +11,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - The user says "run the harness" or asks "what next".
 - A TCTI implementation task is proposed without a clear gate.
 - A future prompt asks to execute the next eligible TCTI gate.
+- The user invokes `/goal` or asks for autonomous TCTI goal continuation.
 
 ## Allowed Scope
 
@@ -41,6 +42,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - `rtk proxy make agent-status AREA=orlix-tcti`
 - `rtk proxy make agent-next AREA=orlix-tcti`
 - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`
+- `rtk proxy make agent-goal AREA=orlix-tcti`
 - `rtk proxy make agent-harness-check`
 - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
 - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`
@@ -54,6 +56,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - next-task Markdown path
 - selected next gate
 - selected gate command
+- selected gate result classification and action policy
 - selected gate proof tier
 - selected gate acceptance weight
 - whether the selected gate requires the real stack
@@ -66,11 +69,13 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - required subagents or skills
 - commit message
 - stop conditions
+- for `agent-goal`, a structured loop handoff with iteration count, command count, last selected gate, next selected gate, selected action-policy fields, and readiness truth
 
 ## Stop Conditions
 
 - Stop if `agent-harness-check` fails.
 - Stop if `agent-task-envelope-check` fails.
+- Stop if `agent-goal` reaches `must_stop=true`, `runtime_patch_allowed=true`, `harness_patch_allowed=true`, `goal_complete=true`, `MAX_ITERATIONS`, `MAX_COMMANDS`, tracked source changes, an environment-only failure, a forbidden behavior violation, or selected-command process failure.
 - Stop if `tcti-plan-consistency` fails.
 - Stop if a seed/golden gate is marked runtime-ready or readiness-eligible.
 - Stop if a Coreutils/package gate depends only on golden ELF or seed probes.
@@ -80,3 +85,18 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - Stop if physical-device opt-in variables are treated as an override for missing, stale, failing, evidence-only, or emergency-override simulator readiness reports.
 - Stop if a physical-device gate is selected without explicit `ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1` or `ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED=1` after the full pinned simulator readiness ladder has passed.
 - Stop if a simulator-runtime gate does not target the pinned Orlix-iPhone-15-Pro-Max simulator.
+
+## Selector And Goal Loop
+
+`agent-next` is a one-shot selector. It refreshes `status.json`, selects one gate, and writes `Build/AgentHarness/orlix-tcti/next-task.json`.
+
+`agent-goal` is the autonomous loop. It runs `.agents/skills/orlix-tcti-next-step/scripts/goal-loop`, which runs `agent-status`, `agent-next`, and `agent-task-envelope-check`, reads the selected-gate action policy from `next-task.json`, and executes the exact `selected_gate_command` only when:
+
+- `continue_refresh_allowed=true`
+- `must_stop=false`
+- `runtime_patch_allowed=false`
+- `harness_patch_allowed=false`
+
+After every selected command, `agent-goal` regenerates status, next-task, and the task envelope before deciding again. It does not infer action from prose or from `status=fail`; it only follows the classifier and action-policy fields in `next-task.json`.
+
+Use `DRY_RUN=1` to inspect what the loop would execute without running selected commands. Use `MAX_ITERATIONS` and `MAX_COMMANDS` to bound work; both default to 25.

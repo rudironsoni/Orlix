@@ -426,4 +426,4 @@ class LifecycleGuardTests(unittest.TestCase):
             result = run_hook(PRE_TOOL_GUARD, bash_payload("rtk git commit -m checkpoint"), cwd=root, env=env)
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn("docs/plans/**/GOAL.md files must be <= 4000 characters", result.stderr)
+        self.assertIn("docs/plans/**/GOAL.md and docs/goals/active/** files must be <= 4000 characters", result.stderr)

@@ -7677,3 +7677,27 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - Stale proof refreshes, missing generated artifacts, rail contract bugs, proof metadata drift, environment-only failures, and forbidden behavior violations do not authorize OrlixKernel/TCTI runtime patches.
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Autonomous Goal Loop Wiring
+
+- Harness-only loop change:
+  - Added canonical `make agent-goal AREA=orlix-tcti`, backed by `.agents/skills/orlix-tcti-next-step/scripts/goal-loop`.
+  - The loop runs `agent-status`, `agent-next`, and `agent-task-envelope-check`, reads selected-gate action policy from `Build/AgentHarness/orlix-tcti/next-task.json`, and executes the exact `selected_gate_command` only when `continue_refresh_allowed=true`, `must_stop=false`, `runtime_patch_allowed=false`, and `harness_patch_allowed=false`.
+  - `.codex/agents/orlix-implementer.toml` now routes `/goal` and autonomous TCTI goal continuation through `rtk proxy make agent-goal AREA=orlix-tcti` unless the user asks for status-only.
+  - `.codex/hooks/orlix_hook_common.py` now includes `docs/goals/active/**` alongside active plan GOAL files for goal-path handling.
+- Evidence:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `tcti-mlibc-linked-syscall-uapi-smoke` as stale proof refresh.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-mlibc-linked-syscall-uapi-smoke`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed for `tcti-mlibc-linked-syscall-uapi-smoke`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-goal AREA=orlix-tcti DRY_RUN=1 MAX_ITERATIONS=5`: all five iterations reported `classification=stale_proof_refresh`, `continue_refresh_allowed=true`, `must_stop=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `would_execute=true` for `make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke`; stopped on `MAX_ITERATIONS reached`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=3`: executed `make tcti-gate TARGET=tcti-mlibc-linked-syscall-uapi-smoke`, which passed and refreshed `Build/TCTI/reports/tcti-mlibc-linked-syscall-uapi-smoke/report.json` at `ebbcf7794104fff6d81f46f49abfc7d3b385da09`; regenerated the envelope, then executed `make tcti-gate TARGET=tcti-shell-exec-simple-command`, which failed and stopped with `stop_reason=selected command failed`.
+  - `Build/TCTI/reports/tcti-shell-exec-simple-command/report.json`: `status=fail`, `passed=false`, `git_sha=ebbcf7794104fff6d81f46f49abfc7d3b385da09`, `failures` count `3`.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
