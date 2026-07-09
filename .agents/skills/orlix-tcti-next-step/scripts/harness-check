@@ -233,6 +233,37 @@ check_skills() {
     grep -q "$gate" "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
       fail "next-step script must include simulator readiness gate $gate"
   done
+  grep -q 'simulator_readiness_acceptance_gate()' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must centralize simulator readiness acceptance metadata"
+  grep -q '\[ "$destination" = "iphonesimulator" \] || return 1' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "simulator readiness acceptance metadata must be scoped to iphonesimulator"
+  grep -q 'if simulator_readiness_acceptance_gate; then' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime report writer must use simulator readiness acceptance metadata helper"
+  grep -q 'simulator_readiness_runtime_claim_gate()' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime validation must centralize simulator runtime-readiness claim metadata"
+  grep -q 'if simulator_readiness_runtime_claim_gate; then' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "runtime report writer must use simulator runtime-readiness claim metadata helper"
+  for gate in \
+    tcti-init-first-syscall \
+    tcti-simulator-stability \
+    tcti-init-console-write \
+    tcti-static-busybox-start \
+    tcti-static-busybox-shell-command \
+    tcti-full-shell-usability \
+    tcti-package-behavior \
+    tcti-dynamic-loader-support \
+    tcti-signals \
+    tcti-vfs-completeness \
+    tcti-full-linux-runtime-readiness; do
+    grep -q "$gate" "$root/tools/runtime/orlix-runtime-validation.sh" ||
+      fail "runtime validation simulator readiness metadata must cover $gate"
+  done
+  for gate in \
+    tcti-full-shell-usability \
+    tcti-package-behavior; do
+    grep -q "$gate" "$root/tools/runtime/orlix-runtime-validation.sh" ||
+      fail "runtime validation simulator readiness claim metadata must cover $gate"
+  done
   grep -q 'physicalGateMissingSimulatorPrerequisites' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "task-envelope check must reject physical gates missing simulator readiness prerequisites"
   if command -v jq >/dev/null 2>&1; then
