@@ -61,6 +61,25 @@ Use `$orlix-tcti-next-step` for TCTI continuation. `agent-status`, `agent-next`,
 
 Use `agent-goal` for autonomous goal execution. It is the bounded loop that repeatedly runs the one-shot selector/envelope commands, consumes the selected-gate action policy in `next-task.json`, executes the exact selected command when refresh continuation is allowed, regenerates the envelope, and stops on policy stop or budget exhaustion.
 
+## Report Freshness
+
+Report `git_sha` is provenance. It is not, by itself, the execution freshness key for selected-gate reports.
+
+`agent-status` recomputes harness/status truth at current HEAD every run. For report execution freshness, the selector compares `report.git_sha` to current HEAD and, when they differ, classifies `git diff --name-only report.git_sha..HEAD` against the selected gate invalidation scope. Reports remain execution-fresh when the only changed paths are docs, IMPLEMENT checkpoints, Codex adapter instructions, or harness/status presentation files that cannot affect the gate execution result. Reports become execution-stale only when changed paths intersect the selected gate's execution inputs.
+
+`status.json` includes `execution_freshness` evidence on report facts when semantic freshness is available:
+
+- `report_git_sha`
+- `current_git_sha`
+- `execution_fresh`
+- `status_recomputed`
+- `changed_paths_since_report`
+- `ignored_non_execution_paths`
+- `invalidating_paths`
+- `reason`
+
+An execution-fresh old-SHA report must not be selected as `stale_proof_refresh` solely because HEAD changed. An execution-stale report is selected as `stale_proof_refresh` and may be refreshed by `agent-goal` only through the selected-gate action policy.
+
 ## Proof Tiers
 
 The roadmap is tiered so the harness manages proof toward real Linux userspace instead of treating golden ELF probes as acceptance. Every roadmap gate declares:

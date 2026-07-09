@@ -163,6 +163,28 @@ struct ReportFailureFact: Codable {
     let message: String
 }
 
+struct ExecutionFreshness: Codable {
+    let reportGitSHA: String?
+    let currentGitSHA: String
+    let executionFresh: Bool
+    let statusRecomputed: Bool
+    let changedPathsSinceReport: [String]
+    let ignoredNonExecutionPaths: [String]
+    let invalidatingPaths: [String]
+    let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case reportGitSHA = "report_git_sha"
+        case currentGitSHA = "current_git_sha"
+        case executionFresh = "execution_fresh"
+        case statusRecomputed = "status_recomputed"
+        case changedPathsSinceReport = "changed_paths_since_report"
+        case ignoredNonExecutionPaths = "ignored_non_execution_paths"
+        case invalidatingPaths = "invalidating_paths"
+        case reason
+    }
+}
+
 struct ReportFact: Codable {
     let path: String
     let exists: Bool
@@ -175,6 +197,7 @@ struct ReportFact: Codable {
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let gitSHA: String?
+    let executionFreshness: ExecutionFreshness?
     let failures: [ReportFailureFact]
     let forbiddenBehaviorViolations: [String]
 
@@ -190,6 +213,7 @@ struct ReportFact: Codable {
         releaseGateEligible: Bool,
         readinessGateEligible: Bool,
         gitSHA: String?,
+        executionFreshness: ExecutionFreshness? = nil,
         failures: [ReportFailureFact] = [],
         forbiddenBehaviorViolations: [String] = []
     ) {
@@ -204,8 +228,28 @@ struct ReportFact: Codable {
         self.releaseGateEligible = releaseGateEligible
         self.readinessGateEligible = readinessGateEligible
         self.gitSHA = gitSHA
+        self.executionFreshness = executionFreshness
         self.failures = failures
         self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
+    }
+
+    func withExecutionFreshness(_ freshness: ExecutionFreshness?) -> ReportFact {
+        ReportFact(
+            path: path,
+            exists: exists,
+            status: status,
+            passed: passed,
+            proofTier: proofTier,
+            acceptanceWeight: acceptanceWeight,
+            realStackRequired: realStackRequired,
+            canClaimRuntimeReadiness: canClaimRuntimeReadiness,
+            releaseGateEligible: releaseGateEligible,
+            readinessGateEligible: readinessGateEligible,
+            gitSHA: gitSHA,
+            executionFreshness: freshness,
+            failures: failures,
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -220,6 +264,7 @@ struct ReportFact: Codable {
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case gitSHA = "git_sha"
+        case executionFreshness = "execution_freshness"
         case failures
         case forbiddenBehaviorViolations = "forbidden_behavior_violations"
     }
@@ -722,6 +767,226 @@ func intValue(_ value: Any?) -> Int? {
     return nil
 }
 
+func pathMatches(_ path: String, _ pattern: String) -> Bool {
+    if pattern.hasSuffix("/**") {
+        let prefix = String(pattern.dropLast(3))
+        return path == prefix || path.hasPrefix(prefix + "/")
+    }
+    if pattern == "docs/plans/active/*/IMPLEMENT.md" {
+        let components = path.split(separator: "/").map(String.init)
+        return components.count == 5 &&
+            components[0] == "docs" &&
+            components[1] == "plans" &&
+            components[2] == "active" &&
+            components[4] == "IMPLEMENT.md"
+    }
+    return path == pattern
+}
+
+let allGateExecutionInvalidationPatterns = [
+    "tools/tcti/**",
+    "tools/runtime/**",
+    ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
+]
+
+let statusOnlyInvalidationPatterns = [
+    ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+    ".agents/skills/orlix-tcti-next-step/scripts/status",
+    ".agents/skills/orlix-tcti-next-step/scripts/next",
+    ".agents/skills/orlix-tcti-next-step/scripts/task-envelope-check",
+    ".agents/skills/orlix-tcti-next-step/scripts/goal-loop",
+    ".codex/**",
+    "docs/harness/**",
+    "AGENTS.md",
+    "docs/goals/active/**",
+    "docs/plans/active/*/IMPLEMENT.md",
+]
+
+let runtimeSimulatorInvalidationPatterns = [
+    "tools/runtime/orlix-runtime-validation.sh",
+    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
+    "project.yml",
+    "Orlix/**",
+    "OrlixOS/**",
+    "OrlixKernel/Sources/ports/orlix/**",
+    "OrlixMLibC/**",
+]
+
+let goldenNoPhoneInvalidationPatterns = [
+    "tools/tcti/orlix-tcti-gate.swift",
+    "OrlixKernel/Tests/TCTI/**",
+    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+]
+
+let kernelProofInvalidationPatterns = [
+    "OrlixKernel/Sources/ports/orlix/**",
+    "OrlixKernel/Makefile",
+    "tools/tcti/orlix-tcti-gate.swift",
+]
+
+let mlibcProofInvalidationPatterns = [
+    "OrlixMLibC/**",
+    "OrlixKernel/Sources/ports/orlix/**",
+    "tools/tcti/**",
+]
+
+let shellCoreutilsOCIInvalidationPatterns = [
+    "OrlixOS/**",
+    "OrlixMLibC/**",
+    "OrlixKernel/Sources/ports/orlix/**",
+    "tools/runtime/**",
+    "tools/tcti/**",
+]
+
+func matchesAny(_ path: String, _ patterns: [String]) -> Bool {
+    patterns.contains { pathMatches(path, $0) }
+}
+
+func isRuntimeSimulatorGate(_ gate: Gate) -> Bool {
+    gate.kind == "simulator-runtime" || gate.id.hasPrefix("simulator-tcti-") || gate.id.hasPrefix("tcti-simulator-")
+}
+
+func isGoldenOrNoPhoneGate(_ gate: Gate) -> Bool {
+    gate.id.hasPrefix("golden-") ||
+        gate.id.hasPrefix("switch-") ||
+        gate.id.hasPrefix("diff-switch-") ||
+        gate.id.hasPrefix("no-phone-") ||
+        gate.kind.contains("no-phone") ||
+        gate.kind.contains("golden") ||
+        gate.command.contains("tcti-gate")
+}
+
+func isKernelProofGate(_ gate: Gate) -> Bool {
+    gate.proofTier == "kernel" || gate.id.contains("kernel")
+}
+
+func isMLibCProofGate(_ gate: Gate) -> Bool {
+    gate.proofTier.contains("mlibc") || gate.id.contains("mlibc")
+}
+
+func isShellCoreutilsOCIGate(_ gate: Gate) -> Bool {
+    gate.id.contains("shell") ||
+        gate.id.contains("busybox") ||
+        gate.id.contains("coreutils") ||
+        gate.id.contains("oci") ||
+        gate.id.contains("package") ||
+        gate.id.contains("dynamic-loader") ||
+        gate.proofTier.contains("shell") ||
+        gate.proofTier.contains("package")
+}
+
+func makefileCanAffectGateExecution(_ gate: Gate) -> Bool {
+    gate.command.contains("make ") || gate.command.hasPrefix("make ")
+}
+
+func doesChangedPathInvalidateGate(_ gate: Gate, changedPath: String) -> Bool {
+    if matchesAny(changedPath, allGateExecutionInvalidationPatterns) {
+        return true
+    }
+    if changedPath == "Makefile" {
+        return makefileCanAffectGateExecution(gate)
+    }
+    if isRuntimeSimulatorGate(gate) && matchesAny(changedPath, runtimeSimulatorInvalidationPatterns) {
+        return true
+    }
+    if isGoldenOrNoPhoneGate(gate) && matchesAny(changedPath, goldenNoPhoneInvalidationPatterns) {
+        return true
+    }
+    if isKernelProofGate(gate) && matchesAny(changedPath, kernelProofInvalidationPatterns) {
+        return true
+    }
+    if isMLibCProofGate(gate) && matchesAny(changedPath, mlibcProofInvalidationPatterns) {
+        return true
+    }
+    if isShellCoreutilsOCIGate(gate) && matchesAny(changedPath, shellCoreutilsOCIInvalidationPatterns) {
+        return true
+    }
+    return false
+}
+
+func changedPathsSinceReport(reportGitSHA: String, currentGitSHA: String) -> [String]? {
+    guard let output = run("/usr/bin/env", ["git", "diff", "--name-only", "\(reportGitSHA)..\(currentGitSHA)"]) else {
+        return nil
+    }
+    return output
+        .split(whereSeparator: \.isNewline)
+        .map(String.init)
+        .filter { !$0.isEmpty }
+}
+
+func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFreshness {
+    let current = gitSHA()
+    guard let reportGitSHA, !reportGitSHA.isEmpty else {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            executionFresh: false,
+            statusRecomputed: true,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "report lacks git_sha provenance"
+        )
+    }
+    if reportGitSHA == current {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            executionFresh: true,
+            statusRecomputed: true,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "report git_sha matches current HEAD"
+        )
+    }
+    guard let changed = changedPathsSinceReport(reportGitSHA: reportGitSHA, currentGitSHA: current) else {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            executionFresh: false,
+            statusRecomputed: true,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "unable to compute changed paths since report git_sha"
+        )
+    }
+    let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
+    let ignored = changed.filter { !invalidating.contains($0) }
+    if invalidating.isEmpty {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            executionFresh: true,
+            statusRecomputed: true,
+            changedPathsSinceReport: changed,
+            ignoredNonExecutionPaths: ignored,
+            invalidatingPaths: [],
+            reason: "report git_sha differs from HEAD only by non-execution paths"
+        )
+    }
+    return ExecutionFreshness(
+        reportGitSHA: reportGitSHA,
+        currentGitSHA: current,
+        executionFresh: false,
+        statusRecomputed: true,
+        changedPathsSinceReport: changed,
+        ignoredNonExecutionPaths: ignored,
+        invalidatingPaths: invalidating,
+        reason: "changed paths invalidate gate execution: \(invalidating.joined(separator: ", "))"
+    )
+}
+
+func reportExecutionFresh(_ report: ReportFact) -> Bool {
+    report.executionFreshness?.executionFresh ?? (report.gitSHA == gitSHA())
+}
+
+func reportFreshnessReason(_ report: ReportFact) -> String {
+    report.executionFreshness?.reason ?? "report git_sha \(report.gitSHA == gitSHA() ? "matches" : "does not match") current HEAD"
+}
+
 func reportFailures(_ value: Any?) -> [ReportFailureFact] {
     guard let rawFailures = value as? [Any] else { return [] }
     return rawFailures.enumerated().map { index, raw in
@@ -944,7 +1209,7 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     }
 
     let currentFailure = status.reports.contains {
-        $0.exists && !$0.passed && $0.gitSHA == gitSHA()
+        $0.exists && !$0.passed && reportExecutionFresh($0)
     }
     let realProductFailure = status.realStackRequired ||
         status.kind == "simulator-runtime" ||
@@ -1098,8 +1363,14 @@ func reportFact(target: String) -> ReportFact {
     }
 }
 
+func reportFact(target: String, gate: Gate) -> ReportFact {
+    let report = reportFact(target: target)
+    guard report.exists else { return report }
+    return report.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: report.gitSHA))
+}
+
 func currentReportPassed(_ report: ReportFact) -> Bool {
-    report.status == "pass" && report.passed && report.gitSHA == gitSHA()
+    report.status == "pass" && report.passed && reportExecutionFresh(report)
 }
 
 func pathExists(_ relative: String) -> Bool {
@@ -1635,16 +1906,16 @@ func diffSwitchExit001Pass() -> (Bool, String) {
 }
 
 func basicReportGate(_ gate: Gate, target: String) -> GateStatus {
-    let report = reportFact(target: target)
+    let report = reportFact(target: target, gate: gate)
     let passed = currentReportPassed(report)
     let state = passed ? "pass" : (report.status == "pass" ? "stale" : report.status)
     let reason: String
     if !report.exists {
         reason = "\(target) report missing"
     } else if passed {
-        reason = "\(target) report status=\(report.status), passed=\(report.passed), git_sha=current"
-    } else if report.status == "pass" && report.passed && report.gitSHA != gitSHA() {
-        reason = "\(target) report is stale for current HEAD"
+        reason = "\(target) report status=\(report.status), passed=\(report.passed), execution_fresh=true; \(reportFreshnessReason(report))"
+    } else if report.status == "pass" && report.passed && !reportExecutionFresh(report) {
+        reason = "\(target) report is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else {
         reason = "\(target) report status=\(report.status), passed=\(report.passed)"
     }
@@ -2083,7 +2354,7 @@ func runtimeGateState(report: ReportFact, passed: Bool) -> String {
 }
 
 func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-init-first-syscall", destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: "tcti-init-first-syscall", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2104,6 +2375,8 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2116,7 +2389,7 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
     ].allSatisfy { !boolValue(forbidden[$0]) }
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2130,8 +2403,8 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with tcti runtime profile and forbidden behavior false"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator runtime-validation report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator runtime-validation report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator runtime-validation report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -2164,7 +2437,7 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
 }
 
 func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2181,6 +2454,8 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2196,7 +2471,7 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
     let signaledProcessClear = intValue(signaledProcess["signal"]) == nil
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2211,8 +2486,8 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with no fatal simulator TCTI runtime errors"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator stability report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator stability report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator stability report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -2247,7 +2522,7 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
 }
 
 func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-init-console-write", destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: "tcti-init-console-write", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2264,6 +2539,8 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2281,7 +2558,7 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
     )
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2296,8 +2573,8 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed on \(requiredSimulatorName) with Linux console usability marker artifact"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator console usability report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator console usability report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator console usability report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -2328,7 +2605,7 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
 }
 
 func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2345,6 +2622,8 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2373,7 +2652,7 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
     } ?? false
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2389,8 +2668,8 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed static BusyBox start gate on \(requiredSimulatorName)"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator static BusyBox start report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator static BusyBox start report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator static BusyBox start report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -2423,7 +2702,7 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
 }
 
 func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2440,6 +2719,8 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2468,7 +2749,7 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
     } ?? false
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2484,8 +2765,8 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed static BusyBox shell command gate on \(requiredSimulatorName)"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator static BusyBox shell command report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator static BusyBox shell command report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator static BusyBox shell command report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -2518,7 +2799,7 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
 }
 
 func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: String, artifactSuffix: String) -> GateStatus {
-    guard let (report, object) = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
+    guard let latest = latestRuntimeReport(gate: runtimeGate, destination: "iphonesimulator") else {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -2535,6 +2816,8 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
             gadget: gate.gadget
         )
     }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
     let forbiddenClear = [
@@ -2563,7 +2846,7 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
     } ?? false
     let reportOK = report.status == "pass" &&
         report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -2579,8 +2862,8 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
     let reason: String
     if reportOK {
         reason = "iphonesimulator runtime-validation report \(report.path) passed \(runtimeGate) on \(requiredSimulatorName)"
-    } else if report.gitSHA != gitSHA() {
-        reason = "latest iphonesimulator \(runtimeGate) report \(report.path) is stale for current HEAD"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphonesimulator \(runtimeGate) report \(report.path) is execution-stale for current HEAD; \(reportFreshnessReason(report))"
     } else if stringValue(object["selected_device_id"]) != requiredSimulatorID ||
         stringValue(object["selected_device_name"]) != requiredSimulatorName {
         reason = "latest iphonesimulator \(runtimeGate) report \(report.path) did not run on required simulator \(requiredSimulatorName) (\(requiredSimulatorID))"
@@ -8876,6 +9159,65 @@ func validateEnvelope() throws {
     print("selected_gate: \(task.selectedGateID)")
 }
 
+func semanticFreshnessFixtureGate(id: String, command: String, kind: String) -> Gate {
+    Gate(
+        id: id,
+        command: command,
+        kind: kind,
+        prerequisites: [],
+        allowedScope: [],
+        forbiddenScope: [],
+        expectedReportPaths: [],
+        readinessEligible: id.hasPrefix("simulator-tcti-"),
+        physicalDevice: false,
+        gadget: false,
+        requiredValidationCommands: [],
+        reducerRequirements: [],
+        requiredSubagentsOrSkills: [],
+        commitMessageTemplate: "",
+        stopConditions: []
+    )
+}
+
+func validateSemanticFreshnessFixtures() throws {
+    let runtimeGate = semanticFreshnessFixtureGate(
+        id: "simulator-tcti-full-shell-usability",
+        command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability",
+        kind: "simulator-runtime"
+    )
+    let tctiGate = semanticFreshnessFixtureGate(
+        id: "tcti-kernel-syscall-dispatch-smoke",
+        command: "make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke",
+        kind: "kernel"
+    )
+    let kernelGate = semanticFreshnessFixtureGate(
+        id: "tcti-kernel-execve-binfmt-elf-smoke",
+        command: "make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke",
+        kind: "kernel"
+    )
+    let selectorGate = semanticFreshnessFixtureGate(
+        id: "tcti-shell-exec-simple-command",
+        command: "make tcti-gate TARGET=tcti-shell-exec-simple-command",
+        kind: "runtime"
+    )
+    let cases: [(String, Gate, String, Bool)] = [
+        ("implement-checkpoint-does-not-rerun-runtime", runtimeGate, "docs/plans/active/orlix-tcti/IMPLEMENT.md", false),
+        ("harness-doc-does-not-rerun-runtime", runtimeGate, "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md", false),
+        ("runtime-tool-reruns-runtime", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", true),
+        ("tcti-tool-reruns-tcti-gate", tctiGate, "tools/tcti/orlix-tcti-gate.swift", true),
+        ("kernel-port-reruns-kernel-and-runtime", kernelGate, "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c", true),
+        ("environment-policy-reruns-simulator", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", true),
+        ("selector-script-recomputes-status-only", selectorGate, ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift", false),
+    ]
+    for (name, gate, path, expected) in cases {
+        let actual = doesChangedPathInvalidateGate(gate, changedPath: path)
+        if actual != expected {
+            throw HarnessError.invalid("semantic freshness fixture \(name) expected invalidates=\(expected) for \(path), got \(actual)")
+        }
+    }
+    print("pass: semantic-freshness-check")
+}
+
 let mode = CommandLine.arguments.dropFirst().first ?? "status"
 
 do {
@@ -8900,8 +9242,10 @@ do {
         let object = try loadJSONObject(url)
         try validateReportProofTierMetadata(object, path: relativePath(url))
         print("pass: \(relativePath(url))")
+    case "semantic-freshness-check":
+        try validateSemanticFreshnessFixtures()
     default:
-        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>]")
+        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check]")
     }
 } catch {
     fputs("agent next-step error: \(error)\n", stderr)

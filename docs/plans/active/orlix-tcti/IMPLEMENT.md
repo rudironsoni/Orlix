@@ -7783,3 +7783,18 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Semantic Report Freshness
+
+- Harness/status policy fix:
+  - Split report freshness into execution freshness and harness/status recomputation.
+  - `report.git_sha` remains provenance, but selected-gate reports are no longer execution-stale solely because HEAD changed.
+  - `.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` now classifies changed paths from `report.git_sha..HEAD` through `doesChangedPathInvalidateGate`.
+  - Docs, IMPLEMENT checkpoints, Codex adapter files, active-goal wording, and harness/status presentation changes recompute status without forcing proof reruns.
+  - Runtime, TCTI tool, environment policy, OrlixKernel port, OrlixMLibC, OrlixOS, project, and relevant gate-family paths still invalidate affected gate execution.
+  - `status.json` report facts now emit `execution_freshness` evidence including changed paths, ignored non-execution paths, invalidating paths, and the semantic freshness reason.
+- Guard coverage:
+  - `.agents/skills/orlix-tcti-next-step/scripts/harness-check` now requires the semantic freshness predicate, `execution_freshness` status evidence, and the Swift `semantic-freshness-check` fixture mode.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
