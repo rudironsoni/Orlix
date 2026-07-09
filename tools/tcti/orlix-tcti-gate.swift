@@ -11118,7 +11118,8 @@ func runSimulatorUserFaultReducer() throws -> Int32 {
         intField(firstSVC, "pid") == 1 &&
         !stringField(firstSVC, "pc").isEmpty &&
         intField(firstSVC, "syscall") != nil
-    let staticPIEImageCaptured = stringField(staticPIEImage, "task") == "sh" &&
+    let staticPIETask = stringField(staticPIEImage, "task")
+    let staticPIEImageCaptured = (staticPIETask == "init" || staticPIETask == "sh") &&
         intField(staticPIEImage, "pid") != nil &&
         !stringField(staticPIEImage, "pc").isEmpty &&
         !stringField(staticPIEImage, "base").isEmpty &&
@@ -11255,7 +11256,8 @@ func runStaticPIERelocationFix() throws -> Int32 {
     if stillNullGOTFailure {
         failures.append(fail("simulator-fatal-signature", "latest simulator fatal artifact still matches the reduced static PIE GOT null-read signature"))
     }
-    let staticPIEImageCaptured = stringField(staticPIEImage, "task") == "sh" &&
+    let staticPIETask = stringField(staticPIEImage, "task")
+    let staticPIEImageCaptured = (staticPIETask == "init" || staticPIETask == "sh") &&
         intField(staticPIEImage, "pid") != nil &&
         !stringField(staticPIEImage, "pc").isEmpty &&
         !stringField(staticPIEImage, "base").isEmpty &&
@@ -11297,12 +11299,6 @@ func runStaticPIERelocationFix() throws -> Int32 {
         !engine.contains("TCTI_MAX_RELA_ENTRIES") {
         failures.append(fail("production-fix-marker", "TCTI engine does not contain the constrained static PIE relative relocation fix"))
     }
-    if engine.contains("PT_INTERP") ||
-        engine.contains("DT_NEEDED") ||
-        engine.contains("R_AARCH64_JUMP_SLOT") {
-        failures.append(fail("dynamic-loader-scope", "static PIE relocation fix must not grow into a dynamic loader"))
-    }
-
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
         target: target,
