@@ -68,9 +68,11 @@ json_bool() {
 }
 
 refresh_envelope() {
-  (cd "$root" && rtk proxy make agent-status AREA=orlix-tcti)
-  (cd "$root" && rtk proxy make agent-next AREA=orlix-tcti)
-  (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti)
+  refresh_status=0
+  (cd "$root" && rtk proxy make agent-status AREA=orlix-tcti) || refresh_status=1
+  (cd "$root" && rtk proxy make agent-next AREA=orlix-tcti) || refresh_status=1
+  (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti) || refresh_status=1
+  return "$refresh_status"
 }
 
 load_envelope_fields() {
@@ -165,6 +167,27 @@ print_handoff() {
   printf 'app-visible_ORLIX-USERLAND-TCTI-OK=%s\n' "$app_visible_marker"
 }
 
+refresh_after_selected_command_failure() {
+  refresh_result=0
+  if ! refresh_envelope; then
+    refresh_result=1
+  fi
+
+  if load_envelope_fields; then
+    if test "$refresh_result" = "0"; then
+      print_handoff "selected command failed after classifier refresh"
+    else
+      print_handoff "selected command failed and classifier refresh failed"
+    fi
+  else
+    if test "$refresh_result" = "0"; then
+      print_handoff "selected command failed after classifier refresh but envelope reload failed"
+    else
+      print_handoff "selected command failed and classifier refresh failed"
+    fi
+  fi
+}
+
 while :; do
   if test "$iteration_count" -ge "$MAX_ITERATIONS"; then
     print_handoff "MAX_ITERATIONS reached"
@@ -242,7 +265,7 @@ while :; do
 
   command_count=$((command_count + 1))
   if ! (cd "$root" && sh -c "$last_selected_command"); then
-    print_handoff "selected command failed"
+    refresh_after_selected_command_failure
     exit 1
   fi
 
