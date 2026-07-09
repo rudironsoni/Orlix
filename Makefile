@@ -33,7 +33,7 @@ ORLIX_BETA_SIMULATOR_ID ?= 1E5553B0-203A-4A11-BAD7-EBDE46863F66
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -216,6 +216,10 @@ agent-next:
 agent-task-envelope-check:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
 	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
+
+agent-goal:
+	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
+	@.agents/skills/orlix-tcti-next-step/scripts/goal-loop
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \

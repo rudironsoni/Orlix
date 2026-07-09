@@ -115,6 +115,13 @@ check_hooks() {
     fail "session_start_context must call the next-step skill script"
   grep -q '.agents/skills/orlix-tcti-next-step/scripts/stop-guard' "$root/.codex/hooks/stop_guard" ||
     fail "stop_guard must call the next-step skill script"
+  grep -q 'docs/goals.*active' "$root/.codex/hooks/orlix_hook_common.py" ||
+    fail "orlix hook common must include docs/goals/active in active goal handling"
+  grep -q 'goals_active.rglob' "$root/.codex/hooks/orlix_hook_common.py" ||
+    fail "orlix hook common must scan docs/goals/active recursively"
+  grep -q 'required_plan_context_paths' "$root/.codex/hooks/orlix_hook_common.py" &&
+    grep -q 'goal_paths' "$root/.codex/hooks/orlix_hook_common.py" ||
+    fail "orlix hook common must route active goal handling through hook helpers"
 }
 
 check_subagents() {
@@ -170,11 +177,19 @@ check_skills() {
   else
     fail "agent harness check requires jq to validate environment policy"
   fi
-  for script in status next task-envelope-check tcti-next-step.swift; do
+  for script in status next task-envelope-check goal-loop tcti-next-step.swift; do
     require_file ".agents/skills/orlix-tcti-next-step/scripts/$script"
     test -x "$root/.agents/skills/orlix-tcti-next-step/scripts/$script" ||
       fail ".agents/skills/orlix-tcti-next-step/scripts/$script is not executable"
   done
+  grep -q 'agent-goal' "$root/.agents/skills/orlix-tcti-next-step/SKILL.md" ||
+    fail "orlix-tcti-next-step skill must document agent-goal"
+  grep -q 'goal-loop' "$root/.agents/skills/orlix-tcti-next-step/SKILL.md" ||
+    fail "orlix-tcti-next-step skill must document goal-loop"
+  grep -q 'agent-goal' "$root/.codex/agents/orlix-implementer.toml" ||
+    fail "Codex implementer agent must mention agent-goal"
+  grep -q 'selected-gate action policy' "$root/.codex/agents/orlix-implementer.toml" ||
+    fail "Codex implementer agent must mention next-task selected-gate action policy"
   ! grep -Eq 'let requiredSimulator(ID|Name) = "[^"]+"' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "next-step scheduler must load simulator identity from environment policy or env vars"
   if perl -0ne 'exit(/state: "(?:superseded|not_needed)",\s*passed: true/s ? 0 : 1)' \
@@ -516,7 +531,7 @@ check_layout() {
   require_file "docs/harness/MCP_POLICY.md"
   require_file "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md"
   test ! -e "$root/docs/harness/ORLIX_TCTI_CODEX_HARNESS.md" || fail "Codex-specific harness doc must be replaced by agent-neutral doc"
-  for target in agent-status agent-next agent-task-envelope-check; do
+  for target in agent-status agent-next agent-task-envelope-check agent-goal; do
     grep -q "^$target:" "$root/Makefile" || fail "Makefile lacks $target"
   done
   grep -q '^tcti-gate:' "$root/Makefile" || fail "Makefile lacks generic tcti-gate target"

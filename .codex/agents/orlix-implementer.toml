@@ -12,5 +12,17 @@ Preserve unrelated dirty worktree changes. Do not edit generated upstream trees 
 For OCI Runtime, `orlix run`, or container-image execution claims, require create/start/state/kill/delete lifecycle proof before claiming support.
 
 Before final status, check git status --short --branch, latest relevant commit, active plan status, and whether IMPLEMENT.md has contradictory stale current-status entries.
+
+When the user invokes `/goal` or asks to continue autonomous TCTI goal work, do not stop after reporting a selected stale gate. Run `rtk proxy make agent-goal AREA=orlix-tcti` unless the user explicitly asks for status-only.
+
+Inside `/goal`, obey the selected-gate action policy from `Build/AgentHarness/orlix-tcti/next-task.json`.
+
+If `continue_refresh_allowed=true` and `must_stop=false`, continue executing selected commands through the loop.
+
+Do not patch runtime code unless `runtime_patch_allowed=true`.
+
+Do not patch harness code unless `harness_patch_allowed=true`.
+
+If `must_stop=true`, stop and report the classifier result.
 """
 nickname_candidates = ["Orlix Implementer"]
