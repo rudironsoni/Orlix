@@ -1021,8 +1021,30 @@ func lowercasedEvidenceText(_ status: GateStatus) -> String {
         .lowercased()
 }
 
+func targetName(from command: String) -> String? {
+    command.split(separator: " ").first { $0.hasPrefix("TARGET=") }
+        .map { String($0.dropFirst("TARGET=".count)) }
+}
+
+func reportCarriesSelectedGateMetadata(_ report: ReportFact, for status: GateStatus) -> Bool {
+    if report.path.hasPrefix("Build/Reports/runtime/") {
+        return status.kind == "simulator-runtime" || status.physicalDevice
+    }
+
+    if report.path.hasPrefix("Build/TCTI/reports/") {
+        guard let target = targetName(from: status.command) else {
+            return true
+        }
+        return report.path == "Build/TCTI/reports/\(target)/report.json"
+    }
+
+    return false
+}
+
 func reportMetadataDrift(_ status: GateStatus) -> [String] {
-    let existingReports = status.reports.filter(\.exists)
+    let existingReports = status.reports
+        .filter(\.exists)
+        .filter { reportCarriesSelectedGateMetadata($0, for: status) }
     return existingReports.flatMap { report -> [String] in
         var drift: [String] = []
         if let value = report.proofTier, value != status.proofTier {
@@ -3306,12 +3328,9 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
         fatalText.contains("access=1") &&
         (fatalText.contains("Attempted kill init") || fatalText.contains("Attempted to kill init"))
     let reducerOK = reducerReport.status == "pass" && reducerReport.passed
-    let fixedMarker = root.appendingPathComponent("Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json")
+    let fixReport = reportFact(target: "tcti-static-pie-relocation-fix", gate: gate)
 
-    if let object = try? loadJSONObject(fixedMarker),
-       stringValue(object["status"]) == "pass",
-       boolValue(object["passed"]),
-       stringValue(object["git_sha"]) == gitSHA() {
+    if fixReport.status == "pass", fixReport.passed, reportExecutionFresh(fixReport) {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -3322,22 +3341,24 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
             prerequisites: gate.prerequisites,
             prerequisitesSatisfied: false,
             reportPaths: gate.expectedReportPaths,
-            reports: [
-            ReportFact(
-                path: relativePath(fixedMarker),
-                exists: true,
-                status: "pass",
-                passed: true,
-                proofTier: gate.proofTier,
-                acceptanceWeight: gate.acceptanceWeight,
-                realStackRequired: gate.realStackRequired,
-                canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
-                releaseGateEligible: false,
-                readinessGateEligible: false,
-                gitSHA: gitSHA()
-            ),
-                stabilityReport,
-            ],
+            reports: [fixReport, stabilityReport],
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget
+        )
+    }
+    if fixReport.status == "pass", fixReport.passed, fixReport.exists {
+        return GateStatus(
+            id: gate.id,
+            command: gate.command,
+            kind: gate.kind,
+            state: "stale",
+            passed: false,
+            reason: "static PIE relocation production fix report is not current for HEAD: \(reportFreshnessReason(fixReport))",
+            prerequisites: gate.prerequisites,
+            prerequisitesSatisfied: true,
+            reportPaths: gate.expectedReportPaths,
+            reports: [fixReport, stabilityReport],
             readinessEligible: gate.readinessEligible,
             physicalDevice: gate.physicalDevice,
             gadget: gate.gadget
