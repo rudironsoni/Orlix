@@ -265,6 +265,20 @@ check_skills() {
     grep -q "$field" "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
       fail "next-task envelope must expose $field"
   done
+  for field in \
+    selected_gate_result_classification \
+    runtime_patch_allowed \
+    harness_patch_allowed \
+    continue_refresh_allowed \
+    must_stop \
+    required_next_action \
+    result_classification_reason \
+    owning_layer; do
+    grep -q "$field" "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+      fail "next-task envelope must expose result classifier field $field"
+  done
+  grep -q 'validateTaskPolicy' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "task-envelope check must validate selected gate result classification/action policy"
   grep -q 'tcti_runtime_validation_command' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" &&
     grep -q 'runtime-validation' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must match TCTI runtime-validation commands"
