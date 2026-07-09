@@ -1,5 +1,45 @@
 # IMPLEMENT.md
 
+## 2026-07-10
+
+### Checkpoint: Selected-Report Metadata Classification For Rail Prerequisites
+
+- Harness-selected proof lane:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected stale/missing no-phone golden and rail proof cleanup.
+- Proof artifacts refreshed at current HEAD `aa9f141585e931f0372864d191d810ecd79e94e0`:
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_002_write`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_005_branches`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_006_memory`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_007_mprotect`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_008_self_modify`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_009_faults`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_010_cpu_model`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-static-pie-relocation-fix`: passed.
+- Harness fix:
+  - `reportMetadataDrift` now checks metadata only on the selected gate's own report, not prerequisite evidence reports.
+  - Runtime reports under `Build/Reports/runtime/**` carry selected-gate metadata only for simulator-runtime and physical-device gates. A rail that depends on simulator stability no longer compares simulator/readiness metadata against rail/probe metadata.
+  - `tcti-static-pie-relocation-fix` status now reports stale proof refresh when its own rail report is old, instead of classifying the current passing simulator-stability prerequisite as an environment failure.
+- Current selector after refresh:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simd-self-move-fix`.
+  - Current action policy: `selected_gate_result_classification=stale_proof_refresh`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=true`, `must_stop=false`.
+- Validation:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `tcti-simd-self-move-fix`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simd-self-move-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Boundary:
+  - This was a harness classifier/report-status fix plus seed/rail proof refresh.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ## 2026-07-08
 
 ### Checkpoint: Golden Structural Validation Carries Current Git SHA
