@@ -1667,7 +1667,7 @@
     },
     {
       "id": "tcti-simulator-kernel-first-syscall",
-      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
       "kind": "simulator-runtime-real-stack",
       "proof_tier": "simulator",
       "acceptance_weight": "blocker",
@@ -1699,7 +1699,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
       ],
       "reducer_requirements": [
         "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
@@ -1721,7 +1721,7 @@
     },
     {
       "id": "tcti-simulator-mlibc-smoke",
-      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
       "kind": "simulator-runtime-real-stack",
       "proof_tier": "simulator",
       "acceptance_weight": "blocker",
@@ -1753,7 +1753,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
       ],
       "reducer_requirements": [
         "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
@@ -1775,7 +1775,7 @@
     },
     {
       "id": "tcti-simulator-coreutils-smoke",
-      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
       "kind": "simulator-runtime-real-stack",
       "proof_tier": "simulator",
       "acceptance_weight": "blocker",
@@ -1807,7 +1807,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-coreutils-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
       ],
       "reducer_requirements": [
         "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
@@ -1829,7 +1829,7 @@
     },
     {
       "id": "tcti-simulator-oci-rootfs-command",
-      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
       "kind": "simulator-runtime-real-stack",
       "proof_tier": "simulator",
       "acceptance_weight": "blocker",
@@ -1861,7 +1861,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-oci-rootfs-command ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
       ],
       "reducer_requirements": [
         "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
@@ -1883,7 +1883,7 @@
     },
     {
       "id": "tcti-simulator-interactive-terminal-smoke",
-      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+      "command": "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
       "kind": "simulator-runtime-real-stack",
       "proof_tier": "simulator",
       "acceptance_weight": "readiness",
@@ -1915,7 +1915,7 @@
       "physical_device": false,
       "gadget": false,
       "required_validation_commands": [
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-interactive-terminal-smoke ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max"
       ],
       "reducer_requirements": [
         "Run through the app-hosted runtime-validation path on the pinned simulator. Report destination, selected simulator ID/name, backend/profile, stdout/stderr or console marker, forbidden_behavior fields, runtime JSON sidecar, current git SHA, and reducers for failures."
@@ -3209,17 +3209,17 @@
         "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
         "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-dynamic-loader-support ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-signals ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-vfs-completeness ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
-        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-linux-runtime-readiness ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-dynamic-loader-support ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-signals ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-vfs-completeness ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
+        "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-linux-runtime-readiness ORLIX_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max",
         "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall"
       ],
       "reducer_requirements": [

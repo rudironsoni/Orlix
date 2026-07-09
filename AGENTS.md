@@ -216,7 +216,7 @@ xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixKernel Conformance" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66' \
+  -destination 'platform=iOS Simulator,id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3' \
   test
 ```
 
@@ -242,7 +242,7 @@ The required simulator for Orlix TCTI and app-hosted simulator validation is:
 
 ```text
 Orlix-iPhone-15-Pro-Max
-UDID: 1E5553B0-203A-4A11-BAD7-EBDE46863F66
+UDID: ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 Runtime: iOS 26.5
 ```
 
@@ -250,7 +250,7 @@ Use this destination for Xcode tests unless the task explicitly requires a
 non-TCTI fresh simulator:
 
 ```text
--destination 'platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66'
+-destination 'platform=iOS Simulator,id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3'
 ```
 
 This simulator is expected to be the only booted simulator while TCTI or
@@ -264,7 +264,7 @@ destinations can become ambiguous after agents create additional simulators.
 Prefer:
 
 ```text
--destination 'platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66'
+-destination 'platform=iOS Simulator,id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3'
 ```
 
 Over:
@@ -473,7 +473,7 @@ Check environment first:
 
 ```sh
 xcode-storage-doctor
-xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b
+xcrun simctl bootstatus ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 -b
 xcrun simctl list devices available
 ```
 
@@ -583,13 +583,13 @@ export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 xcode-storage-doctor
 
-xcrun simctl bootstatus 1E5553B0-203A-4A11-BAD7-EBDE46863F66 -b
+xcrun simctl bootstatus ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 -b
 
 xcodebuild \
   -project Orlix.xcodeproj \
   -scheme "OrlixTestRunner Tests" \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=1E5553B0-203A-4A11-BAD7-EBDE46863F66' \
+  -destination 'platform=iOS Simulator,id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3' \
   -only-testing:OrlixTestRunnerTests \
   test
 ```

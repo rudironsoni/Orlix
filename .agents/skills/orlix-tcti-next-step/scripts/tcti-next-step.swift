@@ -4891,7 +4891,7 @@ func runtimePreflightGates() -> [Gate] {
             forbiddenScope: [
                 "Do not run physical-device gates.",
                 "Do not treat simulator evidence as release or physical readiness.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "Do not allow more than one simulator to be booted while this gate runs.",
                 "Do not use emergency override or preflight-only evidence as pass.",
                 "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
@@ -5850,7 +5850,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
             "The current simulator report must include structured first-svc and static-PIE events, plus either a structured null-read fatal user fault or no fatal user fault in a passing report.",
             "The no-phone reducer must replay before production TCTI patching.",
         ],
@@ -5981,7 +5981,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
             "The fatal artifact must include addr-sp=0x1000000a0 after /dev/hvc0 open, proving the LDRSW zero-extension failure shape.",
             "The runtime /sbin/init disassembly must show emitted LDRSW 0xb9801848.",
         ],
@@ -6142,7 +6142,7 @@ func runtimePreflightGates() -> [Gate] {
             "Do not edit generated Linux build trees.",
             "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
             "Do not patch the fetch-fault runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
         ],
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-post-exec-sh-fetch-fault-reducer/report.json",
@@ -6165,7 +6165,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
             "The artifact must show child pid 32 reaches execve(221), task changes to sh, and TCTI fetch faults at pc=addr=0x1000494c8 access=0.",
             "The reducer must replay before production TCTI patching.",
         ],
@@ -6205,7 +6205,7 @@ func runtimePreflightGates() -> [Gate] {
             "Do not edit generated Linux build trees.",
             "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
             "Do not patch the PIE entry fetch runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
         ],
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-post-pie-sh-entry-fetch-fault-reducer/report.json",
@@ -6228,7 +6228,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
             "The artifact must show static-PIE /bin/sh reaches execve(221), then TCTI exits task=sh with status=-14 at pc=fault and insn=0x0.",
             "The reducer must replay before production TCTI patching.",
         ],
@@ -6268,7 +6268,7 @@ func runtimePreflightGates() -> [Gate] {
             "Do not edit generated Linux build trees.",
             "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
             "Do not patch the Bash mmap/read runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
         ],
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json",
@@ -6291,7 +6291,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
         ],
         reducerRequirements: [
-            "The latest simulator stability report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+            "The latest simulator stability report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
             "The structured report must show static-PIE /bin/sh and mmap syscall 222, plus either the Bash user-data read-fault event or no fatal user fault in a passing report.",
             "The reducer must replay before production TCTI patching.",
         ],
@@ -6353,7 +6353,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
             ],
             reducerRequirements: [
-                "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "The simulator report must show init first-svc syscall 178, then a non-null init read fault before static PIE or shell progress.",
                 "The reducer must replay without running simulator or physical-device gates.",
             ],
@@ -6392,7 +6392,7 @@ func runtimePreflightGates() -> [Gate] {
             ],
             forbiddenScope: [
                 "Do not run physical-device gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "Do not allow more than one simulator to be booted while this gate runs.",
                 "Do not treat first-syscall marker evidence as simulator stability.",
                 "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
@@ -6519,7 +6519,7 @@ func runtimePreflightGates() -> [Gate] {
             ],
             forbiddenScope: [
                 "Do not run physical-device gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "Do not allow more than one simulator to be booted while this gate runs.",
                 "Do not claim full Linux usability, shell readiness, release readiness, or physical readiness from this marker.",
                 "Do not add production assembly or gadget dispatch.",
@@ -6606,7 +6606,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
             ],
             reducerRequirements: [
-                "The latest static BusyBox simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "The latest static BusyBox simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "The simulator report must show static PIE image task=sh and signaled_process.signal=6 for the same pid.",
                 "The reducer must replay without running simulator or phone gates.",
             ],
@@ -6802,7 +6802,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
             ],
             reducerRequirements: [
-                "The latest static BusyBox shell-command simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "The latest static BusyBox shell-command simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "The report must show the ORLIX-TCTI-BUSYBOX-USABLE marker before unsupported instruction SIGILL signal=4.",
                 "The reducer must replay without running simulator or phone gates.",
             ],
@@ -6836,7 +6836,7 @@ func runtimePreflightGates() -> [Gate] {
             ],
             forbiddenScope: [
                 "Do not run phone gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "Do not allow more than one simulator to be booted while this gate runs.",
                 "Do not claim full Linux usability, release readiness, or phone readiness from this gate.",
                 "Do not add production assembly or gadget dispatch.",
@@ -6988,7 +6988,7 @@ func runtimePreflightGates() -> [Gate] {
                 "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
             ],
             reducerRequirements: [
-                "The latest full-shell simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66).",
+                "The latest full-shell simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
                 "The simulator report must show init first-svc syscall 178, static PIE image task=init, then a non-null init read fault.",
                 "The reducer must replay without running simulator or phone gates.",
             ],
@@ -7097,7 +7097,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not patch the cat user-data read-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-reducer/report.json",
@@ -7162,7 +7162,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not call host read/write or implement Linux syscall behavior in TCTI.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for subsequent simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for subsequent simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-fix/report.json",
@@ -7230,7 +7230,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not patch the init user-data write-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-reducer/report.json",
@@ -7361,7 +7361,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not patch the sh SIGABRT runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-reducer/report.json",
@@ -7496,7 +7496,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not patch the sh read-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-sh-read-fault-reducer/report.json",
@@ -7691,7 +7691,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
                 "Do not patch the cat posix_memalign BRK runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-reducer/report.json",
@@ -7756,7 +7756,7 @@ func runtimePreflightGates() -> [Gate] {
                 "Do not flip product defconfigs.",
                 "Do not edit generated Linux or build trees.",
                 "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Use only Orlix-iPhone-15-Pro-Max (1E5553B0-203A-4A11-BAD7-EBDE46863F66) for simulator evidence.",
+                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
             ],
             expectedReportPaths: [
                 "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-fix/report.json",

@@ -11,7 +11,7 @@ if [ -n "$hook_command" ]; then
   payload="$(printf '%s\n%s' "$payload" "$hook_command")"
 fi
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-sim_id="1E5553B0-203A-4A11-BAD7-EBDE46863F66"
+sim_id="ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
 sim_name="Orlix-iPhone-15-Pro-Max"
 
 warn() {
