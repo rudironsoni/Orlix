@@ -7629,3 +7629,18 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - No OrlixKernel runtime code was changed.
   - No HostAdapter, OrlixOS runtime behavior, app fake output, generated tree, physical-device gate, production assembly, or gadget dispatch work was done.
   - Full TCTI, global runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Static PIE Relocation Proof-Tier Metadata Alignment
+
+- Context:
+  - After `07bb336a0dbd5e4d6e4d29f3bbaec425d6904fb1`, `Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json` carried `proof_tier=seed`.
+  - `Build/AgentHarness/orlix-tcti/status.json` classified the same selected gate as `proof_tier=rail`, `kind=production-tcti-fix`.
+- Classification:
+  - This was proof-tier metadata drift in the TCTI report writer.
+  - The next-step harness classifies `kind=production-tcti-fix` gates as `rail`.
+  - The TCTI gate report writer fell through to its default `seed/probe` metadata because `tcti-static-pie-relocation-fix` is not a roadmap JSON gate target and had no explicit report metadata override.
+- Fix:
+  - Add explicit `tcti-static-pie-relocation-fix` metadata in `tools/tcti/orlix-tcti-gate.swift`: `proof_tier=rail`, `acceptance_weight=probe`, `real_stack_required=false`, `can_claim_runtime_readiness=false`.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+  - This does not prove full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, or app-visible `ORLIX-USERLAND-TCTI-OK`.
