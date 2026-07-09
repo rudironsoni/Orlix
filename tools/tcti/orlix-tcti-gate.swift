@@ -15826,12 +15826,13 @@ func runSIMDMOVI16BFix() throws -> Int32 {
     let target = "tcti-simd-movi-16b-fix"
     var failures: [Failure] = []
     var artifacts: [String] = []
+    var evidence: [String: String] = [:]
 
     let simulatorReports = runtimeValidationReports(
         gate: "tcti-simulator-stability",
         destination: "iphonesimulator"
     )
-    let simulatorEvidenceMatched = simulatorReports.contains { report in
+    let historicalSIGILLEvidenceMatched = simulatorReports.contains { report in
         var reportArtifacts: [String] = []
         let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
         let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
@@ -15843,11 +15844,86 @@ func runSIMDMOVI16BFix() throws -> Int32 {
         }
         return matched
     }
-    if !simulatorEvidenceMatched {
-        failures.append(fail("simulator-unsupported-signature", "no recorded simulator stability report contains MOVI v0.16b instruction 0x4f06e7e0 with SIGILL evidence"))
-    }
-    if let latestSimulatorReport = simulatorReports.first {
-        _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+    evidence["historical_sigill_evidence_found"] = "\(historicalSIGILLEvidenceMatched)"
+
+    if let latestSimulatorReport = latestRuntimeValidationReport(
+        gate: "tcti-simulator-stability",
+        destination: "iphonesimulator"
+    ) {
+        let latestSimulatorText = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+        let latestGitSha = stringField(latestSimulatorReport.object, "git_sha")
+        let latestStatus = stringField(latestSimulatorReport.object, "status")
+        let latestPassed = boolField(latestSimulatorReport.object, "passed")
+        let latestPreflightOnly = boolField(latestSimulatorReport.object, "preflight_only")
+        let latestAutonomousBypassed = boolField(latestSimulatorReport.object, "autonomous_tests_bypassed")
+        let latestForbidden = latestSimulatorReport.object["forbidden_behavior"] as? [String: Any] ?? [:]
+        let currentText = latestSimulatorText.lowercased()
+        let currentMOVISignature = currentText.contains("0x4f06e7e0") ||
+            currentText.contains("insn=0x4f06e7e0")
+        let unsupportedSignatureCurrent = currentMOVISignature &&
+            currentText.contains("unsupported instruction")
+        let sigillSignatureCurrent = currentMOVISignature &&
+            (currentText.contains("sigill") || currentText.contains("signal=4"))
+        let fatalMOVIRuntimeMarkerCurrent = currentMOVISignature &&
+            (currentText.contains("fatal runtime") ||
+             currentText.contains("tcti-simulator-fatal-runtime") ||
+             currentText.contains("attempted to kill init") ||
+             currentText.contains("kernel panic") ||
+             currentText.contains("bug:") ||
+             currentText.contains("oops"))
+        let forbiddenFields = [
+            "generated_exec_memory",
+            "host_exec_guest_text",
+            "host_x18",
+            "map_jit",
+            "native_ios_api_exposure_to_guest",
+            "rwx",
+        ]
+
+        evidence["latest_simulator_stability_report"] = relativePath(latestSimulatorReport.url)
+        evidence["latest_simulator_stability_git_sha"] = latestGitSha
+        evidence["latest_simulator_stability_status"] = latestStatus
+        evidence["latest_simulator_stability_passed"] = "\(latestPassed)"
+        evidence["latest_simulator_stability_current"] = "\(latestGitSha == gitSha())"
+        evidence["latest_simulator_stability_preflight_only"] = "\(latestPreflightOnly)"
+        evidence["latest_simulator_stability_autonomous_tests_bypassed"] = "\(latestAutonomousBypassed)"
+        evidence["unsupported_signature_current"] = "\(unsupportedSignatureCurrent)"
+        evidence["sigill_signature_current"] = "\(sigillSignatureCurrent)"
+        evidence["fatal_movi_runtime_marker_current"] = "\(fatalMOVIRuntimeMarkerCurrent)"
+        for field in forbiddenFields {
+            evidence["latest_simulator_forbidden_\(field)"] = "\(boolField(latestForbidden, field))"
+        }
+
+        if latestGitSha != gitSha() {
+            failures.append(fail("simulator-stability-stale", "latest simulator stability report is not current for HEAD"))
+        }
+        if latestStatus != "pass" || !latestPassed {
+            failures.append(fail("simulator-stability-not-passing", "latest current simulator stability report is not passing"))
+        }
+        if latestPreflightOnly {
+            failures.append(fail("simulator-stability-preflight-only", "latest simulator stability report is preflight-only"))
+        }
+        if latestAutonomousBypassed {
+            failures.append(fail("simulator-stability-bypassed", "latest simulator stability report bypassed autonomous tests"))
+        }
+        for field in forbiddenFields where boolField(latestForbidden, field) {
+            failures.append(fail("simulator-stability-forbidden-behavior", "latest simulator stability report has forbidden_behavior.\(field)=true"))
+        }
+        if unsupportedSignatureCurrent {
+            failures.append(fail("simulator-unsupported-signature-current", "latest current simulator stability artifacts still contain unsupported MOVI 0x4f06e7e0 evidence"))
+        }
+        if sigillSignatureCurrent {
+            failures.append(fail("simulator-sigill-signature-current", "latest current simulator stability artifacts still contain SIGILL tied to MOVI 0x4f06e7e0"))
+        }
+        if fatalMOVIRuntimeMarkerCurrent {
+            failures.append(fail("simulator-fatal-movi-signature-current", "latest current simulator stability artifacts still contain a fatal MOVI 0x4f06e7e0 runtime marker"))
+        }
+    } else {
+        evidence["latest_simulator_stability_report"] = ""
+        evidence["unsupported_signature_current"] = "unknown"
+        evidence["sigill_signature_current"] = "unknown"
+        evidence["fatal_movi_runtime_marker_current"] = "unknown"
+        failures.append(fail("simulator-stability-report-missing", "missing current simulator stability report for MOVI v0.16b rail"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -15886,10 +15962,30 @@ func runSIMDMOVI16BFix() throws -> Int32 {
             failures.append(fail("execution", "SIMD MOVI 16B fixture did not write execution report"))
             throw GateError.commandFailed("missing SIMD MOVI 16B execution report")
         }
+        let firstInstruction = execution.instructionEncodings.first ?? ""
+        let firstDecoded = execution.decodedInstructions.first
+        let exitKind = execution.exit?.kind ?? ""
+        let exitCode = execution.exit?.code
+        let exitSyscallObserved = execution.syscalls.contains {
+            $0.nr == 93 &&
+                $0.name == "exit" &&
+                (jsonInt($0.args.first) == 42 || jsonString($0.args.first) == "42")
+        }
+        evidence["positive_execution_path"] = result.artifacts.first { $0.hasSuffix("/execution.json") || $0.hasSuffix("execution.json") } ?? ""
+        evidence["first_instruction"] = firstInstruction
+        evidence["decoded_class"] = firstDecoded?.instructionClass ?? ""
+        evidence["decoded_op"] = firstDecoded?.op ?? ""
+        evidence["imm_hex"] = firstDecoded?.immHex ?? ""
+        evidence["exit_code"] = exitCode.map(String.init) ?? ""
+        evidence["exit_kind"] = exitKind
+        evidence["exit_syscall_observed"] = "\(exitSyscallObserved)"
         if execution.instructionEncodings.first != "0x4f06e7e0" ||
             execution.decodedInstructions.first?.instructionClass != "simd_modified_immediate" ||
+            execution.decodedInstructions.first?.op != "movi" ||
+            execution.decodedInstructions.first?.immHex != "0xdfdfdfdfdfdfdfdf" ||
+            execution.exit?.kind != "guest_exit_syscall" ||
             execution.exit?.code != 42 ||
-            !execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+            !exitSyscallObserved {
             failures.append(fail("execution-shape", "expected decoded SIMD MOVI 16B fixture to continue to captured exit(42)"))
         }
         if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
@@ -15908,15 +16004,17 @@ func runSIMDMOVI16BFix() throws -> Int32 {
         expectedStatus: .pass
     )
     artifacts.append(relativePath(reducer))
+    evidence["positive_reproducer_path"] = relativePath(reducer)
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Bound simulator unsupported 0x4f06e7e0 to the exact SIMD MOVI v0.16b, #0xdf semantic subset.",
+        summary: "Bound current MOVI v0.16b, #0xdf positive execution and simulator stability to the exact SIMD modified-immediate subset.",
         failures: failures,
         artifacts: artifacts,
         counters: ["simulator_reports_reduced": 1],
+        evidence: evidence,
         releaseGateEligible: false,
         readinessGateEligible: false
     ))
