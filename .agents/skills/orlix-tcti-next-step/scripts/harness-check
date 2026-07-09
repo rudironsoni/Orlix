@@ -329,6 +329,13 @@ check_skills() {
   done
   grep -q 'validateTaskPolicy' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "task-envelope check must validate selected gate result classification/action policy"
+  grep -q 'doesChangedPathInvalidateGate' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must use semantic gate execution freshness"
+  grep -q 'execution_freshness' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
+    fail "next-step status must emit execution_freshness evidence"
+  expect_command_passes "semantic freshness fixtures" \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    semantic-freshness-check
   grep -q 'tcti_runtime_validation_command' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" &&
     grep -q 'runtime-validation' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must match TCTI runtime-validation commands"
@@ -522,11 +529,13 @@ check_skills() {
       | .state == "pass" and
         .passed == true and
         .satisfies_prerequisite == true and
-        .reason == "tcti-kernel-syscall-dispatch-smoke report status=pass, passed=true, git_sha=current" and
+        .reason == "tcti-kernel-syscall-dispatch-smoke report status=pass, passed=true, execution_fresh=true; report git_sha matches current HEAD" and
         (.reports | length) == 1 and
         .reports[0].status == "pass" and
         .reports[0].passed == true and
-        .reports[0].proof_tier == "kernel"
+        .reports[0].proof_tier == "kernel" and
+        .reports[0].execution_freshness.execution_fresh == true and
+        .reports[0].execution_freshness.status_recomputed == true
     ' "$root/Build/AgentHarness/orlix-tcti/status.json" >/dev/null; then
       fail "agent status must consume tcti-kernel-syscall-dispatch-smoke as a passing report-backed kernel gate"
     fi
