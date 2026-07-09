@@ -7716,3 +7716,19 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Simulator Stability Readiness Metadata
+
+- Harness/report metadata fix:
+  - `simulator-tcti-runtime-stability` is a simulator readiness-ladder gate in the active next-step scheduler. It is not `readiness_eligible` and does not claim full runtime readiness by itself.
+  - The scheduler expected `acceptance_weight=readiness` for the selected gate because simulator TCTI gates default to readiness-weight metadata.
+  - `tools/runtime/orlix-runtime-validation.sh` emitted the `tcti-simulator-stability` runtime report with the default `acceptance_weight=blocker`.
+  - Updated the runtime-validation report writer so `tcti-simulator-stability` emits `acceptance_weight=readiness` while leaving `can_claim_runtime_readiness=false` and `readiness_gate_eligible=false`.
+- Validation:
+  - `rtk proxy env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_ID=1E5553B0-203A-4A11-BAD7-EBDE46863F66 ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=Orlix-iPhone-15-Pro-Max` failed as runtime validation, wrote `Build/Reports/runtime/tcti-simulator-stability-20260709T171034Z-32949.json`, and emitted `acceptance_weight=readiness`, `proof_tier=simulator`, `real_stack_required=true`, `can_claim_runtime_readiness=false`, `readiness_gate_eligible=false`, `release_gate_eligible=false`.
+  - `rtk proxy make agent-status AREA=orlix-tcti`, `rtk proxy make agent-next AREA=orlix-tcti`, and `rtk proxy make agent-task-envelope-check AREA=orlix-tcti` passed after regeneration.
+  - The refreshed selected-gate action policy no longer reports metadata drift. It reports `selected_gate_result_classification=environment_only_failure`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=false`, `must_stop=true`, `required_next_action=fix or rerun environment/simulator setup before changing product code`, and `owning_layer=environment`.
+  - `rtk proxy make agent-goal AREA=orlix-tcti DRY_RUN=1 MAX_ITERATIONS=5` and `rtk proxy make agent-goal AREA=orlix-tcti MAX_ITERATIONS=5` both stopped at iteration 1 with `classification=environment_only_failure` and `command_count=0`.
+- Boundary:
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
