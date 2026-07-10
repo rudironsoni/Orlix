@@ -2,6 +2,41 @@
 
 ## 2026-07-10
 
+### Checkpoint: Post-Overlay Null User-Fault Fix Rail Contract
+
+- Harness-selected gate:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `tcti-post-overlay-null-user-fault-fix`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-post-overlay-null-user-fault-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Initial result:
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix`: failed.
+  - Report: `Build/TCTI/reports/tcti-post-overlay-null-user-fault-fix/report.json`.
+  - Current `git_sha`: `baadad9dd8defdd98a36b60af5674ad319a942f7`.
+  - Classifier first stopped on `proof_tier_report_status_metadata_drift`: report `proof_tier=seed`, selected rail expected `proof_tier=rail`.
+  - After metadata repair, classifier stopped on `rail_evidence_contract_bug`: failure id `dynamic-loader-scope`.
+- Fix:
+  - Added `tcti-post-overlay-null-user-fault-fix` to the rail/probe metadata fallback in `tools/tcti/orlix-tcti-gate.swift`.
+  - Narrowed the rail dynamic-loader scope check so `PT_INTERP` ownership-guard text is allowed when TCTI leaves interpreter relocation to `ld.so`.
+  - Kept `DT_NEEDED` and `R_AARCH64_JUMP_SLOT` as forbidden dynamic-loader relocation ownership markers for this rail.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS runtime behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+- Evidence:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix`: passed.
+  - Report: `Build/TCTI/reports/tcti-post-overlay-null-user-fault-fix/report.json`.
+  - Report fields: `status=pass`, `passed=true`, `proof_tier=rail`, `acceptance_weight=probe`, `forbidden_behavior` all false.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: next selected `tcti-ldrsw-sign-extension-fix`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: next selected `tcti-ldrsw-sign-extension-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Product truth:
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: Post-Overlay Null User-Fault Reducer Contract
 
 - Harness-selected gate:
