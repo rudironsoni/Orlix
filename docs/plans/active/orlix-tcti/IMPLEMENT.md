@@ -2,6 +2,22 @@
 
 ## 2026-07-10
 
+### Checkpoint: Durable LDRSW Rail Evidence
+
+- `agent-goal` stopped at `tcti-ldrsw-sign-extension-fix` because the rail required a missing historical `tcti-ldrsw-sign-extension-reducer` report even though the current pinned simulator stability report passes and no longer contains the old high-address fault signature.
+- Classified the stop as a rail evidence-contract bug. No current guest/runtime LDRSW failure was observed, and no OrlixKernel runtime patch was authorized or made.
+- Replaced the non-durable failing-report dependency with:
+  - exact no-phone switch-debug execution of `LDRSW 0xb9801848` loading `0xffffffcd` and reaching guest `exit(42)` only after 64-bit sign extension;
+  - a mapped-`mm` KUnit execution regression that verifies `x8=0xffffffffffffffcd`;
+  - a replayable pass regression under `Build/TCTI/reproducers/tcti-ldrsw-sign-extension-fix/`;
+  - the current passing pinned-simulator stability report, with the old `addr-sp=0x1000000a0` signature absent and all forbidden-behavior fields false.
+- Removed the circular roadmap dependency where the missing historical reducer was treated as superseded by the fix gate that depended on it.
+- Added classifier coverage so missing reducer evidence on a production rail authorizes only a harness/report-contract repair, never an OrlixKernel runtime patch.
+- `rtk proxy make tcti-gate TARGET=tcti-ldrsw-sign-extension-fix`: passed at `c301ed89aa4c36e580d1693e60e6780dbf7ab188`.
+- `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-ldrsw-sign-extension-fix/ldrsw-sign-extension-pass-regression.json`: passed with `actual replay status=pass` and `actual replay exit code=0`.
+- Development and release OrlixKernel KUnit profiles passed with the mapped-`mm` LDRSW execution regression.
+- This checkpoint does not prove full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator ladder completion, or app-visible `ORLIX-USERLAND-TCTI-OK`.
+
 ### Checkpoint: Static PIE Rail Semantic Simulator Freshness
 
 - After seed proof regeneration, `tcti-static-pie-relocation-fix` failed only because its current passing simulator-stability prerequisite had a prior `git_sha`; `status.json` already proved the report execution-fresh because only harness/docs paths changed.

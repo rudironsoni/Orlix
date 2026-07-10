@@ -5238,6 +5238,41 @@ static void tcti_switch_executes_simd_ld1r_4s_from_mapped_mm(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static void tcti_switch_executes_ldrsw_sign_extension_from_mapped_mm(struct kunit *test)
+{
+	const u32 value = 0xffffffcdU;
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	ret = tcti_write_user_data(current->mm, mapped + 24, &value,
+				   sizeof(value));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	regs.regs[2] = mapped;
+	regs.regs[8] = 0;
+	regs.pc = 0x8e40;
+	decoded = tcti_decode_aarch64(0xb9801848U);
+
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &decoded,
+						&fault_address);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, mapped + 24, fault_address);
+	KUNIT_EXPECT_EQ(test, 0xffffffffffffffcdULL, regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0x8e44ULL, regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_switch_executes_mlibc_cpuset_count_small_loop(struct kunit *test)
 {
 	static const u32 instructions[] = {
@@ -6038,6 +6073,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_popcount_sequence),
 	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_count_from_mapped_mm),
 	KUNIT_CASE(tcti_switch_executes_simd_ld1r_4s_from_mapped_mm),
+	KUNIT_CASE(tcti_switch_executes_ldrsw_sign_extension_from_mapped_mm),
 	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_count_small_loop),
 	KUNIT_CASE(tcti_switch_executes_fmov_w_s),
 	KUNIT_CASE(tcti_switch_executes_ucvtf_2d),
