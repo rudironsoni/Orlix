@@ -1091,6 +1091,24 @@ func policy(
     )
 }
 
+func selectedCommandCanGenerateProof(_ status: GateStatus) -> Bool {
+    guard status.prerequisitesSatisfied,
+          !status.physicalDevice,
+          !status.command.isEmpty else {
+        return false
+    }
+
+    if status.command.hasPrefix("make tcti-gate TARGET=") {
+        return true
+    }
+
+    return status.kind == "simulator-runtime" &&
+        status.command.hasPrefix("make runtime-validation DESTINATION=iphonesimulator ") &&
+        status.command.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)") &&
+        status.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)") &&
+        status.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)")
+}
+
 func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     if status.state == "stale" {
         return policy(
@@ -1218,12 +1236,13 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
         status.reportPaths.contains { $0.contains("/reproducers/") || $0.contains("*.json") }
     let reducerLike = status.kind.contains("reducer") || evidenceText.contains("reducer")
     if status.state == "missing" && (missingReports || reducerLike) {
+        let canGenerate = selectedCommandCanGenerateProof(status)
         return policy(
             classification: "missing_generated_artifact",
             runtimePatchAllowed: false,
             harnessPatchAllowed: false,
-            continueRefreshAllowed: false,
-            mustStop: true,
+            continueRefreshAllowed: canGenerate,
+            mustStop: !canGenerate,
             requiredNextAction: "generate or refresh the required proof artifact before selecting implementation work",
             reason: status.reason,
             owningLayer: "proof artifact"
@@ -1250,12 +1269,13 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     }
 
     if status.state == "missing" {
+        let canGenerate = selectedCommandCanGenerateProof(status)
         return policy(
             classification: "missing_generated_artifact",
             runtimePatchAllowed: false,
             harnessPatchAllowed: false,
-            continueRefreshAllowed: false,
-            mustStop: true,
+            continueRefreshAllowed: canGenerate,
+            mustStop: !canGenerate,
             requiredNextAction: "produce the missing report or artifact named by the selected gate",
             reason: status.reason,
             owningLayer: "proof artifact"
@@ -9238,6 +9258,93 @@ func validateSemanticFreshnessFixtures() throws {
     print("pass: semantic-freshness-check")
 }
 
+func policyFixtureReport(
+    path: String,
+    exists: Bool = true,
+    passed: Bool = false,
+    proofTier: String? = "seed",
+    acceptanceWeight: String? = nil,
+    realStackRequired: Bool? = nil,
+    canClaimRuntimeReadiness: Bool? = nil,
+    forbiddenBehaviorViolations: [String] = []
+) -> ReportFact {
+    ReportFact(
+        path: path,
+        exists: exists,
+        status: passed ? "pass" : "fail",
+        passed: passed,
+        proofTier: proofTier,
+        acceptanceWeight: acceptanceWeight,
+        realStackRequired: realStackRequired,
+        canClaimRuntimeReadiness: canClaimRuntimeReadiness,
+        releaseGateEligible: false,
+        readinessGateEligible: false,
+        gitSHA: gitSHA(),
+        forbiddenBehaviorViolations: forbiddenBehaviorViolations
+    )
+}
+
+func policyFixtureStatus(
+    id: String,
+    command: String = "make tcti-gate TARGET=tcti-fixture",
+    kind: String = "rail",
+    proofTier: String = "seed",
+    acceptanceWeight: String = "probe",
+    realStackRequired: Bool = false,
+    canClaimRuntimeReadiness: Bool = false,
+    state: String,
+    passed: Bool = false,
+    reason: String,
+    reports: [ReportFact] = [],
+    readinessEligible: Bool = false
+) -> GateStatus {
+    GateStatus(
+        id: id,
+        command: command,
+        kind: kind,
+        proofTier: proofTier,
+        acceptanceWeight: acceptanceWeight,
+        realStackRequired: realStackRequired,
+        canClaimRuntimeReadiness: canClaimRuntimeReadiness,
+        state: state,
+        passed: passed,
+        reason: reason,
+        prerequisites: [],
+        prerequisitesSatisfied: true,
+        reportPaths: reports.map(\.path),
+        reports: reports,
+        readinessEligible: readinessEligible,
+        physicalDevice: false,
+        gadget: false
+    )
+}
+
+func validateGateResultPolicyFixtures() throws {
+    let fixtures: [(String, GateStatus, String, Bool, Bool, Bool, Bool)] = [
+        ("stale-proof-refresh", policyFixtureStatus(id: "stale", state: "stale", reason: "report git_sha is stale"), "stale_proof_refresh", false, false, true, false),
+        ("missing-generated-artifact", policyFixtureStatus(id: "golden-init-001-structural", command: "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit", kind: "golden-structural", state: "missing", reason: "validation artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/golden_elf/init_001_exit/validation.json", exists: false)]), "missing_generated_artifact", false, false, true, false),
+        ("missing-artifact-without-safe-generator", policyFixtureStatus(id: "unknown", command: "", state: "missing", reason: "artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/unknown.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
+        ("rail-evidence-contract-bug", policyFixtureStatus(id: "rail", state: "fail", reason: "historical generated report is obsolete"), "rail_evidence_contract_bug", false, true, false, true),
+        ("metadata-drift", policyFixtureStatus(id: "drift", kind: "rail", proofTier: "rail", state: "fail", reason: "metadata mismatch", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "seed")]), "proof_tier_report_status_metadata_drift", false, true, false, true),
+        ("runtime-product-failure", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
+        ("environment-only-failure", policyFixtureStatus(id: "environment", state: "fail", reason: "CoreSimulator bootstatus failed"), "environment_only_failure", false, false, false, true),
+        ("forbidden-behavior-violation", policyFixtureStatus(id: "forbidden", state: "fail", reason: "safety report failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", forbiddenBehaviorViolations: ["map_jit"])]), "forbidden_behavior_violation", false, false, false, true),
+        ("readiness-gate-pass", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: true, state: "pass", passed: true, reason: "current simulator readiness report passed", readinessEligible: true), "readiness_gate_pass", false, false, true, false),
+    ]
+
+    for (name, status, classification, runtimePatchAllowed, harnessPatchAllowed, continueRefreshAllowed, mustStop) in fixtures {
+        let actual = classifyGateResult(status)
+        guard actual.classification == classification,
+              actual.runtimePatchAllowed == runtimePatchAllowed,
+              actual.harnessPatchAllowed == harnessPatchAllowed,
+              actual.continueRefreshAllowed == continueRefreshAllowed,
+              actual.mustStop == mustStop else {
+            throw HarnessError.invalid("gate result policy fixture \(name) produced unexpected policy")
+        }
+    }
+    print("pass: gate-result-policy-check")
+}
+
 let mode = CommandLine.arguments.dropFirst().first ?? "status"
 
 do {
@@ -9264,8 +9371,10 @@ do {
         print("pass: \(relativePath(url))")
     case "semantic-freshness-check":
         try validateSemanticFreshnessFixtures()
+    case "gate-result-policy-check":
+        try validateGateResultPolicyFixtures()
     default:
-        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check]")
+        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check|gate-result-policy-check]")
     }
 } catch {
     fputs("agent next-step error: \(error)\n", stderr)
