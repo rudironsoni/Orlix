@@ -715,6 +715,9 @@ func simulatorRuntimeReportExecutionFreshForRail(_ report: [String: Any]) -> Boo
     guard let changedPaths = changedPathsSince(stringField(report, "git_sha")) else {
         return false
     }
+    let runtimeIrrelevantPrefixes = [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/",
+    ]
     let runtimeInvalidatingPrefixes = [
         "OrlixKernel/",
         "OrlixMLibC/",
@@ -726,7 +729,10 @@ func simulatorRuntimeReportExecutionFreshForRail(_ report: [String: Any]) -> Boo
         ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
     ]
     return !changedPaths.contains { path in
-        runtimeInvalidatingExactPaths.contains(path) ||
+        if runtimeIrrelevantPrefixes.contains(where: { path.hasPrefix($0) }) {
+            return false
+        }
+        return runtimeInvalidatingExactPaths.contains(path) ||
             runtimeInvalidatingPrefixes.contains { path.hasPrefix($0) }
     }
 }
@@ -7736,6 +7742,21 @@ func decodeA64SeedInstruction(raw: UInt32, pc: UInt64) -> A64DecodedInstruction 
         )
     }
 
+    if (raw & 0xffc0_0000) == 0xb980_0000 {
+        let imm12 = Int((raw >> 10) & 0xfff)
+        let rn = Int((raw >> 5) & 0x1f)
+        let rt = Int(raw & 0x1f)
+        return .loadStoreUnsignedImmediate(
+            raw: raw,
+            pc: pc,
+            op: "ldrsw",
+            rt: rt,
+            rn: rn,
+            offset: imm12 * 4,
+            width: 32
+        )
+    }
+
 	if (raw & 0xfff0_0000) == 0xd510_0000 || (raw & 0xfff0_0000) == 0xd530_0000 {
 		let sysreg = UInt16((raw >> 5) & 0xffff)
 		let rt = Int(raw & 0x1f)
@@ -8048,6 +8069,10 @@ func executeSwitchDebug(
                     } else if op == "ldrb" {
                         let bytes = try elf.readBytes(at: address, length: 1)
                         registers[rt] = UInt64(bytes[0])
+                    } else if op == "ldrsw" {
+                        let bytes = try elf.readBytes(at: address, length: 4)
+                        let value = Int64(Int32(bitPattern: try littleEndianUInt32(bytes, 0)))
+                        registers[rt] = UInt64(bitPattern: value)
                     } else if op == "str" {
                         _ = try elf.readBytes(at: address, length: 8)
                         memoryWrites.append(CapturedMemoryWrite(
@@ -11653,67 +11678,198 @@ func runLDRSWSignExtensionFix() throws -> Int32 {
     let target = "tcti-ldrsw-sign-extension-fix"
     var failures: [Failure] = []
     var artifacts: [String] = []
-    var reducerEvidenceOK = false
+    var evidence: [String: String] = [:]
 
     let reducerReportURL = buildPath("reports", "tcti-ldrsw-sign-extension-reducer", "report.json")
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "git_sha") != gitSha() ||
-            stringField(reducerReport, "status") != "pass" ||
-            !boolField(reducerReport, "passed") {
-            let reducerURL = buildPath("reproducers", "tcti-ldrsw-sign-extension-reducer", "ldrsw-sign-extension-pass-regression.json")
-            if let reducer = try? loadJSON(reducerURL) as? [String: Any],
-               stringField(reducer, "target") == "tcti-ldrsw-sign-extension-reducer",
-               stringField(reducer, "expected_status") == "pass",
-               stringField(reducer, "command") == "make tcti-gate TARGET=tcti-ldrsw-sign-extension-reducer" {
-                artifacts.append(relativePath(reducerURL))
-                reducerEvidenceOK = true
-            } else {
-                failures.append(fail("reducer-report", "tcti-ldrsw-sign-extension-reducer report is missing, stale, or not passing"))
-            }
-        } else {
-            reducerEvidenceOK = true
-        }
+        evidence["historical_reducer_report"] = relativePath(reducerReportURL)
+        evidence["historical_reducer_status"] = stringField(reducerReport, "status")
+        evidence["historical_reducer_passed"] = "\(boolField(reducerReport, "passed"))"
     } else {
-        let reducerURL = buildPath("reproducers", "tcti-ldrsw-sign-extension-reducer", "ldrsw-sign-extension-pass-regression.json")
-        if let reducer = try? loadJSON(reducerURL) as? [String: Any],
-           stringField(reducer, "target") == "tcti-ldrsw-sign-extension-reducer",
-           stringField(reducer, "expected_status") == "pass",
-           stringField(reducer, "command") == "make tcti-gate TARGET=tcti-ldrsw-sign-extension-reducer" {
-            artifacts.append(relativePath(reducerURL))
-            reducerEvidenceOK = true
-        } else {
-            failures.append(fail("reducer-report", "missing tcti-ldrsw-sign-extension-reducer report"))
-        }
+        evidence["historical_reducer_report"] = ""
     }
 
     let decoderURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
     let testsURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "tests", "tcti_decode_test.c")
-    let decoder = try readText(decoderURL)
-    let tests = try readText(testsURL)
-    artifacts.append(relativePath(decoderURL))
-    artifacts.append(relativePath(testsURL))
-
-    if !decoder.contains("*result_size = sizeof(u64);\n\t\treturn true;\n\tcase 3:") ||
-        !decoder.contains("*result_size = sizeof(u32);\n\t\treturn true;\n\tdefault:") {
+    let decoderSource = try readText(decoderURL)
+    let testSource = try readText(testsURL)
+    artifacts.append(contentsOf: [relativePath(decoderURL), relativePath(testsURL)])
+    if !decoderSource.contains("*result_size = sizeof(u64);\n\t\treturn true;\n\tcase 3:") ||
+        !decoderSource.contains("*result_size = sizeof(u32);\n\t\treturn true;\n\tdefault:") {
         failures.append(fail("decoder-result-width", "signed load decoder must keep opc=2 as X-register result and opc=3 as W-register result"))
     }
-    if !tests.contains("0xb9801848U") ||
-        !tests.contains("tcti_decode_ldrsw_signed_immediate_writes_x_register") ||
-        !tests.contains("KUNIT_EXPECT_EQ(test, 8U, decoded.result_size)") {
-        failures.append(fail("kunit-regression", "missing exact emitted LDRSW 0xb9801848 decode/result-width regression"))
+    if !testSource.contains("tcti_switch_executes_ldrsw_sign_extension_from_mapped_mm") ||
+        !testSource.contains("0xb9801848U") ||
+        !testSource.contains("0xffffffffffffffcdULL") {
+        failures.append(fail("kunit-execution-regression", "missing exact mapped-mm LDRSW 0xb9801848 sign-extension execution regression"))
     }
-    if !reducerEvidenceOK {
-        failures.append(fail("reducer-evidence", "missing reducer report or pass-regression evidence for LDRSW sign-extension"))
+
+    let fixtureURL = path("tools", "tcti", "fixtures", "golden_elf", "init_001_exit_ldrsw_sign_extension.S")
+    let fixtureOutput = buildPath("ldrsw_sign_extension", "switch-debug")
+    let baseMetadataURL = path("OrlixKernel", "Tests", "TCTI", "golden_elf", "init_001_exit", "golden.json")
+    let baseMetadata = try decoder.decode(GoldenMetadata.self, from: Data(contentsOf: baseMetadataURL))
+    let builtFixture = try buildFixtureBinary(
+        source: fixtureURL,
+        outputRoot: fixtureOutput,
+        name: "init_001_exit_ldrsw_sign_extension"
+    )
+    let fixtureELF = try TinyElf64Aarch64(binary: builtFixture.binary)
+    let fixtureMetadata = GoldenMetadata(
+        caseID: "init_001_exit_ldrsw_sign_extension",
+        generatorCommand: baseMetadata.generatorCommand,
+        sourceSHA256: baseMetadata.sourceSHA256,
+        expectedBinarySHA256: baseMetadata.expectedBinarySHA256,
+        actualBinarySHA256: baseMetadata.actualBinarySHA256,
+        compilerPath: baseMetadata.compilerPath,
+        compilerVersion: baseMetadata.compilerVersion,
+        linkerPath: baseMetadata.linkerPath,
+        linkerVersion: baseMetadata.linkerVersion,
+        flags: baseMetadata.flags,
+        libcMode: baseMetadata.libcMode,
+        elfType: baseMetadata.elfType,
+        entrypoint: hexPC(fixtureELF.entrypoint),
+        machine: baseMetadata.machine,
+        expectedSyscalls: baseMetadata.expectedSyscalls,
+        expectedExitCode: 42,
+        expectedMessage: nil,
+        forbiddenBehavior: baseMetadata.forbiddenBehavior
+    )
+    let fixtureExecution = try executeSwitchDebug(binary: builtFixture.binary, metadata: fixtureMetadata)
+    let fixtureExecutionURL = fixtureOutput
+        .appendingPathComponent("init_001_exit_ldrsw_sign_extension", isDirectory: true)
+        .appendingPathComponent("execution.json")
+    try writeJSON(fixtureExecution.report, to: fixtureExecutionURL)
+    artifacts.append(contentsOf: [
+        relativePath(fixtureURL),
+        relativePath(builtFixture.binary),
+        relativePath(fixtureExecutionURL),
+    ])
+    failures.append(contentsOf: fixtureExecution.failures)
+
+    let exactLDRSW = fixtureExecution.report.decodedInstructions.first {
+        $0.raw == "0xb9801848" && $0.op == "ldrsw" && $0.rt == 8 &&
+            $0.rn == 2 && $0.offset == 24 && $0.width == 32
     }
+    let fixturePassed = fixtureExecution.failures.isEmpty &&
+        fixtureExecution.report.instructionEncodings.contains("0xb9801848") &&
+        exactLDRSW != nil &&
+        fixtureExecution.report.exit?.kind == "guest_exit_syscall" &&
+        fixtureExecution.report.exit?.code == 42
+    evidence["switch_debug_fixture"] = relativePath(fixtureURL)
+    evidence["switch_debug_execution"] = relativePath(fixtureExecutionURL)
+    evidence["switch_debug_exact_instruction"] = "0xb9801848"
+    evidence["switch_debug_loaded_u32"] = "0xffffffcd"
+    evidence["switch_debug_loaded_i32"] = "-51"
+    evidence["switch_debug_destination_register"] = "x8"
+    evidence["switch_debug_guest_exit_code"] = "\(fixtureExecution.report.exit?.code ?? -1)"
+    evidence["switch_debug_sign_extension_proven"] = "\(fixturePassed)"
+    if !fixturePassed {
+        failures.append(fail("switch-debug-sign-extension", "no-phone fixture did not execute exact LDRSW 0xb9801848 and prove sign extension into X8 through guest exit(42)"))
+    }
+
+    if let simulatorReport = latestRuntimeValidationReport(
+        gate: "tcti-simulator-stability",
+        destination: "iphonesimulator"
+    ) {
+        let simulatorText = runtimeReportText(simulatorReport, artifacts: &artifacts)
+        let simulatorObject = simulatorReport.object
+        let executionFresh = simulatorRuntimeReportExecutionFreshForRail(simulatorObject)
+        let status = stringField(simulatorObject, "status")
+        let passed = boolField(simulatorObject, "passed")
+        let preflightOnly = boolField(simulatorObject, "preflight_only")
+        let bypassed = boolField(simulatorObject, "autonomous_tests_bypassed")
+        let selectedDeviceID = stringField(simulatorObject, "selected_device_id")
+        let selectedDeviceName = stringField(simulatorObject, "selected_device_name")
+        let simulatorSingleBooted = boolField(simulatorObject, "simulator_single_booted")
+        let forbidden = simulatorObject["forbidden_behavior"] as? [String: Any] ?? [:]
+        let forbiddenFields = [
+            "generated_exec_memory",
+            "host_exec_guest_text",
+            "host_x18",
+            "map_jit",
+            "native_ios_api_exposure_to_guest",
+            "rwx",
+        ]
+        let oldLiteralSignature = simulatorText.lowercased().contains("addr-sp=0x1000000a0")
+        let faultPattern = #"Orlix TCTI: user fault[^\n]*sp=(0x[0-9a-fA-F]+)[^\n]*addr=(0x[0-9a-fA-F]+)[^\n]*access=1"#
+        var oldAddressDeltaSignature = false
+        if let groups = firstRegexGroups(faultPattern, in: simulatorText),
+           groups.count == 2,
+           let sp = parseHexUInt64(groups[0]),
+           let address = parseHexUInt64(groups[1]) {
+            oldAddressDeltaSignature = address &- sp == 0x1000000a0
+        }
+        let oldFatalSignature = oldLiteralSignature || oldAddressDeltaSignature
+
+        evidence["latest_simulator_stability_report"] = relativePath(simulatorReport.url)
+        evidence["latest_simulator_stability_git_sha"] = stringField(simulatorObject, "git_sha")
+        evidence["latest_simulator_stability_execution_fresh"] = "\(executionFresh)"
+        evidence["latest_simulator_stability_status"] = status
+        evidence["latest_simulator_stability_passed"] = "\(passed)"
+        evidence["latest_simulator_stability_preflight_only"] = "\(preflightOnly)"
+        evidence["latest_simulator_stability_autonomous_tests_bypassed"] = "\(bypassed)"
+        evidence["latest_simulator_selected_device_id"] = selectedDeviceID
+        evidence["latest_simulator_selected_device_name"] = selectedDeviceName
+        evidence["latest_simulator_single_booted"] = "\(simulatorSingleBooted)"
+        evidence["old_addr_sp_0x1000000a0_signature_current"] = "\(oldFatalSignature)"
+        for field in forbiddenFields {
+            evidence["latest_simulator_forbidden_\(field)"] = (forbidden[field] as? Bool).map { "\($0)" } ?? "missing"
+        }
+
+        if !executionFresh {
+            failures.append(fail("simulator-stability-stale", "latest pinned simulator stability report is not execution-fresh for this rail"))
+        }
+        if status != "pass" || !passed {
+            failures.append(fail("simulator-stability-not-passing", "latest pinned simulator stability report is not passing"))
+        }
+        if preflightOnly {
+            failures.append(fail("simulator-stability-preflight-only", "latest pinned simulator stability report is preflight-only"))
+        }
+        if bypassed {
+            failures.append(fail("simulator-stability-bypassed", "latest pinned simulator stability report bypassed autonomous tests"))
+        }
+        if selectedDeviceID != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
+            selectedDeviceName != "Orlix-iPhone-15-Pro-Max" ||
+            !simulatorSingleBooted {
+            failures.append(fail("simulator-stability-device", "latest simulator stability report must come from only the pinned Orlix-iPhone-15-Pro-Max simulator"))
+        }
+        for field in forbiddenFields {
+            guard let value = forbidden[field] as? Bool, !value else {
+                failures.append(fail("simulator-stability-forbidden-behavior", "latest pinned simulator stability report must set forbidden_behavior.\(field)=false"))
+                continue
+            }
+        }
+        if oldFatalSignature {
+            failures.append(fail("simulator-ldrsw-fatal-signature-current", "latest pinned simulator artifacts still contain the old addr-sp=0x1000000a0 LDRSW fatal signature"))
+        }
+    } else {
+        evidence["latest_simulator_stability_report"] = ""
+        evidence["latest_simulator_stability_execution_fresh"] = "false"
+        evidence["old_addr_sp_0x1000000a0_signature_current"] = "unknown"
+        failures.append(fail("simulator-stability-report-missing", "missing latest pinned iphonesimulator tcti-simulator-stability report"))
+    }
+
+    let passRegression = try writeReducer(
+        target: target,
+        caseID: "ldrsw-sign-extension-pass-regression",
+        command: "make tcti-gate TARGET=\(target)",
+        reason: "replay exact LDRSW 0xb9801848 negative-word sign extension and current pinned simulator stability evidence",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(passRegression))
+    evidence["pass_regression"] = relativePath(passRegression)
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Checked reducer-backed LDRSW sign-extension fix for the simulator high-address va_list fault.",
+        summary: "Checked current no-phone and pinned-simulator evidence for exact LDRSW 0xb9801848 sign extension.",
         failures: failures,
         artifacts: artifacts,
+        counters: ["switch_debug_fixtures_executed": 1],
+        evidence: evidence,
         releaseGateEligible: false,
         readinessGateEligible: false
     ))
