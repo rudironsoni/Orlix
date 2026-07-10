@@ -2,6 +2,66 @@
 
 ## 2026-07-10
 
+### Checkpoint: SIMD MOVI 16B Rail Semantic Freshness
+
+- Harness-selected gate:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simd-movi-16b-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed with `continue_refresh_allowed=true`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `must_stop=false`.
+- Initial result:
+  - `rtk proxy make tcti-gate TARGET=tcti-simd-movi-16b-fix`: failed.
+  - Report: `Build/TCTI/reports/tcti-simd-movi-16b-fix/report.json`.
+  - Failure: `simulator-stability-stale`.
+  - The rail had current positive MOVI no-phone execution, but required exact `git_sha` equality for the latest simulator-stability prerequisite.
+  - `agent-status` already treated that same simulator-stability report as execution-fresh because only non-execution paths changed.
+- Fix:
+  - Reused the existing semantic simulator-runtime freshness helper for `tcti-simd-movi-16b-fix`.
+  - Kept exact `git_sha` matching as evidence through `latest_simulator_stability_exact_git_sha_matches`.
+  - Kept `latest_simulator_stability_current=true` tied to semantic execution freshness for rail prerequisites.
+- Evidence:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-simd-movi-16b-fix`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-16b-fix/simd-movi-16b-pass-regression.json`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `no-phone-tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `no-phone-tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- MOVI report fields:
+  - `status=pass`, `passed=true`, `git_sha=5cff4d49bfd32c10d1c20c009dea56d1e2b02821`, `proof_tier=seed`, `acceptance_weight=probe`, `real_stack_required=false`, `can_claim_runtime_readiness=false`.
+  - Positive execution: `first_instruction=0x4f06e7e0`, `decoded_class=simd_modified_immediate`, `decoded_op=movi`, `imm_hex=0xdfdfdfdfdfdfdfdf`, `exit_kind=guest_exit_syscall`, `exit_code=42`, `exit_syscall_observed=true`.
+  - Simulator prerequisite: `latest_simulator_stability_report=Build/Reports/runtime/tcti-simulator-stability-20260709T210928Z-97306.json`, `latest_simulator_stability_current=true`, `latest_simulator_stability_exact_git_sha_matches=false`, `unsupported_signature_current=false`, `sigill_signature_current=false`, `fatal_movi_runtime_marker_current=false`.
+- Boundary:
+  - This was a harness/report evidence-contract repair, not an OrlixKernel runtime fix.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: SIMD Self-Move Rail Evidence Contract Repair
+
+- Harness-selected stop:
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-simd-self-move-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed, with `runtime_patch_allowed=false`, `harness_patch_allowed=true`, `continue_refresh_allowed=false`, and `must_stop=true`.
+  - Stop reason: `Build/TCTI/reports/tcti-simd-self-move-fix/report.json` reported `proof_tier=seed` while the selected roadmap gate expected `proof_tier=rail`.
+- Fix:
+  - Added explicit `proof_tier=rail`, `acceptance_weight=probe`, `real_stack_required=false`, and `can_claim_runtime_readiness=false` metadata for `tcti-simd-self-move-fix`.
+  - Repaired the rail contract so it no longer requires the old generated simulator SIGILL report as current proof when current simulator stability supersedes it.
+  - The rail now records current positive no-phone SIMD self-move execution, a replayable pass regression, and current simulator-stability evidence without the old unsupported `0x6e144401` signature.
+  - Updated the selected task envelope to expect `Build/TCTI/reproducers/tcti-simd-self-move-fix/simd-self-move-pass-regression.json` instead of requiring the stale historical reducer report as a validation input.
+- Evidence:
+  - `rtk proxy make tcti-gate TARGET=tcti-simd-self-move-fix`: passed.
+  - Report: `Build/TCTI/reports/tcti-simd-self-move-fix/report.json`.
+  - Report fields: `status=pass`, `passed=true`, `git_sha=5cff4d49bfd32c10d1c20c009dea56d1e2b02821`, `proof_tier=rail`, `acceptance_weight=probe`, `real_stack_required=false`, `can_claim_runtime_readiness=false`.
+  - Positive execution evidence: `first_instruction=0x6e144401`, `decoded_class=simd_vector_element_move`, `decoded_op=mov`, `exit_kind=guest_exit_syscall`, `exit_code=42`, `exit_syscall_observed=true`.
+  - Current simulator evidence: `simulator_supersedes_stale_reducer=true`, `unsupported_signature_current=false`.
+  - Pass-regression reducer: `Build/TCTI/reproducers/tcti-simd-self-move-fix/simd-self-move-pass-regression.json`.
+  - Forbidden behavior remained false for generated executable memory, host-exec guest text, host x18, MAP_JIT, native iOS API exposure, and RWX.
+- Boundary:
+  - This was a harness/report evidence-contract repair, not an OrlixKernel runtime fix.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: Selected-Report Metadata Classification For Rail Prerequisites
 
 - Harness-selected proof lane:

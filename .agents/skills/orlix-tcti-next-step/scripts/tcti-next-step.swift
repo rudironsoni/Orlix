@@ -5437,7 +5437,7 @@ func runtimePreflightGates() -> [Gate] {
         ],
         expectedReportPaths: [
             "Build/TCTI/reports/tcti-simd-self-move-fix/report.json",
-            "Build/TCTI/reports/tcti-simd-self-move-reducer/report.json",
+            "Build/TCTI/reproducers/tcti-simd-self-move-fix/simd-self-move-pass-regression.json",
             "Build/Reports/runtime/tcti-simulator-stability-*.json",
         ],
         readinessEligible: false,
@@ -5447,7 +5447,6 @@ func runtimePreflightGates() -> [Gate] {
             "rtk proxy git diff --check",
             "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
             "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-self-move-reducer",
             "rtk proxy make tcti-gate TARGET=tcti-simd-self-move-fix",
             "rtk proxy make agent-harness-check",
             "rtk proxy make agent-status AREA=orlix-tcti",
@@ -5458,7 +5457,7 @@ func runtimePreflightGates() -> [Gate] {
             "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
         ],
         reducerRequirements: [
-            "The unsupported 0x6e080400 reducer must pass before production TCTI patching.",
+            "The rail must not require the old generated simulator SIGILL report as current proof.",
             "After the production fix, rerun simulator stability through the next selected gate on the pinned simulator.",
         ],
         requiredSubagentsOrSkills: [
@@ -5472,7 +5471,7 @@ func runtimePreflightGates() -> [Gate] {
             "tcti-test-reducer",
             "tcti-release-gate-reviewer",
         ],
-        commitMessageTemplate: "fix(tcti): support simd self move no-op",
+        commitMessageTemplate: "fix(tcti): repair simd self move rail evidence contract",
         stopConditions: [
             "Stop if the fix requires broad SIMD/vector register semantics.",
             "Stop if the fix requires production assembly, gadget dispatch, HostAdapter Linux behavior, product defconfig flips, or generated-tree edits.",
