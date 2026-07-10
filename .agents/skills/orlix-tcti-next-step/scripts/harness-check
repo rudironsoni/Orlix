@@ -190,6 +190,29 @@ check_skills() {
     grep -q 'selected command failed after classifier refresh' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
     grep -q 'refresh_envelope' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" ||
     fail "goal-loop must refresh and reload classifier policy after selected command failure"
+  test "$(grep -c 'ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop")" -eq 2 ||
+    fail "goal-loop must refresh status and next-task without streaming the full roadmap"
+  quiet_status="$(cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti 2>&1)" ||
+    fail "quiet agent-status failed"
+  test -z "$quiet_status" || fail "quiet agent-status must not print human-readable roadmap output"
+  quiet_next="$(cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next AREA=orlix-tcti 2>&1)" ||
+    fail "quiet agent-next failed"
+  test -z "$quiet_next" || fail "quiet agent-next must not print human-readable task output"
+  direct_status="$(cd "$root" && rtk proxy make agent-status AREA=orlix-tcti 2>&1)" ||
+    fail "direct agent-status failed"
+  printf '%s\n' "$direct_status" | grep -q '^Orlix TCTI agent status$' ||
+    fail "direct agent-status must retain human-readable output"
+  direct_next="$(cd "$root" && rtk proxy make agent-next AREA=orlix-tcti 2>&1)" ||
+    fail "direct agent-next failed"
+  printf '%s\n' "$direct_next" | grep -q '^Orlix TCTI next task$' ||
+    fail "direct agent-next must retain human-readable output"
+  goal_output="$(cd "$root" && DRY_RUN=1 MAX_ITERATIONS=1 MAX_COMMANDS=0 rtk proxy make agent-goal AREA=orlix-tcti 2>&1)" ||
+    fail "bounded agent-goal dry run failed"
+  printf '%s\n' "$goal_output" | grep -q '^agent_goal_iteration:$' ||
+    fail "bounded agent-goal dry run must emit an iteration record"
+  if printf '%s\n' "$goal_output" | grep -Eq '^(Orlix TCTI agent status|gates:)$'; then
+    fail "agent-goal must not stream the human-readable roadmap"
+  fi
   "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" gate-result-policy-check ||
     fail "selected gate result policy fixtures failed"
   grep -q 'agent-goal' "$root/.codex/agents/orlix-implementer.toml" ||
