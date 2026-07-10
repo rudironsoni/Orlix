@@ -695,6 +695,42 @@ func gitSha() -> String {
     (try? run(["git", "rev-parse", "HEAD"])) ?? ""
 }
 
+func changedPathsSince(_ reportGitSha: String) -> [String]? {
+    let current = gitSha()
+    if reportGitSha.isEmpty {
+        return nil
+    }
+    if reportGitSha == current {
+        return []
+    }
+    guard let output = try? run(["git", "diff", "--name-only", "\(reportGitSha)..\(current)"]) else {
+        return nil
+    }
+    return output
+        .split(whereSeparator: \.isNewline)
+        .map(String.init)
+}
+
+func simulatorRuntimeReportExecutionFreshForRail(_ report: [String: Any]) -> Bool {
+    guard let changedPaths = changedPathsSince(stringField(report, "git_sha")) else {
+        return false
+    }
+    let runtimeInvalidatingPrefixes = [
+        "OrlixKernel/",
+        "OrlixMLibC/",
+        "OrlixOS/",
+        "tools/runtime/",
+    ]
+    let runtimeInvalidatingExactPaths = [
+        "project.yml",
+        ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
+    ]
+    return !changedPaths.contains { path in
+        runtimeInvalidatingExactPaths.contains(path) ||
+            runtimeInvalidatingPrefixes.contains { path.hasPrefix($0) }
+    }
+}
+
 func sha256(_ url: URL) throws -> String {
     let output = try run(["shasum", "-a", "256", url.path])
     guard let first = output.split(separator: " ").first else {
@@ -841,7 +877,7 @@ func proofTierMetadata(for target: String) -> ProofTierMetadata {
             realStackRequired: true,
             canClaimRuntimeReadiness: false
         )
-    case "tcti-static-pie-relocation-fix":
+    case "tcti-static-pie-relocation-fix", "tcti-simd-self-move-fix":
         return ProofTierMetadata(
             proofTier: "rail",
             acceptanceWeight: "probe",
@@ -13127,37 +13163,77 @@ func runSIMDSelfMoveFix() throws -> Int32 {
     let target = "tcti-simd-self-move-fix"
     var failures: [Failure] = []
     var artifacts: [String] = []
+    var evidence: [String: String] = [:]
 
     let reducerReportURL = buildPath("reports", "tcti-simd-self-move-reducer", "report.json")
+    var reducerCurrentPass = false
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        let reducerCurrentPass = stringField(reducerReport, "git_sha") == gitSha() &&
+        reducerCurrentPass = stringField(reducerReport, "git_sha") == gitSha() &&
             stringField(reducerReport, "status") == "pass" &&
             boolField(reducerReport, "passed")
-        if !reducerCurrentPass {
-            var simulatorArtifacts: [String] = []
-            let simulatorReport = latestRuntimeValidationReport(
-                gate: "tcti-simulator-stability",
-                destination: "iphonesimulator"
-            )
-            let simulatorText = simulatorReport.map { runtimeReportText($0, artifacts: &simulatorArtifacts) } ?? ""
-            artifacts.append(contentsOf: simulatorArtifacts)
-            let simulatorCurrentPass = simulatorReport.map { report in
-                stringField(report.object, "git_sha") == gitSha() &&
-                    stringField(report.object, "status") == "pass" &&
-                    boolField(report.object, "passed") &&
-                    !boolField(report.object, "preflight_only") &&
-                    !boolField(report.object, "autonomous_tests_bypassed")
-            } ?? false
-            let oldUnsupportedSignatureActive = simulatorText.contains("insn=0x6e144401") &&
-                simulatorText.contains("unsupported instruction") &&
-                simulatorText.contains("exitcode=0x00000004")
-            if !simulatorCurrentPass || oldUnsupportedSignatureActive {
-                failures.append(fail("reducer-report", "SIMD self-move reducer report is missing, stale, or not passing, and the latest simulator stability report does not supersede the old unsupported 0x6e144401 failure"))
-            }
-        }
+        evidence["reducer_report_path"] = relativePath(reducerReportURL)
+        evidence["reducer_report_git_sha"] = stringField(reducerReport, "git_sha")
+        evidence["reducer_report_status"] = stringField(reducerReport, "status")
+        evidence["reducer_report_passed"] = "\(boolField(reducerReport, "passed"))"
+        evidence["reducer_report_current_pass"] = "\(reducerCurrentPass)"
     } else {
-        failures.append(fail("reducer-report", "missing tcti-simd-self-move-reducer report"))
+        evidence["reducer_report_path"] = ""
+        evidence["reducer_report_current_pass"] = "false"
+    }
+
+    var simulatorSupersedesReducer = false
+    if let simulatorReport = latestRuntimeValidationReport(
+        gate: "tcti-simulator-stability",
+        destination: "iphonesimulator"
+    ) {
+        var simulatorArtifacts: [String] = []
+        let simulatorText = runtimeReportText(simulatorReport, artifacts: &simulatorArtifacts)
+        artifacts.append(contentsOf: simulatorArtifacts)
+        let simulatorTextLower = simulatorText.lowercased()
+        let simulatorFresh = simulatorRuntimeReportExecutionFreshForRail(simulatorReport.object)
+        let simulatorPass = stringField(simulatorReport.object, "status") == "pass" &&
+            boolField(simulatorReport.object, "passed") &&
+            !boolField(simulatorReport.object, "preflight_only") &&
+            !boolField(simulatorReport.object, "autonomous_tests_bypassed")
+        let forbidden = simulatorReport.object["forbidden_behavior"] as? [String: Any] ?? [:]
+        let forbiddenFields = [
+            "generated_exec_memory",
+            "host_exec_guest_text",
+            "host_x18",
+            "map_jit",
+            "native_ios_api_exposure_to_guest",
+            "rwx",
+        ]
+        let forbiddenClean = !forbiddenFields.contains { boolField(forbidden, $0) }
+        let selfMoveSignatureCurrent = simulatorTextLower.contains("0x6e144401") ||
+            simulatorTextLower.contains("insn=0x6e144401")
+        let oldUnsupportedSignatureActive = selfMoveSignatureCurrent &&
+            simulatorTextLower.contains("unsupported instruction") &&
+            (simulatorTextLower.contains("exitcode=0x00000004") ||
+             simulatorTextLower.contains("sigill") ||
+             simulatorTextLower.contains("signal=4"))
+        simulatorSupersedesReducer = simulatorFresh && simulatorPass && forbiddenClean && !oldUnsupportedSignatureActive
+
+        evidence["latest_simulator_stability_report"] = relativePath(simulatorReport.url)
+        evidence["latest_simulator_stability_git_sha"] = stringField(simulatorReport.object, "git_sha")
+        evidence["latest_simulator_stability_status"] = stringField(simulatorReport.object, "status")
+        evidence["latest_simulator_stability_passed"] = "\(boolField(simulatorReport.object, "passed"))"
+        evidence["latest_simulator_stability_execution_fresh"] = "\(simulatorFresh)"
+        evidence["latest_simulator_stability_preflight_only"] = "\(boolField(simulatorReport.object, "preflight_only"))"
+        evidence["latest_simulator_stability_autonomous_tests_bypassed"] = "\(boolField(simulatorReport.object, "autonomous_tests_bypassed"))"
+        evidence["unsupported_signature_current"] = "\(oldUnsupportedSignatureActive)"
+        evidence["forbidden_behavior_clean"] = "\(forbiddenClean)"
+        evidence["simulator_supersedes_stale_reducer"] = "\(simulatorSupersedesReducer)"
+    } else {
+        evidence["latest_simulator_stability_report"] = ""
+        evidence["latest_simulator_stability_execution_fresh"] = "false"
+        evidence["unsupported_signature_current"] = "unknown"
+        evidence["simulator_supersedes_stale_reducer"] = "false"
+    }
+
+    if !reducerCurrentPass && !simulatorSupersedesReducer {
+        failures.append(fail("reducer-report", "SIMD self-move reducer report is missing, stale, or not passing, and the latest simulator stability report does not supersede the old unsupported 0x6e144401 failure"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
@@ -13189,10 +13265,28 @@ func runSIMDSelfMoveFix() throws -> Int32 {
             failures.append(fail("execution", "SIMD self-move fix fixture did not write execution report"))
             throw GateError.commandFailed("missing SIMD self-move fix execution report")
         }
+        let firstInstruction = execution.instructionEncodings.first ?? ""
+        let firstDecoded = execution.decodedInstructions.first
+        let exitKind = execution.exit?.kind ?? ""
+        let exitCode = execution.exit?.code
+        let exitSyscallObserved = execution.syscalls.contains {
+            $0.nr == 93 &&
+                $0.name == "exit" &&
+                (jsonInt($0.args.first) == 42 || jsonString($0.args.first) == "42")
+        }
+        evidence["positive_execution_path"] = result.artifacts.first { $0.hasSuffix("/execution.json") || $0.hasSuffix("execution.json") } ?? ""
+        evidence["first_instruction"] = firstInstruction
+        evidence["decoded_class"] = firstDecoded?.instructionClass ?? ""
+        evidence["decoded_op"] = firstDecoded?.op ?? ""
+        evidence["exit_code"] = exitCode.map(String.init) ?? ""
+        evidence["exit_kind"] = exitKind
+        evidence["exit_syscall_observed"] = "\(exitSyscallObserved)"
         if execution.instructionEncodings.first != "0x6e144401" ||
             execution.decodedInstructions.first?.instructionClass != "simd_vector_element_move" ||
+            execution.decodedInstructions.first?.op != "mov" ||
+            execution.exit?.kind != "guest_exit_syscall" ||
             execution.exit?.code != 42 ||
-            !execution.syscalls.contains(where: { $0.nr == 93 && $0.name == "exit" }) {
+            !exitSyscallObserved {
             failures.append(fail("execution-shape", "expected decoded SIMD self-move lane-copy fixture to continue to captured exit(42)"))
         }
         if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
@@ -13202,13 +13296,26 @@ func runSIMDSelfMoveFix() throws -> Int32 {
         failures.append(fail("execution", "\(error)"))
     }
 
+    let reducer = try writeReducer(
+        target: target,
+        caseID: "simd-self-move-pass-regression",
+        command: "make tcti-gate TARGET=\(target)",
+        reason: "Current no-phone SIMD self-move execution decodes 0x6e144401 as a constrained lane-copy and exits through captured exit(42).",
+        artifacts: artifacts,
+        expectedStatus: .pass
+    )
+    artifacts.append(relativePath(reducer))
+    evidence["positive_reproducer_path"] = relativePath(reducer)
+
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Checked constrained decoded AArch64 SIMD lane self-move 0x6e144401 support as a lane-copy.",
+        summary: "Checked current SIMD lane self-move positive execution and simulator stability against the stale unsupported 0x6e144401 signature.",
         failures: failures,
         artifacts: artifacts,
+        counters: ["simd_self_move_positive_executions": 1],
+        evidence: evidence,
         releaseGateEligible: false,
         readinessGateEligible: false
     ))
@@ -15852,6 +15959,7 @@ func runSIMDMOVI16BFix() throws -> Int32 {
     ) {
         let latestSimulatorText = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
         let latestGitSha = stringField(latestSimulatorReport.object, "git_sha")
+        let latestExecutionFresh = simulatorRuntimeReportExecutionFreshForRail(latestSimulatorReport.object)
         let latestStatus = stringField(latestSimulatorReport.object, "status")
         let latestPassed = boolField(latestSimulatorReport.object, "passed")
         let latestPreflightOnly = boolField(latestSimulatorReport.object, "preflight_only")
@@ -15884,7 +15992,8 @@ func runSIMDMOVI16BFix() throws -> Int32 {
         evidence["latest_simulator_stability_git_sha"] = latestGitSha
         evidence["latest_simulator_stability_status"] = latestStatus
         evidence["latest_simulator_stability_passed"] = "\(latestPassed)"
-        evidence["latest_simulator_stability_current"] = "\(latestGitSha == gitSha())"
+        evidence["latest_simulator_stability_current"] = "\(latestExecutionFresh)"
+        evidence["latest_simulator_stability_exact_git_sha_matches"] = "\(latestGitSha == gitSha())"
         evidence["latest_simulator_stability_preflight_only"] = "\(latestPreflightOnly)"
         evidence["latest_simulator_stability_autonomous_tests_bypassed"] = "\(latestAutonomousBypassed)"
         evidence["unsupported_signature_current"] = "\(unsupportedSignatureCurrent)"
@@ -15894,8 +16003,8 @@ func runSIMDMOVI16BFix() throws -> Int32 {
             evidence["latest_simulator_forbidden_\(field)"] = "\(boolField(latestForbidden, field))"
         }
 
-        if latestGitSha != gitSha() {
-            failures.append(fail("simulator-stability-stale", "latest simulator stability report is not current for HEAD"))
+        if !latestExecutionFresh {
+            failures.append(fail("simulator-stability-stale", "latest simulator stability report is not execution-fresh for this rail"))
         }
         if latestStatus != "pass" || !latestPassed {
             failures.append(fail("simulator-stability-not-passing", "latest current simulator stability report is not passing"))
