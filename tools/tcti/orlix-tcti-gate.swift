@@ -11430,8 +11430,8 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
         (fatalAccess == nil || fatalAccess == 1)
     let noFatalUserFault = fatalAddress.isEmpty
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !simulatorRuntimeReportExecutionFreshForRail(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is not execution-fresh for this rail"))
     }
     if !simulatorPassed && !simulatorFailed {
         failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
@@ -11528,8 +11528,8 @@ func runPostOverlayNullUserFaultFix() throws -> Int32 {
         let simulatorObject = simulatorReport.object
         let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
         artifacts.append(contentsOf: simulatorArtifacts)
-        if stringField(simulatorObject, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+        if !simulatorRuntimeReportExecutionFreshForRail(simulatorObject) {
+            failures.append(fail("simulator-report-stale", "latest simulator stability report is not execution-fresh for this rail"))
         }
     } else {
         failures.append(fail("simulator-report", "missing iphonesimulator tcti-simulator-stability report"))
