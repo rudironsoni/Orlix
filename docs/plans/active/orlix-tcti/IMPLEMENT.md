@@ -2,6 +2,48 @@
 
 ## 2026-07-10
 
+### Checkpoint: Post-Overlay Null User-Fault Reducer Contract
+
+- Harness-selected gate:
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `no-phone-tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `no-phone-tcti-post-overlay-null-user-fault-reducer`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Initial result:
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer`: failed.
+  - Report: `Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json`.
+  - Failure: `simulator-static-pie-event`.
+  - The referenced current simulator stability report, `Build/Reports/runtime/tcti-simulator-stability-20260710T003014Z-48876.json`, already carried structured `tcti_runtime_events.static_pie_image` for `task=init`, `pid=1`, `pc=0x28499dd3ea3c`, `base=0x28499dd30000`, and `entry=0xea3c`.
+  - The reducer contract was stricter than the roadmap requirement because it required the static PIE image event to belong to `task=sh`.
+- Fix:
+  - Updated `runPostOverlayNullUserFaultReducer()` to accept structured static PIE image evidence for either `init` or `sh`, matching the current simulator stability report shape and the neighboring reducer contract.
+  - No OrlixKernel runtime behavior changed.
+- Evidence:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json`: passed. The replayed negative fixture failed as expected and `Build/TCTI/reports/tcti-repro/report.json` recorded `status=pass`, `passed=true`, and `replay_exit_code=2`.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load`: passed, restoring the latest golden ELF report after the negative replay.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make agent-status AREA=orlix-tcti`: selected `tcti-post-overlay-null-user-fault-fix`.
+  - `rtk proxy make agent-next AREA=orlix-tcti`: selected `tcti-post-overlay-null-user-fault-fix`.
+  - `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed.
+- Current next envelope:
+  - Selected gate: `tcti-post-overlay-null-user-fault-fix`.
+  - Selected command: `make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix`.
+  - Classification: `missing_generated_artifact`.
+  - `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=false`, `must_stop=true`.
+  - Required next action: `generate or refresh required proof artifact before selecting implementation work`.
+- Boundary:
+  - This was a reducer/report evidence-contract repair, not an OrlixKernel runtime fix.
+  - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: SIMD MOVI 16B Rail Semantic Freshness
 
 - Harness-selected gate:
