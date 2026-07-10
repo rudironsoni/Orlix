@@ -17367,10 +17367,108 @@ func runSIMDORR4SFix() throws -> Int32 {
     return exitCode(for: status)
 }
 
+func staticBusyBoxPassEvidenceFailures(_ object: [String: Any]) -> [Failure] {
+	var failures: [Failure] = []
+	func requireFalse(_ dictionary: [String: Any], _ key: String, _ id: String) {
+		guard let value = dictionary[key] as? Bool, value == false else {
+			failures.append(fail(id, "current static BusyBox pass evidence requires \(key)=false"))
+			return
+		}
+	}
+	func requireExplicitNull(_ dictionary: [String: Any], _ key: String, _ id: String) {
+		guard dictionary[key] is NSNull else {
+			failures.append(fail(id, "current static BusyBox pass evidence requires \(key)=null"))
+			return
+		}
+	}
+
+	if !simulatorRuntimeReportExecutionFreshForRail(object) {
+		failures.append(fail("simulator-report-stale", "current static BusyBox pass evidence is execution-stale for the current rail"))
+	}
+	if stringField(object, "gate") != "tcti-static-busybox-start" ||
+		stringField(object, "status") != "pass" ||
+		object["passed"] as? Bool != true {
+		failures.append(fail("simulator-report-status", "current static BusyBox evidence must be a passing tcti-static-busybox-start report"))
+	}
+	if stringField(object, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
+		stringField(object, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
+		intField(object, "simulator_booted_count") != 1 ||
+		object["simulator_single_booted"] as? Bool != true {
+		failures.append(fail("simulator-scope", "current static BusyBox pass evidence must use only the pinned Orlix-iPhone-15-Pro-Max simulator"))
+	}
+	requireFalse(object, "autonomous_tests_bypassed", "autonomous-tests-bypassed")
+	requireFalse(object, "preflight_only", "preflight-only")
+
+	guard let events = object["tcti_runtime_events"] as? [String: Any] else {
+		return failures + [fail("runtime-events", "current static BusyBox pass evidence requires tcti_runtime_events")]
+	}
+	let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
+	if stringField(staticPIE, "task") != "sh" || intField(staticPIE, "pid") == nil {
+		failures.append(fail("static-pie-sh", "current static BusyBox pass evidence must identify static_pie_image task=sh with a pid"))
+	}
+	guard let signal = events["signaled_process"] as? [String: Any] else {
+		return failures + [fail("process-signal", "current static BusyBox pass evidence requires signaled_process")]
+	}
+	requireExplicitNull(signal, "pid", "process-signal")
+	requireExplicitNull(signal, "signal", "process-signal")
+	guard let fatalUserFault = events["fatal_user_fault"] as? [String: Any] else {
+		return failures + [fail("fatal-user-fault", "current static BusyBox pass evidence requires fatal_user_fault")]
+	}
+	for key in ["task", "pid", "pc", "lr", "sp", "addr", "access", "si"] {
+		requireExplicitNull(fatalUserFault, key, "fatal-user-fault")
+	}
+	let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+	for key in ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"] {
+		requireFalse(forbidden, key, "forbidden-behavior")
+	}
+	return failures
+}
+
+func validateStaticBusyBoxPassEvidenceContract() -> [Failure] {
+	let valid: [String: Any] = [
+		"git_sha": gitSha(),
+		"gate": "tcti-static-busybox-start",
+		"status": "pass",
+		"passed": true,
+		"selected_device_id": "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3",
+		"selected_device_name": "Orlix-iPhone-15-Pro-Max",
+		"simulator_booted_count": 1,
+		"simulator_single_booted": true,
+		"autonomous_tests_bypassed": false,
+		"preflight_only": false,
+		"tcti_runtime_events": [
+			"static_pie_image": ["task": "sh", "pid": 42],
+			"signaled_process": ["pid": NSNull(), "signal": NSNull()],
+			"fatal_user_fault": ["task": NSNull(), "pid": NSNull(), "pc": NSNull(), "lr": NSNull(), "sp": NSNull(), "addr": NSNull(), "access": NSNull(), "si": NSNull()],
+		],
+		"forbidden_behavior": [
+			"generated_exec_memory": false, "host_exec_guest_text": false, "host_x18": false,
+			"map_jit": false, "native_ios_api_exposure_to_guest": false, "rwx": false,
+		],
+	]
+	guard staticBusyBoxPassEvidenceFailures(valid).isEmpty else {
+		return [fail("pass-evidence-fixture", "valid static BusyBox pass evidence was rejected")]
+	}
+	let invalidFixtures: [(String, [String: Any])] = [
+		("missing-forbidden", valid.merging(["forbidden_behavior": ["generated_exec_memory": false]], uniquingKeysWith: { _, replacement in replacement })),
+		("fatal-pc", valid.merging(["tcti_runtime_events": ["static_pie_image": ["task": "sh", "pid": 42], "signaled_process": ["signal": NSNull()], "fatal_user_fault": ["pc": "0x1000"]]], uniquingKeysWith: { _, replacement in replacement })),
+		("missing-signal", valid.merging(["tcti_runtime_events": ["static_pie_image": ["task": "sh", "pid": 42], "fatal_user_fault": ["task": NSNull(), "pid": NSNull(), "pc": NSNull(), "lr": NSNull(), "sp": NSNull(), "addr": NSNull(), "access": NSNull(), "si": NSNull()]]], uniquingKeysWith: { _, replacement in replacement })),
+		("missing-fault", valid.merging(["tcti_runtime_events": ["static_pie_image": ["task": "sh", "pid": 42], "signaled_process": ["pid": NSNull(), "signal": NSNull()]]], uniquingKeysWith: { _, replacement in replacement })),
+		("preflight", valid.merging(["preflight_only": true], uniquingKeysWith: { _, replacement in replacement })),
+		("bypassed", valid.merging(["autonomous_tests_bypassed": true], uniquingKeysWith: { _, replacement in replacement })),
+	]
+	return invalidFixtures.compactMap { name, fixture in
+		staticBusyBoxPassEvidenceFailures(fixture).isEmpty
+			? fail("pass-evidence-fixture-\(name)", "malformed static BusyBox pass evidence was accepted")
+			: nil
+	}
+}
+
 func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
 	let target = "tcti-post-busybox-sigabrt-reducer"
 	var failures: [Failure] = []
 	var artifacts: [String] = []
+	failures.append(contentsOf: validateStaticBusyBoxPassEvidenceContract())
 
 	func reportModifiedAt(_ url: URL) -> Date {
 		(try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -17390,11 +17488,16 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
 			destination: "iphonesimulator"
 		)
 	} else {
-		selectedReport = candidateGates
+		let candidateReports = candidateGates
 			.compactMap { latestRuntimeValidationReport(gate: $0, destination: "iphonesimulator") }
-			.filter { stringField($0.object, "status") == "fail" && !boolField($0.object, "passed") }
 			.sorted { reportModifiedAt($0.url) > reportModifiedAt($1.url) }
-			.first
+		selectedReport = candidateReports.first {
+			stringField($0.object, "status") == "fail" && !boolField($0.object, "passed")
+		} ?? candidateReports.first {
+			stringField($0.object, "gate") == "tcti-static-busybox-start" &&
+			stringField($0.object, "status") == "pass" &&
+			boolField($0.object, "passed")
+		}
 	}
 
 	guard let simulatorReport = selectedReport else {
@@ -17419,11 +17522,45 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
     let text = reportArtifacts
         .compactMap { try? readRelativeArtifact($0) }
         .joined(separator: "\n")
-    let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
+	let events = object["tcti_runtime_events"] as? [String: Any] ?? [:]
     let staticPIE = events["static_pie_image"] as? [String: Any] ?? [:]
     let signal = events["signaled_process"] as? [String: Any] ?? [:]
     let staticPID = intField(staticPIE, "pid")
     let signaledPID = intField(signal, "pid")
+	let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+	let fatalUserFault = events["fatal_user_fault"] as? [String: Any] ?? [:]
+	let forbiddenOK = [
+		"generated_exec_memory",
+		"host_exec_guest_text",
+		"host_x18",
+		"map_jit",
+		"native_ios_api_exposure_to_guest",
+		"rwx",
+	].allSatisfy { !boolField(forbidden, $0) }
+	let passEvidenceFailures = staticBusyBoxPassEvidenceFailures(object)
+	if failures.isEmpty && passEvidenceFailures.isEmpty {
+		let reducer = try writeReducer(
+			target: target,
+			caseID: "post-busybox-sigabrt-pass-regression",
+			command: "TCTI_SIMULATOR_REPORT=\(relativePath(simulatorReport.url)) make tcti-gate TARGET=\(target)",
+			reason: "The current pinned static BusyBox report passes without SIGABRT, so the historical SIGABRT reducer is not needed.",
+			artifacts: artifacts,
+			expectedStatus: .pass
+		)
+		artifacts.append(relativePath(reducer))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .pass,
+			summary: "Static BusyBox SIGABRT reducer is not needed because the current pinned simulator report passes without a process signal or fatal user fault.",
+			failures: [],
+			artifacts: artifacts,
+			counters: ["simulator_reports_reduced": 0],
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("pass: \(relativePath(reportURL))")
+		return 0
+	}
 
 	if stringField(object, "git_sha") == gitSha(),
 	   stringField(object, "status") == "fail",
@@ -17501,16 +17638,6 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
         failures.append(fail("sigabrt-syscall-shape", "simulator artifacts must show a known static BusyBox SIGABRT shape before signal=6"))
     }
 	if gate == "tcti-init-console-write" {
-		let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
-		let forbiddenOK = [
-			"generated_exec_memory",
-			"host_exec_guest_text",
-			"host_x18",
-			"map_jit",
-			"native_ios_api_exposure_to_guest",
-			"rwx",
-		].allSatisfy { !boolField(forbidden, $0) }
-		let fatalUserFault = events["fatal_user_fault"] as? [String: Any] ?? [:]
 		let hasFatalUserFault = !stringField(fatalUserFault, "task").isEmpty ||
 			intField(fatalUserFault, "pid") != nil ||
 			!stringField(fatalUserFault, "pc").isEmpty ||
@@ -17691,17 +17818,42 @@ func runUserDataWindowRefreshFix() throws -> Int32 {
     var failures: [Failure] = []
     var artifacts: [String] = []
 
-	let reducerReportURL = buildPath("reports", "tcti-post-bash-mmap-read-fault-reducer", "report.json")
+	let reducerTarget = "tcti-post-busybox-sigabrt-reducer"
+	let reducerReportURL = buildPath("reports", reducerTarget, "report.json")
+	let reducerPath = relativePath(buildPath("reproducers", reducerTarget, "post-busybox-sigabrt-pass-regression.json"))
+	guard let currentBusyBoxReport = latestRuntimeValidationReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator") else {
+		failures.append(fail("simulator-report", "missing current pinned static BusyBox report required by the reducer contract"))
+		let reportURL = try writeReport(report(
+			target: target,
+			status: .fail,
+			summary: "No current pinned static BusyBox report is available to validate the reducer-backed user-data window rail.",
+			failures: failures,
+			artifacts: artifacts,
+			releaseGateEligible: false,
+			readinessGateEligible: false
+		))
+		print("fail: \(relativePath(reportURL))")
+		return 1
+	}
+	let currentBusyBoxPath = relativePath(currentBusyBoxReport.url)
+	artifacts.append(currentBusyBoxPath)
+	failures.append(contentsOf: staticBusyBoxPassEvidenceFailures(currentBusyBoxReport.object))
 	if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
 		artifacts.append(relativePath(reducerReportURL))
-		artifacts.append(contentsOf: (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String })
+		let reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
+		artifacts.append(contentsOf: reducerArtifacts)
 		if stringField(reducerReport, "git_sha") != gitSha() ||
+			stringField(reducerReport, "target") != reducerTarget ||
+			stringField(reducerReport, "gate") != reducerTarget ||
 			stringField(reducerReport, "status") != "pass" ||
 			!boolField(reducerReport, "passed") {
-            failures.append(fail("reducer-report", "post-Bash mmap/read reducer report is missing, stale, or not passing"))
-        }
+			failures.append(fail("reducer-report", "post-BusyBox SIGABRT reducer report has the wrong identity, is stale, or is not passing"))
+		}
+		if !reducerArtifacts.contains(currentBusyBoxPath) || !reducerArtifacts.contains(reducerPath) {
+			failures.append(fail("reducer-coverage", "post-BusyBox SIGABRT reducer must link the exact current static BusyBox report and pass-regression reproducer"))
+		}
     } else {
-        failures.append(fail("reducer-report", "missing tcti-post-bash-mmap-read-fault-reducer report"))
+        failures.append(fail("reducer-report", "missing tcti-post-busybox-sigabrt-reducer report"))
     }
 
     let userPageURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c")

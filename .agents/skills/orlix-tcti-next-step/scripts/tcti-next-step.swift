@@ -2207,13 +2207,48 @@ func postBashMmapReadFaultReducerPass(_ gate: Gate) -> GateStatus {
 	)
 }
 
+func currentStaticBusyBoxPassEvidence() -> (ReportFact, [String: Any])? {
+	guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-start", destination: "iphonesimulator"),
+		report.status == "pass",
+		report.passed,
+		reportExecutionFresh(report),
+		stringValue(object["selected_device_id"]) == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3",
+		stringValue(object["selected_device_name"]) == "Orlix-iPhone-15-Pro-Max",
+		intValue(object["simulator_booted_count"]) == 1,
+		boolValue(object["simulator_single_booted"]),
+		object["autonomous_tests_bypassed"] as? Bool == false,
+		object["preflight_only"] as? Bool == false,
+		let forbidden = object["forbidden_behavior"] as? [String: Any],
+		["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"].allSatisfy({ forbidden[$0] as? Bool == false }),
+		let events = object["tcti_runtime_events"] as? [String: Any],
+		let staticPIE = events["static_pie_image"] as? [String: Any],
+		stringValue(staticPIE["task"]) == "sh",
+		intValue(staticPIE["pid"]) != nil,
+		let signal = events["signaled_process"] as? [String: Any],
+		signal["pid"] is NSNull,
+		signal["signal"] is NSNull,
+		let fault = events["fatal_user_fault"] as? [String: Any],
+		["task", "pid", "pc", "lr", "sp", "addr", "access", "si"].allSatisfy({ fault[$0] is NSNull })
+	else {
+		return nil
+	}
+	return (report, object)
+}
+
 func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 	let fixReport = reportFact(target: "tcti-user-data-window-refresh-fix")
 	let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
 	let fixArtifacts = (fixObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
-	let reducerReport = reportFact(target: "tcti-post-bash-mmap-read-fault-reducer")
+	let reducerReport = reportFact(target: "tcti-post-busybox-sigabrt-reducer")
 	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
 	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+	let expectedReducerPath = "Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json"
+	let currentBusyBoxEvidence = currentStaticBusyBoxPassEvidence()
+	let currentBusyBoxPath = currentBusyBoxEvidence?.0.path
+	let reducerIdentityOK = stringValue(reducerObject?["target"]) == "tcti-post-busybox-sigabrt-reducer" &&
+		stringValue(reducerObject?["gate"]) == "tcti-post-busybox-sigabrt-reducer"
+	let reducerCoversCurrentBusyBox = currentBusyBoxPath.map { reducerArtifacts.contains($0) && reducerArtifacts.contains(expectedReducerPath) } ?? false
+	let fixCoversCurrentBusyBox = currentBusyBoxPath.map { fixArtifacts.contains($0) } ?? false
 	let runtimeGates = [
 		"tcti-static-busybox-shell-command",
 		"tcti-simulator-stability",
@@ -2260,6 +2295,10 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 		   reducerReport.status == "pass",
 		   reducerReport.passed,
 		   reducerReport.gitSHA == gitSHA(),
+		   currentBusyBoxEvidence != nil,
+		   reducerIdentityOK,
+		   reducerCoversCurrentBusyBox,
+		   fixCoversCurrentBusyBox,
 		   reducerCoversReport,
 		   fixCoversReport {
 			return GateStatus(
@@ -2284,11 +2323,46 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 			kind: gate.kind,
 			state: "ready",
 			passed: false,
-			reason: "current simulator report \(report.path) records the reducer-backed post-Bash mmap/read fault and the fix report does not cover that report yet",
+			reason: "current simulator report \(report.path) records the reducer-backed user-data window fault and the fix report does not cover that report yet",
 			prerequisites: gate.prerequisites,
 			prerequisitesSatisfied: false,
 			reportPaths: gate.expectedReportPaths,
 			reports: [report, reducerReport, fixReport],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	guard let (currentBusyBoxReport, _) = currentBusyBoxEvidence else {
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current pinned static BusyBox pass evidence is missing or incomplete for the user-data window rail",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: [reducerReport, fixReport].filter(\.exists),
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+	if !reducerIdentityOK || !currentReportPassed(reducerReport) || !reducerCoversCurrentBusyBox || !fixCoversCurrentBusyBox {
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "user-data window rail requires the current post-BusyBox reducer and fix reports to cover \(currentBusyBoxReport.path)",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: [currentBusyBoxReport, reducerReport, fixReport],
 			readinessEligible: gate.readinessEligible,
 			physicalDevice: gate.physicalDevice,
 			gadget: gate.gadget
@@ -6900,7 +6974,7 @@ func runtimePreflightGates() -> [Gate] {
             id: "tcti-user-data-window-refresh-fix",
             command: "make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
             kind: "production-tcti-fix",
-            prerequisites: ["no-phone-tcti-post-busybox-sigabrt-reducer"],
+            prerequisites: ["no-phone-tcti-post-busybox-sigabrt-reducer", "simulator-tcti-static-busybox-start"],
             allowedScope: [
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
                 "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/**",
@@ -8121,7 +8195,8 @@ func runtimePreflightGates() -> [Gate] {
 }
 
 func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
-    let inserts = runtimePreflightGates()
+    let roadmapIDs = Set(roadmap.gates.map(\.id))
+    let inserts = runtimePreflightGates().filter { !roadmapIDs.contains($0.id) }
     var result: [Gate] = []
     var inserted = false
     for gate in roadmap.gates {
