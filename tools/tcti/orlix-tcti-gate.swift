@@ -11284,8 +11284,8 @@ func runStaticPIERelocationFix() throws -> Int32 {
     let runtimeEvents = simulatorObject["tcti_runtime_events"] as? [String: Any] ?? [:]
     let staticPIEImage = runtimeEvents["static_pie_image"] as? [String: Any] ?? [:]
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !simulatorRuntimeReportExecutionFreshForRail(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is not execution-fresh for this rail"))
     }
     let simulatorPassed = stringField(simulatorObject, "status") == "pass" && boolField(simulatorObject, "passed")
     let simulatorFailedAfterProgress = stringField(simulatorObject, "status") == "fail" && !boolField(simulatorObject, "passed")

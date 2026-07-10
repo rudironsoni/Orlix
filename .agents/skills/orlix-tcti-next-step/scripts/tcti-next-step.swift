@@ -1178,6 +1178,35 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     }
 
     let evidenceText = lowercasedEvidenceText(status)
+    let railContractTerms = [
+        "historical",
+        "non-durable",
+        "obsolete",
+        "superseded",
+        "stale generated",
+        "simulator-unsupported-signature",
+        "dynamic-loader-scope",
+        "simulator-static-pie-event",
+        "no recorded simulator stability report",
+        "does not include structured",
+        "expected reducer/report path",
+        "simulator-report-stale",
+        "not execution-fresh for this rail",
+    ]
+    let railLike = status.kind == "rail" || status.kind.contains("production")
+    if railLike && railContractTerms.contains(where: { evidenceText.contains($0) }) {
+        return policy(
+            classification: "rail_evidence_contract_bug",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: true,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "repair the selected rail evidence contract or map it to durable current evidence",
+            reason: status.reason,
+            owningLayer: "TCTI harness/report contract"
+        )
+    }
+
     let environmentTerms = [
         "environment",
         "coresimulator",
@@ -1202,33 +1231,6 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
             requiredNextAction: "fix or rerun the environment/simulator setup before changing product code",
             reason: status.reason,
             owningLayer: "environment"
-        )
-    }
-
-    let railContractTerms = [
-        "historical",
-        "non-durable",
-        "obsolete",
-        "superseded",
-        "stale generated",
-        "simulator-unsupported-signature",
-        "dynamic-loader-scope",
-        "simulator-static-pie-event",
-        "no recorded simulator stability report",
-        "does not include structured",
-        "expected reducer/report path",
-    ]
-    let railLike = status.kind == "rail" || status.kind.contains("production")
-    if railLike && railContractTerms.contains(where: { evidenceText.contains($0) }) {
-        return policy(
-            classification: "rail_evidence_contract_bug",
-            runtimePatchAllowed: false,
-            harnessPatchAllowed: true,
-            continueRefreshAllowed: false,
-            mustStop: true,
-            requiredNextAction: "repair the selected rail evidence contract or map it to durable current evidence",
-            reason: status.reason,
-            owningLayer: "TCTI harness/report contract"
         )
     }
 
@@ -9325,6 +9327,7 @@ func validateGateResultPolicyFixtures() throws {
         ("missing-generated-artifact", policyFixtureStatus(id: "golden-init-001-structural", command: "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit", kind: "golden-structural", state: "missing", reason: "validation artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/golden_elf/init_001_exit/validation.json", exists: false)]), "missing_generated_artifact", false, false, true, false),
         ("missing-artifact-without-safe-generator", policyFixtureStatus(id: "unknown", command: "", state: "missing", reason: "artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/unknown.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
         ("rail-evidence-contract-bug", policyFixtureStatus(id: "rail", state: "fail", reason: "historical generated report is obsolete"), "rail_evidence_contract_bug", false, true, false, true),
+        ("rail-simulator-freshness-contract-bug", policyFixtureStatus(id: "rail-stale", state: "fail", reason: "simulator-report-stale: latest simulator stability report is not execution-fresh for this rail"), "rail_evidence_contract_bug", false, true, false, true),
         ("metadata-drift", policyFixtureStatus(id: "drift", kind: "rail", proofTier: "rail", state: "fail", reason: "metadata mismatch", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "seed")]), "proof_tier_report_status_metadata_drift", false, true, false, true),
         ("runtime-product-failure", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
         ("environment-only-failure", policyFixtureStatus(id: "environment", state: "fail", reason: "CoreSimulator bootstatus failed"), "environment_only_failure", false, false, false, true),
