@@ -2,6 +2,24 @@
 
 ## 2026-07-10
 
+### Checkpoint: Silent Autonomous Goal Iterations
+
+- The compact goal-loop fix suppressed the full roadmap, but autonomous runs still streamed every selected command and a detailed selected-gate policy block on every iteration.
+- Changed default `agent-goal` behavior to emit only neutral iteration and command counters while capturing every refresh and selected-command output under a unique per-run directory in `Build/AgentHarness/orlix-tcti/goal-loop/`.
+- Kept one final handoff with the selected action policy and generated command-log path. Live command and detailed iteration streaming now requires explicit `ORLIX_TCTI_GOAL_STREAM_OUTPUT=1` opt-in.
+- Direct `make agent-status` and `make agent-next` output remains unchanged.
+- Added harness checks for neutral dry-run output and absence of roadmap and selected-gate iteration fields. Added an executable output-contract self-test that proves quiet stdout/stderr capture, run-scoped command logging, and explicit diagnostic streaming behavior.
+- Validation:
+  - `rtk git diff --check`: passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/goal-loop`: passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check`: passed.
+  - `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/goal-loop output-contract-check`: passed, including quiet stdout/stderr capture and streamed diagnostic output.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - A real bounded `MAX_ITERATIONS=1 MAX_COMMANDS=1 make agent-goal AREA=orlix-tcti` run emitted `27` lines with one neutral progress record, one final handoff, and zero leaked selected-command result lines. Its unique run directory contained `command-001.log` with `66` bytes of captured output.
+- This changes autonomous orchestration output only. It does not change gate commands, result classification, allowed actions, OrlixKernel runtime behavior, simulator behavior, readiness policy, or physical-device policy.
+
 ### Checkpoint: Post-Overlay Reducer Semantic Simulator Freshness
 
 - `agent-goal` stopped at `no-phone-tcti-post-overlay-null-user-fault-reducer` after `Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json` failed only with `simulator-report-stale`.

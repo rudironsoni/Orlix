@@ -61,7 +61,7 @@ Use `$orlix-tcti-next-step` for TCTI continuation. `agent-status`, `agent-next`,
 
 Use `agent-goal` for autonomous goal execution. It is the bounded loop that repeatedly runs the one-shot selector/envelope commands, consumes the selected-gate action policy in `next-task.json`, executes the exact selected command when refresh continuation is allowed, regenerates the envelope, and stops on policy stop or budget exhaustion.
 
-Inside `agent-goal`, status and next-task regeneration is quiet: JSON and Markdown artifacts are still rewritten and validated, but the full human-readable roadmap is not printed on every iteration. Direct `make agent-status` and `make agent-next` commands retain their normal human-readable output.
+Inside `agent-goal`, status and next-task regeneration is quiet: JSON and Markdown artifacts are still rewritten and validated, refresh and selected-command output is captured under a unique run directory in `Build/AgentHarness/orlix-tcti/goal-loop/`, and iterations emit only neutral progress counters. One final handoff exposes the selected action policy. `ORLIX_TCTI_GOAL_STREAM_OUTPUT=1` is an explicit diagnostic opt-in. Direct `make agent-status` and `make agent-next` commands retain their normal human-readable output.
 
 ## Report Freshness
 

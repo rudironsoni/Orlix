@@ -190,7 +190,8 @@ check_skills() {
     grep -q 'selected command failed after classifier refresh' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
     grep -q 'refresh_envelope' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" ||
     fail "goal-loop must refresh and reload classifier policy after selected command failure"
-  test "$(grep -c 'ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop")" -eq 2 ||
+  grep -q 'ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
+    grep -q 'ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" ||
     fail "goal-loop must refresh status and next-task without streaming the full roadmap"
   quiet_status="$(cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti 2>&1)" ||
     fail "quiet agent-status failed"
@@ -208,11 +209,21 @@ check_skills() {
     fail "direct agent-next must retain human-readable output"
   goal_output="$(cd "$root" && DRY_RUN=1 MAX_ITERATIONS=1 MAX_COMMANDS=0 rtk proxy make agent-goal AREA=orlix-tcti 2>&1)" ||
     fail "bounded agent-goal dry run failed"
-  printf '%s\n' "$goal_output" | grep -q '^agent_goal_iteration:$' ||
-    fail "bounded agent-goal dry run must emit an iteration record"
-  if printf '%s\n' "$goal_output" | grep -Eq '^(Orlix TCTI agent status|gates:)$'; then
-    fail "agent-goal must not stream the human-readable roadmap"
+  printf '%s\n' "$goal_output" | grep -q '^agent_goal_progress iteration=1 command_count=0 would_execute=' ||
+    fail "bounded agent-goal dry run must emit a neutral progress record"
+  test "$(printf '%s\n' "$goal_output" | grep -c '^agent_goal_handoff:$')" -eq 1 ||
+    fail "bounded agent-goal dry run must emit exactly one final handoff"
+  for handoff_field in stop_reason current_head iteration_count command_count last_classification runtime_patch_allowed harness_patch_allowed continue_refresh_allowed must_stop owning_layer last_command_log next_selected_gate readiness_truth; do
+    printf '%s\n' "$goal_output" | grep -q "^${handoff_field}[=:]" ||
+      fail "bounded agent-goal handoff is missing ${handoff_field}"
+  done
+  if printf '%s\n' "$goal_output" | grep -Eq '^(Orlix TCTI agent status|gates:|selected_gate=|selected_command=|classification=)'; then
+    fail "agent-goal must not stream roadmap or selected-gate details during iterations"
   fi
+  output_contract="$($root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop output-contract-check 2>&1)" ||
+    fail "agent-goal output contract check failed"
+  test "$output_contract" = "pass: output-contract-check" ||
+    fail "agent-goal output contract check returned unexpected output"
   "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" gate-result-policy-check ||
     fail "selected gate result policy fixtures failed"
   grep -q 'agent-goal' "$root/.codex/agents/orlix-implementer.toml" ||

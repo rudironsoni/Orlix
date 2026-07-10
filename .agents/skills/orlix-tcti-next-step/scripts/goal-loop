@@ -9,6 +9,12 @@ DRY_RUN="${DRY_RUN:-0}"
 MAX_ITERATIONS="${MAX_ITERATIONS:-25}"
 MAX_COMMANDS="${MAX_COMMANDS:-25}"
 STOP_ON_TRACKED_CHANGES="${STOP_ON_TRACKED_CHANGES:-1}"
+STREAM_OUTPUT="${ORLIX_TCTI_GOAL_STREAM_OUTPUT:-0}"
+goal_run_id="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
+goal_log_dir="$root/Build/AgentHarness/orlix-tcti/goal-loop/$goal_run_id"
+refresh_log=""
+
+mkdir -p "$goal_log_dir"
 
 case "$MAX_ITERATIONS" in
   ''|*[!0-9]*)
@@ -44,6 +50,8 @@ last_continue_refresh_allowed="false"
 last_must_stop="false"
 last_owning_layer=""
 last_reason=""
+last_command_log=""
+refresh_count=0
 
 json_string() {
   file="$1"
@@ -69,9 +77,18 @@ json_bool() {
 
 refresh_envelope() {
   refresh_status=0
-  (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti) || refresh_status=1
-  (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next AREA=orlix-tcti) || refresh_status=1
-  (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti) || refresh_status=1
+  if test "$STREAM_OUTPUT" = "1"; then
+    (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti) || refresh_status=1
+    (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next AREA=orlix-tcti) || refresh_status=1
+    (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti) || refresh_status=1
+  else
+    refresh_count=$((refresh_count + 1))
+    refresh_log="$goal_log_dir/refresh-$(printf '%03d' "$refresh_count").log"
+    : >"$refresh_log"
+    (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti) >>"$refresh_log" 2>&1 || refresh_status=1
+    (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next AREA=orlix-tcti) >>"$refresh_log" 2>&1 || refresh_status=1
+    (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti) >>"$refresh_log" 2>&1 || refresh_status=1
+  fi
   return "$refresh_status"
 }
 
@@ -103,6 +120,11 @@ tracked_source_changed() {
 
 print_iteration_summary() {
   would_execute="$1"
+  if test "$STREAM_OUTPUT" != "1"; then
+    printf 'agent_goal_progress iteration=%s command_count=%s would_execute=%s\n' \
+      "$iteration_count" "$command_count" "$would_execute"
+    return
+  fi
   printf '%s\n' "agent_goal_iteration:"
   printf 'iteration=%s\n' "$iteration_count"
   printf 'selected_gate=%s\n' "$last_selected_gate"
@@ -155,6 +177,7 @@ print_handoff() {
   printf 'must_stop=%s\n' "$last_must_stop"
   printf 'owning_layer=%s\n' "$last_owning_layer"
   printf 'result_classification_reason=%s\n' "$last_reason"
+  printf 'last_command_log=%s\n' "$last_command_log"
   printf 'next_selected_gate=%s\n' "$next_selected_gate"
   printf 'next_selected_command=%s\n' "$next_selected_command"
   printf '%s\n' "readiness_truth:"
@@ -187,6 +210,51 @@ refresh_after_selected_command_failure() {
     fi
   fi
 }
+
+run_selected_command() {
+  if test "$STREAM_OUTPUT" = "1"; then
+    (cd "$root" && sh -c "$last_selected_command")
+    return
+  fi
+
+  last_command_log="$goal_log_dir/command-$(printf '%03d' "$command_count").log"
+  (cd "$root" && sh -c "$last_selected_command") >"$last_command_log" 2>&1
+}
+
+if test "${1:-}" = "output-contract-check"; then
+  iteration_count=1
+  command_count=1
+  last_selected_gate="output-contract-fixture"
+  last_selected_command="printf 'goal-stdout-marker\\n'; printf 'goal-stderr-marker\\n' >&2"
+  last_classification="stale_proof_refresh"
+  last_continue_refresh_allowed="true"
+
+  STREAM_OUTPUT=0
+  quiet_output="$(print_iteration_summary true; run_selected_command)"
+  quiet_command_log="$goal_log_dir/command-001.log"
+  test "$quiet_output" = "agent_goal_progress iteration=1 command_count=1 would_execute=true" ||
+    { printf '%s\n' "FAIL: quiet output contract leaked iteration or command details" >&2; exit 1; }
+  grep -q '^goal-stdout-marker$' "$quiet_command_log" &&
+    grep -q '^goal-stderr-marker$' "$quiet_command_log" ||
+    { printf '%s\n' "FAIL: quiet output contract did not capture stdout and stderr" >&2; exit 1; }
+
+  STREAM_OUTPUT=1
+  streamed_output="$(print_iteration_summary true; run_selected_command 2>&1)"
+  printf '%s\n' "$streamed_output" | grep -q '^agent_goal_iteration:$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^selected_gate=output-contract-fixture$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^selected_command=printf ' &&
+    printf '%s\n' "$streamed_output" | grep -q '^classification=stale_proof_refresh$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^runtime_patch_allowed=false$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^harness_patch_allowed=false$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^continue_refresh_allowed=true$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^must_stop=false$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^goal-stdout-marker$' &&
+    printf '%s\n' "$streamed_output" | grep -q '^goal-stderr-marker$' ||
+    { printf '%s\n' "FAIL: streamed output contract omitted diagnostic details" >&2; exit 1; }
+
+  printf '%s\n' "pass: output-contract-check"
+  exit 0
+fi
 
 while :; do
   if test "$iteration_count" -ge "$MAX_ITERATIONS"; then
@@ -264,7 +332,7 @@ while :; do
   fi
 
   command_count=$((command_count + 1))
-  if ! (cd "$root" && sh -c "$last_selected_command"); then
+  if ! run_selected_command; then
     refresh_after_selected_command_failure
     exit 1
   fi
