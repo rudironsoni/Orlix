@@ -877,7 +877,7 @@ func proofTierMetadata(for target: String) -> ProofTierMetadata {
             realStackRequired: true,
             canClaimRuntimeReadiness: false
         )
-    case "tcti-static-pie-relocation-fix", "tcti-simd-self-move-fix", "tcti-post-overlay-null-user-fault-fix":
+    case "tcti-static-pie-relocation-fix", "tcti-simd-self-move-fix", "tcti-post-overlay-null-user-fault-fix", "tcti-ldrsw-sign-extension-fix":
         return ProofTierMetadata(
             proofTier: "rail",
             acceptanceWeight: "probe",

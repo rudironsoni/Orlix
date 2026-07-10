@@ -2,6 +2,21 @@
 
 ## 2026-07-10
 
+### Checkpoint: LDRSW Sign-Extension Rail Metadata
+
+- Harness-selected gate: `tcti-ldrsw-sign-extension-fix`.
+- Initial result: `rtk proxy make tcti-gate TARGET=tcti-ldrsw-sign-extension-fix` failed with report metadata drift, `proof_tier=seed` where the selected rail expects `proof_tier=rail`.
+- Fix: added `tcti-ldrsw-sign-extension-fix` to the rail/probe metadata fallback in `tools/tcti/orlix-tcti-gate.swift`.
+- Validation:
+  - `rtk proxy git diff --check`: passed.
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+- Remaining selected gate: `tcti-ldrsw-sign-extension-fix`.
+- Remaining blocker: the rail now emits `proof_tier=rail`, but fails on missing `tcti-ldrsw-sign-extension-reducer` report and missing pass-regression reducer evidence. No concrete guest/runtime failure state was produced by this run.
+- No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+
 ### Checkpoint: Post-Overlay Null User-Fault Fix Rail Contract
 
 - Harness-selected gate:
