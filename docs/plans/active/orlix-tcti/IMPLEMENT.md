@@ -2,6 +2,29 @@
 
 ## 2026-07-10
 
+### Checkpoint: Post-Overlay Reducer Semantic Simulator Freshness
+
+- `agent-goal` stopped at `no-phone-tcti-post-overlay-null-user-fault-reducer` after `Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json` failed only with `simulator-report-stale`.
+- The reducer required exact `git_sha` equality for `Build/Reports/runtime/tcti-simulator-stability-20260710T140552Z-78901.json`, while `status.json` correctly marked that passing report execution-fresh because all changes since `d6ae2e2b0c2057a9464325a6dc4b2111b9503dd5` were harness or documentation paths.
+- Classified this as a TCTI harness/report evidence-contract bug. No current guest/runtime failure was observed, and no runtime patch was authorized or made.
+- Updated `runPostOverlayNullUserFaultReducer()` and its downstream `runPostOverlayNullUserFaultFix()` rail to use the existing semantic simulator-runtime freshness helper. The downstream rail still requires an exact-HEAD passing reducer report. Pinned simulator identity, single-booted state, structured first-SVC and static-PIE events, fatal-user-fault interpretation, negative execution shape, and reproducer generation remain required.
+- Updated the result classifier so a `no-phone-reducer` whose only structured failure ID is `simulator-report-stale` becomes `rail_evidence_contract_bug`. Added an explicit mixed-failure fixture proving substantive reducer failures remain unclassified stops and do not authorize harness-only repair.
+- Validation:
+  - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift gate-result-policy-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix`: passed after removing the same duplicated exact-SHA simulator prerequisite.
+  - `rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json`: passed; the replayed negative fixture failed as expected with exit code `2`.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`: passed.
+  - `rtk proxy make agent-harness-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load`: passed, restoring the positive golden report after negative replay.
+  - `rtk proxy make agent-status AREA=orlix-tcti`, `rtk proxy make agent-next AREA=orlix-tcti`, and `rtk proxy make agent-task-envelope-check AREA=orlix-tcti`: passed; next selected `tcti-post-overlay-null-user-fault-fix`.
+- No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, runtime-validation behavior, generated upstream tree, physical-device gate, production assembly, or gadget dispatch changed.
+- Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: Compact Autonomous Goal Output
 
 - Repeated `agent-goal` iterations printed the complete gate roadmap through `agent-status`, producing very large transcripts even though the loop only needed generated JSON policy fields.

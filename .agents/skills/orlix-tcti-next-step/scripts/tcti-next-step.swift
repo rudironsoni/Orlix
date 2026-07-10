@@ -1196,8 +1196,13 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
         "simulator-report-stale",
         "not execution-fresh for this rail",
     ]
+    let failureIDs = status.reports.flatMap(\.failures).map(\.id)
+    let exclusivelyStaleNoPhoneReducer = status.kind == "no-phone-reducer" &&
+        !failureIDs.isEmpty &&
+        Set(failureIDs) == Set(["simulator-report-stale"])
     let railLike = status.kind == "rail" || status.kind.contains("production")
-    if railLike && railContractTerms.contains(where: { evidenceText.contains($0) }) {
+    if exclusivelyStaleNoPhoneReducer ||
+        (railLike && railContractTerms.contains(where: { evidenceText.contains($0) })) {
         return policy(
             classification: "rail_evidence_contract_bug",
             runtimePatchAllowed: false,
@@ -9211,6 +9216,7 @@ func policyFixtureReport(
     acceptanceWeight: String? = nil,
     realStackRequired: Bool? = nil,
     canClaimRuntimeReadiness: Bool? = nil,
+    failures: [ReportFailureFact] = [],
     forbiddenBehaviorViolations: [String] = []
 ) -> ReportFact {
     ReportFact(
@@ -9225,6 +9231,7 @@ func policyFixtureReport(
         releaseGateEligible: false,
         readinessGateEligible: false,
         gitSHA: gitSHA(),
+        failures: failures,
         forbiddenBehaviorViolations: forbiddenBehaviorViolations
     )
 }
@@ -9271,6 +9278,8 @@ func validateGateResultPolicyFixtures() throws {
         ("missing-artifact-without-safe-generator", policyFixtureStatus(id: "unknown", command: "", state: "missing", reason: "artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/unknown.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
         ("rail-evidence-contract-bug", policyFixtureStatus(id: "rail", state: "fail", reason: "historical generated report is obsolete"), "rail_evidence_contract_bug", false, true, false, true),
         ("rail-simulator-freshness-contract-bug", policyFixtureStatus(id: "rail-stale", state: "fail", reason: "simulator-report-stale: latest simulator stability report is not execution-fresh for this rail"), "rail_evidence_contract_bug", false, true, false, true),
+        ("no-phone-reducer-simulator-freshness-contract-bug", policyFixtureStatus(id: "reducer-stale", kind: "no-phone-reducer", state: "fail", reason: "simulator-report-stale", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", failures: [ReportFailureFact(id: "simulator-report-stale", message: "latest simulator stability report is not execution-fresh for this rail")])]), "rail_evidence_contract_bug", false, true, false, true),
+        ("no-phone-reducer-mixed-failure-stops-unclassified", policyFixtureStatus(id: "reducer-mixed", kind: "no-phone-reducer", state: "fail", reason: "simulator report stale and negative execution shape failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", failures: [ReportFailureFact(id: "simulator-report-stale", message: "latest simulator stability report is not execution-fresh for this rail"), ReportFailureFact(id: "negative-execution-shape", message: "negative execution shape failed")])]), "current_runtime_product_failure", false, false, false, true),
         ("rail-missing-reducer-contract-bug", policyFixtureStatus(id: "rail-reducer", kind: "production-tcti-fix", state: "fail", reason: "reducer-evidence: missing reducer report or pass-regression evidence"), "rail_evidence_contract_bug", false, true, false, true),
         ("metadata-drift", policyFixtureStatus(id: "drift", kind: "rail", proofTier: "rail", state: "fail", reason: "metadata mismatch", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "seed")]), "proof_tier_report_status_metadata_drift", false, true, false, true),
         ("runtime-product-failure", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
