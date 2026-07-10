@@ -101,4 +101,6 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 
 After every selected command, `agent-goal` regenerates status, next-task, and the task envelope before deciding again. It does not infer action from prose or from `status=fail`; it only follows the classifier and action-policy fields in `next-task.json`.
 
+The loop regenerates status and next-task with `ORLIX_TCTI_HARNESS_QUIET=1` so autonomous runs emit compact iteration and handoff records instead of streaming the full roadmap. Direct status and next commands remain human-readable.
+
 Use `DRY_RUN=1` to inspect what the loop would execute without running selected commands. Use `MAX_ITERATIONS` and `MAX_COMMANDS` to bound work; both default to 25.
