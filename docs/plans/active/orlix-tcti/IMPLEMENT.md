@@ -2,6 +2,24 @@
 
 ## 2026-07-10
 
+### Checkpoint: User-Data Window Fix Proof Contract
+
+- The harness selected `tcti-user-data-window-refresh-fix` and stopped with `proof_tier_report_status_metadata_drift`: the report emitted `proof_tier=seed` while the production rail expects `proof_tier=rail`.
+- The gate implementation also required the unrelated, missing `tcti-post-bash-mmap-read-fault-reducer` report even though the roadmap prerequisite, expected report paths, validation commands, reducer requirements, and historical BusyBox checkpoint all identify `tcti-post-busybox-sigabrt-reducer`.
+- Classified both failures as TCTI harness/report contract defects. The envelope had `runtime_patch_allowed=false`, `harness_patch_allowed=true`, and `must_stop=true`; no current runtime failure authorized a product patch.
+- Aligned the rail metadata and reducer report dependency with `tcti-post-busybox-sigabrt-reducer`.
+- The current pinned static BusyBox report passes, so no SIGABRT failure report exists to reduce. Updated the reducer to emit a not-needed pass only for a current passing static BusyBox report on the single required simulator with no process signal, no fatal user fault, and all forbidden-behavior fields false.
+- The not-needed pass now also writes the contractually required `post-busybox-sigabrt-pass-regression` reducer so the selected validation command can replay the current passing evidence.
+- Made the current-pass evidence branch fail closed: all six forbidden-behavior keys must be explicit boolean false; `autonomous_tests_bypassed` and `preflight_only` must be explicit false; static PIE must identify `task=sh` and a pid; and every reported fatal-user-fault field is empty. The gate executes malformed-evidence fixtures for missing forbidden keys, fatal PC, preflight-only, and bypassed evidence before accepting a pass.
+- Added an explicit roadmap entry for the rail metadata and changed runtime-preflight insertion to skip IDs already represented in the roadmap. This prevents duplicate gate IDs while making `proof_tier=rail`, `acceptance_weight=probe`, `real_stack_required=false`, and `can_claim_runtime_readiness=false` a source-of-truth contract rather than a fallback.
+- The gate and scheduler now require the same reducer identity and evidence linkage: the reducer target/gate must be `tcti-post-busybox-sigabrt-reducer`; its artifacts must contain both the exact current pinned static-BusyBox report and the pass-regression reducer; and the fix report must carry that exact runtime report. The legacy matching-fault branch uses these checks before it can return pass.
+- The rail accepts a simulator report only when the existing execution-freshness policy proves that changes since its `git_sha` are non-runtime paths. A harness-only commit therefore does not force forbidden simulator reruns, while `OrlixKernel`, `OrlixMLibC`, `OrlixOS`, `tools/runtime`, project metadata, or simulator-policy changes still invalidate the report.
+- Final review found the first strict implementation had incorrectly required byte-for-byte `git_sha` equality, which made its own harness-only checkpoint fail after commit. Replaced that check in both the gate and scheduler with their established execution-freshness policy, then reran the reducer, replay, and user-data rail successfully without a simulator rerun.
+- The scheduler must model the current static-BusyBox report as a prerequisite of this rail. Added `simulator-tcti-static-busybox-start` so a stale runtime report is refreshed by the simulator ladder before the rail is selectable, instead of being mislabeled as an unclassified runtime-product failure.
+- Regenerated the envelope after the dependency fix. It now selects `tcti-kernel-syscall-dispatch-smoke` as `stale_proof_refresh` with `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=true`, and `must_stop=false`.
+- Validation completed before commit: `git diff --check`, both Swift parse checks, `tcti-plan-consistency`, `tcti-post-busybox-sigabrt-reducer`, replay through `tcti-repro`, `tcti-user-data-window-refresh-fix`, `tcti-report-schema-check`, `tcti-appstore-safety-audit`, and `agent-status` / `agent-next` / `agent-task-envelope-check`. The harness now selects `tcti-busybox-syscall-return-trace`; that next no-phone rail has not yet been run.
+- Preserved all existing `tcti_user_page.c` source assertions and did not change runtime behavior.
+
 ### Checkpoint: Silent Autonomous Goal Iterations
 
 - The compact goal-loop fix suppressed the full roadmap, but autonomous runs still streamed every selected command and a detailed selected-gate policy block on every iteration.

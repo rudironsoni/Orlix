@@ -3153,6 +3153,77 @@
       "can_claim_runtime_readiness": false
     },
     {
+      "id": "tcti-user-data-window-refresh-fix",
+      "command": "make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
+      "kind": "production-tcti-fix",
+      "prerequisites": [
+        "no-phone-tcti-post-busybox-sigabrt-reducer",
+        "simulator-tcti-static-busybox-start"
+      ],
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/**",
+        "tools/tcti/orlix-tcti-gate.swift",
+        ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+        ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
+        "docs/plans/active/orlix-tcti/IMPLEMENT.md"
+      ],
+      "forbidden_scope": [
+        "Do not run physical-device gates.",
+        "Do not run simulator gates as proof for this no-phone fix gate.",
+        "Do not add production assembly or gadget dispatch.",
+        "Do not edit generated Linux or build trees.",
+        "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics."
+      ],
+      "expected_report_paths": [
+        "Build/TCTI/reports/tcti-user-data-window-refresh-fix/report.json",
+        "Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json",
+        "Build/TCTI/reports/tcti-repro/report.json",
+        "Build/Reports/runtime/tcti-static-busybox-start-*.json"
+      ],
+      "readiness_eligible": false,
+      "physical_device": false,
+      "gadget": false,
+      "required_validation_commands": [
+        "rtk proxy git diff --check",
+        "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
+        "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
+        "rtk proxy make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
+        "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
+        "rtk proxy make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
+        "rtk proxy make agent-harness-check",
+        "rtk proxy make agent-status AREA=orlix-tcti",
+        "rtk proxy make agent-next AREA=orlix-tcti",
+        "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
+        "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
+        "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
+        "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit"
+      ],
+      "reducer_requirements": [
+        "The post-BusyBox SIGABRT reducer must pass for the current report before a runtime patch is authorized.",
+        "The fix gate must emit a current JSON report and cannot claim simulator readiness."
+      ],
+      "required_subagents_or_skills": [
+        "orlix-tcti-reproducer",
+        "orlix-tcti-safety",
+        "orlix-tcti-debug",
+        "tcti-planner",
+        "tcti-safety-reviewer",
+        "tcti-test-reducer",
+        "tcti-release-gate-reviewer"
+      ],
+      "commit_message_template": "fix(tcti): refresh user data windows after kernel faults",
+      "stop_conditions": [
+        "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
+        "Stop if the fix requires HostAdapter Linux behavior, production assembly, gadget dispatch, product defconfig flips, or generated-tree edits.",
+        "Stop if simulator static BusyBox readiness is claimed before its pinned simulator gate passes."
+      ],
+      "proof_tier": "rail",
+      "acceptance_weight": "probe",
+      "real_stack_required": false,
+      "can_claim_runtime_readiness": false
+    },
+    {
       "id": "physical-tcti-init-first-syscall",
       "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
       "kind": "physical-device",
