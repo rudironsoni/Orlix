@@ -2,6 +2,23 @@
 
 ## 2026-07-10
 
+### Checkpoint: Compact Autonomous Goal Output
+
+- Repeated `agent-goal` iterations printed the complete gate roadmap through `agent-status`, producing very large transcripts even though the loop only needed generated JSON policy fields.
+- Added goal-loop-only quiet status and next-task regeneration through `ORLIX_TCTI_HARNESS_QUIET=1`.
+- Direct `make agent-status` and `make agent-next` behavior remains human-readable and unchanged.
+- Added executable harness checks proving quiet status and next-task commands produce no human-readable output while still regenerating their artifacts.
+- Validation:
+  - `rtk git diff --check`: passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/goal-loop`: passed.
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-next-step/scripts/harness-check`: passed.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy make agent-harness-check`: passed, including the bounded real `agent-goal` output check.
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed.
+  - Quiet status and next output were both `0` bytes; direct status remained `42422` bytes, direct next remained `301` bytes, and `DRY_RUN=1 MAX_ITERATIONS=1 MAX_COMMANDS=0 .agents/skills/orlix-tcti-next-step/scripts/goal-loop` emitted a compact `39`-line iteration and handoff record without the full roadmap.
+- This is an orchestration/output fix only. It does not change OrlixKernel runtime behavior, proof classification, gate selection, allowed scope, readiness state, or physical-device policy.
+
 ### Checkpoint: Durable LDRSW Rail Evidence
 
 - `agent-goal` stopped at `tcti-ldrsw-sign-extension-fix` because the rail required a missing historical `tcti-ldrsw-sign-extension-reducer` report even though the current pinned simulator stability report passes and no longer contains the old high-address fault signature.

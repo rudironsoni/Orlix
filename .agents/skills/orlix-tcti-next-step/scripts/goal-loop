@@ -69,8 +69,8 @@ json_bool() {
 
 refresh_envelope() {
   refresh_status=0
-  (cd "$root" && rtk proxy make agent-status AREA=orlix-tcti) || refresh_status=1
-  (cd "$root" && rtk proxy make agent-next AREA=orlix-tcti) || refresh_status=1
+  (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-status AREA=orlix-tcti) || refresh_status=1
+  (cd "$root" && ORLIX_TCTI_HARNESS_QUIET=1 rtk proxy make agent-next AREA=orlix-tcti) || refresh_status=1
   (cd "$root" && rtk proxy make agent-task-envelope-check AREA=orlix-tcti) || refresh_status=1
   return "$refresh_status"
 }

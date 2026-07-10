@@ -8940,12 +8940,14 @@ func writeNext() throws -> TaskEnvelope {
     let task = try envelope(from: status)
     try writeJSON(task, to: nextTaskURL)
     try markdown(for: task).write(to: nextTaskMarkdownURL, atomically: true, encoding: .utf8)
-    print("Orlix TCTI next task")
-    print("next_task_json: \(relativePath(nextTaskURL))")
-    print("next_task_md: \(relativePath(nextTaskMarkdownURL))")
-    print("selected_gate: \(task.selectedGateID)")
-    print("selected_command: \(task.selectedGateCommand)")
-    print("commit_message: \(task.commitMessage)")
+    if ProcessInfo.processInfo.environment["ORLIX_TCTI_HARNESS_QUIET"] != "1" {
+        print("Orlix TCTI next task")
+        print("next_task_json: \(relativePath(nextTaskURL))")
+        print("next_task_md: \(relativePath(nextTaskMarkdownURL))")
+        print("selected_gate: \(task.selectedGateID)")
+        print("selected_command: \(task.selectedGateCommand)")
+        print("commit_message: \(task.commitMessage)")
+    }
     return task
 }
 
@@ -9295,7 +9297,9 @@ let mode = CommandLine.arguments.dropFirst().first ?? "status"
 do {
     switch mode {
     case "status":
-        _ = try writeStatus(printHuman: true)
+        _ = try writeStatus(
+            printHuman: ProcessInfo.processInfo.environment["ORLIX_TCTI_HARNESS_QUIET"] != "1"
+        )
     case "next":
         _ = try writeNext()
     case "check":
