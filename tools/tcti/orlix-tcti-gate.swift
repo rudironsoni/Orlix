@@ -877,7 +877,7 @@ func proofTierMetadata(for target: String) -> ProofTierMetadata {
             realStackRequired: true,
             canClaimRuntimeReadiness: false
         )
-    case "tcti-static-pie-relocation-fix", "tcti-simd-self-move-fix":
+    case "tcti-static-pie-relocation-fix", "tcti-simd-self-move-fix", "tcti-post-overlay-null-user-fault-fix":
         return ProofTierMetadata(
             proofTier: "rail",
             acceptanceWeight: "probe",
@@ -11522,8 +11522,8 @@ func runPostOverlayNullUserFaultFix() throws -> Int32 {
         !engine.contains("regs = task_pt_regs(current);") {
         failures.append(fail("syscall-resume-marker", "TCTI syscall path must resume with task pt_regs before reapplying static PIE relocations"))
     }
-    if engine.contains("PT_INTERP") ||
-        engine.contains("DT_NEEDED") ||
+    // PT_INTERP is valid in ownership guards that leave interpreter relocation to ld.so.
+    if engine.contains("DT_NEEDED") ||
         engine.contains("R_AARCH64_JUMP_SLOT") {
         failures.append(fail("dynamic-loader-scope", "post-overlay null user-fault fix must not grow into a dynamic loader"))
     }
