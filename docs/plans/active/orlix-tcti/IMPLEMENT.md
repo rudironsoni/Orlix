@@ -2,6 +2,13 @@
 
 ## 2026-07-10
 
+### Checkpoint: Autonomous Missing Proof Generation Policy
+
+- `agent-goal` stopped at `golden-init-001-structural` with `missing_generated_artifact`, even though the selected envelope carried the supported generator command `make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit` and all prerequisites were satisfied.
+- Updated the classifier so missing generated proof may continue only through supported no-phone `tcti-gate` commands or the exact pinned-simulator `runtime-validation` command. Physical-device work and missing artifacts without a known safe generator remain stopped.
+- Added executable classifier fixtures for stale refresh, missing generated artifact, rail evidence-contract bug, metadata drift, current runtime/product failure, environment-only failure, forbidden behavior violation, and readiness pass.
+- This is a harness autonomy fix. It does not change OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated upstream trees, physical-device gates, production assembly, or gadget dispatch.
+
 ### Checkpoint: LDRSW Sign-Extension Rail Metadata
 
 - Harness-selected gate: `tcti-ldrsw-sign-extension-fix`.

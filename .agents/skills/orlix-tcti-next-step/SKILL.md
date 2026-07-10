@@ -97,6 +97,8 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 - `runtime_patch_allowed=false`
 - `harness_patch_allowed=false`
 
+`missing_generated_artifact` may authorize continuation only when the selected command is a supported no-phone `tcti-gate` command or the pinned-simulator `runtime-validation` command, all prerequisites are satisfied, and the gate is not physical-device work. Missing artifacts without a known safe generator remain stop conditions.
+
 After every selected command, `agent-goal` regenerates status, next-task, and the task envelope before deciding again. It does not infer action from prose or from `status=fail`; it only follows the classifier and action-policy fields in `next-task.json`.
 
 Use `DRY_RUN=1` to inspect what the loop would execute without running selected commands. Use `MAX_ITERATIONS` and `MAX_COMMANDS` to bound work; both default to 25.
