@@ -11393,7 +11393,8 @@ func runPostOverlayNullUserFaultReducer() throws -> Int32 {
         intField(firstSVC, "pid") == 1 &&
         !stringField(firstSVC, "pc").isEmpty &&
         intField(firstSVC, "syscall") != nil
-    let staticPIEImageCaptured = stringField(staticPIEImage, "task") == "sh" &&
+    let staticPIETask = stringField(staticPIEImage, "task")
+    let staticPIEImageCaptured = (staticPIETask == "init" || staticPIETask == "sh") &&
         intField(staticPIEImage, "pid") != nil &&
         !stringField(staticPIEImage, "pc").isEmpty &&
         !stringField(staticPIEImage, "base").isEmpty &&
