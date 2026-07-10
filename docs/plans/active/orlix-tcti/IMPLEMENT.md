@@ -2,6 +2,16 @@
 
 ## 2026-07-10
 
+### Checkpoint: Static PIE Rail Semantic Simulator Freshness
+
+- After seed proof regeneration, `tcti-static-pie-relocation-fix` failed only because its current passing simulator-stability prerequisite had a prior `git_sha`; `status.json` already proved the report execution-fresh because only harness/docs paths changed.
+- Updated the static PIE rail to use the existing semantic simulator freshness helper instead of exact-HEAD equality.
+- Updated classifier precedence so a rail-specific `simulator-report-stale` contract failure is classified as `rail_evidence_contract_bug`, while genuine CoreSimulator, runner, destination, and storage failures remain `environment_only_failure`.
+- Added a classifier fixture for the rail simulator-freshness precedence case.
+- Validation passed: `git diff --check`, Swift parse for both harness tools, `gate-result-policy-check`, `tcti-static-pie-relocation-fix`, `agent-harness-check`, `tcti-report-schema-check`, `tcti-plan-consistency`, `agent-status`, `agent-next`, and `agent-task-envelope-check`.
+- The static PIE rail report now passes. The next selected gate is `tcti-simd-self-move-fix`; no runtime implementation authorization was produced.
+- This is a harness/report contract fix. It does not change OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, runtime-validation behavior, generated upstream trees, physical-device gates, production assembly, or gadget dispatch.
+
 ### Checkpoint: Autonomous Missing Proof Generation Policy
 
 - `agent-goal` stopped at `golden-init-001-structural` with `missing_generated_artifact`, even though the selected envelope carried the supported generator command `make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit` and all prerequisites were satisfied.
