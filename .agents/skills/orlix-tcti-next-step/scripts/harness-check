@@ -190,6 +190,8 @@ check_skills() {
     grep -q 'selected command failed after classifier refresh' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" &&
     grep -q 'refresh_envelope' "$root/.agents/skills/orlix-tcti-next-step/scripts/goal-loop" ||
     fail "goal-loop must refresh and reload classifier policy after selected command failure"
+  "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" gate-result-policy-check ||
+    fail "selected gate result policy fixtures failed"
   grep -q 'agent-goal' "$root/.codex/agents/orlix-implementer.toml" ||
     fail "Codex implementer agent must mention agent-goal"
   grep -q 'selected-gate action policy' "$root/.codex/agents/orlix-implementer.toml" ||
