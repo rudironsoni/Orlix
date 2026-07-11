@@ -8204,3 +8204,18 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app, generated-tree, physical-device, production-assembly, or gadget behavior changed.
   - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Darwin Attr And ACL Header Normalization
+
+- OrlixOS package fix:
+  - Replaced GNU-specific `sed` word-boundary expressions in the durable attr and ACL package recipes with fixed token replacement that works with the Darwin host tools used by Xcode builds.
+  - Kept the post-install fail-closed checks and made them fixed-string checks for the forbidden `EXPORT` token.
+  - Bumped the shared project build from 16 to 17 because OrlixOS package inputs changed.
+- Evidence:
+  - `make -f OrlixOS/Makefile build PROFILE=tcti_runtime ORLIXOS_FORCE_PACKAGE_RECONFIGURE=1`: passed after rebuilding the real package set.
+  - The installed attr and ACL public headers contain no `EXPORT` token.
+  - `make tcti-gate TARGET=tcti-kernel-kselftest-subset`: passed through the pinned-simulator OrlixOS terminal-session XCTest surface.
+  - `Build/TCTI/reports/tcti-kernel-kselftest-subset/report.json` records product `0.1 (17)`, `pass_count=1`, `fail_count=0`, `skip_count=0`, and all forbidden behavior false.
+- Boundary:
+  - The fix changes only OrlixOS package construction. No generated upstream tree, OrlixKernel runtime behavior, OrlixMLibC behavior, HostAdapter behavior, app output, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
