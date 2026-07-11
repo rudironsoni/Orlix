@@ -2,6 +2,13 @@
 
 ## 2026-07-11
 
+### Checkpoint: BusyBox Shell Reducer Scheduling
+
+- The selector chose `no-phone-tcti-post-busybox-shell-command-sigill-reducer` before any `tcti-static-busybox-shell-command` simulator report existed. Its reducer command could only fail with missing simulator evidence, so this was a scheduler ordering defect, not a guest SIGILL or TCTI runtime failure.
+- Updated the scheduler to treat the missing producer report as a not-needed reducer state that satisfies its prerequisite, and made the downstream MOVI vN.4s rail explicitly depend on `simulator-tcti-static-busybox-shell-command` as well as the reducer.
+- No OrlixKernel, HostAdapter, OrlixOS, app, runtime-validation, generated-tree, physical-device, production-assembly, or gadget-dispatch behavior changed.
+- Validation: `git diff --check`, Swift parse of `tcti-next-step.swift`, `agent-harness-check`, and regenerated `agent-status` / `agent-next` / `agent-task-envelope-check` passed. The selector no longer chooses the impossible reducer first.
+
 ### Checkpoint: Simulator Booted-State Runtime Validation
 
 - A current `tcti-coreutils-ls-stat` refresh failed before app launch with CoreSimulator SimError 405, `Unable to boot device in current state: Booted`. The runtime report had no TCTI events, no child process start, and all forbidden-behavior fields false.

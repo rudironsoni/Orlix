@@ -2377,7 +2377,22 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
 	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
 	guard let (report, object) = latestRuntimeReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") else {
-		return basicReportGate(gate, target: "tcti-post-busybox-shell-command-sigill-reducer")
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "not_needed",
+			passed: false,
+			satisfiesPrerequisite: true,
+			reason: "static BusyBox shell-command simulator evidence is missing; run the simulator producer before selecting a SIGILL reducer",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: reducerReport.exists ? [reducerReport] : [],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
 	}
 	let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
 	let text = artifacts.compactMap { artifact -> String? in
@@ -5897,7 +5912,10 @@ func runtimePreflightGates() -> [Gate] {
         id: "tcti-simd-movi-4s-0x1-fix",
         command: "make tcti-gate TARGET=tcti-simd-movi-4s-0x1-fix",
         kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["no-phone-tcti-post-busybox-shell-command-sigill-reducer"],
+        prerequisites: [
+            "simulator-tcti-static-busybox-shell-command",
+            "no-phone-tcti-post-busybox-shell-command-sigill-reducer",
+        ],
         allowedScope: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
