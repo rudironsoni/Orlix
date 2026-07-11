@@ -41,9 +41,9 @@ $(ORLIXOS_ATTR_STAMP): $(ORLIXOS_ATTR_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.or
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
 	for header in "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/attr/attributes.h" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/attr/libattr.h"; do \
 		[ -s "$$header" ] || { echo "missing installed attr header: $$header" >&2; exit 1; }; \
-		sed -i.bak 's/\<EXPORT\>/extern/g' "$$header"; \
+		sed -i.bak 's/EXPORT/extern/g' "$$header"; \
 		rm -f "$$header.bak"; \
-		! grep -q '\<EXPORT\>' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
+		! grep -Fq 'EXPORT' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
 	done; \
 	for program in getfattr setfattr; do \
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
@@ -104,9 +104,9 @@ $(ORLIXOS_ACL_STAMP): $(ORLIXOS_ACL_SOURCE_STAMP) $(ORLIXOS_ATTR_STAMP) $(ORLIXO
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
 	for header in "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/sys/acl.h" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/include/acl/libacl.h"; do \
 		[ -s "$$header" ] || { echo "missing installed acl header: $$header" >&2; exit 1; }; \
-		sed -i.bak 's/\<EXPORT\>/extern/g' "$$header"; \
+		sed -i.bak 's/EXPORT/extern/g' "$$header"; \
 		rm -f "$$header.bak"; \
-		! grep -q '\<EXPORT\>' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
+		! grep -Fq 'EXPORT' "$$header" || { echo "unsanitized EXPORT in $$header" >&2; exit 1; }; \
 	done; \
 	for program in getfacl setfacl; do \
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
