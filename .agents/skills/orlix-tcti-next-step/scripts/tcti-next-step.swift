@@ -2660,7 +2660,7 @@ func runtimeGateState(report: ReportFact, passed: Bool) -> String {
     if passed {
         return "pass"
     }
-    if report.status == "pass" {
+    if !reportExecutionFresh(report) || report.status == "pass" {
         return "stale"
     }
     return report.status
@@ -6512,6 +6512,26 @@ func policyFixtureStatus(
 }
 
 func validateGateResultPolicyFixtures() throws {
+    let staleFailedRuntimeReport = policyFixtureReport(
+        path: "Build/Reports/runtime/tcti-stale-failure.json"
+    ).withExecutionFreshness(ExecutionFreshness(
+        reportGitSHA: "old",
+        currentGitSHA: "current",
+        reportProductVersion: "0.1",
+        reportProductBuildID: "16",
+        currentProductVersion: "0.1",
+        currentProductBuildID: "17",
+        executionFresh: false,
+        statusRecomputed: true,
+        changedPathsSinceReport: ["project.yml"],
+        ignoredNonExecutionPaths: [],
+        invalidatingPaths: ["project.yml"],
+        reason: "product build changed"
+    ))
+    guard runtimeGateState(report: staleFailedRuntimeReport, passed: false) == "stale" else {
+        throw HarnessError.invalid("stale failing runtime report must remain refreshable")
+    }
+
     let fixtures: [(String, GateStatus, String, Bool, Bool, Bool, Bool)] = [
         ("stale-proof-refresh", policyFixtureStatus(id: "stale", state: "stale", reason: "report git_sha is stale"), "stale_proof_refresh", false, false, true, false),
         ("current-pass-reducer-refresh", policyFixtureStatus(id: "no-phone-tcti-post-busybox-sigabrt-reducer", command: "make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer", kind: "no-phone-reducer", state: "ready", reason: "current passing static BusyBox report Build/Reports/runtime/tcti-static-busybox-start-current.json requires the post-BusyBox SIGABRT reducer to refresh exact report linkage"), "stale_proof_refresh", false, false, true, false),
