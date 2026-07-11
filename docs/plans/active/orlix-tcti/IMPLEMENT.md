@@ -8232,3 +8232,19 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No product runtime behavior, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Single Semantic Proof Freshness Policy
+
+- Harness simplification:
+  - `reportExecutionFresh` now applies the existing product version/build and product-input change policy even when a caller did not precompute an `ExecutionFreshness` object.
+  - Removed all direct `ReportFact.gitSHA == current HEAD` decisions from runtime, reducer, and fix rails. Exact producer report path linkage remains the reducer/fix identity contract.
+  - Golden structural validation now verifies the recorded source and binary SHA-256 values instead of expiring solely because a later proof or harness commit changed HEAD.
+  - Added an executable guard that rejects future direct report-to-HEAD freshness comparisons.
+- Evidence:
+  - `rtk proxy swiftc -typecheck .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `semantic-freshness-check`, `gate-result-policy-check`, and `rtk proxy make agent-harness-check`: passed.
+  - Status, next-task, and envelope regeneration passed without reselecting current golden or rail proofs after harness-only changes.
+  - The selector now reaches `simulator-tcti-vfs-completeness` as `stale_proof_refresh`, with source edits forbidden until the build-17 gate runs.
+- Boundary:
+  - No product runtime behavior, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
