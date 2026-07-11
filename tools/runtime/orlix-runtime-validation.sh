@@ -1470,11 +1470,14 @@ install_app() {
 	if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 		local bootstatus_status
 
-		xcrun simctl boot "$device_id" >"$artifact_dir/boot.stdout" 2>"$artifact_dir/boot.stderr" || true
 		if simulator_is_booted "$device_id"; then
+			printf 'simctl reports the selected simulator is already Booted. Skipping simctl boot.\n' \
+				>"$artifact_dir/boot.stdout"
+			: >"$artifact_dir/boot.stderr"
 			printf 'simctl reports the selected simulator is Booted. Skipping blocking bootstatus and continuing to install/launch probe.\n' \
 				>"$artifact_dir/bootstatus-skipped-booted.txt"
 		else
+			xcrun simctl boot "$device_id" >"$artifact_dir/boot.stdout" 2>"$artifact_dir/boot.stderr" || true
 		set +e
 		python3 - "$device_id" "$simulator_boot_timeout_seconds" \
 			"$artifact_dir/bootstatus.stdout" \
