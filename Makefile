@@ -33,7 +33,10 @@ ORLIX_BETA_SIMULATOR_ID ?= ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+TCTI_GATE_SOURCE := tools/tcti/orlix-tcti-gate.swift
+TCTI_GATE_BIN := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate
+TCTI_GATE_BUILD_ID := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate.build-id
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -68,6 +71,58 @@ check-build-tools:
 	if ! brew bundle check --file Brewfile; then \
 		echo "missing Orlix build tool dependencies; install them with: brew bundle --file Brewfile" >&2; \
 		exit 1; \
+	fi
+
+product-build-prepare:
+	@set -euo pipefail; \
+	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
+	[[ "$$current" =~ ^[0-9]+$$ ]] || { echo "CURRENT_PROJECT_VERSION must be an integer in project.yml, got: $$current" >&2; exit 1; }; \
+	head_build="$$(git show HEAD:project.yml 2>/dev/null | awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }')"; \
+	product_paths=( \
+		project.yml \
+		OrlixKernel/Makefile OrlixKernel/Sources/boot OrlixKernel/Sources/include OrlixKernel/Sources/Support OrlixKernel/Sources/ports/orlix \
+		OrlixHostAdapter/Makefile OrlixHostAdapter/Sources \
+		OrlixMLibC/Makefile OrlixMLibC/Sources \
+		OrlixOS/Makefile OrlixOS/Sources \
+		Orlix/Makefile Orlix/Sources OrlixTestRunner/Sources \
+	); \
+	working_changes="$$(git status --porcelain=v1 --untracked-files=all -- "$${product_paths[@]}" | grep -v ' project.yml$$' || true)"; \
+	project_semantic_changes="$$(git diff HEAD -- project.yml | grep -E '^[+-]' | grep -vE '^(---|\+\+\+|[+-][[:space:]]*(CURRENT_PROJECT_VERSION|MARKETING_VERSION):)' || true)"; \
+	if [ -n "$$project_semantic_changes" ]; then working_changes="$$working_changes project.yml"; fi; \
+	baseline="$$(git log -G 'CURRENT_PROJECT_VERSION:' -1 --format=%H -- project.yml)"; \
+	[ -n "$$baseline" ] || { echo "cannot find CURRENT_PROJECT_VERSION baseline in project.yml history" >&2; exit 1; }; \
+	baseline_build="$$(git show "$$baseline:project.yml" | awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }')"; \
+	committed_product_change=false; \
+	if ! git diff --quiet "$$baseline" HEAD -- "$${product_paths[@]}"; then committed_product_change=true; fi; \
+	needs_bump=false; \
+	if [ -n "$$working_changes" ] && [ "$$current" = "$$head_build" ]; then needs_bump=true; fi; \
+	if [ "$$committed_product_change" = true ] && [ "$$current" = "$$baseline_build" ]; then needs_bump=true; fi; \
+	if [ "$$needs_bump" = true ]; then \
+		next="$$((current + 1))"; \
+		perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
+		if [ "$${ORLIX_TCTI_HARNESS_QUIET:-0}" != 1 ]; then printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next for product input changes"; fi; \
+	else \
+		if [ "$${ORLIX_TCTI_HARNESS_QUIET:-0}" != 1 ]; then printf '%s\n' "product version unchanged: CURRENT_PROJECT_VERSION=$$current"; fi; \
+	fi
+
+product-build-version-check: product-build-prepare
+	@set -euo pipefail; \
+	current="$$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' project.yml)"; \
+	baseline="$$(git log -G 'CURRENT_PROJECT_VERSION:' -1 --format=%H -- project.yml)"; \
+	[ -n "$$baseline" ] || { echo "cannot find CURRENT_PROJECT_VERSION baseline in project.yml history" >&2; exit 1; }; \
+	baseline_build="$$(git show "$$baseline:project.yml" | awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }')"; \
+	if [ "$$current" = "$$baseline_build" ]; then \
+		product_paths=( \
+			OrlixKernel/Makefile OrlixKernel/Sources/boot OrlixKernel/Sources/include OrlixKernel/Sources/Support OrlixKernel/Sources/ports/orlix \
+			OrlixHostAdapter/Makefile OrlixHostAdapter/Sources \
+			OrlixMLibC/Makefile OrlixMLibC/Sources \
+			OrlixOS/Makefile OrlixOS/Sources \
+			Orlix/Makefile Orlix/Sources OrlixTestRunner/Sources \
+		); \
+		git diff --quiet "$$baseline" HEAD -- "$${product_paths[@]}" || { \
+			echo "product inputs changed after CURRENT_PROJECT_VERSION=$$current was established; run make product-build-prepare and commit project.yml" >&2; \
+			exit 1; \
+		}; \
 	fi
 
 beta-prerequisites: check-build-tools
@@ -180,15 +235,29 @@ beta-simulator-gate: beta-prerequisites
 		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
 
-runtime-validation: beta-prerequisites
+runtime-validation: product-build-version-check beta-prerequisites
 	@tools/runtime/orlix-runtime-validation.sh
 
-tcti-gate:
-	@test -n "$(TARGET)" || { echo "TARGET is required. Run: make tcti-gate-list" >&2; exit 2; }
-	@swift tools/tcti/orlix-tcti-gate.swift "$(TARGET)"
+tcti-gate-tool:
+	@set -euo pipefail; \
+	mkdir -p "$(dir $(TCTI_GATE_BIN))"; \
+	build_id="$$( { shasum -a 256 "$(TCTI_GATE_SOURCE)"; swiftc --version 2>&1; } | shasum -a 256 | awk '{ print $$1 }')"; \
+	if [ -x "$(TCTI_GATE_BIN)" ] && [ -s "$(TCTI_GATE_BUILD_ID)" ] && [ "$$(cat "$(TCTI_GATE_BUILD_ID)")" = "$$build_id" ]; then \
+		printf '%s\n' "reusing TCTI gate tool: $(TCTI_GATE_BIN)" >&2; \
+	else \
+		tmp="$(TCTI_GATE_BIN).tmp"; \
+		swiftc "$(TCTI_GATE_SOURCE)" -o "$$tmp"; \
+		mv "$$tmp" "$(TCTI_GATE_BIN)"; \
+		printf '%s\n' "$$build_id" > "$(TCTI_GATE_BUILD_ID)"; \
+		printf '%s\n' "built TCTI gate tool: $(TCTI_GATE_BIN)" >&2; \
+	fi
 
-tcti-gate-list:
-	@swift tools/tcti/orlix-tcti-gate.swift --list
+tcti-gate: tcti-gate-tool
+	@test -n "$(TARGET)" || { echo "TARGET is required. Run: make tcti-gate-list" >&2; exit 2; }
+	@"$(TCTI_GATE_BIN)" "$(TARGET)"
+
+tcti-gate-list: tcti-gate-tool
+	@"$(TCTI_GATE_BIN)" --list
 
 agent-harness-check:
 	@.agents/skills/orlix-tcti-next-step/scripts/harness-check all
@@ -297,13 +366,14 @@ beta-upload:
 xcodeproj:
 	@$(KERNEL_MAKE) xcodeproj
 
-build:
-	@$(MAKE) clean
+build: product-build-version-check
 	@$(MLIBC_MAKE) build
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
 	@$(KERNEL_MAKE) build PROFILE="$(PROFILE)" ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"
 	@$(HOSTADAPTER_MAKE) build
 	@$(APP_MAKE) build
+
+rebuild: clean build
 
 prepare scripts dtbs kunit kselftest kselftest-install test:
 	@$(KERNEL_MAKE) $@

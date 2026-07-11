@@ -7,6 +7,9 @@ REPO_ROOT := $(abspath $(PROJECT_DIR)/..)
 KERNEL_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixKernel/Makefile
 
 PROFILE ?= release
+ORLIX_PROJECT_YML ?= $(REPO_ROOT)/project.yml
+ORLIX_PRODUCT_VERSION ?= $(shell awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
+ORLIX_PRODUCT_BUILD_ID ?= $(shell awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
 ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
 ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(REPO_ROOT)/Build)
 ORLIX_OS_TARGET_SETTINGS ?= $(REPO_ROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
@@ -311,6 +314,8 @@ build:
 
 __build: __write-cross-file __build-compiler-rt
 	@set -euo pipefail; \
+	[ -n "$(ORLIX_PRODUCT_VERSION)" ] || { echo "project.yml lacks MARKETING_VERSION" >&2; exit 1; }; \
+	case "$(ORLIX_PRODUCT_BUILD_ID)" in ''|*[!0-9]*) echo "project.yml CURRENT_PROJECT_VERSION must be an integer" >&2; exit 1 ;; esac; \
 	command -v "$(MESON)" >/dev/null 2>&1 || { echo "meson is required to build OrlixMLibC" >&2; exit 1; }; \
 	command -v "$(NINJA)" >/dev/null 2>&1 || { echo "ninja is required to build OrlixMLibC" >&2; exit 1; }; \
 	$(MAKE) -f "$(PROJECT_DIR)/Makefile" __ensure-kernel-headers PROFILE="$(PROFILE)"; \
@@ -395,7 +400,7 @@ __build: __write-cross-file __build-compiler-rt
 	[ -d "$(MLIBC_SYSROOT)/usr/include" ] || { echo "missing OrlixMLibC installed headers: $(MLIBC_SYSROOT)/usr/include" >&2; exit 1; }; \
 	[ -d "$(MLIBC_SYSROOT)/usr/lib" ] || { echo "missing OrlixMLibC installed libraries: $(MLIBC_SYSROOT)/usr/lib" >&2; exit 1; }; \
 	[ -s "$(MLIBC_RTLIB)" ] || { echo "missing Orlix compiler runtime archive: $(MLIBC_RTLIB)" >&2; exit 1; }; \
-	printf 'profile=%s\nmlibc_commit=%s\n' "$(PROFILE)" "$(MLIBC_COMMIT)" > "$(MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready"; \
+	printf 'profile=%s\nproduct_version=%s\nproduct_build_id=%s\nmlibc_commit=%s\n' "$(PROFILE)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$(MLIBC_COMMIT)" > "$(MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready"; \
 	echo "built OrlixMLibC sysroot: $(MLIBC_SYSROOT)"
 
 headers_install:

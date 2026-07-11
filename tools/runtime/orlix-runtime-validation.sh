@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+product_version="$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
+product_build_id="$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
+[ -n "$product_version" ] || { echo "project.yml lacks MARKETING_VERSION" >&2; exit 2; }
+[[ "$product_build_id" =~ ^[0-9]+$ ]] || { echo "project.yml CURRENT_PROJECT_VERSION must be an integer" >&2; exit 2; }
+
 gate="${GATE:-tcti-init-first-syscall}"
 profile="${PROFILE:-}"
 if [ -z "$profile" ]; then
@@ -722,6 +727,8 @@ if [ "$status" = "pass" ] &&
   "guest_page_size": 4096,
   "host_page_size": $(getconf PAGESIZE),
   "passed": $passed,
+	"product_build_id": "$product_build_id",
+	"product_version": "$product_version",
 	"preflight_only": $preflight_only,
 	"proof_tier": "$proof_tier",
 	"profile": "$escaped_profile",
@@ -753,13 +760,11 @@ is_tcti_physical_gate() {
 
 report_has_passed() {
 	local path="$1"
-	local current_sha
-	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
-	[ -n "$current_sha" ] || return 1
 	[ -s "$path" ] &&
 		grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$path" &&
 		grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$path" &&
-		grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" &&
+		grep -q "\"product_version\"[[:space:]]*:[[:space:]]*\"$product_version\"" "$path" &&
+		grep -q "\"product_build_id\"[[:space:]]*:[[:space:]]*\"$product_build_id\"" "$path" &&
 		! grep -q '"status"[[:space:]]*:[[:space:]]*"evidence"' "$path" &&
 		! grep -q '"preflight_only"[[:space:]]*:[[:space:]]*true' "$path" &&
 		! grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*true' "$path"
@@ -850,11 +855,7 @@ latest_runtime_report_for_gate() {
 simulator_tcti_report_passed() {
 	local path="$1"
 	local expected_gate="$2"
-	local current_sha
-	current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
-	[ -n "$current_sha" ] || return 1
 	report_has_passed "$path" || return 1
-	grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$path" || return 1
 	grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$path" || return 1
 	grep -q "\"selected_device_id\"[[:space:]]*:[[:space:]]*\"$required_simulator_id\"" "$path" || return 1
 	grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$required_simulator_name\"" "$path" || return 1

@@ -21,6 +21,9 @@ libc ?= orlixmlibc
 
 ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
 ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(CURDIR)/Build)
+ORLIX_PROJECT_YML ?= $(CURDIR)/project.yml
+ORLIX_PRODUCT_VERSION ?= $(shell awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
+ORLIX_PRODUCT_BUILD_ID ?= $(shell awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
 
 LINUX_UPSTREAM_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/upstream/linux-$(LINUX_VERSION).git
 
@@ -2132,6 +2135,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	$(call orlix_kernel_acquire_profile_lock); \
 	output="$(ORLIX_KERNEL_PAYLOAD_DIR)"; \
 	required_settings=( \
+		"ORLIX_PRODUCT_VERSION=$(ORLIX_PRODUCT_VERSION)" \
+		"ORLIX_PRODUCT_BUILD_ID=$(ORLIX_PRODUCT_BUILD_ID)" \
 		"ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" \
 		"ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" \
 		"ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" \
@@ -2181,6 +2186,7 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	validate_unsigned_int "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)"; \
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)"; \
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)"; \
+	validate_unsigned_int "$(ORLIX_PRODUCT_BUILD_ID)"; \
 	expected_output="$(ORLIX_BUILD_ROOT)/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)"; \
 	[ "$$output" = "$$expected_output" ] || { echo "OrlixKernel payload path must come from OrlixOS target metadata: $$output" >&2; exit 1; }; \
 	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixKernel/payload" "$$output"; do \
@@ -2256,6 +2262,8 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		[ "$$(sed -n 's/^payload_bundle_name=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" ] && \
 		[ "$$(sed -n 's/^payload_bundle_extension=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" ] && \
 		[ "$$(sed -n 's/^payload_bundle_identifier=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" ] && \
+		[ "$$(sed -n 's/^product_version=//p' "$$payload_stamp")" = "$(ORLIX_PRODUCT_VERSION)" ] && \
+		[ "$$(sed -n 's/^product_build_id=//p' "$$payload_stamp")" = "$(ORLIX_PRODUCT_BUILD_ID)" ] && \
 		[ "$$(sed -n 's/^linux_page_size=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" ] && \
 		[ "$$(sed -n 's/^root_initramfs_resource=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" ] && \
 		[ "$$(sed -n 's/^base_root_image_resource=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" ] && \
@@ -2335,9 +2343,9 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		printf '%s\n' '    <key>CFBundlePackageType</key>'; \
 		printf '%s\n' '    <string>BNDL</string>'; \
 		printf '%s\n' '    <key>CFBundleShortVersionString</key>'; \
-		printf '%s\n' '    <string>0.1</string>'; \
+		printf '%s\n' '    <string>$(ORLIX_PRODUCT_VERSION)</string>'; \
 		printf '%s\n' '    <key>CFBundleVersion</key>'; \
-		printf '%s\n' '    <string>1</string>'; \
+		printf '%s\n' '    <string>$(ORLIX_PRODUCT_BUILD_ID)</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxArch</key>'; \
 		printf '%s\n' '    <string>$(ORLIX_PORT_ARCH)</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxVersion</key>'; \
@@ -2372,7 +2380,7 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		printf '%s\n' '</plist>'; \
 	} > "$$output/Info.plist"; \
 	plutil -lint "$$output/Info.plist" >/dev/null; \
-	printf 'profile=%s\nlinux_version=%s\nrootfs_input=%s\nrootfs_sha256=%s\nbase_root_tree_input=%s\nbase_root_tree_sha256=%s\nstate_root_tree_input=%s\nstate_root_tree_sha256=%s\npayload_boot_profile=%s\nkernel_command_line=%s\npayload_bundle_name=%s\npayload_bundle_extension=%s\npayload_bundle_identifier=%s\nlinux_page_size=%s\nroot_initramfs_resource=%s\nbase_root_image_resource=%s\nstate_root_image_resource=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\nbase_root_host_block_device=%s\nstate_root_host_block_device=%s\nbase_root_image_size=%s\nstate_root_image_size=%s\nstate_root_minimum_bytes=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$$rootfs_input" "$$rootfs_sha256" "$$base_root_tree_input" "$$base_root_tree_sha256" "$$state_root_tree_input" "$$state_root_tree_sha256" "$$payload_boot_profile" "$$payload_kernel_command_line" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_ROOT_MODES)" "$$selected_root_mode" "$(ORLIX_KERNEL_BASE_ROOT_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)" > "$$payload_stamp"; \
+	printf 'profile=%s\nlinux_version=%s\nproduct_version=%s\nproduct_build_id=%s\nrootfs_input=%s\nrootfs_sha256=%s\nbase_root_tree_input=%s\nbase_root_tree_sha256=%s\nstate_root_tree_input=%s\nstate_root_tree_sha256=%s\npayload_boot_profile=%s\nkernel_command_line=%s\npayload_bundle_name=%s\npayload_bundle_extension=%s\npayload_bundle_identifier=%s\nlinux_page_size=%s\nroot_initramfs_resource=%s\nbase_root_image_resource=%s\nstate_root_image_resource=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\nbase_root_host_block_device=%s\nstate_root_host_block_device=%s\nbase_root_image_size=%s\nstate_root_image_size=%s\nstate_root_minimum_bytes=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$$rootfs_input" "$$rootfs_sha256" "$$base_root_tree_input" "$$base_root_tree_sha256" "$$state_root_tree_input" "$$state_root_tree_sha256" "$$payload_boot_profile" "$$payload_kernel_command_line" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_ROOT_MODES)" "$$selected_root_mode" "$(ORLIX_KERNEL_BASE_ROOT_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)" > "$$payload_stamp"; \
 	echo "packaged OrlixKernel payload: $$output (profile $(PROFILE))"
 
 __ios-simulator-framework: xcodeproj
