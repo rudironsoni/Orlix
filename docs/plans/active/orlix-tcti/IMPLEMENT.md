@@ -8294,3 +8294,17 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - This fixes command authorization and proof freshness only. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime behavior, generated upstream sources, production assembly, or gadget dispatch.
   - Full TCTI completion, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven until current runtime evidence establishes them.
+
+### Checkpoint: Physical Retry Preserves Simulator Prerequisites
+
+- Runtime-validation fix:
+  - Simulator prerequisite lookup now selects the newest report for both gate and `destination=iphonesimulator`.
+  - A newer failed physical report for the same gate can no longer hide a current passing simulator prerequisite.
+  - The selection logic is isolated in `tools/runtime/orlix-runtime-report-selection.sh` and shared by every simulator ladder lookup.
+- Evidence:
+  - The Xcode 27 physical retry produced `Build/Reports/runtime/tcti-init-first-syscall-20260711T214745Z-76009.json` and exposed the destination-shadowing failure before device discovery.
+  - `tools/runtime/tests/test-runtime-report-selection.sh` passes with an older simulator report and a newer physical report for the same gate.
+  - Bash syntax checks, `rtk git diff --check`, and `rtk proxy make agent-harness-check` passed.
+- Boundary:
+  - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, production assembly, or gadget behavior changed.
+  - Physical-device execution and release eligibility remain unproven until the selected gate passes.

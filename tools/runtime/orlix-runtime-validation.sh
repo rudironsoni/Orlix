@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/orlix-runtime-report-selection.sh"
+
 product_version="$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
 product_build_id="$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
 [ -n "$product_version" ] || { echo "project.yml lacks MARKETING_VERSION" >&2; exit 2; }
@@ -787,69 +789,24 @@ autonomous_tcti_reports_passed() {
 }
 
 latest_simulator_stability_report() {
-	local latest=""
-	local path
-	for path in "$report_dir"/tcti-simulator-stability-*.json; do
-		[ -e "$path" ] || continue
-		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
-			latest="$path"
-		fi
-	done
-	[ -n "$latest" ] || return 1
-	printf '%s\n' "$latest"
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-simulator-stability iphonesimulator
 }
 
 latest_simulator_first_syscall_report() {
-	local latest=""
-	local path
-	for path in "$report_dir"/tcti-init-first-syscall-*.json; do
-		[ -e "$path" ] || continue
-		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
-			latest="$path"
-		fi
-	done
-	[ -n "$latest" ] || return 1
-	printf '%s\n' "$latest"
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-first-syscall iphonesimulator
 }
 
 latest_simulator_console_usability_report() {
-	local latest=""
-	local path
-	for path in "$report_dir"/tcti-init-console-write-*.json; do
-		[ -e "$path" ] || continue
-		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
-			latest="$path"
-		fi
-	done
-	[ -n "$latest" ] || return 1
-	printf '%s\n' "$latest"
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-console-write iphonesimulator
 }
 
 latest_simulator_static_busybox_report() {
-	local latest=""
-	local path
-	for path in "$report_dir"/tcti-static-busybox-start-*.json; do
-		[ -e "$path" ] || continue
-		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
-			latest="$path"
-		fi
-	done
-	[ -n "$latest" ] || return 1
-	printf '%s\n' "$latest"
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-static-busybox-start iphonesimulator
 }
 
 latest_runtime_report_for_gate() {
 	local expected_gate="$1"
-	local latest=""
-	local path
-	for path in "$report_dir"/"$expected_gate"-*.json; do
-		[ -e "$path" ] || continue
-		if [ -z "$latest" ] || [ "$path" -nt "$latest" ]; then
-			latest="$path"
-		fi
-	done
-	[ -n "$latest" ] || return 1
-	printf '%s\n' "$latest"
+	orlix_latest_runtime_report_for_gate "$report_dir" "$expected_gate" iphonesimulator
 }
 
 simulator_tcti_report_passed() {
