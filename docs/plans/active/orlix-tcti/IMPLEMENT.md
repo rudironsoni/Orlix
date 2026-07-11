@@ -8283,12 +8283,14 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Harness fix:
   - The pre-tool safety policy now recognizes the documented physical-device opt-in when it is attached directly to the selected command, while retaining autonomous and full simulator-ladder preflight checks.
   - Hook proof freshness now uses the shared `project.yml` product version and build identity instead of expiring all reports after a harness-only commit changes `HEAD`.
+  - Simulator-ladder checks now ignore newer physical reports for the same gate, so a failed physical first-syscall attempt cannot hide the current passing simulator first-syscall prerequisite.
   - Added a regression assertion that rejects any return to the false `explicit human opt-in` blocker for an inline authorized command.
 - Evidence:
   - `rtk proxy sh -n .agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy`: passed.
   - `rtk proxy make agent-hooks-check`: passed.
   - `rtk proxy make agent-harness-check`: passed, including semantic freshness and gate-result policy fixtures.
   - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`: passed for product `0.1 (18)` before physical-device selection.
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260711T211444Z-42935.json` proved that a newer failed `iphoneos` report could otherwise shadow the current passing `iphonesimulator` first-syscall prerequisite; the destination-filtered hook check prevents that false retry blocker.
 - Boundary:
   - This fixes command authorization and proof freshness only. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime behavior, generated upstream sources, production assembly, or gadget dispatch.
   - Full TCTI completion, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven until current runtime evidence establishes them.

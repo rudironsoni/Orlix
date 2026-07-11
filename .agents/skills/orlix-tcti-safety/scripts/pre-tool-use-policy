@@ -87,6 +87,7 @@ latest_runtime_report_for_gate() {
   latest=""
   for report in "$root"/Build/Reports/runtime/"$gate"-*.json; do
     test -e "$report" || continue
+    grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$report" || continue
     if test -z "$latest" || test "$report" -nt "$latest"; then
       latest="$report"
     fi
