@@ -345,6 +345,8 @@ check_skills() {
     fail "pre-tool safety hook must reject simulator reports with fatal runtime artifacts"
   grep -q 'tcti-init-console-write' "$root/tools/runtime/orlix-runtime-validation.sh" ||
     fail "runtime validation must expose tcti-init-console-write for simulator usability"
+  grep -q 'kill%20-TERM%20%24%24%3B%20exit%200' "$root/tools/runtime/orlix-runtime-validation.sh" ||
+    fail "signals runtime validation must exit successfully after the TERM trap marker"
   grep -q 'ORLIX_TCTI_REQUIRED_SIMULATOR_ID' "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" ||
     fail "task-envelope check must require the pinned simulator"
   for field in physical_device_allowed physical_device_blockers release_gate_eligible readiness_gate_eligible; do

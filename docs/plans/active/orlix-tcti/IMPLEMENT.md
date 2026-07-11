@@ -2,6 +2,15 @@
 
 ## 2026-07-11
 
+### Checkpoint: Current BusyBox Rail Sequencing And SIMD Evidence
+
+- Fixed the selector ordering for a newer passing static BusyBox report. It now refreshes the exact-report SIGABRT pass regression before the user-data-window rail, then refreshes the downstream rail, without authorizing a runtime patch.
+- A stale passing BusyBox shell-command producer now defers its SIGILL reducer so the pinned simulator producer refreshes first. Current marker-then-SIGILL failures still select the reducer.
+- Repaired the CMEQ v4.4s and UMAXV v4.4s rails to require current positive switch-debug execution, replayable pass regressions, a current passing shell-command simulator report, absence of the old opcode-specific unsupported/SIGILL signatures, and all forbidden-behavior fields false. Historical generated SIGILL reports are optional context.
+- Fixed the signals readiness probe to exit zero after its TERM trap emits `ORLIX-TCTI-SIGNALS-OK`. The previous command deliberately exited one and contradicted the shared fatal-runtime contract even though Linux signal delivery succeeded.
+- Current pinned-simulator refreshes passed for static BusyBox shell command, package behavior, dynamic-loader support, and signals. The next VFS-completeness attempt reached `/bin/mv` and failed in mlibc `renameat2` with `__ensure(!"Not implemented")`, followed by `BRK #1` (`0xd4200020`) and shell status 132. This is the first current product blocker and belongs to the OrlixMLibC syscall/sysdep path, not TCTI instruction semantics or HostAdapter.
+- No OrlixKernel runtime, HostAdapter, OrlixOS runtime, app output, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+
 ### Checkpoint: MOVI 4S Rail Evidence
 
 - The MOVI v1.4s rail required a historical `0x4f000421` post-marker SIGILL even though the current pinned shell-command report passes and the constrained no-phone fixture exits through `exit(42)`.

@@ -1178,6 +1178,41 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     }
 
     let evidenceText = lowercasedEvidenceText(status)
+    let currentPassReducerRefresh = status.kind == "no-phone-reducer" &&
+        status.state == "ready" &&
+        evidenceText.contains("current passing static busybox report") &&
+        evidenceText.contains("refresh exact report linkage") &&
+        selectedCommandCanGenerateProof(status)
+    if currentPassReducerRefresh {
+        return policy(
+            classification: "stale_proof_refresh",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: true,
+            mustStop: false,
+            requiredNextAction: "refresh the selected reducer against the exact current passing runtime report",
+            reason: status.reason,
+            owningLayer: "proof refresh"
+        )
+    }
+
+    let currentPassUserDataRailRefresh = status.id == "tcti-user-data-window-refresh-fix" &&
+        status.state == "ready" &&
+        evidenceText.contains("user-data window rail requires the current post-busybox reducer and fix reports to cover") &&
+        selectedCommandCanGenerateProof(status)
+    if currentPassUserDataRailRefresh {
+        return policy(
+            classification: "stale_proof_refresh",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: true,
+            mustStop: false,
+            requiredNextAction: "refresh the selected rail against the exact current passing runtime report and reducer",
+            reason: status.reason,
+            owningLayer: "proof refresh"
+        )
+    }
+
     let railContractTerms = [
         "historical",
         "non-durable",
@@ -2235,6 +2270,21 @@ func currentStaticBusyBoxPassEvidence() -> (ReportFact, [String: Any])? {
 	return (report, object)
 }
 
+let postBusyBoxSIGABRTPassRegressionPath = "Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json"
+
+func postBusyBoxSIGABRTReducerCoversPass(
+	reducerReport: ReportFact,
+	reducerObject: [String: Any]?,
+	reducerArtifacts: [String],
+	busyBoxReportPath: String
+) -> Bool {
+	currentReportPassed(reducerReport) &&
+		stringValue(reducerObject?["target"]) == "tcti-post-busybox-sigabrt-reducer" &&
+		stringValue(reducerObject?["gate"]) == "tcti-post-busybox-sigabrt-reducer" &&
+		reducerArtifacts.contains(busyBoxReportPath) &&
+		reducerArtifacts.contains(postBusyBoxSIGABRTPassRegressionPath)
+}
+
 func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 	let fixReport = reportFact(target: "tcti-user-data-window-refresh-fix")
 	let fixObject = try? loadJSONObject(root.appendingPathComponent(fixReport.path))
@@ -2242,7 +2292,7 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 	let reducerReport = reportFact(target: "tcti-post-busybox-sigabrt-reducer")
 	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
 	let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
-	let expectedReducerPath = "Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json"
+	let expectedReducerPath = postBusyBoxSIGABRTPassRegressionPath
 	let currentBusyBoxEvidence = currentStaticBusyBoxPassEvidence()
 	let currentBusyBoxPath = currentBusyBoxEvidence?.0.path
 	let reducerIdentityOK = stringValue(reducerObject?["target"]) == "tcti-post-busybox-sigabrt-reducer" &&
@@ -2372,6 +2422,10 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 	return basicReportGate(gate, target: "tcti-user-data-window-refresh-fix")
 }
 
+func passingRuntimeReportDefersFailureReducer(_ report: ReportFact) -> Bool {
+	report.status == "pass" && report.passed
+}
+
 func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 	let reducerReport = reportFact(target: "tcti-post-busybox-shell-command-sigill-reducer")
 	let reducerObject = try? loadJSONObject(root.appendingPathComponent(reducerReport.path))
@@ -2446,7 +2500,7 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 			gadget: gate.gadget
 		)
 	}
-	if report.status == "pass", report.passed, reportExecutionFresh(report) {
+	if passingRuntimeReportDefersFailureReducer(report) {
 		return GateStatus(
 			id: gate.id,
 			command: gate.command,
@@ -2454,7 +2508,9 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 			state: "not_needed",
 			passed: false,
 			satisfiesPrerequisite: true,
-			reason: "current static BusyBox shell-command simulator report passes without the marker-then-SIGILL signature",
+			reason: reportExecutionFresh(report)
+				? "current static BusyBox shell-command simulator report passes without the marker-then-SIGILL signature"
+				: "passing static BusyBox shell-command simulator evidence is stale; refresh the simulator producer before selecting a SIGILL reducer",
 			prerequisites: gate.prerequisites,
 			prerequisitesSatisfied: false,
 			reportPaths: gate.expectedReportPaths,
@@ -3124,6 +3180,46 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
 			prerequisitesSatisfied: false,
 			reportPaths: gate.expectedReportPaths,
 			reports: reducerReport.exists ? [report, reducerReport] : [report],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
+
+	if let (currentBusyBoxReport, _) = currentStaticBusyBoxPassEvidence() {
+		if postBusyBoxSIGABRTReducerCoversPass(
+			reducerReport: reducerReport,
+			reducerObject: reducerObject,
+			reducerArtifacts: reducerArtifacts,
+			busyBoxReportPath: currentBusyBoxReport.path
+		) {
+			return GateStatus(
+				id: gate.id,
+				command: gate.command,
+				kind: gate.kind,
+				state: "pass",
+				passed: true,
+				reason: "post-BusyBox SIGABRT reducer report \(reducerReport.path) covers current passing static BusyBox report \(currentBusyBoxReport.path)",
+				prerequisites: gate.prerequisites,
+				prerequisitesSatisfied: false,
+				reportPaths: gate.expectedReportPaths,
+				reports: [currentBusyBoxReport, reducerReport],
+				readinessEligible: gate.readinessEligible,
+				physicalDevice: gate.physicalDevice,
+				gadget: gate.gadget
+			)
+		}
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "ready",
+			passed: false,
+			reason: "current passing static BusyBox report \(currentBusyBoxReport.path) requires the post-BusyBox SIGABRT reducer to refresh exact report linkage",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: reducerReport.exists ? [currentBusyBoxReport, reducerReport] : [currentBusyBoxReport],
 			readinessEligible: gate.readinessEligible,
 			physicalDevice: gate.physicalDevice,
 			gadget: gate.gadget
@@ -9310,13 +9406,52 @@ func validateSemanticFreshnessFixtures() throws {
         ("environment-policy-reruns-simulator", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", true),
         ("selector-script-recomputes-status-only", selectorGate, ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift", false),
     ]
-    for (name, gate, path, expected) in cases {
+	for (name, gate, path, expected) in cases {
         let actual = doesChangedPathInvalidateGate(gate, changedPath: path)
         if actual != expected {
             throw HarnessError.invalid("semantic freshness fixture \(name) expected invalidates=\(expected) for \(path), got \(actual)")
-        }
-    }
-    print("pass: semantic-freshness-check")
+		}
+	}
+
+	let busyBoxPath = "Build/Reports/runtime/tcti-static-busybox-start-current.json"
+	let reducerReport = policyFixtureReport(
+		path: "Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json",
+		passed: true
+	)
+	let reducerObject: [String: Any] = [
+		"target": "tcti-post-busybox-sigabrt-reducer",
+		"gate": "tcti-post-busybox-sigabrt-reducer",
+	]
+	let reducerLinkageCases: [(String, [String], Bool)] = [
+		("missing-current-runtime-report", [postBusyBoxSIGABRTPassRegressionPath], false),
+		("missing-pass-regression", [busyBoxPath], false),
+		("exact-current-pass-linkage", [busyBoxPath, postBusyBoxSIGABRTPassRegressionPath], true),
+	]
+	for (name, artifacts, expected) in reducerLinkageCases {
+		let actual = postBusyBoxSIGABRTReducerCoversPass(
+			reducerReport: reducerReport,
+			reducerObject: reducerObject,
+			reducerArtifacts: artifacts,
+			busyBoxReportPath: busyBoxPath
+		)
+		if actual != expected {
+			throw HarnessError.invalid("post-BusyBox reducer linkage fixture \(name) expected covers=\(expected), got \(actual)")
+		}
+	}
+	let stalePassingRuntimeReport = policyFixtureReport(
+		path: "Build/Reports/runtime/tcti-static-busybox-shell-command-stale.json",
+		passed: true
+	)
+	if !passingRuntimeReportDefersFailureReducer(stalePassingRuntimeReport) {
+		throw HarnessError.invalid("passing stale runtime producer must defer its failure reducer")
+	}
+	let failingRuntimeReport = policyFixtureReport(
+		path: "Build/Reports/runtime/tcti-static-busybox-shell-command-current.json"
+	)
+	if passingRuntimeReportDefersFailureReducer(failingRuntimeReport) {
+		throw HarnessError.invalid("failing runtime producer must remain eligible for reducer matching")
+	}
+	print("pass: semantic-freshness-check")
 }
 
 func policyFixtureReport(
@@ -9385,6 +9520,8 @@ func policyFixtureStatus(
 func validateGateResultPolicyFixtures() throws {
     let fixtures: [(String, GateStatus, String, Bool, Bool, Bool, Bool)] = [
         ("stale-proof-refresh", policyFixtureStatus(id: "stale", state: "stale", reason: "report git_sha is stale"), "stale_proof_refresh", false, false, true, false),
+        ("current-pass-reducer-refresh", policyFixtureStatus(id: "no-phone-tcti-post-busybox-sigabrt-reducer", command: "make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer", kind: "no-phone-reducer", state: "ready", reason: "current passing static BusyBox report Build/Reports/runtime/tcti-static-busybox-start-current.json requires the post-BusyBox SIGABRT reducer to refresh exact report linkage"), "stale_proof_refresh", false, false, true, false),
+        ("current-pass-user-data-rail-refresh", policyFixtureStatus(id: "tcti-user-data-window-refresh-fix", command: "make tcti-gate TARGET=tcti-user-data-window-refresh-fix", kind: "production-tcti-fix", proofTier: "rail", state: "ready", reason: "user-data window rail requires the current post-BusyBox reducer and fix reports to cover Build/Reports/runtime/tcti-static-busybox-start-current.json"), "stale_proof_refresh", false, false, true, false),
         ("missing-generated-artifact", policyFixtureStatus(id: "golden-init-001-structural", command: "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit", kind: "golden-structural", state: "missing", reason: "validation artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/golden_elf/init_001_exit/validation.json", exists: false)]), "missing_generated_artifact", false, false, true, false),
         ("missing-artifact-without-safe-generator", policyFixtureStatus(id: "unknown", command: "", state: "missing", reason: "artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/unknown.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
         ("rail-evidence-contract-bug", policyFixtureStatus(id: "rail", state: "fail", reason: "historical generated report is obsolete"), "rail_evidence_contract_bug", false, true, false, true),
