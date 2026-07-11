@@ -1,5 +1,13 @@
 # IMPLEMENT.md
 
+## 2026-07-11
+
+### Checkpoint: Simulator Booted-State Runtime Validation
+
+- A current `tcti-coreutils-ls-stat` refresh failed before app launch with CoreSimulator SimError 405, `Unable to boot device in current state: Booted`. The runtime report had no TCTI events, no child process start, and all forbidden-behavior fields false.
+- `install_app()` previously invoked `simctl boot` unconditionally and then separately recognized an already Booted simulator. It now skips that redundant boot request when `simulator_is_booted` succeeds, writes explicit skip evidence, and keeps the existing bootstatus, install, launch, marker, and forbidden-behavior checks unchanged.
+- This is runtime-validation orchestration repair only. No OrlixKernel, HostAdapter, OrlixOS, app, generated-tree, physical-device, production-assembly, or gadget-dispatch behavior changed.
+
 ## 2026-07-10
 
 ### Checkpoint: User-Data Window Fix Proof Contract
