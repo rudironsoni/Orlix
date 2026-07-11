@@ -1336,13 +1336,11 @@ __validate-linux-abi:
 	@set -euo pipefail; \
 	[ "$(LINUX_UAPI_ARCH)" = arm64 ] || { echo "LINUX_UAPI_ARCH must remain upstream Linux arm64, got: $(LINUX_UAPI_ARCH)" >&2; exit 1; }; \
 	pattern='ARCH[[:space:]]*=[[:space:]]*"?or''lix'; \
-	if rg -n "$$pattern" OrlixMLibC OrlixOS OrlixKernel/Sources/ports/orlix \
-		--glob '!kbuild/kernel-rules.mk' \
-		--glob 'Makefile' \
-		--glob '*.mk' \
-		--glob '*.sh' \
-		--glob '*.cross' \
-		--glob '*.pc'; then \
+	if find OrlixMLibC/Sources OrlixOS/Sources OrlixKernel/Sources/ports/orlix \
+		-type f \
+		\( -name Makefile -o -name '*.mk' -o -name '*.sh' -o -name '*.cross' -o -name '*.pc' \) \
+		! -path 'OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk' \
+		-exec grep -nE "$$pattern" {} +; then \
 		echo "do not use an Orlix-specific Kbuild architecture as the Linux ABI; Orlix uses upstream Linux arm64 UAPI and aarch64-linux-gnu userspace" >&2; \
 		exit 1; \
 	fi
