@@ -619,6 +619,51 @@ func runWithFileBackedOutput(
     return output.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+func xcresultBundlePath(in output: String) -> String? {
+    for line in output.components(separatedBy: .newlines).reversed() where line.contains(".xcresult") {
+        guard let start = line.firstIndex(of: "/"),
+              let end = line.range(of: ".xcresult", options: .backwards)?.upperBound else {
+            continue
+        }
+        return String(line[start..<end])
+    }
+    return nil
+}
+
+func xcresultFailureTexts(in data: Data) -> [String] {
+    guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let failures = root["testFailures"] as? [[String: Any]] else {
+        return []
+    }
+    return failures.compactMap { $0["failureText"] as? String }
+}
+
+func xcresultFailureTexts(at path: String) -> [String] {
+    guard let summary = try? runWithFileBackedOutput([
+        "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", path,
+    ], check: false),
+    let data = summary.data(using: .utf8) else {
+        return []
+    }
+    return xcresultFailureTexts(in: data)
+}
+
+func runXCResultSummaryParserCheck() -> Int32 {
+    let output = """
+    Test session results, code coverage, and logs:
+        /tmp/Test-OrlixKernel Conformance.xcresult
+    """
+    let fixture = #"{"testFailures":[{"failureText":"The test runner hung before establishing connection."}]}"#
+    guard xcresultBundlePath(in: output) == "/tmp/Test-OrlixKernel Conformance.xcresult",
+          let data = fixture.data(using: .utf8),
+          xcresultFailureTexts(in: data) == ["The test runner hung before establishing connection."] else {
+        print("fail: xcresult summary parser check")
+        return 1
+    }
+    print("pass: xcresult summary parser check")
+    return 0
+}
+
 func runWithFileBackedOutput(
     _ arguments: [String],
     check: Bool = true,
@@ -2560,6 +2605,19 @@ func runKernelKselftestSubset() throws -> Int32 {
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
+    let resultBundlePath = xcresultBundlePath(in: xcodeOutput)
+    let xctestFailureTexts = resultBundlePath.map(xcresultFailureTexts(at:)) ?? []
+    if let resultBundlePath {
+        evidence["xctest_result_bundle_path"] = resultBundlePath
+    }
+    if !xctestFailureTexts.isEmpty {
+        evidence["xctest_failure_text"] = xctestFailureTexts.joined(separator: " | ")
+    }
+    let runnerConnectionFailure = xctestFailureTexts.first {
+        $0.localizedCaseInsensitiveContains("test runner hung before establishing connection") ||
+            $0.localizedCaseInsensitiveContains("connection to remote process was not established")
+    }
+
     let testExecuted = xcodeOutput.contains("testSignalWaitProbeCompletesThroughOrlixOSTerminalSession")
     let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
@@ -2573,7 +2631,11 @@ func runKernelKselftestSubset() throws -> Int32 {
         evidence["pass_count"] = "1"
     } else {
         evidence["fail_count"] = "1"
-        failures.append(fail("kselftest-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+        if let runnerConnectionFailure {
+            failures.append(fail("xctest-runner-connection-failure", runnerConnectionFailure))
+        } else {
+            failures.append(fail("kselftest-xctest-failed", "xcodebuild did not report a clean pass for \(xcodeTest)"))
+        }
     }
     if !testExecuted {
         failures.append(fail("kselftest-xctest-not-executed", "xcodebuild output did not mention \(xcodeTest)"))
@@ -20338,6 +20400,8 @@ let tctiTargets = [
 
 func dispatch(_ target: String) throws -> Int32 {
     switch target {
+    case "tcti-xcresult-summary-parser-check":
+        return runXCResultSummaryParserCheck()
     case "tcti-plan-consistency":
         return try runPlanConsistency()
     case "tcti-report-schema-check":

@@ -8333,3 +8333,10 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - This changes only the OrlixKernel product build linker selection. Linux runtime semantics, TCTI execution, HostAdapter, OrlixOS, app output, generated upstream sources, production assembly, and gadget dispatch are unchanged.
   - Physical-device runtime success and release eligibility remain unproven until the selected gate passes.
+### Checkpoint: XCTest Result-Bundle Failure Evidence
+
+- The kernel kselftest gate now reads the `xcresulttool` test summary referenced by `xcodebuild` and records the result-bundle path and structured XCTest failure text.
+- Runner connection failures use the stable `xctest-runner-connection-failure` ID, allowing the post-run classifier to deny runtime patches when XCTest never reached the selected test.
+- `tcti-xcresult-summary-parser-check` covers result-bundle path extraction and structured failure-text parsing.
+- `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`, `rtk proxy make tcti-gate TARGET=tcti-xcresult-summary-parser-check`, and `rtk proxy make agent-harness-check` passed.
+- No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device gate, production assembly, or gadget behavior changed.
