@@ -823,13 +823,19 @@ orlix_product_adapter_finalize_archive() { \
 	expected_sched_order="$$(for symbol in _stop_sched_class _dl_sched_class _rt_sched_class _fair_sched_class _ext_sched_class _idle_sched_class; do if class_symbol_present "$$symbol"; then printf '%s\n' "$$symbol"; fi; done)"; \
 	if [ -n "$$expected_sched_order" ]; then printf '%s\n' "$$expected_sched_order" >> "$$order_file"; fi; \
 	link_order_args=(); \
+	linker_select_args=(); \
 	link_rename_args=(); \
 	if [ -n "$$expected_initcall_order" ]; then \
 		for section in __initcall_e __initcall0 __initcall0s __initcall1 __initcall1s __initcall2 __initcall2s __initcall3 __initcall3s __initcall4 __initcall4s __initcall5 __initcall5s __initcallrf __initcallrfs __initcall6 __initcall6s __initcall7 __initcall7s; do \
 			link_rename_args+=(-Wl,-rename_section,__DATA,"$$section",__DATA,__initcalls); \
 		done; \
 	fi; \
-	if [ -s "$$order_file" ]; then link_order_args=(-Wl,-order_file,"$$order_file"); fi; \
+	if [ -s "$$order_file" ]; then \
+		classic_ld="$$(xcrun --find ld-classic 2>/dev/null || true)"; \
+		[ -x "$$classic_ld" ] || { echo "ordered Orlix product link requires ld-classic" >&2; exit 1; }; \
+		linker_select_args=(-fuse-ld="$$classic_ld"); \
+		link_order_args=(-Wl,-order_file,"$$order_file"); \
+	fi; \
 	partial_objects=(); \
 	chunk_index=0; \
 	link_chunk() { \
@@ -862,7 +868,7 @@ orlix_product_adapter_finalize_archive() { \
 	if [ ! -s "$$linked_obj" ]; then linked_needs_link=1; else for partial_object in "$${partial_objects[@]}"; do if [ "$$linked_obj" -ot "$$partial_object" ]; then linked_needs_link=1; break; fi; done; fi; \
 	if [ -s "$$order_file" ] && [ "$$linked_obj" -ot "$$order_file" ]; then linked_needs_link=1; fi; \
 	if [ "$$linked_needs_link" -eq 1 ]; then \
-		/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib -Wl,-r "$${link_rename_args[@]}" "$${link_order_args[@]}" -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
+		/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -nostdlib "$${linker_select_args[@]}" -Wl,-r "$${link_rename_args[@]}" "$${link_order_args[@]}" -Wl,-o,"$$linked_obj" @"$$objects_rsp"; \
 		orlix_product_adapter_verify_object_contract "$$linked_obj"; \
 		: > "$$linked_verified"; \
 	elif [ ! -e "$$linked_verified" ] || [ "$$linked_verified" -ot "$$linked_obj" ]; then \

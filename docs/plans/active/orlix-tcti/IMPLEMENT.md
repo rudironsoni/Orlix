@@ -8308,3 +8308,17 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, production assembly, or gadget behavior changed.
   - Physical-device execution and release eligibility remain unproven until the selected gate passes.
+
+### Checkpoint: Xcode 27 Ordered Product Link Compatibility
+
+- Product-build fix:
+  - Xcode 27 `ld-27034` no longer honors the initcall data-symbol order file during the relocatable OrlixKernel product merge.
+  - The ordered product merge now resolves `ld-classic` through `xcrun` and selects it explicitly with Clang `-fuse-ld`, failing closed if the compatible linker is unavailable.
+  - Compilation and unordered chunk links are unchanged.
+- Evidence:
+  - `Build/Reports/runtime/tcti-init-first-syscall-20260711T215410Z-88423.json` failed before app build because the Xcode 27-linked iPhone kernel object violated Linux initcall ordering.
+  - A disposable link probe using the same response file, section renames, and generated order file matched expected and actual initcall order byte-for-byte with explicit `ld-classic`.
+  - `make -f OrlixKernel/Makefile __kernel-archive PROFILE=tcti_runtime ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos` passed and produced the real arm64 iPhone `OrlixKernel.a`.
+- Boundary:
+  - This changes only the OrlixKernel product build linker selection. Linux runtime semantics, TCTI execution, HostAdapter, OrlixOS, app output, generated upstream sources, production assembly, and gadget dispatch are unchanged.
+  - Physical-device runtime success and release eligibility remain unproven until the selected gate passes.
