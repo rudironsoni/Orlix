@@ -6496,7 +6496,7 @@ func policyFixtureReport(
     failures: [ReportFailureFact] = [],
     forbiddenBehaviorViolations: [String] = []
 ) -> ReportFact {
-    ReportFact(
+    return ReportFact(
         path: path,
         exists: exists,
         status: passed ? "pass" : "fail",
@@ -6507,7 +6507,23 @@ func policyFixtureReport(
         canClaimRuntimeReadiness: canClaimRuntimeReadiness,
         releaseGateEligible: false,
         readinessGateEligible: false,
-        gitSHA: gitSHA(),
+        gitSHA: "fixture-current-head",
+        productVersion: "fixture-version",
+        productBuildID: "fixture-build",
+        executionFreshness: ExecutionFreshness(
+            reportGitSHA: "fixture-current-head",
+            currentGitSHA: "fixture-current-head",
+            reportProductVersion: "fixture-version",
+            reportProductBuildID: "fixture-build",
+            currentProductVersion: "fixture-version",
+            currentProductBuildID: "fixture-build",
+            executionFresh: true,
+            statusRecomputed: false,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "classifier fixture explicitly models current execution evidence"
+        ),
         failures: failures,
         forbiddenBehaviorViolations: forbiddenBehaviorViolations
     )

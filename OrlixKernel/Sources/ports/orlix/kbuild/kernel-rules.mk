@@ -1251,39 +1251,47 @@ run: __ios-simulator-framework xcodeproj
 	os_log="$(ORLIX_IOS_SIMULATOR_RUN_LOG_DIR)/Orlix-os.log"; \
 	: > "$$runtime_log"; \
 	: > "$$os_log"; \
+	app_data="$$(xcrun simctl get_app_container "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" data)"; \
+	terminal_capture="$$app_data/tmp/orlix-simulator-terminal-output.txt"; \
+	rm -f "$$terminal_capture"; \
+	. "$(CURDIR)/tools/runtime/orlix-runtime-log-policy.sh"; \
 	log_pid=""; \
 	launch_pid=""; \
+	sync_terminal_capture() { if [ -r "$$terminal_capture" ]; then cp "$$terminal_capture" "$$os_log"; fi; }; \
 	cleanup_tree() { pid="$$1"; [ -n "$$pid" ] || return 0; for child in $$(pgrep -P "$$pid" 2>/dev/null || true); do cleanup_tree "$$child"; done; kill "$$pid" >/dev/null 2>&1 || true; }; \
-	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; }; \
+	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; sync_terminal_capture; }; \
 	trap cleanup EXIT INT TERM; \
 	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "Orlix" || subsystem == "com.rudironsoni.Orlix"' >> "$$runtime_log" 2>&1 & \
 	log_pid="$$!"; \
-	xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
+	SIMCTL_CHILD_ORLIX_SIMULATOR_CAPTURE_TERMINAL_OUTPUT=1 xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
 	launch_pid="$$!"; \
-	app_has_started() { grep -E -q 'Orlix\[|Starting Orlix bootloader|ORLIX-COREUTILS-TEST-INIT' "$$runtime_log" || kill -0 "$$launch_pid" >/dev/null 2>&1; }; \
-	validate_runtime_log() { \
-		LC_ALL=C tr -d '\r' < "$$runtime_log" | awk 'BEGIN { bad = 0 } /(^|[^[:alnum:]_])not ok[[:space:]]+[0-9]+([[:space:]-]|$$)/ { print "upstream failure marker: " $$0 > "/dev/stderr"; bad = 1 } /Kernel panic|kernel panic|panic:|Oops|BUG:|Out of memory|Killed process|Attempted to kill init/ { print "fatal runtime marker: " $$0 > "/dev/stderr"; bad = 1 } END { exit bad ? 1 : 0 }'; \
-	}; \
+	marker_present() { grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" || { [ -s "$$terminal_capture" ] && grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$terminal_capture"; }; }; \
+	app_has_started() { grep -E -q 'Orlix\[|Starting Orlix bootloader|ORLIX-COREUTILS-TEST-INIT' "$$runtime_log" || [ -s "$$terminal_capture" ] || kill -0 "$$launch_pid" >/dev/null 2>&1; }; \
+	fatal_present() { orlix_runtime_log_has_failure "$$runtime_log" "$$terminal_capture"; }; \
+	fail_for_runtime_log() { sync_terminal_capture; orlix_runtime_log_validate "$$runtime_log" "$$os_log" || true; exit 1; }; \
 	printf '{"runtimeLogPath":"%s","osLogPath":"%s","bundleId":"%s"}\n' "$$runtime_log" "$$os_log" "$(ORLIX_APP_BUNDLE_ID)"; \
 	if [ -n "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" ]; then \
 		for _ in $$(seq 1 "$(ORLIX_KERNEL_RUN_STARTUP_TIMEOUT_SECONDS)"); do \
-			grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" && break; \
+			fatal_present && fail_for_runtime_log; \
+			marker_present && break; \
 			app_has_started && break; \
 			sleep 1; \
 		done; \
-		if ! grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" && ! app_has_started; then \
+		if ! marker_present && ! app_has_started; then \
 			echo "Orlix did not start before marker $(ORLIX_KERNEL_RUN_UNTIL_MARKER): $$runtime_log" >&2; \
 			exit 1; \
 		fi; \
 		for _ in $$(seq 1 "$(ORLIX_KERNEL_RUN_TIMEOUT_SECONDS)"); do \
-			grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" && break; \
+			fatal_present && fail_for_runtime_log; \
+			marker_present && break; \
 			sleep 1; \
 		done; \
-		grep -F -q "$(ORLIX_KERNEL_RUN_UNTIL_MARKER)" "$$runtime_log" || { echo "timed out waiting for marker $(ORLIX_KERNEL_RUN_UNTIL_MARKER): $$runtime_log" >&2; exit 1; }; \
+		marker_present || { echo "timed out waiting for marker $(ORLIX_KERNEL_RUN_UNTIL_MARKER): $$runtime_log $$terminal_capture" >&2; exit 1; }; \
 	else \
-		sleep "$(ORLIX_KERNEL_RUN_TIMEOUT_SECONDS)"; \
+		orlix_runtime_log_observe "$(ORLIX_KERNEL_RUN_TIMEOUT_SECONDS)" "$$runtime_log" "$$terminal_capture" || fail_for_runtime_log; \
 	fi; \
-	validate_runtime_log
+	sync_terminal_capture; \
+	orlix_runtime_log_validate "$$runtime_log" "$$os_log"
 
 clean:
 	@set -euo pipefail; \
