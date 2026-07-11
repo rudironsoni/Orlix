@@ -294,7 +294,7 @@ if tcti_runtime_validation_command && ! tcti_runtime_validation_is_simulator; th
 fi
 
 if printf '%s' "$payload" |
-  grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS|generic/platform=iOS'; then
+  grep -Eq 'tcti-init-first-syscall|DESTINATION=iphoneos|platform=iOS,|generic/platform=iOS'; then
   if printf '%s' "$payload" | grep -Eq 'Build/Reports/runtime' &&
      printf '%s' "$payload" | grep -Eq 'jq|sed[[:space:]]+-n|cat|grep|ls|head|tail|rtk[[:space:]]+(read|json|log)' &&
      ! printf '%s' "$payload" |
@@ -319,6 +319,8 @@ fi
 if printf '%s' "$payload" | grep -Eq 'xcodebuild' &&
   printf '%s' "$payload" |
     grep -Eq 'iphoneos|generic/platform=iOS|platform=iOS,|(^|[[:space:],])id=[0-9A-Fa-f-]{8,}([[:space:],'\''"]|$)' &&
+  ! printf '%s' "$payload" |
+    grep -Eq "platform=iOS Simulator|iphonesimulator|id=$sim_id" &&
   ! printf '%s' "$payload" |
     grep -Eq 'beta-archive|beta-export-archive|beta-upload'; then
   block "device-oriented xcodebuild invocations must use sanctioned runtime-validation beta release flow."
