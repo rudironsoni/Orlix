@@ -1374,6 +1374,8 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
         "booted simulator",
         "storage",
         "runner attach",
+        "test runner hung before establishing connection",
+        "connection to remote process was not established",
         "preflight",
         "destination",
         "selected_device",
@@ -6600,6 +6602,8 @@ func validateGateResultPolicyFixtures() throws {
         ("runtime-product-failure", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
         ("xcodebuild-product-failure", policyFixtureStatus(id: "xcodebuild-product", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "xcodebuild reached the app-hosted test but OrlixOS package construction failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
         ("environment-only-failure", policyFixtureStatus(id: "environment", state: "fail", reason: "CoreSimulator bootstatus failed"), "environment_only_failure", false, false, false, true),
+        ("xctest-runner-connection-failure", policyFixtureStatus(id: "xctest-runner", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "The test runner hung before establishing connection", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
+        ("remote-process-connection-failure", policyFixtureStatus(id: "xctest-remote-process", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "Connection to remote process was not established", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
         ("forbidden-behavior-violation", policyFixtureStatus(id: "forbidden", state: "fail", reason: "safety report failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", forbiddenBehaviorViolations: ["map_jit"])]), "forbidden_behavior_violation", false, false, false, true),
         ("readiness-gate-pass", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: true, state: "pass", passed: true, reason: "current simulator readiness report passed", readinessEligible: true), "readiness_gate_pass", false, false, true, false),
     ]

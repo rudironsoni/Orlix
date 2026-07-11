@@ -1,5 +1,15 @@
 # IMPLEMENT.md
 
+## 2026-07-12
+
+### Checkpoint: Simulator Baseline And XCTest Attach Classification
+
+- Corrected the TCTI safety hook so direct `xcodebuild` commands explicitly targeting the pinned iOS Simulator baseline are not treated as direct physical-device work. Generic iOS and concrete physical-device destinations remain blocked.
+- Classified XCTest runner connection failures, including `The test runner hung before establishing connection` and `Connection to remote process was not established`, as `environment_only_failure` with `runtime_patch_allowed=false`.
+- Added raw, `rtk proxy`, and JSON-shaped simulator-command hook coverage plus classifier fixtures for both XCTest connection signatures.
+- Validation passed: shell and Swift parsing, `gate-result-policy-check`, `agent-harness-check`, all 35 Codex hook guard tests, `tcti-plan-consistency`, `tcti-report-schema-check`, and `git diff --check`.
+- No product code, generated tree, runtime implementation, simulator gate, or physical-device gate changed.
+
 ## 2026-07-11
 
 ### Checkpoint: Current BusyBox Rail Sequencing And SIMD Evidence
