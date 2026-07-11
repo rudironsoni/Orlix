@@ -8315,6 +8315,7 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - Xcode 27 `ld-27034` no longer honors the initcall data-symbol order file during the relocatable OrlixKernel product merge.
   - The ordered product merge now resolves `ld-classic` through `xcrun` and selects it explicitly with Clang `-fuse-ld`, failing closed if the compatible linker is unavailable.
   - Compilation and unordered chunk links are unchanged.
+  - The shared product build advanced from `0.1 (18)` to `0.1 (19)` because the shipped OrlixKernel product artifact changed.
 - Evidence:
   - `Build/Reports/runtime/tcti-init-first-syscall-20260711T215410Z-88423.json` failed before app build because the Xcode 27-linked iPhone kernel object violated Linux initcall ordering.
   - A disposable link probe using the same response file, section renames, and generated order file matched expected and actual initcall order byte-for-byte with explicit `ld-classic`.
