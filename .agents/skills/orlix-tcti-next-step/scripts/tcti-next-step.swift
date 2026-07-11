@@ -7250,7 +7250,7 @@ func runtimePreflightGates() -> [Gate] {
             id: "simulator-tcti-static-busybox-shell-command",
             command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
             kind: "simulator-runtime",
-            prerequisites: ["simulator-tcti-static-busybox-start", "tcti-simd-umaxv-4s-fix"],
+            prerequisites: ["simulator-tcti-static-busybox-start"],
             allowedScope: [
                 "tools/runtime/orlix-runtime-validation.sh",
                 ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
