@@ -993,7 +993,10 @@ func executionFreshness(
             reason: "unable to compute changed paths since report git_sha"
         )
     }
-    let changed = Array(Set(committedChanged + currentWorkingTreeChangedPaths())).sorted()
+    let workingChanged = currentWorkingTreeChangedPaths()
+    let changed = Array(Set(committedChanged + workingChanged)).sorted()
+    let committedInvalidating = committedChanged.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
+    let workingInvalidating = workingChanged.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
     let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
     let ignored = changed.filter { !invalidating.contains($0) }
     let versionMatches = reportVersion.marketingVersion == currentVersion.marketingVersion
@@ -1001,8 +1004,12 @@ func executionFreshness(
     let committedVersion = projectVersion(at: current)
     let pendingBuildBump = committedVersion?.marketingVersion != currentVersion.marketingVersion ||
         committedVersion?.buildID != currentVersion.buildID
+    let provenanceVersion = projectVersion(at: reportGitSHA)
+    let reportTestedPendingBuild = provenanceVersion?.marketingVersion != reportVersion.marketingVersion ||
+        provenanceVersion?.buildID != reportVersion.buildID
     if explicitReportVersion != nil && versionMatches && buildMatches &&
-        (invalidating.isEmpty || pendingBuildBump) {
+        (workingInvalidating.isEmpty || pendingBuildBump) &&
+        (committedInvalidating.isEmpty || reportTestedPendingBuild) {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
@@ -1015,7 +1022,7 @@ func executionFreshness(
             changedPathsSinceReport: changed,
             ignoredNonExecutionPaths: ignored,
             invalidatingPaths: [],
-            reason: pendingBuildBump
+            reason: pendingBuildBump || reportTestedPendingBuild
                 ? "report matches pending product version/build; report git_sha is provenance only"
                 : "product version/build match; report git_sha is provenance only"
         )
