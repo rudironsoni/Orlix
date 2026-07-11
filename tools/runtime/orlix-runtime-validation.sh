@@ -568,7 +568,7 @@ simulator_launch_arguments() {
 	tcti-signals)
 		output_args=(
 			--orlix-kernel-command-line-append \
-			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=trap%20%27printf%20$signals_marker%27%20TERM%3B%20kill%20-TERM%20%24%24%3B%20exit%201"
+			"orlix.exec=/bin/sh orlix.argv0=/bin/sh orlix.argv1=-c orlix.argv2=trap%20%27printf%20$signals_marker%27%20TERM%3B%20kill%20-TERM%20%24%24%3B%20exit%200"
 		)
 		;;
 	tcti-vfs-completeness)
@@ -612,7 +612,11 @@ simulator_readiness_runtime_claim_gate() {
 	[ "$destination" = "iphonesimulator" ] || return 1
 	case "$gate" in
 	tcti-full-shell-usability | \
-		tcti-package-behavior)
+		tcti-package-behavior | \
+		tcti-dynamic-loader-support | \
+		tcti-signals | \
+		tcti-vfs-completeness | \
+		tcti-full-linux-runtime-readiness)
 		return 0
 		;;
 	*)

@@ -10882,6 +10882,13 @@ func boolField(_ object: [String: Any], _ key: String) -> Bool {
 	object[key] as? Bool ?? false
 }
 
+func forbiddenBehaviorIsExplicitlyFalse(_ object: [String: Any], fields: [String]) -> Bool {
+	guard let forbidden = object["forbidden_behavior"] as? [String: Any] else {
+		return false
+	}
+	return fields.allSatisfy { forbidden[$0] as? Bool == false }
+}
+
 func intField(_ object: [String: Any], _ key: String) -> Int? {
 	if let value = object[key] as? Int {
 		return value
@@ -16492,12 +16499,13 @@ func runSIMDCMEQ4SFix() throws -> Int32 {
 	let target = "tcti-simd-cmeq-4s-fix"
 	var failures: [Failure] = []
 	var artifacts: [String] = []
+	var evidence: [String: String] = [:]
 
 	let simulatorReports = runtimeValidationReports(
 		gate: "tcti-static-busybox-shell-command",
 		destination: "iphonesimulator"
 	)
-	let simulatorEvidenceMatched = simulatorReports.contains { report in
+	let historicalSIGILLEvidenceMatched = simulatorReports.contains { report in
 		var reportArtifacts: [String] = []
 		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
 		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
@@ -16510,11 +16518,69 @@ func runSIMDCMEQ4SFix() throws -> Int32 {
 		}
 		return matched
 	}
-	if !simulatorEvidenceMatched {
-		failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains CMEQ v4.4s, v3.4s, v1.4s instruction 0x6ea18c64 with post-marker SIGILL evidence"))
-	}
-	if let latestSimulatorReport = simulatorReports.first {
-		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	evidence["historical_sigill_evidence_found"] = "\(historicalSIGILLEvidenceMatched)"
+
+	if let latestSimulatorReport = latestRuntimeValidationReport(
+		gate: "tcti-static-busybox-shell-command",
+		destination: "iphonesimulator"
+	) {
+		let simulatorText = runtimeReportText(latestSimulatorReport, artifacts: &artifacts).lowercased()
+		let executionFresh = simulatorRuntimeReportExecutionFreshForRail(latestSimulatorReport.object)
+		let status = stringField(latestSimulatorReport.object, "status")
+		let passed = boolField(latestSimulatorReport.object, "passed")
+		let preflightOnly = boolField(latestSimulatorReport.object, "preflight_only")
+		let autonomousBypassed = boolField(latestSimulatorReport.object, "autonomous_tests_bypassed")
+		let forbidden = latestSimulatorReport.object["forbidden_behavior"] as? [String: Any] ?? [:]
+		let cmeqSignature = simulatorText.contains("0x6ea18c64") || simulatorText.contains("insn=0x6ea18c64")
+		let unsupportedSignatureCurrent = cmeqSignature && simulatorText.contains("unsupported instruction")
+		let sigillSignatureCurrent = cmeqSignature && (simulatorText.contains("sigill") || simulatorText.contains("signal=4"))
+		let forbiddenFields = [
+			"generated_exec_memory",
+			"host_exec_guest_text",
+			"host_x18",
+			"map_jit",
+			"native_ios_api_exposure_to_guest",
+			"rwx",
+		]
+		let forbiddenBehaviorValid = forbiddenBehaviorIsExplicitlyFalse(latestSimulatorReport.object, fields: forbiddenFields)
+
+		evidence["latest_simulator_shell_command_report"] = relativePath(latestSimulatorReport.url)
+		evidence["latest_simulator_shell_command_git_sha"] = stringField(latestSimulatorReport.object, "git_sha")
+		evidence["latest_simulator_shell_command_status"] = status
+		evidence["latest_simulator_shell_command_passed"] = "\(passed)"
+		evidence["latest_simulator_shell_command_current"] = "\(executionFresh)"
+		evidence["unsupported_signature_current"] = "\(unsupportedSignatureCurrent)"
+		evidence["sigill_signature_current"] = "\(sigillSignatureCurrent)"
+		for field in forbiddenFields {
+			evidence["latest_simulator_forbidden_\(field)"] = "\(boolField(forbidden, field))"
+		}
+		if !forbiddenBehaviorValid {
+			failures.append(fail("simulator-shell-command-forbidden-metadata", "latest static BusyBox shell-command report must contain every forbidden_behavior field as explicit false"))
+		}
+
+		if !executionFresh {
+			failures.append(fail("simulator-shell-command-stale", "latest static BusyBox shell-command report is not execution-fresh for this rail"))
+		}
+		if status != "pass" || !passed {
+			failures.append(fail("simulator-shell-command-not-passing", "latest current static BusyBox shell-command report is not passing"))
+		}
+		if preflightOnly || autonomousBypassed {
+			failures.append(fail("simulator-shell-command-incomplete", "latest static BusyBox shell-command report is preflight-only or bypassed"))
+		}
+		for field in forbiddenFields where boolField(forbidden, field) {
+			failures.append(fail("simulator-shell-command-forbidden-behavior", "latest static BusyBox shell-command report has forbidden_behavior.\(field)=true"))
+		}
+		if unsupportedSignatureCurrent {
+			failures.append(fail("simulator-unsupported-signature-current", "latest current simulator artifacts still contain unsupported CMEQ 0x6ea18c64 evidence"))
+		}
+		if sigillSignatureCurrent {
+			failures.append(fail("simulator-sigill-signature-current", "latest current simulator artifacts still contain SIGILL tied to CMEQ 0x6ea18c64"))
+		}
+	} else {
+		evidence["latest_simulator_shell_command_report"] = ""
+		evidence["unsupported_signature_current"] = "unknown"
+		evidence["sigill_signature_current"] = "unknown"
+		failures.append(fail("simulator-shell-command-report-missing", "missing current static BusyBox shell-command report for CMEQ v4.4s rail"))
 	}
 
 	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
@@ -16546,7 +16612,8 @@ func runSIMDCMEQ4SFix() throws -> Int32 {
 		failures.append(fail("decode-marker", "missing exact Advanced SIMD CMEQ vD.4s, vN.4s, vM.4s decoder subset for 0x6ea18c64"))
 	}
 	if !switchDebug.contains("tcti_execute_simd_vector_compare") ||
-		!switchDebug.contains("left == right ? GENMASK_ULL(31, 0) : 0") {
+		!switchDebug.contains("decoded->simd_compare_op != TCTI_SIMD_COMPARE_CMEQ") ||
+		!switchDebug.contains("u64 result = left == right ? mask : 0") {
 		failures.append(fail("semantic-marker", "missing SIMD CMEQ 4S switch-debug lane compare semantic handler"))
 	}
 	if !tests.contains("0x6ea18c64U") ||
@@ -16579,6 +16646,12 @@ func runSIMDCMEQ4SFix() throws -> Int32 {
 		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
 			failures.append(fail("execution-unsupported-instruction", "SIMD CMEQ 4S fixture still stops as unsupported"))
 		}
+		evidence["positive_execution_path"] = result.artifacts.first { $0.hasSuffix("execution.json") } ?? ""
+		evidence["instruction"] = "0x6ea18c64"
+		evidence["decoded_class"] = "simd_vector_compare"
+		evidence["decoded_op"] = "cmeq"
+		evidence["exit_code"] = (execution.exit?.code).map(String.init) ?? ""
+		evidence["exit_kind"] = execution.exit?.kind ?? ""
 	} catch {
 		failures.append(fail("execution", "\(error)"))
 	}
@@ -16592,15 +16665,17 @@ func runSIMDCMEQ4SFix() throws -> Int32 {
 		expectedStatus: .pass
 	)
 	artifacts.append(relativePath(reducer))
+	evidence["positive_reproducer_path"] = relativePath(reducer)
 
 	let status: GateStatus = failures.isEmpty ? .pass : .fail
 	let reportURL = try writeReport(report(
 		target: target,
 		status: status,
-		summary: "Bound simulator unsupported 0x6ea18c64 to exact SIMD CMEQ v4.4s, v3.4s, v1.4s semantic subset.",
+		summary: "Bound current positive CMEQ v4.4s execution and simulator shell-command stability to the exact SIMD vector-compare subset.",
 		failures: failures,
 		artifacts: artifacts,
 		counters: ["simulator_reports_reduced": 1],
+		evidence: evidence,
 		releaseGateEligible: false,
 		readinessGateEligible: false
 	))
@@ -16612,12 +16687,13 @@ func runSIMDUMAXV4SFix() throws -> Int32 {
 	let target = "tcti-simd-umaxv-4s-fix"
 	var failures: [Failure] = []
 	var artifacts: [String] = []
+	var evidence: [String: String] = [:]
 
 	let simulatorReports = runtimeValidationReports(
 		gate: "tcti-static-busybox-shell-command",
 		destination: "iphonesimulator"
 	)
-	let simulatorEvidenceMatched = simulatorReports.contains { report in
+	let historicalSIGILLEvidenceMatched = simulatorReports.contains { report in
 		var reportArtifacts: [String] = []
 		let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
 		let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
@@ -16630,11 +16706,41 @@ func runSIMDUMAXV4SFix() throws -> Int32 {
 		}
 		return matched
 	}
-	if !simulatorEvidenceMatched {
-		failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains UMAXV s5, v4.4s instruction 0x6eb0a885 with post-marker SIGILL evidence"))
-	}
-	if let latestSimulatorReport = simulatorReports.first {
-		_ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+	evidence["historical_sigill_evidence_found"] = "\(historicalSIGILLEvidenceMatched)"
+	if let latestSimulatorReport = latestRuntimeValidationReport(gate: "tcti-static-busybox-shell-command", destination: "iphonesimulator") {
+		let simulatorText = runtimeReportText(latestSimulatorReport, artifacts: &artifacts).lowercased()
+		let executionFresh = simulatorRuntimeReportExecutionFreshForRail(latestSimulatorReport.object)
+		let status = stringField(latestSimulatorReport.object, "status")
+		let passed = boolField(latestSimulatorReport.object, "passed")
+		let preflightOnly = boolField(latestSimulatorReport.object, "preflight_only")
+		let autonomousBypassed = boolField(latestSimulatorReport.object, "autonomous_tests_bypassed")
+		let forbidden = latestSimulatorReport.object["forbidden_behavior"] as? [String: Any] ?? [:]
+		let signature = simulatorText.contains("0x6eb0a885") || simulatorText.contains("insn=0x6eb0a885")
+		let unsupportedCurrent = signature && simulatorText.contains("unsupported instruction")
+		let sigillCurrent = signature && (simulatorText.contains("sigill") || simulatorText.contains("signal=4"))
+		let forbiddenFields = ["generated_exec_memory", "host_exec_guest_text", "host_x18", "map_jit", "native_ios_api_exposure_to_guest", "rwx"]
+		let forbiddenBehaviorValid = forbiddenBehaviorIsExplicitlyFalse(latestSimulatorReport.object, fields: forbiddenFields)
+		evidence["latest_simulator_shell_command_report"] = relativePath(latestSimulatorReport.url)
+		evidence["latest_simulator_shell_command_git_sha"] = stringField(latestSimulatorReport.object, "git_sha")
+		evidence["latest_simulator_shell_command_status"] = status
+		evidence["latest_simulator_shell_command_passed"] = "\(passed)"
+		evidence["latest_simulator_shell_command_current"] = "\(executionFresh)"
+		evidence["latest_simulator_shell_command_preflight_only"] = "\(preflightOnly)"
+		evidence["latest_simulator_shell_command_autonomous_tests_bypassed"] = "\(autonomousBypassed)"
+		evidence["unsupported_signature_current"] = "\(unsupportedCurrent)"
+		evidence["sigill_signature_current"] = "\(sigillCurrent)"
+		if !executionFresh { failures.append(fail("simulator-shell-command-stale", "latest static BusyBox shell-command report is not execution-fresh for this rail")) }
+		if status != "pass" || !passed { failures.append(fail("simulator-shell-command-not-passing", "latest current static BusyBox shell-command report is not passing")) }
+		if preflightOnly || autonomousBypassed { failures.append(fail("simulator-shell-command-incomplete", "latest static BusyBox shell-command report is preflight-only or bypassed")) }
+		for field in forbiddenFields {
+			evidence["latest_simulator_forbidden_\(field)"] = "\(boolField(forbidden, field))"
+			if boolField(forbidden, field) { failures.append(fail("simulator-shell-command-forbidden-behavior", "latest static BusyBox shell-command report has forbidden_behavior.\(field)=true")) }
+		}
+		if !forbiddenBehaviorValid { failures.append(fail("simulator-shell-command-forbidden-metadata", "latest static BusyBox shell-command report must contain every forbidden_behavior field as explicit false")) }
+		if unsupportedCurrent { failures.append(fail("simulator-unsupported-signature-current", "latest current simulator artifacts still contain unsupported UMAXV 0x6eb0a885 evidence")) }
+		if sigillCurrent { failures.append(fail("simulator-sigill-signature-current", "latest current simulator artifacts still contain SIGILL tied to UMAXV 0x6eb0a885")) }
+	} else {
+		failures.append(fail("simulator-shell-command-report-missing", "missing current static BusyBox shell-command report for UMAXV v4.4s rail"))
 	}
 
 	let headerURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.h")
@@ -16666,7 +16772,8 @@ func runSIMDUMAXV4SFix() throws -> Int32 {
 		failures.append(fail("decode-marker", "missing exact Advanced SIMD UMAXV Sd, Vn.4s decoder subset for 0x6eb0a885"))
 	}
 	if !switchDebug.contains("tcti_execute_simd_vector_reduction") ||
-		!switchDebug.contains("value > maximum") {
+		!switchDebug.contains("decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV") ||
+		!switchDebug.contains("value > result") {
 		failures.append(fail("semantic-marker", "missing SIMD UMAXV 4S switch-debug reduction semantic handler"))
 	}
 	if !tests.contains("0x6eb0a885U") ||
@@ -16699,6 +16806,12 @@ func runSIMDUMAXV4SFix() throws -> Int32 {
 		if result.failures.contains(where: { $0.id == "execution-unsupported-instruction" }) {
 			failures.append(fail("execution-unsupported-instruction", "SIMD UMAXV 4S fixture still stops as unsupported"))
 		}
+		evidence["positive_execution_path"] = result.artifacts.first { $0.hasSuffix("execution.json") } ?? ""
+		evidence["instruction"] = "0x6eb0a885"
+		evidence["decoded_class"] = "simd_vector_reduction"
+		evidence["decoded_op"] = "umaxv"
+		evidence["exit_code"] = (execution.exit?.code).map(String.init) ?? ""
+		evidence["exit_kind"] = execution.exit?.kind ?? ""
 	} catch {
 		failures.append(fail("execution", "\(error)"))
 	}
@@ -16712,15 +16825,17 @@ func runSIMDUMAXV4SFix() throws -> Int32 {
 		expectedStatus: .pass
 	)
 	artifacts.append(relativePath(reducer))
+	evidence["positive_reproducer_path"] = relativePath(reducer)
 
 	let status: GateStatus = failures.isEmpty ? .pass : .fail
 	let reportURL = try writeReport(report(
 		target: target,
 		status: status,
-		summary: "Bound simulator unsupported 0x6eb0a885 to exact SIMD UMAXV s5, v4.4s semantic subset.",
+		summary: "Bound current positive UMAXV s5, v4.4s execution and simulator shell-command stability to the exact SIMD vector-reduction subset.",
 		failures: failures,
 		artifacts: artifacts,
 		counters: ["simulator_reports_reduced": 1],
+		evidence: evidence,
 		releaseGateEligible: false,
 		readinessGateEligible: false
 	))
