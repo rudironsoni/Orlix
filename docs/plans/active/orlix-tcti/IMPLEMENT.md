@@ -8248,3 +8248,32 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No product runtime behavior, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: OrlixMLibC renameat2 And App-Visible Test Capture
+
+- Product fix:
+  - Added the missing OrlixMLibC `renameat2` sysdep and public wrapper. It forwards `SYS_renameat2` to Linux and translates Linux errors through the existing mlibc convention without emulating rename semantics.
+  - Added the Orlix-owned `orlix/renameat2` regression for a successful flags-zero rename and Linux `RENAME_NOREPLACE` returning `EEXIST` while preserving both files.
+  - Bumped the shared product build to `0.1 (18)` because the shipped OrlixMLibC and statically linked userspace changed.
+- Build and validation path corrections:
+  - Removed target settings that overrode the explicit `ORLIX_BUILD_ROOT` and `ORLIX_PROFILE` used by runtime validation. Xcode continues to use external-SSD DerivedData, while product inputs now reuse the canonical external build root and `tcti_runtime` no longer builds the release profile by mistake.
+  - The kernel simulator runner now enables the existing app terminal capture and records it at `osLogPath`. Completion and fatal markers are checked across the process and app-visible terminal logs.
+  - The OrlixMLibC wrapper now resolves both named log paths and accepts the completion marker only from those real run artifacts.
+  - Kernel and OrlixMLibC runners now share `tools/runtime/orlix-runtime-log-policy.sh`, so completion cannot override a fatal marker and the two consumers cannot silently drift.
+  - The kernel runner copies terminal capture to `osLogPath` during cleanup and checks fatal terminal output while waiting, including runs that time out before the completion marker.
+  - Marker-free observation runs use the same fatal-aware polling policy, so a panic or test failure stops promptly instead of sleeping through the full observation interval.
+  - The OrlixOS payload build phase no longer exposes unresolved external build-root or profile paths to Xcode dependency analysis. Its script resolves the canonical external build root and defaults to `release` only when no explicit profile is supplied.
+  - Classifier policy tests use fixed test-only identity and freshness values. They do not read live Git or project identity, write product reports, or satisfy product gates.
+- Evidence:
+  - The focused pinned-simulator run recorded task `orlix-renameat2` invoking Linux syscall 276. Flags zero returned 0, `RENAME_NOREPLACE` returned `-EEXIST`, and the app terminal capture recorded `ok 2 - orlix/renameat2` followed by `ORLIX-MLIBC-TEST-END`.
+  - `tools/runtime/tests/test-runtime-log-policy.sh` passed clean completion and terminal-only `not ok`, panic, Oops, BUG, OOM, killed-process, init-death, and assertion fixtures, including fatal markers alongside a completion marker.
+  - The log-policy fixtures also prove fail-closed missing-log handling, CRLF normalization, multi-log aggregation, prompt fatal observation, and a complete clean observation interval.
+  - A pinned-simulator run with an intentionally absent marker and a two-second timeout failed as expected while preserving `ok 2 - orlix/renameat2` and `ORLIX-MLIBC-TEST-END` in the named `Orlix-os.log` artifact.
+  - `Build/Reports/runtime/tcti-vfs-completeness-20260711T172432Z-65407.json` passed for product `0.1 (18)` on `Orlix-iPhone-15-Pro-Max`.
+  - `Build/Reports/runtime/tcti-vfs-completeness-20260711T172432Z-65407.artifacts/simulator-terminal-output.txt` records `/bin/mv` entering TCTI, `ORLIX-TCTI-VFS-OK`, process status 0, no mlibc not-implemented assertion, and no unsupported instruction.
+  - The VFS report records all forbidden-behavior fields false.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`, `rtk proxy make agent-harness-check`, `rtk proxy make product-build-version-check`, and `rtk git diff --check` passed after the corrections.
+- Boundary:
+  - Linux retains VFS and rename semantics. OrlixMLibC only forwards the public API to Linux.
+  - No HostAdapter semantics, OrlixOS runtime semantics, app-generated Linux output, generated upstream source, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

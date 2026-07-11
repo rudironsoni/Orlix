@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 17
+    CURRENT_PROJECT_VERSION: 18
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -101,7 +101,6 @@ targets:
         INFOPLIST_FILE: OrlixKernel/Sources/Support/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernel
         PRODUCT_NAME: OrlixKernel
-        ORLIX_PROFILE: release
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixKernel/Sources
           - $(SRCROOT)/OrlixKernel/Sources/include
@@ -127,7 +126,7 @@ targets:
       - sdk: libz.tbd
     postBuildScripts:
       - name: Embed OrlixOS Payload
-        basedOnDependencyAnalysis: true
+        basedOnDependencyAnalysis: false
         inputFiles:
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
@@ -140,23 +139,6 @@ targets:
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/patches
-          - $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(ORLIX_PROFILE)/usr/include
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/Info.plist
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/.orlix-payload-ready
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/initramfs.cpio.gz
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/base.ext4
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/state.ext4
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts/development.dtb
-          - $(ORLIX_OS_PAYLOAD_SOURCE_ROOT)/$(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts/release.dtb
-          - $(ORLIX_OS_ROOT_INITRAMFS_INPUT)
-          - $(ORLIX_OS_BASE_ROOT_TREE_INPUT)
-          - $(ORLIX_OS_STATE_ROOT_TREE_INPUT)
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
@@ -310,12 +292,6 @@ targets:
         INFOPLIST_FILE: OrlixOS/Sources/Session/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOS
         PRODUCT_NAME: OrlixOS
-        ORLIX_PROFILE: release
-        ORLIX_BUILD_ROOT: $(DERIVED_DATA_DIR)/../OrlixSystem/Build
-        ORLIX_OS_PAYLOAD_SOURCE_ROOT: $(ORLIX_BUILD_ROOT)/OrlixKernel/payload
-        ORLIX_OS_ROOT_INITRAMFS_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/rootfs/initramfs.cpio.gz
-        ORLIX_OS_BASE_ROOT_TREE_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/base-tree
-        ORLIX_OS_STATE_ROOT_TREE_INPUT: $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(ORLIX_PROFILE)/state-tree
   OrlixOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -438,7 +414,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunner
         PRODUCT_NAME: OrlixTestRunner
-        ORLIX_PROFILE: release
   OrlixKernelHostedTests:
     type: bundle.unit-test
     platform: iOS
