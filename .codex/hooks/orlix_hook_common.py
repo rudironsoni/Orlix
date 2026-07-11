@@ -19,7 +19,7 @@ GENERATED_PATH_RE = re.compile(
     r"(?:\./)?(?:" + "|".join(re.escape(pattern) for pattern in GENERATED_PATTERNS) + r")"
 )
 WRITE_TOOL_NAMES = {"apply_patch", "edit", "write", "multiedit"}
-BASH_TOOL_NAMES = {"bash"}
+BASH_TOOL_NAMES = {"bash", "exec_command", "functions.exec_command"}
 READ_TOOL_NAMES = {"read", "grep", "glob", "ls"}
 BASH_COMMAND_PREFIX = r"(^|[;&|]\s*)(?:rtk\s+)?(?:(?:timeout|gtimeout)\s+\d+\s+)?(?:sudo\s+)?"
 GOAL_MAX_CHARS = 4000

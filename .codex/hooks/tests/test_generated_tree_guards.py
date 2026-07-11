@@ -30,6 +30,14 @@ def bash_payload(command):
     }
 
 
+def exec_command_payload(command, tool_name="exec_command"):
+    return {
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool_name,
+        "tool_input": {"cmd": command},
+    }
+
+
 class GeneratedTreeGuardTests(unittest.TestCase):
     def test_pre_tool_guard_allows_read_only_bash_generated_tree_inspection(self):
         result = run_hook(
@@ -37,6 +45,18 @@ class GeneratedTreeGuardTests(unittest.TestCase):
             bash_payload(
                 "rtk rg -n 'SYSCALL_DEFINE' "
                 "Build/OrlixKernel/src/linux-6.12-port/kernel/fork.c"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_allows_read_only_exec_command_generated_tree_inspection(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "rtk sed -n '1,80p' "
+                "Build/OrlixMLibC/upstream/mlibc-1.0.git/options/posix/generic/unistd.cpp"
             ),
         )
 
@@ -73,6 +93,52 @@ class GeneratedTreeGuardTests(unittest.TestCase):
             bash_payload(
                 "rtk sed -i '' 's/old/new/' "
                 "Build/OrlixOS/upstream/coreutils-9.5.git/src/cat.c"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_exec_command_mutation_to_linux_clone(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "rtk sed -i '' 's/old/new/' "
+                "Build/OrlixKernel/upstream/linux-6.12.git/kernel/fork.c"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_exec_command_mutation_to_mlibc_clone(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "rtk touch Build/OrlixMLibC/upstream/mlibc-1.0.git/agent-edit"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_exec_command_mutation_to_coreutils_clone(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "rtk git -C Build/OrlixOS/upstream/coreutils-9.5.git apply /tmp/fix.patch"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_namespaced_exec_command_after_cd_to_generated_tree(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "cd Build/OrlixOS/upstream/coreutils-9.5.git && rtk git apply /tmp/fix.patch",
+                tool_name="functions.exec_command",
             ),
         )
 

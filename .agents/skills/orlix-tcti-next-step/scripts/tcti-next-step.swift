@@ -5,6 +5,14 @@ struct Roadmap: Decodable {
     let area: String
     let description: String
     let gates: [Gate]
+    let runtimePreflightGateIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case area
+        case description
+        case gates
+        case runtimePreflightGateIDs = "runtime_preflight_gate_ids"
+    }
 }
 
 struct EnvironmentPolicy: Decodable {
@@ -166,6 +174,10 @@ struct ReportFailureFact: Codable {
 struct ExecutionFreshness: Codable {
     let reportGitSHA: String?
     let currentGitSHA: String
+    let reportProductVersion: String?
+    let reportProductBuildID: String?
+    let currentProductVersion: String
+    let currentProductBuildID: String
     let executionFresh: Bool
     let statusRecomputed: Bool
     let changedPathsSinceReport: [String]
@@ -176,6 +188,10 @@ struct ExecutionFreshness: Codable {
     enum CodingKeys: String, CodingKey {
         case reportGitSHA = "report_git_sha"
         case currentGitSHA = "current_git_sha"
+        case reportProductVersion = "report_product_version"
+        case reportProductBuildID = "report_product_build_id"
+        case currentProductVersion = "current_product_version"
+        case currentProductBuildID = "current_product_build_id"
         case executionFresh = "execution_fresh"
         case statusRecomputed = "status_recomputed"
         case changedPathsSinceReport = "changed_paths_since_report"
@@ -197,6 +213,8 @@ struct ReportFact: Codable {
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let gitSHA: String?
+    let productVersion: String?
+    let productBuildID: String?
     let executionFreshness: ExecutionFreshness?
     let failures: [ReportFailureFact]
     let forbiddenBehaviorViolations: [String]
@@ -213,6 +231,8 @@ struct ReportFact: Codable {
         releaseGateEligible: Bool,
         readinessGateEligible: Bool,
         gitSHA: String?,
+        productVersion: String? = nil,
+        productBuildID: String? = nil,
         executionFreshness: ExecutionFreshness? = nil,
         failures: [ReportFailureFact] = [],
         forbiddenBehaviorViolations: [String] = []
@@ -228,6 +248,8 @@ struct ReportFact: Codable {
         self.releaseGateEligible = releaseGateEligible
         self.readinessGateEligible = readinessGateEligible
         self.gitSHA = gitSHA
+        self.productVersion = productVersion
+        self.productBuildID = productBuildID
         self.executionFreshness = executionFreshness
         self.failures = failures
         self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
@@ -246,6 +268,8 @@ struct ReportFact: Codable {
             releaseGateEligible: releaseGateEligible,
             readinessGateEligible: readinessGateEligible,
             gitSHA: gitSHA,
+            productVersion: productVersion,
+            productBuildID: productBuildID,
             executionFreshness: freshness,
             failures: failures,
             forbiddenBehaviorViolations: forbiddenBehaviorViolations
@@ -264,6 +288,8 @@ struct ReportFact: Codable {
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case gitSHA = "git_sha"
+        case productVersion = "product_version"
+        case productBuildID = "product_build_id"
         case executionFreshness = "execution_freshness"
         case failures
         case forbiddenBehaviorViolations = "forbidden_behavior_violations"
@@ -783,144 +809,145 @@ func pathMatches(_ path: String, _ pattern: String) -> Bool {
     return path == pattern
 }
 
-let allGateExecutionInvalidationPatterns = [
-    "tools/tcti/**",
-    "tools/runtime/**",
-    ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
-]
-
-let statusOnlyInvalidationPatterns = [
-    ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-    ".agents/skills/orlix-tcti-next-step/scripts/status",
-    ".agents/skills/orlix-tcti-next-step/scripts/next",
-    ".agents/skills/orlix-tcti-next-step/scripts/task-envelope-check",
-    ".agents/skills/orlix-tcti-next-step/scripts/goal-loop",
-    ".codex/**",
-    "docs/harness/**",
-    "AGENTS.md",
-    "docs/goals/active/**",
-    "docs/plans/active/*/IMPLEMENT.md",
-]
-
-let runtimeSimulatorInvalidationPatterns = [
-    "tools/runtime/orlix-runtime-validation.sh",
-    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
+let productExecutionInvalidationPatterns = [
     "project.yml",
-    "Orlix/**",
-    "OrlixOS/**",
-    "OrlixKernel/Sources/ports/orlix/**",
-    "OrlixMLibC/**",
-]
-
-let goldenNoPhoneInvalidationPatterns = [
-    "tools/tcti/orlix-tcti-gate.swift",
-    "OrlixKernel/Tests/TCTI/**",
-    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-]
-
-let kernelProofInvalidationPatterns = [
-    "OrlixKernel/Sources/ports/orlix/**",
     "OrlixKernel/Makefile",
-    "tools/tcti/orlix-tcti-gate.swift",
-]
-
-let mlibcProofInvalidationPatterns = [
-    "OrlixMLibC/**",
+    "OrlixKernel/Sources/boot/**",
+    "OrlixKernel/Sources/include/**",
+    "OrlixKernel/Sources/Support/**",
     "OrlixKernel/Sources/ports/orlix/**",
-    "tools/tcti/**",
-]
-
-let shellCoreutilsOCIInvalidationPatterns = [
-    "OrlixOS/**",
-    "OrlixMLibC/**",
-    "OrlixKernel/Sources/ports/orlix/**",
-    "tools/runtime/**",
-    "tools/tcti/**",
+    "OrlixHostAdapter/Makefile",
+    "OrlixHostAdapter/Sources/**",
+    "OrlixMLibC/Makefile",
+    "OrlixMLibC/Sources/**",
+    "OrlixOS/Makefile",
+    "OrlixOS/Sources/**",
+    "Orlix/Makefile",
+    "Orlix/Sources/**",
+    "OrlixTestRunner/Sources/**",
 ]
 
 func matchesAny(_ path: String, _ patterns: [String]) -> Bool {
     patterns.contains { pathMatches(path, $0) }
 }
 
-func isRuntimeSimulatorGate(_ gate: Gate) -> Bool {
-    gate.kind == "simulator-runtime" || gate.id.hasPrefix("simulator-tcti-") || gate.id.hasPrefix("tcti-simulator-")
-}
-
-func isGoldenOrNoPhoneGate(_ gate: Gate) -> Bool {
-    gate.id.hasPrefix("golden-") ||
-        gate.id.hasPrefix("switch-") ||
-        gate.id.hasPrefix("diff-switch-") ||
-        gate.id.hasPrefix("no-phone-") ||
-        gate.kind.contains("no-phone") ||
-        gate.kind.contains("golden") ||
-        gate.command.contains("tcti-gate")
-}
-
-func isKernelProofGate(_ gate: Gate) -> Bool {
-    gate.proofTier == "kernel" || gate.id.contains("kernel")
-}
-
-func isMLibCProofGate(_ gate: Gate) -> Bool {
-    gate.proofTier.contains("mlibc") || gate.id.contains("mlibc")
-}
-
-func isShellCoreutilsOCIGate(_ gate: Gate) -> Bool {
-    gate.id.contains("shell") ||
-        gate.id.contains("busybox") ||
-        gate.id.contains("coreutils") ||
-        gate.id.contains("oci") ||
-        gate.id.contains("package") ||
-        gate.id.contains("dynamic-loader") ||
-        gate.proofTier.contains("shell") ||
-        gate.proofTier.contains("package")
-}
-
-func makefileCanAffectGateExecution(_ gate: Gate) -> Bool {
-    gate.command.contains("make ") || gate.command.hasPrefix("make ")
-}
-
 func doesChangedPathInvalidateGate(_ gate: Gate, changedPath: String) -> Bool {
-    if matchesAny(changedPath, allGateExecutionInvalidationPatterns) {
-        return true
-    }
-    if changedPath == "Makefile" {
-        return makefileCanAffectGateExecution(gate)
-    }
-    if isRuntimeSimulatorGate(gate) && matchesAny(changedPath, runtimeSimulatorInvalidationPatterns) {
-        return true
-    }
-    if isGoldenOrNoPhoneGate(gate) && matchesAny(changedPath, goldenNoPhoneInvalidationPatterns) {
-        return true
-    }
-    if isKernelProofGate(gate) && matchesAny(changedPath, kernelProofInvalidationPatterns) {
-        return true
-    }
-    if isMLibCProofGate(gate) && matchesAny(changedPath, mlibcProofInvalidationPatterns) {
-        return true
-    }
-    if isShellCoreutilsOCIGate(gate) && matchesAny(changedPath, shellCoreutilsOCIInvalidationPatterns) {
-        return true
-    }
-    return false
+    _ = gate
+    return matchesAny(changedPath, productExecutionInvalidationPatterns)
 }
 
 func changedPathsSinceReport(reportGitSHA: String, currentGitSHA: String) -> [String]? {
+    let cacheKey = "\(reportGitSHA)..\(currentGitSHA)"
+    if let cached = changedPathsByCommitRange[cacheKey] { return cached }
     guard let output = run("/usr/bin/env", ["git", "diff", "--name-only", "\(reportGitSHA)..\(currentGitSHA)"]) else {
         return nil
     }
-    return output
+    let paths = output
         .split(whereSeparator: \.isNewline)
         .map(String.init)
         .filter { !$0.isEmpty }
+    changedPathsByCommitRange[cacheKey] = paths
+    return paths
 }
 
-func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFreshness {
+struct ProjectVersion {
+    let marketingVersion: String
+    let buildID: String
+}
+
+var cachedCurrentProjectVersion: ProjectVersion?
+var didLoadCurrentProjectVersion = false
+var projectVersionByGitSHA: [String: ProjectVersion] = [:]
+var cachedWorkingTreeChangedPaths: [String]?
+var changedPathsByCommitRange: [String: [String]] = [:]
+
+func projectVersion(from contents: String) -> ProjectVersion? {
+    var marketingVersion: String?
+    var buildID: String?
+    for line in contents.split(whereSeparator: \.isNewline).map(String.init) {
+        let fields = line.split(separator: ":", maxSplits: 1).map(String.init)
+        guard fields.count == 2 else { continue }
+        let key = fields[0].trimmingCharacters(in: .whitespaces)
+        let value = fields[1]
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        if key == "MARKETING_VERSION" { marketingVersion = value }
+        if key == "CURRENT_PROJECT_VERSION" { buildID = value }
+    }
+    guard let marketingVersion, let buildID, !marketingVersion.isEmpty, !buildID.isEmpty else {
+        return nil
+    }
+    return ProjectVersion(marketingVersion: marketingVersion, buildID: buildID)
+}
+
+func currentProjectVersion() -> ProjectVersion? {
+    if didLoadCurrentProjectVersion { return cachedCurrentProjectVersion }
+    didLoadCurrentProjectVersion = true
+    let url = root.appendingPathComponent("project.yml")
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+    cachedCurrentProjectVersion = projectVersion(from: contents)
+    return cachedCurrentProjectVersion
+}
+
+func projectVersion(at gitSHA: String) -> ProjectVersion? {
+    if let cached = projectVersionByGitSHA[gitSHA] { return cached }
+    guard let contents = run("/usr/bin/env", ["git", "show", "\(gitSHA):project.yml"]) else {
+        return nil
+    }
+    guard let version = projectVersion(from: contents) else { return nil }
+    projectVersionByGitSHA[gitSHA] = version
+    return version
+}
+
+func currentWorkingTreeChangedPaths() -> [String] {
+    if let cachedWorkingTreeChangedPaths { return cachedWorkingTreeChangedPaths }
+    guard let output = run("/usr/bin/env", ["git", "status", "--porcelain=v1", "--untracked-files=all"]) else {
+        return []
+    }
+    let paths: [String] = output.split(whereSeparator: \.isNewline).compactMap { rawLine -> String? in
+        let line = String(rawLine)
+        guard line.count > 3 else { return nil }
+        let path = String(line.dropFirst(3))
+        if let renameSeparator = path.range(of: " -> ") {
+            return String(path[renameSeparator.upperBound...])
+        }
+        return path
+    }
+    cachedWorkingTreeChangedPaths = paths
+    return paths
+}
+
+func executionFreshness(
+    for gate: Gate,
+    reportGitSHA: String?,
+    reportProductVersion: String? = nil,
+    reportProductBuildID: String? = nil
+) -> ExecutionFreshness {
     let current = gitSHA()
+    guard let currentVersion = currentProjectVersion() else {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: "unknown",
+            currentProductBuildID: "unknown",
+            executionFresh: false,
+            statusRecomputed: true,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "project.yml lacks MARKETING_VERSION or CURRENT_PROJECT_VERSION"
+        )
+    }
     guard let reportGitSHA, !reportGitSHA.isEmpty else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
@@ -929,22 +956,35 @@ func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFresh
             reason: "report lacks git_sha provenance"
         )
     }
-    if reportGitSHA == current {
+    let explicitReportVersion: ProjectVersion? = {
+        guard let reportProductVersion, !reportProductVersion.isEmpty,
+              let reportProductBuildID, !reportProductBuildID.isEmpty else { return nil }
+        return ProjectVersion(marketingVersion: reportProductVersion, buildID: reportProductBuildID)
+    }()
+    guard let reportVersion = explicitReportVersion ?? projectVersion(at: reportGitSHA) else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
-            executionFresh: true,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
+            executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
             ignoredNonExecutionPaths: [],
             invalidatingPaths: [],
-            reason: "report git_sha matches current HEAD"
+            reason: "unable to read product version and build ID from project.yml at report git_sha"
         )
     }
-    guard let changed = changedPathsSinceReport(reportGitSHA: reportGitSHA, currentGitSHA: current) else {
+    guard let committedChanged = changedPathsSinceReport(reportGitSHA: reportGitSHA, currentGitSHA: current) else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
@@ -953,29 +993,77 @@ func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFresh
             reason: "unable to compute changed paths since report git_sha"
         )
     }
+    let changed = Array(Set(committedChanged + currentWorkingTreeChangedPaths())).sorted()
     let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
     let ignored = changed.filter { !invalidating.contains($0) }
-    if invalidating.isEmpty {
+    let versionMatches = reportVersion.marketingVersion == currentVersion.marketingVersion
+    let buildMatches = reportVersion.buildID == currentVersion.buildID
+    let committedVersion = projectVersion(at: current)
+    let pendingBuildBump = committedVersion?.marketingVersion != currentVersion.marketingVersion ||
+        committedVersion?.buildID != currentVersion.buildID
+    if explicitReportVersion != nil && versionMatches && buildMatches &&
+        (invalidating.isEmpty || pendingBuildBump) {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: true,
             statusRecomputed: true,
             changedPathsSinceReport: changed,
             ignoredNonExecutionPaths: ignored,
             invalidatingPaths: [],
-            reason: "report git_sha differs from HEAD only by non-execution paths"
+            reason: pendingBuildBump
+                ? "report matches pending product version/build; report git_sha is provenance only"
+                : "product version/build match; report git_sha is provenance only"
         )
+    }
+    if versionMatches && buildMatches && invalidating.isEmpty {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
+            executionFresh: true,
+            statusRecomputed: true,
+            changedPathsSinceReport: changed,
+            ignoredNonExecutionPaths: ignored,
+            invalidatingPaths: [],
+            reason: "product version/build match; git_sha differs only by proof or harness paths"
+        )
+    }
+    let reason: String
+    if versionMatches && buildMatches {
+        reason = "product inputs changed without bumping CURRENT_PROJECT_VERSION: \(invalidating.joined(separator: ", "))"
+    } else {
+        reason = "product version/build changed from \(reportVersion.marketingVersion) (\(reportVersion.buildID)) to \(currentVersion.marketingVersion) (\(currentVersion.buildID))"
     }
     return ExecutionFreshness(
         reportGitSHA: reportGitSHA,
         currentGitSHA: current,
+        reportProductVersion: reportVersion.marketingVersion,
+        reportProductBuildID: reportVersion.buildID,
+        currentProductVersion: currentVersion.marketingVersion,
+        currentProductBuildID: currentVersion.buildID,
         executionFresh: false,
         statusRecomputed: true,
         changedPathsSinceReport: changed,
         ignoredNonExecutionPaths: ignored,
         invalidatingPaths: invalidating,
-        reason: "changed paths invalidate gate execution: \(invalidating.joined(separator: ", "))"
+        reason: reason
+    )
+}
+
+func executionFreshness(for gate: Gate, report: ReportFact) -> ExecutionFreshness {
+    executionFreshness(
+        for: gate,
+        reportGitSHA: report.gitSHA,
+        reportProductVersion: report.productVersion,
+        reportProductBuildID: report.productBuildID
     )
 }
 
@@ -1430,6 +1518,8 @@ func reportFact(target: String) -> ReportFact {
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"]),
+            productVersion: stringValue(object["product_version"]),
+            productBuildID: stringValue(object["product_build_id"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
@@ -1453,7 +1543,7 @@ func reportFact(target: String) -> ReportFact {
 func reportFact(target: String, gate: Gate) -> ReportFact {
     let report = reportFact(target: target)
     guard report.exists else { return report }
-    return report.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: report.gitSHA))
+    return report.withExecutionFreshness(executionFreshness(for: gate, report: report))
 }
 
 func currentReportPassed(_ report: ReportFact) -> Bool {
@@ -2550,6 +2640,8 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"]),
+            productVersion: stringValue(object["product_version"]),
+            productBuildID: stringValue(object["product_build_id"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
@@ -2590,7 +2682,7 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2669,7 +2761,7 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2754,7 +2846,7 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2837,7 +2929,7 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2934,7 +3026,7 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -3031,7 +3123,7 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -5224,3124 +5316,8 @@ func missingGate(_ gate: Gate, reason: String) -> GateStatus {
     artifactStatus(gate, passed: false, reason: reason)
 }
 
-func simulatorProofGate(id: String, runtimeGate: String, marker: String, prerequisite: String, label: String) -> Gate {
-    let command = "make runtime-validation DESTINATION=iphonesimulator GATE=\(runtimeGate) ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)"
-    return Gate(
-        id: id,
-        command: command,
-        kind: "simulator-runtime",
-        proofTier: "simulator",
-        acceptanceWeight: "readiness",
-        realStackRequired: true,
-        canClaimRuntimeReadiness: true,
-        prerequisites: [prerequisite],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-            "OrlixOS/Sources/make/**",
-            "tools/runtime/orlix-runtime-validation.sh",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/**",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-            "docs/plans/active/orlix-tcti/PLAN.md",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run phone gates.",
-            "Do not use any simulator except Orlix-iPhone-15-Pro-Max.",
-            "Do not treat an earlier simulator pass as proof for \(label).",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not add HostAdapter, Darwin syscall, fd table, process, signal, scheduler, or broad Linux runtime semantics unless this gate envelope is extended first.",
-            "Do not edit generated Linux or build trees.",
-        ],
-        expectedReportPaths: [
-            "Build/Reports/runtime/\(runtimeGate)-*.json",
-            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-            "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-            "Build/TCTI/reports/tcti-plan-consistency/report.json",
-            "Build/TCTI/reports/tcti-report-schema-check/report.json",
-            "Build/TCTI/reports/tcti-golden-elf/report.json",
-            "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-            "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-            "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy \(command)",
-        ],
-        reducerRequirements: [
-            "If \(label) fails, reduce it into a no-phone TCTI fixture or report-specific reducer before patching production behavior.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): prove \(label) on simulator",
-        stopConditions: [
-            "Stop if the marker \(marker) is missing.",
-            "Stop if more than the pinned simulator is booted.",
-            "Stop if this gate is used to claim broader readiness than \(label).",
-        ]
-    )
-}
-
-func runtimePreflightGates() -> [Gate] {
-    [
-        Gate(
-            id: "tcti-contract",
-            command: "make tcti-gate TARGET=tcti-contract",
-            kind: "no-phone-contract",
-            prerequisites: ["first-gadget-init-001-exit"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Stay no-phone.",
-                "Do not mark TODO contract groups as pass.",
-                "Do not broaden beyond the smallest missing no-phone contract group selected by the report.",
-            ],
-            expectedReportPaths: ["Build/TCTI/reports/tcti-contract/report.json"],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-contract",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            ],
-            reducerRequirements: ["Any failing contract group must produce a replayable reducer."],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-oracle",
-                "orlix-tcti-safety",
-                "tcti-test-reducer",
-            ],
-            commitMessageTemplate: "test(tcti): complete no-phone contract gate",
-            stopConditions: [
-                "Stop if the contract report remains TODO without selecting the smallest missing no-phone group.",
-                "Stop if a TODO group is reported as pass.",
-            ]
-        ),
-        Gate(
-            id: "tcti-memory-fuzz",
-            command: "make tcti-gate TARGET=tcti-memory-fuzz",
-            kind: "no-phone-fuzz",
-            prerequisites: ["tcti-contract"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Stay no-phone.",
-                "Do not patch from certification logs.",
-                "Do not bypass executable-memory safety policy.",
-            ],
-            expectedReportPaths: ["Build/TCTI/reports/tcti-memory-fuzz/report.json"],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-memory-fuzz",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            ],
-            reducerRequirements: ["Any memory fuzz failure must produce a replayable reducer."],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-oracle",
-                "orlix-tcti-safety",
-                "tcti-test-reducer",
-            ],
-            commitMessageTemplate: "test(tcti): add no-phone memory fuzz gate",
-            stopConditions: [
-                "Stop if memory permissions or backing semantics are unclear.",
-                "Stop if the failure cannot be reduced before implementation.",
-            ]
-        ),
-        Gate(
-            id: "tcti-direct-chain-fuzz",
-            command: "make tcti-gate TARGET=tcti-direct-chain-fuzz",
-            kind: "no-phone-fuzz",
-            prerequisites: ["tcti-memory-fuzz"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Stay no-phone.",
-                "Do not implement production assembly unless a separate selected gate allows it.",
-                "Do not bypass executable-memory safety policy.",
-            ],
-            expectedReportPaths: ["Build/TCTI/reports/tcti-direct-chain-fuzz/report.json"],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-direct-chain-fuzz",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            ],
-            reducerRequirements: ["Any direct-chain fuzz failure must produce a replayable reducer."],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-oracle",
-                "orlix-tcti-safety",
-                "tcti-test-reducer",
-            ],
-            commitMessageTemplate: "test(tcti): add no-phone direct-chain fuzz gate",
-            stopConditions: [
-                "Stop if direct chaining would require production assembly before its selected gate.",
-                "Stop if the failure cannot be reduced before implementation.",
-            ]
-        ),
-        Gate(
-            id: "simulator-tcti-init-first-syscall",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            kind: "simulator-runtime",
-            prerequisites: ["tcti-simulator-kernel-first-syscall"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**",
-                "tools/runtime/orlix-runtime-validation.sh",
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                "OrlixOS/Sources/make/rootfs.mk",
-                "OrlixOS/Sources/make/packages.mk",
-                "project.yml",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not treat simulator evidence as release or physical readiness.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "Do not allow more than one simulator to be booted while this gate runs.",
-                "Do not use emergency override or preflight-only evidence as pass.",
-                "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
-            ],
-            expectedReportPaths: [
-                "Build/Reports/runtime/tcti-init-first-syscall-*.json",
-                "Build/TCTI/reports/tcti-plan-consistency/report.json",
-                "Build/TCTI/reports/tcti-report-schema-check/report.json",
-                "Build/TCTI/reports/tcti-golden-elf/report.json",
-                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            ],
-            reducerRequirements: [
-                "Any simulator failure after app launch must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
-                "Environment or simulator boot failures must be reported as infrastructure blockers, not TCTI passes.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): certify first simulator syscall gate",
-            stopConditions: [
-                "Stop if no-phone reports are missing, todo, evidence, or fail.",
-                "Stop if simulator runtime-validation uses preflight-only or emergency override evidence.",
-                "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-simulator-user-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-simulator-user-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["simulator-tcti-init-first-syscall"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                "Makefile",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not add production TCTI assembly.",
-                "Do not add gadget dispatch.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-                "Do not edit generated upstream or build trees.",
-                "Do not flip product defconfigs.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-simulator-user-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
-                "Build/TCTI/reports/tcti-repro/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf CASE=init_011_static_pie_got_byte_load EXECUTE=switch-debug",
-                "rtk proxy make tcti-gate TARGET=tcti-simulator-user-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            ],
-            reducerRequirements: [
-                "A current failing simulator stability report must contain a structured null-read fatal user fault event, or a current passing simulator stability report must contain structured first-svc and static-PIE events with no fatal user fault.",
-                "The no-phone reducer must replay through make tcti-gate TARGET=tcti-repro before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-tcti-reproducer",
-                "orlix-tcti-golden-elf",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): add simulator fault got reducer",
-            stopConditions: [
-                "Stop if the current simulator stability report is stale or missing required structured TCTI runtime events.",
-                "Stop if the no-phone reducer cannot replay.",
-                "Stop if production TCTI code would be required before the reducer exists.",
-            ]
-        ),
-    Gate(
-        id: "tcti-static-pie-relocation-fix",
-        command: "make tcti-gate TARGET=tcti-static-pie-relocation-fix",
-        kind: "production-tcti-fix",
-        prerequisites: ["no-phone-tcti-simulator-user-fault-reducer"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tcti.h",
-            "tools/tcti/orlix-tcti-gate.swift",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not implement a broad ELF dynamic loader.",
-            "Limit production behavior to the reducer-backed static PIE R_AARCH64_RELATIVE/GOT null-read failure class.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-static-pie-relocation-fix/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-            "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-            "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            "rtk proxy make tcti-gate TARGET=tcti-static-pie-relocation-fix",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-        ],
-        reducerRequirements: [
-            "A current simulator stability pass must include structured static PIE image evidence and no fatal null GOT read signature.",
-            "If simulator stability regresses to the old null GOT read failure, regenerate a current reducer before production TCTI patching.",
-            "After the production fix marker passes, rerun simulator stability through the next selected gate.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-safety",
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-runtime-claim-verification",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "fix(tcti): apply static pie relative relocations",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches the null GOT/read reducer.",
-            "Stop if the fix requires production assembly, gadget dispatch, HostAdapter Linux behavior, product defconfig flips, or generated-tree edits.",
-            "Stop if the fix broadens into dynamic loader, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-simd-self-move-reducer",
-        command: "make tcti-gate TARGET=tcti-simd-self-move-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["tcti-static-pie-relocation-fix"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/**",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Reduce the simulator unsupported 0x6e080400 SIGILL before production TCTI patching.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-self-move-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-golden-elf/execution-simd-self-move-unsupported.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-self-move-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-simd-self-move-unsupported.json",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        ],
-        reducerRequirements: [
-            "The current simulator stability failure must match unsupported instruction 0x6e080400 with exitcode=0x00000004.",
-            "The no-phone reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-test-reducer",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-        ],
-        commitMessageTemplate: "test(tcti): reduce simulator simd self move",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches unsupported 0x6e080400.",
-            "Stop if reducer replay cannot reproduce the no-phone unsupported instruction failure.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-self-move-fix",
-        command: "make tcti-gate TARGET=tcti-simd-self-move-fix",
-        kind: "production-tcti-fix",
-        prerequisites: ["no-phone-tcti-simd-self-move-reducer"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-            "tools/tcti/orlix-tcti-gate.swift",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Limit production behavior to decoded AArch64 SIMD lane self-move 0x6e080400 as a no-op.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-self-move-fix/report.json",
-            "Build/TCTI/reproducers/tcti-simd-self-move-fix/simd-self-move-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-self-move-fix",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-        ],
-        reducerRequirements: [
-            "The rail must not require the old generated simulator SIGILL report as current proof.",
-            "After the production fix, rerun simulator stability through the next selected gate on the pinned simulator.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-safety",
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-runtime-claim-verification",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "fix(tcti): repair simd self move rail evidence contract",
-        stopConditions: [
-            "Stop if the fix requires broad SIMD/vector register semantics.",
-            "Stop if the fix requires production assembly, gadget dispatch, HostAdapter Linux behavior, product defconfig flips, or generated-tree edits.",
-            "Stop if simulator stability still stops on unsupported 0x6e080400 after the fix.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-brk-trap-reducer",
-        command: "make tcti-gate TARGET=tcti-brk-trap-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["tcti-simd-self-move-fix"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/**",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not implement BRK as a success no-op for init; reduce the trap and identify the underlying startup or relocation cause.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-brk-trap-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-brk-trap-reducer/execution-brk-trap-unsupported.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-brk-trap-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-brk-trap-reducer/execution-brk-trap-unsupported.json",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        ],
-        reducerRequirements: [
-            "The current simulator stability failure must match unsupported instruction 0xd4200020 after mmap syscall 222.",
-            "The no-phone reducer must replay before any production patch for the underlying startup or relocation cause.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-test-reducer",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-        ],
-        commitMessageTemplate: "test(tcti): reduce simulator brk trap",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches unsupported 0xd4200020.",
-            "Stop if reducer replay cannot reproduce the no-phone BRK unsupported instruction failure.",
-            "Stop if the proposed fix treats BRK as a passing no-op instead of addressing the underlying cause.",
-        ]
-    ),
-    Gate(
-        id: "tcti-brk-trap-root-cause",
-        command: "make tcti-gate TARGET=tcti-brk-trap-root-cause",
-        kind: "simulator-root-cause",
-        prerequisites: ["no-phone-tcti-brk-trap-reducer"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            "Build/TCTI/brk_trap_root_cause/**",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not implement BRK as a success no-op.",
-            "Do not claim simulator stability; this gate only binds the current simulator BRK failure to exact ELF facts.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-brk-trap-root-cause/report.json",
-            "Build/TCTI/brk_trap_root_cause/root-cause.md",
-            "Build/TCTI/reports/tcti-brk-trap-reducer/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-brk-trap-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-brk-trap-root-cause",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The BRK trap reducer must pass before this root-cause inspection runs.",
-            "The root-cause report must prove the simulator BRK is an explicit guard/trap in runtime init, not a missing successful BRK semantic.",
-            "Any production fix after this must address the startup condition that reaches the trap and must not skip BRK to force progress.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "orlix-runtime-claim-verification",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): bind simulator brk trap to init guard",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches unsupported 0xd4200020.",
-            "Stop if the inspected runtime init ELF does not contain the ADRP/LDR/CBNZ/BRK guard at ELF VMA 0x1be14.",
-            "Stop if the evidence would require treating BRK as a passing no-op.",
-        ]
-    ),
-    Gate(
-        id: "tcti-add-sub-shifted-xzr-fix",
-        command: "make tcti-gate TARGET=tcti-add-sub-shifted-xzr-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-brk-trap-root-cause"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not implement BRK as success no-op.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator stability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-add-sub-shifted-xzr-fix/report.json",
-            "Build/TCTI/reports/tcti-brk-trap-root-cause/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-add-sub-shifted-xzr-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-add-sub-shifted-xzr-fix/add-sub-shifted-xzr-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite the simulator BRK register facts x9, x13, sp, and pstate.",
-            "The KUnit regression must prove NEG x13, x9 uses XZR/WZR source semantics and preserves SP.",
-            "The gate must not treat BRK #1 as a supported successful instruction.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): fix shifted addsub xzr semantics",
-        stopConditions: [
-            "Stop if the latest simulator failure no longer provides the BRK register facts this fix reduces.",
-            "Stop if the fix would require adding production assembly, gadget dispatch, or BRK success semantics.",
-            "Stop if the KUnit regression cannot be compiled.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-movi-2s-fix",
-        command: "make tcti-gate TARGET=tcti-simd-movi-2s-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-add-sub-shifted-xzr-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD beyond the exact emitted MOVI vN.2s #0x100 subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator stability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-movi-2s-fix/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-movi-2s-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-2s-fix/simd-movi-2s-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite the simulator unsupported instruction 0x0f002420.",
-            "The KUnit regression must prove MOVI v0.2s materializes 0x0000010000000100 in the low SIMD half.",
-            "The gate must not broaden into generic SIMD modified-immediate support.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd movi immediate",
-        stopConditions: [
-            "Stop if the latest simulator failure no longer exposes unsupported instruction 0x0f002420.",
-            "Stop if the fix would require generic SIMD immediate decoding.",
-            "Stop if KUnit cannot compile the regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-movi-16b-fix",
-        command: "make tcti-gate TARGET=tcti-simd-movi-16b-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-movi-2s-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_movi_16b.S",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD beyond the exact emitted MOVI vN.16b #0xdf subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator stability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-movi-16b-fix/report.json",
-            "Build/TCTI/reproducers/tcti-simd-movi-16b-fix/simd-movi-16b-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-movi-16b-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-16b-fix/simd-movi-16b-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0x4f06e7e0.",
-            "The KUnit regression must prove MOVI v0.16b materializes 0xdfdfdfdfdfdfdfdf in both SIMD halves.",
-            "The gate must not broaden into generic SIMD modified-immediate support.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd movi sixteen-byte immediate",
-        stopConditions: [
-            "Stop if latest simulator failure no longer exposes unsupported instruction 0x4f06e7e0.",
-            "Stop if fix would require generic SIMD modified-immediate decoding.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-movi-4s-0x1-fix",
-        command: "make tcti-gate TARGET=tcti-simd-movi-4s-0x1-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: [
-            "simulator-tcti-static-busybox-shell-command",
-            "no-phone-tcti-post-busybox-shell-command-sigill-reducer",
-        ],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_movi_4s_0x1.S",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD beyond the exact emitted MOVI vN.4s #0x1 subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-movi-4s-0x1-fix/report.json",
-            "Build/TCTI/reproducers/tcti-simd-movi-4s-0x1-fix/simd-movi-4s-0x1-pass-regression.json",
-            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-movi-4s-0x1-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-movi-4s-0x1-fix/simd-movi-4s-0x1-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0x4f000421.",
-            "The KUnit regression must prove MOVI v1.4s materializes 0x0000000100000001 in both SIMD halves for v1.",
-            "The gate must not broaden into generic SIMD modified-immediate support.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd movi shell immediate",
-        stopConditions: [
-            "Stop if latest simulator failure no longer exposes unsupported instruction 0x4f000421.",
-            "Stop if fix would require generic SIMD modified-immediate decoding.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-cmeq-4s-fix",
-        command: "make tcti-gate TARGET=tcti-simd-cmeq-4s-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-movi-4s-0x1-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.h",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_cmeq_4s.S",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD beyond the exact emitted CMEQ vD.4s, vN.4s, vM.4s subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-cmeq-4s-fix/report.json",
-            "Build/TCTI/reproducers/tcti-simd-cmeq-4s-fix/simd-cmeq-4s-pass-regression.json",
-            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-cmeq-4s-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-cmeq-4s-fix/simd-cmeq-4s-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0x6ea18c64 from the pinned static BusyBox shell-command report.",
-            "The KUnit regression must prove CMEQ v4.4s, v3.4s, v1.4s produces 0xffffffff for equal 32-bit lanes and zero otherwise.",
-            "The gate must not broaden into generic SIMD compare support.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd cmeq shell compare",
-        stopConditions: [
-            "Stop if current simulator failure no longer exposes unsupported instruction 0x6ea18c64.",
-            "Stop if fix would require generic SIMD compare decoding.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-umaxv-4s-fix",
-        command: "make tcti-gate TARGET=tcti-simd-umaxv-4s-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-cmeq-4s-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.h",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/init_001_exit_simd_umaxv_4s.S",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD beyond the exact emitted UMAXV Sd, Vn.4s subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not claim simulator shell usability until the simulator gate passes after this no-phone fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-umaxv-4s-fix/report.json",
-            "Build/TCTI/reproducers/tcti-simd-umaxv-4s-fix/simd-umaxv-4s-pass-regression.json",
-            "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-umaxv-4s-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-umaxv-4s-fix/simd-umaxv-4s-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0x6eb0a885 from the pinned static BusyBox shell-command report.",
-            "The KUnit regression must prove UMAXV s5, v4.4s writes the unsigned maximum 32-bit lane to the scalar destination.",
-            "The gate must not broaden into generic SIMD reduction support.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd max reduction",
-        stopConditions: [
-            "Stop if current simulator failure no longer exposes unsupported instruction 0x6eb0a885.",
-            "Stop if fix would require generic SIMD reduction decoding.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-str-s-fix",
-        command: "make tcti-gate TARGET=tcti-simd-str-s-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-movi-4s-0x1-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD/FP memory support beyond exact emitted S-register unsigned-immediate width.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not treat simulator stability as passing from this no-phone reducer fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-str-s-fix/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-str-s-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-str-s-fix/simd-str-s-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0xbd01c260.",
-            "The KUnit regression must prove STR s0, [x19, #0x1c0] decodes as SIMD/FP unsigned-immediate 32-bit store.",
-            "The gate must not broaden into generic SIMD/FP memory semantics.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd str scalar",
-        stopConditions: [
-            "Stop if latest simulator failure no longer exposes unsupported instruction 0xbd01c260.",
-            "Stop if fix would require generic SIMD/FP memory support.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "tcti-simd-dup-2d-fix",
-        command: "make tcti-gate TARGET=tcti-simd-dup-2d-fix",
-        kind: "no-phone-simulator-reducer-fix",
-        prerequisites: ["tcti-simd-str-s-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/decode_aarch64.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/switch_debug.c",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not broaden SIMD vector support beyond exact emitted DUP vN.2d, xM subset.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not treat simulator stability as passing from this no-phone reducer fix.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-simd-dup-2d-fix/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-simd-dup-2d-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-simd-dup-2d-fix/simd-dup-2d-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The fix gate must cite simulator unsupported instruction 0x4e080d80.",
-            "The KUnit regression must prove DUP v0.2d, x12 decodes and replicates x12 into both vector lanes.",
-            "The gate must not broaden into generic SIMD vector move semantics.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-safety",
-            "orlix-tcti-debug",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): support emitted simd dup vector",
-        stopConditions: [
-            "Stop if latest simulator failure no longer exposes unsupported instruction 0x4e080d80.",
-            "Stop if fix would require generic SIMD vector move support.",
-            "Stop if KUnit cannot compile regression.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-post-overlay-null-user-fault-reducer",
-        command: "make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["tcti-simd-dup-2d-fix"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/**",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not run simulator gates while reducing this failure.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Reduce the pinned simulator post-overlay null user-fault null-read regression before production patching, or confirm the current structured simulator report no longer contains that fatal event.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-            "The current simulator report must include structured first-svc and static-PIE events, plus either a structured null-read fatal user fault or no fatal user fault in a passing report.",
-            "The no-phone reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): reduce simulator got slot regression",
-        stopConditions: [
-            "Stop if the latest simulator stability report is stale or missing required structured TCTI runtime events.",
-            "Stop if reducer replay cannot reproduce the no-phone unrelocated GOT byte-load failure.",
-            "Stop if production TCTI code would be required before the reducer exists.",
-        ]
-    ),
-    Gate(
-        id: "tcti-post-overlay-null-user-fault-fix",
-        command: "make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix",
-        kind: "production-tcti-fix",
-        prerequisites: ["no-phone-tcti-post-overlay-null-user-fault-reducer"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not implement a broad ELF dynamic loader.",
-            "Limit production behavior to the reducer-backed post-overlay null user-fault visibility failure class.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-overlay-null-user-fault-fix/report.json",
-            "Build/TCTI/reports/tcti-post-overlay-null-user-fault-reducer/report.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-relocation-invisible-byte-load.json",
-            "rtk proxy make tcti-gate TARGET=tcti-post-overlay-null-user-fault-fix",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-        ],
-        reducerRequirements: [
-            "The post-overlay null user-fault reducer must pass before production TCTI patching.",
-            "After the fix, rerun simulator stability on the pinned simulator through the next selected gate.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "orlix-runtime-claim-verification",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "fix(tcti): preserve static pie got slot writes",
-        stopConditions: [
-            "Stop if the fix requires production assembly, gadget dispatch, HostAdapter Linux behavior, product defconfig flips, or generated-tree edits.",
-            "Stop if the fix broadens into dynamic loader, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Stop if the latest simulator stability failure still matches the post-overlay null user-fault null-read signature after the fix.",
-        ]
-    ),
-    Gate(
-        id: "tcti-ldrsw-sign-extension-fix",
-        command: "make tcti-gate TARGET=tcti-ldrsw-sign-extension-fix",
-        kind: "production-tcti-fix",
-        prerequisites: ["tcti-post-overlay-null-user-fault-fix"],
-        allowedScope: [
-            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Limit production behavior to signed load destination-width semantics required by emitted LDRSW 0xb9801848.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-ldrsw-sign-extension-fix/report.json",
-            "Build/TCTI/reproducers/tcti-ldrsw-sign-extension-fix/ldrsw-sign-extension-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-ldrsw-sign-extension-fix",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-ldrsw-sign-extension-fix/ldrsw-sign-extension-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-            "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-        ],
-        reducerRequirements: [
-            "The exact emitted LDRSW 0xb9801848 must execute through switch-debug and prove 32-bit sign extension into an X register before exit(42).",
-            "The gate must write and replay a pass-regression reproducer without requiring a historical failing simulator report.",
-            "The latest execution-fresh pinned simulator stability report must pass without the old high-address LDRSW fault signature.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "orlix-runtime-claim-verification",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "fix(tcti): sign extend ldrsw into x registers",
-        stopConditions: [
-            "Stop if the fix requires production assembly, gadget dispatch, HostAdapter Linux behavior, product defconfig flips, or generated-tree edits.",
-            "Stop if the fix broadens into generic runtime semantics beyond signed-load destination-width correction.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-post-setsid-tls-fault-reducer",
-        command: "make tcti-gate TARGET=tcti-post-setsid-tls-fault-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["tcti-ldrsw-sign-extension-fix"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "tools/tcti/fixtures/golden_elf/**",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux or build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Reduce the pinned simulator post-setsid pid-valued user fault before production TCTI patching.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-setsid-tls-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-post-setsid-tls-fault-reducer/post-setsid-tls-fault-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-setsid-tls-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-setsid-tls-fault-reducer/post-setsid-tls-fault-pass-regression.json",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-        ],
-        reducerRequirements: [
-            "The current simulator stability failure must match the pinned Orlix-iPhone-15-Pro-Max post-setsid pid-valued user fault.",
-            "The no-phone reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): reduce post setsid simulator fault",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches the post-setsid pid-valued user fault.",
-            "Stop if reducer replay cannot reproduce the no-phone regression.",
-            "Stop if production TCTI code would be required before the reducer exists.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-post-exec-sh-fetch-fault-reducer",
-        command: "make tcti-gate TARGET=tcti-post-exec-sh-fetch-fault-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["no-phone-tcti-post-setsid-tls-fault-reducer"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not patch the fetch-fault runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-exec-sh-fetch-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-post-exec-sh-fetch-fault-reducer/post-exec-sh-fetch-fault-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-exec-sh-fetch-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-exec-sh-fetch-fault-reducer/post-exec-sh-fetch-fault-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-            "The artifact must show child pid 32 reaches execve(221), task changes to sh, and TCTI fetch faults at pc=addr=0x1000494c8 access=0.",
-            "The reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): reduce post-exec sh fetch fault",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches post-exec sh fetch fault pc=addr=0x1000494c8 access=0.",
-            "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-            "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-post-pie-sh-entry-fetch-fault-reducer",
-        command: "make tcti-gate TARGET=tcti-post-pie-sh-entry-fetch-fault-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["no-phone-tcti-post-exec-sh-fetch-fault-reducer"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not patch the PIE entry fetch runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-pie-sh-entry-fetch-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-post-pie-sh-entry-fetch-fault-reducer/post-pie-sh-entry-fetch-fault-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-pie-sh-entry-fetch-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-pie-sh-entry-fetch-fault-reducer/post-pie-sh-entry-fetch-fault-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-            "The artifact must show static-PIE /bin/sh reaches execve(221), then TCTI exits task=sh with status=-14 at pc=fault and insn=0x0.",
-            "The reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): reduce pie shell entry fetch fault",
-        stopConditions: [
-            "Stop if the latest simulator stability failure no longer matches post-PIE sh entry fetch fault status=-14 insn=0x0.",
-            "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-            "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-        ]
-    ),
-    Gate(
-        id: "no-phone-tcti-post-bash-mmap-read-fault-reducer",
-        command: "make tcti-gate TARGET=tcti-post-bash-mmap-read-fault-reducer",
-        kind: "no-phone-reducer",
-        prerequisites: ["no-phone-tcti-post-pie-sh-entry-fetch-fault-reducer"],
-        allowedScope: [
-            "tools/tcti/orlix-tcti-gate.swift",
-            "Makefile",
-            ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-        ],
-        forbiddenScope: [
-            "Do not run physical-device gates.",
-            "Do not add production assembly.",
-            "Do not add gadget dispatch.",
-            "Do not flip product defconfigs.",
-            "Do not edit generated Linux build trees.",
-            "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-            "Do not patch the Bash mmap/read runtime behavior before the reducer exists and replays.",
-            "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-        ],
-        expectedReportPaths: [
-            "Build/TCTI/reports/tcti-post-bash-mmap-read-fault-reducer/report.json",
-            "Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json",
-            "Build/Reports/runtime/tcti-simulator-stability-*.json",
-        ],
-        readinessEligible: false,
-        physicalDevice: false,
-        gadget: false,
-        requiredValidationCommands: [
-            "rtk proxy git diff --check",
-            "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-            "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-            "rtk proxy make tcti-gate TARGET=tcti-post-bash-mmap-read-fault-reducer",
-            "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-bash-mmap-read-fault-reducer/post-bash-mmap-read-fault-pass-regression.json",
-            "rtk proxy make agent-harness-check",
-            "rtk proxy make agent-status AREA=orlix-tcti",
-            "rtk proxy make agent-next AREA=orlix-tcti",
-            "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-        ],
-        reducerRequirements: [
-            "The latest simulator stability report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-            "The structured report must show static-PIE /bin/sh and mmap syscall 222, plus either the Bash user-data read-fault event or no fatal user fault in a passing report.",
-            "The reducer must replay before production TCTI patching.",
-        ],
-        requiredSubagentsOrSkills: [
-            "orlix-tcti-reproducer",
-            "orlix-tcti-debug",
-            "orlix-tcti-safety",
-            "tcti-planner",
-            "tcti-safety-reviewer",
-            "tcti-llvm-inspector",
-            "tcti-test-reducer",
-            "tcti-release-gate-reviewer",
-        ],
-        commitMessageTemplate: "test(tcti): reduce bash mmap read fault",
-        stopConditions: [
-            "Stop if the latest simulator stability report is stale or missing structured static-PIE, mmap, or fatal-user-fault fields.",
-            "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-            "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-        ]
-        ),
-        Gate(
-            id: "no-phone-tcti-init-read-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-init-read-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["no-phone-tcti-post-bash-mmap-read-fault-reducer"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not run simulator gates while reducing this report-backed failure.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-                "Only bind the current pinned simulator init read-fault report to a replayable no-phone reducer.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-init-read-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-init-read-fault-reducer/init-read-fault-pass-regression.json",
-                "Build/Reports/runtime/tcti-simulator-stability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-init-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-init-read-fault-reducer/init-read-fault-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest simulator stability failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "The simulator report must show init first-svc syscall 178, then a non-null init read fault before static PIE or shell progress.",
-                "The reducer must replay without running simulator or physical-device gates.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-safety",
-                "orlix-tcti-debug",
-                "tcti-test-reducer",
-                "tcti-safety-reviewer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce init read fault before simulator stability",
-            stopConditions: [
-                "Stop if no current simulator init read-fault report exists.",
-                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
-                "Stop if production TCTI code would be required before the reducer exists.",
-            ]
-        ),
-        Gate(
-            id: "simulator-tcti-runtime-stability",
-        command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-        kind: "simulator-runtime",
-        prerequisites: ["no-phone-tcti-init-read-fault-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**",
-                "tools/runtime/orlix-runtime-validation.sh",
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                "OrlixOS/Sources/make/rootfs.mk",
-                "OrlixOS/Sources/make/packages.mk",
-                "project.yml",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "Do not allow more than one simulator to be booted while this gate runs.",
-                "Do not treat first-syscall marker evidence as simulator stability.",
-                "Do not patch simulator logs directly without reducing TCTI behavior into a no-phone fixture.",
-                "Do not add production assembly or gadget dispatch unless a later selected gate allows it.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-                "Do not edit generated Linux or build trees.",
-            ],
-            expectedReportPaths: [
-                "Build/Reports/runtime/tcti-simulator-stability-*.json",
-                "Build/TCTI/reports/tcti-plan-consistency/report.json",
-                "Build/TCTI/reports/tcti-report-schema-check/report.json",
-                "Build/TCTI/reports/tcti-golden-elf/report.json",
-                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-simulator-stability ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            ],
-            reducerRequirements: [
-                "Any simulator fatal runtime error must be reduced into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
-                "The stability report must include the fatal log artifact when the gate fails.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "orlix-tcti-reproducer",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): require simulator runtime stability gate",
-            stopConditions: [
-                "Stop if the simulator captures Kernel panic, Attempted to kill init, Attempted kill init, user fault, BUG, Oops, SIGSEGV, fatal error, or crash.",
-                "Stop if the failure cannot be reduced before implementation.",
-                "Stop if a simulator pass is claimed as physical, release, or readiness eligibility.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-console-sh-sigabrt-reducer",
-            command: "make tcti-gate TARGET=tcti-post-console-sh-sigabrt-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["simulator-tcti-runtime-stability"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not patch runtime behavior before the console SIGABRT reducer exists and replays.",
-                "Do not run physical-device gates.",
-                "Do not run any simulator except Orlix-iPhone-15-Pro-Max.",
-                "Do not add production TCTI assembly or gadget dispatch.",
-                "Do not add HostAdapter Linux behavior or Darwin guest syscall behavior.",
-                "Do not implement VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics in the harness.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-console-sh-sigabrt-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-console-sh-sigabrt-reducer/post-console-sh-sigabrt-pass-regression.json",
-                "Build/Reports/runtime/tcti-init-console-write-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-console-sh-sigabrt-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-console-sh-sigabrt-reducer/post-console-sh-sigabrt-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest console simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show sh static PIE entry 0x45418, mmap syscall 222, uname syscall 160, syscall 172 returning sh pid, then syscall 129 same pid signal 6 before ORLIX-TCTI-CONSOLE-OK.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce simulator console sh sigabrt",
-            stopConditions: [
-                "Stop if latest console simulator report is stale or no longer matches sh SIGABRT signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "simulator-tcti-linux-console-usability",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            kind: "simulator-runtime",
-            prerequisites: ["no-phone-tcti-post-console-sh-sigabrt-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/**",
-                "OrlixOS/Sources/make/**",
-                "tools/runtime/orlix-runtime-validation.sh",
-                "tools/tcti/orlix-tcti-gate.swift",
-                "tools/tcti/fixtures/**",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/PLAN.md",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "Do not allow more than one simulator to be booted while this gate runs.",
-                "Do not claim full Linux usability, shell readiness, release readiness, or physical readiness from this marker.",
-                "Do not add production assembly or gadget dispatch.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or Linux runtime semantics.",
-                "Do not edit generated Linux or build trees.",
-            ],
-            expectedReportPaths: [
-                "Build/Reports/runtime/tcti-init-console-write-*.json",
-                "Build/Reports/runtime/tcti-simulator-stability-*.json",
-                "Build/TCTI/reports/tcti-plan-consistency/report.json",
-                "Build/TCTI/reports/tcti-report-schema-check/report.json",
-                "Build/TCTI/reports/tcti-golden-elf/report.json",
-                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-console-write ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            ],
-            reducerRequirements: [
-                "If the simulator console marker fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
-                "The report must include a non-empty tcti-console-write marker artifact and all forbidden-behavior fields false.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "orlix-tcti-reproducer",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): require simulator console usability before phone",
-            stopConditions: [
-                "Stop if the simulator console marker artifact is missing or empty.",
-                "Stop if more than the pinned simulator is booted.",
-                "Stop if the gate is used to claim full Linux usability, shell readiness, release readiness, or physical-device readiness.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-busybox-sigabrt-reducer",
-            command: "make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["simulator-tcti-linux-console-usability"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not run simulator gates while reducing this failure.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Only bind the current pinned simulator static BusyBox SIGABRT report to a replayable no-phone reducer.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
-                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-            ],
-            reducerRequirements: [
-                "The latest static BusyBox simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "The simulator report must show static PIE image task=sh and signaled_process.signal=6 for the same pid.",
-                "The reducer must replay without running simulator or phone gates.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-safety",
-                "orlix-tcti-debug",
-                "tcti-test-reducer",
-                "tcti-safety-reviewer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce static busybox sigabrt",
-            stopConditions: [
-                "Stop if no current static BusyBox simulator SIGABRT report exists.",
-                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
-                "Stop if production TCTI code would be required before the reducer exists.",
-            ]
-        ),
-        Gate(
-            id: "tcti-user-data-window-refresh-fix",
-            command: "make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
-            kind: "production-tcti-fix",
-            prerequisites: ["no-phone-tcti-post-busybox-sigabrt-reducer", "simulator-tcti-static-busybox-start"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/**",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not run simulator gates as proof for this no-phone fix gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not make TCTI data access depend on native hosted executable-window refresh.",
-                "Do not claim simulator static BusyBox start until the simulator gate passes after this no-phone fix.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-user-data-window-refresh-fix/report.json",
-                "Build/TCTI/reports/tcti-post-busybox-sigabrt-reducer/report.json",
-                "Build/TCTI/reports/tcti-repro/report.json",
-                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-sigabrt-reducer/post-busybox-sigabrt-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The post-BusyBox SIGABRT reducer must pass for the current git SHA before this fix gate passes.",
-                "The fix gate must not run simulator or phone gates; simulator proof happens in simulator-tcti-static-busybox-start after the no-phone fix gate passes.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): keep data reads off hosted window refresh",
-            stopConditions: [
-                "Stop if the BusyBox SIGABRT reducer report is missing, stale, or failing.",
-                "Stop if the fix requires HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, or generated-tree edits.",
-                "Stop if simulator static BusyBox start is claimed before the pinned simulator gate reruns and passes.",
-            ]
-        ),
-        Gate(
-            id: "tcti-busybox-syscall-return-trace",
-            command: "make tcti-gate TARGET=tcti-busybox-syscall-return-trace",
-            kind: "production-tcti-diagnostic",
-            prerequisites: ["tcti-user-data-window-refresh-fix"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/report.c",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/report.h",
-                "tools/runtime/orlix-runtime-validation.sh",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not change syscall semantics in this diagnostic gate.",
-                "Do not claim simulator static BusyBox start until the simulator gate reruns and passes with the return trace.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-busybox-syscall-return-trace/report.json",
-                "Build/TCTI/reports/tcti-user-data-window-refresh-fix/report.json",
-                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-user-data-window-refresh-fix",
-                "rtk proxy make tcti-gate TARGET=tcti-busybox-syscall-return-trace",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest static BusyBox simulator failure must remain captured as JSON before this diagnostic gate.",
-                "The next simulator static BusyBox run must expose BusyBox shell syscall returns in runtime JSON if it still fails.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-tcti-debug",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): trace busybox syscall returns",
-            stopConditions: [
-                "Stop if return tracing changes syscall behavior instead of reporting it.",
-                "Stop if the diagnostic adds HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, or generated-tree edits.",
-                "Stop if simulator static BusyBox start is claimed before the pinned simulator gate reruns and passes.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-busybox-shell-command-sigill-reducer",
-            command: "make tcti-gate TARGET=tcti-post-busybox-shell-command-sigill-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["tcti-user-data-window-refresh-fix"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not run simulator gates while reducing this failure.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Only bind the current pinned simulator BusyBox marker-then-SIGILL report to a replayable no-phone reducer.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-busybox-shell-command-sigill-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-busybox-shell-command-sigill-reducer/post-busybox-shell-command-sigill-after-marker-pass-regression.json",
-                "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-busybox-shell-command-sigill-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-busybox-shell-command-sigill-reducer/post-busybox-shell-command-sigill-after-marker-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest static BusyBox shell-command simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "The report must show the ORLIX-TCTI-BUSYBOX-USABLE marker before unsupported instruction SIGILL signal=4.",
-                "The reducer must replay without running simulator or phone gates.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce busybox shell command sigill",
-            stopConditions: [
-                "Stop if no current static BusyBox shell-command SIGILL report exists.",
-                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
-                "Stop if production TCTI code would be required before the reducer exists.",
-            ]
-        ),
-        Gate(
-            id: "simulator-tcti-static-busybox-start",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            kind: "simulator-runtime",
-            prerequisites: ["simulator-tcti-linux-console-usability"],
-            allowedScope: [
-                "tools/runtime/orlix-runtime-validation.sh",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/PLAN.md",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "Do not allow more than one simulator to be booted while this gate runs.",
-                "Do not claim full Linux usability, release readiness, or phone readiness from this gate.",
-                "Do not add production assembly or gadget dispatch.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not edit generated Linux or build trees.",
-            ],
-            expectedReportPaths: [
-                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-                "Build/Reports/runtime/tcti-init-console-write-*.json",
-                "Build/Reports/runtime/tcti-simulator-stability-*.json",
-                "Build/TCTI/reports/tcti-plan-consistency/report.json",
-                "Build/TCTI/reports/tcti-report-schema-check/report.json",
-                "Build/TCTI/reports/tcti-golden-elf/report.json",
-                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-start ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            ],
-            reducerRequirements: [
-                "If static BusyBox start fails because of a TCTI runtime fault, reduce it into a no-phone golden, oracle, memory fuzz, direct-chain fuzz, or safety case before production patching.",
-                "The report must be current for HEAD, run on the pinned simulator, and keep all forbidden-behavior fields false.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "orlix-tcti-reproducer",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): require simulator static busybox start before phone",
-            stopConditions: [
-                "Stop if the static BusyBox start report is missing or not current for HEAD.",
-                "Stop if more than the pinned simulator is booted.",
-                "Stop if the gate is used to claim full Linux usability, release readiness, or phone readiness.",
-            ]
-        ),
-        Gate(
-            id: "simulator-tcti-static-busybox-shell-command",
-            command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            kind: "simulator-runtime",
-            prerequisites: ["simulator-tcti-static-busybox-start"],
-            allowedScope: [
-                "tools/runtime/orlix-runtime-validation.sh",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/PLAN.md",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not use any simulator except Orlix-iPhone-15-Pro-Max.",
-                "Do not treat shell start or one shell command as full shell usability.",
-                "Do not claim package behavior, dynamic loader support, signals, VFS completeness, or full Linux runtime readiness from this gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not edit generated Linux or build trees.",
-            ],
-            expectedReportPaths: [
-                "Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-                "Build/Reports/runtime/tcti-static-busybox-start-*.json",
-                "Build/Reports/runtime/tcti-init-console-write-*.json",
-                "Build/Reports/runtime/tcti-simulator-stability-*.json",
-                "Build/TCTI/reports/tcti-plan-consistency/report.json",
-                "Build/TCTI/reports/tcti-report-schema-check/report.json",
-                "Build/TCTI/reports/tcti-golden-elf/report.json",
-                "Build/TCTI/reports/tcti-appstore-safety-audit/report.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy make tcti-gate TARGET=tcti-plan-consistency",
-                "rtk proxy make tcti-gate TARGET=tcti-report-schema-check",
-                "rtk proxy make tcti-gate TARGET=tcti-golden-elf",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-static-busybox-shell-command ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)",
-            ],
-            reducerRequirements: [
-                "If the BusyBox shell command fails, reduce it into a no-phone TCTI fixture or report-specific reducer before patching production behavior.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-safety",
-                "orlix-tcti-debug",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): prove static busybox shell command on simulator",
-            stopConditions: [
-                "Stop if the marker ORLIX-TCTI-BUSYBOX-USABLE is missing.",
-                "Stop if more than the pinned simulator is booted.",
-                "Stop if the gate is used to claim full Linux usability, release readiness, or phone readiness.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-static-pie-init-read-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["simulator-tcti-static-busybox-shell-command"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run phone gates.",
-                "Do not run simulator gates while reducing this report-backed failure.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Only bind the current pinned simulator post-static-PIE init read-fault report to a replayable no-phone reducer.",
-            ],
-		expectedReportPaths: [
-			"Build/TCTI/reports/tcti-post-static-pie-init-read-fault-reducer/report.json",
-			"Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
-			"Build/Reports/runtime/tcti-static-busybox-shell-command-*.json",
-			"Build/Reports/runtime/tcti-full-shell-usability-*.json",
-		],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator failure must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3).",
-                "The simulator report must show init first-svc syscall 178, static PIE image task=init, then a non-null init read fault.",
-                "The reducer must replay without running simulator or phone gates.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-safety",
-                "orlix-tcti-debug",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce post static pie init read fault",
-            stopConditions: [
-                "Stop if no current pinned simulator post-static-PIE init read-fault report exists.",
-                "Stop if reducer replay cannot reproduce the report-backed failure shape.",
-                "Stop if production TCTI code would be required before the reducer exists.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-static-pie-init-tls-fix",
-            command: "make tcti-gate TARGET=tcti-post-static-pie-init-tls-fix",
-            kind: "production-tcti-fix",
-            prerequisites: ["no-phone-tcti-post-static-pie-init-read-fault-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/**",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not run simulator gates as proof for this no-phone fix gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not use host TPIDR_EL0 as guest state.",
-                "Do not claim full-shell usability until the pinned simulator full-shell gate reruns and passes.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-static-pie-init-tls-fix/report.json",
-                "Build/TCTI/reports/tcti-post-static-pie-init-read-fault-reducer/report.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-static-pie-init-read-fault-reducer/post-static-pie-init-read-fault-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-static-pie-init-tls-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-            ],
-            reducerRequirements: [
-                "The post-static-PIE init read-fault reducer must pass for the current report before runtime code changes.",
-                "The fix gate must emit a JSON report and must not use simulator success as its own no-phone pass criterion.",
-                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): initialize guest tls for static pie init",
-            stopConditions: [
-                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
-                "Stop if the fix requires host TPIDR_EL0, HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, product defconfig flips, or generated-tree edits.",
-                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-cat-read-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["tcti-post-static-pie-init-tls-fix"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not run simulator gates as proof for this no-phone reducer gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not patch the cat user-data read-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show the shell reached cat /tmp/orlix-tcti-shell, then cat faulted on a non-null user-data read and the shell exited 139 before ORLIX-TCTI-SHELL-USABLE.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell cat read fault",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the cat user-data read-fault signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-full-shell-cat-read-fault-fix",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-fix",
-            kind: "no-phone-fix",
-            prerequisites: ["no-phone-tcti-post-full-shell-cat-read-fault-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not treat this no-phone fix gate as full shell usability proof.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not call host read/write or implement Linux syscall behavior in TCTI.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for subsequent simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-fix/report.json",
-                "Build/TCTI/reports/tcti-post-full-shell-cat-read-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-read-fault-reducer/post-full-shell-cat-read-fault-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-read-fault-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-            ],
-            reducerRequirements: [
-                "The cat read-fault reducer must pass for the current pinned simulator report before runtime code changes.",
-                "The fix gate must prove TCTI refreshes the guest read buffer after successful read(2) without adding Linux runtime semantics.",
-                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): refresh read buffer after syscall return",
-            stopConditions: [
-                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
-                "Stop if the fix requires HostAdapter Linux behavior, Darwin guest syscall behavior, VFS, fd tables, process model, signal handling, scheduler behavior, production assembly, gadget dispatch, product defconfig flips, or generated-tree edits.",
-                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-init-write-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["tcti-post-full-shell-cat-read-fault-fix"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not run simulator gates as proof for this no-phone reducer gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not patch the init user-data write-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show init pid=1 reached first TCTI svc syscall 178, entered a static PIE image, issued mmap syscall 222, then faulted a non-null user-data write with access=2 si=2 before ORLIX-TCTI-SHELL-USABLE.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell init write fault",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the init user-data write-fault signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-full-shell-init-write-fault-fix",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-fix",
-            kind: "no-phone-fix",
-            prerequisites: ["no-phone-tcti-post-full-shell-init-write-fault-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/fault.c",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not treat this no-phone fix gate as simulator full-shell success.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not map guest text host-executable or add JIT/MAP_JIT/RWX/prot_exec behavior.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-fix/report.json",
-                "Build/TCTI/reports/tcti-post-full-shell-init-write-fault-reducer/report.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-write-fault-reducer/post-full-shell-init-write-fault-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-write-fault-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-            ],
-            reducerRequirements: [
-                "The init write-fault reducer must pass for the current report before runtime code changes.",
-                "The fix gate must emit JSON and must not use simulator success as its own no-phone pass criterion.",
-                "After this fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): sync write fault windows for full shell",
-            stopConditions: [
-                "Stop if the reducer report is missing, stale, failing, or does not cover the current simulator report.",
-                "Stop if the fix requires HostAdapter Linux behavior, Darwin guest syscall behavior, production assembly, gadget dispatch, product defconfig flips, generated-tree edits, or executable guest text mappings.",
-                "Stop if full-shell usability is claimed before the pinned simulator gate reruns and passes.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-sh-sigabrt-reducer",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["tcti-post-full-shell-init-write-fault-fix"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not rerun the simulator as proof for this no-phone reducer gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not patch the sh SIGABRT runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show sh static PIE entry 0x45418, mmap syscall 222, uname syscall 160, syscall 172 returning the sh pid, then syscall 129 with the same pid and signal 6 before ORLIX-TCTI-SHELL-USABLE.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell sh sigabrt",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the sh SIGABRT signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-full-shell-sh-sigabrt-fix",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-fix",
-            kind: "no-phone-fix",
-            prerequisites: [
-                "no-phone-tcti-post-full-shell-sh-sigabrt-reducer",
-            ],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not add HostAdapter Linux behavior.",
-                "Do not call Darwin syscalls as guest side effects.",
-                "Do not implement VFS, fd table, process, signal, scheduler, or Linux runtime semantics in the harness.",
-                "Do not add production TCTI assembly or gadget dispatch.",
-                "Do not edit generated Linux trees.",
-                "Do not add MAP_JIT, JIT, RWX, vm_protect EXECUTE, or host-executable guest text.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-fix/report.json",
-                "Build/TCTI/reports/tcti-post-full-shell-sh-sigabrt-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-sh-sigabrt-reducer/post-full-shell-sh-sigabrt-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-sh-sigabrt-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=development",
-                "rtk test env PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" make -f OrlixKernel/Makefile kunit PROFILE=release",
-            ],
-            reducerRequirements: [
-                "The sh SIGABRT reducer must pass for the current pinned simulator report before runtime code changes.",
-                "The fix gate must emit JSON and must not treat simulator success as its own no-phone pass criterion.",
-                "After fix gate passes, rerun simulator full-shell usability on the pinned simulator through agent-next.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): preserve fault window access class",
-            stopConditions: [
-                "Stop if reducer report is missing, stale, failing, or does not cover the current simulator report.",
-                "Stop if the fix requires HostAdapter Linux behavior or Darwin guest syscall behavior.",
-                "Stop if the fix requires physical-device execution.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-sh-read-fault-reducer",
-            command: "make tcti-gate TARGET=tcti-post-sh-read-fault-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: [
-                "tcti-post-full-shell-sh-sigabrt-fix",
-            ],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not rerun the simulator as proof for this no-phone reducer gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not patch the sh read-fault runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-sh-read-fault-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-sh-read-fault-reducer/post-sh-read-fault-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-sh-read-fault-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-sh-read-fault-reducer/post-sh-read-fault-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show sh static PIE, mmap syscall 222, a nonzero sh user-data read fault, and signal 11 before ORLIX-TCTI-SHELL-USABLE.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell sh read fault",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the sh read-fault signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: [
-                "no-phone-tcti-post-full-shell-sh-read-fault-reducer",
-            ],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not patch runtime behavior before this reducer exists and replays.",
-                "Do not run physical-device gates.",
-                "Do not add production TCTI assembly or gadget dispatch.",
-                "Do not add HostAdapter Linux behavior or Darwin guest syscall behavior.",
-                "Do not implement VFS, fd table, process, signal, scheduler, or Linux runtime semantics in the harness.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show init static PIE, first svc syscall 178, init mmap syscall 222, no sh startup, no signal, no fatal user fault, and no ORLIX-TCTI-SHELL-USABLE marker.",
-                "The reducer must replay before any further runtime patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell init mmap hang",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the init second-mmap hang signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-full-shell-init-second-mmap-hang-fix",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-fix",
-            kind: "no-phone-fix",
-            prerequisites: ["no-phone-tcti-post-full-shell-init-second-mmap-hang-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/engine.c",
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not rerun the simulator as proof for this no-phone fix gate.",
-                "Do not implement BRK as a supported TCTI instruction for this assertion symptom.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not map guest text host-executable or add JIT/MAP_JIT/RWX/prot_exec behavior.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-fix/report.json",
-                "Build/TCTI/reports/tcti-post-full-shell-init-second-mmap-hang-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-init-second-mmap-hang-reducer/post-full-shell-init-second-mmap-hang-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-init-second-mmap-hang-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The init second-mmap reducer must pass and cover the current pinned full-shell simulator report.",
-                "The fix gate must prove TCTI successful execve return preserves guest TLS instead of clearing TPIDR_EL0 state.",
-                "The fix gate must keep forbidden behavior false and leave physical-device work blocked.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): preserve guest tls across execve return",
-            stopConditions: [
-                "Stop if the reducer does not cover the current pinned full-shell simulator report.",
-                "Stop if the fix requires BRK support instead of preventing the mlibc assertion.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if the next simulator full-shell report still lacks ORLIX-TCTI-SHELL-USABLE.",
-            ]
-        ),
-        Gate(
-            id: "no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
-            kind: "no-phone-reducer",
-            prerequisites: ["tcti-post-full-shell-init-second-mmap-hang-fix"],
-            allowedScope: [
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not rerun the simulator as proof for this no-phone reducer gate.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Do not patch the cat posix_memalign BRK runtime behavior before the reducer exists and replays.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The latest full-shell simulator report must be current for HEAD and pinned to Orlix-iPhone-15-Pro-Max.",
-                "The report must show cat running under TCTI, an mlibc posix_memalign alignment assertion, unsupported BRK instruction 0xd4200020 in cat, shell status 132, and no ORLIX-TCTI-SHELL-USABLE marker.",
-                "The reducer must replay before production TCTI patching.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "test(tcti): reduce full shell cat brk assertion",
-            stopConditions: [
-                "Stop if the latest full-shell simulator report is stale or no longer matches the cat posix_memalign BRK signature.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if reducer replay cannot reproduce the no-phone evidence gate.",
-            ]
-        ),
-        Gate(
-            id: "tcti-post-full-shell-cat-posix-memalign-brk-fix",
-            command: "make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-fix",
-            kind: "no-phone-fix",
-            prerequisites: ["no-phone-tcti-post-full-shell-cat-posix-memalign-brk-reducer"],
-            allowedScope: [
-                "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/mmap.c",
-                "tools/tcti/orlix-tcti-gate.swift",
-                ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "docs/plans/active/orlix-tcti/IMPLEMENT.md",
-            ],
-            forbiddenScope: [
-                "Do not run physical-device gates.",
-                "Do not rerun the simulator as proof for this no-phone fix gate.",
-                "Do not implement BRK as a supported TCTI instruction for this assertion symptom.",
-                "Do not add production assembly.",
-                "Do not add gadget dispatch.",
-                "Do not flip product defconfigs.",
-                "Do not edit generated Linux or build trees.",
-                "Do not add HostAdapter, Darwin syscall, VFS, fd table, process, signal, scheduler, or broad Linux runtime semantics.",
-                "Use only Orlix-iPhone-15-Pro-Max (ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3) for simulator evidence.",
-            ],
-            expectedReportPaths: [
-                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-fix/report.json",
-                "Build/TCTI/reports/tcti-post-full-shell-cat-posix-memalign-brk-reducer/report.json",
-                "Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
-                "Build/Reports/runtime/tcti-full-shell-usability-*.json",
-            ],
-            readinessEligible: false,
-            physicalDevice: false,
-            gadget: false,
-            requiredValidationCommands: [
-                "rtk proxy git diff --check",
-                "rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift",
-                "rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-reducer",
-                "rtk proxy make tcti-gate TARGET=tcti-repro REPRO=Build/TCTI/reproducers/tcti-post-full-shell-cat-posix-memalign-brk-reducer/post-full-shell-cat-posix-memalign-brk-pass-regression.json",
-                "rtk proxy make tcti-gate TARGET=tcti-post-full-shell-cat-posix-memalign-brk-fix",
-                "rtk proxy make agent-harness-check",
-                "rtk proxy make agent-status AREA=orlix-tcti",
-                "rtk proxy make agent-next AREA=orlix-tcti",
-                "rtk proxy make agent-task-envelope-check AREA=orlix-tcti",
-                "rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit",
-            ],
-            reducerRequirements: [
-                "The cat posix_memalign BRK reducer must pass and cover the current pinned full-shell simulator report.",
-                "The fix gate must prove hosted anonymous mmap selection preserves host-page alignment without implementing BRK as a supported instruction.",
-                "The fix gate must keep forbidden behavior false and leave physical-device work blocked.",
-            ],
-            requiredSubagentsOrSkills: [
-                "orlix-tcti-reproducer",
-                "orlix-tcti-debug",
-                "orlix-tcti-safety",
-                "orlix-runtime-claim-verification",
-                "tcti-planner",
-                "tcti-safety-reviewer",
-                "tcti-llvm-inspector",
-                "tcti-test-reducer",
-                "tcti-release-gate-reviewer",
-            ],
-            commitMessageTemplate: "fix(tcti): preserve mmap alignment for full shell cat",
-            stopConditions: [
-                "Stop if the reducer does not cover the current pinned full-shell simulator report.",
-                "Stop if the fix requires BRK support instead of preventing the mlibc assertion.",
-                "Stop if more than the pinned Orlix-iPhone-15-Pro-Max simulator is booted.",
-                "Stop if the next simulator full-shell report still lacks ORLIX-TCTI-SHELL-USABLE.",
-            ]
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-full-shell-usability",
-            runtimeGate: "tcti-full-shell-usability",
-            marker: "ORLIX-TCTI-SHELL-USABLE",
-            prerequisite: "tcti-post-full-shell-cat-posix-memalign-brk-fix",
-            label: "full shell usability"
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-package-behavior",
-            runtimeGate: "tcti-package-behavior",
-            marker: "ORLIX-TCTI-PACKAGE-BEHAVIOR-OK",
-            prerequisite: "simulator-tcti-full-shell-usability",
-            label: "package behavior"
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-dynamic-loader-support",
-            runtimeGate: "tcti-dynamic-loader-support",
-            marker: "ORLIX-TCTI-DYNAMIC-LOADER-OK",
-            prerequisite: "simulator-tcti-package-behavior",
-            label: "dynamic loader support"
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-signals",
-            runtimeGate: "tcti-signals",
-            marker: "ORLIX-TCTI-SIGNALS-OK",
-            prerequisite: "simulator-tcti-dynamic-loader-support",
-            label: "signal behavior"
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-vfs-completeness",
-            runtimeGate: "tcti-vfs-completeness",
-            marker: "ORLIX-TCTI-VFS-OK",
-            prerequisite: "simulator-tcti-signals",
-            label: "VFS completeness"
-        ),
-        simulatorProofGate(
-            id: "simulator-tcti-full-linux-runtime-readiness",
-            runtimeGate: "tcti-full-linux-runtime-readiness",
-            marker: "ORLIX-TCTI-FULL-RUNTIME-OK",
-            prerequisite: "simulator-tcti-vfs-completeness",
-            label: "full Linux runtime readiness"
-        ),
-    ]
-}
-
 func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
-    let roadmapIDs = Set(roadmap.gates.map(\.id))
-    let inserts = runtimePreflightGates().filter { !roadmapIDs.contains($0.id) }
-    var result: [Gate] = []
-    var inserted = false
-    for gate in roadmap.gates {
-        if !inserted && gate.kind == "physical-device" {
-            result.append(contentsOf: inserts)
-            inserted = true
-        }
-        result.append(gate)
-    }
-    if !inserted {
-        result.append(contentsOf: inserts)
-    }
-    return result
+    roadmap.gates
 }
 
 func statuses(for roadmap: Roadmap) -> [GateStatus] {
@@ -8606,6 +5582,13 @@ func validateRoadmapSimulatorPolicy(_ roadmap: Roadmap) throws {
     let gates = roadmapGatesWithRuntimePreflight(roadmap)
     try validateProofTierPolicy(gates)
     let ids = Set(gates.map(\.id))
+    let missingPreflightGates = roadmap.runtimePreflightGateIDs.filter { !ids.contains($0) }
+    if !missingPreflightGates.isEmpty {
+        throw HarnessError.invalid("roadmap runtime preflight list references missing gates: \(missingPreflightGates.joined(separator: ","))")
+    }
+    if Set(roadmap.runtimePreflightGateIDs).count != roadmap.runtimePreflightGateIDs.count {
+        throw HarnessError.invalid("roadmap runtime preflight gate IDs must be unique")
+    }
     let missingReadinessGates = simulatorReadinessGateIDs.filter { !ids.contains($0) }
     if !missingReadinessGates.isEmpty {
         throw HarnessError.invalid("roadmap missing simulator readiness gates: \(missingReadinessGates.joined(separator: ","))")
@@ -8701,9 +5684,9 @@ func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
         gate.command.contains("ORLIX_SIMULATOR_ID=")
 }
 
-func selectedStatusWithSafety(from statuses: [GateStatus]) -> GateStatus? {
+func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateIDs: [String]) -> GateStatus? {
     let simulatorPassed = simulatorRuntimeGatesComplete(statuses)
-    let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
+    let preflightGateIDs = Set(runtimePreflightGateIDs)
     let preflightPassed = statuses
         .filter { preflightGateIDs.contains($0.id) }
         .allSatisfy { $0.satisfiesPrerequisite }
@@ -8769,8 +5752,8 @@ func statusDocument() throws -> StatusDocument {
     try validateRoadmapSimulatorPolicy(roadmap)
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
-    let next = selectedStatusWithSafety(from: gateStatuses)
-    let preflightGateIDs = Set(runtimePreflightGates().map(\.id))
+    let next = selectedStatusWithSafety(from: gateStatuses, runtimePreflightGateIDs: roadmap.runtimePreflightGateIDs)
+    let preflightGateIDs = Set(roadmap.runtimePreflightGateIDs)
     let preflightPassed = gateStatuses
         .filter { preflightGateIDs.contains($0.id) }
         .allSatisfy { $0.satisfiesPrerequisite }
@@ -9400,10 +6383,15 @@ func validateSemanticFreshnessFixtures() throws {
     let cases: [(String, Gate, String, Bool)] = [
         ("implement-checkpoint-does-not-rerun-runtime", runtimeGate, "docs/plans/active/orlix-tcti/IMPLEMENT.md", false),
         ("harness-doc-does-not-rerun-runtime", runtimeGate, "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md", false),
-        ("runtime-tool-reruns-runtime", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", true),
-        ("tcti-tool-reruns-tcti-gate", tctiGate, "tools/tcti/orlix-tcti-gate.swift", true),
+        ("runtime-tool-does-not-rebuild-product", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", false),
+        ("tcti-tool-does-not-rebuild-product", tctiGate, "tools/tcti/orlix-tcti-gate.swift", false),
         ("kernel-port-reruns-kernel-and-runtime", kernelGate, "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c", true),
-        ("environment-policy-reruns-simulator", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", true),
+        ("host-adapter-reruns-product", runtimeGate, "OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/runtime.c", true),
+        ("mlibc-reruns-product", runtimeGate, "OrlixMLibC/Sources/patches/0007-example.patch", true),
+        ("coreutils-input-reruns-product", runtimeGate, "OrlixOS/Sources/make/packages.mk", true),
+        ("app-source-reruns-product", runtimeGate, "Orlix/Sources/OrlixApp.swift", true),
+        ("project-build-id-reruns-product", runtimeGate, "project.yml", true),
+        ("environment-policy-does-not-rebuild-product", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", false),
         ("selector-script-recomputes-status-only", selectorGate, ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift", false),
     ]
 	for (name, gate, path, expected) in cases {

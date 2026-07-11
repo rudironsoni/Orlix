@@ -8144,3 +8144,46 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel runtime semantics, HostAdapter behavior, OrlixOS behavior, app output, generated-tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Generated Upstream Tree Mutation Guard
+
+- Codex harness enforcement:
+  - Extended the shared generated-tree guard to recognize current `exec_command` tool calls in addition to legacy `Bash` calls.
+  - Read-only inspection of generated Linux, mlibc, and package trees remains allowed.
+  - Patch, shell, script, build, and Git mutations targeting generated upstream/build trees remain blocked before execution.
+- Evidence:
+  - `rtk proxy python3 .codex/hooks/tests/test_generated_tree_guards.py`: 11 tests passed, including current Codex command coverage for Linux, mlibc, and Coreutils generated clones.
+  - `rtk proxy make agent-harness-check`: passed after unrelated product-version freshness WIP was isolated.
+- Boundary:
+  - No generated tree or product runtime behavior changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Project Version And Incremental Proof Freshness
+
+- Product identity:
+  - `project.yml` remains the single source of `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` for the app and Xcode frameworks.
+  - Product input work bumped the shared build from `0.1 (15)` to `0.1 (16)` exactly once through `make product-build-prepare`; a second invocation preserved build 16.
+  - OrlixMLibC sysroot, OrlixOS rootfs/distribution manifest, and OrlixKernel payload bundle/stamp now carry the same version/build pair.
+  - Product version validation compares against the last commit that changed `CURRENT_PROJECT_VERSION`, so later proof/docs commits cannot hide an unversioned product change.
+  - Automatic preparation uses the same historical baseline, so it can repair an unversioned product change even after intervening proof/docs commits.
+- Build behavior:
+  - Normal `make build` no longer performs an unconditional clean. `make rebuild` is the explicit clean-build target.
+  - `orlix-tcti-gate.swift` is compiled into a cached executable keyed by its source and Swift compiler identity. Consecutive unchanged gates reuse the executable.
+  - Read-only status, selection, and proof gates do not mutate `project.yml`; product build/runtime boundaries own automatic build-number preparation.
+- Proof freshness:
+  - TCTI and runtime reports now emit `product_version` and `product_build_id`; `git_sha` remains provenance.
+  - Current explicit version/build matches remain execution-current across proof-only commit changes.
+  - Legacy reports without explicit product identity still fail closed when product paths changed without a build-number bump.
+  - Historical stale reports are checked for schema shape without being compared to current roadmap metadata.
+- Evidence:
+  - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed with `product_version=0.1`, `product_build_id=16`, and no failures.
+  - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed and reused the compiled gate executable on the unchanged second invocation.
+  - `rtk proxy make agent-harness-check`: passed with the final cache, version-freshness, report-schema, and generated-tree guard assertions.
+  - `rtk proxy make product-build-version-check`: passed for pending build `0.1 (16)`.
+  - The same version check passed from the committed build-16 baseline.
+  - `rtk proxy python3 .codex/hooks/tests/test_generated_tree_guards.py`: 12 tests passed after adding namespaced `exec_command` and generated-tree `cd` mutation coverage.
+  - `rtk proxy swiftc -typecheck tools/tcti/orlix-tcti-gate.swift` and `rtk proxy swiftc -typecheck .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+- Boundary:
+  - No TCTI runtime instruction behavior, Linux semantics, HostAdapter semantics, OrlixOS session behavior, or app output changed.
+  - The build-number change intentionally makes build-15 product reports stale. No simulator or physical-device gate was run.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

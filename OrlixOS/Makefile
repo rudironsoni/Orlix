@@ -8,6 +8,9 @@ MLIBC_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixMLibC/Makefile
 KERNEL_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixKernel/Makefile
 
 PROFILE ?= release
+ORLIX_PROJECT_YML ?= $(REPO_ROOT)/project.yml
+ORLIX_PRODUCT_VERSION ?= $(shell awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
+ORLIX_PRODUCT_BUILD_ID ?= $(shell awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
 
 ORLIXOS_TARGET_SETTINGS := $(PROJECT_DIR)/Sources/distribution/target-settings.xcconfig
 
