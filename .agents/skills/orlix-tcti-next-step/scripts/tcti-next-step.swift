@@ -918,7 +918,6 @@ func currentWorkingTreeChangedPaths() -> [String] {
 }
 
 func executionFreshness(
-    for gate: Gate,
     reportGitSHA: String?,
     reportProductVersion: String? = nil,
     reportProductBuildID: String? = nil
@@ -995,9 +994,9 @@ func executionFreshness(
     }
     let workingChanged = currentWorkingTreeChangedPaths()
     let changed = Array(Set(committedChanged + workingChanged)).sorted()
-    let committedInvalidating = committedChanged.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
-    let workingInvalidating = workingChanged.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
-    let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
+    let committedInvalidating = committedChanged.filter { matchesAny($0, productExecutionInvalidationPatterns) }
+    let workingInvalidating = workingChanged.filter { matchesAny($0, productExecutionInvalidationPatterns) }
+    let invalidating = changed.filter { matchesAny($0, productExecutionInvalidationPatterns) }
     let ignored = changed.filter { !invalidating.contains($0) }
     let versionMatches = reportVersion.marketingVersion == currentVersion.marketingVersion
     let buildMatches = reportVersion.buildID == currentVersion.buildID
@@ -1065,6 +1064,20 @@ func executionFreshness(
     )
 }
 
+func executionFreshness(
+    for gate: Gate,
+    reportGitSHA: String?,
+    reportProductVersion: String? = nil,
+    reportProductBuildID: String? = nil
+) -> ExecutionFreshness {
+    _ = gate
+    return executionFreshness(
+        reportGitSHA: reportGitSHA,
+        reportProductVersion: reportProductVersion,
+        reportProductBuildID: reportProductBuildID
+    )
+}
+
 func executionFreshness(for gate: Gate, report: ReportFact) -> ExecutionFreshness {
     executionFreshness(
         for: gate,
@@ -1075,11 +1088,19 @@ func executionFreshness(for gate: Gate, report: ReportFact) -> ExecutionFreshnes
 }
 
 func reportExecutionFresh(_ report: ReportFact) -> Bool {
-    report.executionFreshness?.executionFresh ?? (report.gitSHA == gitSHA())
+    (report.executionFreshness ?? executionFreshness(
+        reportGitSHA: report.gitSHA,
+        reportProductVersion: report.productVersion,
+        reportProductBuildID: report.productBuildID
+    )).executionFresh
 }
 
 func reportFreshnessReason(_ report: ReportFact) -> String {
-    report.executionFreshness?.reason ?? "report git_sha \(report.gitSHA == gitSHA() ? "matches" : "does not match") current HEAD"
+    (report.executionFreshness ?? executionFreshness(
+        reportGitSHA: report.gitSHA,
+        reportProductVersion: report.productVersion,
+        reportProductBuildID: report.productBuildID
+    )).reason
 }
 
 func reportFailures(_ value: Any?) -> [ReportFailureFact] {
@@ -1560,6 +1581,14 @@ func pathExists(_ relative: String) -> Bool {
     fileManager.fileExists(atPath: root.appendingPathComponent(relative).path)
 }
 
+func sha256(_ path: String) -> String? {
+    let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : root.appendingPathComponent(path)
+    return run("/usr/bin/shasum", ["-a", "256", url.path])?
+        .split(whereSeparator: { $0.isWhitespace })
+        .first
+        .map(String.init)
+}
+
 func structuralCasePass(_ caseID: String) -> (Bool, String, [ReportFact]) {
     let source = "OrlixKernel/Tests/TCTI/golden_elf/\(caseID)/\(caseID).S"
     let metadata = "OrlixKernel/Tests/TCTI/golden_elf/\(caseID)/golden.json"
@@ -1573,16 +1602,18 @@ func structuralCasePass(_ caseID: String) -> (Bool, String, [ReportFact]) {
     }
     do {
         let object = try loadJSONObject(validationURL)
-        let hasHashes = stringValue(object["source_sha256"]) != nil && stringValue(object["binary_sha256"]) != nil
-        let hasBinary = stringValue(object["binary"]) != nil
-        let artifactGitSHA = stringValue(object["git_sha"])
-        guard artifactGitSHA == gitSHA() else {
-            return (false, "\(validation) is stale or lacks git_sha for current HEAD", [])
+        guard let expectedSourceHash = stringValue(object["source_sha256"]),
+              let expectedBinaryHash = stringValue(object["binary_sha256"]),
+              let binary = stringValue(object["binary"]) else {
+            return (false, "\(validation) is missing source/binary hash fields", [])
         }
-        if hasHashes && hasBinary {
-            return (true, "\(caseID) structural validation artifact is current for HEAD with source and binary hashes", [])
+        guard sha256(source) == expectedSourceHash else {
+            return (false, "\(validation) source hash does not match \(source)", [])
         }
-        return (false, "\(validation) is missing source/binary hash fields", [])
+        guard sha256(binary) == expectedBinaryHash else {
+            return (false, "\(validation) binary hash does not match \(binary)", [])
+        }
+        return (true, "\(caseID) structural validation source and binary hashes match", [])
     } catch {
         return (false, "\(validation) is malformed: \(error)", [])
     }
@@ -2256,7 +2287,7 @@ func postBashMmapReadFaultReducerPass(_ gate: Gate) -> GateStatus {
 		let signaledPID = intValue(signal["pid"])
 		let matchesCurrentFault = report.status == "fail" &&
 			!report.passed &&
-			report.gitSHA == gitSHA() &&
+			reportExecutionFresh(report) &&
 			stringValue(staticPIE["task"]) == "sh" &&
 			staticPID != nil &&
 			stringValue(mmap["task"]) == "sh" &&
@@ -2280,7 +2311,7 @@ func postBashMmapReadFaultReducerPass(_ gate: Gate) -> GateStatus {
 		let reducerCoversReport = reducerArtifacts.contains(report.path)
 		if reducerReport.status == "pass",
 		   reducerReport.passed,
-		   reducerReport.gitSHA == gitSHA(),
+		   reportExecutionFresh(reducerReport),
 		   reducerCoversReport {
 			return GateStatus(
 				id: gate.id,
@@ -2317,7 +2348,7 @@ func postBashMmapReadFaultReducerPass(_ gate: Gate) -> GateStatus {
 
 	if reducerReport.status == "pass",
 	   reducerReport.passed,
-	   reducerReport.gitSHA == gitSHA() {
+	   reportExecutionFresh(reducerReport) {
 		return basicReportGate(gate, target: "tcti-post-bash-mmap-read-fault-reducer")
 	}
 	return GateStatus(
@@ -2412,7 +2443,7 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 		let staticPID = intValue(staticPIE["pid"])
 		let matchesCurrentFault = report.status == "fail" &&
 			!report.passed &&
-			report.gitSHA == gitSHA() &&
+			reportExecutionFresh(report) &&
 			stringValue(staticPIE["task"]) == "sh" &&
 			staticPID != nil &&
 			stringValue(mmap["task"]) == "sh" &&
@@ -2437,10 +2468,10 @@ func userDataWindowRefreshFixPass(_ gate: Gate) -> GateStatus {
 		let fixCoversReport = fixArtifacts.contains(report.path)
 		if fixReport.status == "pass",
 		   fixReport.passed,
-		   fixReport.gitSHA == gitSHA(),
+		   reportExecutionFresh(fixReport),
 		   reducerReport.status == "pass",
 		   reducerReport.passed,
-		   reducerReport.gitSHA == gitSHA(),
+		   reportExecutionFresh(reducerReport),
 		   currentBusyBoxEvidence != nil,
 		   reducerIdentityOK,
 		   reducerCoversCurrentBusyBox,
@@ -2554,7 +2585,7 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 	}.joined(separator: "\n")
 	let matchesCurrentSIGILL = report.status == "fail" &&
 		!report.passed &&
-		report.gitSHA == gitSHA() &&
+		reportExecutionFresh(report) &&
 		text.contains("ORLIX-TCTI-BUSYBOX-USABLE") &&
 		text.contains("Orlix TCTI: unsupported instruction task=sh") &&
 		text.contains("signal=4")
@@ -2562,7 +2593,7 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 		let reducerCoversReport = reducerArtifacts.contains(report.path)
 		if reducerReport.status == "pass",
 		   reducerReport.passed,
-		   reducerReport.gitSHA == gitSHA(),
+		   reportExecutionFresh(reducerReport),
 		   reducerCoversReport {
 			return GateStatus(
 				id: gate.id,
@@ -3234,7 +3265,7 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
 		let signaledPID = intValue(signaledProcess["pid"])
 		let matchesCurrentSIGABRT = report.status == "fail" &&
 			!report.passed &&
-			report.gitSHA == gitSHA() &&
+			reportExecutionFresh(report) &&
 			stringValue(staticPIE["task"]) == "sh" &&
 			staticPID != nil &&
 			staticPID == signaledPID &&
@@ -3249,7 +3280,7 @@ func postBusyBoxSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
 		let reducerCoversReport = reducerArtifacts.contains(report.path)
 		if reducerReport.status == "pass",
 		   reducerReport.passed,
-		   reducerReport.gitSHA == gitSHA(),
+		   reportExecutionFresh(reducerReport),
 		   reducerCoversReport {
 			return GateStatus(
 				id: gate.id,
@@ -3367,7 +3398,7 @@ func initReadFaultReducerPass(_ gate: Gate) -> GateStatus {
     let reducerReport = reportFact(target: "tcti-init-read-fault-reducer")
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA() {
+       reportExecutionFresh(reducerReport) {
         return GateStatus(
             id: gate.id,
             command: gate.command,
@@ -3411,7 +3442,7 @@ func initReadFaultReducerPass(_ gate: Gate) -> GateStatus {
     let signal = events["signaled_process"] as? [String: Any] ?? [:]
     let matchesCurrentFault = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -3453,7 +3484,7 @@ func postStaticPIEInitReadFaultReport() -> (ReportFact, [String: Any])? {
         let signal = events["signaled_process"] as? [String: Any] ?? [:]
         let matchesCurrentFault = report.status == "fail" &&
             !report.passed &&
-            report.gitSHA == gitSHA() &&
+            reportExecutionFresh(report) &&
             stringValue(firstSVC["task"]) == "init" &&
             intValue(firstSVC["pid"]) == 1 &&
             intValue(firstSVC["syscall"]) == 178 &&
@@ -3487,7 +3518,7 @@ func postStaticPIEInitReadFaultReport() -> (ReportFact, [String: Any])? {
         let signal = events["signaled_process"] as? [String: Any] ?? [:]
         let matchesCurrentFault = report.status == "fail" &&
             !report.passed &&
-            report.gitSHA == gitSHA() &&
+            reportExecutionFresh(report) &&
             stringValue(firstSVC["task"]) == "init" &&
             intValue(firstSVC["pid"]) == 1 &&
             intValue(firstSVC["syscall"]) == 178 &&
@@ -3536,7 +3567,7 @@ func postStaticPIEInitReadFaultReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -3598,7 +3629,7 @@ func postStaticPIEInitTLSFixPass(_ gate: Gate) -> GateStatus {
 
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA(),
+       reportExecutionFresh(fixReport),
        fixArtifacts.contains(report.path) {
         return basicReportGate(gate, target: "tcti-post-static-pie-init-tls-fix")
     }
@@ -3646,7 +3677,7 @@ func simulatorStaticPIERelocationFixPass(_ gate: Gate) -> GateStatus {
     let reducerReport = reportFact(target: "tcti-simulator-user-fault-reducer")
     let stabilityFailedAtHead = stabilityReport.status == "fail" &&
         !stabilityReport.passed &&
-        stabilityReport.gitSHA == gitSHA() &&
+        reportExecutionFresh(stabilityReport) &&
         stringValue(stabilityObject["backend"]) == "tcti" &&
         stringValue(stabilityObject["profile"]) == "tcti_runtime" &&
         !boolValue(stabilityObject["preflight_only"]) &&
@@ -3753,7 +3784,7 @@ func postFullShellCatReadFaultReport() -> (ReportFact, [String: Any])? {
     } ?? ""
     let matchesCurrentFault = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -3800,7 +3831,7 @@ func postFullShellCatReadFaultReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -3898,7 +3929,7 @@ func postFullShellCatReadFaultFixPass(_ gate: Gate) -> GateStatus {
 
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA(),
+       reportExecutionFresh(fixReport),
        fixArtifacts.contains(report.path) {
         return basicReportGate(gate, target: "tcti-post-full-shell-cat-read-fault-fix")
     }
@@ -3951,7 +3982,7 @@ func postFullShellCatPosixMemalignBRKReport() -> (ReportFact, [String: Any])? {
     } ?? ""
     let matchesCurrentFailure = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -3993,7 +4024,7 @@ func postFullShellCatPosixMemalignBRKReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4091,7 +4122,7 @@ func postFullShellCatPosixMemalignBRKFixPass(_ gate: Gate) -> GateStatus {
 
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA(),
+       reportExecutionFresh(fixReport),
        fixArtifacts.contains(report.path) {
         return basicReportGate(gate, target: "tcti-post-full-shell-cat-posix-memalign-brk-fix")
     }
@@ -4151,7 +4182,7 @@ func postFullShellInitWriteFaultReport() -> (ReportFact, [String: Any])? {
     } ?? ""
     let matchesCurrentFault = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -4207,7 +4238,7 @@ func postFullShellInitWriteFaultReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4273,7 +4304,7 @@ func postFullShellSHSIGABRTReport() -> (ReportFact, [String: Any])? {
     } ?? ""
     let matchesCurrentFailure = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -4330,7 +4361,7 @@ func postFullShellSHSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4380,7 +4411,7 @@ func postFullShellSHReadFaultReport() -> (ReportFact, [String: Any])? {
     let fullShellText = runtimeArtifactText(object, suffix: "tcti-full-shell-usability.txt") ?? ""
     let matchesCurrentFailure = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -4435,7 +4466,7 @@ func postFullShellSHReadFaultReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4488,7 +4519,7 @@ func postConsoleSHSIGABRTReport() -> (ReportFact, [String: Any])? {
     let consoleText = runtimeArtifactText(object, suffix: "tcti-console-write.txt") ?? ""
     let matchesCurrentFailure = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(object["selected_device_id"]) == requiredSimulatorID &&
         stringValue(object["selected_device_name"]) == requiredSimulatorName &&
         intValue(object["simulator_booted_count"]) == 1 &&
@@ -4549,7 +4580,7 @@ func postConsoleSHSIGABRTReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4589,7 +4620,7 @@ func postFullShellInitWriteFaultFixPass(_ gate: Gate) -> GateStatus {
     let fixReport = reportFact(target: "tcti-post-full-shell-init-write-fault-fix")
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA() {
+       reportExecutionFresh(fixReport) {
         return basicReportGate(gate, target: "tcti-post-full-shell-init-write-fault-fix")
     }
 
@@ -4727,7 +4758,7 @@ func postFullShellSHSIGABRTFixPass(_ gate: Gate) -> GateStatus {
 
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA(),
+       reportExecutionFresh(fixReport),
        fixArtifacts.contains(report.path) {
         return basicReportGate(gate, target: "tcti-post-full-shell-sh-sigabrt-fix")
     }
@@ -4781,7 +4812,7 @@ func postFullShellInitSecondMmapHangReport() -> (ReportFact, [String: Any])? {
     let fullShellText = runtimeArtifactText(object, suffix: "tcti-full-shell-usability.txt") ?? ""
     let matchesCurrentFailure = report.status == "fail" &&
         !report.passed &&
-        report.gitSHA == gitSHA() &&
+        reportExecutionFresh(report) &&
         stringValue(firstSVC["task"]) == "init" &&
         intValue(firstSVC["pid"]) == 1 &&
         intValue(firstSVC["syscall"]) == 178 &&
@@ -4831,7 +4862,7 @@ func postFullShellInitSecondMmapHangReducerPass(_ gate: Gate) -> GateStatus {
     let reducerCoversReport = reducerArtifacts.contains(report.path)
     if reducerReport.status == "pass",
        reducerReport.passed,
-       reducerReport.gitSHA == gitSHA(),
+       reportExecutionFresh(reducerReport),
        reducerCoversReport {
         return GateStatus(
             id: gate.id,
@@ -4929,7 +4960,7 @@ func postFullShellInitSecondMmapHangFixPass(_ gate: Gate) -> GateStatus {
 
     if fixReport.status == "pass",
        fixReport.passed,
-       fixReport.gitSHA == gitSHA(),
+       reportExecutionFresh(fixReport),
        fixArtifacts.contains(report.path) {
         return basicReportGate(gate, target: "tcti-post-full-shell-init-second-mmap-hang-fix")
     }
@@ -6444,6 +6475,12 @@ func validateSemanticFreshnessFixtures() throws {
 	)
 	if passingRuntimeReportDefersFailureReducer(failingRuntimeReport) {
 		throw HarnessError.invalid("failing runtime producer must remain eligible for reducer matching")
+	}
+	let scriptURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift")
+	let scriptText = try String(contentsOf: scriptURL, encoding: .utf8)
+	let exactHeadComparison = ".gitSHA == " + "gitSHA()"
+	if scriptText.contains(exactHeadComparison) {
+		throw HarnessError.invalid("report freshness must use reportExecutionFresh instead of exact HEAD equality")
 	}
 	print("pass: semantic-freshness-check")
 }
