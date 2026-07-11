@@ -1487,7 +1487,9 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         evidence["hostadapter_linux_syscall_semantics"] = "absent"
     }
 
-    let kunitOutput = try run(
+    // KUnit builds can emit enough output to fill a pipe before Process.waitUntilExit().
+    // Use the existing file-backed runner so this no-phone proof cannot deadlock on output.
+    let kunitOutput = try runWithFileBackedOutput(
         ["sh", "-c", "\(kunitCommand) 2>&1"],
         check: false
     )
