@@ -174,6 +174,10 @@ struct ReportFailureFact: Codable {
 struct ExecutionFreshness: Codable {
     let reportGitSHA: String?
     let currentGitSHA: String
+    let reportProductVersion: String?
+    let reportProductBuildID: String?
+    let currentProductVersion: String
+    let currentProductBuildID: String
     let executionFresh: Bool
     let statusRecomputed: Bool
     let changedPathsSinceReport: [String]
@@ -184,6 +188,10 @@ struct ExecutionFreshness: Codable {
     enum CodingKeys: String, CodingKey {
         case reportGitSHA = "report_git_sha"
         case currentGitSHA = "current_git_sha"
+        case reportProductVersion = "report_product_version"
+        case reportProductBuildID = "report_product_build_id"
+        case currentProductVersion = "current_product_version"
+        case currentProductBuildID = "current_product_build_id"
         case executionFresh = "execution_fresh"
         case statusRecomputed = "status_recomputed"
         case changedPathsSinceReport = "changed_paths_since_report"
@@ -205,6 +213,8 @@ struct ReportFact: Codable {
     let releaseGateEligible: Bool
     let readinessGateEligible: Bool
     let gitSHA: String?
+    let productVersion: String?
+    let productBuildID: String?
     let executionFreshness: ExecutionFreshness?
     let failures: [ReportFailureFact]
     let forbiddenBehaviorViolations: [String]
@@ -221,6 +231,8 @@ struct ReportFact: Codable {
         releaseGateEligible: Bool,
         readinessGateEligible: Bool,
         gitSHA: String?,
+        productVersion: String? = nil,
+        productBuildID: String? = nil,
         executionFreshness: ExecutionFreshness? = nil,
         failures: [ReportFailureFact] = [],
         forbiddenBehaviorViolations: [String] = []
@@ -236,6 +248,8 @@ struct ReportFact: Codable {
         self.releaseGateEligible = releaseGateEligible
         self.readinessGateEligible = readinessGateEligible
         self.gitSHA = gitSHA
+        self.productVersion = productVersion
+        self.productBuildID = productBuildID
         self.executionFreshness = executionFreshness
         self.failures = failures
         self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
@@ -254,6 +268,8 @@ struct ReportFact: Codable {
             releaseGateEligible: releaseGateEligible,
             readinessGateEligible: readinessGateEligible,
             gitSHA: gitSHA,
+            productVersion: productVersion,
+            productBuildID: productBuildID,
             executionFreshness: freshness,
             failures: failures,
             forbiddenBehaviorViolations: forbiddenBehaviorViolations
@@ -272,6 +288,8 @@ struct ReportFact: Codable {
         case releaseGateEligible = "release_gate_eligible"
         case readinessGateEligible = "readiness_gate_eligible"
         case gitSHA = "git_sha"
+        case productVersion = "product_version"
+        case productBuildID = "product_build_id"
         case executionFreshness = "execution_freshness"
         case failures
         case forbiddenBehaviorViolations = "forbidden_behavior_violations"
@@ -791,144 +809,145 @@ func pathMatches(_ path: String, _ pattern: String) -> Bool {
     return path == pattern
 }
 
-let allGateExecutionInvalidationPatterns = [
-    "tools/tcti/**",
-    "tools/runtime/**",
-    ".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json",
-    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
-]
-
-let statusOnlyInvalidationPatterns = [
-    ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
-    ".agents/skills/orlix-tcti-next-step/scripts/status",
-    ".agents/skills/orlix-tcti-next-step/scripts/next",
-    ".agents/skills/orlix-tcti-next-step/scripts/task-envelope-check",
-    ".agents/skills/orlix-tcti-next-step/scripts/goal-loop",
-    ".codex/**",
-    "docs/harness/**",
-    "AGENTS.md",
-    "docs/goals/active/**",
-    "docs/plans/active/*/IMPLEMENT.md",
-]
-
-let runtimeSimulatorInvalidationPatterns = [
-    "tools/runtime/orlix-runtime-validation.sh",
-    ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
+let productExecutionInvalidationPatterns = [
     "project.yml",
-    "Orlix/**",
-    "OrlixOS/**",
-    "OrlixKernel/Sources/ports/orlix/**",
-    "OrlixMLibC/**",
-]
-
-let goldenNoPhoneInvalidationPatterns = [
-    "tools/tcti/orlix-tcti-gate.swift",
-    "OrlixKernel/Tests/TCTI/**",
-    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
-]
-
-let kernelProofInvalidationPatterns = [
-    "OrlixKernel/Sources/ports/orlix/**",
     "OrlixKernel/Makefile",
-    "tools/tcti/orlix-tcti-gate.swift",
-]
-
-let mlibcProofInvalidationPatterns = [
-    "OrlixMLibC/**",
+    "OrlixKernel/Sources/boot/**",
+    "OrlixKernel/Sources/include/**",
+    "OrlixKernel/Sources/Support/**",
     "OrlixKernel/Sources/ports/orlix/**",
-    "tools/tcti/**",
-]
-
-let shellCoreutilsOCIInvalidationPatterns = [
-    "OrlixOS/**",
-    "OrlixMLibC/**",
-    "OrlixKernel/Sources/ports/orlix/**",
-    "tools/runtime/**",
-    "tools/tcti/**",
+    "OrlixHostAdapter/Makefile",
+    "OrlixHostAdapter/Sources/**",
+    "OrlixMLibC/Makefile",
+    "OrlixMLibC/Sources/**",
+    "OrlixOS/Makefile",
+    "OrlixOS/Sources/**",
+    "Orlix/Makefile",
+    "Orlix/Sources/**",
+    "OrlixTestRunner/Sources/**",
 ]
 
 func matchesAny(_ path: String, _ patterns: [String]) -> Bool {
     patterns.contains { pathMatches(path, $0) }
 }
 
-func isRuntimeSimulatorGate(_ gate: Gate) -> Bool {
-    gate.kind == "simulator-runtime" || gate.id.hasPrefix("simulator-tcti-") || gate.id.hasPrefix("tcti-simulator-")
-}
-
-func isGoldenOrNoPhoneGate(_ gate: Gate) -> Bool {
-    gate.id.hasPrefix("golden-") ||
-        gate.id.hasPrefix("switch-") ||
-        gate.id.hasPrefix("diff-switch-") ||
-        gate.id.hasPrefix("no-phone-") ||
-        gate.kind.contains("no-phone") ||
-        gate.kind.contains("golden") ||
-        gate.command.contains("tcti-gate")
-}
-
-func isKernelProofGate(_ gate: Gate) -> Bool {
-    gate.proofTier == "kernel" || gate.id.contains("kernel")
-}
-
-func isMLibCProofGate(_ gate: Gate) -> Bool {
-    gate.proofTier.contains("mlibc") || gate.id.contains("mlibc")
-}
-
-func isShellCoreutilsOCIGate(_ gate: Gate) -> Bool {
-    gate.id.contains("shell") ||
-        gate.id.contains("busybox") ||
-        gate.id.contains("coreutils") ||
-        gate.id.contains("oci") ||
-        gate.id.contains("package") ||
-        gate.id.contains("dynamic-loader") ||
-        gate.proofTier.contains("shell") ||
-        gate.proofTier.contains("package")
-}
-
-func makefileCanAffectGateExecution(_ gate: Gate) -> Bool {
-    gate.command.contains("make ") || gate.command.hasPrefix("make ")
-}
-
 func doesChangedPathInvalidateGate(_ gate: Gate, changedPath: String) -> Bool {
-    if matchesAny(changedPath, allGateExecutionInvalidationPatterns) {
-        return true
-    }
-    if changedPath == "Makefile" {
-        return makefileCanAffectGateExecution(gate)
-    }
-    if isRuntimeSimulatorGate(gate) && matchesAny(changedPath, runtimeSimulatorInvalidationPatterns) {
-        return true
-    }
-    if isGoldenOrNoPhoneGate(gate) && matchesAny(changedPath, goldenNoPhoneInvalidationPatterns) {
-        return true
-    }
-    if isKernelProofGate(gate) && matchesAny(changedPath, kernelProofInvalidationPatterns) {
-        return true
-    }
-    if isMLibCProofGate(gate) && matchesAny(changedPath, mlibcProofInvalidationPatterns) {
-        return true
-    }
-    if isShellCoreutilsOCIGate(gate) && matchesAny(changedPath, shellCoreutilsOCIInvalidationPatterns) {
-        return true
-    }
-    return false
+    _ = gate
+    return matchesAny(changedPath, productExecutionInvalidationPatterns)
 }
 
 func changedPathsSinceReport(reportGitSHA: String, currentGitSHA: String) -> [String]? {
+    let cacheKey = "\(reportGitSHA)..\(currentGitSHA)"
+    if let cached = changedPathsByCommitRange[cacheKey] { return cached }
     guard let output = run("/usr/bin/env", ["git", "diff", "--name-only", "\(reportGitSHA)..\(currentGitSHA)"]) else {
         return nil
     }
-    return output
+    let paths = output
         .split(whereSeparator: \.isNewline)
         .map(String.init)
         .filter { !$0.isEmpty }
+    changedPathsByCommitRange[cacheKey] = paths
+    return paths
 }
 
-func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFreshness {
+struct ProjectVersion {
+    let marketingVersion: String
+    let buildID: String
+}
+
+var cachedCurrentProjectVersion: ProjectVersion?
+var didLoadCurrentProjectVersion = false
+var projectVersionByGitSHA: [String: ProjectVersion] = [:]
+var cachedWorkingTreeChangedPaths: [String]?
+var changedPathsByCommitRange: [String: [String]] = [:]
+
+func projectVersion(from contents: String) -> ProjectVersion? {
+    var marketingVersion: String?
+    var buildID: String?
+    for line in contents.split(whereSeparator: \.isNewline).map(String.init) {
+        let fields = line.split(separator: ":", maxSplits: 1).map(String.init)
+        guard fields.count == 2 else { continue }
+        let key = fields[0].trimmingCharacters(in: .whitespaces)
+        let value = fields[1]
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        if key == "MARKETING_VERSION" { marketingVersion = value }
+        if key == "CURRENT_PROJECT_VERSION" { buildID = value }
+    }
+    guard let marketingVersion, let buildID, !marketingVersion.isEmpty, !buildID.isEmpty else {
+        return nil
+    }
+    return ProjectVersion(marketingVersion: marketingVersion, buildID: buildID)
+}
+
+func currentProjectVersion() -> ProjectVersion? {
+    if didLoadCurrentProjectVersion { return cachedCurrentProjectVersion }
+    didLoadCurrentProjectVersion = true
+    let url = root.appendingPathComponent("project.yml")
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+    cachedCurrentProjectVersion = projectVersion(from: contents)
+    return cachedCurrentProjectVersion
+}
+
+func projectVersion(at gitSHA: String) -> ProjectVersion? {
+    if let cached = projectVersionByGitSHA[gitSHA] { return cached }
+    guard let contents = run("/usr/bin/env", ["git", "show", "\(gitSHA):project.yml"]) else {
+        return nil
+    }
+    guard let version = projectVersion(from: contents) else { return nil }
+    projectVersionByGitSHA[gitSHA] = version
+    return version
+}
+
+func currentWorkingTreeChangedPaths() -> [String] {
+    if let cachedWorkingTreeChangedPaths { return cachedWorkingTreeChangedPaths }
+    guard let output = run("/usr/bin/env", ["git", "status", "--porcelain=v1", "--untracked-files=all"]) else {
+        return []
+    }
+    let paths: [String] = output.split(whereSeparator: \.isNewline).compactMap { rawLine -> String? in
+        let line = String(rawLine)
+        guard line.count > 3 else { return nil }
+        let path = String(line.dropFirst(3))
+        if let renameSeparator = path.range(of: " -> ") {
+            return String(path[renameSeparator.upperBound...])
+        }
+        return path
+    }
+    cachedWorkingTreeChangedPaths = paths
+    return paths
+}
+
+func executionFreshness(
+    for gate: Gate,
+    reportGitSHA: String?,
+    reportProductVersion: String? = nil,
+    reportProductBuildID: String? = nil
+) -> ExecutionFreshness {
     let current = gitSHA()
+    guard let currentVersion = currentProjectVersion() else {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: "unknown",
+            currentProductBuildID: "unknown",
+            executionFresh: false,
+            statusRecomputed: true,
+            changedPathsSinceReport: [],
+            ignoredNonExecutionPaths: [],
+            invalidatingPaths: [],
+            reason: "project.yml lacks MARKETING_VERSION or CURRENT_PROJECT_VERSION"
+        )
+    }
     guard let reportGitSHA, !reportGitSHA.isEmpty else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
@@ -937,22 +956,35 @@ func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFresh
             reason: "report lacks git_sha provenance"
         )
     }
-    if reportGitSHA == current {
+    let explicitReportVersion: ProjectVersion? = {
+        guard let reportProductVersion, !reportProductVersion.isEmpty,
+              let reportProductBuildID, !reportProductBuildID.isEmpty else { return nil }
+        return ProjectVersion(marketingVersion: reportProductVersion, buildID: reportProductBuildID)
+    }()
+    guard let reportVersion = explicitReportVersion ?? projectVersion(at: reportGitSHA) else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
-            executionFresh: true,
+            reportProductVersion: nil,
+            reportProductBuildID: nil,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
+            executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
             ignoredNonExecutionPaths: [],
             invalidatingPaths: [],
-            reason: "report git_sha matches current HEAD"
+            reason: "unable to read product version and build ID from project.yml at report git_sha"
         )
     }
-    guard let changed = changedPathsSinceReport(reportGitSHA: reportGitSHA, currentGitSHA: current) else {
+    guard let committedChanged = changedPathsSinceReport(reportGitSHA: reportGitSHA, currentGitSHA: current) else {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: false,
             statusRecomputed: true,
             changedPathsSinceReport: [],
@@ -961,29 +993,77 @@ func executionFreshness(for gate: Gate, reportGitSHA: String?) -> ExecutionFresh
             reason: "unable to compute changed paths since report git_sha"
         )
     }
+    let changed = Array(Set(committedChanged + currentWorkingTreeChangedPaths())).sorted()
     let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
     let ignored = changed.filter { !invalidating.contains($0) }
-    if invalidating.isEmpty {
+    let versionMatches = reportVersion.marketingVersion == currentVersion.marketingVersion
+    let buildMatches = reportVersion.buildID == currentVersion.buildID
+    let committedVersion = projectVersion(at: current)
+    let pendingBuildBump = committedVersion?.marketingVersion != currentVersion.marketingVersion ||
+        committedVersion?.buildID != currentVersion.buildID
+    if explicitReportVersion != nil && versionMatches && buildMatches &&
+        (invalidating.isEmpty || pendingBuildBump) {
         return ExecutionFreshness(
             reportGitSHA: reportGitSHA,
             currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
             executionFresh: true,
             statusRecomputed: true,
             changedPathsSinceReport: changed,
             ignoredNonExecutionPaths: ignored,
             invalidatingPaths: [],
-            reason: "report git_sha differs from HEAD only by non-execution paths"
+            reason: pendingBuildBump
+                ? "report matches pending product version/build; report git_sha is provenance only"
+                : "product version/build match; report git_sha is provenance only"
         )
+    }
+    if versionMatches && buildMatches && invalidating.isEmpty {
+        return ExecutionFreshness(
+            reportGitSHA: reportGitSHA,
+            currentGitSHA: current,
+            reportProductVersion: reportVersion.marketingVersion,
+            reportProductBuildID: reportVersion.buildID,
+            currentProductVersion: currentVersion.marketingVersion,
+            currentProductBuildID: currentVersion.buildID,
+            executionFresh: true,
+            statusRecomputed: true,
+            changedPathsSinceReport: changed,
+            ignoredNonExecutionPaths: ignored,
+            invalidatingPaths: [],
+            reason: "product version/build match; git_sha differs only by proof or harness paths"
+        )
+    }
+    let reason: String
+    if versionMatches && buildMatches {
+        reason = "product inputs changed without bumping CURRENT_PROJECT_VERSION: \(invalidating.joined(separator: ", "))"
+    } else {
+        reason = "product version/build changed from \(reportVersion.marketingVersion) (\(reportVersion.buildID)) to \(currentVersion.marketingVersion) (\(currentVersion.buildID))"
     }
     return ExecutionFreshness(
         reportGitSHA: reportGitSHA,
         currentGitSHA: current,
+        reportProductVersion: reportVersion.marketingVersion,
+        reportProductBuildID: reportVersion.buildID,
+        currentProductVersion: currentVersion.marketingVersion,
+        currentProductBuildID: currentVersion.buildID,
         executionFresh: false,
         statusRecomputed: true,
         changedPathsSinceReport: changed,
         ignoredNonExecutionPaths: ignored,
         invalidatingPaths: invalidating,
-        reason: "changed paths invalidate gate execution: \(invalidating.joined(separator: ", "))"
+        reason: reason
+    )
+}
+
+func executionFreshness(for gate: Gate, report: ReportFact) -> ExecutionFreshness {
+    executionFreshness(
+        for: gate,
+        reportGitSHA: report.gitSHA,
+        reportProductVersion: report.productVersion,
+        reportProductBuildID: report.productBuildID
     )
 }
 
@@ -1438,6 +1518,8 @@ func reportFact(target: String) -> ReportFact {
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"]),
+            productVersion: stringValue(object["product_version"]),
+            productBuildID: stringValue(object["product_build_id"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
@@ -1461,7 +1543,7 @@ func reportFact(target: String) -> ReportFact {
 func reportFact(target: String, gate: Gate) -> ReportFact {
     let report = reportFact(target: target)
     guard report.exists else { return report }
-    return report.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: report.gitSHA))
+    return report.withExecutionFreshness(executionFreshness(for: gate, report: report))
 }
 
 func currentReportPassed(_ report: ReportFact) -> Bool {
@@ -2558,6 +2640,8 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             releaseGateEligible: boolValue(object["release_gate_eligible"]),
             readinessGateEligible: boolValue(object["readiness_gate_eligible"]),
             gitSHA: stringValue(object["git_sha"]),
+            productVersion: stringValue(object["product_version"]),
+            productBuildID: stringValue(object["product_build_id"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
@@ -2598,7 +2682,7 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2677,7 +2761,7 @@ func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2762,7 +2846,7 @@ func simulatorConsoleUsabilityPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2845,7 +2929,7 @@ func simulatorStaticBusyBoxStartPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -2942,7 +3026,7 @@ func simulatorStaticBusyBoxShellCommandPass(_ gate: Gate) -> GateStatus {
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -3039,7 +3123,7 @@ func simulatorRuntimeMarkerPass(_ gate: Gate, runtimeGate: String, marker: Strin
             gadget: gate.gadget
         )
     }
-    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, reportGitSHA: latest.0.gitSHA))
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
     let object = latest.1
 
     let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
@@ -6299,10 +6383,15 @@ func validateSemanticFreshnessFixtures() throws {
     let cases: [(String, Gate, String, Bool)] = [
         ("implement-checkpoint-does-not-rerun-runtime", runtimeGate, "docs/plans/active/orlix-tcti/IMPLEMENT.md", false),
         ("harness-doc-does-not-rerun-runtime", runtimeGate, "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md", false),
-        ("runtime-tool-reruns-runtime", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", true),
-        ("tcti-tool-reruns-tcti-gate", tctiGate, "tools/tcti/orlix-tcti-gate.swift", true),
+        ("runtime-tool-does-not-rebuild-product", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", false),
+        ("tcti-tool-does-not-rebuild-product", tctiGate, "tools/tcti/orlix-tcti-gate.swift", false),
         ("kernel-port-reruns-kernel-and-runtime", kernelGate, "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c", true),
-        ("environment-policy-reruns-simulator", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", true),
+        ("host-adapter-reruns-product", runtimeGate, "OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/runtime.c", true),
+        ("mlibc-reruns-product", runtimeGate, "OrlixMLibC/Sources/patches/0007-example.patch", true),
+        ("coreutils-input-reruns-product", runtimeGate, "OrlixOS/Sources/make/packages.mk", true),
+        ("app-source-reruns-product", runtimeGate, "Orlix/Sources/OrlixApp.swift", true),
+        ("project-build-id-reruns-product", runtimeGate, "project.yml", true),
+        ("environment-policy-does-not-rebuild-product", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", false),
         ("selector-script-recomputes-status-only", selectorGate, ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift", false),
     ]
 	for (name, gate, path, expected) in cases {

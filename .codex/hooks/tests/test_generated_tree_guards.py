@@ -30,10 +30,10 @@ def bash_payload(command):
     }
 
 
-def exec_command_payload(command):
+def exec_command_payload(command, tool_name="exec_command"):
     return {
         "hook_event_name": "PreToolUse",
-        "tool_name": "exec_command",
+        "tool_name": tool_name,
         "tool_input": {"cmd": command},
     }
 
@@ -127,6 +127,18 @@ class GeneratedTreeGuardTests(unittest.TestCase):
             PRE_TOOL_GUARD,
             exec_command_payload(
                 "rtk git -C Build/OrlixOS/upstream/coreutils-9.5.git apply /tmp/fix.patch"
+            ),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_namespaced_exec_command_after_cd_to_generated_tree(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload(
+                "cd Build/OrlixOS/upstream/coreutils-9.5.git && rtk git apply /tmp/fix.patch",
+                tool_name="functions.exec_command",
             ),
         )
 

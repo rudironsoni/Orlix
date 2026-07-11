@@ -53,6 +53,8 @@ struct Report: Codable {
     let realStackRequired: Bool
     let canClaimRuntimeReadiness: Bool
     let gitSha: String
+    let productVersion: String
+    let productBuildID: String
     let backend: String
     let kernelProfile: String?
     let kernelConfig: String?
@@ -90,6 +92,8 @@ struct Report: Codable {
         case realStackRequired = "real_stack_required"
         case canClaimRuntimeReadiness = "can_claim_runtime_readiness"
         case gitSha = "git_sha"
+        case productVersion = "product_version"
+        case productBuildID = "product_build_id"
         case backend
         case kernelProfile = "kernel_profile"
         case kernelConfig = "kernel_config"
@@ -115,6 +119,11 @@ struct Report: Codable {
         case actualReplayStatus = "actual_replay_status"
         case execution
     }
+}
+
+struct ProductVersion {
+    let version: String
+    let buildID: String
 }
 
 struct ExecutionReport: Codable {
@@ -695,46 +704,36 @@ func gitSha() -> String {
     (try? run(["git", "rev-parse", "HEAD"])) ?? ""
 }
 
-func changedPathsSince(_ reportGitSha: String) -> [String]? {
-    let current = gitSha()
-    if reportGitSha.isEmpty {
-        return nil
+func productVersion() -> ProductVersion {
+    let projectURL = repoRoot().appendingPathComponent("project.yml")
+    let contents = (try? String(contentsOf: projectURL, encoding: .utf8)) ?? ""
+    var version = ""
+    var buildID = ""
+    for line in contents.split(whereSeparator: \.isNewline).map(String.init) {
+        let fields = line.split(separator: ":", maxSplits: 1).map(String.init)
+        guard fields.count == 2 else { continue }
+        let key = fields[0].trimmingCharacters(in: .whitespaces)
+        let value = fields[1]
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        if key == "MARKETING_VERSION" { version = value }
+        if key == "CURRENT_PROJECT_VERSION" { buildID = value }
     }
-    if reportGitSha == current {
-        return []
+    guard !version.isEmpty, Int(buildID) != nil else {
+        fputs("project.yml must define MARKETING_VERSION and integer CURRENT_PROJECT_VERSION\n", stderr)
+        exit(2)
     }
-    guard let output = try? run(["git", "diff", "--name-only", "\(reportGitSha)..\(current)"]) else {
-        return nil
-    }
-    return output
-        .split(whereSeparator: \.isNewline)
-        .map(String.init)
+    return ProductVersion(version: version, buildID: buildID)
+}
+
+func reportMatchesCurrentProduct(_ report: [String: Any]) -> Bool {
+    let product = productVersion()
+    return stringField(report, "product_version") == product.version &&
+        stringField(report, "product_build_id") == product.buildID
 }
 
 func simulatorRuntimeReportExecutionFreshForRail(_ report: [String: Any]) -> Bool {
-    guard let changedPaths = changedPathsSince(stringField(report, "git_sha")) else {
-        return false
-    }
-    let runtimeIrrelevantPrefixes = [
-        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/",
-    ]
-    let runtimeInvalidatingPrefixes = [
-        "OrlixKernel/",
-        "OrlixMLibC/",
-        "OrlixOS/",
-        "tools/runtime/",
-    ]
-    let runtimeInvalidatingExactPaths = [
-        "project.yml",
-        ".agents/skills/orlix-tcti-next-step/references/environment-policy.json",
-    ]
-    return !changedPaths.contains { path in
-        if runtimeIrrelevantPrefixes.contains(where: { path.hasPrefix($0) }) {
-            return false
-        }
-        return runtimeInvalidatingExactPaths.contains(path) ||
-            runtimeInvalidatingPrefixes.contains { path.hasPrefix($0) }
-    }
+    reportMatchesCurrentProduct(report)
 }
 
 func sha256(_ url: URL) throws -> String {
@@ -927,6 +926,7 @@ func report(
     execution: ExecutionReport? = nil
 ) -> Report {
     let metadata = proofTierMetadata(for: target)
+    let product = productVersion()
     return Report(
         target: target,
         gate: target,
@@ -939,6 +939,8 @@ func report(
         realStackRequired: metadata.realStackRequired,
         canClaimRuntimeReadiness: metadata.canClaimRuntimeReadiness,
         gitSha: gitSha(),
+        productVersion: product.version,
+        productBuildID: product.buildID,
         backend: "tcti",
         kernelProfile: kernelProfile,
         kernelConfig: kernelConfig,
@@ -1418,6 +1420,8 @@ func runKernelSyscallDispatchSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
         "kunit_command": kunitCommand,
@@ -1610,6 +1614,8 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
         "linux_execve_binfmt_elf_path_entered": "false",
@@ -1781,7 +1787,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
         let execSP = stringField(execStartThread, "sp")
         let execPstate = stringField(execStartThread, "pstate")
         let execSyscallno = intField(execStartThread, "syscallno")
-        let reportCurrent = stringField(simulatorReport.object, "git_sha") == gitSha() &&
+        let reportCurrent = reportMatchesCurrentProduct(simulatorReport.object) &&
             stringField(simulatorReport.object, "status") == "pass" &&
             boolField(simulatorReport.object, "passed") &&
             stringField(simulatorReport.object, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
@@ -1820,7 +1826,7 @@ func runKernelExecveBinfmtElfSmoke() throws -> Int32 {
     }
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
-    let blocker = failures.isEmpty ? "" : "No current pinned-simulator report proves Linux execve/binfmt_elf reached arch start_thread and TCTI entry for the current HEAD."
+    let blocker = failures.isEmpty ? "" : "No current pinned-simulator report proves Linux execve/binfmt_elf reached arch start_thread and TCTI entry for the current product version/build."
     if !blocker.isEmpty {
         evidence["blocker"] = blocker
     }
@@ -1895,6 +1901,8 @@ func runKernelFaultSignalSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
         "workload_hook_compiled": "false",
@@ -2080,6 +2088,8 @@ func runKernelWaitReapingSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
         "workload_hook_compiled": "false",
@@ -2275,6 +2285,8 @@ func runKernelPtyConsoleSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "kernel_config": relativePath(kernelConfig),
         "workload_hook_compiled": "false",
@@ -2482,6 +2494,8 @@ func runKernelKselftestSubset() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -2633,6 +2647,8 @@ func runMLibCBuildSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -2788,6 +2804,8 @@ func runMLibCSysdepsSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -2950,6 +2968,8 @@ func runMLibCLibcTestSubset() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3107,6 +3127,8 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3321,6 +3343,8 @@ func runMLibCPthreadTLSSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3515,6 +3539,8 @@ func runMLibCLinkedSyscallUAPISmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3682,6 +3708,8 @@ func runShellExecSimpleCommand() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3761,8 +3789,8 @@ func runShellExecSimpleCommand() throws -> Int32 {
         "rwx",
     ]
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -3853,6 +3881,8 @@ func runShellPipelineSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -3956,8 +3986,8 @@ func runShellPipelineSmoke() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -4063,6 +4093,8 @@ func runShellEnvVarSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -4166,8 +4198,8 @@ func runShellEnvVarSmoke() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -4273,6 +4305,8 @@ func runShellRedirectionSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -4377,8 +4411,8 @@ func runShellRedirectionSmoke() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -4486,6 +4520,8 @@ func runShellScriptSmoke() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -4590,8 +4626,8 @@ func runShellScriptSmoke() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -4699,6 +4735,8 @@ func runCoreutilsTrueFalseEcho() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -4814,8 +4852,8 @@ func runCoreutilsTrueFalseEcho() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -4922,6 +4960,8 @@ func runCoreutilsCatWC() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -5013,8 +5053,8 @@ func runCoreutilsCatWC() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -5091,6 +5131,8 @@ func runCoreutilsLsStat() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -5182,8 +5224,8 @@ func runCoreutilsLsStat() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -5260,6 +5302,8 @@ func runCoreutilsMkdirRmCpLn() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -5353,8 +5397,8 @@ func runCoreutilsMkdirRmCpLn() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -5431,6 +5475,8 @@ func runCoreutilsEnvPath() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -5522,8 +5568,8 @@ func runCoreutilsEnvPath() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -5602,6 +5648,8 @@ func runCoreutilsTestSubset() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "runtime_gate": runtimeGate,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -5693,8 +5741,8 @@ func runCoreutilsTestSubset() throws -> Int32 {
         forbiddenBehavior[key] = boolField(forbidden, key)
     }
 
-    if stringField(runtimeObject, "git_sha") != gitSha() {
-        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current HEAD"))
+    if !reportMatchesCurrentProduct(runtimeObject) {
+        failures.append(fail("runtime-report-stale", "\(runtimeReportPath) is not current for product version/build"))
     }
     if stringField(runtimeObject, "status") == "pass" && boolField(runtimeObject, "passed") {
         evidence["runtime_validation_passed"] = "true"
@@ -5816,6 +5864,8 @@ func runOCIImageLayoutParse() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -6009,6 +6059,8 @@ func runOCIRootfsMaterialize() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -6186,6 +6238,8 @@ func runOCIRootfsBootSession() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -6550,10 +6604,21 @@ func isLegacyRuntimeReportWithoutProofTierMetadata(_ url: URL, object: Any, erro
     }
 }
 
-func checkReportFile(_ url: URL, roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex()) -> [String] {
+func checkReportFile(
+    _ url: URL,
+    roadmapIndex: RoadmapProofTierIndex = roadmapProofTierIndex(),
+    allowStaleProductMetadata: Bool = false
+) -> [String] {
     do {
         let object = try loadJSON(url)
-        let errors = validateReportObject(object, roadmapIndex: roadmapIndex, sourcePath: relativePath(url))
+        let currentRoadmapIndex: RoadmapProofTierIndex
+        if !allowStaleProductMetadata ||
+            (object as? [String: Any]).map(reportMatchesCurrentProduct) == true {
+            currentRoadmapIndex = roadmapIndex
+        } else {
+            currentRoadmapIndex = RoadmapProofTierIndex(metadataByTarget: [:], errors: [])
+        }
+        let errors = validateReportObject(object, roadmapIndex: currentRoadmapIndex, sourcePath: relativePath(url))
         if isLegacyRuntimeReportWithoutProofTierMetadata(url, object: object, errors: errors) {
             return []
         }
@@ -6997,7 +7062,7 @@ func runReportSchemaCheck() throws -> Int32 {
                 continue
             }
             checked.append(relativePath(url))
-            failures.append(contentsOf: checkReportFile(url).map { fail("report", $0) })
+            failures.append(contentsOf: checkReportFile(url, allowStaleProductMetadata: true).map { fail("report", $0) })
         }
     }
 
@@ -7005,7 +7070,7 @@ func runReportSchemaCheck() throws -> Int32 {
     if let runtimeReports = try? fileManager.contentsOfDirectory(at: runtimeReportRoot, includingPropertiesForKeys: nil) {
         for url in runtimeReports where url.pathExtension == "json" {
             checked.append(relativePath(url))
-            failures.append(contentsOf: checkReportFile(url).map { fail("report", $0) })
+            failures.append(contentsOf: checkReportFile(url, allowStaleProductMetadata: true).map { fail("report", $0) })
         }
     }
 
@@ -10601,6 +10666,8 @@ func validateInit001Golden(metadataURL: URL, outputRoot: URL) throws -> (failure
         .appendingPathComponent("validation.json")
     let validationPayload = [
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "binary": relativePath(built.binary),
         "source_sha256": sourceHash,
         "binary_sha256": binaryHash,
@@ -10639,6 +10706,8 @@ func validateGoldenCase(caseID: String, metadataURL: URL, outputRoot: URL) throw
         .appendingPathComponent("validation.json")
     let validationPayload = [
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "binary": relativePath(built.binary),
         "source_sha256": sourceHash,
         "binary_sha256": binaryHash,
@@ -10995,7 +11064,7 @@ func latestBRKTrapSimulatorReport() throws -> (url: URL, object: [String: Any], 
         guard let object = try? loadJSON(candidate) as? [String: Any],
               stringField(object, "gate") == "tcti-simulator-stability",
               stringField(object, "destination") == "iphonesimulator",
-              stringField(object, "git_sha") == gitSha(),
+              reportMatchesCurrentProduct(object),
               stringField(object, "status") == "fail",
               !boolField(object, "passed")
         else {
@@ -11207,8 +11276,8 @@ func runSimulatorUserFaultReducer() throws -> Int32 {
         (fatalAccess == nil || fatalAccess == 1)
     let noFatalUserFault = fatalAddress.isEmpty
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
     }
     if !simulatorPassed && !simulatorFailed {
         failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
@@ -11359,7 +11428,7 @@ func runStaticPIERelocationFix() throws -> Int32 {
         artifacts.append(relativePath(reproReportURL))
         reducerProofPassed = stringField(reproReport, "status") == "pass" &&
             boolField(reproReport, "passed") &&
-            stringField(reproReport, "git_sha") == gitSha() &&
+            reportMatchesCurrentProduct(reproReport) &&
             stringField(reproReport, "expected_status") == "fail" &&
             stringField(reproReport, "actual_replay_status") == "fail" &&
             reproArtifacts.contains("Build/TCTI/reproducers/tcti-golden-elf/execution-static-pie-got-unrelocated-byte-load.json")
@@ -11523,7 +11592,7 @@ func runPostOverlayNullUserFaultFix() throws -> Int32 {
     let reducerReportURL = buildPath("reports", "tcti-post-overlay-null-user-fault-reducer", "report.json")
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerReport) ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
             failures.append(fail("reducer-report", "post-overlay null user-fault reducer report is missing, stale, or not passing"))
@@ -11607,8 +11676,8 @@ func runLDRSWSignExtensionReducer() throws -> Int32 {
     let terminalText = try simulatorArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
     let combinedText = fatalText + "\n" + terminalText
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -11920,8 +11989,8 @@ func runCloneZeroPCReducer() throws -> Int32 {
 	let terminalText = try simulatorArtifacts.first { $0.hasSuffix("simulator-terminal-output.txt") }.map(readRelativeArtifact) ?? ""
 	let combinedText = fatalText + "\n" + terminalText
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -11979,7 +12048,7 @@ func runCloneZeroPCFix() throws -> Int32 {
 	let reducerReportURL = buildPath("reports", "tcti-clone-zero-pc-reducer", "report.json")
 	if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
 		artifacts.append(relativePath(reducerReportURL))
-		if stringField(reducerReport, "git_sha") != gitSha() ||
+		if !reportMatchesCurrentProduct(reducerReport) ||
 			stringField(reducerReport, "status") != "pass" ||
 			!boolField(reducerReport, "passed") {
 			failures.append(fail("reducer-report", "tcti-clone-zero-pc-reducer report is missing, stale, or not passing"))
@@ -12079,8 +12148,8 @@ func runPostSetsidTLSFaultReducer() throws -> Int32 {
 	let staticReadReturn = childStaticReadGroups?[2] ?? staticReadGroups?[3]
 	let signaledPID = firstRegexGroups(#"orlix-init: process signaled pid=([0-9]+) signal=11"#, in: terminalText)?.first
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -12212,8 +12281,8 @@ func runPostExecSHFetchFaultReducer() throws -> Int32 {
 		return terminalText.range(of: pattern, options: .regularExpression) == nil ? nil : pid
 	}
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -12331,8 +12400,8 @@ func runPostPIESHEntryFetchFaultReducer() throws -> Int32 {
 	let faultAddress = exitGroups?[3]
 	let instruction = exitGroups?[4]
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -12482,8 +12551,8 @@ func runPostBashMmapReadFaultReducer() throws -> Int32 {
 		return String(format: "0x%llx", address - base)
 	}()
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if !simulatorPassed && !simulatorFailed {
 		failures.append(fail("simulator-report-status", "reducer requires a current simulator stability pass or fail report"))
@@ -12638,8 +12707,8 @@ func runInitReadFaultReducer() throws -> Int32 {
 	let noStaticPIE = stringField(staticPIE, "task").isEmpty && intField(staticPIE, "pid") == nil
 	let noSignal = intField(signal, "signal") == nil
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator stability report"))
@@ -12782,8 +12851,8 @@ func runPostStaticPIEInitReadFaultReducer() throws -> Int32 {
 		faultAddress != "0x0"
 	let noSignal = intField(signal, "signal") == nil
 
-	if stringField(object, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "selected simulator static-PIE init read-fault report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(object) {
+		failures.append(fail("simulator-report-stale", "selected simulator static-PIE init read-fault report is stale for current product version/build"))
 	}
 	if stringField(object, "status") != "fail" || boolField(object, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
@@ -12924,8 +12993,8 @@ func runPostTrueEntryFetchFaultReducer() throws -> Int32 {
 	let signalOK = intField(signal, "pid") == faultPID &&
 		intField(signal, "signal") == 11
 
-	if stringField(object, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "selected simulator /bin/true fetch-fault report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(object) {
+		failures.append(fail("simulator-report-stale", "selected simulator /bin/true fetch-fault report is stale for current product version/build"))
 	}
 	if stringField(object, "status") != "fail" || boolField(object, "passed") {
 		failures.append(fail("simulator-report-status", "reducer requires a current failing simulator report"))
@@ -13114,8 +13183,8 @@ func runPostSHReadFaultReducer() throws -> Int32 {
 		"rwx",
 	]
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
 	}
 	if !["tcti-simulator-stability", "tcti-full-shell-usability"].contains(stringField(simulatorObject, "gate")) ||
 		stringField(simulatorObject, "destination") != "iphonesimulator" ||
@@ -13251,15 +13320,15 @@ func runSIMDSelfMoveReducer() throws -> Int32 {
     let fixReportPass: Bool
     if let fixReport = try? loadJSON(fixReportURL) as? [String: Any] {
         artifacts.append(relativePath(fixReportURL))
-        fixReportPass = stringField(fixReport, "git_sha") == gitSha() &&
+        fixReportPass = reportMatchesCurrentProduct(fixReport) &&
             stringField(fixReport, "status") == "pass" &&
             boolField(fixReport, "passed")
     } else {
         fixReportPass = false
     }
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "SIMD self-move reducer requires a current failing simulator stability report"))
@@ -13335,7 +13404,7 @@ func runSIMDSelfMoveFix() throws -> Int32 {
     var reducerCurrentPass = false
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        reducerCurrentPass = stringField(reducerReport, "git_sha") == gitSha() &&
+        reducerCurrentPass = reportMatchesCurrentProduct(reducerReport) &&
             stringField(reducerReport, "status") == "pass" &&
             boolField(reducerReport, "passed")
         evidence["reducer_report_path"] = relativePath(reducerReportURL)
@@ -13534,8 +13603,8 @@ func runSIMDSLaneMoveReducer() throws -> Int32 {
             .joined(separator: "\n")
     }
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "SIMD S-lane move reducer requires a current failing simulator stability report"))
@@ -13624,12 +13693,12 @@ func runBRKTrapReducer() throws -> Int32 {
     let simulatorObject = simulatorReport.object
     let simulatorArtifacts = (simulatorObject["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     artifacts.append(contentsOf: simulatorArtifacts)
-    let simulatorText = try simulatorArtifacts
+    let simulatorText = simulatorArtifacts
         .map { (try? readRelativeArtifact($0)) ?? "" }
         .joined(separator: "\n")
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "status") != "fail" || boolField(simulatorObject, "passed") {
         failures.append(fail("simulator-report-status", "BRK reducer requires a current failing simulator stability report"))
@@ -13695,7 +13764,7 @@ func runBRKTrapReducer() throws -> Int32 {
 func latestInitMLibCLockBRKSimulatorReport(gates gateNames: [String], destination: String) -> (url: URL, object: [String: Any])? {
     for gateName in gateNames {
         for report in runtimeValidationReports(gate: gateName, destination: destination) {
-            guard stringField(report.object, "git_sha") == gitSha(),
+            guard reportMatchesCurrentProduct(report.object),
                   stringField(report.object, "status") == "fail",
                   !boolField(report.object, "passed")
             else {
@@ -13768,8 +13837,8 @@ func runInitMLibCLockBRKReducer() throws -> Int32 {
         "rwx",
     ]
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected simulator init mlibc lock BRK report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected simulator init mlibc lock BRK report is stale for current product version/build"))
     }
     if !acceptedGates.contains(stringField(object, "gate")) ||
         stringField(object, "destination") != "iphonesimulator" ||
@@ -13899,8 +13968,8 @@ func runBRKTrapRootCause() throws -> Int32 {
         .components(separatedBy: " ")
         .first ?? "unknown"
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "matching simulator BRK trap report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" {
         failures.append(fail("simulator-device", "BRK root-cause inspection must use Orlix-iPhone-15-Pro-Max simulator ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"))
@@ -13978,7 +14047,7 @@ func runBRKTrapRootCause() throws -> Int32 {
     let reducerReportURL = buildPath("reports", "tcti-brk-trap-reducer", "report.json")
     if let reducerReport = try? loadJSON(reducerReportURL) as? [String: Any] {
         artifacts.append(relativePath(reducerReportURL))
-        if stringField(reducerReport, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerReport) ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
             failures.append(fail("reducer-report", "BRK trap reducer report is missing, stale, or not passing"))
@@ -14032,8 +14101,8 @@ func runBRKGuardGOTReducer() throws -> Int32 {
     let unifiedText = try simulatorArtifacts.first { $0.hasSuffix("simulator-unified.log") }.map(readRelativeArtifact) ?? ""
     let fatalText = try simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
 
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" {
         failures.append(fail("simulator-device", "BRK guard reducer must use Orlix-iPhone-15-Pro-Max simulator ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"))
@@ -14066,7 +14135,7 @@ func runBRKGuardGOTReducer() throws -> Int32 {
     let rootCauseReportURL = buildPath("reports", "tcti-brk-trap-root-cause", "report.json")
     if let rootCauseReport = try? loadJSON(rootCauseReportURL) as? [String: Any] {
         artifacts.append(relativePath(rootCauseReportURL))
-        if stringField(rootCauseReport, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(rootCauseReport) ||
             stringField(rootCauseReport, "status") != "pass" ||
             !boolField(rootCauseReport, "passed") {
             failures.append(fail("root-cause-report", "BRK root-cause report is missing, stale, or not passing"))
@@ -15949,8 +16018,8 @@ func runAddSubShiftedXZRFix() throws -> Int32 {
             .map(String.init)
             .last { $0.contains("Orlix TCTI: unsupported instruction") && $0.contains("insn=0xd4200020") } ?? ""
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+        if !reportMatchesCurrentProduct(simulatorReport.object) {
+            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
         }
         if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
             failures.append(fail("simulator-report-status", "ADD/SUB shifted XZR fix requires the current BRK simulator failure report"))
@@ -17264,8 +17333,8 @@ func runSIMDAND16BFix() throws -> Int32 {
             .map(String.init)
             .last { $0.contains("Orlix TCTI: unsupported instruction") && $0.contains("insn=0x4e211c01") } ?? ""
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+        if !reportMatchesCurrentProduct(simulatorReport.object) {
+            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
         }
         if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
             failures.append(fail("simulator-report-status", "SIMD AND 16B fix requires the current simulator failure report"))
@@ -17378,8 +17447,8 @@ func runSIMDORR4SFix() throws -> Int32 {
         let fatalText = try simulatorArtifacts.first { $0.hasSuffix("tcti-simulator-fatal-runtime.txt") }.map(readRelativeArtifact) ?? ""
         let simulatorText = [unifiedText, terminalText, fatalText].joined(separator: "\n")
 
-        if stringField(simulatorReport.object, "git_sha") != gitSha() {
-            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current HEAD"))
+        if !reportMatchesCurrentProduct(simulatorReport.object) {
+            failures.append(fail("simulator-report-stale", "latest simulator stability report is stale for current product version/build"))
         }
         if stringField(simulatorReport.object, "status") != "fail" || boolField(simulatorReport.object, "passed") {
             failures.append(fail("simulator-report-status", "SIMD ORR 4S fix requires the current simulator failure report"))
@@ -17534,6 +17603,8 @@ func staticBusyBoxPassEvidenceFailures(_ object: [String: Any]) -> [Failure] {
 func validateStaticBusyBoxPassEvidenceContract() -> [Failure] {
 	let valid: [String: Any] = [
 		"git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
 		"gate": "tcti-static-busybox-start",
 		"status": "pass",
 		"passed": true,
@@ -17669,7 +17740,7 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
 		return 0
 	}
 
-	if stringField(object, "git_sha") == gitSha(),
+	if reportMatchesCurrentProduct(object),
 	   stringField(object, "status") == "fail",
 	   !boolField(object, "passed"),
 	   stringField(staticPIE, "task") == "sh",
@@ -17690,8 +17761,8 @@ func runPostBusyBoxSIGABRTReducer() throws -> Int32 {
 		return 0
 	}
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox SIGABRT report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox SIGABRT report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "SIGABRT reducer requires a current simulator static BusyBox failure report"))
@@ -17825,8 +17896,8 @@ func runPostBusyBoxShellCommandSIGILLReducer() throws -> Int32 {
     let markerArtifact = reportArtifacts.first { $0.hasSuffix("tcti-static-busybox-shell-command.txt") }
     let markerText = markerArtifact.flatMap { try? readRelativeArtifact($0) } ?? ""
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox shell-command SIGILL report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected simulator static BusyBox shell-command SIGILL report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "SIGILL reducer requires a current simulator static BusyBox shell-command failure report"))
@@ -17949,7 +18020,7 @@ func runUserDataWindowRefreshFix() throws -> Int32 {
 		artifacts.append(relativePath(reducerReportURL))
 		let reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
 		artifacts.append(contentsOf: reducerArtifacts)
-		if stringField(reducerReport, "git_sha") != gitSha() ||
+		if !reportMatchesCurrentProduct(reducerReport) ||
 			stringField(reducerReport, "target") != reducerTarget ||
 			stringField(reducerReport, "gate") != reducerTarget ||
 			stringField(reducerReport, "status") != "pass" ||
@@ -18005,7 +18076,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 		reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
 		artifacts.append(relativePath(reducerReportURL))
 		artifacts.append(contentsOf: reducerArtifacts)
-		if stringField(reducerReport, "git_sha") != gitSha() ||
+		if !reportMatchesCurrentProduct(reducerReport) ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
             failures.append(fail("reducer-report", "post-static-PIE init read-fault reducer report is missing, stale, or not passing"))
@@ -18060,8 +18131,8 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
         return String(format: "0x%llx", address - base)
     }()
 
-	if stringField(simulatorObject, "git_sha") != gitSha() {
-		failures.append(fail("simulator-report-stale", "selected simulator report is stale for current HEAD"))
+	if !reportMatchesCurrentProduct(simulatorObject) {
+		failures.append(fail("simulator-report-stale", "selected simulator report is stale for current product version/build"))
 	}
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -18101,7 +18172,7 @@ func runPostStaticPIEInitTLSFix() throws -> Int32 {
 		let latestStaticPIE = latestEvents["static_pie_image"] as? [String: Any] ?? [:]
 		let latestFault = latestEvents["fatal_user_fault"] as? [String: Any] ?? [:]
 		let latestFirstSVC = latestEvents["first_svc"] as? [String: Any] ?? [:]
-		let latestStillMatches = stringField(latestObject, "git_sha") == gitSha() &&
+		let latestStillMatches = reportMatchesCurrentProduct(latestObject) &&
 			stringField(latestObject, "status") == "fail" &&
 			!boolField(latestObject, "passed") &&
 			stringField(latestObject, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
@@ -18219,8 +18290,8 @@ func runPostFullShellCatReadFaultReducer() throws -> Int32 {
     let faultAddress = stringField(fault, "addr")
     let faultPID = intField(fault, "pid").map(String.init)
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
@@ -18324,7 +18395,7 @@ func runPostFullShellCatReadFaultFix() throws -> Int32 {
     let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     if let reducerObject {
         artifacts.append(relativePath(reducerURL))
-        if stringField(reducerObject, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerObject) ||
             stringField(reducerObject, "status") != "pass" ||
             !boolField(reducerObject, "passed") {
             failures.append(fail("reducer-report", "cat read-fault reducer report is missing, stale, or not passing"))
@@ -18355,8 +18426,8 @@ func runPostFullShellCatReadFaultFix() throws -> Int32 {
     }
 
     artifacts.append(simulatorPath)
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -18441,8 +18512,8 @@ func runPostFullShellCatPosixMemalignBRKReducer() throws -> Int32 {
         "rwx",
     ]
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
@@ -18532,7 +18603,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
     let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     if let reducerObject {
         artifacts.append(relativePath(reducerURL))
-        if stringField(reducerObject, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerObject) ||
             stringField(reducerObject, "status") != "pass" ||
             !boolField(reducerObject, "passed") {
             failures.append(fail("reducer-report", "cat posix_memalign BRK reducer report is missing, stale, or not passing"))
@@ -18563,8 +18634,8 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
     }
 
     artifacts.append(simulatorPath)
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -18594,7 +18665,7 @@ func runPostFullShellCatPosixMemalignBRKFix() throws -> Int32 {
         let latestEvents = latestObject["tcti_runtime_events"] as? [String: Any] ?? [:]
         let latestFirstSVC = latestEvents["first_svc"] as? [String: Any] ?? [:]
         let latestSignal = latestEvents["signaled_process"] as? [String: Any] ?? [:]
-        let latestMatchesCurrentFailure = stringField(latestObject, "git_sha") == gitSha() &&
+        let latestMatchesCurrentFailure = reportMatchesCurrentProduct(latestObject) &&
             stringField(latestObject, "status") == "fail" &&
             !boolField(latestObject, "passed") &&
             stringField(latestObject, "selected_device_id") == "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" &&
@@ -18722,8 +18793,8 @@ func runPostFullShellInitWriteFaultReducer() throws -> Int32 {
         return String(format: "0x%llx", address - base)
     }()
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
@@ -18879,8 +18950,8 @@ func runPostFullShellSHSIGABRTReducer() throws -> Int32 {
     let shPID = intField(staticPIE, "pid")
     let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
@@ -19027,8 +19098,8 @@ func runPostConsoleSHSIGABRTReducer() throws -> Int32 {
     let shPID = intField(staticPIE, "pid")
     let shPIDHex = shPID.map { String(format: "0x%x", $0) } ?? ""
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected console simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected console simulator report is stale for current product version/build"))
     }
     if stringField(object, "gate") != "tcti-init-console-write" ||
         stringField(object, "destination") != "iphonesimulator" ||
@@ -19155,7 +19226,7 @@ func runPostFullShellInitWriteFaultFix() throws -> Int32 {
         reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
         artifacts.append(relativePath(reducerReportURL))
         artifacts.append(contentsOf: reducerArtifacts)
-        if stringField(reducerReport, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerReport) ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
             failures.append(fail("reducer-report", "post-full-shell init write-fault reducer report is missing, stale, or not passing"))
@@ -19188,8 +19259,8 @@ func runPostFullShellInitWriteFaultFix() throws -> Int32 {
     if !reducerArtifacts.contains(simulatorPath) {
         failures.append(fail("reducer-coverage", "init write-fault reducer must cover the selected simulator report"))
     }
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -19244,7 +19315,7 @@ func runPostFullShellSHSIGABRTFix() throws -> Int32 {
         reducerArtifacts = (reducerReport["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
         artifacts.append(relativePath(reducerReportURL))
         artifacts.append(contentsOf: reducerArtifacts)
-        if stringField(reducerReport, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerReport) ||
             stringField(reducerReport, "status") != "pass" ||
             !boolField(reducerReport, "passed") {
             failures.append(fail("reducer-report", "post-full-shell sh SIGABRT reducer report is missing, stale, or not passing"))
@@ -19275,8 +19346,8 @@ func runPostFullShellSHSIGABRTFix() throws -> Int32 {
     }
 
     artifacts.append(simulatorPath)
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -19365,8 +19436,8 @@ func runPostFullShellInitSecondMmapHangReducer() throws -> Int32 {
     let signal = events["signaled_process"] as? [String: Any] ?? [:]
     let lastReturn = events["last_sh_syscall_return"] as? [String: Any] ?? [:]
 
-    if stringField(object, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(object) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(object, "status") != "fail" || boolField(object, "passed") {
         failures.append(fail("simulator-report-status", "reducer requires a current failing full-shell simulator report"))
@@ -19518,7 +19589,7 @@ func runPostFullShellInitSecondMmapHangFix() throws -> Int32 {
     let reducerArtifacts = (reducerObject?["artifacts"] as? [Any] ?? []).compactMap { $0 as? String }
     if let reducerObject {
         artifacts.append(relativePath(reducerURL))
-        if stringField(reducerObject, "git_sha") != gitSha() ||
+        if !reportMatchesCurrentProduct(reducerObject) ||
             stringField(reducerObject, "status") != "pass" ||
             !boolField(reducerObject, "passed") {
             failures.append(fail("reducer-report", "post-full-shell init second-mmap reducer report is missing, stale, or not passing"))
@@ -19549,8 +19620,8 @@ func runPostFullShellInitSecondMmapHangFix() throws -> Int32 {
     }
 
     artifacts.append(simulatorPath)
-    if stringField(simulatorObject, "git_sha") != gitSha() {
-        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current HEAD"))
+    if !reportMatchesCurrentProduct(simulatorObject) {
+        failures.append(fail("simulator-report-stale", "selected full-shell simulator report is stale for current product version/build"))
     }
     if stringField(simulatorObject, "selected_device_id") != "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3" ||
         stringField(simulatorObject, "selected_device_name") != "Orlix-iPhone-15-Pro-Max" ||
@@ -19617,6 +19688,8 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -19807,6 +19880,8 @@ func runOCIStdioSignalWait() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "kernel_profile": kernelProfile,
         "selected_simulator_id": simulatorID,
         "selected_simulator_name": simulatorName,
@@ -20006,6 +20081,8 @@ func runOCILifecycleCreateStartExecKillWaitDelete() throws -> Int32 {
         "actual_command": command,
         "backend": "tcti",
         "git_sha": gitSha(),
+        "product_version": productVersion().version,
+        "product_build_id": productVersion().buildID,
         "oci_source": "OrlixOS",
         "real_stack_execution_surface": "aggregate of app-hosted OrlixOS OCI exec and stdio signal/wait gates",
         "exec_gate": execTarget,
@@ -20062,7 +20139,7 @@ func runOCILifecycleCreateStartExecKillWaitDelete() throws -> Int32 {
     if let execReport {
         if stringField(execReport, "status") == "pass" &&
             boolField(execReport, "passed") &&
-            stringField(execReport, "git_sha") == gitSha() {
+            reportMatchesCurrentProduct(execReport) {
             evidence["lifecycle_exec_observed"] = "true"
             evidence["oci_command_exit_status"] = "\(intField(execReport, "oci_process_exit_status") ?? -1)"
             evidence["oci_process_exit_observed"] = boolField(execReport, "oci_process_exit_observed") ? "true" : "false"
@@ -20085,7 +20162,7 @@ func runOCILifecycleCreateStartExecKillWaitDelete() throws -> Int32 {
     if let signalReport {
         if stringField(signalReport, "status") == "pass" &&
             boolField(signalReport, "passed") &&
-            stringField(signalReport, "git_sha") == gitSha() {
+            reportMatchesCurrentProduct(signalReport) {
             evidence["lifecycle_create_observed"] = "true"
             evidence["lifecycle_start_observed"] = "true"
             evidence["lifecycle_kill_observed"] = "true"
