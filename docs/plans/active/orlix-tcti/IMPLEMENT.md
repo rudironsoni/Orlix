@@ -8144,3 +8144,16 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - No OrlixKernel runtime semantics, HostAdapter behavior, OrlixOS behavior, app output, generated-tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Generated Upstream Tree Mutation Guard
+
+- Codex harness enforcement:
+  - Extended the shared generated-tree guard to recognize current `exec_command` tool calls in addition to legacy `Bash` calls.
+  - Read-only inspection of generated Linux, mlibc, and package trees remains allowed.
+  - Patch, shell, script, build, and Git mutations targeting generated upstream/build trees remain blocked before execution.
+- Evidence:
+  - `rtk proxy python3 .codex/hooks/tests/test_generated_tree_guards.py`: 11 tests passed, including current Codex command coverage for Linux, mlibc, and Coreutils generated clones.
+  - `rtk proxy make agent-harness-check`: passed after unrelated product-version freshness WIP was isolated.
+- Boundary:
+  - No generated tree or product runtime behavior changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
