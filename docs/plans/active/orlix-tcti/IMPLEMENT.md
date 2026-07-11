@@ -8277,3 +8277,18 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - Linux retains VFS and rename semantics. OrlixMLibC only forwards the public API to Linux.
   - No HostAdapter semantics, OrlixOS runtime semantics, app-generated Linux output, generated upstream source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Physical Device Opt-In Hook Contract
+
+- Harness fix:
+  - The pre-tool safety policy now recognizes the documented physical-device opt-in when it is attached directly to the selected command, while retaining autonomous and full simulator-ladder preflight checks.
+  - Hook proof freshness now uses the shared `project.yml` product version and build identity instead of expiring all reports after a harness-only commit changes `HEAD`.
+  - Added a regression assertion that rejects any return to the false `explicit human opt-in` blocker for an inline authorized command.
+- Evidence:
+  - `rtk proxy sh -n .agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy`: passed.
+  - `rtk proxy make agent-hooks-check`: passed.
+  - `rtk proxy make agent-harness-check`: passed, including semantic freshness and gate-result policy fixtures.
+  - `rtk proxy make tcti-gate TARGET=tcti-golden-elf`: passed for product `0.1 (18)` before physical-device selection.
+- Boundary:
+  - This fixes command authorization and proof freshness only. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime behavior, generated upstream sources, production assembly, or gadget dispatch.
+  - Full TCTI completion, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven until current runtime evidence establishes them.
