@@ -8190,3 +8190,17 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - No TCTI runtime instruction behavior, Linux semantics, HostAdapter semantics, OrlixOS session behavior, or app output changed.
   - The build-number change intentionally makes build-15 product reports stale. No simulator or physical-device gate was run.
   - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Xcode-Hosted Product Failure Classification
+
+- Harness classifier fix:
+  - Removed the unqualified `xcodebuild` keyword from environment-only failure detection.
+  - Added a classifier fixture proving that an app-hosted Xcode build failure with a current real-stack report is a current product failure, while the existing CoreSimulator bootstatus fixture remains environment-only.
+- Evidence:
+  - `tcti-kernel-kselftest-subset` reached deterministic OrlixOS package construction and failed on an unsanitized attr header. No CoreSimulator boot, destination, storage, or runner-attachment failure was reported.
+  - `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
+  - `rtk proxy make agent-harness-check`: passed, including `gate-result-policy-check`.
+  - Regenerated `next-task.json` classifies the selected failure as `current_runtime_product_failure`, sets `runtime_patch_allowed=true`, and requires a reducer and owning-layer product fix.
+- Boundary:
+  - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app, generated-tree, physical-device, production-assembly, or gadget behavior changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
