@@ -8098,4 +8098,17 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - `.agents/skills/orlix-tcti-next-step/scripts/harness-check` now requires the semantic freshness predicate, `execution_freshness` status evidence, and the Swift `semantic-freshness-check` fixture mode.
 - Boundary:
   - No OrlixKernel runtime behavior, HostAdapter behavior, OrlixOS behavior, app output, generated Linux/mlibc/package/rootfs/build tree source, physical-device gate, production assembly, or gadget dispatch changed.
+- Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: KUnit Gate Runner Output And ABI Audit Reliability
+
+- Harness/build-rail fix:
+  - `tcti-kernel-syscall-dispatch-smoke` now captures its KUnit command with the existing file-backed process runner. The previous in-memory pipe runner waited for the child before draining stdout and stderr, which could deadlock a verbose KUnit build.
+  - `__validate-linux-abi` now checks the same durable Orlix build-source file types through `find` plus `grep` instead of the environment-stalling `rg` traversal.
+- Evidence:
+  - The former ABI audit command exceeded a 30-second diagnostic timeout. The corrected `make -f OrlixKernel/Makefile __validate-linux-abi` passed in the current workspace.
+  - `rtk proxy make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke` passed and wrote `Build/TCTI/reports/tcti-kernel-syscall-dispatch-smoke/report.json` at `ed179e22b42d5fc9bfa6c5787a82fa0baa37d249`.
+  - The current report records the named KUnit test as executed and passed, `svc_boundary_reached=true`, `orlix_syscall_dispatch_entered=true`, `linux_syscall_return_state_written=true`, and all forbidden-behavior fields false.
+- Boundary:
+  - No OrlixKernel runtime semantics, HostAdapter behavior, OrlixOS behavior, app output, generated-tree source, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, global runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
