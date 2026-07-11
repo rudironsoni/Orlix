@@ -8219,3 +8219,16 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Boundary:
   - The fix changes only OrlixOS package construction. No generated upstream tree, OrlixKernel runtime behavior, OrlixMLibC behavior, HostAdapter behavior, app output, physical-device gate, production assembly, or gadget dispatch changed.
   - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Stale Failed Runtime Report Refresh
+
+- Harness state fix:
+  - `runtimeGateState` now marks any execution-stale runtime report as `stale`, regardless of whether the old report passed or failed.
+  - Current failing reports remain failures. Only reports invalidated by the semantic freshness policy become refreshable.
+  - Added an executable fixture proving that a build-16 failed report becomes stale when the current product build is 17.
+- Evidence:
+  - `rtk proxy make agent-harness-check`: passed, including `gate-result-policy-check`.
+  - Regenerated `next-task.json` now classifies the old build-15 VFS failure as `stale_proof_refresh` and authorizes the exact pinned-simulator refresh command without authorizing source edits.
+- Boundary:
+  - No product runtime behavior, generated tree, physical-device gate, production assembly, or gadget dispatch changed.
+  - Full TCTI completion, runtime readiness, package readiness, release readiness, physical-device readiness, simulator readiness completion, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
