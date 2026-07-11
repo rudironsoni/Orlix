@@ -16402,24 +16402,14 @@ func runSIMDMOVI4S0x1Fix() throws -> Int32 {
         gate: "tcti-static-busybox-shell-command",
         destination: "iphonesimulator"
     )
-    let simulatorEvidenceMatched = simulatorReports.contains { report in
-        var reportArtifacts: [String] = []
-        let simulatorText = runtimeReportText(report, artifacts: &reportArtifacts)
-        let matched = simulatorText.contains("Orlix TCTI: unsupported instruction") &&
-            simulatorText.contains("insn=0x4f000421") &&
-            simulatorText.contains("orlix-init: process signaled") &&
-            simulatorText.contains("signal=4") &&
-            simulatorText.contains("ORLIX-TCTI-BUSYBOX-USABLE")
-        if matched {
-            artifacts.append(contentsOf: reportArtifacts)
-        }
-        return matched
-    }
-    if !simulatorEvidenceMatched {
-        failures.append(fail("simulator-unsupported-signature", "no recorded static BusyBox shell-command report contains MOVI v1.4s instruction 0x4f000421 with post-marker SIGILL evidence"))
-    }
     if let latestSimulatorReport = simulatorReports.first {
-        _ = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+        let simulatorText = runtimeReportText(latestSimulatorReport, artifacts: &artifacts)
+        if simulatorText.contains("insn=0x4f000421") &&
+            (simulatorText.contains("Orlix TCTI: unsupported instruction") || simulatorText.contains("signal=4")) {
+            failures.append(fail("simulator-unsupported-signature-current", "current static BusyBox shell-command evidence still contains MOVI v1.4s 0x4f000421 unsupported or SIGILL evidence"))
+        }
+    } else {
+        failures.append(fail("simulator-report-missing", "missing static BusyBox shell-command simulator evidence for MOVI v1.4s rail"))
     }
 
     let decodeURL = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "hosted_exec", "tcti", "decode_aarch64.c")
