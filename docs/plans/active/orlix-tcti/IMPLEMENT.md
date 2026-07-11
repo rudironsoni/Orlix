@@ -2,6 +2,12 @@
 
 ## 2026-07-11
 
+### Checkpoint: MOVI 4S Rail Evidence
+
+- The MOVI v1.4s rail required a historical `0x4f000421` post-marker SIGILL even though the current pinned shell-command report passes and the constrained no-phone fixture exits through `exit(42)`.
+- Replaced that obsolete historical-signature requirement with current shell-command evidence that rejects an unsupported or SIGILL signature for `0x4f000421`; retained the decoder, KUnit, positive execution, and replayable regression requirements.
+- No OrlixKernel runtime, HostAdapter, OrlixOS, app, generated-tree, assembly, gadget, or physical-device behavior changed.
+
 ### Checkpoint: BusyBox Shell Reducer Scheduling
 
 - The selector chose `no-phone-tcti-post-busybox-shell-command-sigill-reducer` before any `tcti-static-busybox-shell-command` simulator report existed. Its reducer command could only fail with missing simulator evidence, so this was a scheduler ordering defect, not a guest SIGILL or TCTI runtime failure.
