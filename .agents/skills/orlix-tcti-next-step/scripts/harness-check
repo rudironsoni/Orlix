@@ -399,6 +399,8 @@ check_skills() {
     fail "pre-tool-use-policy must match TCTI runtime-validation commands"
   grep -q 'simulator_tcti_full_ladder_passed' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must enforce full simulator ladder before physical/default-phone TCTI"
+  grep -q '"iphonesimulator"' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
+    fail "pre-tool-use-policy simulator ladder must ignore newer physical reports for the same gate"
   grep -Eq 'ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE|ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must require explicit physical-device opt-in"
   grep -Eq 'ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE|ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED' "$root/tools/runtime/orlix-runtime-validation.sh" ||
