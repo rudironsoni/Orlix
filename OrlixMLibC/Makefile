@@ -235,7 +235,9 @@ MLIBC_TEST_LINUX_CASES := \
 	linux/utmp \
 	linux/utmpx \
 	linux/xattr
-MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES)
+MLIBC_TEST_ORLIX_CASES := \
+	orlix/renameat2
+MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES) $(MLIBC_TEST_ORLIX_CASES)
 # Runtime-log polling uses 0.1s ticks. Scale with the selected upstream mlibc
 # tests so a full suite is not cut off by the focused-case timeout.
 MLIBC_TEST_RUN_WAIT_TICKS ?= $(shell expr 600 + $(words $(MLIBC_TEST_CASES)) \* 50)
@@ -431,21 +433,28 @@ __test-run: __test-initramfs
 	run_log="$(MLIBC_TEST_BUILD_DIR)/orlix-kernel-run-output.log"; \
 	mkdir -p "$(MLIBC_TEST_BUILD_DIR)"; \
 	$(KERNEL_MAKE) run PROFILE="$(PROFILE)" type=mlibc libc=orlixmlibc ORLIX_KERNEL_TEST_INITRAMFS_INPUT="$(MLIBC_TEST_INITRAMFS_DIR)/rootfs/initramfs.cpio.gz" ORLIX_KERNEL_RUN_UNTIL_MARKER="$(MLIBC_TEST_COMPLETION_MARKER)" ORLIX_KERNEL_RUN_TIMEOUT_SECONDS="$(MLIBC_TEST_RUN_TIMEOUT_SECONDS)" | tee "$$run_log"; \
-	runtime_log="$$(awk -F'"' '/runtimeLogPath/ { print $$4 }' "$$run_log" | tail -n 1)"; \
+	runtime_log="$$(awk -F'"' '{ for (i = 1; i <= NF; i++) if ($$i == "runtimeLogPath") print $$(i + 2) }' "$$run_log" | tail -n 1)"; \
+	os_log="$$(awk -F'"' '{ for (i = 1; i <= NF; i++) if ($$i == "osLogPath") print $$(i + 2) }' "$$run_log" | tail -n 1)"; \
 	[ -n "$$runtime_log" ] || { echo "missing Orlix runtime log path in $$run_log" >&2; exit 1; }; \
+	[ -n "$$os_log" ] || { echo "missing Orlix OS log path in $$run_log" >&2; exit 1; }; \
+	. "$(CURDIR)/tools/runtime/orlix-runtime-log-policy.sh"; \
 	for _ in $$(seq 1 50); do [ -s "$$runtime_log" ] && break; sleep 0.1; done; \
 	[ -s "$$runtime_log" ] || { echo "missing Orlix runtime log: $$runtime_log" >&2; exit 1; }; \
+	[ -r "$$os_log" ] || { echo "missing Orlix OS log: $$os_log" >&2; exit 1; }; \
+	marker_present() { grep -F -q '$(MLIBC_TEST_COMPLETION_MARKER)' "$$runtime_log" || { [ -s "$$os_log" ] && grep -F -q '$(MLIBC_TEST_COMPLETION_MARKER)' "$$os_log"; }; }; \
+	failure_present() { orlix_runtime_log_has_failure "$$runtime_log" "$$os_log"; }; \
 	for _ in $$(seq 1 $(MLIBC_TEST_RUN_WAIT_TICKS)); do \
-		if grep -E -q '(^|[^[:alnum:]])not ok[[:space:]][0-9]|Kernel panic|Out of memory|oom-killer|Assertion .* failed' "$$runtime_log"; then break; fi; \
-		grep -F -q '$(MLIBC_TEST_COMPLETION_MARKER)' "$$runtime_log" && break; \
+		failure_present && break; \
+		marker_present && break; \
 		sleep 0.1; \
 	done; \
-	if grep -E '(^|[^[:alnum:]])not ok[[:space:]][0-9]|Kernel panic|Out of memory|oom-killer|Assertion .* failed' "$$runtime_log"; then \
-		echo "OrlixMLibC tests reported failure in runtime log: $$runtime_log" >&2; \
+	if failure_present; then \
+		orlix_runtime_log_validate "$$runtime_log" "$$os_log" || true; \
+		echo "OrlixMLibC tests reported failure: $$runtime_log $$os_log" >&2; \
 		exit 1; \
 	fi; \
-	grep -F -q '$(MLIBC_TEST_COMPLETION_MARKER)' "$$runtime_log" || { echo "OrlixMLibC tests did not reach completion marker: $$runtime_log" >&2; exit 1; }; \
-	echo "verified OrlixMLibC upstream tests in simulator log: $$runtime_log"
+	marker_present || { echo "OrlixMLibC tests did not reach completion marker: $$runtime_log $$os_log" >&2; exit 1; }; \
+	echo "verified OrlixMLibC tests in simulator logs: $$runtime_log $$os_log"
 
 __test-build: build __build-compiler-rt
 	@set -euo pipefail; \
