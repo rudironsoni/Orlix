@@ -2446,6 +2446,24 @@ func postBusyBoxShellCommandSIGILLReducerPass(_ gate: Gate) -> GateStatus {
 			gadget: gate.gadget
 		)
 	}
+	if report.status == "pass", report.passed, reportExecutionFresh(report) {
+		return GateStatus(
+			id: gate.id,
+			command: gate.command,
+			kind: gate.kind,
+			state: "not_needed",
+			passed: false,
+			satisfiesPrerequisite: true,
+			reason: "current static BusyBox shell-command simulator report passes without the marker-then-SIGILL signature",
+			prerequisites: gate.prerequisites,
+			prerequisitesSatisfied: false,
+			reportPaths: gate.expectedReportPaths,
+			reports: [report],
+			readinessEligible: gate.readinessEligible,
+			physicalDevice: gate.physicalDevice,
+			gadget: gate.gadget
+		)
+	}
 	return basicReportGate(gate, target: "tcti-post-busybox-shell-command-sigill-reducer")
 }
 

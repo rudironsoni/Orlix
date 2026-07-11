@@ -7,6 +7,7 @@
 - The selector chose `no-phone-tcti-post-busybox-shell-command-sigill-reducer` before any `tcti-static-busybox-shell-command` simulator report existed. Its reducer command could only fail with missing simulator evidence, so this was a scheduler ordering defect, not a guest SIGILL or TCTI runtime failure.
 - Updated the scheduler to treat the missing producer report as a not-needed reducer state that satisfies its prerequisite, and made the downstream MOVI vN.4s rail explicitly depend on `simulator-tcti-static-busybox-shell-command` as well as the reducer.
 - Removed the circular static BusyBox shell-command prerequisite on the downstream UMAXV rail. The simulator shell-command gate must run first to supply a concrete instruction/fault report before any instruction-specific reducer or fix can be selected.
+- The shell-command SIGILL reducer now treats a current clean shell-command simulator pass as not-needed. A historical failed reducer report cannot block the readiness ladder when no marker-then-SIGILL report exists to reduce.
 - No OrlixKernel, HostAdapter, OrlixOS, app, runtime-validation, generated-tree, physical-device, production-assembly, or gadget-dispatch behavior changed.
 - Validation: `git diff --check`, Swift parse of `tcti-next-step.swift`, `agent-harness-check`, and regenerated `agent-status` / `agent-next` / `agent-task-envelope-check` passed. The selector no longer chooses the impossible reducer first.
 
