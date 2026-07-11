@@ -8175,12 +8175,15 @@ Timestamp: `2026-07-06T20:29:32Z`.
   - Current explicit version/build matches remain execution-current across proof-only commit changes.
   - Legacy reports without explicit product identity still fail closed when product paths changed without a build-number bump.
   - Historical stale reports are checked for schema shape without being compared to current roadmap metadata.
+  - Reports produced from a pending bumped product build remain current after that exact product build is committed or merged; later same-build product changes still invalidate them.
 - Evidence:
   - `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`: passed with `product_version=0.1`, `product_build_id=16`, and no failures.
   - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`: passed and reused the compiled gate executable on the unchanged second invocation.
   - `rtk proxy make agent-harness-check`: passed with the final cache, version-freshness, report-schema, and generated-tree guard assertions.
   - `rtk proxy make product-build-version-check`: passed for pending build `0.1 (16)`.
   - The same version check passed from the committed build-16 baseline.
+  - Build-16 `tcti-simulator-stability` passed at merge HEAD `15fbfbb2536cd740490f78201bd7bc13252eef87`; report `Build/Reports/runtime/tcti-simulator-stability-20260711T125901Z-82531.json` records `product_version=0.1`, `product_build_id=16`, the pinned simulator, and all forbidden behavior false.
+  - After merge-edge freshness recomputation, `rails-defconfig-safety` and `simulator-tcti-runtime-stability` remained current and the selector advanced to `toolchain`.
   - `rtk proxy python3 .codex/hooks/tests/test_generated_tree_guards.py`: 12 tests passed after adding namespaced `exec_command` and generated-tree `cd` mutation coverage.
   - `rtk proxy swiftc -typecheck tools/tcti/orlix-tcti-gate.swift` and `rtk proxy swiftc -typecheck .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift`: passed.
 - Boundary:
