@@ -25,6 +25,14 @@ expect_hook_allows() {
   fi
 }
 
+expect_hook_rejects_after_opt_in() {
+  payload="$1"
+  output="$(printf '%s\n' "$payload" | "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" 2>&1 || true)"
+  printf '%s' "$output" | grep -q 'explicit human opt-in' &&
+    fail "pre-tool-use-policy did not recognize inline physical-device opt-in: $payload"
+  return 0
+}
+
 expect_command_fails() {
   description="$1"
   shift
@@ -417,6 +425,7 @@ check_skills() {
     fail "Codex rules must forbid rtk proxy ios-deploy"
 
   expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall; grep . AGENTS.md'
+  expect_hook_rejects_after_opt_in 'ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE=1 make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall'
   expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos GATE="tcti-init-first-syscall"'
   expect_hook_blocks "make runtime-validation DESTINATION=iphoneos GATE='tcti-init-first-syscall'"
   expect_hook_blocks 'make runtime-validation DESTINATION=iphoneos'

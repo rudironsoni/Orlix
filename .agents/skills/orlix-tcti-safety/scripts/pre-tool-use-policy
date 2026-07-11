@@ -14,6 +14,25 @@ root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 sim_id="ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"
 sim_name="Orlix-iPhone-15-Pro-Max"
 
+project_value() {
+  key="$1"
+  awk -F: -v key="$key" '
+    {
+      name = $1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name == key) {
+        value = $2
+        gsub(/[[:space:]\"]/, "", value)
+        print value
+        exit
+      }
+    }
+  ' "$root/project.yml"
+}
+
+product_version="$(project_value MARKETING_VERSION)"
+product_build_id="$(project_value CURRENT_PROJECT_VERSION)"
+
 warn() {
   printf '%s\n' "ORLIX-TCTI-HOOK-WARN: $*" >&2
 }
@@ -21,6 +40,13 @@ warn() {
 block() {
   printf '%s\n' "ORLIX-TCTI-HOOK-BLOCK: $*" >&2
   exit 2
+}
+
+physical_device_opt_in_present() {
+  test "${ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE:-0}" = "1" ||
+    test "${ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED:-0}" = "1" ||
+    printf '%s' "$payload" |
+      grep -Eq '(^|[[:space:];])(ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE|ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED)=1([[:space:];]|$)'
 }
 
 if printf '%s' "$raw_payload" | grep -q '\*\*\* Begin Patch'; then
@@ -34,12 +60,13 @@ fi
 has_pass_report() {
   target="$1"
   report="$root/Build/TCTI/reports/$target/report.json"
-  current_sha="$(git -C "$root" rev-parse HEAD 2>/dev/null || true)"
-  test -n "$current_sha" || return 1
+  test -n "$product_version" || return 1
+  test -n "$product_build_id" || return 1
   test -f "$report" &&
     grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report" &&
     grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$report" &&
-    grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$report" &&
+    grep -q "\"product_version\"[[:space:]]*:[[:space:]]*\"$product_version\"" "$report" &&
+    grep -q "\"product_build_id\"[[:space:]]*:[[:space:]]*\"$product_build_id\"" "$report" &&
     ! grep -q '"status"[[:space:]]*:[[:space:]]*"evidence"' "$report" &&
     ! grep -q '"preflight_only"[[:space:]]*:[[:space:]]*true' "$report" &&
     ! grep -q '"autonomous_tests_bypassed"[[:space:]]*:[[:space:]]*true' "$report"
@@ -72,11 +99,12 @@ simulator_report_passed() {
   gate="$1"
   report="$(latest_runtime_report_for_gate "$gate")" || return 1
   fatal_artifact="${report%.json}.artifacts/tcti-simulator-fatal-runtime.txt"
-  current_sha="$(git -C "$root" rev-parse HEAD 2>/dev/null || true)"
-  test -n "$current_sha" || return 1
+  test -n "$product_version" || return 1
+  test -n "$product_build_id" || return 1
   grep -q '"status"[[:space:]]*:[[:space:]]*"pass"' "$report" || return 1
   grep -q '"passed"[[:space:]]*:[[:space:]]*true' "$report" || return 1
-  grep -q "\"git_sha\"[[:space:]]*:[[:space:]]*\"$current_sha\"" "$report" || return 1
+  grep -q "\"product_version\"[[:space:]]*:[[:space:]]*\"$product_version\"" "$report" || return 1
+  grep -q "\"product_build_id\"[[:space:]]*:[[:space:]]*\"$product_build_id\"" "$report" || return 1
   grep -q '"destination"[[:space:]]*:[[:space:]]*"iphonesimulator"' "$report" || return 1
   grep -q "\"selected_device_id\"[[:space:]]*:[[:space:]]*\"$sim_id\"" "$report" || return 1
   grep -q "\"selected_device_name\"[[:space:]]*:[[:space:]]*\"$sim_name\"" "$report" || return 1
@@ -255,8 +283,7 @@ if source_policy_read_command; then
 fi
 
 if tcti_runtime_validation_command && ! tcti_runtime_validation_is_simulator; then
-  if [ "${ORLIX_TCTI_ALLOW_PHYSICAL_DEVICE:-0}" != "1" ] &&
-     [ "${ORLIX_TCTI_PHYSICAL_DEVICE_ALLOWED:-0}" != "1" ]; then
+  if ! physical_device_opt_in_present; then
     block "physical/default-phone TCTI runtime-validation requires explicit human opt-in after full pinned simulator readiness passes."
   fi
   autonomous_preflight_passed ||
