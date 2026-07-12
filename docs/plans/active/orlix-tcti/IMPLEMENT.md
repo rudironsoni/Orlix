@@ -8471,3 +8471,4 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Pinned Apple Development team `A9C4N82KYY` and automatic signing in the agent-neutral environment policy and every canonical L4 command.
 - No product runtime behavior changed. The mlibc device capability remains unproven until rerun from a clean checkpoint.
 - The signed retry stopped before build completion because automatic signing needed `-allowProvisioningUpdates`; canonical L4 commands now pass the existing policy explicitly.
+- Xcode 27 still lacked an account. Fastlane created and installed `Orlix-AdHoc` for the approved device using the existing App Store Connect API key and installed ZQ distribution certificate. L4 commands now use deterministic manual signing with that real profile.
