@@ -79,7 +79,6 @@ product-build-prepare:
 	[[ "$$current" =~ ^[0-9]+$$ ]] || { echo "CURRENT_PROJECT_VERSION must be an integer in project.yml, got: $$current" >&2; exit 1; }; \
 	head_build="$$(git show HEAD:project.yml 2>/dev/null | awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }')"; \
 	product_paths=( \
-		project.yml \
 		OrlixKernel/Makefile OrlixKernel/Sources/boot OrlixKernel/Sources/include OrlixKernel/Sources/Support OrlixKernel/Sources/ports/orlix \
 		OrlixHostAdapter/Makefile OrlixHostAdapter/Sources \
 		OrlixMLibC/Makefile OrlixMLibC/Sources \
@@ -87,13 +86,15 @@ product-build-prepare:
 		Orlix/Makefile Orlix/Sources OrlixTestRunner/Sources \
 	); \
 	working_changes="$$(git status --porcelain=v1 --untracked-files=all -- "$${product_paths[@]}" | grep -v ' project.yml$$' || true)"; \
-	project_semantic_changes="$$(git diff HEAD -- project.yml | grep -E '^[+-]' | grep -vE '^(---|\+\+\+|[+-][[:space:]]*(CURRENT_PROJECT_VERSION|MARKETING_VERSION):)' || true)"; \
+	project_nonsemantic_keys='CURRENT_PROJECT_VERSION|MARKETING_VERSION|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER'; \
+	project_semantic_changes="$$(git diff HEAD -- project.yml | grep -E '^[+-]' | grep -vE '^(---|\+\+\+|[+-][[:space:]]*('"$$project_nonsemantic_keys"'):[[:space:]])' || true)"; \
 	if [ -n "$$project_semantic_changes" ]; then working_changes="$$working_changes project.yml"; fi; \
 	baseline="$$(git log -G 'CURRENT_PROJECT_VERSION:' -1 --format=%H -- project.yml)"; \
 	[ -n "$$baseline" ] || { echo "cannot find CURRENT_PROJECT_VERSION baseline in project.yml history" >&2; exit 1; }; \
 	baseline_build="$$(git show "$$baseline:project.yml" | awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }')"; \
+	committed_project_semantic_changes="$$(git diff "$$baseline" HEAD -- project.yml | grep -E '^[+-]' | grep -vE '^(---|\+\+\+|[+-][[:space:]]*('"$$project_nonsemantic_keys"'):[[:space:]])' || true)"; \
 	committed_product_change=false; \
-	if ! git diff --quiet "$$baseline" HEAD -- "$${product_paths[@]}"; then committed_product_change=true; fi; \
+	if ! git diff --quiet "$$baseline" HEAD -- "$${product_paths[@]}" || [ -n "$$committed_project_semantic_changes" ]; then committed_product_change=true; fi; \
 	needs_bump=false; \
 	if [ -n "$$working_changes" ] && [ "$$current" = "$$head_build" ]; then needs_bump=true; fi; \
 	if [ "$$committed_product_change" = true ] && [ "$$current" = "$$baseline_build" ]; then needs_bump=true; fi; \
