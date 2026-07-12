@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 20
+    CURRENT_PROJECT_VERSION: 21
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -93,7 +93,11 @@ targets:
               exit 1
           fi
           mkdir -p "$TARGET_TEMP_DIR"
-          cp -f "$archive" "$TARGET_TEMP_DIR/OrlixKernel.a"
+          if [ ! -s "$TARGET_TEMP_DIR/OrlixKernel.a" ] || ! cmp -s "$archive" "$TARGET_TEMP_DIR/OrlixKernel.a"; then
+              cp -f "$archive" "$TARGET_TEMP_DIR/OrlixKernel.a"
+          else
+              echo "Reusing unchanged OrlixKernel archive."
+          fi
     settings:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES
@@ -126,7 +130,7 @@ targets:
       - sdk: libz.tbd
     postBuildScripts:
       - name: Embed OrlixOS Payload
-        basedOnDependencyAnalysis: false
+        basedOnDependencyAnalysis: true
         inputFiles:
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
@@ -139,6 +143,7 @@ targets:
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/patches
+          - $(SRCROOT)/tools/runtime/orlix-sync-payload.sh
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
@@ -283,8 +288,7 @@ targets:
               esac
           fi
           destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$payload_name.$payload_extension"
-          rm -rf "$destination"
-          cp -R "$payload" "$destination"
+          "$SRCROOT/tools/runtime/orlix-sync-payload.sh" "$payload" "$destination"
     settings:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES

@@ -73,6 +73,9 @@ simulator_booted_ids=""
 simulator_single_booted="false"
 device_xcode_id=""
 device_ddi_available=""
+simulator_runtime_identifier=""
+simulator_runtime_version=""
+simulator_runtime_build=""
 app_path=""
 failure_stage=""
 failure_kind=""
@@ -747,6 +750,9 @@ if [ "$status" = "pass" ] &&
 	  "selected_device_id": $(json_string_or_null "$device_id"),
 	  "selected_device_name": $(json_string_or_null "$device_name"),
 	  "selected_xcode_device_id": $(json_string_or_null "$device_xcode_id"),
+	  "simulator_runtime_identifier": $(json_string_or_null "$simulator_runtime_identifier"),
+	  "simulator_runtime_version": $(json_string_or_null "$simulator_runtime_version"),
+	  "simulator_runtime_build": $(json_string_or_null "$simulator_runtime_build"),
 	  "simulator_booted_count": $(json_string_or_null "$simulator_booted_count"),
 	  "simulator_booted_ids": "$escaped_simulator_booted_ids",
 	  "simulator_single_booted": $simulator_single_booted,
@@ -795,24 +801,29 @@ autonomous_tcti_reports_passed() {
 }
 
 latest_simulator_stability_report() {
-	orlix_latest_runtime_report_for_gate "$report_dir" tcti-simulator-stability iphonesimulator
+	ensure_simulator_runtime_identity
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-simulator-stability iphonesimulator "$simulator_runtime_identifier" "$simulator_runtime_build"
 }
 
 latest_simulator_first_syscall_report() {
-	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-first-syscall iphonesimulator
+	ensure_simulator_runtime_identity
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-first-syscall iphonesimulator "$simulator_runtime_identifier" "$simulator_runtime_build"
 }
 
 latest_simulator_console_usability_report() {
-	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-console-write iphonesimulator
+	ensure_simulator_runtime_identity
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-init-console-write iphonesimulator "$simulator_runtime_identifier" "$simulator_runtime_build"
 }
 
 latest_simulator_static_busybox_report() {
-	orlix_latest_runtime_report_for_gate "$report_dir" tcti-static-busybox-start iphonesimulator
+	ensure_simulator_runtime_identity
+	orlix_latest_runtime_report_for_gate "$report_dir" tcti-static-busybox-start iphonesimulator "$simulator_runtime_identifier" "$simulator_runtime_build"
 }
 
 latest_runtime_report_for_gate() {
 	local expected_gate="$1"
-	orlix_latest_runtime_report_for_gate "$report_dir" "$expected_gate" iphonesimulator
+	ensure_simulator_runtime_identity
+	orlix_latest_runtime_report_for_gate "$report_dir" "$expected_gate" iphonesimulator "$simulator_runtime_identifier" "$simulator_runtime_build"
 }
 
 simulator_tcti_report_passed() {
@@ -1236,6 +1247,41 @@ select_target() {
 	esac
 }
 
+capture_simulator_runtime_identity() {
+	if [ "$destination" != "iphonesimulator" ] && [ "$destination" != "iOS Simulator" ]; then
+		return
+	fi
+	local identity="$artifact_dir/simulator-runtime-identity.json"
+	python3 tools/runtime/orlix-simulator-runtime-identity.py --device-id "$device_id" >"$identity" ||
+		die "Could not resolve the selected simulator runtime identity."
+	read -r simulator_runtime_identifier simulator_runtime_version simulator_runtime_build < <(
+		python3 - "$identity" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    value = json.load(handle)
+print(value["identifier"], value["version"], value["build"])
+PY
+	)
+}
+
+ensure_simulator_runtime_identity() {
+	if [ -n "$simulator_runtime_identifier" ] && [ -n "$simulator_runtime_build" ]; then
+		return
+	fi
+	local identity
+	identity="$(python3 tools/runtime/orlix-simulator-runtime-identity.py --device-id "$required_simulator_id")" ||
+		die "Could not resolve the required simulator runtime identity."
+	read -r simulator_runtime_identifier simulator_runtime_version simulator_runtime_build < <(
+		python3 - "$identity" <<'PY'
+import json
+import sys
+value = json.loads(sys.argv[1])
+print(value["identifier"], value["version"], value["build"])
+PY
+	)
+}
+
 build_kernel_for_gate() {
 	local platform="iphoneos"
 
@@ -1302,9 +1348,13 @@ build_app_for_target() {
 		export USER="$LOGNAME"
 	fi
 
-	xcodegen generate --spec project.yml \
-		>"$artifact_dir/xcodegen.log" 2>&1 ||
-		die "xcodegen failed."
+	if [ ! -s Orlix.xcodeproj/project.pbxproj ] || [ project.yml -nt Orlix.xcodeproj/project.pbxproj ]; then
+		xcodegen generate --spec project.yml \
+			>"$artifact_dir/xcodegen.log" 2>&1 ||
+			die "xcodegen failed."
+	else
+		printf 'Reusing Orlix.xcodeproj because it is current for project.yml.\n' >"$artifact_dir/xcodegen.log"
+	fi
 
 	ORLIX_BUILD_ROOT="$build_root" ORLIX_PROFILE="$profile" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -1830,6 +1880,7 @@ main() {
 	require_command python3
 
 	select_target
+	capture_simulator_runtime_identity
 	assert_single_required_simulator_booted_top_level true
 	build_kernel_for_gate
 	assert_tcti_kernel_config
