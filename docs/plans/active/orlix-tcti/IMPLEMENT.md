@@ -8470,3 +8470,4 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The selected mlibc phone gate stopped at Xcode signing because runtime-validation had no development team. It did not reach installation, launch, guest execution, or TCTI runtime behavior.
 - Pinned Apple Development team `A9C4N82KYY` and automatic signing in the agent-neutral environment policy and every canonical L4 command.
 - No product runtime behavior changed. The mlibc device capability remains unproven until rerun from a clean checkpoint.
+- The signed retry stopped before build completion because automatic signing needed `-allowProvisioningUpdates`; canonical L4 commands now pass the existing policy explicitly.
