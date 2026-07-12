@@ -8,6 +8,7 @@
 - Xcode 27 had no configured account, so Fastlane created and installed an ad hoc Orlix profile for the approved device using existing App Store Connect credentials. L4 now uses deterministic manual signing; OCI behavior remains unchanged.
 - The profile is scoped to the Orlix application target through `project.yml`; OrlixOS and OrlixKernel framework targets do not receive provisioning profiles.
 - Signing-only `project.yml` changes are excluded from simulator runtime invalidation by content-aware diff classification; OCI/runtime-affecting project changes remain invalidating.
+- Shared build-number preparation now uses the same exact-key distinction, so signing-only changes do not bump or invalidate OCI/runtime evidence; runtime-affecting changes still require a build bump.
 
 Implementation log. Append-only. Capture decisions, deviations from the plan, evidence, blockers, and open questions that arose during execution.
 
