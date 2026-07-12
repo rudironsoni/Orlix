@@ -215,6 +215,9 @@ struct ReportFact: Codable {
     let gitSHA: String?
     let productVersion: String?
     let productBuildID: String?
+    let simulatorRuntimeIdentifier: String?
+    let simulatorRuntimeVersion: String?
+    let simulatorRuntimeBuild: String?
     let executionFreshness: ExecutionFreshness?
     let failures: [ReportFailureFact]
     let forbiddenBehaviorViolations: [String]
@@ -238,6 +241,9 @@ struct ReportFact: Codable {
         gitSHA: String?,
         productVersion: String? = nil,
         productBuildID: String? = nil,
+        simulatorRuntimeIdentifier: String? = nil,
+        simulatorRuntimeVersion: String? = nil,
+        simulatorRuntimeBuild: String? = nil,
         executionFreshness: ExecutionFreshness? = nil,
         failures: [ReportFailureFact] = [],
         forbiddenBehaviorViolations: [String] = [],
@@ -260,6 +266,9 @@ struct ReportFact: Codable {
         self.gitSHA = gitSHA
         self.productVersion = productVersion
         self.productBuildID = productBuildID
+        self.simulatorRuntimeIdentifier = simulatorRuntimeIdentifier
+        self.simulatorRuntimeVersion = simulatorRuntimeVersion
+        self.simulatorRuntimeBuild = simulatorRuntimeBuild
         self.executionFreshness = executionFreshness
         self.failures = failures
         self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
@@ -285,6 +294,9 @@ struct ReportFact: Codable {
             gitSHA: gitSHA,
             productVersion: productVersion,
             productBuildID: productBuildID,
+            simulatorRuntimeIdentifier: simulatorRuntimeIdentifier,
+            simulatorRuntimeVersion: simulatorRuntimeVersion,
+            simulatorRuntimeBuild: simulatorRuntimeBuild,
             executionFreshness: freshness,
             failures: failures,
             forbiddenBehaviorViolations: forbiddenBehaviorViolations,
@@ -310,6 +322,9 @@ struct ReportFact: Codable {
         case gitSHA = "git_sha"
         case productVersion = "product_version"
         case productBuildID = "product_build_id"
+        case simulatorRuntimeIdentifier = "simulator_runtime_identifier"
+        case simulatorRuntimeVersion = "simulator_runtime_version"
+        case simulatorRuntimeBuild = "simulator_runtime_build"
         case executionFreshness = "execution_freshness"
         case failures
         case forbiddenBehaviorViolations = "forbidden_behavior_violations"
@@ -914,6 +929,31 @@ func currentProjectVersion() -> ProjectVersion? {
     return cachedCurrentProjectVersion
 }
 
+struct SimulatorRuntimeIdentity {
+    let identifier: String
+    let version: String
+    let build: String
+}
+
+var cachedSimulatorRuntimeIdentity: SimulatorRuntimeIdentity??
+
+func currentSimulatorRuntimeIdentity() -> SimulatorRuntimeIdentity? {
+    if let cachedSimulatorRuntimeIdentity { return cachedSimulatorRuntimeIdentity }
+    let helper = root.appendingPathComponent("tools/runtime/orlix-simulator-runtime-identity.py").path
+    guard let output = run("/usr/bin/env", ["python3", helper, "--device-id", requiredSimulatorID]),
+          let data = output.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let identifier = stringValue(object["identifier"]),
+          let version = stringValue(object["version"]),
+          let build = stringValue(object["build"]) else {
+        cachedSimulatorRuntimeIdentity = .some(nil)
+        return nil
+    }
+    let identity = SimulatorRuntimeIdentity(identifier: identifier, version: version, build: build)
+    cachedSimulatorRuntimeIdentity = .some(identity)
+    return identity
+}
+
 func projectVersion(at gitSHA: String) -> ProjectVersion? {
     if let cached = projectVersionByGitSHA[gitSHA] { return cached }
     guard let contents = run("/usr/bin/env", ["git", "show", "\(gitSHA):project.yml"]) else {
@@ -1104,12 +1144,36 @@ func executionFreshness(
 }
 
 func executionFreshness(for gate: Gate, report: ReportFact) -> ExecutionFreshness {
-    executionFreshness(
+    let base = executionFreshness(
         for: gate,
         reportGitSHA: report.gitSHA,
         reportProductVersion: report.productVersion,
         reportProductBuildID: report.productBuildID
     )
+    guard base.executionFresh, gate.kind == "simulator-runtime", !gate.physicalDevice else {
+        return base
+    }
+    guard let current = currentSimulatorRuntimeIdentity(),
+          report.simulatorRuntimeIdentifier == current.identifier,
+          report.simulatorRuntimeBuild == current.build else {
+        let reportIdentity = "\(report.simulatorRuntimeIdentifier ?? "missing")/\(report.simulatorRuntimeBuild ?? "missing")"
+        let currentIdentity = currentSimulatorRuntimeIdentity().map { "\($0.identifier)/\($0.build)" } ?? "unavailable"
+        return ExecutionFreshness(
+            reportGitSHA: base.reportGitSHA,
+            currentGitSHA: base.currentGitSHA,
+            reportProductVersion: base.reportProductVersion,
+            reportProductBuildID: base.reportProductBuildID,
+            currentProductVersion: base.currentProductVersion,
+            currentProductBuildID: base.currentProductBuildID,
+            executionFresh: false,
+            statusRecomputed: true,
+            changedPathsSinceReport: base.changedPathsSinceReport,
+            ignoredNonExecutionPaths: base.ignoredNonExecutionPaths,
+            invalidatingPaths: base.invalidatingPaths,
+            reason: "simulator runtime changed from \(reportIdentity) to \(currentIdentity)"
+        )
+    }
+    return base
 }
 
 func reportExecutionFresh(_ report: ReportFact) -> Bool {
@@ -1602,6 +1666,9 @@ func reportFact(target: String) -> ReportFact {
             gitSHA: stringValue(object["git_sha"]),
             productVersion: stringValue(object["product_version"]),
             productBuildID: stringValue(object["product_build_id"]),
+            simulatorRuntimeIdentifier: stringValue(object["simulator_runtime_identifier"]),
+            simulatorRuntimeVersion: stringValue(object["simulator_runtime_version"]),
+            simulatorRuntimeBuild: stringValue(object["simulator_runtime_build"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
         )
@@ -2713,11 +2780,17 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
     let candidates = entries
         .filter { $0.lastPathComponent.hasPrefix("\(gateName)-") && $0.pathExtension == "json" }
         .sorted { $0.lastPathComponent > $1.lastPathComponent }
+    let currentRuntime = destination == "iphonesimulator" ? currentSimulatorRuntimeIdentity() : nil
     for url in candidates {
         guard let object = try? loadJSONObject(url),
               stringValue(object["gate"]) == gateName,
               stringValue(object["destination"]) == destination
         else {
+            continue
+        }
+        if let currentRuntime,
+           (stringValue(object["simulator_runtime_identifier"]) != currentRuntime.identifier ||
+            stringValue(object["simulator_runtime_build"]) != currentRuntime.build) {
             continue
         }
         let failureContext = object["failure_context"] as? [String: Any]
@@ -2735,6 +2808,9 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             gitSHA: stringValue(object["git_sha"]),
             productVersion: stringValue(object["product_version"]),
             productBuildID: stringValue(object["product_build_id"]),
+            simulatorRuntimeIdentifier: stringValue(object["simulator_runtime_identifier"]),
+            simulatorRuntimeVersion: stringValue(object["simulator_runtime_version"]),
+            simulatorRuntimeBuild: stringValue(object["simulator_runtime_build"]),
             failures: reportFailures(object["failures"]),
             forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"]),
             failureStage: stringValue(failureContext?["stage"]),

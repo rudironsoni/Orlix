@@ -18,3 +18,15 @@ selected="$(orlix_latest_runtime_report_for_gate "$tmp" tcti-init-first-syscall 
 }
 
 printf '%s\n' "pass: runtime report selection"
+
+printf '%s\n' '{"destination":"iphonesimulator","simulator_runtime_identifier":"runtime-26","simulator_runtime_build":"26A"}' >"$tmp/tcti-runtime-old.json"
+sleep 1
+printf '%s\n' '{"destination":"iphonesimulator","simulator_runtime_identifier":"runtime-27","simulator_runtime_build":"27A"}' >"$tmp/tcti-runtime-new.json"
+
+selected="$(orlix_latest_runtime_report_for_gate "$tmp" tcti-runtime iphonesimulator runtime-26 26A)"
+[ "$selected" = "$tmp/tcti-runtime-old.json" ] || {
+	printf 'expected matching simulator runtime report, got %s\n' "$selected" >&2
+	exit 1
+}
+
+printf '%s\n' "pass: simulator runtime report selection"

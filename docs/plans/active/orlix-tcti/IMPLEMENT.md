@@ -8358,6 +8358,18 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - This is an environment/tooling correction. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch.
 - Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
 
+### Checkpoint: Incremental Payload Embedding And Simulator Runtime Identity
+
+- Measured on the external DerivedData mount, the first build after build-21 metadata changed completed in 613.81 seconds. The second identical build completed in 54.16 seconds, and the build after adding content-stable kernel archive reuse completed in 59.84 seconds. The incremental path is more than 10x faster and no longer runs the payload embed or signs `OrlixOS.framework` when payload inputs are unchanged.
+- The OrlixOS payload build phase is dependency-aware and uses a tested semantic-stamp synchronizer. An unchanged `.orlix-payload-ready` leaves the embedded payload untouched, avoiding repeated `base.ext4` copying and the resulting framework/app resign cascade. A changed payload is synchronized into a temporary directory and replaced only after its identity is verified.
+- Runtime validation reuses `Orlix.xcodeproj` when it is current for `project.yml`, instead of regenerating the project before every gate.
+- Simulator reports now record `simulator_runtime_identifier`, `simulator_runtime_version`, and `simulator_runtime_build`. Runtime report selection uses the product version/build plus simulator runtime identifier/build, so reports for iOS 26.5 build 23F77 and another simulator runtime can coexist and are reused when their runtime is selected again.
+- Simulator runtime identity affects simulator-backed reports only. No-phone golden, reducer, kernel, safety, and toolchain reports do not become stale merely because the selected simulator runtime changes.
+- Focused fixtures cover payload idempotence and replacement, simulator runtime identity resolution, and selecting an older compatible simulator report when a newer report belongs to another runtime.
+- The shared product build advanced from `0.1 (20)` to `0.1 (21)` because app payload packaging changed.
+- No Linux semantics, TCTI instruction execution, HostAdapter behavior, OrlixOS session semantics, app-generated output, generated upstream source, physical-device behavior, production assembly, or gadget dispatch changed.
+- Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: Simulator Install Timeout Classification
 
 - Runtime-validation now records simulator install failures with a structured failure kind and whether product launch was attempted. The install timeout is configurable through `ORLIX_SIMULATOR_INSTALL_TIMEOUT_SECONDS` and defaults to 1800 seconds for the externally backed simulator environment.

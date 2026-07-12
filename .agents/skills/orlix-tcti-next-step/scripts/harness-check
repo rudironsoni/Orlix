@@ -396,6 +396,10 @@ check_skills() {
     semantic-freshness-check
   expect_command_passes "runtime report destination selection fixtures" \
     "$root/tools/runtime/tests/test-runtime-report-selection.sh"
+  expect_command_passes "simulator runtime identity fixtures" \
+    "$root/tools/runtime/tests/test-simulator-runtime-identity.sh"
+  expect_command_passes "incremental OrlixOS payload embed fixtures" \
+    "$root/tools/runtime/tests/test-sync-payload.sh"
   grep -q 'tcti_runtime_validation_command' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" &&
     grep -q 'runtime-validation' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must match TCTI runtime-validation commands"
