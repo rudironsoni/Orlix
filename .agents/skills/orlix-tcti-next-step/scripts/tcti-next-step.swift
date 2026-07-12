@@ -2952,6 +2952,62 @@ func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
     )
 }
 
+func physicalFirstSyscallPass(_ gate: Gate) -> GateStatus {
+    guard let latest = latestRuntimeReport(gate: "tcti-init-first-syscall", destination: "iphoneos") else {
+        return missingGate(gate, reason: "missing iphoneos runtime-validation report for tcti-init-first-syscall")
+    }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
+    let object = latest.1
+    let forbidden = object["forbidden_behavior"] as? [String: Any] ?? [:]
+    let forbiddenClear = [
+        "generated_exec_memory",
+        "host_exec_guest_text",
+        "host_x18",
+        "map_jit",
+        "native_ios_api_exposure_to_guest",
+        "rwx",
+    ].allSatisfy { !boolValue(forbidden[$0]) }
+    let reportOK = report.status == "pass" &&
+        report.passed &&
+        reportExecutionFresh(report) &&
+        !(stringValue(object["selected_device_id"]) ?? "").isEmpty &&
+        stringValue(object["backend"]) == "tcti" &&
+        stringValue(object["profile"]) == "tcti_runtime" &&
+        !boolValue(object["preflight_only"]) &&
+        !boolValue(object["autonomous_tests_bypassed"]) &&
+        forbiddenClear &&
+        runtimeArtifactContains(object, suffix: "tcti-first-syscall.txt", marker: "Orlix TCTI: svc #0")
+    let reason: String
+    if reportOK {
+        reason = "iphoneos runtime-validation report \(report.path) passed on device \(stringValue(object["selected_device_id"]) ?? "unknown") with tcti runtime profile and forbidden behavior false"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphoneos runtime-validation report \(report.path) is execution-stale; \(reportFreshnessReason(report))"
+    } else if !runtimeArtifactContains(object, suffix: "tcti-first-syscall.txt", marker: "Orlix TCTI: svc #0") {
+        reason = "latest iphoneos runtime-validation report \(report.path) did not include the first TCTI svc marker artifact"
+    } else {
+        reason = "latest iphoneos runtime-validation report \(report.path) is not a valid non-preflight TCTI pass"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
+        state: runtimeGateState(report: report, passed: reportOK),
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
 func simulatorStabilityPass(_ gate: Gate) -> GateStatus {
     guard let latest = latestRuntimeReport(gate: "tcti-simulator-stability", destination: "iphonesimulator") else {
         return GateStatus(
@@ -5490,7 +5546,7 @@ func baseGateStatus(_ gate: Gate) -> GateStatus {
     case "simulator-tcti-full-linux-runtime-readiness":
         return simulatorRuntimeMarkerPass(gate, runtimeGate: "tcti-full-linux-runtime-readiness", marker: "ORLIX-TCTI-FULL-RUNTIME-OK", artifactSuffix: "tcti-full-linux-runtime-readiness.txt")
     case "physical-tcti-init-first-syscall":
-        return missingGate(gate, reason: "physical first-syscall gate is not allowed until no-phone and simulator prerequisites pass")
+        return physicalFirstSyscallPass(gate)
     default:
         if let target = tctiGateTarget(in: gate.command) {
             return basicReportGate(gate, target: target)
