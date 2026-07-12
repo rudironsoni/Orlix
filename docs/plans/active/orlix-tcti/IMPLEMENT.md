@@ -8369,6 +8369,7 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The physical first-syscall gate now depends on the complete current simulator ladder plus current safety and report-schema proof. Older gadget and interactive-terminal probes are superseded by the stronger full-runtime simulator evidence for device authorization.
 - The pre-tool safety hook enforces the same contract and no longer blocks an envelope-authorized phone run on unrelated historical no-phone reports.
 - Runtime validation now enforces that same simulator-ladder contract internally. The first authorized phone attempt stopped before device discovery because this stale duplicate check still required every historical autonomous report; no device or product runtime failure was observed.
+- The unlocked physical retry reached Xcode signing and exposed that runtime validation did not forward the repository's existing `ORLIX_ALLOW_PROVISIONING_UPDATES` control. Physical builds now pass `-allowProvisioningUpdates` only when that explicit environment setting is `YES`.
 - This changes harness selection only. It does not change product runtime behavior or weaken app-hosted runtime evidence.
 
 ### Checkpoint: Simulator Gate Launch Argument Preservation
