@@ -42,10 +42,14 @@ struct ProductRuntimeCapability: Decodable {
 struct EnvironmentPolicy: Decodable {
     let requiredSimulatorID: String
     let requiredSimulatorName: String
+    let requiredDeviceID: String
+    let requiredDeviceName: String
 
     enum CodingKeys: String, CodingKey {
         case requiredSimulatorID = "required_simulator_id"
         case requiredSimulatorName = "required_simulator_name"
+        case requiredDeviceID = "required_device_id"
+        case requiredDeviceName = "required_device_name"
     }
 }
 
@@ -858,6 +862,8 @@ let nextTaskMarkdownURL = outputRoot.appendingPathComponent("next-task.md")
 let environmentPolicy = loadEnvironmentPolicy()
 let requiredSimulatorID = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIRED_SIMULATOR_ID"] ?? environmentPolicy.requiredSimulatorID
 let requiredSimulatorName = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIRED_SIMULATOR_NAME"] ?? environmentPolicy.requiredSimulatorName
+let requiredDeviceID = environmentPolicy.requiredDeviceID
+let requiredDeviceName = environmentPolicy.requiredDeviceName
 let simulatorReadinessCapabilities: [SimulatorReadinessCapability] = {
     let prefix = "sim" + "ulator-" + "tcti-"
     return [
@@ -1858,6 +1864,39 @@ func runtimeReportFatalFree(_ object: [String: Any]) -> Bool {
     }
     if let text = runtimeArtifactText(object, suffix: "tcti-simulator-fatal-runtime.txt"),
        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return false
+    }
+    return true
+}
+
+func deviceRuntimeReportFatalFree(_ object: [String: Any]) -> Bool {
+    let fatalPatterns = [
+        "Kernel panic",
+        "Attempted to kill init",
+        "Attempted kill init",
+        "Orlix TCTI: user fault",
+        "panic - not syncing",
+        "BUG:",
+        "Oops",
+        "SIGSEGV",
+        "fatal error",
+        "Fatal error",
+        "crash",
+        "Crash",
+        "orlix-init: process signaled ",
+    ]
+    for suffix in ["launch-console.log", "launch.log"] {
+        guard let text = runtimeArtifactText(object, suffix: suffix),
+              !fatalPatterns.contains(where: { text.contains($0) }) else {
+            return false
+        }
+    }
+    guard let launchText = runtimeArtifactText(object, suffix: "launch.json"),
+          let launchData = launchText.data(using: .utf8),
+          let launch = try? JSONSerialization.jsonObject(with: launchData) as? [String: Any],
+          stringValue((launch["info"] as? [String: Any])?["outcome"]) == "success",
+          let coreDumpCreated = ((launch["result"] as? [String: Any])?["terminationResult"] as? [String: Any])?["wasCoreDumpCreated"] as? Bool,
+          coreDumpCreated == false else {
         return false
     }
     return true
@@ -3066,6 +3105,12 @@ func runtimeGateState(report: ReportFact, passed: Bool) -> String {
     return report.status
 }
 
+func deviceRuntimeGateState(report: ReportFact, passed: Bool) -> String {
+    if passed { return "pass" }
+    if !reportExecutionFresh(report) { return "stale" }
+    return "fail"
+}
+
 func simulatorFirstSyscallPass(_ gate: Gate) -> GateStatus {
     guard let latest = latestRuntimeReport(gate: "tcti-init-first-syscall", destination: "iphonesimulator") else {
         return GateStatus(
@@ -3193,6 +3238,126 @@ func physicalFirstSyscallPass(_ gate: Gate) -> GateStatus {
         realStackRequired: gate.realStackRequired,
         canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
         state: runtimeGateState(report: report, passed: reportOK),
+        passed: reportOK,
+        reason: reason,
+        prerequisites: gate.prerequisites,
+        prerequisitesSatisfied: false,
+        reportPaths: gate.expectedReportPaths,
+        reports: [report],
+        readinessEligible: gate.readinessEligible,
+        physicalDevice: gate.physicalDevice,
+        gadget: gate.gadget
+    )
+}
+
+func runtimeCapabilityArtifactPass(_ object: [String: Any], capability: ProductRuntimeCapability) -> Bool {
+    if let artifactSuffix = capability.artifactSuffix, let marker = capability.marker {
+        return runtimeArtifactContains(object, suffix: artifactSuffix, marker: marker)
+    }
+    if let artifactSuffix = capability.artifactSuffix {
+        let artifacts = (object["artifacts"] as? [Any] ?? []).compactMap { stringValue($0) }
+        return artifacts.contains { artifact in
+            guard artifact.hasSuffix(artifactSuffix) else { return false }
+            let data = try? Data(contentsOf: runtimeArtifactURL(artifact))
+            return data?.isEmpty == false
+        }
+    }
+    return true
+}
+
+struct DeviceRuntimeAcceptance {
+    let approvedDevice: Bool
+    let backendOK: Bool
+    let profileOK: Bool
+    let executionModeOK: Bool
+    let forbiddenClear: Bool
+    let fatalFree: Bool
+    let artifactOK: Bool
+    let passed: Bool
+}
+
+let requiredDeviceForbiddenBehaviorKeys: Set<String> = [
+    "generated_exec_memory",
+    "host_exec_guest_text",
+    "host_x18",
+    "map_jit",
+    "native_ios_api_exposure_to_guest",
+    "rwx",
+]
+
+func deviceForbiddenBehaviorClear(_ object: [String: Any]) -> Bool {
+    guard let forbidden = object["forbidden_behavior"] as? [String: Any],
+          Set(forbidden.keys) == requiredDeviceForbiddenBehaviorKeys else {
+        return false
+    }
+    return requiredDeviceForbiddenBehaviorKeys.allSatisfy { key in
+        guard let value = forbidden[key] as? Bool else { return false }
+        return value == false
+    }
+}
+
+func deviceRuntimeAcceptance(
+    report: ReportFact,
+    object: [String: Any],
+    capability: ProductRuntimeCapability
+) -> DeviceRuntimeAcceptance {
+    let approvedDevice = stringValue(object["selected_device_id"]) == requiredDeviceID
+    let backendOK = stringValue(object["backend"]) == "tcti"
+    let profileOK = stringValue(object["profile"]) == "tcti_runtime"
+    let executionModeOK = (object["preflight_only"] as? Bool) == false &&
+        (object["autonomous_tests_bypassed"] as? Bool) == false
+    let forbiddenClear = deviceForbiddenBehaviorClear(object)
+    let fatalFree = deviceRuntimeReportFatalFree(object)
+    let artifactOK = runtimeCapabilityArtifactPass(object, capability: capability)
+    return DeviceRuntimeAcceptance(
+        approvedDevice: approvedDevice,
+        backendOK: backendOK,
+        profileOK: profileOK,
+        executionModeOK: executionModeOK,
+        forbiddenClear: forbiddenClear,
+        fatalFree: fatalFree,
+        artifactOK: artifactOK,
+        passed: report.status == "pass" && report.passed && reportExecutionFresh(report) && approvedDevice && backendOK && profileOK && executionModeOK && forbiddenClear && fatalFree && artifactOK
+    )
+}
+
+func deviceRuntimeCapabilityPass(_ gate: Gate, capability: ProductRuntimeCapability) -> GateStatus {
+    guard let latest = latestRuntimeReport(gate: capability.runtimeGate, destination: "iphoneos") else {
+        return missingGate(gate, reason: "missing iphoneos runtime-validation report for \(capability.runtimeGate) on approved device \(requiredDeviceName)")
+    }
+    let report = latest.0.withExecutionFreshness(executionFreshness(for: gate, report: latest.0))
+    let object = latest.1
+    let acceptance = deviceRuntimeAcceptance(report: report, object: object, capability: capability)
+    let reportOK = acceptance.passed
+    let reason: String
+    if reportOK {
+        reason = "iphoneos runtime-validation report \(report.path) passed \(capability.id) on approved device \(requiredDeviceName) (\(requiredDeviceID))"
+    } else if !reportExecutionFresh(report) {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) is execution-stale; \(reportFreshnessReason(report))"
+    } else if !acceptance.approvedDevice {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) did not run on approved device \(requiredDeviceName) (\(requiredDeviceID))"
+    } else if !acceptance.backendOK || !acceptance.profileOK {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) did not use backend=tcti and profile=tcti_runtime"
+    } else if !acceptance.executionModeOK {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) is preflight-only or bypassed autonomous runtime validation"
+    } else if !acceptance.forbiddenClear {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) records forbidden behavior: \(report.forbiddenBehaviorViolations.joined(separator: ","))"
+    } else if !acceptance.fatalFree {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) lacks clean device launch-console, launch-log, or launch-result evidence"
+    } else if !acceptance.artifactOK {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) is missing its canonical capability artifact evidence"
+    } else {
+        reason = "latest iphoneos \(capability.runtimeGate) report \(report.path) is not a valid non-preflight TCTI pass with forbidden behavior false"
+    }
+    return GateStatus(
+        id: gate.id,
+        command: gate.command,
+        kind: gate.kind,
+        proofTier: gate.proofTier,
+        acceptanceWeight: gate.acceptanceWeight,
+        realStackRequired: gate.realStackRequired,
+        canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
+        state: deviceRuntimeGateState(report: report, passed: reportOK),
         passed: reportOK,
         reason: reason,
         prerequisites: gate.prerequisites,
@@ -5530,7 +5695,10 @@ func simdDUP2DFixPass(_ gate: Gate) -> GateStatus {
     )
 }
 
-func baseGateStatus(_ gate: Gate) -> GateStatus {
+func baseGateStatus(_ gate: Gate, roadmap: Roadmap) -> GateStatus {
+    if let capability = roadmap.productRuntimeCapabilities.first(where: { $0.deviceGateID == gate.id }) {
+        return deviceRuntimeCapabilityPass(gate, capability: capability)
+    }
     if let caseID = structuralGateCases[gate.id] {
         let check = structuralCasePass(caseID)
         return artifactStatus(gate, passed: check.0, reason: check.1)
@@ -5779,11 +5947,51 @@ func missingGate(_ gate: Gate, reason: String) -> GateStatus {
 }
 
 func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
-    roadmap.gates
+    guard let template = roadmap.gates.first(where: { $0.id == "physical-tcti-init-first-syscall" }) else {
+        return roadmap.gates
+    }
+    var gates = roadmap.gates
+    var existingIDs = Set(gates.map(\.id))
+    var previousDeviceGateID: String?
+    for capability in roadmap.productRuntimeCapabilities {
+        guard let deviceGateID = capability.deviceGateID else {
+            continue
+        }
+        defer { previousDeviceGateID = deviceGateID }
+        if existingIDs.contains(deviceGateID) {
+            continue
+        }
+        guard let prerequisite = previousDeviceGateID else {
+            continue
+        }
+        gates.append(Gate(
+            id: deviceGateID,
+            command: "make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID)",
+            kind: "physical-device",
+            proofTier: "device",
+            acceptanceWeight: "blocker",
+            realStackRequired: true,
+            canClaimRuntimeReadiness: false,
+            prerequisites: Array(Set(template.prerequisites + [prerequisite])).sorted(),
+            allowedScope: template.allowedScope,
+            forbiddenScope: template.forbiddenScope,
+            expectedReportPaths: Array(Set(template.expectedReportPaths + ["Build/Reports/runtime/\(capability.runtimeGate)-*.json"])).sorted(),
+            readinessEligible: false,
+            physicalDevice: true,
+            gadget: false,
+            requiredValidationCommands: template.requiredValidationCommands + ["rtk proxy make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID)"],
+            reducerRequirements: template.reducerRequirements,
+            requiredSubagentsOrSkills: template.requiredSubagentsOrSkills,
+            commitMessageTemplate: "test(tcti): validate \(capability.id) on approved device",
+            stopConditions: template.stopConditions
+        ))
+        existingIDs.insert(deviceGateID)
+    }
+    return gates
 }
 
 func statuses(for roadmap: Roadmap) -> [GateStatus] {
-    let bases = roadmapGatesWithRuntimePreflight(roadmap).map(baseGateStatus)
+    let bases = roadmapGatesWithRuntimePreflight(roadmap).map { baseGateStatus($0, roadmap: roadmap) }
     let byID = Dictionary(uniqueKeysWithValues: bases.map { ($0.id, $0) })
     return bases.map { status in
         let satisfied = status.prerequisites.allSatisfy { byID[$0]?.satisfiesPrerequisite == true }
@@ -6100,6 +6308,7 @@ func validateProductRuntimeCapabilities(
             let commandTokens = deviceGate.command.split(whereSeparator: { $0.isWhitespace }).map(String.init)
             guard commandTokens.prefix(2).elementsEqual(["make", "runtime-validation"]),
                   commandTokens.contains("DESTINATION=iphoneos"),
+                  commandTokens.contains("ORLIX_DEVICE_ID=\(requiredDeviceID)"),
                   commandTokens.filter({ $0.hasPrefix("GATE=") }) == ["GATE=\(capability.runtimeGate)"] else {
                 throw HarnessError.invalid("product runtime capability \(capability.id) device command does not match its runtime gate")
             }
@@ -6113,8 +6322,9 @@ func validateProductRuntimeCapabilities(
 }
 
 func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
-    let byID = Dictionary(uniqueKeysWithValues: roadmap.gates.map { ($0.id, $0) })
-    guard byID.count == roadmap.gates.count else {
+    let materializedGates = roadmapGatesWithRuntimePreflight(roadmap)
+    let byID = Dictionary(uniqueKeysWithValues: materializedGates.map { ($0.id, $0) })
+    guard byID.count == materializedGates.count else {
         throw HarnessError.invalid("roadmap gate IDs must be unique")
     }
     let levels = try explicitPyramidLevels(roadmap)
@@ -6138,7 +6348,7 @@ func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
             throw HarnessError.invalid("permanent gate \(gate.id) depends on historical remediation: \(historicalPrerequisites.joined(separator: ","))")
         }
     }
-    let expectedCounts = ["L0": 4, "L1": 25, "L2": 29, "L3": 16, "L4": 1, "L5": 0]
+    let expectedCounts = ["L0": 4, "L1": 25, "L2": 29, "L3": 16, "L4": 15, "L5": 0]
     for (label, count) in expectedCounts where roadmap.pyramidLevelGateIDs[label]?.count != count {
         throw HarnessError.invalid("roadmap \(label) count must remain \(count) during frontier migration")
     }
@@ -7324,10 +7534,22 @@ func validateSemanticFrontierFixtures() throws {
     }
 
     let roadmap = try loadRoadmap()
-    let gatesByID = Dictionary(uniqueKeysWithValues: roadmap.gates.map { ($0.id, $0) })
+    let materializedGates = roadmapGatesWithRuntimePreflight(roadmap)
+    let gatesByID = Dictionary(uniqueKeysWithValues: materializedGates.map { ($0.id, $0) })
     let l3GateIDs = Set(roadmap.pyramidLevelGateIDs["L3"] ?? [])
     let l4GateIDs = Set(roadmap.pyramidLevelGateIDs["L4"] ?? [])
     try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: gatesByID)
+    let capabilityDeviceGateIDs = roadmap.productRuntimeCapabilities.compactMap(\.deviceGateID)
+    guard Set(capabilityDeviceGateIDs) == l4GateIDs else {
+        throw HarnessError.invalid("materialized L4 gate set must equal the canonical capability device projection")
+    }
+    for index in capabilityDeviceGateIDs.indices where index > capabilityDeviceGateIDs.startIndex {
+        let deviceGateID = capabilityDeviceGateIDs[index]
+        let previousDeviceGateID = capabilityDeviceGateIDs[capabilityDeviceGateIDs.index(before: index)]
+        guard gatesByID[deviceGateID]?.prerequisites.contains(previousDeviceGateID) == true else {
+            throw HarnessError.invalid("materialized device matrix must serialize \(deviceGateID) after \(previousDeviceGateID)")
+        }
+    }
     guard let firstCapability = roadmap.productRuntimeCapabilities.first else {
         throw HarnessError.invalid("product runtime capability fixture requires a canonical capability")
     }
@@ -7420,6 +7642,122 @@ func validateSemanticFrontierFixtures() throws {
     }
     guard rejectedMissingL4Classification else {
         throw HarnessError.invalid("product runtime capability fixture must reject a materialized device gate outside L4")
+    }
+
+    let fixtureRoot = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/fixtures", isDirectory: true)
+    let deviceFixtureObject = try loadJSONObject(fixtureRoot.appendingPathComponent("device-runtime-pass.json"))
+    let deviceFixtureReport = policyFixtureReport(
+        path: ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-pass.json",
+        passed: true,
+        proofTier: "device",
+        acceptanceWeight: "blocker",
+        realStackRequired: true,
+        canClaimRuntimeReadiness: false
+    )
+    let deviceFixtureCapability = roadmap.productRuntimeCapabilities.first { $0.id == "first-syscall" }!
+    guard deviceRuntimeAcceptance(report: deviceFixtureReport, object: deviceFixtureObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("real-shaped approved-device fixture must satisfy the canonical device acceptance contract")
+    }
+    var wrongDeviceObject = deviceFixtureObject
+    wrongDeviceObject["selected_device_id"] = "unapproved-device"
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: wrongDeviceObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject an unapproved device")
+    }
+    var forbiddenDeviceObject = deviceFixtureObject
+    var forbiddenValues = forbiddenDeviceObject["forbidden_behavior"] as! [String: Any]
+    forbiddenValues["rwx"] = true
+    forbiddenDeviceObject["forbidden_behavior"] = forbiddenValues
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: forbiddenDeviceObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject forbidden behavior")
+    }
+    var missingForbiddenObject = deviceFixtureObject
+    missingForbiddenObject.removeValue(forKey: "forbidden_behavior")
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: missingForbiddenObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject missing forbidden behavior")
+    }
+    var incompleteForbiddenObject = deviceFixtureObject
+    var incompleteForbiddenValues = incompleteForbiddenObject["forbidden_behavior"] as! [String: Any]
+    incompleteForbiddenValues.removeValue(forKey: "rwx")
+    incompleteForbiddenObject["forbidden_behavior"] = incompleteForbiddenValues
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: incompleteForbiddenObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject incomplete forbidden behavior")
+    }
+    var malformedForbiddenObject = deviceFixtureObject
+    var malformedForbiddenValues = malformedForbiddenObject["forbidden_behavior"] as! [String: Any]
+    malformedForbiddenValues["rwx"] = "false"
+    malformedForbiddenObject["forbidden_behavior"] = malformedForbiddenValues
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: malformedForbiddenObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject malformed forbidden behavior")
+    }
+    for key in ["preflight_only", "autonomous_tests_bypassed"] {
+        var trueModeObject = deviceFixtureObject
+        trueModeObject[key] = true
+        guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: trueModeObject, capability: deviceFixtureCapability).passed else {
+            throw HarnessError.invalid("device acceptance fixture must reject \(key)=true")
+        }
+        var missingModeObject = deviceFixtureObject
+        missingModeObject.removeValue(forKey: key)
+        guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: missingModeObject, capability: deviceFixtureCapability).passed else {
+            throw HarnessError.invalid("device acceptance fixture must reject missing \(key)")
+        }
+        var malformedModeObject = deviceFixtureObject
+        malformedModeObject[key] = "false"
+        guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: malformedModeObject, capability: deviceFixtureCapability).passed else {
+            throw HarnessError.invalid("device acceptance fixture must reject malformed \(key)")
+        }
+    }
+    var missingFatalEvidenceObject = deviceFixtureObject
+    missingFatalEvidenceObject["artifacts"] = (deviceFixtureObject["artifacts"] as? [Any] ?? []).filter { !((stringValue($0) ?? "").hasSuffix("launch.log")) }
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: missingFatalEvidenceObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject missing fatal-inspection evidence")
+    }
+    func replacingDeviceFixtureArtifact(suffix: String, with replacement: String) -> [String: Any] {
+        var object = deviceFixtureObject
+        object["artifacts"] = (deviceFixtureObject["artifacts"] as? [Any] ?? []).map { artifact in
+            let path = stringValue(artifact) ?? ""
+            return path.hasSuffix(suffix) ? replacement : path
+        }
+        return object
+    }
+    let crashObject = replacingDeviceFixtureArtifact(
+        suffix: "launch-console.log",
+        with: ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-fail-crash.launch-console.log"
+    )
+    guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: crashObject, capability: deviceFixtureCapability).passed else {
+        throw HarnessError.invalid("device acceptance fixture must reject crash markers")
+    }
+    for launchFixture in [
+        "device-runtime-fail-core-dump.launch.json",
+        "device-runtime-fail-missing-core-dump.launch.json",
+        "device-runtime-fail-malformed-core-dump.launch.json",
+    ] {
+        let object = replacingDeviceFixtureArtifact(
+            suffix: "launch.json",
+            with: ".agents/skills/orlix-tcti-next-step/fixtures/\(launchFixture)"
+        )
+        guard !deviceRuntimeAcceptance(report: deviceFixtureReport, object: object, capability: deviceFixtureCapability).passed else {
+            throw HarnessError.invalid("device acceptance fixture must reject unsafe launch result \(launchFixture)")
+        }
+    }
+    guard deviceRuntimeGateState(report: deviceFixtureReport, passed: false) == "fail" else {
+        throw HarnessError.invalid("current rejected device evidence must be fail, not stale")
+    }
+    let staleDeviceReport = deviceFixtureReport.withExecutionFreshness(ExecutionFreshness(
+        reportGitSHA: "fixture-old-head",
+        currentGitSHA: "fixture-current-head",
+        reportProductVersion: "fixture-version",
+        reportProductBuildID: "fixture-build",
+        currentProductVersion: "fixture-version",
+        currentProductBuildID: "fixture-build",
+        executionFresh: false,
+        statusRecomputed: true,
+        changedPathsSinceReport: ["OrlixKernel/fixture"],
+        ignoredNonExecutionPaths: [],
+        invalidatingPaths: ["OrlixKernel/fixture"],
+        reason: "fixture execution input changed"
+    ))
+    guard deviceRuntimeGateState(report: staleDeviceReport, passed: false) == "stale" else {
+        throw HarnessError.invalid("execution-stale device evidence must remain stale")
     }
     print("pass: semantic-frontier-check")
 }

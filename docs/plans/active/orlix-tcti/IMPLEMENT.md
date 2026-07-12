@@ -8449,3 +8449,11 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Existing duplicate first-syscall L3 gate names are explicit aliases of one semantic capability and one materialized L4 gate. Other device instances remain absent rather than being represented by fictional IDs.
 - Validation requires exact L3 coverage, unique runtime semantics, exact parsed and pinned runtime-validation commands, simulator proof metadata, and valid materialized L4 device gates. The inventory does not authorize phone execution or claim matrix equality.
 - Product runtime behavior, generated evidence, upstream trees, physical execution, and release state are unchanged.
+
+## 2026-07-12 Symmetric Approved-Device Matrix
+
+- Materialized the complete L4 projection from the canonical L3 capability inventory without duplicating semantic acceptance or large roadmap gate definitions.
+- All fifteen device instances target `RRJ-iPhone-15-Pro-Max` (`00008130-001E74A11193803A`), retain the complete simulator readiness prerequisites, and execute serially.
+- A device capability passes only from current `iphoneos` runtime evidence on the immutable approved device with the same artifact and marker contract, TCTI profile, and forbidden-behavior policy as its simulator capability, plus clean device launch-console, launch-log, and launch-result evidence with no core dump.
+- Device acceptance fixtures cover valid pass, wrong device, typed true/missing/malformed preflight and bypass fields, true/missing/incomplete/malformed closed-world forbidden behavior, missing fatal evidence, crash markers, explicit or malformed core-dump state, current invalid evidence, and stale execution evidence.
+- No new physical command ran. Explicit opt-in, clean protected state, matrix identity comparison, and live frontier activation remain separate prerequisites.
