@@ -233,17 +233,19 @@ Quality grades cover agent legibility, observability, isolation, architecture en
 1. Preserve and classify interrupted command artifacts, then terminate orphaned processes.
 2. Inventory current checks into L0 through L5 and identify duplicate, historical, superseded, and missing gates.
 3. Define the compact gate graph, destination-independent IDs, semantic input groups, and report contracts.
-4. Replace historical first-unresolved selection with pyramid-frontier selection.
-5. Implement symmetric simulator and device destination adapters.
-6. Shrink the roadmap and selector through progressive disclosure and focused skills.
-7. Add mechanical architecture, generated-tree, metadata, and promotion checks.
-8. Import current valid evidence without rerunning semantically unchanged work.
-9. Add missing simulator userland-marker coverage and complete L3.
-10. Run the identical matrix on the approved iPhone and complete L4.
-11. Reduce and repair only concrete current failures with scoped, tested PRs.
-12. Build, archive, validate, export, upload, and confirm the beta in TestFlight.
-13. Enable recurring knowledge, quality, and harness gardening.
-14. Remove obsolete compatibility aliases and historical permanent gates after migration validation.
+4. Define one canonical L3/L4 product-capability list and instantiate it for `iphonesimulator` and `iphoneos`; destination instances share semantic inputs, acceptance, and product identity while adapters own only launch and evidence capture.
+5. Derive L3 and L4 completion from the canonical matrix, and derive L5 eligibility from exact L3/L4 capability and product-identity equality. A single phone smoke gate or producer-owned readiness boolean is insufficient.
+6. Replace historical first-unresolved selection with safety-filtered pyramid-frontier selection only after the permanent frontier can represent the complete L3, L4, and L5 objective.
+7. Implement symmetric simulator and device destination adapters.
+8. Shrink the roadmap and selector through progressive disclosure and focused skills.
+9. Add mechanical architecture, generated-tree, metadata, and promotion checks.
+10. Import current valid evidence without rerunning semantically unchanged work.
+11. Add missing simulator userland-marker coverage and complete L3.
+12. Run the identical matrix on the approved iPhone and complete L4.
+13. Reduce and repair only concrete current failures with scoped, tested PRs.
+14. Build, archive, validate, export, upload, and confirm the beta in TestFlight.
+15. Enable recurring knowledge, quality, and harness gardening.
+16. Remove obsolete compatibility aliases and historical permanent gates after migration validation.
 
 ## Acceptance
 
