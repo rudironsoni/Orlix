@@ -8411,3 +8411,11 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - `gate-result-policy-check` covers both the timeout and immediate-rejection boundaries. Swift typechecking, shell syntax, report schema, plan consistency, the full agent harness check, task-envelope regeneration, and `git diff --check` pass for this checkpoint.
 - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device gate, production assembly, or gadget behavior changed.
 - Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Current Authorization Truth: Structured Reducer Required
+
+- This entry supersedes the earlier `Xcode-Hosted Product Failure Classification` statement that a current product failure set `runtime_patch_allowed=true`.
+- The current classifier has no path that emits `runtime_patch_allowed=true`. Raw simulator, component, Xcode, product, and production-fix failures all remain false and stop for structured reducer linkage.
+- Reducer names, prerequisite names, artifact-path membership, free-form evidence, and `git_sha` alone cannot authorize runtime mutation.
+- Runtime authorization remains disabled until the active agentic-release-harness plan proves exact failing-report content identity, structured failure identity, reproduced replay outcome, semantic freshness, one canonical source owner, repository-derived scope, and verifier-recomputed authorization.
+- The authoritative current policy is recorded in `docs/goals/active/orlix-release.md` and `docs/plans/active/orlix-agentic-release-harness/`.

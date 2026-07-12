@@ -1,0 +1,16 @@
+{
+  "target": "fixture-linked",
+  "case_id": "linked-failure",
+  "command": "make tcti-gate TARGET=tcti-repro",
+  "working_directory": ".",
+  "artifacts": ["Build/TCTI/reports/fixture-linked/report.json"],
+  "reason": "typed source failure linkage fixture",
+  "expected_status": "fail",
+  "source_failure": {
+    "report_path": "Build/TCTI/reports/fixture-linked/report.json",
+    "report_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "failure_id": "fixture-failure",
+    "failure_fingerprint": "fixture-failure-fingerprint"
+  },
+  "replay_outcome": "reproduced"
+}

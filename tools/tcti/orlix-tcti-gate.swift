@@ -19,6 +19,50 @@ struct Failure: Codable {
     let message: String
 }
 
+enum ReplayOutcome: String, Codable {
+    case reproduced
+    case notReproduced = "not_reproduced"
+    case notRun = "not_run"
+    case differentFailure = "different_failure"
+    case environmentFailure = "environment_failure"
+    case harnessFailure = "harness_failure"
+    case forbiddenBehavior = "forbidden_behavior"
+    case inconclusive
+}
+
+struct SourceFailureLinkage: Codable {
+    let reportPath: String
+    let reportSHA256: String
+    let failureID: String
+    let failureFingerprint: String
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case reportPath = "report_path"
+        case reportSHA256 = "report_sha256"
+        case failureID = "failure_id"
+        case failureFingerprint = "failure_fingerprint"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let knownKeys = Set(container.allKeys)
+        let expectedKeys = Set(CodingKeys.allCases)
+        guard knownKeys == expectedKeys else {
+            let unexpected = knownKeys.subtracting(expectedKeys).map(\.rawValue).sorted()
+            let missing = expectedKeys.subtracting(knownKeys).map(\.rawValue).sorted()
+            throw DecodingError.dataCorruptedError(
+                forKey: .reportPath,
+                in: container,
+                debugDescription: "source_failure keys mismatch; unexpected=\(unexpected), missing=\(missing)"
+            )
+        }
+        reportPath = try container.decode(String.self, forKey: .reportPath)
+        reportSHA256 = try container.decode(String.self, forKey: .reportSHA256)
+        failureID = try container.decode(String.self, forKey: .failureID)
+        failureFingerprint = try container.decode(String.self, forKey: .failureFingerprint)
+    }
+}
+
 struct ProofTierMetadata: Equatable {
     let proofTier: String
     let acceptanceWeight: String
@@ -78,6 +122,8 @@ struct Report: Codable {
     let evidence: [String: String]?
     let expectedStatus: String?
     let actualReplayStatus: String?
+    let sourceFailure: SourceFailureLinkage?
+    let replayOutcome: ReplayOutcome?
     let execution: ExecutionReport?
 
     enum CodingKeys: String, CodingKey {
@@ -117,6 +163,8 @@ struct Report: Codable {
         case evidence
         case expectedStatus = "expected_status"
         case actualReplayStatus = "actual_replay_status"
+        case sourceFailure = "source_failure"
+        case replayOutcome = "replay_outcome"
         case execution
     }
 }
@@ -398,6 +446,8 @@ struct Reproducer: Codable {
     let artifacts: [String]
     let reason: String
     let expectedStatus: String?
+    let sourceFailure: SourceFailureLinkage?
+    let replayOutcome: ReplayOutcome?
 
     enum CodingKeys: String, CodingKey {
         case target
@@ -407,6 +457,8 @@ struct Reproducer: Codable {
         case artifacts
         case reason
         case expectedStatus = "expected_status"
+        case sourceFailure = "source_failure"
+        case replayOutcome = "replay_outcome"
     }
 }
 
@@ -968,6 +1020,8 @@ func report(
     bypassReason: String = "",
     expectedStatus: String? = nil,
     actualReplayStatus: String? = nil,
+    sourceFailure: SourceFailureLinkage? = nil,
+    replayOutcome: ReplayOutcome? = nil,
     execution: ExecutionReport? = nil
 ) -> Report {
     let metadata = proofTierMetadata(for: target)
@@ -1009,6 +1063,8 @@ func report(
         evidence: evidence,
         expectedStatus: expectedStatus,
         actualReplayStatus: actualReplayStatus,
+        sourceFailure: sourceFailure,
+        replayOutcome: replayOutcome,
         execution: execution
     )
 }
@@ -1073,7 +1129,9 @@ func writeReducer(
     command: String,
     reason: String,
     artifacts: [String] = [],
-    expectedStatus: GateStatus = .fail
+    expectedStatus: GateStatus = .fail,
+    sourceFailure: SourceFailureLinkage? = nil,
+    replayOutcome: ReplayOutcome? = nil
 ) throws -> URL {
     let reducer = Reproducer(
         target: target,
@@ -1082,7 +1140,9 @@ func writeReducer(
         workingDirectory: repoRoot().path,
         artifacts: artifacts,
         reason: reason,
-        expectedStatus: expectedStatus.rawValue
+        expectedStatus: expectedStatus.rawValue,
+        sourceFailure: sourceFailure,
+        replayOutcome: replayOutcome
     )
     let url = buildPath("reproducers", target, "\(caseID).json")
     try writeJSON(reducer, to: url)
@@ -6634,6 +6694,7 @@ func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = r
             errors.append("forbidden_behavior.\(key) must be bool")
         }
     }
+    errors.append(contentsOf: validateTypedLinkageFields(dictionary))
     return errors
 }
 
@@ -6688,6 +6749,83 @@ func checkReportFile(
         return errors.map { "\(relativePath(url)): \($0)" }
     } catch {
         return ["\(relativePath(url)): cannot parse JSON: \(error)"]
+    }
+}
+
+func validateSourceFailureLinkage(_ linkage: SourceFailureLinkage) -> [String] {
+    var errors: [String] = []
+    if linkage.reportPath.isEmpty || linkage.reportPath.hasPrefix("/") || linkage.reportPath.contains("..") {
+        errors.append("source_failure.report_path must be a non-empty repository-relative path")
+    }
+    if !linkage.reportPath.hasPrefix("Build/Reports/runtime/") &&
+        !linkage.reportPath.hasPrefix("Build/TCTI/reports/") {
+        errors.append("source_failure.report_path must be under an approved generated report root")
+    }
+    if linkage.reportSHA256.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) == nil {
+        errors.append("source_failure.report_sha256 must be a 64-character hexadecimal digest")
+    }
+    if linkage.failureID.isEmpty {
+        errors.append("source_failure.failure_id must be non-empty")
+    }
+    if linkage.failureFingerprint.isEmpty {
+        errors.append("source_failure.failure_fingerprint must be non-empty")
+    }
+    return errors
+}
+
+func validateTypedLinkageFields(_ dictionary: [String: Any]) -> [String] {
+    let sourceValue = dictionary["source_failure"]
+    let outcomeValue = dictionary["replay_outcome"]
+    guard sourceValue != nil || outcomeValue != nil else { return [] }
+
+    var errors: [String] = []
+    var linkage: SourceFailureLinkage?
+    if let sourceValue {
+        let expectedKeys = Set(SourceFailureLinkage.CodingKeys.allCases.map(\.rawValue))
+        guard let sourceDictionary = sourceValue as? [String: Any],
+              Set(sourceDictionary.keys) == expectedKeys,
+              JSONSerialization.isValidJSONObject(sourceValue),
+              let data = try? JSONSerialization.data(withJSONObject: sourceValue) else {
+            errors.append("source_failure must be a closed-world object with report_path, report_sha256, failure_id, and failure_fingerprint")
+            return errors
+        }
+        do {
+            linkage = try decoder.decode(SourceFailureLinkage.self, from: data)
+            errors.append(contentsOf: validateSourceFailureLinkage(linkage!))
+        } catch {
+            errors.append("source_failure does not match the closed-world schema: \(error)")
+        }
+    }
+    var outcome: ReplayOutcome?
+    if let outcomeValue {
+        guard let rawValue = outcomeValue as? String,
+              let decoded = ReplayOutcome(rawValue: rawValue) else {
+            errors.append("replay_outcome must be one of reproduced, not_reproduced, not_run, different_failure, environment_failure, harness_failure, forbidden_behavior, inconclusive")
+            return errors
+        }
+        outcome = decoded
+    }
+    if (linkage == nil) != (outcome == nil) {
+        errors.append("source_failure and replay_outcome must be provided together")
+    }
+    if outcome == .reproduced && linkage == nil {
+        errors.append("replay_outcome=reproduced requires source_failure")
+    }
+    return errors
+}
+
+func checkReducerAuthorizationFixture(_ url: URL) -> [String] {
+    do {
+        let data = try Data(contentsOf: url)
+        let reducer = try decoder.decode(Reproducer.self, from: data)
+        let object = try JSONSerialization.jsonObject(with: data)
+        guard let dictionary = object as? [String: Any] else {
+            return ["typed reducer contract must be a JSON object"]
+        }
+        _ = reducer
+        return validateTypedLinkageFields(dictionary)
+    } catch {
+        return ["cannot decode typed reducer contract: \(error)"]
     }
 }
 
@@ -7109,6 +7247,30 @@ func runReportSchemaCheck() throws -> Int32 {
         let index = loadRoadmapProofTierMetadataByTarget(from: fixture)
         if index.errors.isEmpty {
             failures.append(fail("roadmap-fixture", "\(relativePath(fixture)) was expected to fail proof-tier metadata indexing"))
+        }
+    }
+
+    let reducerFixtureRoot = fixtureRoot.appendingPathComponent("reducer-authorization", isDirectory: true)
+    for name in [
+        "reducer.legacy.json",
+        "reducer.valid-linkage.json",
+    ] {
+        let fixture = reducerFixtureRoot.appendingPathComponent(name)
+        checked.append(relativePath(fixture))
+        failures.append(contentsOf: checkReducerAuthorizationFixture(fixture).map { fail("reducer-schema", "\(relativePath(fixture)): \($0)") })
+    }
+    for name in [
+        "reducer.fail-unknown-outcome.json",
+        "reducer.fail-malformed-linkage.json",
+        "reducer.fail-unknown-linkage-key.json",
+        "reducer.fail-missing-linkage-key.json",
+        "reducer.fail-source-only.json",
+        "reducer.fail-outcome-only.json",
+    ] {
+        let fixture = reducerFixtureRoot.appendingPathComponent(name)
+        checked.append(relativePath(fixture))
+        if checkReducerAuthorizationFixture(fixture).isEmpty {
+            failures.append(fail("reducer-schema-fixture", "\(relativePath(fixture)) was expected to fail typed reducer validation"))
         }
     }
 

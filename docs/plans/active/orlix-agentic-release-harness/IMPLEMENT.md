@@ -75,3 +75,16 @@
 - Validation: the active goal is 2,075 characters; plan consistency passed; a serial `rtk proxy make agent-harness-check` passed; `rtk git diff --check` passed.
 - One earlier full-harness run transiently failed its temporary kernel KUnit fixture. An isolated reproduction emitted every expected field and satisfied the exact predicate, and the serial rerun passed. No source change was made for that transient result.
 - Final checkpoint validation passed plan consistency, hook checks, and `git diff --check`; the goal and workflow are ready to commit.
+
+### Checkpoint: Typed Reducer Linkage Schema
+
+- Added optional closed-world `source_failure` linkage to reducer descriptors and reports with an approved repository-relative report path, report SHA-256, structured failure ID, and failure fingerprint. Canonical filesystem normalization and symlink containment remain required before authorization is enabled.
+- Added closed replay outcomes: `reproduced`, `not_reproduced`, `not_run`, `different_failure`, `environment_failure`, `harness_failure`, `forbidden_behavior`, and `inconclusive`.
+- Existing reducers remain compatible because the new fields are optional. Real gate call sites do not emit linkage yet.
+- Schema validation rejects malformed or unapproved report paths, invalid digests, empty failure identities, unknown replay outcomes, unpaired linkage/outcome fields, missing or unknown linkage keys, and an attempted producer-controlled `runtime_patch_allowed` key.
+- The next-step consumer decodes the same typed fields into report facts and exposes a focused structured-linkage fixture check. It does not perform causal authorization yet.
+- Added a narrow repository-controlled source-owner policy for `orlix-kernel-tcti`; its scopes cannot point at generated trees, absolute paths, or traversal paths. No other product owner is authorization-capable yet.
+- `runtime_patch_allowed` remains false on every classifier path. This checkpoint defines data shape only and changes no product runtime behavior.
+- Focused evidence: Swift parse and typecheck passed for the TCTI gate; Swift parse passed for next-step; `structured-reducer-linkage-check` passed; `tcti-report-schema-check` passed; `git diff --check` passed.
+- Adversarial review initially found producer/consumer root drift, permissive owner-policy decoding, stale active-plan authorization truth, and missing pairing fixtures. All four findings were corrected and the same reviewer confirmed no remaining finding in that scope.
+- Final evidence also passed `source-owner-policy-check`, `tcti-plan-consistency`, and the full serial `agent-harness-check`.
