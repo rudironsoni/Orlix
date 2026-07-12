@@ -163,3 +163,9 @@
 - Integrated fixtures prove eligible L4 work beats historical remediation, unauthorized phone work is not selected, lower permanent work wins, and a current permanent failure stops with no runtime authorization.
 - Current status has no executable permanent gate because physical opt-in is absent and the harness worktree is dirty. `agent-next` emits `blocked-physical-device-opt-in-required`, and envelope validation passes.
 - No physical command ran. L3/L4 product-identity equality, the remaining fourteen device executions, L5 gates, and TestFlight remain incomplete.
+
+### Checkpoint: Approved-Device Signing Policy
+
+- The first newly selected L4 command failed during Xcode build before installation because physical runtime-validation did not supply a development team. No guest or TCTI runtime failure occurred.
+- Pinned the existing Apple Development team `A9C4N82KYY` in environment policy and require every materialized device command to use that team with automatic signing.
+- Device command validation now rejects missing or altered team and signing-style tokens. Runtime, app, kernel, HostAdapter, and userspace behavior are unchanged.

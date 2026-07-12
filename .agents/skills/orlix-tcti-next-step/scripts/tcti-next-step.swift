@@ -44,12 +44,14 @@ struct EnvironmentPolicy: Decodable {
     let requiredSimulatorName: String
     let requiredDeviceID: String
     let requiredDeviceName: String
+    let requiredDevelopmentTeam: String
 
     enum CodingKeys: String, CodingKey {
         case requiredSimulatorID = "required_simulator_id"
         case requiredSimulatorName = "required_simulator_name"
         case requiredDeviceID = "required_device_id"
         case requiredDeviceName = "required_device_name"
+        case requiredDevelopmentTeam = "required_development_team"
     }
 }
 
@@ -864,6 +866,7 @@ let requiredSimulatorID = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIR
 let requiredSimulatorName = ProcessInfo.processInfo.environment["ORLIX_TCTI_REQUIRED_SIMULATOR_NAME"] ?? environmentPolicy.requiredSimulatorName
 let requiredDeviceID = environmentPolicy.requiredDeviceID
 let requiredDeviceName = environmentPolicy.requiredDeviceName
+let requiredDevelopmentTeam = environmentPolicy.requiredDevelopmentTeam
 let simulatorReadinessCapabilities: [SimulatorReadinessCapability] = {
     let prefix = "sim" + "ulator-" + "tcti-"
     return [
@@ -5966,7 +5969,7 @@ func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
         }
         gates.append(Gate(
             id: deviceGateID,
-            command: "make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID)",
+            command: "make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic",
             kind: "physical-device",
             proofTier: "device",
             acceptanceWeight: "blocker",
@@ -5979,7 +5982,7 @@ func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
             readinessEligible: false,
             physicalDevice: true,
             gadget: false,
-            requiredValidationCommands: template.requiredValidationCommands + ["rtk proxy make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID)"],
+            requiredValidationCommands: template.requiredValidationCommands + ["rtk proxy make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic"],
             reducerRequirements: template.reducerRequirements,
             requiredSubagentsOrSkills: template.requiredSubagentsOrSkills,
             commitMessageTemplate: "test(tcti): validate \(capability.id) on approved device",
@@ -6306,10 +6309,16 @@ func validateProductRuntimeCapabilities(
                 throw HarnessError.invalid("product runtime capability \(capability.id) references an invalid materialized device gate")
             }
             let commandTokens = deviceGate.command.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-            guard commandTokens.prefix(2).elementsEqual(["make", "runtime-validation"]),
-                  commandTokens.contains("DESTINATION=iphoneos"),
-                  commandTokens.contains("ORLIX_DEVICE_ID=\(requiredDeviceID)"),
-                  commandTokens.filter({ $0.hasPrefix("GATE=") }) == ["GATE=\(capability.runtimeGate)"] else {
+            let expectedCommandTokens = [
+                "make",
+                "runtime-validation",
+                "DESTINATION=iphoneos",
+                "GATE=\(capability.runtimeGate)",
+                "ORLIX_DEVICE_ID=\(requiredDeviceID)",
+                "ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam)",
+                "ORLIX_CODE_SIGN_STYLE=Automatic",
+            ]
+            guard commandTokens == expectedCommandTokens else {
                 throw HarnessError.invalid("product runtime capability \(capability.id) device command does not match its runtime gate")
             }
         }
@@ -7729,6 +7738,40 @@ func validateSemanticFrontierFixtures() throws {
     }
     guard rejectedMissingL4Classification else {
         throw HarnessError.invalid("product runtime capability fixture must reject a materialized device gate outside L4")
+    }
+    var unsignedDeviceGateMap = gatesByID
+    if let deviceGateID = firstCapability.deviceGateID,
+       let deviceGate = gatesByID[deviceGateID] {
+        unsignedDeviceGateMap[deviceGateID] = replacingCommand(
+            deviceGate,
+            with: deviceGate.command.replacingOccurrences(of: " ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam)", with: "")
+        )
+    }
+    var rejectedMissingDevelopmentTeam = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: unsignedDeviceGateMap)
+    } catch {
+        rejectedMissingDevelopmentTeam = true
+    }
+    guard rejectedMissingDevelopmentTeam else {
+        throw HarnessError.invalid("product runtime capability fixture must reject a device command without the pinned development team")
+    }
+    var shadowedSigningGateMap = gatesByID
+    if let deviceGateID = firstCapability.deviceGateID,
+       let deviceGate = gatesByID[deviceGateID] {
+        shadowedSigningGateMap[deviceGateID] = replacingCommand(
+            deviceGate,
+            with: deviceGate.command + " ORLIX_DEVELOPMENT_TEAM=ATTACKER ORLIX_CODE_SIGN_STYLE=Manual"
+        )
+    }
+    var rejectedShadowedSigning = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: shadowedSigningGateMap)
+    } catch {
+        rejectedShadowedSigning = true
+    }
+    guard rejectedShadowedSigning else {
+        throw HarnessError.invalid("product runtime capability fixture must reject shadowed signing assignments")
     }
 
     let fixtureRoot = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/fixtures", isDirectory: true)
