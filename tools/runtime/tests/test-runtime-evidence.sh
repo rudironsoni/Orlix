@@ -7,6 +7,13 @@ source "$root/tools/runtime/orlix-runtime-evidence.sh"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+orlix_runtime_destination_is_simulator iphonesimulator
+orlix_runtime_destination_is_simulator "iOS Simulator"
+if orlix_runtime_destination_is_simulator iphoneos; then
+	echo "physical destination was classified as simulator" >&2
+	exit 1
+fi
+
 touch "$tmp/launch-console.log" "$tmp/launch.log"
 marker='Orlix TCTI: svc #0 task=init pid=1 pc=0x700d1caa98 syscall=178 x0=0xb2'
 printf '%s\n' "$marker" >"$tmp/launch.stderr"

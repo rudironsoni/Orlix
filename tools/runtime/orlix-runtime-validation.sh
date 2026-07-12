@@ -1758,7 +1758,9 @@ assert_gate_markers() {
 	case "$gate" in
 		tcti-init-first-syscall)
 			capture_tcti_first_syscall
-			assert_no_simulator_fatal_runtime
+			if orlix_runtime_destination_is_simulator "$destination"; then
+				assert_no_simulator_fatal_runtime
+			fi
 			;;
 	tcti-simulator-stability)
 		capture_tcti_first_syscall
