@@ -51,3 +51,14 @@
 - Evidence: `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed; `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift validate-roadmap` passed; `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift semantic-frontier-check` passed; `rtk git diff --check` passed.
 - Adversarial review found and closed one comparator defect: acceptance weight now precedes state, and the cross-state blocker/readiness fixture passes. The reviewer reported no remaining blocking comparator finding.
 - Final verification also passed `rtk proxy make agent-harness-check`, `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`, and `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`.
+
+### Checkpoint: Reducer-First Runtime Authorization
+
+- Corrected the result classifier so a current simulator, component, Xcode, or product failure no longer authorizes an immediate runtime patch.
+- Raw current failures emit `runtime_patch_allowed=false`, stop, and require a replayable reducer.
+- Runtime authorization remains disabled even for a production-fix gate with a reducer-shaped prerequisite name. Names and prerequisite state are not sufficient proof of reducer replay, exact failure linkage, freshness, or ownership.
+- Added classifier fixtures for raw kernel failure, Xcode/product failure, simulator install product rejection, and a misleading reducer-named prerequisite.
+- A future authorization checkpoint must add structured reducer report identity, replay status, exact failing-report and failure-ID linkage, execution freshness, and owning-layer evidence before any `runtime_patch_allowed=true` path is introduced.
+- This tightens authorization only. It does not select a reducer automatically and does not change product runtime behavior.
+- Adversarial re-review found no remaining blocker and confirmed there is no current classifier path that emits `runtime_patch_allowed=true`.
+- Evidence: `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift gate-result-policy-check`, Swift parse, `rtk proxy make agent-harness-check`, and `rtk git diff --check` passed.
