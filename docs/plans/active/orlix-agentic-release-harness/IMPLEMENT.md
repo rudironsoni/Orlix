@@ -132,3 +132,13 @@
 - The model must reuse semantic acceptance across destinations. It must not duplicate test meaning in destination-specific Make targets. Destination adapters remain limited to launch and evidence capture.
 - Physical selection remains blocked unless the complete current simulator matrix, explicit opt-in, clean protected worktree, and destination policy all pass. Release remains blocked until the complete identical phone matrix passes for the same product identity.
 - No product runtime code, generated report, reducer, upstream clone, phone execution, archive, or release action changed in this checkpoint.
+
+### Checkpoint: Canonical Product Capability Inventory
+
+- Added one closed-world `product_runtime_capabilities` map covering every current L3 permanent gate. Each capability names its existing simulator gate aliases, optional materialized device gate, runtime-validation gate, marker artifact, and marker when required.
+- The two existing first-syscall L3 aliases now map to one semantic capability and the one existing L4 first-syscall gate. The model does not invent future device gate IDs.
+- Roadmap validation now rejects missing or extra L3 capability coverage, duplicate capability/runtime/simulator/materialized-device identities, unknown or non-simulator gates, inexact runtime commands, invalid materialized L4 gates, and empty or incomplete marker contracts.
+- Focused fixtures validate the real roadmap and independently reject missing coverage, duplicate identities or runtime semantics, runtime-gate prefix collisions, unpinned simulator commands, and device gates outside L4.
+- This checkpoint defines semantic identity once. It does not add destination-specific acceptance logic, authorize phone execution, claim L4 equality, add L5 gates, or activate the live semantic frontier.
+- Current report inspection also confirmed that runtime reports expose version and build identity but do not yet expose the semantic product/payload identity required for final L3/L4 equality. That remains required before release promotion.
+- No product runtime code, generated report, reducer, upstream clone, phone execution, archive, or release action changed.
