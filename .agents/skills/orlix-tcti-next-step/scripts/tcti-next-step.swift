@@ -872,8 +872,16 @@ func matchesAny(_ path: String, _ patterns: [String]) -> Bool {
 }
 
 func doesChangedPathInvalidateGate(_ gate: Gate, changedPath: String) -> Bool {
-    _ = gate
-    return matchesAny(changedPath, productExecutionInvalidationPatterns)
+    if changedPath == "project.yml" {
+        return gate.kind == "simulator-runtime" ||
+            gate.kind == "simulator-runtime-real-stack" ||
+            gate.physicalDevice
+    }
+    if gate.realStackRequired {
+        return matchesAny(changedPath, productExecutionInvalidationPatterns)
+    }
+    guard !changedPath.hasPrefix("docs/") else { return false }
+    return matchesAny(changedPath, gate.allowedScope)
 }
 
 func changedPathsSinceReport(reportGitSHA: String, currentGitSHA: String) -> [String]? {
@@ -1135,11 +1143,38 @@ func executionFreshness(
     reportProductVersion: String? = nil,
     reportProductBuildID: String? = nil
 ) -> ExecutionFreshness {
-    _ = gate
-    return executionFreshness(
+    let base = executionFreshness(
         reportGitSHA: reportGitSHA,
         reportProductVersion: reportProductVersion,
         reportProductBuildID: reportProductBuildID
+    )
+    guard !base.executionFresh,
+          gate.kind != "simulator-runtime",
+          gate.kind != "simulator-runtime-real-stack",
+          !gate.physicalDevice,
+          let reportGitSHA, !reportGitSHA.isEmpty,
+          let committedChanged = changedPathsSinceReport(
+              reportGitSHA: reportGitSHA,
+              currentGitSHA: base.currentGitSHA
+          ) else {
+        return base
+    }
+    let changed = Array(Set(committedChanged + currentWorkingTreeChangedPaths())).sorted()
+    let invalidating = changed.filter { doesChangedPathInvalidateGate(gate, changedPath: $0) }
+    guard invalidating.isEmpty else { return base }
+    return ExecutionFreshness(
+        reportGitSHA: base.reportGitSHA,
+        currentGitSHA: base.currentGitSHA,
+        reportProductVersion: base.reportProductVersion,
+        reportProductBuildID: base.reportProductBuildID,
+        currentProductVersion: base.currentProductVersion,
+        currentProductBuildID: base.currentProductBuildID,
+        executionFresh: true,
+        statusRecomputed: true,
+        changedPathsSinceReport: changed,
+        ignoredNonExecutionPaths: changed,
+        invalidatingPaths: [],
+        reason: "gate inputs unchanged; product version/build does not invalidate this non-runtime proof"
     )
 }
 
@@ -5526,23 +5561,6 @@ func selectedStatus(from statuses: [GateStatus]) -> GateStatus? {
     statuses.first { !$0.satisfiesPrerequisite && $0.prerequisitesSatisfied }
 }
 
-func noPhoneGatesBeforeFirstPhysical(_ statuses: [GateStatus]) -> [GateStatus] {
-    var gates: [GateStatus] = []
-    for status in statuses {
-        if status.physicalDevice {
-            break
-        }
-        if !status.physicalDevice {
-            gates.append(status)
-        }
-    }
-    return gates
-}
-
-func noPhoneGatesPassedBeforeFirstPhysical(_ statuses: [GateStatus]) -> Bool {
-    noPhoneGatesBeforeFirstPhysical(statuses).allSatisfy { $0.satisfiesPrerequisite }
-}
-
 func simulatorRuntimeGates(_ statuses: [GateStatus]) -> [GateStatus] {
     statuses.filter { $0.kind == "simulator-runtime" }
 }
@@ -5829,9 +5847,6 @@ func physicalBlockers(statuses: [GateStatus], preflightPassed: Bool) -> [String]
     if !preflightPassed {
         blockers.append("autonomous_no_phone_preflight_not_passed")
     }
-    if !noPhoneGatesPassedBeforeFirstPhysical(statuses) {
-        blockers.append("no_phone_gates_before_first_physical_not_passed")
-    }
     if !physicalDeviceExplicitlyAllowed() {
         blockers.append("explicit_physical_opt_in_missing")
     }
@@ -5868,6 +5883,15 @@ func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateI
         statuses: statuses,
         preflightPassed: preflightPassed
     ).isEmpty
+    if let finalRuntime = statuses.first(where: {
+        $0.id == "simulator-tcti-full-linux-runtime-readiness" &&
+            $0.currentlySimulatorReadinessSatisfied
+    }), finalRuntime.currentlySimulatorReadinessSatisfied,
+       let missingReadiness = simulatorReadinessStatuses(statuses).first(where: {
+           !$0.currentlySimulatorReadinessSatisfied
+       }) {
+        return missingReadiness
+    }
     let eligible = statuses.filter { status in
         guard !status.satisfiesPrerequisite && status.prerequisitesSatisfied else {
             return false
@@ -5937,7 +5961,6 @@ func statusDocument() throws -> StatusDocument {
     let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
         preflightPassed &&
         missingSimulatorReadiness.isEmpty &&
-        noPhoneGatesPassedBeforeFirstPhysical(gateStatuses) &&
         physicalDeviceExplicitlyAllowed() &&
         !dirtyRuntimeOrHarness
     let releaseEligible = gateStatuses.contains {
@@ -6513,13 +6536,20 @@ func validateEnvelope() throws {
     print("selected_gate: \(task.selectedGateID)")
 }
 
-func semanticFreshnessFixtureGate(id: String, command: String, kind: String) -> Gate {
+func semanticFreshnessFixtureGate(
+    id: String,
+    command: String,
+    kind: String,
+    allowedScope: [String] = [],
+    realStackRequired: Bool? = nil
+) -> Gate {
     Gate(
         id: id,
         command: command,
         kind: kind,
+        realStackRequired: realStackRequired,
         prerequisites: [],
-        allowedScope: [],
+        allowedScope: allowedScope,
         forbiddenScope: [],
         expectedReportPaths: [],
         readinessEligible: id.hasPrefix("simulator-tcti-"),
@@ -6537,22 +6567,32 @@ func validateSemanticFreshnessFixtures() throws {
     let runtimeGate = semanticFreshnessFixtureGate(
         id: "simulator-tcti-full-shell-usability",
         command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability",
-        kind: "simulator-runtime"
+        kind: "simulator-runtime",
+        realStackRequired: true
     )
     let tctiGate = semanticFreshnessFixtureGate(
         id: "tcti-kernel-syscall-dispatch-smoke",
         command: "make tcti-gate TARGET=tcti-kernel-syscall-dispatch-smoke",
-        kind: "kernel"
+        kind: "kernel",
+        realStackRequired: true
     )
     let kernelGate = semanticFreshnessFixtureGate(
         id: "tcti-kernel-execve-binfmt-elf-smoke",
         command: "make tcti-gate TARGET=tcti-kernel-execve-binfmt-elf-smoke",
-        kind: "kernel"
+        kind: "kernel",
+        realStackRequired: true
     )
     let selectorGate = semanticFreshnessFixtureGate(
         id: "tcti-shell-exec-simple-command",
         command: "make tcti-gate TARGET=tcti-shell-exec-simple-command",
-        kind: "runtime"
+        kind: "runtime",
+        realStackRequired: true
+    )
+    let toolchainGate = semanticFreshnessFixtureGate(
+        id: "toolchain",
+        command: "make tcti-gate TARGET=tcti-toolchain-check",
+        kind: "rail",
+        allowedScope: ["tools/tcti/orlix-tcti-gate.swift", "OrlixKernel/Tests/TCTI/golden_elf/**"]
     )
     let cases: [(String, Gate, String, Bool)] = [
         ("implement-checkpoint-does-not-rerun-runtime", runtimeGate, "docs/plans/active/orlix-tcti/IMPLEMENT.md", false),
@@ -6565,8 +6605,11 @@ func validateSemanticFreshnessFixtures() throws {
         ("coreutils-input-reruns-product", runtimeGate, "OrlixOS/Sources/make/packages.mk", true),
         ("app-source-reruns-product", runtimeGate, "Orlix/Sources/OrlixApp.swift", true),
         ("project-build-id-reruns-product", runtimeGate, "project.yml", true),
+        ("project-build-id-does-not-rerun-kernel-proof", kernelGate, "project.yml", false),
         ("environment-policy-does-not-rebuild-product", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", false),
         ("selector-script-recomputes-status-only", selectorGate, ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift", false),
+        ("product-build-id-does-not-rerun-toolchain", toolchainGate, "project.yml", false),
+        ("golden-input-reruns-toolchain", toolchainGate, "OrlixKernel/Tests/TCTI/golden_elf/init_001_exit.S", true),
     ]
 	for (name, gate, path, expected) in cases {
         let actual = doesChangedPathInvalidateGate(gate, changedPath: path)

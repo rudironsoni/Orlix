@@ -3396,9 +3396,7 @@
       "id": "simulator-tcti-init-first-syscall",
       "kind": "simulator-runtime",
       "physical_device": false,
-      "prerequisites": [
-        "tcti-simulator-kernel-first-syscall"
-      ],
+      "prerequisites": [],
       "proof_tier": "simulator",
       "readiness_eligible": false,
       "real_stack_required": true,

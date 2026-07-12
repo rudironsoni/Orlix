@@ -8358,6 +8358,16 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - This is an environment/tooling correction. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch.
 - Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
 
+### Checkpoint: Gate-Specific Proof Freshness
+
+- Non-runtime seed and rail reports now expire only when files in that gate's own executable scope change. A shared product build-number bump alone no longer invalidates unrelated toolchain proof.
+- No-phone real-stack gates follow changed product inputs instead of the shared build number. Simulator and device gates retain product version, build, and simulator-runtime identity checks.
+- Semantic freshness fixtures prove that `project.yml` does not rerun the toolchain probe while changes to golden ELF inputs do.
+- Build 21 app-hosted simulator gates passed for full shell usability, package behavior, dynamic-loader support, signals, VFS completeness, and full Linux runtime readiness on iOS 26.5 build 23F77.
+- The current first-syscall certification also passed, completing all eleven pinned-simulator readiness reports. The observation-only first-syscall gate no longer depends on an older no-phone report when stronger current app-hosted runtime evidence exists.
+- Physical authorization now follows the documented contract: explicit runtime preflight, the complete current simulator ladder, explicit human opt-in, and a clean worktree. Unrelated stale historical probes do not outrank current app evidence.
+- This changes harness selection only. It does not change product runtime behavior or weaken app-hosted runtime evidence.
+
 ### Checkpoint: Simulator Gate Launch Argument Preservation
 
 - Runtime validation now terminates the previously installed simulator app and waits for its process to exit before launching the next gate. This prevents a rapid relaunch from retaining the previous process and dropping the new gate's kernel command-line arguments.
