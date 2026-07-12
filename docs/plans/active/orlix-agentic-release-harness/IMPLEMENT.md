@@ -88,3 +88,13 @@
 - Focused evidence: Swift parse and typecheck passed for the TCTI gate; Swift parse passed for next-step; `structured-reducer-linkage-check` passed; `tcti-report-schema-check` passed; `git diff --check` passed.
 - Adversarial review initially found producer/consumer root drift, permissive owner-policy decoding, stale active-plan authorization truth, and missing pairing fixtures. All four findings were corrected and the same reviewer confirmed no remaining finding in that scope.
 - Final evidence also passed `source-owner-policy-check`, `tcti-plan-consistency`, and the full serial `agent-harness-check`.
+
+### Checkpoint: Package Failure Source Linkage
+
+- The existing `tcti-package-behavior` runtime failure path now finalizes its JSON report before writing the report-specific reducer.
+- The source report owns one stable structured failure ID and fingerprint derived from gate, destination, failure context, product version/build, and simulator runtime identity. Explanatory prose, timestamps, report paths, and process IDs are excluded.
+- The reducer records the repository-relative source report path, SHA-256 of the exact finalized report bytes, matching failure ID and fingerprint, and `replay_outcome=not_run`.
+- Reducer emission fails closed when the source report is missing, outside `Build/Reports/runtime`, non-failing, or lacks the matching structured failure.
+- The focused fixture invokes the real `die()` ordering, verifies deterministic identity, exact digest linkage, changed-input behavior, pre-finalization rejection, and absence of `runtime_patch_allowed`.
+- This is producer linkage only. It does not claim replay reproduction, choose an owning source layer, or authorize runtime edits. `runtime_patch_allowed` remains false.
+- No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch changed.

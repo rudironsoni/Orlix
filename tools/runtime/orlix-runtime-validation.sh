@@ -88,6 +88,8 @@ product_launch_attempted=""
 failure_stdout_empty=""
 failure_stderr_empty=""
 runtime_failure_reducer=""
+failure_id=""
+failure_fingerprint=""
 
 mkdir -p "$report_dir"
 report="$report_dir/${gate}-$(date -u +%Y%m%dT%H%M%SZ)-$$.md"
@@ -106,8 +108,8 @@ fi
 
 die() {
 	local message="$1"
-	write_runtime_failure_reducer "$message"
 	write_json_report "fail" "false" "$message" "false" ""
+	write_runtime_failure_reducer "$message"
 	write_report "failed" "$message"
 	printf 'runtime validation failed, report: %s\n' "$report" >&2
 	exit 1
@@ -215,6 +217,78 @@ json_artifacts_array() {
 	printf ']'
 }
 
+compute_failure_identity() {
+	[ "$gate" = "tcti-package-behavior" ] || return 0
+	[ "$status_for_failure_identity" = "fail" ] || return 0
+
+	local identity_json
+	identity_json="$(python3 - \
+		"$gate" "$destination" "$failure_stage" "$failure_kind" \
+		"$failure_exit_status" "$failure_timeout_seconds" \
+		"$product_launch_attempted" "$product_version" "$product_build_id" \
+		"$simulator_runtime_identifier" "$simulator_runtime_version" \
+		"$simulator_runtime_build" <<'PY'
+import hashlib
+import json
+import sys
+
+(gate, destination, stage, kind, exit_status, timeout_seconds,
+ product_launch_attempted, product_version, product_build_id,
+ runtime_identifier, runtime_version, runtime_build) = sys.argv[1:]
+
+def optional_int(value):
+    return int(value) if value and value.lstrip('-').isdigit() else None
+
+def optional_bool(value):
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
+
+fields = {
+    "destination": destination,
+    "failure": {
+        "exit_status": optional_int(exit_status),
+        "kind": kind or None,
+        "stage": stage or None,
+        "timeout_seconds": optional_int(timeout_seconds),
+    },
+    "gate": gate,
+    "product": {
+        "build_id": product_build_id,
+        "version": product_version,
+    },
+    "product_launch_attempted": optional_bool(product_launch_attempted),
+    "runtime": {
+        "build": runtime_build or None,
+        "identifier": runtime_identifier or None,
+        "version": runtime_version or None,
+    },
+}
+canonical = json.dumps(fields, sort_keys=True, separators=(",", ":"))
+fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+failure_id = ".".join(filter(None, [gate, destination, stage or "unknown-stage", kind or "unknown-kind"]))
+print(failure_id)
+print(fingerprint)
+PY
+	)"
+	failure_id="$(printf '%s\n' "$identity_json" | sed -n '1p')"
+	failure_fingerprint="$(printf '%s\n' "$identity_json" | sed -n '2p')"
+}
+
+failure_entry_json() {
+	if [ -z "$failure_id" ]; then
+		printf '[]'
+		return
+	fi
+	printf '[{"fingerprint":"%s","id":"%s","message":"runtime validation failed at structured stage %s with kind %s"}]' \
+		"$(json_escape "$failure_fingerprint")" \
+		"$(json_escape "$failure_id")" \
+		"$(json_escape "${failure_stage:-unknown-stage}")" \
+		"$(json_escape "${failure_kind:-unknown-kind}")"
+}
+
 write_runtime_failure_reducer() {
 	local message="$1"
 	case "$gate:$destination" in
@@ -224,9 +298,27 @@ write_runtime_failure_reducer() {
 	if [ -n "$runtime_failure_reducer" ]; then
 		return 0
 	fi
+	[ -s "$json_report" ] || return 1
 
 	local reducer_root="${ORLIX_TCTI_BUILD_ROOT:-Build/TCTI}/reproducers/simulator-tcti-package-behavior"
-	local report_base case_id reducer_copy
+	local report_base case_id reducer_copy source_report
+	source_report="$(python3 - "$PWD" "$json_report" <<'PY'
+import os
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1]).resolve()
+report = pathlib.Path(sys.argv[2]).resolve()
+try:
+    relative = report.relative_to(root)
+except ValueError:
+    raise SystemExit("source failure report must be inside the repository")
+normalized = relative.as_posix()
+if not normalized.startswith("Build/Reports/runtime/"):
+    raise SystemExit("source failure report must be under Build/Reports/runtime")
+print(normalized)
+PY
+	)" || return 1
 	report_base="$(basename "$json_report" .json)"
 	case_id="package-behavior-fail-${report_base#tcti-package-behavior-}"
 	runtime_failure_reducer="$reducer_root/$case_id.json"
@@ -237,7 +329,9 @@ write_runtime_failure_reducer() {
 	replay_command="env PATH=\"\$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin\" ORLIX_RUNTIME_GATE_CAPTURE_SECONDS=$capture_seconds make runtime-validation DESTINATION=iphonesimulator GATE=tcti-package-behavior ORLIX_SIMULATOR_ID=$required_simulator_id ORLIX_TCTI_REQUIRED_SIMULATOR_ID=$required_simulator_id ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=$required_simulator_name"
 
 	python3 - "$runtime_failure_reducer" "$PWD" "$case_id" "$replay_command" "$message" \
-		"$json_report" \
+		"$source_report" \
+		"$failure_id" \
+		"$failure_fingerprint" \
 		"$report" \
 		"$artifact_dir/simulator-terminal-output.txt" \
 		"$artifact_dir/tcti-package-behavior.txt" \
@@ -246,11 +340,20 @@ write_runtime_failure_reducer() {
 		"$artifact_dir/launch-console.log" \
 		"$artifact_dir/launch.log" \
 		"$artifact_dir/simulator-unified.log" <<'PY'
+import hashlib
 import json
 import os
 import sys
 
-output, cwd, case_id, command, message, *candidates = sys.argv[1:]
+output, cwd, case_id, command, message, source_report, failure_id, failure_fingerprint, *candidates = sys.argv[1:]
+with open(source_report, "rb") as handle:
+    source_payload = json.load(handle)
+source_failures = source_payload.get("failures", [])
+if source_payload.get("status") != "fail" or not any(
+    item.get("id") == failure_id and item.get("fingerprint") == failure_fingerprint
+    for item in source_failures
+):
+    raise SystemExit("source failure linkage requires a finalized matching report")
 artifacts = []
 for candidate in candidates:
     if candidate and (os.path.exists(candidate) or candidate.endswith(".json") or candidate.endswith(".md")):
@@ -264,6 +367,13 @@ payload = {
     "artifacts": artifacts,
     "reason": message,
     "expected_status": "fail",
+    "replay_outcome": "not_run",
+    "source_failure": {
+        "failure_fingerprint": failure_fingerprint,
+        "failure_id": failure_id,
+        "report_path": source_report,
+        "report_sha256": hashlib.sha256(open(source_report, "rb").read()).hexdigest(),
+    },
 }
 
 tmp = output + ".tmp"
@@ -693,6 +803,7 @@ if [ "$status" = "pass" ] &&
 	local artifacts_json
 	local failure_context
 	local tcti_runtime_events
+	local failures_json
 	local preflight_only="false"
 	if [ -n "$runtime_preflight_only" ]; then
 		preflight_only="true"
@@ -709,6 +820,9 @@ if [ "$status" = "pass" ] &&
 		escaped_required_simulator_name="$(json_escape "$required_simulator_name")"
 		escaped_simulator_booted_ids="$(json_escape "$simulator_booted_ids")"
 	artifacts_json="$(json_artifacts_array)"
+	status_for_failure_identity="$status"
+	compute_failure_identity
+	failures_json="$(failure_entry_json)"
 	failure_context="$(failure_context_json)"
 	tcti_runtime_events="$(tcti_runtime_events_json)"
 	cat >"$json_report.tmp" <<JSON
@@ -726,7 +840,7 @@ if [ "$status" = "pass" ] &&
 	"acceptance_weight": "$acceptance_weight",
 	"can_claim_runtime_readiness": $can_claim_runtime_readiness,
 	"failure_context": $failure_context,
-	"failures": [],
+	"failures": $failures_json,
   "forbidden_behavior": {
     "generated_exec_memory": false,
     "host_exec_guest_text": false,
@@ -1887,7 +2001,6 @@ assert_gate_markers() {
 main() {
 	validate_gate
 	physical_tcti_preflight
-
 	if [ -n "$runtime_preflight_only" ]; then
 		if [ "$tcti_evidence_mode" -eq 1 ]; then
 			write_json_report "evidence" "false" "Preflight accepted emergency evidence mode; this is not a passing gate." "true" "$tcti_device_override_reason"
@@ -1931,4 +2044,6 @@ main() {
 	printf 'runtime validation passed, report: %s\n' "$report"
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	main "$@"
+fi
