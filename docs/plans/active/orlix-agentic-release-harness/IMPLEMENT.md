@@ -142,3 +142,15 @@
 - This checkpoint defines semantic identity once. It does not add destination-specific acceptance logic, authorize phone execution, claim L4 equality, add L5 gates, or activate the live semantic frontier.
 - Current report inspection also confirmed that runtime reports expose version and build identity but do not yet expose the semantic product/payload identity required for final L3/L4 equality. That remains required before release promotion.
 - No product runtime code, generated report, reducer, upstream clone, phone execution, archive, or release action changed.
+
+### Checkpoint: Materialized Symmetric L4 Matrix
+
+- Materialized one L4 device gate for each canonical product runtime capability. The existing physical first-syscall gate remains the first instance; fourteen additional gates are derived from the canonical capability data rather than duplicated as large roadmap objects.
+- Device gates run the same runtime-validation gate, artifact, and marker contract as their L3 simulator counterparts on approved device `RRJ-iPhone-15-Pro-Max` (`00008130-001E74A11193803A`).
+- Every device gate directly retains the complete simulator readiness prerequisites and is serialized after the previous device capability. Explicit physical opt-in and a clean protected worktree remain required before selection.
+- Approved device identity comes only from immutable environment policy; `ORLIX_DEVICE_ID` cannot redefine the trust anchor.
+- Device evidence requires a current passing `iphoneos` report, approved device identity, TCTI runtime profile, exact typed-false `preflight_only` and `autonomous_tests_bypassed` fields, the exact closed-world forbidden-behavior key set with every value an actual boolean `false`, device-specific fatal-free launch-console, launch-log, and launch-result evidence, no core dump, and the canonical artifact/marker.
+- Current rejected evidence is `fail`; only semantically invalidated execution evidence is `stale`.
+- Focused frontier fixtures prove the materialized L4 set exactly equals the canonical device projection, device instances are serialized in capability order, a real-shaped device pass is accepted, and wrong-device, true/missing/incomplete/malformed forbidden behavior, missing-fatal-evidence, crash-marker, core-dump, malformed launch-result, current-invalid, and stale cases fail correctly.
+- Current status now exposes all fifteen L4 gates. Existing first-syscall device evidence passes; the remaining fourteen capabilities are missing and have not been run.
+- This checkpoint does not activate the semantic frontier, run phone gates, establish L3/L4 product-identity equality, add L5 gates, or change product runtime behavior.

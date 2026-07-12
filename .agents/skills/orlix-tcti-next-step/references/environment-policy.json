@@ -1,4 +1,6 @@
 {
   "required_simulator_id": "ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3",
-  "required_simulator_name": "Orlix-iPhone-15-Pro-Max"
+  "required_simulator_name": "Orlix-iPhone-15-Pro-Max",
+  "required_device_id": "00008130-001E74A11193803A",
+  "required_device_name": "RRJ-iPhone-15-Pro-Max"
 }

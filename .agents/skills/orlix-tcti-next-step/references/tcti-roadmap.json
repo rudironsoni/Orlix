@@ -3,20 +3,20 @@
   "description": "Agent-neutral Orlix TCTI next-task roadmap. Repo-local workflow data for the orlix-tcti-next-step skill, not an MCP server.",
   "product_runtime_capabilities": [
     {"id":"first-syscall","simulator_gate_ids":["tcti-simulator-kernel-first-syscall","simulator-tcti-init-first-syscall"],"device_gate_id":"physical-tcti-init-first-syscall","runtime_gate":"tcti-init-first-syscall","artifact_suffix":"tcti-first-syscall.txt","marker":"Orlix TCTI: svc #0"},
-    {"id":"mlibc-smoke","simulator_gate_ids":["tcti-simulator-mlibc-smoke"],"runtime_gate":"tcti-mlibc-smoke","artifact_suffix":"tcti-mlibc-smoke.txt","marker":"ORLIX-TCTI-MLIBC-SMOKE-OK"},
-    {"id":"coreutils-smoke","simulator_gate_ids":["tcti-simulator-coreutils-smoke"],"runtime_gate":"tcti-coreutils-smoke","artifact_suffix":"tcti-coreutils-smoke.txt","marker":"ORLIX-TCTI-COREUTILS-SMOKE-OK"},
-    {"id":"oci-rootfs-command","simulator_gate_ids":["tcti-simulator-oci-rootfs-command"],"runtime_gate":"tcti-oci-rootfs-command","artifact_suffix":"tcti-oci-rootfs-command.txt","marker":"ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK"},
-    {"id":"interactive-terminal","simulator_gate_ids":["tcti-simulator-interactive-terminal-smoke"],"runtime_gate":"tcti-interactive-terminal-smoke","artifact_suffix":"tcti-interactive-terminal-smoke.txt","marker":"ORLIX-TCTI-INTERACTIVE-TERMINAL-OK"},
-    {"id":"runtime-stability","simulator_gate_ids":["simulator-tcti-runtime-stability"],"runtime_gate":"tcti-simulator-stability"},
-    {"id":"linux-console-usability","simulator_gate_ids":["simulator-tcti-linux-console-usability"],"runtime_gate":"tcti-init-console-write","artifact_suffix":"tcti-console-write.txt","marker":"ORLIX-TCTI-CONSOLE-OK"},
-    {"id":"static-busybox-start","simulator_gate_ids":["simulator-tcti-static-busybox-start"],"runtime_gate":"tcti-static-busybox-start","artifact_suffix":"tcti-static-busybox-start.txt"},
-    {"id":"static-busybox-shell-command","simulator_gate_ids":["simulator-tcti-static-busybox-shell-command"],"runtime_gate":"tcti-static-busybox-shell-command","artifact_suffix":"tcti-static-busybox-shell-command.txt","marker":"ORLIX-TCTI-BUSYBOX-USABLE"},
-    {"id":"full-shell-usability","simulator_gate_ids":["simulator-tcti-full-shell-usability"],"runtime_gate":"tcti-full-shell-usability","artifact_suffix":"tcti-full-shell-usability.txt","marker":"ORLIX-TCTI-SHELL-USABLE"},
-    {"id":"package-behavior","simulator_gate_ids":["simulator-tcti-package-behavior"],"runtime_gate":"tcti-package-behavior","artifact_suffix":"tcti-package-behavior.txt","marker":"ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"},
-    {"id":"dynamic-loader-support","simulator_gate_ids":["simulator-tcti-dynamic-loader-support"],"runtime_gate":"tcti-dynamic-loader-support","artifact_suffix":"tcti-dynamic-loader-support.txt","marker":"ORLIX-TCTI-DYNAMIC-LOADER-OK"},
-    {"id":"signals","simulator_gate_ids":["simulator-tcti-signals"],"runtime_gate":"tcti-signals","artifact_suffix":"tcti-signals.txt","marker":"ORLIX-TCTI-SIGNALS-OK"},
-    {"id":"vfs-completeness","simulator_gate_ids":["simulator-tcti-vfs-completeness"],"runtime_gate":"tcti-vfs-completeness","artifact_suffix":"tcti-vfs-completeness.txt","marker":"ORLIX-TCTI-VFS-OK"},
-    {"id":"full-linux-runtime-readiness","simulator_gate_ids":["simulator-tcti-full-linux-runtime-readiness"],"runtime_gate":"tcti-full-linux-runtime-readiness","artifact_suffix":"tcti-full-linux-runtime-readiness.txt","marker":"ORLIX-TCTI-FULL-RUNTIME-OK"}
+    {"id":"mlibc-smoke","simulator_gate_ids":["tcti-simulator-mlibc-smoke"],"device_gate_id":"device-tcti-mlibc-smoke","runtime_gate":"tcti-mlibc-smoke","artifact_suffix":"tcti-mlibc-smoke.txt","marker":"ORLIX-TCTI-MLIBC-SMOKE-OK"},
+    {"id":"coreutils-smoke","simulator_gate_ids":["tcti-simulator-coreutils-smoke"],"device_gate_id":"device-tcti-coreutils-smoke","runtime_gate":"tcti-coreutils-smoke","artifact_suffix":"tcti-coreutils-smoke.txt","marker":"ORLIX-TCTI-COREUTILS-SMOKE-OK"},
+    {"id":"oci-rootfs-command","simulator_gate_ids":["tcti-simulator-oci-rootfs-command"],"device_gate_id":"device-tcti-oci-rootfs-command","runtime_gate":"tcti-oci-rootfs-command","artifact_suffix":"tcti-oci-rootfs-command.txt","marker":"ORLIX-TCTI-OCI-ROOTFS-COMMAND-OK"},
+    {"id":"interactive-terminal","simulator_gate_ids":["tcti-simulator-interactive-terminal-smoke"],"device_gate_id":"device-tcti-interactive-terminal-smoke","runtime_gate":"tcti-interactive-terminal-smoke","artifact_suffix":"tcti-interactive-terminal-smoke.txt","marker":"ORLIX-TCTI-INTERACTIVE-TERMINAL-OK"},
+    {"id":"runtime-stability","simulator_gate_ids":["simulator-tcti-runtime-stability"],"device_gate_id":"device-tcti-runtime-stability","runtime_gate":"tcti-simulator-stability"},
+    {"id":"linux-console-usability","simulator_gate_ids":["simulator-tcti-linux-console-usability"],"device_gate_id":"device-tcti-linux-console-usability","runtime_gate":"tcti-init-console-write","artifact_suffix":"tcti-console-write.txt","marker":"ORLIX-TCTI-CONSOLE-OK"},
+    {"id":"static-busybox-start","simulator_gate_ids":["simulator-tcti-static-busybox-start"],"device_gate_id":"device-tcti-static-busybox-start","runtime_gate":"tcti-static-busybox-start","artifact_suffix":"tcti-static-busybox-start.txt"},
+    {"id":"static-busybox-shell-command","simulator_gate_ids":["simulator-tcti-static-busybox-shell-command"],"device_gate_id":"device-tcti-static-busybox-shell-command","runtime_gate":"tcti-static-busybox-shell-command","artifact_suffix":"tcti-static-busybox-shell-command.txt","marker":"ORLIX-TCTI-BUSYBOX-USABLE"},
+    {"id":"full-shell-usability","simulator_gate_ids":["simulator-tcti-full-shell-usability"],"device_gate_id":"device-tcti-full-shell-usability","runtime_gate":"tcti-full-shell-usability","artifact_suffix":"tcti-full-shell-usability.txt","marker":"ORLIX-TCTI-SHELL-USABLE"},
+    {"id":"package-behavior","simulator_gate_ids":["simulator-tcti-package-behavior"],"device_gate_id":"device-tcti-package-behavior","runtime_gate":"tcti-package-behavior","artifact_suffix":"tcti-package-behavior.txt","marker":"ORLIX-TCTI-PACKAGE-BEHAVIOR-OK"},
+    {"id":"dynamic-loader-support","simulator_gate_ids":["simulator-tcti-dynamic-loader-support"],"device_gate_id":"device-tcti-dynamic-loader-support","runtime_gate":"tcti-dynamic-loader-support","artifact_suffix":"tcti-dynamic-loader-support.txt","marker":"ORLIX-TCTI-DYNAMIC-LOADER-OK"},
+    {"id":"signals","simulator_gate_ids":["simulator-tcti-signals"],"device_gate_id":"device-tcti-signals","runtime_gate":"tcti-signals","artifact_suffix":"tcti-signals.txt","marker":"ORLIX-TCTI-SIGNALS-OK"},
+    {"id":"vfs-completeness","simulator_gate_ids":["simulator-tcti-vfs-completeness"],"device_gate_id":"device-tcti-vfs-completeness","runtime_gate":"tcti-vfs-completeness","artifact_suffix":"tcti-vfs-completeness.txt","marker":"ORLIX-TCTI-VFS-OK"},
+    {"id":"full-linux-runtime-readiness","simulator_gate_ids":["simulator-tcti-full-linux-runtime-readiness"],"device_gate_id":"device-tcti-full-linux-runtime-readiness","runtime_gate":"tcti-full-linux-runtime-readiness","artifact_suffix":"tcti-full-linux-runtime-readiness.txt","marker":"ORLIX-TCTI-FULL-RUNTIME-OK"}
   ],
   "gates": [
     {
@@ -6858,7 +6858,7 @@
     },
     {
       "id": "physical-tcti-init-first-syscall",
-      "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
+      "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall ORLIX_DEVICE_ID=00008130-001E74A11193803A",
       "kind": "physical-device",
       "prerequisites": [
         "simulator-tcti-init-first-syscall",
@@ -7084,7 +7084,21 @@
       "simulator-tcti-full-linux-runtime-readiness"
     ],
     "L4": [
-      "physical-tcti-init-first-syscall"
+      "physical-tcti-init-first-syscall",
+      "device-tcti-mlibc-smoke",
+      "device-tcti-coreutils-smoke",
+      "device-tcti-oci-rootfs-command",
+      "device-tcti-interactive-terminal-smoke",
+      "device-tcti-runtime-stability",
+      "device-tcti-linux-console-usability",
+      "device-tcti-static-busybox-start",
+      "device-tcti-static-busybox-shell-command",
+      "device-tcti-full-shell-usability",
+      "device-tcti-package-behavior",
+      "device-tcti-dynamic-loader-support",
+      "device-tcti-signals",
+      "device-tcti-vfs-completeness",
+      "device-tcti-full-linux-runtime-readiness"
     ],
     "L5": []
   },

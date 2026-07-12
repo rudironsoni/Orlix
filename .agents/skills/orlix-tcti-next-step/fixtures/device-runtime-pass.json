@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "passed": true,
+  "backend": "tcti",
+  "profile": "tcti_runtime",
+  "destination": "iphoneos",
+  "selected_device_id": "00008130-001E74A11193803A",
+  "preflight_only": false,
+  "autonomous_tests_bypassed": false,
+  "forbidden_behavior": {
+    "generated_exec_memory": false,
+    "host_exec_guest_text": false,
+    "host_x18": false,
+    "map_jit": false,
+    "native_ios_api_exposure_to_guest": false,
+    "rwx": false
+  },
+  "artifacts": [
+    ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-pass.launch-console.log",
+    ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-pass.launch.log",
+    ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-pass.launch.json",
+    ".agents/skills/orlix-tcti-next-step/fixtures/device-runtime-pass.tcti-first-syscall.txt"
+  ]
+}
