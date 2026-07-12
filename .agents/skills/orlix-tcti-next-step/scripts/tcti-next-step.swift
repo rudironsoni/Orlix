@@ -1596,13 +1596,13 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     if ["fail", "ready"].contains(status.state) && currentFailure && realProductFailure {
         return policy(
             classification: "current_runtime_product_failure",
-            runtimePatchAllowed: true,
+            runtimePatchAllowed: false,
             harnessPatchAllowed: false,
             continueRefreshAllowed: false,
             mustStop: true,
-            requiredNextAction: "stop, reduce the current failure, and patch only the owning runtime/product layer",
+            requiredNextAction: "stop and generate structured, execution-fresh reducer linkage before any runtime patch",
             reason: status.reason,
-            owningLayer: status.kind == "simulator-runtime" ? "runtime-validation selected stack" : "selected gate owning layer"
+            owningLayer: "failure reduction"
         )
     }
 
@@ -6875,7 +6875,8 @@ func policyFixtureStatus(
     passed: Bool = false,
     reason: String,
     reports: [ReportFact] = [],
-    readinessEligible: Bool = false
+    readinessEligible: Bool = false,
+    prerequisites: [String] = []
 ) -> GateStatus {
     GateStatus(
         id: id,
@@ -6888,7 +6889,7 @@ func policyFixtureStatus(
         state: state,
         passed: passed,
         reason: reason,
-        prerequisites: [],
+        prerequisites: prerequisites,
         prerequisitesSatisfied: true,
         reportPaths: reports.map(\.path),
         reports: reports,
@@ -6931,13 +6932,14 @@ func validateGateResultPolicyFixtures() throws {
         ("no-phone-reducer-mixed-failure-stops-unclassified", policyFixtureStatus(id: "reducer-mixed", kind: "no-phone-reducer", state: "fail", reason: "simulator report stale and negative execution shape failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", failures: [ReportFailureFact(id: "simulator-report-stale", message: "latest simulator stability report is not execution-fresh for this rail"), ReportFailureFact(id: "negative-execution-shape", message: "negative execution shape failed")])]), "current_runtime_product_failure", false, false, false, true),
         ("rail-missing-reducer-contract-bug", policyFixtureStatus(id: "rail-reducer", kind: "production-tcti-fix", state: "fail", reason: "reducer-evidence: missing reducer report or pass-regression evidence"), "rail_evidence_contract_bug", false, true, false, true),
         ("metadata-drift", policyFixtureStatus(id: "drift", kind: "rail", proofTier: "rail", state: "fail", reason: "metadata mismatch", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "seed")]), "proof_tier_report_status_metadata_drift", false, true, false, true),
-        ("runtime-product-failure", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
-        ("xcodebuild-product-failure", policyFixtureStatus(id: "xcodebuild-product", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "xcodebuild reached the app-hosted test but OrlixOS package construction failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", true, false, false, true),
+        ("runtime-product-failure-needs-reducer", policyFixtureStatus(id: "runtime", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "guest syscall failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", false, false, false, true),
+        ("xcodebuild-product-failure-needs-reducer", policyFixtureStatus(id: "xcodebuild-product", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "xcodebuild reached the app-hosted test but OrlixOS package construction failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "current_runtime_product_failure", false, false, false, true),
+        ("reducer-named-prerequisite-does-not-authorize", policyFixtureStatus(id: "production-fix", kind: "production-tcti-fix", proofTier: "rail", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "a prerequisite name is not reducer evidence", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "rail")], prerequisites: ["current-runtime-reducer"]), "current_runtime_product_failure", false, false, false, true),
         ("environment-only-failure", policyFixtureStatus(id: "environment", state: "fail", reason: "CoreSimulator bootstatus failed"), "environment_only_failure", false, false, false, true),
         ("xctest-runner-connection-failure", policyFixtureStatus(id: "xctest-runner", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "The test runner hung before establishing connection", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
         ("remote-process-connection-failure", policyFixtureStatus(id: "xctest-remote-process", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "Connection to remote process was not established", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
         ("simulator-install-timeout", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "current simulator report failed before launch", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "timeout", failureExitStatus: "124", failureTimeoutSeconds: "120", productLaunchAttempted: false)]), "environment_only_failure", false, false, false, true),
-        ("simulator-install-product-rejection", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "simulator rejected the built app", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "command-failure", failureExitStatus: "1", productLaunchAttempted: false)]), "current_runtime_product_failure", true, false, false, true),
+        ("simulator-install-product-rejection-needs-reducer", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "simulator rejected the built app", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "command-failure", failureExitStatus: "1", productLaunchAttempted: false)]), "current_runtime_product_failure", false, false, false, true),
         ("forbidden-behavior-violation", policyFixtureStatus(id: "forbidden", state: "fail", reason: "safety report failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", forbiddenBehaviorViolations: ["map_jit"])]), "forbidden_behavior_violation", false, false, false, true),
         ("readiness-gate-pass", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: true, state: "pass", passed: true, reason: "current simulator readiness report passed", readinessEligible: true), "readiness_gate_pass", false, false, true, false),
     ]
