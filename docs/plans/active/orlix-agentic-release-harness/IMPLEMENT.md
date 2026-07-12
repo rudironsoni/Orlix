@@ -98,3 +98,12 @@
 - The focused fixture invokes the real `die()` ordering, verifies deterministic identity, exact digest linkage, changed-input behavior, pre-finalization rejection, and absence of `runtime_patch_allowed`.
 - This is producer linkage only. It does not claim replay reproduction, choose an owning source layer, or authorize runtime edits. `runtime_patch_allowed` remains false.
 - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch changed.
+
+### Checkpoint: XCTest Selected-Suite Finalization
+
+- The selected mlibc dynamic-loader XCTest executed once with zero failures, emitted `ORLIX-MLIBC-TEST-END`, and proved the dynamic-loader marker and PT_INTERP workload before Xcode stalled in post-test finalization.
+- The shared parser now accepts either Xcode's final success banner or a clean selected-suite summary with at least one executed test, zero failures, and the required completion marker. Explicit failure evidence still rejects the run.
+- Both mlibc gates using this runner stop Xcode after the complete evidence set instead of waiting indefinitely for post-test finalization.
+- Focused parser fixtures cover a clean selected-suite pass, nonzero failures, and a missing completion marker.
+- The corrected dynamic-loader rerun passed with one test executed, one passed, zero failed, zero skipped, and all forbidden behavior false.
+- This changes gate process control and evidence parsing only. Product runtime behavior is unchanged.

@@ -8426,3 +8426,9 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - New reducers start with `replay_outcome=not_run`; no producer can assert reproduction or runtime authorization.
 - The focused fixture executes the real failure-ordering path and proves missing or noncanonical source reports fail closed.
 - This changes runtime-validation evidence production only. Product behavior and readiness truth are unchanged, and `runtime_patch_allowed` remains false.
+
+### Checkpoint: XCTest Selected-Suite Finalization
+
+- `tcti-mlibc-dynamic-loader-smoke` reached its PT_INTERP-backed workload, emitted the required mlibc and dynamic-loader evidence, and passed one selected XCTest with zero failures before Xcode stalled during finalization.
+- The gate now accepts that complete selected-suite evidence without requiring Xcode's delayed final banner. Explicit failures and missing markers remain failures.
+- The corrected rerun passed. This is a harness-only result-contract repair; product behavior and readiness policy are unchanged.

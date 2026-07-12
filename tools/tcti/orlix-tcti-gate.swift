@@ -700,15 +700,34 @@ func xcresultFailureTexts(at path: String) -> [String] {
     return xcresultFailureTexts(in: data)
 }
 
+func xcodeOutputShowsCleanSelectedTestPass(_ output: String, completionMarker: String) -> Bool {
+    let selectedSuitePassed = output.contains("Test Suite 'Selected tests' passed") &&
+        output.range(of: #"Executed [1-9][0-9]* tests?, with 0 failures"#, options: .regularExpression) != nil
+    let success = output.contains("** TEST SUCCEEDED **") || selectedSuitePassed
+    let failure = output.contains("** TEST FAILED **") ||
+        output.contains("Test Suite 'Selected tests' failed") ||
+        output.range(of: #"Executed [0-9]+ tests?, with [1-9][0-9]* failures?"#, options: .regularExpression) != nil
+    return success && !failure && output.contains(completionMarker)
+}
+
 func runXCResultSummaryParserCheck() -> Int32 {
     let output = """
     Test session results, code coverage, and logs:
         /tmp/Test-OrlixKernel Conformance.xcresult
     """
     let fixture = #"{"testFailures":[{"failureText":"The test runner hung before establishing connection."}]}"#
+    let completedTestOutput = """
+    ORLIX-MLIBC-TEST-END
+    Test Suite 'Selected tests' passed.
+         Executed 1 test, with 0 failures (0 unexpected) in 1.0 seconds
+    """
+    let failedTestOutput = completedTestOutput + "\nExecuted 1 test, with 1 failure (0 unexpected)\n"
     guard xcresultBundlePath(in: output) == "/tmp/Test-OrlixKernel Conformance.xcresult",
           let data = fixture.data(using: .utf8),
-          xcresultFailureTexts(in: data) == ["The test runner hung before establishing connection."] else {
+          xcresultFailureTexts(in: data) == ["The test runner hung before establishing connection."],
+          xcodeOutputShowsCleanSelectedTestPass(completedTestOutput, completionMarker: "ORLIX-MLIBC-TEST-END"),
+          !xcodeOutputShowsCleanSelectedTestPass(failedTestOutput, completionMarker: "ORLIX-MLIBC-TEST-END"),
+          !xcodeOutputShowsCleanSelectedTestPass("Test Suite 'Selected tests' passed", completionMarker: "ORLIX-MLIBC-TEST-END") else {
         print("fail: xcresult summary parser check")
         return 1
     }
@@ -2829,6 +2848,7 @@ func runMLibCBuildSmoke() throws -> Int32 {
         check: false,
         terminateAfterOutputContainsAny: [
             ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures", "ORLIX-MLIBC-TEST-END"],
             ["** TEST FAILED **", "Test Suite 'Selected tests' failed"],
             ["not ok ", "Test Case '-[OrlixMLibCConformanceTests.OrlixMLibCConformanceTests testMLibCRootfsCompletesThroughOrlixOSTerminalSession]' failed"],
         ]
@@ -2837,7 +2857,7 @@ func runMLibCBuildSmoke() throws -> Int32 {
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput, completionMarker: "ORLIX-MLIBC-TEST-END")
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
     let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
@@ -3337,6 +3357,7 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
         check: false,
         terminateAfterOutputContainsAny: [
             ["** TEST SUCCEEDED **", "ORLIX-MLIBC-TEST-END"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures", "ORLIX-MLIBC-TEST-END"],
             ["** TEST FAILED **", "Test Suite 'Selected tests' failed"],
             ["not ok ", "Test Case '-[OrlixMLibCConformanceTests.OrlixMLibCConformanceTests testMLibCRootfsCompletesThroughOrlixOSTerminalSession]' failed"],
         ]
@@ -3345,7 +3366,7 @@ func runMLibCDynamicLoaderSmoke() throws -> Int32 {
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testMLibCRootfsCompletesThroughOrlixOSTerminalSession")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput, completionMarker: "ORLIX-MLIBC-TEST-END")
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
     let completionSeen = xcodeOutput.contains("ORLIX-MLIBC-TEST-END")
