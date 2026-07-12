@@ -1615,6 +1615,16 @@ capture_launch() {
 			local launch_args=()
 			touch "$artifact_dir/launch.json" "$artifact_dir/launch.log"
 			simulator_launch_arguments launch_args
+			xcrun simctl terminate "$device_id" "$bundle_id" >/dev/null 2>&1 || true
+			local stopped=0
+			for _ in $(seq 1 50); do
+				if ! pgrep -f "/CoreSimulator/Devices/$device_id/.*/Orlix.app/Orlix" >/dev/null 2>&1; then
+					stopped=1
+					break
+				fi
+				sleep 0.2
+			done
+			[ "$stopped" -eq 1 ] || die "Previous Orlix simulator process did not terminate before launch."
 			run_command_with_timeout "$((capture_seconds + 15))" \
 				"$artifact_dir/simulator-unified.log" \
 			"$artifact_dir/simulator-unified.stderr" \
@@ -1629,7 +1639,6 @@ capture_launch() {
 				"$artifact_dir/launch.stderr" \
 				env SIMCTL_CHILD_ORLIX_SIMULATOR_CAPTURE_TERMINAL_OUTPUT=1 \
 				xcrun simctl launch \
-				--terminate-running-process \
 					--console \
 					"$device_id" \
 					"$bundle_id" \
