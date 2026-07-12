@@ -8472,3 +8472,5 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - No product runtime behavior changed. The mlibc device capability remains unproven until rerun from a clean checkpoint.
 - The signed retry stopped before build completion because automatic signing needed `-allowProvisioningUpdates`; canonical L4 commands now pass the existing policy explicitly.
 - Xcode 27 still lacked an account. Fastlane created and installed `Orlix-AdHoc` for the approved device using the existing App Store Connect API key and installed ZQ distribution certificate. L4 commands now use deterministic manual signing with that real profile.
+- The initial manual profile setting propagated to framework targets and failed before compilation. The profile specifier is now routed through an app-target-only `project.yml` build setting.
+- Signing-only `project.yml` changes no longer invalidate simulator execution evidence. Content-aware freshness still invalidates project changes that affect versions, dependencies, sources, linker settings, or runtime behavior.
