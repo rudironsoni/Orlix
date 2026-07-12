@@ -115,3 +115,10 @@
 - The five OCI component gates using the same file-backed runner now use the shared clean selected-suite parser and stop after complete XCTest evidence instead of waiting for Xcode's final banner.
 - Every OCI gate retains its existing named-test, skip, runtime assertion, artifact, and exit-status requirements; a clean XCTest summary alone cannot satisfy those gate-specific contracts.
 - The corrected stdio/signal/wait rerun passed. This changes harness process control only and does not change OCI, OrlixOS, Linux, HostAdapter, or app behavior.
+
+### Checkpoint: Missing Pinned-Simulator Artifact Continuation
+
+- The documented safe-generator policy recognized only exact `simulator-runtime` kinds, so the missing `simulator-runtime-real-stack` mlibc report stopped even though its exact pinned-simulator command and prerequisite were valid.
+- Safe generator recognition now accepts only the explicit `simulator-runtime` and `simulator-runtime-real-stack` kinds and one seven-token command grammar with a constrained gate name and exact pinned destination, simulator ID, and simulator name arguments.
+- Classifier fixtures prove the missing pinned real-stack mlibc report continues only through its exact runtime-validation generator and reject malicious kinds, altered simulator tokens, duplicate destinations, appended shell commands, physical-device status, and unsatisfied prerequisites.
+- Physical-device commands, unpinned simulator commands, and unknown generators remain stop conditions.

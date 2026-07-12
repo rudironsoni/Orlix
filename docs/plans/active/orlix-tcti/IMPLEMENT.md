@@ -8438,3 +8438,8 @@ Timestamp: `2026-07-06T20:29:32Z`.
 
 - The OCI component gates now accept the same clean selected-suite completion evidence before Xcode's delayed final banner, while retaining every gate-specific runtime and artifact assertion.
 - The selected `tcti-oci-stdio-signal-wait` rerun passed after the process-control correction. Product behavior and promotion policy are unchanged.
+
+### Checkpoint: Missing Pinned-Simulator Artifact Continuation
+
+- Missing `simulator-runtime-real-stack` reports now follow the same exact pinned runtime-validation generator policy as the explicitly recognized simulator-runtime kind.
+- This changes autonomous continuation only. It does not weaken simulator identity, prerequisites, physical-device policy, or readiness claims.
