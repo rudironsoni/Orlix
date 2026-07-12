@@ -2,6 +2,7 @@
 from orlix_hook_common import (
     active_plan_dirs,
     block,
+    external_ssd_bypass_violation,
     flattened_text,
     generated_tree_write_violation,
     is_git_commit_or_push,
@@ -12,14 +13,19 @@ from orlix_hook_common import (
     read_stdin_text,
     repo_root,
     required_plan_context_paths,
+    selected_task_policy,
     tool_requires_plan_context,
     tool_mutates_workspace,
+    unauthorized_physical_command,
+    unauthorized_release_command,
+    unauthorized_tcti_runtime_write,
 )
 
 payload = parse_json(read_stdin_text())
 text = flattened_text(payload)
 root = repo_root()
 state = load_plan_context_state(root)
+policy = selected_task_policy(root)
 
 if active_plan_dirs(root):
     if not plan_context_loaded(root, state) and tool_requires_plan_context(payload):
@@ -33,6 +39,18 @@ if active_plan_dirs(root):
 
 if generated_tree_write_violation(payload):
     block("Generated upstream/build trees are read-only for agents. Move the fix to the owning Orlix layer.")
+
+if unauthorized_tcti_runtime_write(payload, policy):
+    block("The current TCTI task envelope has runtime_patch_allowed=false. Classify a current runtime failure before editing TCTI runtime sources.")
+
+if unauthorized_physical_command(payload, policy):
+    block("The current TCTI task envelope has physical_device_allowed=false. Complete the simulator frontier and regenerate the envelope first.")
+
+if unauthorized_release_command(payload, policy):
+    block("The current TCTI task envelope has release_gate_eligible=false. Complete simulator and device promotion before beta release commands.")
+
+if external_ssd_bypass_violation(payload):
+    block("Xcode storage must use the configured external-SSD wrappers. Use normal xcrun/xcodebuild through the required PATH, then run xcode-storage-doctor.")
 
 if is_git_commit_or_push(payload):
     for message in oversized_goal_messages(root):

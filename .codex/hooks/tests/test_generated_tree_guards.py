@@ -2,6 +2,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -22,6 +23,36 @@ def run_hook(script, payload):
     )
 
 
+def run_hook_in_repo(script, payload, policy):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        subprocess.run(["git", "init"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=Hook Test", "-c", "user.email=hook@example.invalid", "commit", "--allow-empty", "-m", "fixture"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        policy = dict(policy)
+        policy.setdefault(
+            "git_sha",
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+        )
+        envelope = root / "Build" / "AgentHarness" / "orlix-tcti" / "next-task.json"
+        envelope.parent.mkdir(parents=True)
+        envelope.write_text(json.dumps(policy))
+        return subprocess.run(
+            [sys.executable, str(script)],
+            input=json.dumps(payload),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=root,
+            check=False,
+        )
+
+
 def bash_payload(command):
     return {
         "hook_event_name": "PreToolUse",
@@ -39,6 +70,137 @@ def exec_command_payload(command, tool_name="exec_command"):
 
 
 class GeneratedTreeGuardTests(unittest.TestCase):
+    @staticmethod
+    def tcti_runtime_path():
+        return "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/" + "hosted_exec/tcti/exec.c"
+
+    def test_pre_tool_guard_blocks_tcti_runtime_write_without_authorization(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Update File: " + self.tcti_runtime_path()
+                },
+            },
+            {"runtime_patch_allowed": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("runtime_patch_allowed=false", result.stderr)
+
+    def test_pre_tool_guard_allows_tcti_runtime_write_with_authorization(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "patch": "*** Update File: " + self.tcti_runtime_path()
+                },
+            },
+            {
+                "runtime_patch_allowed": True,
+                "allowed_scope": ["OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/" + "hosted_exec/tcti/**"],
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_pre_tool_guard_blocks_rtk_phone_command_before_promotion(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            exec_command_payload("rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-userland-marker"),
+            {"physical_device_allowed": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("physical_device_allowed=false", result.stderr)
+
+    def test_pre_tool_guard_blocks_beta_upload_before_release_promotion(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-upload"),
+            {"release_gate_eligible": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("release_gate_eligible=false", result.stderr)
+
+    def test_pre_tool_guard_blocks_release_when_envelope_is_missing(self):
+        command = "make " + "be" + "ta-upload"
+        result = run_hook(PRE_TOOL_GUARD, bash_payload(command))
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("release_gate_eligible=false", result.stderr)
+
+    def test_pre_tool_guard_allows_release_name_in_read_only_search(self):
+        command = "rtk grep -n '" + "be" + "ta-archive' Makefile"
+        result = run_hook(PRE_TOOL_GUARD, bash_payload(command))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_pre_tool_guard_blocks_direct_agent_envelope_write(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload("rtk proxy touch Build/AgentHarness/orlix-tcti/next-task.json"),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_does_not_exempt_mixed_hook_and_runtime_patch(self):
+        patch = "\n".join(
+            [
+                "*** Begin Patch",
+                "*** Update File: .codex/hooks/example.py",
+                "*** Update File: " + self.tcti_runtime_path(),
+                "*** End Patch",
+            ]
+        )
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            {"hook_event_name": "PreToolUse", "tool_name": "apply_patch", "tool_input": {"patch": patch}},
+            {"runtime_patch_allowed": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("runtime_patch_allowed=false", result.stderr)
+
+    def test_permission_guard_cannot_override_release_promotion(self):
+        command = "make " + "be" + "ta-archive"
+        result = run_hook_in_repo(
+            PERMISSION_GUARD,
+            bash_payload(command),
+            {"release_gate_eligible": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("release_gate_eligible=false", result.stderr)
+
+    def test_pre_tool_guard_blocks_direct_generated_report_write(self):
+        result = run_hook(
+            PRE_TOOL_GUARD,
+            exec_command_payload("rtk proxy touch Build/Reports/runtime/fake.json"),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
+
+    def test_pre_tool_guard_blocks_external_ssd_bypass(self):
+        commands = (
+            "/usr/bin/xcrun simctl list",
+            "rtk proxy /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -version",
+            "xcodebuild -derivedDataPath /tmp/DerivedData test",
+            "xcodebuild SYMROOT=/tmp/build test",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                result = run_hook(PRE_TOOL_GUARD, exec_command_payload(command))
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("external-SSD", result.stderr)
+
     def test_pre_tool_guard_allows_read_only_bash_generated_tree_inspection(self):
         result = run_hook(
             PRE_TOOL_GUARD,
