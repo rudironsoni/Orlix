@@ -62,3 +62,16 @@
 - This tightens authorization only. It does not select a reducer automatically and does not change product runtime behavior.
 - Adversarial re-review found no remaining blocker and confirmed there is no current classifier path that emits `runtime_patch_allowed=true`.
 - Evidence: `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift gate-result-policy-check`, Swift parse, `rtk proxy make agent-harness-check`, and `rtk git diff --check` passed.
+
+### Checkpoint: Active Goal And Luna Workflow
+
+- Activated `docs/goals/active/orlix-release.md` as a concise map to the existing L0-L5 plan and completion contract.
+- Added `WORKFLOW.md` with disjoint reducer-contract, evidence-inventory, and adversarial-authorization packets.
+- Ran the three packets with `gpt-5.6-luna` at medium reasoning. They were read-only and edited no product or harness source.
+- The agents agreed that current reducer descriptors already carry replay command, case, artifacts, and expected status, while current reports carry structured failure IDs and the next-step consumer already computes semantic execution freshness.
+- Missing authorization-grade evidence is exact failing-report content identity, structured failure fingerprint, explicit replay outcome, exact causal linkage, canonical source owner, repository-derived owner scope, and an authorization input digest.
+- The adversarial review rejected trusting `git_sha == HEAD`, artifact-path membership, filenames, prerequisite names, free-form evidence, or a producer-provided authorization boolean.
+- The workflow now records a six-step fail-closed implementation sequence. `runtime_patch_allowed` remains false until an end-to-end positive authorization fixture and all forged, stale, unrelated, mismatched, mixed, and extra-target fixtures pass.
+- Validation: the active goal is 2,075 characters; plan consistency passed; a serial `rtk proxy make agent-harness-check` passed; `rtk git diff --check` passed.
+- One earlier full-harness run transiently failed its temporary kernel KUnit fixture. An isolated reproduction emitted every expected field and satisfied the exact predicate, and the serial rerun passed. No source change was made for that transient result.
+- Final checkpoint validation passed plan consistency, hook checks, and `git diff --check`; the goal and workflow are ready to commit.
