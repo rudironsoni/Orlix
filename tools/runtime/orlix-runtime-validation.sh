@@ -4,6 +4,7 @@ set -euo pipefail
 export HOMEBREW_NO_AUTO_UPDATE="${HOMEBREW_NO_AUTO_UPDATE:-1}"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/orlix-runtime-report-selection.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/orlix-runtime-evidence.sh"
 
 product_version="$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
 product_build_id="$(awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
@@ -356,13 +357,13 @@ tcti_runtime_events_json() {
 	local last_return_ret=""
 	local last_return_signed_ret=""
 
-	first_svc_line="$(grep -h -F 'Orlix TCTI: svc #0' "$artifact_dir"/tcti-first-syscall.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | head -1 || true)"
-	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=(init|sh) ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	exec_start_thread_line="$(grep -h -E 'Orlix TCTI: linux exec start_thread ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=(init|sh) .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	fault_line="$(grep -h -E 'Orlix TCTI: user fault ' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	signaled_line="$(grep -h -E 'orlix-init: process signaled pid=[0-9]+ signal=[0-9]+' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
-	last_return_line="$(grep -h -E 'Orlix TCTI: syscall return task=sh ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	first_svc_line="$(grep -h -F 'Orlix TCTI: svc #0' "$artifact_dir"/tcti-first-syscall.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | head -1 || true)"
+	static_pie_line="$(grep -h -E 'Orlix TCTI: static PIE image task=(init|sh) ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	exec_start_thread_line="$(grep -h -E 'Orlix TCTI: linux exec start_thread ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	mmap_line="$(grep -h -E 'Orlix TCTI: svc #0 task=(init|sh) .* syscall=222' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	fault_line="$(grep -h -E 'Orlix TCTI: user fault ' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	signaled_line="$(grep -h -E 'orlix-init: process signaled pid=[0-9]+ signal=[0-9]+' "$artifact_dir"/tcti-simulator-fatal-runtime.txt "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
+	last_return_line="$(grep -h -E 'Orlix TCTI: syscall return task=sh ' "$artifact_dir"/launch-console.log "$artifact_dir"/launch.log "$artifact_dir"/launch.stderr "$artifact_dir"/simulator-terminal-output.txt "$artifact_dir"/simulator-unified.log 2>/dev/null | tail -1 || true)"
 
 	first_svc_task="$(log_field "$first_svc_line" task)"
 	first_svc_pid="$(log_field "$first_svc_line" pid)"
@@ -1727,12 +1728,13 @@ assert_no_simulator_fatal_runtime() {
 
 assert_gate_markers() {
 	capture_tcti_first_syscall() {
-		grep -F 'Orlix TCTI: svc #0' \
+		orlix_capture_tcti_first_syscall \
+			"$artifact_dir/tcti-first-syscall.txt" \
 			"$artifact_dir/launch-console.log" \
 			"$artifact_dir/launch.log" \
+			"$artifact_dir/launch.stderr" \
 			"$artifact_dir/simulator-terminal-output.txt" \
-			"$artifact_dir/simulator-unified.log" \
-			>"$artifact_dir/tcti-first-syscall.txt" 2>/dev/null || {
+			"$artifact_dir/simulator-unified.log" || {
 			failure_stage="tcti-first-syscall-marker"
 			die "No TCTI \`svc #0\` marker was captured from \`$destination\`."
 		}
