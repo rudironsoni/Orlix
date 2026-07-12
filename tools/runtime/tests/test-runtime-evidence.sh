@@ -15,7 +15,9 @@ orlix_capture_tcti_first_syscall \
 	"$tmp/tcti-first-syscall.txt" \
 	"$tmp/launch-console.log" \
 	"$tmp/launch.log" \
-	"$tmp/launch.stderr"
+	"$tmp/launch.stderr" \
+	"$tmp/simulator-terminal-output.txt" \
+	"$tmp/simulator-unified.log"
 
 grep -Fxq "$marker" "$tmp/tcti-first-syscall.txt"
 printf '%s\n' 'pass: runtime physical first-syscall evidence'
