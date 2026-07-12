@@ -6850,7 +6850,6 @@
       "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
       "kind": "physical-device",
       "prerequisites": [
-        "first-gadget-init-001-exit",
         "simulator-tcti-init-first-syscall",
         "simulator-tcti-runtime-stability",
         "simulator-tcti-linux-console-usability",
@@ -6863,8 +6862,7 @@
         "simulator-tcti-vfs-completeness",
         "simulator-tcti-full-linux-runtime-readiness",
         "appstore-safety",
-        "report-schema",
-        "tcti-simulator-interactive-terminal-smoke"
+        "report-schema"
       ],
       "allowed_scope": [
         "tools/runtime/orlix-runtime-validation.sh",
