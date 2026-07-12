@@ -8419,3 +8419,10 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Reducer names, prerequisite names, artifact-path membership, free-form evidence, and `git_sha` alone cannot authorize runtime mutation.
 - Runtime authorization remains disabled until the active agentic-release-harness plan proves exact failing-report content identity, structured failure identity, reproduced replay outcome, semantic freshness, one canonical source owner, repository-derived scope, and verifier-recomputed authorization.
 - The authoritative current policy is recorded in `docs/goals/active/orlix-release.md` and `docs/plans/active/orlix-agentic-release-harness/`.
+
+### Checkpoint: Package Failure Source Linkage
+
+- `tcti-package-behavior` now writes its failed runtime report before its report-specific reducer, then links the reducer to the exact report digest and matching structured failure ID/fingerprint.
+- New reducers start with `replay_outcome=not_run`; no producer can assert reproduction or runtime authorization.
+- The focused fixture executes the real failure-ordering path and proves missing or noncanonical source reports fail closed.
+- This changes runtime-validation evidence production only. Product behavior and readiness truth are unchanged, and `runtime_patch_allowed` remains false.

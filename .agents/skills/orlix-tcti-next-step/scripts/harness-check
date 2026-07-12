@@ -405,6 +405,8 @@ check_skills() {
     source-owner-policy-check
   expect_command_passes "runtime report destination selection fixtures" \
     "$root/tools/runtime/tests/test-runtime-report-selection.sh"
+  expect_command_passes "package failure report linkage fixtures" \
+    "$root/tools/runtime/tests/test-package-failure-linkage.sh"
   expect_command_passes "simulator runtime identity fixtures" \
     "$root/tools/runtime/tests/test-simulator-runtime-identity.sh"
   expect_command_passes "incremental OrlixOS payload embed fixtures" \
