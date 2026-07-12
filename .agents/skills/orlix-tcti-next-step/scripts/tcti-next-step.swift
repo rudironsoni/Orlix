@@ -1511,11 +1511,20 @@ func selectedCommandCanGenerateProof(_ status: GateStatus) -> Bool {
         return true
     }
 
-    return status.kind == "simulator-runtime" &&
-        status.command.hasPrefix("make runtime-validation DESTINATION=iphonesimulator ") &&
-        status.command.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)") &&
-        status.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)") &&
-        status.command.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)")
+    let acceptedKinds = Set(["simulator-runtime", "simulator-runtime-real-stack"])
+    let tokens = status.command.split(whereSeparator: \.isWhitespace).map(String.init)
+    guard acceptedKinds.contains(status.kind),
+          tokens.count == 7,
+          tokens[0] == "make",
+          tokens[1] == "runtime-validation",
+          tokens[2] == "DESTINATION=iphonesimulator",
+          tokens[3].range(of: #"^GATE=[A-Za-z0-9][A-Za-z0-9-]*$"#, options: .regularExpression) != nil,
+          tokens[4] == "ORLIX_SIMULATOR_ID=\(requiredSimulatorID)",
+          tokens[5] == "ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)",
+          tokens[6] == "ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)" else {
+        return false
+    }
+    return true
 }
 
 func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
@@ -7020,7 +7029,9 @@ func policyFixtureStatus(
     reason: String,
     reports: [ReportFact] = [],
     readinessEligible: Bool = false,
-    prerequisites: [String] = []
+    prerequisites: [String] = [],
+    prerequisitesSatisfied: Bool = true,
+    physicalDevice: Bool = false
 ) -> GateStatus {
     GateStatus(
         id: id,
@@ -7034,11 +7045,11 @@ func policyFixtureStatus(
         passed: passed,
         reason: reason,
         prerequisites: prerequisites,
-        prerequisitesSatisfied: true,
+        prerequisitesSatisfied: prerequisitesSatisfied,
         reportPaths: reports.map(\.path),
         reports: reports,
         readinessEligible: readinessEligible,
-        physicalDevice: false,
+        physicalDevice: physicalDevice,
         gadget: false
     )
 }
@@ -7064,11 +7075,19 @@ func validateGateResultPolicyFixtures() throws {
         throw HarnessError.invalid("stale failing runtime report must remain refreshable")
     }
 
+    let pinnedSimulatorCommand = "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-mlibc-smoke ORLIX_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID) ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)"
     let fixtures: [(String, GateStatus, String, Bool, Bool, Bool, Bool)] = [
         ("stale-proof-refresh", policyFixtureStatus(id: "stale", state: "stale", reason: "report git_sha is stale"), "stale_proof_refresh", false, false, true, false),
         ("current-pass-reducer-refresh", policyFixtureStatus(id: "no-phone-tcti-post-busybox-sigabrt-reducer", command: "make tcti-gate TARGET=tcti-post-busybox-sigabrt-reducer", kind: "no-phone-reducer", state: "ready", reason: "current passing static BusyBox report Build/Reports/runtime/tcti-static-busybox-start-current.json requires the post-BusyBox SIGABRT reducer to refresh exact report linkage"), "stale_proof_refresh", false, false, true, false),
         ("current-pass-user-data-rail-refresh", policyFixtureStatus(id: "tcti-user-data-window-refresh-fix", command: "make tcti-gate TARGET=tcti-user-data-window-refresh-fix", kind: "production-tcti-fix", proofTier: "rail", state: "ready", reason: "user-data window rail requires the current post-BusyBox reducer and fix reports to cover Build/Reports/runtime/tcti-static-busybox-start-current.json"), "stale_proof_refresh", false, false, true, false),
         ("missing-generated-artifact", policyFixtureStatus(id: "golden-init-001-structural", command: "make tcti-gate TARGET=tcti-golden-elf CASE=init_001_exit", kind: "golden-structural", state: "missing", reason: "validation artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/golden_elf/init_001_exit/validation.json", exists: false)]), "missing_generated_artifact", false, false, true, false),
+        ("missing-pinned-simulator-real-stack-artifact", policyFixtureStatus(id: "tcti-simulator-mlibc-smoke", command: pinnedSimulatorCommand, kind: "simulator-runtime-real-stack", proofTier: "simulator", acceptanceWeight: "blocker", realStackRequired: true, state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-mlibc-smoke-*.json", exists: false, proofTier: "simulator", acceptanceWeight: "blocker", realStackRequired: true)]), "missing_generated_artifact", false, false, true, false),
+        ("missing-malicious-simulator-kind-stops", policyFixtureStatus(id: "malicious", command: pinnedSimulatorCommand, kind: "simulator-runtime-malicious", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/malicious-*.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
+        ("missing-wrong-simulator-token-stops", policyFixtureStatus(id: "wrong-simulator", command: pinnedSimulatorCommand.replacingOccurrences(of: "ORLIX_SIMULATOR_ID=\(requiredSimulatorID)", with: "ORLIX_SIMULATOR_ID=\(requiredSimulatorID)-wrong"), kind: "simulator-runtime-real-stack", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/wrong-*.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
+        ("missing-duplicate-destination-stops", policyFixtureStatus(id: "duplicate-argument", command: pinnedSimulatorCommand + " DESTINATION=iphoneos", kind: "simulator-runtime-real-stack", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/duplicate-*.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
+        ("missing-appended-shell-command-stops", policyFixtureStatus(id: "appended-command", command: pinnedSimulatorCommand + " ; make runtime-validation DESTINATION=iphoneos", kind: "simulator-runtime-real-stack", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/appended-*.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
+        ("missing-physical-simulator-command-stops", policyFixtureStatus(id: "physical", command: pinnedSimulatorCommand, kind: "simulator-runtime-real-stack", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/physical-*.json", exists: false)], physicalDevice: true), "missing_generated_artifact", false, false, false, true),
+        ("missing-unsatisfied-prerequisite-stops", policyFixtureStatus(id: "blocked", command: pinnedSimulatorCommand, kind: "simulator-runtime-real-stack", state: "missing", reason: "runtime report missing", reports: [policyFixtureReport(path: "Build/Reports/runtime/blocked-*.json", exists: false)], prerequisitesSatisfied: false), "missing_generated_artifact", false, false, false, true),
         ("missing-artifact-without-safe-generator", policyFixtureStatus(id: "unknown", command: "", state: "missing", reason: "artifact missing", reports: [policyFixtureReport(path: "Build/TCTI/unknown.json", exists: false)]), "missing_generated_artifact", false, false, false, true),
         ("rail-evidence-contract-bug", policyFixtureStatus(id: "rail", state: "fail", reason: "historical generated report is obsolete"), "rail_evidence_contract_bug", false, true, false, true),
         ("rail-simulator-freshness-contract-bug", policyFixtureStatus(id: "rail-stale", state: "fail", reason: "simulator-report-stale: latest simulator stability report is not execution-fresh for this rail"), "rail_evidence_contract_bug", false, true, false, true),
