@@ -154,3 +154,12 @@
 - Focused frontier fixtures prove the materialized L4 set exactly equals the canonical device projection, device instances are serialized in capability order, a real-shaped device pass is accepted, and wrong-device, true/missing/incomplete/malformed forbidden behavior, missing-fatal-evidence, crash-marker, core-dump, malformed launch-result, current-invalid, and stale cases fail correctly.
 - Current status now exposes all fifteen L4 gates. Existing first-syscall device evidence passes; the remaining fourteen capabilities are missing and have not been run.
 - This checkpoint does not activate the semantic frontier, run phone gates, establish L3/L4 product-identity equality, add L5 gates, or change product runtime behavior.
+
+### Checkpoint: Live Safety-Filtered Permanent Frontier
+
+- Replaced live historical first-unresolved selection with the tested permanent L0-L5 semantic frontier after the complete L4 topology became representable.
+- Selection first removes unauthorized physical and gadget candidates, then ranks only permanent gates by pyramid level, acceptance weight, current state, and stable ID. Historical remediation remains available outside the permanent release frontier.
+- Reclassified `tcti-memory-fuzz` and `tcti-direct-chain-fuzz` as historical maintenance/remediation. They no longer preempt the product frontier.
+- Integrated fixtures prove eligible L4 work beats historical remediation, unauthorized phone work is not selected, lower permanent work wins, and a current permanent failure stops with no runtime authorization.
+- Current status has no executable permanent gate because physical opt-in is absent and the harness worktree is dirty. `agent-next` emits `blocked-physical-device-opt-in-required`, and envelope validation passes.
+- No physical command ran. L3/L4 product-identity equality, the remaining fourteen device executions, L5 gates, and TestFlight remain incomplete.
