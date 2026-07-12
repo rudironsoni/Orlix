@@ -5969,7 +5969,7 @@ func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
         }
         gates.append(Gate(
             id: deviceGateID,
-            command: "make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic",
+            command: "make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic ORLIX_ALLOW_PROVISIONING_UPDATES=YES",
             kind: "physical-device",
             proofTier: "device",
             acceptanceWeight: "blocker",
@@ -5982,7 +5982,7 @@ func roadmapGatesWithRuntimePreflight(_ roadmap: Roadmap) -> [Gate] {
             readinessEligible: false,
             physicalDevice: true,
             gadget: false,
-            requiredValidationCommands: template.requiredValidationCommands + ["rtk proxy make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic"],
+            requiredValidationCommands: template.requiredValidationCommands + ["rtk proxy make runtime-validation DESTINATION=iphoneos GATE=\(capability.runtimeGate) ORLIX_DEVICE_ID=\(requiredDeviceID) ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam) ORLIX_CODE_SIGN_STYLE=Automatic ORLIX_ALLOW_PROVISIONING_UPDATES=YES"],
             reducerRequirements: template.reducerRequirements,
             requiredSubagentsOrSkills: template.requiredSubagentsOrSkills,
             commitMessageTemplate: "test(tcti): validate \(capability.id) on approved device",
@@ -6317,6 +6317,7 @@ func validateProductRuntimeCapabilities(
                 "ORLIX_DEVICE_ID=\(requiredDeviceID)",
                 "ORLIX_DEVELOPMENT_TEAM=\(requiredDevelopmentTeam)",
                 "ORLIX_CODE_SIGN_STYLE=Automatic",
+                "ORLIX_ALLOW_PROVISIONING_UPDATES=YES",
             ]
             guard commandTokens == expectedCommandTokens else {
                 throw HarnessError.invalid("product runtime capability \(capability.id) device command does not match its runtime gate")

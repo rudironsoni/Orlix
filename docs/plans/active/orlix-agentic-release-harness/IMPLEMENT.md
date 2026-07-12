@@ -169,3 +169,4 @@
 - The first newly selected L4 command failed during Xcode build before installation because physical runtime-validation did not supply a development team. No guest or TCTI runtime failure occurred.
 - Pinned the existing Apple Development team `A9C4N82KYY` in environment policy and require every materialized device command to use that team with automatic signing.
 - Device command validation now rejects missing or altered team and signing-style tokens. Runtime, app, kernel, HostAdapter, and userspace behavior are unchanged.
+- The signed retry reached provisioning and proved that Make's provisioning-update default is not exported to runtime-validation. Canonical device commands now explicitly require `ORLIX_ALLOW_PROVISIONING_UPDATES=YES` so Xcode can create or refresh the development profile.

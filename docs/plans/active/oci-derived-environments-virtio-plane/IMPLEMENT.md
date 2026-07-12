@@ -1,5 +1,11 @@
 # IMPLEMENT.md
 
+## 2026-07-12 Agentic Release L4 Signing Checkpoint
+
+- The canonical approved-device validation matrix is now selected only after the complete simulator frontier and explicit physical opt-in.
+- The first new device capability exposed pre-launch signing and provisioning configuration gaps. Device commands now pin the approved development team, automatic signing, and provisioning updates in agent-neutral environment policy.
+- No OCI, OrlixOS, kernel, HostAdapter, app, rootfs, or userspace behavior changed. The remaining device matrix and TestFlight release are still incomplete.
+
 Implementation log. Append-only. Capture decisions, deviations from the plan, evidence, blockers, and open questions that arose during execution.
 
 ## Task Reference
