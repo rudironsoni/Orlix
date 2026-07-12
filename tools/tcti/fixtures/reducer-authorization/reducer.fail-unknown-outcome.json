@@ -1,0 +1,16 @@
+{
+  "target": "fixture-unknown-outcome",
+  "case_id": "unknown-outcome",
+  "command": "make tcti-gate TARGET=tcti-repro",
+  "working_directory": ".",
+  "artifacts": [],
+  "reason": "unknown replay outcome must be rejected",
+  "expected_status": "fail",
+  "source_failure": {
+    "report_path": "Build/TCTI/reports/fixture.json",
+    "report_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "failure_id": "fixture-failure",
+    "failure_fingerprint": "fixture-failure-fingerprint"
+  },
+  "replay_outcome": "maybe"
+}

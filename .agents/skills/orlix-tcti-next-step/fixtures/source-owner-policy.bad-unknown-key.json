@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "runtime_patch_allowed": true,
+  "owners": [
+    {
+      "id": "orlix-kernel-tcti",
+      "allowed_scope": [
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**"
+      ]
+    }
+  ]
+}

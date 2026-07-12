@@ -29,6 +29,26 @@ struct EnvironmentPolicy: Decodable {
     }
 }
 
+struct SourceOwnerPolicy: Decodable {
+    let schemaVersion: Int
+    let owners: [SourceOwner]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case owners
+    }
+}
+
+struct SourceOwner: Decodable {
+    let id: String
+    let allowedScope: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case allowedScope = "allowed_scope"
+    }
+}
+
 struct Gate: Codable {
     let id: String
     let command: String
@@ -175,6 +195,31 @@ struct ReportFailureFact: Codable {
     let message: String
 }
 
+enum ReplayOutcomeFact: String, Codable {
+    case reproduced
+    case notReproduced = "not_reproduced"
+    case notRun = "not_run"
+    case differentFailure = "different_failure"
+    case environmentFailure = "environment_failure"
+    case harnessFailure = "harness_failure"
+    case forbiddenBehavior = "forbidden_behavior"
+    case inconclusive
+}
+
+struct SourceFailureLinkageFact: Codable {
+    let reportPath: String
+    let reportSHA256: String
+    let failureID: String
+    let failureFingerprint: String
+
+    enum CodingKeys: String, CodingKey {
+        case reportPath = "report_path"
+        case reportSHA256 = "report_sha256"
+        case failureID = "failure_id"
+        case failureFingerprint = "failure_fingerprint"
+    }
+}
+
 struct ExecutionFreshness: Codable {
     let reportGitSHA: String?
     let currentGitSHA: String
@@ -230,6 +275,8 @@ struct ReportFact: Codable {
     let failureExitStatus: String?
     let failureTimeoutSeconds: String?
     let productLaunchAttempted: Bool?
+    let sourceFailure: SourceFailureLinkageFact?
+    let replayOutcome: ReplayOutcomeFact?
 
     init(
         path: String,
@@ -255,7 +302,9 @@ struct ReportFact: Codable {
         failureKind: String? = nil,
         failureExitStatus: String? = nil,
         failureTimeoutSeconds: String? = nil,
-        productLaunchAttempted: Bool? = nil
+        productLaunchAttempted: Bool? = nil,
+        sourceFailure: SourceFailureLinkageFact? = nil,
+        replayOutcome: ReplayOutcomeFact? = nil
     ) {
         self.path = path
         self.exists = exists
@@ -281,6 +330,8 @@ struct ReportFact: Codable {
         self.failureExitStatus = failureExitStatus
         self.failureTimeoutSeconds = failureTimeoutSeconds
         self.productLaunchAttempted = productLaunchAttempted
+        self.sourceFailure = sourceFailure
+        self.replayOutcome = replayOutcome
     }
 
     func withExecutionFreshness(_ freshness: ExecutionFreshness?) -> ReportFact {
@@ -308,7 +359,9 @@ struct ReportFact: Codable {
             failureKind: failureKind,
             failureExitStatus: failureExitStatus,
             failureTimeoutSeconds: failureTimeoutSeconds,
-            productLaunchAttempted: productLaunchAttempted
+            productLaunchAttempted: productLaunchAttempted,
+            sourceFailure: sourceFailure,
+            replayOutcome: replayOutcome
         )
     }
 
@@ -337,6 +390,8 @@ struct ReportFact: Codable {
         case failureExitStatus = "failure_exit_status"
         case failureTimeoutSeconds = "failure_timeout_seconds"
         case productLaunchAttempted = "product_launch_attempted"
+        case sourceFailure = "source_failure"
+        case replayOutcome = "replay_outcome"
     }
 }
 
@@ -776,6 +831,7 @@ let roadmapURL = ProcessInfo.processInfo.environment["ORLIX_TCTI_ROADMAP_PATH"].
     URL(fileURLWithPath: $0, relativeTo: root).standardizedFileURL
 } ?? root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json")
 let environmentPolicyURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/environment-policy.json")
+let sourceOwnerPolicyURL = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/references/source-owner-policy.json")
 let statusURL = outputRoot.appendingPathComponent("status.json")
 let nextTaskURL = outputRoot.appendingPathComponent("next-task.json")
 let nextTaskMarkdownURL = outputRoot.appendingPathComponent("next-task.md")
@@ -812,6 +868,7 @@ func relativePath(_ url: URL) -> String {
 func loadRoadmap(from url: URL = roadmapURL) throws -> Roadmap {
     let data = try Data(contentsOf: url)
     let roadmap = try JSONDecoder().decode(Roadmap.self, from: data)
+    _ = try loadSourceOwnerPolicy()
     guard roadmap.area == "orlix-tcti" else {
         throw HarnessError.invalid("roadmap area must be orlix-tcti")
     }
@@ -826,6 +883,62 @@ func loadEnvironmentPolicy() -> EnvironmentPolicy {
         fputs("error: missing or invalid \(relativePath(environmentPolicyURL)): \(error)\n", stderr)
         exit(2)
     }
+}
+
+let canonicalSourceOwnerScopes: [String: Set<String>] = [
+    "orlix-kernel-tcti": Set([
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/**",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c",
+        "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/**",
+    ]),
+]
+
+func loadSourceOwnerPolicy(from url: URL = sourceOwnerPolicyURL) throws -> SourceOwnerPolicy {
+    let data = try Data(contentsOf: url)
+    let raw = try JSONSerialization.jsonObject(with: data)
+    guard let dictionary = raw as? [String: Any],
+          Set(dictionary.keys) == Set(["schema_version", "owners"]),
+          let rawOwners = dictionary["owners"] as? [[String: Any]],
+          rawOwners.allSatisfy({ Set($0.keys) == Set(["id", "allowed_scope"]) }) else {
+        throw HarnessError.invalid("source owner policy must use the closed-world schema_version and owners contract")
+    }
+    let policy = try JSONDecoder().decode(SourceOwnerPolicy.self, from: data)
+    guard policy.schemaVersion == 1 else {
+        throw HarnessError.invalid("source owner policy schema_version must be 1")
+    }
+    guard !policy.owners.isEmpty else {
+        throw HarnessError.invalid("source owner policy must define at least one owner")
+    }
+    let ids = policy.owners.map(\.id)
+    guard Set(ids).count == ids.count else {
+        throw HarnessError.invalid("source owner policy IDs must be unique")
+    }
+    for owner in policy.owners {
+        guard !owner.id.isEmpty, !owner.allowedScope.isEmpty else {
+            throw HarnessError.invalid("source owner entries require non-empty id and allowed_scope")
+        }
+        for scope in owner.allowedScope {
+            guard !scope.isEmpty,
+                  scope != ".",
+                  scope != "*",
+                  scope != "**",
+                  !scope.hasPrefix("Build/"),
+                  !scope.hasPrefix("/"),
+                  !scope.contains(".."),
+                  !scope.contains("//"),
+                  !scope.contains("/./") else {
+                throw HarnessError.invalid("source owner \(owner.id) contains unsafe scope \(scope)")
+            }
+        }
+        guard let canonicalScopes = canonicalSourceOwnerScopes[owner.id],
+              Set(owner.allowedScope) == canonicalScopes else {
+            throw HarnessError.invalid("source owner \(owner.id) must match repository-controlled canonical scopes")
+        }
+    }
+    guard Set(ids) == Set(canonicalSourceOwnerScopes.keys) else {
+        throw HarnessError.invalid("source owner policy must define exactly the repository-controlled owners")
+    }
+    return policy
 }
 
 func loadJSONObject(_ url: URL) throws -> [String: Any] {
@@ -1270,6 +1383,35 @@ func reportFailures(_ value: Any?) -> [ReportFailureFact] {
         }
         return ReportFailureFact(id: "failure-\(index + 1)", message: "\(raw)")
     }
+}
+
+func sourceFailureLinkage(_ value: Any?) -> SourceFailureLinkageFact? {
+    guard let dictionary = value as? [String: Any],
+          Set(dictionary.keys) == Set(["report_path", "report_sha256", "failure_id", "failure_fingerprint"]),
+          let reportPath = stringValue(dictionary["report_path"]),
+          let reportSHA256 = stringValue(dictionary["report_sha256"]),
+          let failureID = stringValue(dictionary["failure_id"]),
+          let failureFingerprint = stringValue(dictionary["failure_fingerprint"]),
+          !reportPath.isEmpty,
+          !reportPath.hasPrefix("/"),
+          !reportPath.contains(".."),
+          reportPath.hasPrefix("Build/Reports/runtime/") || reportPath.hasPrefix("Build/TCTI/reports/"),
+          reportSHA256.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil,
+          !failureID.isEmpty,
+          !failureFingerprint.isEmpty else {
+        return nil
+    }
+    return SourceFailureLinkageFact(
+        reportPath: reportPath,
+        reportSHA256: reportSHA256,
+        failureID: failureID,
+        failureFingerprint: failureFingerprint
+    )
+}
+
+func replayOutcome(_ value: Any?) -> ReplayOutcomeFact? {
+    guard let rawValue = stringValue(value) else { return nil }
+    return ReplayOutcomeFact(rawValue: rawValue)
 }
 
 func forbiddenBehaviorViolations(_ value: Any?) -> [String] {
@@ -1729,7 +1871,9 @@ func reportFact(target: String) -> ReportFact {
             simulatorRuntimeVersion: stringValue(object["simulator_runtime_version"]),
             simulatorRuntimeBuild: stringValue(object["simulator_runtime_build"]),
             failures: reportFailures(object["failures"]),
-            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"]),
+            sourceFailure: sourceFailureLinkage(object["source_failure"]),
+            replayOutcome: replayOutcome(object["replay_outcome"])
         )
     } catch {
         return ReportFact(
@@ -6961,6 +7105,54 @@ func validateGateResultPolicyFixtures() throws {
     print("pass: gate-result-policy-check")
 }
 
+func validateStructuredReducerLinkageFixtures() throws {
+    let fixtureRoot = root.appendingPathComponent("tools/tcti/fixtures/reducer-authorization", isDirectory: true)
+    let legacy = try loadJSONObject(fixtureRoot.appendingPathComponent("reducer.legacy.json"))
+    guard legacy["source_failure"] == nil, legacy["replay_outcome"] == nil else {
+        throw HarnessError.invalid("legacy reducer fixture must not contain typed linkage")
+    }
+
+    let valid = try loadJSONObject(fixtureRoot.appendingPathComponent("reducer.valid-linkage.json"))
+    guard let linkage = sourceFailureLinkage(valid["source_failure"]),
+          replayOutcome(valid["replay_outcome"]) == .reproduced,
+          linkage.reportPath.hasPrefix("Build/Reports/runtime/") || linkage.reportPath.hasPrefix("Build/TCTI/reports/") else {
+        throw HarnessError.invalid("valid reducer fixture must expose typed current-report linkage and reproduced outcome")
+    }
+
+    for name in [
+        "reducer.fail-unknown-outcome.json",
+        "reducer.fail-malformed-linkage.json",
+        "reducer.fail-unknown-linkage-key.json",
+        "reducer.fail-missing-linkage-key.json",
+        "reducer.fail-source-only.json",
+        "reducer.fail-outcome-only.json",
+    ] {
+        let object = try loadJSONObject(fixtureRoot.appendingPathComponent(name))
+        if sourceFailureLinkage(object["source_failure"]) != nil,
+           replayOutcome(object["replay_outcome"]) != nil {
+            throw HarnessError.invalid("invalid reducer fixture \(name) must not produce complete typed linkage")
+        }
+    }
+    print("pass: structured-reducer-linkage-check")
+}
+
+func validateSourceOwnerPolicyFixtures() throws {
+    _ = try loadSourceOwnerPolicy()
+    let fixtureRoot = root.appendingPathComponent(".agents/skills/orlix-tcti-next-step/fixtures", isDirectory: true)
+    for name in ["source-owner-policy.bad-unknown-key.json", "source-owner-policy.bad-broad-scope.json"] {
+        var rejected = false
+        do {
+            _ = try loadSourceOwnerPolicy(from: fixtureRoot.appendingPathComponent(name))
+        } catch {
+            rejected = true
+        }
+        guard rejected else {
+            throw HarnessError.invalid("invalid source owner policy fixture \(name) unexpectedly passed")
+        }
+    }
+    print("pass: source-owner-policy-check")
+}
+
 func validateSemanticFrontierFixtures() throws {
     let historicalReducer = policyFixtureStatus(id: "historical-reducer", kind: "no-phone-reducer", state: "fail", reason: "historical reducer")
     let historicalFix = policyFixtureStatus(id: "historical-fix", kind: "production-tcti-fix", state: "fail", reason: "historical fix")
@@ -7024,10 +7216,14 @@ do {
         try validateSemanticFreshnessFixtures()
     case "gate-result-policy-check":
         try validateGateResultPolicyFixtures()
+    case "structured-reducer-linkage-check":
+        try validateStructuredReducerLinkageFixtures()
+    case "source-owner-policy-check":
+        try validateSourceOwnerPolicyFixtures()
     case "semantic-frontier-check":
         try validateSemanticFrontierFixtures()
     default:
-        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check|semantic-frontier-check|gate-result-policy-check]")
+        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check|semantic-frontier-check|gate-result-policy-check|structured-reducer-linkage-check|source-owner-policy-check]")
     }
 } catch {
     fputs("agent next-step error: \(error)\n", stderr)

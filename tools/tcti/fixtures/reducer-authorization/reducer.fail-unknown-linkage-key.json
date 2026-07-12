@@ -1,0 +1,17 @@
+{
+  "target": "fixture-unknown-linkage-key",
+  "case_id": "unknown-linkage-key",
+  "command": "make tcti-gate TARGET=tcti-repro",
+  "working_directory": ".",
+  "artifacts": [],
+  "reason": "unknown source failure linkage keys must be rejected",
+  "expected_status": "fail",
+  "source_failure": {
+    "report_path": "Build/TCTI/reports/fixture.json",
+    "report_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "failure_id": "fixture-failure",
+    "failure_fingerprint": "fixture-failure-fingerprint",
+    "runtime_patch_allowed": true
+  },
+  "replay_outcome": "reproduced"
+}

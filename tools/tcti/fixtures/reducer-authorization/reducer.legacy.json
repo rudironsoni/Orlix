@@ -1,0 +1,9 @@
+{
+  "target": "fixture-legacy",
+  "case_id": "legacy",
+  "command": "make tcti-gate TARGET=tcti-repro",
+  "working_directory": ".",
+  "artifacts": [],
+  "reason": "legacy reducer without authorization linkage",
+  "expected_status": "fail"
+}

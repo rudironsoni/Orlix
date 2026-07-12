@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "owners": [
+    {
+      "id": "orlix-kernel-tcti",
+      "allowed_scope": [
+        "OrlixKernel/**"
+      ]
+    }
+  ]
+}

@@ -397,6 +397,12 @@ check_skills() {
   expect_command_passes "semantic pyramid frontier fixtures" \
     "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
     semantic-frontier-check
+  expect_command_passes "structured reducer linkage fixtures" \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    structured-reducer-linkage-check
+  expect_command_passes "source owner policy fixtures" \
+    "$root/.agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift" \
+    source-owner-policy-check
   expect_command_passes "runtime report destination selection fixtures" \
     "$root/tools/runtime/tests/test-runtime-report-selection.sh"
   expect_command_passes "simulator runtime identity fixtures" \
