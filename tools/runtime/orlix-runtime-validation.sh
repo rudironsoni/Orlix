@@ -40,6 +40,7 @@ simulator_boot_timeout_seconds="${ORLIX_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
 simulator_install_timeout_seconds="${ORLIX_SIMULATOR_INSTALL_TIMEOUT_SECONDS:-1800}"
 development_team="${ORLIX_DEVELOPMENT_TEAM:-}"
 code_sign_style="${ORLIX_CODE_SIGN_STYLE:-}"
+code_sign_identity="${ORLIX_CODE_SIGN_IDENTITY:-}"
 provisioning_profile_specifier="${ORLIX_PROVISIONING_PROFILE_SPECIFIER:-}"
 runtime_preflight_only="${ORLIX_RUNTIME_PREFLIGHT_ONLY:-}"
 tcti_device_override="${ORLIX_TCTI_DEVICE_OVERRIDE:-}"
@@ -1456,6 +1457,9 @@ build_app_for_target() {
 	fi
 	if [ "$destination" = "iphoneos" ] && [ -n "$code_sign_style" ]; then
 		signing_settings+=(CODE_SIGN_STYLE="$code_sign_style")
+	fi
+	if [ "$destination" = "iphoneos" ] && [ -n "$code_sign_identity" ]; then
+		signing_settings+=(CODE_SIGN_IDENTITY="$code_sign_identity")
 	fi
 	if [ "$destination" = "iphoneos" ] && [ -n "$provisioning_profile_specifier" ]; then
 		signing_settings+=(PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile_specifier")

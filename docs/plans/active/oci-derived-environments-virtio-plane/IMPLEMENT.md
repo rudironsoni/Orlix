@@ -5,6 +5,7 @@
 - The canonical approved-device validation matrix is now selected only after the complete simulator frontier and explicit physical opt-in.
 - The first new device capability exposed pre-launch signing and provisioning configuration gaps. Device commands now pin the approved development team, automatic signing, and provisioning updates in agent-neutral environment policy.
 - No OCI, OrlixOS, kernel, HostAdapter, app, rootfs, or userspace behavior changed. The remaining device matrix and TestFlight release are still incomplete.
+- Xcode 27 had no configured account, so Fastlane created and installed an ad hoc Orlix profile for the approved device using existing App Store Connect credentials. L4 now uses deterministic manual signing; OCI behavior remains unchanged.
 
 Implementation log. Append-only. Capture decisions, deviations from the plan, evidence, blockers, and open questions that arose during execution.
 

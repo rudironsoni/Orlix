@@ -6858,7 +6858,7 @@
     },
     {
       "id": "physical-tcti-init-first-syscall",
-      "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall ORLIX_DEVICE_ID=00008130-001E74A11193803A ORLIX_DEVELOPMENT_TEAM=A9C4N82KYY ORLIX_CODE_SIGN_STYLE=Automatic ORLIX_ALLOW_PROVISIONING_UPDATES=YES",
+      "command": "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall ORLIX_DEVICE_ID=00008130-001E74A11193803A ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L ORLIX_CODE_SIGN_STYLE=Manual ORLIX_CODE_SIGN_IDENTITY=9DD07A84E35071408CF5C9900A0B7176755B912F ORLIX_PROVISIONING_PROFILE_SPECIFIER=Orlix-AdHoc",
       "kind": "physical-device",
       "prerequisites": [
         "simulator-tcti-init-first-syscall",

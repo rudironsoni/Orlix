@@ -170,3 +170,5 @@
 - Pinned the existing Apple Development team `A9C4N82KYY` in environment policy and require every materialized device command to use that team with automatic signing.
 - Device command validation now rejects missing or altered team and signing-style tokens. Runtime, app, kernel, HostAdapter, and userspace behavior are unchanged.
 - The signed retry reached provisioning and proved that Make's provisioning-update default is not exported to runtime-validation. Canonical device commands now explicitly require `ORLIX_ALLOW_PROVISIONING_UPDATES=YES` so Xcode can create or refresh the development profile.
+- Xcode 27 has no configured account, so automatic profile creation remained unavailable. Fastlane used the existing App Store Connect API key to create and install ad hoc profile `Orlix-AdHoc`, which contains the approved device and matches installed team `ZQ3L7M567L` distribution identity `9DD07A84E35071408CF5C9900A0B7176755B912F`.
+- Canonical L4 commands now use deterministic manual signing with that team, identity, and profile. The runtime adapter now forwards `ORLIX_CODE_SIGN_IDENTITY` to Xcode.
