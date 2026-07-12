@@ -6582,8 +6582,8 @@ func validateReportObject(_ object: Any, roadmapIndex: RoadmapProofTierIndex = r
         errors.append("report claims runtime readiness without real_stack_required=true")
     }
     if dictionary["readiness_gate_eligible"] as? Bool == true {
-        if status != "pass" || canClaimRuntimeReadiness != true || realStackRequired != true {
-            errors.append("readiness_gate_eligible requires pass, real_stack_required=true, and can_claim_runtime_readiness=true")
+        if status != "pass" || realStackRequired != true {
+            errors.append("readiness_gate_eligible requires pass and real_stack_required=true")
         }
     }
     if dictionary["release_gate_eligible"] as? Bool == true {
@@ -7080,6 +7080,7 @@ func runReportSchemaCheck() throws -> Int32 {
 
     for name in [
         "report.pass.json",
+        "report.pass.scoped-readiness.json",
         "report.todo.kernel-roadmap-metadata.json",
     ] {
         let fixture = fixtureRoot.appendingPathComponent(name)
