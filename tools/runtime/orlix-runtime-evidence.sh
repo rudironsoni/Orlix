@@ -3,5 +3,11 @@
 orlix_capture_tcti_first_syscall() {
 	local output="$1"
 	shift
-	grep -h -F 'Orlix TCTI: svc #0' "$@" >"$output" 2>/dev/null
+	local inputs=()
+	local input
+	for input in "$@"; do
+		[ -f "$input" ] && inputs+=("$input")
+	done
+	[ "${#inputs[@]}" -gt 0 ] || return 1
+	grep -h -F 'Orlix TCTI: svc #0' "${inputs[@]}" >"$output"
 }
