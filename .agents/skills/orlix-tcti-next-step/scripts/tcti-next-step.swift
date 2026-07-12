@@ -358,6 +358,15 @@ struct GateResultPolicy: Codable, Equatable {
     }
 }
 
+enum PyramidLevel: Int, CaseIterable {
+    case l0 = 0
+    case l1
+    case l2
+    case l3
+    case l4
+    case l5
+}
+
 struct GateStatus: Encodable {
     let id: String
     let command: String
@@ -5976,6 +5985,33 @@ func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateI
     return eligible.first
 }
 
+func inferredPyramidLevel(_ status: GateStatus) -> PyramidLevel {
+    if status.proofTier == "release" { return .l5 }
+    if status.physicalDevice || status.proofTier == "device" { return .l4 }
+    if status.kind == "simulator-runtime" || status.proofTier == "simulator" { return .l3 }
+    if ["kernel", "kselftest", "mlibc", "mlibc-uapi", "shell", "coreutils", "oci"].contains(status.proofTier) { return .l2 }
+    if status.kind == "rail" || status.kind == "safety" { return .l0 }
+    return .l1
+}
+
+func isPermanentFrontierGate(_ status: GateStatus) -> Bool {
+    !status.kind.contains("reducer") && !status.kind.contains("fix") &&
+        !status.kind.contains("diagnostic") && !status.kind.contains("root-cause")
+}
+
+func semanticFrontier(from statuses: [GateStatus]) -> GateStatus? {
+    let statePriority = ["fail": 0, "ready": 1, "missing": 2, "stale": 3]
+    let acceptancePriority = ["release": 0, "readiness": 1, "blocker": 2, "probe": 3]
+    return statuses
+        .filter { !$0.satisfiesPrerequisite && $0.prerequisitesSatisfied && isPermanentFrontierGate($0) }
+        .sorted {
+            let left = (inferredPyramidLevel($0).rawValue, statePriority[$0.state] ?? 4, acceptancePriority[$0.acceptanceWeight] ?? 4, $0.id)
+            let right = (inferredPyramidLevel($1).rawValue, statePriority[$1.state] ?? 4, acceptancePriority[$1.acceptanceWeight] ?? 4, $1.id)
+            return left < right
+        }
+        .first
+}
+
 func gitSHA() -> String {
     run("/usr/bin/env", ["git", "rev-parse", "HEAD"]) ?? "unknown"
 }
@@ -6860,6 +6896,28 @@ func validateGateResultPolicyFixtures() throws {
     print("pass: gate-result-policy-check")
 }
 
+func validateSemanticFrontierFixtures() throws {
+    let historicalReducer = policyFixtureStatus(id: "historical-reducer", kind: "no-phone-reducer", state: "fail", reason: "historical reducer")
+    let historicalFix = policyFixtureStatus(id: "historical-fix", kind: "production-tcti-fix", state: "fail", reason: "historical fix")
+    let component = policyFixtureStatus(id: "component-mlibc", kind: "real-stack-mlibc", proofTier: "mlibc", acceptanceWeight: "blocker", realStackRequired: true, state: "stale", reason: "semantic mlibc input changed")
+    let simulator = policyFixtureStatus(id: "runtime-userland-marker", command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-userland-marker", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "missing", reason: "simulator product capability missing")
+    let l0Failure = policyFixtureStatus(id: "source-policy", kind: "rail", proofTier: "rail", acceptanceWeight: "blocker", state: "fail", reason: "source policy failed")
+
+    let firstOrdering = [historicalReducer, simulator, historicalFix, component]
+    let secondOrdering = Array(firstOrdering.reversed())
+    guard semanticFrontier(from: firstOrdering)?.id == component.id,
+          semanticFrontier(from: secondOrdering)?.id == component.id else {
+        throw HarnessError.invalid("semantic frontier must ignore roadmap order and historical remediation gates")
+    }
+    guard semanticFrontier(from: [component, l0Failure, simulator])?.id == l0Failure.id else {
+        throw HarnessError.invalid("semantic frontier must select the lowest unresolved pyramid level")
+    }
+    guard semanticFrontier(from: [historicalReducer, historicalFix]) == nil else {
+        throw HarnessError.invalid("historical remediation gates must not form the permanent product frontier")
+    }
+    print("pass: semantic-frontier-check")
+}
+
 let mode = CommandLine.arguments.dropFirst().first ?? "status"
 
 do {
@@ -6890,8 +6948,10 @@ do {
         try validateSemanticFreshnessFixtures()
     case "gate-result-policy-check":
         try validateGateResultPolicyFixtures()
+    case "semantic-frontier-check":
+        try validateSemanticFrontierFixtures()
     default:
-        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check|gate-result-policy-check]")
+        throw HarnessError.usage("usage: tcti-next-step.swift [status|next|check|validate-roadmap [roadmap.json]|validate-report <report.json>|semantic-freshness-check|semantic-frontier-check|gate-result-policy-check]")
     }
 } catch {
     fputs("agent next-step error: \(error)\n", stderr)
