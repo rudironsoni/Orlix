@@ -8433,3 +8433,8 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The gate now accepts that complete selected-suite evidence without requiring Xcode's delayed final banner. Explicit failures and missing markers remain failures.
 - The corrected rerun passed. This is a harness-only result-contract repair; product behavior and readiness policy are unchanged.
 - The same final-banner dependency was removed from the remaining mlibc sysdeps, libc-subset, pthread/TLS, and linked syscall/UAPI gates. The selected pthread/TLS rerun passed.
+
+### Checkpoint: OCI XCTest Selected-Suite Finalization
+
+- The OCI component gates now accept the same clean selected-suite completion evidence before Xcode's delayed final banner, while retaining every gate-specific runtime and artifact assertion.
+- The selected `tcti-oci-stdio-signal-wait` rerun passed after the process-control correction. Product behavior and promotion policy are unchanged.

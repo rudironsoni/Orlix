@@ -700,14 +700,15 @@ func xcresultFailureTexts(at path: String) -> [String] {
     return xcresultFailureTexts(in: data)
 }
 
-func xcodeOutputShowsCleanSelectedTestPass(_ output: String, completionMarker: String) -> Bool {
+func xcodeOutputShowsCleanSelectedTestPass(_ output: String, completionMarker: String? = nil) -> Bool {
     let selectedSuitePassed = output.contains("Test Suite 'Selected tests' passed") &&
         output.range(of: #"Executed [1-9][0-9]* tests?, with 0 failures"#, options: .regularExpression) != nil
     let success = output.contains("** TEST SUCCEEDED **") || selectedSuitePassed
     let failure = output.contains("** TEST FAILED **") ||
         output.contains("Test Suite 'Selected tests' failed") ||
         output.range(of: #"Executed [0-9]+ tests?, with [1-9][0-9]* failures?"#, options: .regularExpression) != nil
-    return success && !failure && output.contains(completionMarker)
+    let completionSeen = completionMarker.map(output.contains) ?? true
+    return success && !failure && completionSeen
 }
 
 func runXCResultSummaryParserCheck() -> Int32 {
@@ -6120,13 +6121,16 @@ func runOCIImageLayoutParse() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testOCIRuntimeProcessDefaultsExecuteThroughOrlixOSTerminalSession")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput)
     let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
@@ -6298,13 +6302,16 @@ func runOCIRootfsMaterialize() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testOCIDerivedMaterializedRootBootsAndExposesOSRelease")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput)
     let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
@@ -6485,13 +6492,16 @@ func runOCIRootfsBootSession() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testCopiedNamedEnvironmentSessionSelectionEntersRootAndDescriptor")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput)
     let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)\bfailed\b"#, options: .regularExpression) != nil
@@ -20037,13 +20047,16 @@ func runOCIExecCoreutilsCommand() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testCopiedNamedEnvironmentSessionSelectionRunsPackagedCoreutilsCommand")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput)
     let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)^Test Case '.*' failed"#, options: .regularExpression) != nil ||
@@ -20220,13 +20233,16 @@ func runOCIStdioSignalWait() throws -> Int32 {
     let xcodeOutput = try runWithFileBackedOutput(
         xcodeArguments,
         check: false,
-        terminateAfterOutputContains: ["** TEST SUCCEEDED **"]
+        terminateAfterOutputContainsAny: [
+            ["** TEST SUCCEEDED **"],
+            ["Test Suite 'Selected tests' passed", "Executed 1 test, with 0 failures"],
+        ]
     )
     try xcodeOutput.write(to: xcodeOutputURL, atomically: true, encoding: .utf8)
     artifacts.append(relativePath(xcodeOutputURL))
 
     let testExecuted = xcodeOutput.contains("testCopiedNamedEnvironmentSessionSelectionRecordsStdioSignalAndWait")
-    let testSucceeded = xcodeOutput.contains("** TEST SUCCEEDED **")
+    let testSucceeded = xcodeOutputShowsCleanSelectedTestPass(xcodeOutput)
     let testSkipped = xcodeOutputHasSkippedTests(xcodeOutput)
     let testFailed = xcodeOutput.contains("** TEST FAILED **") ||
         xcodeOutput.range(of: #"(?m)^Test Case '.*' failed"#, options: .regularExpression) != nil ||

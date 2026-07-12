@@ -108,3 +108,10 @@
 - The corrected dynamic-loader rerun passed with one test executed, one passed, zero failed, zero skipped, and all forbidden behavior false.
 - The subsequent selected pthread/TLS rerun also passed after the remaining mlibc call sites adopted the shared parser.
 - This changes gate process control and evidence parsing only. Product runtime behavior is unchanged.
+
+### Checkpoint: OCI XCTest Selected-Suite Finalization
+
+- The selected OCI stdio/signal/wait XCTest executed once with zero failures before Xcode stalled after the selected-suite summary.
+- The five OCI component gates using the same file-backed runner now use the shared clean selected-suite parser and stop after complete XCTest evidence instead of waiting for Xcode's final banner.
+- Every OCI gate retains its existing named-test, skip, runtime assertion, artifact, and exit-status requirements; a clean XCTest summary alone cannot satisfy those gate-specific contracts.
+- The corrected stdio/signal/wait rerun passed. This changes harness process control only and does not change OCI, OrlixOS, Linux, HostAdapter, or app behavior.
