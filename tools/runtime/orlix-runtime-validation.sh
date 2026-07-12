@@ -1328,6 +1328,7 @@ assert_tcti_kernel_config() {
 build_app_for_target() {
 	local build_settings=(ORLIX_PROFILE="$profile")
 	local signing_settings=()
+	local provisioning_flags=()
 	local xcode_destination_id="${device_xcode_id:-$device_id}"
 	local xcode_destination="platform=iOS,id=$xcode_destination_id"
 
@@ -1343,6 +1344,9 @@ build_app_for_target() {
 	fi
 	if [ "$destination" = "iphoneos" ] && [ -n "$provisioning_profile_specifier" ]; then
 		signing_settings+=(PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile_specifier")
+	fi
+	if [ "$destination" = "iphoneos" ] && [ "${ORLIX_ALLOW_PROVISIONING_UPDATES:-NO}" = "YES" ]; then
+		provisioning_flags+=(-allowProvisioningUpdates)
 	fi
 
 	if [ -z "${USER:-}" ] && [ -n "${LOGNAME:-}" ]; then
@@ -1362,6 +1366,7 @@ build_app_for_target() {
 		-scheme "$scheme" \
 		-configuration "$configuration" \
 		-destination "$xcode_destination" \
+		"${provisioning_flags[@]}" \
 		"${build_settings[@]}" \
 		"${signing_settings[@]}" \
 		build \
@@ -1373,6 +1378,7 @@ build_app_for_target() {
 		-scheme "$scheme" \
 		-configuration "$configuration" \
 		-destination "$xcode_destination" \
+		"${provisioning_flags[@]}" \
 		"${build_settings[@]}" \
 		"${signing_settings[@]}" \
 		-showBuildSettings -json \
