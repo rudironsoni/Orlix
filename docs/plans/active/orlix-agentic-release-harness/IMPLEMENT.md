@@ -122,3 +122,13 @@
 - Safe generator recognition now accepts only the explicit `simulator-runtime` and `simulator-runtime-real-stack` kinds and one seven-token command grammar with a constrained gate name and exact pinned destination, simulator ID, and simulator name arguments.
 - Classifier fixtures prove the missing pinned real-stack mlibc report continues only through its exact runtime-validation generator and reject malicious kinds, altered simulator tokens, duplicate destinations, appended shell commands, physical-device status, and unsatisfied prerequisites.
 - Physical-device commands, unpinned simulator commands, and unknown generators remain stop conditions.
+
+### Checkpoint: Frontier Activation Prerequisite Correction
+
+- Regenerated current harness state after the supplementary simulator reports. All permanent simulator readiness gates pass, but the old live selector incorrectly chooses historical `tcti-direct-chain-fuzz` work.
+- Audited the explicit permanent frontier before replacing the selector. The roadmap currently contains sixteen L3 gates, only one L4 first-syscall gate, and no L5 gates.
+- The existing physical first-syscall report passes, so directly switching to the pure semantic frontier would leave no selected permanent work. It would not represent the required identical phone matrix or TestFlight completion.
+- Corrected the implementation order: define one canonical product-capability matrix with simulator and approved-device instances, derive exact matrix and product-identity equality, add L5 release gates, then activate safety-filtered semantic frontier selection.
+- The model must reuse semantic acceptance across destinations. It must not duplicate test meaning in destination-specific Make targets. Destination adapters remain limited to launch and evidence capture.
+- Physical selection remains blocked unless the complete current simulator matrix, explicit opt-in, clean protected worktree, and destination policy all pass. Release remains blocked until the complete identical phone matrix passes for the same product identity.
+- No product runtime code, generated report, reducer, upstream clone, phone execution, archive, or release action changed in this checkpoint.
