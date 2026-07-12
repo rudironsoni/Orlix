@@ -7030,9 +7030,7 @@
       "switch-init-011-static-pie-got-byte-load",
       "diff-switch-init-001-exit",
       "first-gadget-init-001-exit",
-      "tcti-contract",
-      "tcti-memory-fuzz",
-      "tcti-direct-chain-fuzz"
+      "tcti-contract"
     ],
     "L2": [
       "tcti-kernel-syscall-dispatch-smoke",
@@ -7103,6 +7101,8 @@
     "L5": []
   },
   "historical_remediation_gate_ids": [
+    "tcti-memory-fuzz",
+    "tcti-direct-chain-fuzz",
     "tcti-user-data-window-refresh-fix",
     "no-phone-tcti-simulator-user-fault-reducer",
     "tcti-static-pie-relocation-fix",

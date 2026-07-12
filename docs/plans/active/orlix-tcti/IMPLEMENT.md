@@ -8457,3 +8457,10 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - A device capability passes only from current `iphoneos` runtime evidence on the immutable approved device with the same artifact and marker contract, TCTI profile, and forbidden-behavior policy as its simulator capability, plus clean device launch-console, launch-log, and launch-result evidence with no core dump.
 - Device acceptance fixtures cover valid pass, wrong device, typed true/missing/malformed preflight and bypass fields, true/missing/incomplete/malformed closed-world forbidden behavior, missing fatal evidence, crash markers, explicit or malformed core-dump state, current invalid evidence, and stale execution evidence.
 - No new physical command ran. Explicit opt-in, clean protected state, matrix identity comparison, and live frontier activation remain separate prerequisites.
+
+## 2026-07-12 Live Permanent Release Frontier
+
+- Activated safety-filtered permanent frontier selection after materializing the complete L4 topology.
+- Historical fuzz and remediation work cannot preempt permanent product promotion. Current permanent failures still stop and remain reducer-first with `runtime_patch_allowed=false`.
+- Without explicit physical opt-in, current `agent-next` produces the blocked physical-device envelope rather than selecting historical work or pretending the goal is complete.
+- No phone command ran. Product-identity equality, the remaining device matrix, L5, and TestFlight remain unproven.

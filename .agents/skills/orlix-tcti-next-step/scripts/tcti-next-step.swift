@@ -6348,12 +6348,12 @@ func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
             throw HarnessError.invalid("permanent gate \(gate.id) depends on historical remediation: \(historicalPrerequisites.joined(separator: ","))")
         }
     }
-    let expectedCounts = ["L0": 4, "L1": 25, "L2": 29, "L3": 16, "L4": 15, "L5": 0]
+    let expectedCounts = ["L0": 4, "L1": 23, "L2": 29, "L3": 16, "L4": 15, "L5": 0]
     for (label, count) in expectedCounts where roadmap.pyramidLevelGateIDs[label]?.count != count {
         throw HarnessError.invalid("roadmap \(label) count must remain \(count) during frontier migration")
     }
-    guard historical.count == 40 else {
-        throw HarnessError.invalid("roadmap historical remediation count must remain 40 during frontier migration")
+    guard historical.count == 42 else {
+        throw HarnessError.invalid("roadmap historical remediation count must remain 42 during frontier migration")
     }
 
     try validateProductRuntimeCapabilities(
@@ -6535,6 +6535,25 @@ func semanticFrontier(
         .first
 }
 
+func selectedPermanentFrontier(
+    from statuses: [GateStatus],
+    pyramidLevels: [String: PyramidLevel],
+    historicalRemediationGateIDs: Set<String>,
+    physicalAllowed: Bool,
+    simulatorPassed: Bool
+) -> GateStatus? {
+    let policyEligible = statuses.filter { status in
+        if status.physicalDevice && !physicalAllowed { return false }
+        if status.gadget && !simulatorPassed { return false }
+        return true
+    }
+    return semanticFrontier(
+        from: policyEligible,
+        pyramidLevels: pyramidLevels,
+        historicalRemediationGateIDs: historicalRemediationGateIDs
+    )
+}
+
 func gitSHA() -> String {
     run("/usr/bin/env", ["git", "rev-parse", "HEAD"]) ?? "unknown"
 }
@@ -6559,7 +6578,13 @@ func statusDocument() throws -> StatusDocument {
     try validateRoadmapSimulatorPolicy(roadmap)
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
-    let next = selectedStatusWithSafety(from: gateStatuses, runtimePreflightGateIDs: roadmap.runtimePreflightGateIDs)
+    let next = selectedPermanentFrontier(
+        from: gateStatuses,
+        pyramidLevels: try explicitPyramidLevels(roadmap),
+        historicalRemediationGateIDs: Set(roadmap.historicalRemediationGateIDs),
+        physicalAllowed: physicalBlockers(statuses: gateStatuses).isEmpty,
+        simulatorPassed: simulatorRuntimeGatesComplete(gateStatuses)
+    )
     let missingSimulatorReadiness = simulatorReadinessMissingGateIDs(gateStatuses)
     let blockers = physicalBlockers(statuses: gateStatuses)
     let dirtyRuntimeOrHarness = dirtyRuntimeOrHarnessWorktree()
@@ -7531,6 +7556,68 @@ func validateSemanticFrontierFixtures() throws {
     }
     guard semanticFrontier(from: [l2Readiness, component], pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == component.id else {
         throw HarnessError.invalid("same-level blocker gates must precede readiness gates regardless of state")
+    }
+    let deviceCapability = policyFixtureStatus(
+        id: "device-capability",
+        command: "make runtime-validation DESTINATION=iphoneos GATE=tcti-fixture ORLIX_DEVICE_ID=fixture-device",
+        kind: "physical-device",
+        proofTier: "device",
+        acceptanceWeight: "blocker",
+        realStackRequired: true,
+        state: "missing",
+        reason: "device capability missing",
+        physicalDevice: true
+    )
+    let liveLevels = levels.merging([deviceCapability.id: .l4]) { current, _ in current }
+    guard selectedPermanentFrontier(
+        from: [historicalReducer, historicalFix, deviceCapability],
+        pyramidLevels: liveLevels,
+        historicalRemediationGateIDs: historical,
+        physicalAllowed: true,
+        simulatorPassed: true
+    )?.id == deviceCapability.id else {
+        throw HarnessError.invalid("eligible permanent L4 work must preempt historical remediation")
+    }
+    guard selectedPermanentFrontier(
+        from: [historicalReducer, historicalFix, deviceCapability],
+        pyramidLevels: liveLevels,
+        historicalRemediationGateIDs: historical,
+        physicalAllowed: false,
+        simulatorPassed: true
+    ) == nil else {
+        throw HarnessError.invalid("physical work must not enter the permanent frontier without authorization")
+    }
+    guard selectedPermanentFrontier(
+        from: [component, deviceCapability],
+        pyramidLevels: liveLevels,
+        historicalRemediationGateIDs: historical,
+        physicalAllowed: true,
+        simulatorPassed: true
+    )?.id == component.id else {
+        throw HarnessError.invalid("lower permanent work must preempt an eligible L4 gate")
+    }
+    let currentPermanentFailure = policyFixtureStatus(
+        id: "current-component-failure",
+        kind: "real-stack-mlibc",
+        proofTier: "mlibc",
+        acceptanceWeight: "blocker",
+        realStackRequired: true,
+        state: "fail",
+        reason: "current component runtime failed"
+    )
+    let failureLevels = liveLevels.merging([currentPermanentFailure.id: .l2]) { current, _ in current }
+    let selectedFailure = selectedPermanentFrontier(
+        from: [deviceCapability, historicalReducer, currentPermanentFailure],
+        pyramidLevels: failureLevels,
+        historicalRemediationGateIDs: historical,
+        physicalAllowed: true,
+        simulatorPassed: true
+    )
+    guard selectedFailure?.id == currentPermanentFailure.id,
+          selectedFailure?.resultPolicy.mustStop == true,
+          selectedFailure?.resultPolicy.continueRefreshAllowed == false,
+          selectedFailure?.resultPolicy.runtimePatchAllowed == false else {
+        throw HarnessError.invalid("current permanent failure must stop before L4 or historical work")
     }
 
     let roadmap = try loadRoadmap()
