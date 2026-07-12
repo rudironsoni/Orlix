@@ -8357,3 +8357,12 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - OCI and environment runtime gates retain the default full-fixture path and their existing zero-skip requirements.
 - This is an environment/tooling correction. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch.
 - Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
+### Checkpoint: Simulator Install Timeout Classification
+
+- Runtime-validation now records simulator install failures with a structured failure kind and whether product launch was attempted. The install timeout is configurable through `ORLIX_SIMULATOR_INSTALL_TIMEOUT_SECONDS` and defaults to 1800 seconds for the externally backed simulator environment.
+- The TCTI result classifier reads the structured failure context. A current simulator install timeout before product launch is `environment_only_failure`, never authorizes runtime or harness patches, and stops for an environment retry. An immediate install rejection remains product-owned instead of being hidden as an environment timeout.
+- The existing build-20 stability report failed at `simulator-install` with exit status 124 after 120 seconds, empty install output, no launch, no runtime events, and all forbidden behavior fields false. It did not observe an OrlixKernel or TCTI runtime failure.
+- `gate-result-policy-check` covers both the timeout and immediate-rejection boundaries. Swift typechecking, shell syntax, report schema, plan consistency, the full agent harness check, task-envelope regeneration, and `git diff --check` pass for this checkpoint.
+- No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device gate, production assembly, or gadget behavior changed.
+- Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

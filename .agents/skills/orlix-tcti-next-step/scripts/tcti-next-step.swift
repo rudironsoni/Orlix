@@ -218,6 +218,11 @@ struct ReportFact: Codable {
     let executionFreshness: ExecutionFreshness?
     let failures: [ReportFailureFact]
     let forbiddenBehaviorViolations: [String]
+    let failureStage: String?
+    let failureKind: String?
+    let failureExitStatus: String?
+    let failureTimeoutSeconds: String?
+    let productLaunchAttempted: Bool?
 
     init(
         path: String,
@@ -235,7 +240,12 @@ struct ReportFact: Codable {
         productBuildID: String? = nil,
         executionFreshness: ExecutionFreshness? = nil,
         failures: [ReportFailureFact] = [],
-        forbiddenBehaviorViolations: [String] = []
+        forbiddenBehaviorViolations: [String] = [],
+        failureStage: String? = nil,
+        failureKind: String? = nil,
+        failureExitStatus: String? = nil,
+        failureTimeoutSeconds: String? = nil,
+        productLaunchAttempted: Bool? = nil
     ) {
         self.path = path
         self.exists = exists
@@ -253,6 +263,11 @@ struct ReportFact: Codable {
         self.executionFreshness = executionFreshness
         self.failures = failures
         self.forbiddenBehaviorViolations = forbiddenBehaviorViolations
+        self.failureStage = failureStage
+        self.failureKind = failureKind
+        self.failureExitStatus = failureExitStatus
+        self.failureTimeoutSeconds = failureTimeoutSeconds
+        self.productLaunchAttempted = productLaunchAttempted
     }
 
     func withExecutionFreshness(_ freshness: ExecutionFreshness?) -> ReportFact {
@@ -272,7 +287,12 @@ struct ReportFact: Codable {
             productBuildID: productBuildID,
             executionFreshness: freshness,
             failures: failures,
-            forbiddenBehaviorViolations: forbiddenBehaviorViolations
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations,
+            failureStage: failureStage,
+            failureKind: failureKind,
+            failureExitStatus: failureExitStatus,
+            failureTimeoutSeconds: failureTimeoutSeconds,
+            productLaunchAttempted: productLaunchAttempted
         )
     }
 
@@ -293,6 +313,11 @@ struct ReportFact: Codable {
         case executionFreshness = "execution_freshness"
         case failures
         case forbiddenBehaviorViolations = "forbidden_behavior_violations"
+        case failureStage = "failure_stage"
+        case failureKind = "failure_kind"
+        case failureExitStatus = "failure_exit_status"
+        case failureTimeoutSeconds = "failure_timeout_seconds"
+        case productLaunchAttempted = "product_launch_attempted"
     }
 }
 
@@ -1132,7 +1157,10 @@ func forbiddenBehaviorViolations(_ value: Any?) -> [String] {
 func lowercasedEvidenceText(_ status: GateStatus) -> String {
     let failures = status.reports.flatMap(\.failures).map { "\($0.id) \($0.message)" }
     let reportPaths = status.reports.map(\.path)
-    return ([status.id, status.kind, status.state, status.reason] + failures + reportPaths)
+    let failureContext = status.reports.flatMap {
+        [$0.failureStage, $0.failureKind, $0.failureExitStatus, $0.failureTimeoutSeconds].compactMap { $0 }
+    }
+    return ([status.id, status.kind, status.state, status.reason] + failures + reportPaths + failureContext)
         .joined(separator: " ")
         .lowercased()
 }
@@ -1294,6 +1322,31 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
     }
 
     let evidenceText = lowercasedEvidenceText(status)
+    let simulatorInstallTimeout = status.reports.contains { report in
+        guard report.exists && !report.passed,
+              report.failureStage?.lowercased() == "simulator-install",
+              report.productLaunchAttempted != true else {
+            return false
+        }
+        if report.failureKind?.lowercased() == "timeout" {
+            return true
+        }
+        return report.failureKind == nil &&
+            report.failureExitStatus == "124" &&
+            (Int(report.failureTimeoutSeconds ?? "") ?? 0) > 0
+    }
+    if simulatorInstallTimeout {
+        return policy(
+            classification: "environment_only_failure",
+            runtimePatchAllowed: false,
+            harnessPatchAllowed: false,
+            continueRefreshAllowed: false,
+            mustStop: true,
+            requiredNextAction: "fix or rerun the environment/simulator setup before changing product code",
+            reason: "The current report timed out during simulator installation before product launch or runtime evidence.",
+            owningLayer: "environment"
+        )
+    }
     let currentPassReducerRefresh = status.kind == "no-phone-reducer" &&
         status.state == "ready" &&
         evidenceText.contains("current passing static busybox report") &&
@@ -2667,6 +2720,7 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
         else {
             continue
         }
+        let failureContext = object["failure_context"] as? [String: Any]
         let fact = ReportFact(
             path: relativePath(url),
             exists: true,
@@ -2682,7 +2736,12 @@ func latestRuntimeReport(gate gateName: String, destination: String) -> (ReportF
             productVersion: stringValue(object["product_version"]),
             productBuildID: stringValue(object["product_build_id"]),
             failures: reportFailures(object["failures"]),
-            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"])
+            forbiddenBehaviorViolations: forbiddenBehaviorViolations(object["forbidden_behavior"]),
+            failureStage: stringValue(failureContext?["stage"]),
+            failureKind: stringValue(failureContext?["kind"]),
+            failureExitStatus: stringValue(failureContext?["exit_status"]),
+            failureTimeoutSeconds: stringValue(failureContext?["timeout_seconds"]),
+            productLaunchAttempted: failureContext?["product_launch_attempted"].map(boolValue)
         )
         return (fact, object)
     }
@@ -6496,7 +6555,12 @@ func policyFixtureReport(
     realStackRequired: Bool? = nil,
     canClaimRuntimeReadiness: Bool? = nil,
     failures: [ReportFailureFact] = [],
-    forbiddenBehaviorViolations: [String] = []
+    forbiddenBehaviorViolations: [String] = [],
+    failureStage: String? = nil,
+    failureKind: String? = nil,
+    failureExitStatus: String? = nil,
+    failureTimeoutSeconds: String? = nil,
+    productLaunchAttempted: Bool? = nil
 ) -> ReportFact {
     return ReportFact(
         path: path,
@@ -6527,7 +6591,12 @@ func policyFixtureReport(
             reason: "classifier fixture explicitly models current execution evidence"
         ),
         failures: failures,
-        forbiddenBehaviorViolations: forbiddenBehaviorViolations
+        forbiddenBehaviorViolations: forbiddenBehaviorViolations,
+        failureStage: failureStage,
+        failureKind: failureKind,
+        failureExitStatus: failureExitStatus,
+        failureTimeoutSeconds: failureTimeoutSeconds,
+        productLaunchAttempted: productLaunchAttempted
     )
 }
 
@@ -6604,6 +6673,8 @@ func validateGateResultPolicyFixtures() throws {
         ("environment-only-failure", policyFixtureStatus(id: "environment", state: "fail", reason: "CoreSimulator bootstatus failed"), "environment_only_failure", false, false, false, true),
         ("xctest-runner-connection-failure", policyFixtureStatus(id: "xctest-runner", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "The test runner hung before establishing connection", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
         ("remote-process-connection-failure", policyFixtureStatus(id: "xctest-remote-process", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "Connection to remote process was not established", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
+        ("simulator-install-timeout", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "current simulator report failed before launch", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "timeout", failureExitStatus: "124", failureTimeoutSeconds: "120", productLaunchAttempted: false)]), "environment_only_failure", false, false, false, true),
+        ("simulator-install-product-rejection", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "simulator rejected the built app", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "command-failure", failureExitStatus: "1", productLaunchAttempted: false)]), "current_runtime_product_failure", true, false, false, true),
         ("forbidden-behavior-violation", policyFixtureStatus(id: "forbidden", state: "fail", reason: "safety report failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", forbiddenBehaviorViolations: ["map_jit"])]), "forbidden_behavior_violation", false, false, false, true),
         ("readiness-gate-pass", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: true, state: "pass", passed: true, reason: "current simulator readiness report passed", readinessEligible: true), "readiness_gate_pass", false, false, true, false),
     ]
@@ -6617,6 +6688,10 @@ func validateGateResultPolicyFixtures() throws {
               actual.mustStop == mustStop else {
             throw HarnessError.invalid("gate result policy fixture \(name) produced unexpected policy")
         }
+    }
+    let installTimeoutPolicy = classifyGateResult(fixtures.first { $0.0 == "simulator-install-timeout" }!.1)
+    guard installTimeoutPolicy.owningLayer == "environment" else {
+        throw HarnessError.invalid("simulator install timeout must remain owned by the environment")
     }
     print("pass: gate-result-policy-check")
 }

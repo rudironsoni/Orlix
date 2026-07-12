@@ -34,6 +34,7 @@ required_simulator_id="${ORLIX_TCTI_REQUIRED_SIMULATOR_ID:-ADE0D3EB-6E89-41DD-9A
 required_simulator_name="${ORLIX_TCTI_REQUIRED_SIMULATOR_NAME:-Orlix-iPhone-15-Pro-Max}"
 capture_seconds="${ORLIX_RUNTIME_GATE_CAPTURE_SECONDS:-45}"
 simulator_boot_timeout_seconds="${ORLIX_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
+simulator_install_timeout_seconds="${ORLIX_SIMULATOR_INSTALL_TIMEOUT_SECONDS:-1800}"
 development_team="${ORLIX_DEVELOPMENT_TEAM:-}"
 code_sign_style="${ORLIX_CODE_SIGN_STYLE:-}"
 provisioning_profile_specifier="${ORLIX_PROVISIONING_PROFILE_SPECIFIER:-}"
@@ -74,8 +75,10 @@ device_xcode_id=""
 device_ddi_available=""
 app_path=""
 failure_stage=""
+failure_kind=""
 failure_exit_status=""
 failure_timeout_seconds=""
+product_launch_attempted=""
 failure_stdout_empty=""
 failure_stderr_empty=""
 runtime_failure_reducer=""
@@ -136,6 +139,7 @@ write_report() {
 		printf -- '- capture seconds: `%s`\n' "$capture_seconds"
 		if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 			printf -- '- simulator boot timeout seconds: `%s`\n' "$simulator_boot_timeout_seconds"
+			printf -- '- simulator install timeout seconds: `%s`\n' "$simulator_install_timeout_seconds"
 			printf -- '- required simulator id: `%s`\n' "$required_simulator_id"
 			printf -- '- required simulator name: `%s`\n' "$required_simulator_name"
 			printf -- '- booted simulator count: `%s`\n' "${simulator_booted_count:-unknown}"
@@ -274,8 +278,10 @@ failure_context_json() {
 	cat <<JSON
 {
     "stage": $(json_string_or_null "$failure_stage"),
+    "kind": $(json_string_or_null "$failure_kind"),
     "exit_status": $(json_string_or_null "$failure_exit_status"),
     "timeout_seconds": $(json_string_or_null "$failure_timeout_seconds"),
+    "product_launch_attempted": ${product_launch_attempted:-null},
     "install_stdout_empty": $(json_string_or_null "$failure_stdout_empty"),
     "install_stderr_empty": $(json_string_or_null "$failure_stderr_empty")
   }
@@ -1499,10 +1505,9 @@ PY
 			xcrun simctl terminate "$device_id" "$bundle_id" || true
 		run_command_with_timeout 10 /dev/null /dev/null \
 			xcrun simctl uninstall "$device_id" "$bundle_id" || true
-		local install_timeout_seconds=120
 		local install_status
 		set +e
-		run_command_with_timeout "$install_timeout_seconds" \
+		run_command_with_timeout "$simulator_install_timeout_seconds" \
 			"$artifact_dir/install.stdout" \
 			"$artifact_dir/install.stderr" \
 			xcrun simctl install "$device_id" "$app_path"
@@ -1510,8 +1515,14 @@ PY
 		set -e
 		if [ "$install_status" -ne 0 ]; then
 			failure_stage="simulator-install"
+			if [ "$install_status" -eq 124 ]; then
+				failure_kind="timeout"
+			else
+				failure_kind="command-failure"
+			fi
 			failure_exit_status="$install_status"
-			failure_timeout_seconds="$install_timeout_seconds"
+			failure_timeout_seconds="$simulator_install_timeout_seconds"
+			product_launch_attempted="false"
 			if [ -s "$artifact_dir/install.stdout" ]; then
 				failure_stdout_empty="false"
 			else
