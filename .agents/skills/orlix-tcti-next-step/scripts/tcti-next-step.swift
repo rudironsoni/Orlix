@@ -1073,6 +1073,36 @@ func changedPathsSinceReport(reportGitSHA: String, currentGitSHA: String) -> [St
     return paths
 }
 
+func projectYMLDiffTouchesOnlySigning(_ diff: String) -> Bool {
+    let changedLines = diff.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+        (line.hasPrefix("+") || line.hasPrefix("-")) &&
+            !line.hasPrefix("+++") && !line.hasPrefix("---")
+    }
+    guard !changedLines.isEmpty else { return false }
+    let signingKeys: Set<String> = [
+        "CODE_SIGN_STYLE",
+        "CODE_SIGN_IDENTITY",
+        "DEVELOPMENT_TEAM",
+        "PROVISIONING_PROFILE_SPECIFIER",
+    ]
+    return changedLines.allSatisfy { line in
+        let body = String(line.dropFirst()).trimmingCharacters(in: .whitespaces)
+        guard let colon = body.firstIndex(of: ":") else { return false }
+        let key = String(body[..<colon])
+        guard key.range(of: "^[A-Z][A-Z0-9_]*$", options: .regularExpression) != nil else {
+            return false
+        }
+        return signingKeys.contains(key)
+    }
+}
+
+func projectYMLChangesAreSigningOnly(reportGitSHA: String, currentGitSHA: String) -> Bool {
+    let committed = run("/usr/bin/env", ["git", "diff", "--unified=0", "\(reportGitSHA)..\(currentGitSHA)", "--", "project.yml"]) ?? ""
+    let working = run("/usr/bin/env", ["git", "diff", "--unified=0", "HEAD", "--", "project.yml"]) ?? ""
+    let diffs = [committed, working].filter { !$0.isEmpty }
+    return !diffs.isEmpty && diffs.allSatisfy(projectYMLDiffTouchesOnlySigning)
+}
+
 struct ProjectVersion {
     let marketingVersion: String
     let buildID: String
@@ -1242,9 +1272,13 @@ func executionFreshness(
     }
     let workingChanged = currentWorkingTreeChangedPaths()
     let changed = Array(Set(committedChanged + workingChanged)).sorted()
-    let committedInvalidating = committedChanged.filter { matchesAny($0, productExecutionInvalidationPatterns) }
-    let workingInvalidating = workingChanged.filter { matchesAny($0, productExecutionInvalidationPatterns) }
-    let invalidating = changed.filter { matchesAny($0, productExecutionInvalidationPatterns) }
+    let signingOnlyProjectChange = changed.contains("project.yml") && projectYMLChangesAreSigningOnly(reportGitSHA: reportGitSHA, currentGitSHA: current)
+    let invalidatesProductExecution: (String) -> Bool = { path in
+        matchesAny(path, productExecutionInvalidationPatterns) && !(path == "project.yml" && signingOnlyProjectChange)
+    }
+    let committedInvalidating = committedChanged.filter(invalidatesProductExecution)
+    let workingInvalidating = workingChanged.filter(invalidatesProductExecution)
+    let invalidating = changed.filter(invalidatesProductExecution)
     let ignored = changed.filter { !invalidating.contains($0) }
     let versionMatches = reportVersion.marketingVersion == currentVersion.marketingVersion
     let buildMatches = reportVersion.buildID == currentVersion.buildID
@@ -7213,6 +7247,20 @@ func semanticFreshnessFixtureGate(
 }
 
 func validateSemanticFreshnessFixtures() throws {
+    let signingOnlyDiff = """
+    diff --git a/project.yml b/project.yml
+    --- a/project.yml
+    +++ b/project.yml
+    @@ -1,0 +2 @@
+    +        PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
+    """
+    let runtimeDiff = signingOnlyDiff + "\n+        OTHER_LDFLAGS: -runtime-change"
+    let disguisedRuntimeDiff = signingOnlyDiff + "\n+        OTHER_LDFLAGS: \"-Wl,-runtime-change CODE_SIGN_STYLE:\""
+    guard projectYMLDiffTouchesOnlySigning(signingOnlyDiff),
+          !projectYMLDiffTouchesOnlySigning(runtimeDiff),
+          !projectYMLDiffTouchesOnlySigning(disguisedRuntimeDiff) else {
+        throw HarnessError.invalid("project.yml semantic freshness must isolate signing-only metadata from runtime changes")
+    }
     let runtimeGate = semanticFreshnessFixtureGate(
         id: "simulator-tcti-full-shell-usability",
         command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-full-shell-usability",

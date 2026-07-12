@@ -1462,7 +1462,7 @@ build_app_for_target() {
 		signing_settings+=(CODE_SIGN_IDENTITY="$code_sign_identity")
 	fi
 	if [ "$destination" = "iphoneos" ] && [ -n "$provisioning_profile_specifier" ]; then
-		signing_settings+=(PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile_specifier")
+		signing_settings+=(ORLIX_PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile_specifier")
 	fi
 	if [ "$destination" = "iphoneos" ] && [ "${ORLIX_ALLOW_PROVISIONING_UPDATES:-NO}" = "YES" ]; then
 		provisioning_flags+=(-allowProvisioningUpdates)
