@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+orlix_runtime_destination_is_simulator() {
+	case "$1" in
+	iphonesimulator|"iOS Simulator") return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 orlix_capture_tcti_first_syscall() {
 	local output="$1"
 	shift

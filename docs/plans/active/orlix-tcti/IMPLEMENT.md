@@ -7,6 +7,7 @@
 - The physical app run reached Linux init, TCTI `svc #0`, Linux syscall dispatch, an interactive shell, and `/bin/ls`, but runtime validation reported failure because physical `devicectl` output was captured in `launch.stderr` while marker extraction searched only the console and log artifacts.
 - Runtime validation now includes `launch.stderr` when capturing the first-syscall marker and structured TCTI runtime events.
 - Added a focused fixture proving a physical-style `launch.stderr` marker produces `tcti-first-syscall.txt` even when simulator-only artifacts are absent.
+- The dual-destination first-syscall gate now applies simulator-only fatal-log validation only to simulator runs instead of rejecting `iphoneos` after valid physical evidence was captured.
 - This is a runtime-validation reporting fix. It does not change OrlixKernel, TCTI execution, HostAdapter, OrlixOS, app behavior, generated upstream sources, production assembly, or gadget dispatch.
 
 ### Checkpoint: Simulator Baseline And XCTest Attach Classification
