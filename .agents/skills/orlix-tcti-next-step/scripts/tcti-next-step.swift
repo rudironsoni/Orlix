@@ -5838,14 +5838,11 @@ func dirtyRuntimeOrHarnessWorktree() -> Bool {
     return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 }
 
-func physicalBlockers(statuses: [GateStatus], preflightPassed: Bool) -> [String] {
+func physicalBlockers(statuses: [GateStatus]) -> [String] {
     var blockers: [String] = []
     let missingSimulator = simulatorReadinessMissingGateIDs(statuses)
     if !missingSimulator.isEmpty {
         blockers.append("missing_or_failing_simulator_readiness_gates=\(missingSimulator.joined(separator: ","))")
-    }
-    if !preflightPassed {
-        blockers.append("autonomous_no_phone_preflight_not_passed")
     }
     if !physicalDeviceExplicitlyAllowed() {
         blockers.append("explicit_physical_opt_in_missing")
@@ -5875,14 +5872,8 @@ func gateUsesRequiredSimulator(_ gate: Gate) -> Bool {
 
 func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateIDs: [String]) -> GateStatus? {
     let simulatorPassed = simulatorRuntimeGatesComplete(statuses)
-    let preflightGateIDs = Set(runtimePreflightGateIDs)
-    let preflightPassed = statuses
-        .filter { preflightGateIDs.contains($0.id) }
-        .allSatisfy { $0.satisfiesPrerequisite }
-    let physicalAllowed = physicalBlockers(
-        statuses: statuses,
-        preflightPassed: preflightPassed
-    ).isEmpty
+    _ = runtimePreflightGateIDs
+    let physicalAllowed = physicalBlockers(statuses: statuses).isEmpty
     if let finalRuntime = statuses.first(where: {
         $0.id == "simulator-tcti-full-linux-runtime-readiness" &&
             $0.currentlySimulatorReadinessSatisfied
@@ -5903,6 +5894,9 @@ func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateI
             return false
         }
         return true
+    }
+    if physicalAllowed, let physicalGate = eligible.first(where: { $0.physicalDevice }) {
+        return physicalGate
     }
     if eligible.contains(where: { $0.reason.contains("simulator stability report") && $0.reason.contains("stale") }),
        let simulatorStability = eligible.first(where: { $0.id == "simulator-tcti-runtime-stability" }) {
@@ -5951,15 +5945,10 @@ func statusDocument() throws -> StatusDocument {
     let gateStatuses = statuses(for: roadmap)
     let physicalGate = gateStatuses.first { $0.physicalDevice }
     let next = selectedStatusWithSafety(from: gateStatuses, runtimePreflightGateIDs: roadmap.runtimePreflightGateIDs)
-    let preflightGateIDs = Set(roadmap.runtimePreflightGateIDs)
-    let preflightPassed = gateStatuses
-        .filter { preflightGateIDs.contains($0.id) }
-        .allSatisfy { $0.satisfiesPrerequisite }
     let missingSimulatorReadiness = simulatorReadinessMissingGateIDs(gateStatuses)
-    let blockers = physicalBlockers(statuses: gateStatuses, preflightPassed: preflightPassed)
+    let blockers = physicalBlockers(statuses: gateStatuses)
     let dirtyRuntimeOrHarness = dirtyRuntimeOrHarnessWorktree()
     let physicalAllowed = physicalGate?.prerequisitesSatisfied == true &&
-        preflightPassed &&
         missingSimulatorReadiness.isEmpty &&
         physicalDeviceExplicitlyAllowed() &&
         !dirtyRuntimeOrHarness

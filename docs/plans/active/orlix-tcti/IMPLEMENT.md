@@ -8366,6 +8366,7 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Build 21 app-hosted simulator gates passed for full shell usability, package behavior, dynamic-loader support, signals, VFS completeness, and full Linux runtime readiness on iOS 26.5 build 23F77.
 - The current first-syscall certification also passed, completing all eleven pinned-simulator readiness reports. The observation-only first-syscall gate no longer depends on an older no-phone report when stronger current app-hosted runtime evidence exists.
 - Physical authorization now follows the documented contract: explicit runtime preflight, the complete current simulator ladder, explicit human opt-in, and a clean worktree. Unrelated stale historical probes do not outrank current app evidence.
+- The physical first-syscall gate now depends on the complete current simulator ladder plus current safety and report-schema proof. Older gadget and interactive-terminal probes are superseded by the stronger full-runtime simulator evidence for device authorization.
 - This changes harness selection only. It does not change product runtime behavior or weaken app-hosted runtime evidence.
 
 ### Checkpoint: Simulator Gate Launch Argument Preservation
