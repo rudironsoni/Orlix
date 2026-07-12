@@ -8,6 +8,7 @@ struct Roadmap: Decodable {
     let runtimePreflightGateIDs: [String]
     let pyramidLevelGateIDs: [String: [String]]
     let historicalRemediationGateIDs: [String]
+    let productRuntimeCapabilities: [ProductRuntimeCapability]
 
     enum CodingKeys: String, CodingKey {
         case area
@@ -16,6 +17,25 @@ struct Roadmap: Decodable {
         case runtimePreflightGateIDs = "runtime_preflight_gate_ids"
         case pyramidLevelGateIDs = "pyramid_level_gate_ids"
         case historicalRemediationGateIDs = "historical_remediation_gate_ids"
+        case productRuntimeCapabilities = "product_runtime_capabilities"
+    }
+}
+
+struct ProductRuntimeCapability: Decodable {
+    let id: String
+    let simulatorGateIDs: [String]
+    let deviceGateID: String?
+    let runtimeGate: String
+    let artifactSuffix: String?
+    let marker: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case simulatorGateIDs = "simulator_gate_ids"
+        case deviceGateID = "device_gate_id"
+        case runtimeGate = "runtime_gate"
+        case artifactSuffix = "artifact_suffix"
+        case marker
     }
 }
 
@@ -6022,6 +6042,76 @@ func explicitPyramidLevels(_ roadmap: Roadmap) throws -> [String: PyramidLevel] 
     return result
 }
 
+func validateProductRuntimeCapabilities(
+    _ capabilities: [ProductRuntimeCapability],
+    l3GateIDs: Set<String>,
+    l4GateIDs: Set<String>,
+    gatesByID: [String: Gate]
+) throws {
+    guard !capabilities.isEmpty else {
+        throw HarnessError.invalid("roadmap product_runtime_capabilities must not be empty")
+    }
+    guard capabilities.allSatisfy({ !$0.id.isEmpty && !$0.runtimeGate.isEmpty && !$0.simulatorGateIDs.isEmpty }) else {
+        throw HarnessError.invalid("product runtime capability IDs, runtime gates, and simulator gate lists must not be empty")
+    }
+    guard Set(capabilities.map(\.id)).count == capabilities.count,
+          Set(capabilities.map(\.runtimeGate)).count == capabilities.count else {
+        throw HarnessError.invalid("product runtime capability IDs and runtime gates must be unique")
+    }
+    let simulatorGateIDList = capabilities.flatMap(\.simulatorGateIDs)
+    let deviceGateIDList = capabilities.compactMap(\.deviceGateID)
+    guard Set(simulatorGateIDList).count == simulatorGateIDList.count,
+          Set(deviceGateIDList).count == deviceGateIDList.count else {
+        throw HarnessError.invalid("simulator and materialized device gate IDs must belong to exactly one product capability")
+    }
+    let capabilitySimulatorGateIDs = Set(simulatorGateIDList)
+    guard capabilitySimulatorGateIDs == l3GateIDs else {
+        let missing = l3GateIDs.subtracting(capabilitySimulatorGateIDs).sorted()
+        let unknown = capabilitySimulatorGateIDs.subtracting(l3GateIDs).sorted()
+        throw HarnessError.invalid("product runtime capability L3 coverage mismatch; missing=\(missing.joined(separator: ",")); unknown=\(unknown.joined(separator: ","))")
+    }
+    for capability in capabilities {
+        for simulatorGateID in capability.simulatorGateIDs {
+            guard let simulatorGate = gatesByID[simulatorGateID] else {
+                throw HarnessError.invalid("product runtime capability \(capability.id) references unknown simulator gate \(simulatorGateID)")
+            }
+            let commandTokens = simulatorGate.command.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            let gateAssignments = commandTokens.filter { $0.hasPrefix("GATE=") }
+            guard commandTokens.prefix(2).elementsEqual(["make", "runtime-validation"]),
+                  commandTokens.contains("DESTINATION=iphonesimulator"),
+                  commandTokens.contains("ORLIX_SIMULATOR_ID=\(requiredSimulatorID)"),
+                  commandTokens.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_ID=\(requiredSimulatorID)"),
+                  commandTokens.contains("ORLIX_TCTI_REQUIRED_SIMULATOR_NAME=\(requiredSimulatorName)"),
+                  gateAssignments == ["GATE=\(capability.runtimeGate)"],
+                  simulatorGate.proofTier == "simulator",
+                  simulatorGate.realStackRequired,
+                  !simulatorGate.physicalDevice else {
+                throw HarnessError.invalid("product runtime capability \(capability.id) has invalid simulator gate contract for \(simulatorGate.id)")
+            }
+        }
+        if let deviceGateID = capability.deviceGateID {
+            guard !deviceGateID.isEmpty,
+                  l4GateIDs.contains(deviceGateID),
+                  let deviceGate = gatesByID[deviceGateID],
+                  deviceGate.physicalDevice,
+                  deviceGate.proofTier == "device" else {
+                throw HarnessError.invalid("product runtime capability \(capability.id) references an invalid materialized device gate")
+            }
+            let commandTokens = deviceGate.command.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            guard commandTokens.prefix(2).elementsEqual(["make", "runtime-validation"]),
+                  commandTokens.contains("DESTINATION=iphoneos"),
+                  commandTokens.filter({ $0.hasPrefix("GATE=") }) == ["GATE=\(capability.runtimeGate)"] else {
+                throw HarnessError.invalid("product runtime capability \(capability.id) device command does not match its runtime gate")
+            }
+        }
+        guard capability.artifactSuffix.map({ !$0.isEmpty }) ?? true,
+              capability.marker.map({ !$0.isEmpty }) ?? true,
+              capability.artifactSuffix != nil || capability.marker == nil else {
+            throw HarnessError.invalid("product runtime capability \(capability.id) marker requires an artifact suffix")
+        }
+    }
+}
+
 func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
     let byID = Dictionary(uniqueKeysWithValues: roadmap.gates.map { ($0.id, $0) })
     guard byID.count == roadmap.gates.count else {
@@ -6055,6 +6145,13 @@ func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
     guard historical.count == 40 else {
         throw HarnessError.invalid("roadmap historical remediation count must remain 40 during frontier migration")
     }
+
+    try validateProductRuntimeCapabilities(
+        roadmap.productRuntimeCapabilities,
+        l3GateIDs: Set(roadmap.pyramidLevelGateIDs["L3"] ?? []),
+        l4GateIDs: Set(roadmap.pyramidLevelGateIDs["L4"] ?? []),
+        gatesByID: byID
+    )
 }
 
 func validateRoadmapSimulatorPolicy(_ roadmap: Roadmap) throws {
@@ -7173,6 +7270,29 @@ func validateSourceOwnerPolicyFixtures() throws {
 }
 
 func validateSemanticFrontierFixtures() throws {
+    func replacingCommand(_ gate: Gate, with command: String) -> Gate {
+        Gate(
+            id: gate.id,
+            command: command,
+            kind: gate.kind,
+            proofTier: gate.proofTier,
+            acceptanceWeight: gate.acceptanceWeight,
+            realStackRequired: gate.realStackRequired,
+            canClaimRuntimeReadiness: gate.canClaimRuntimeReadiness,
+            prerequisites: gate.prerequisites,
+            allowedScope: gate.allowedScope,
+            forbiddenScope: gate.forbiddenScope,
+            expectedReportPaths: gate.expectedReportPaths,
+            readinessEligible: gate.readinessEligible,
+            physicalDevice: gate.physicalDevice,
+            gadget: gate.gadget,
+            requiredValidationCommands: gate.requiredValidationCommands,
+            reducerRequirements: gate.reducerRequirements,
+            requiredSubagentsOrSkills: gate.requiredSubagentsOrSkills,
+            commitMessageTemplate: gate.commitMessageTemplate,
+            stopConditions: gate.stopConditions
+        )
+    }
     let historicalReducer = policyFixtureStatus(id: "historical-reducer", kind: "no-phone-reducer", state: "fail", reason: "historical reducer")
     let historicalFix = policyFixtureStatus(id: "historical-fix", kind: "production-tcti-fix", state: "fail", reason: "historical fix")
     let component = policyFixtureStatus(id: "component-mlibc", kind: "real-stack-mlibc", proofTier: "mlibc", acceptanceWeight: "blocker", realStackRequired: true, state: "stale", reason: "semantic mlibc input changed")
@@ -7201,6 +7321,105 @@ func validateSemanticFrontierFixtures() throws {
     }
     guard semanticFrontier(from: [l2Readiness, component], pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == component.id else {
         throw HarnessError.invalid("same-level blocker gates must precede readiness gates regardless of state")
+    }
+
+    let roadmap = try loadRoadmap()
+    let gatesByID = Dictionary(uniqueKeysWithValues: roadmap.gates.map { ($0.id, $0) })
+    let l3GateIDs = Set(roadmap.pyramidLevelGateIDs["L3"] ?? [])
+    let l4GateIDs = Set(roadmap.pyramidLevelGateIDs["L4"] ?? [])
+    try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: gatesByID)
+    guard let firstCapability = roadmap.productRuntimeCapabilities.first else {
+        throw HarnessError.invalid("product runtime capability fixture requires a canonical capability")
+    }
+    var rejectedMissingCoverage = false
+    do {
+        try validateProductRuntimeCapabilities(Array(roadmap.productRuntimeCapabilities.dropFirst()), l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: gatesByID)
+    } catch {
+        rejectedMissingCoverage = true
+    }
+    guard rejectedMissingCoverage else {
+        throw HarnessError.invalid("product runtime capability fixture must reject missing L3 coverage")
+    }
+    let duplicateCapability = ProductRuntimeCapability(
+        id: firstCapability.id,
+        simulatorGateIDs: firstCapability.simulatorGateIDs,
+        deviceGateID: nil,
+        runtimeGate: firstCapability.runtimeGate,
+        artifactSuffix: firstCapability.artifactSuffix,
+        marker: firstCapability.marker
+    )
+    var rejectedDuplicateIdentity = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities + [duplicateCapability], l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: gatesByID)
+    } catch {
+        rejectedDuplicateIdentity = true
+    }
+    guard rejectedDuplicateIdentity else {
+        throw HarnessError.invalid("product runtime capability fixture must reject duplicate capability and simulator identities")
+    }
+    if roadmap.productRuntimeCapabilities.count > 1 {
+        var duplicateRuntimeCapabilities = roadmap.productRuntimeCapabilities
+        let second = duplicateRuntimeCapabilities[1]
+        duplicateRuntimeCapabilities[1] = ProductRuntimeCapability(
+            id: second.id,
+            simulatorGateIDs: second.simulatorGateIDs,
+            deviceGateID: second.deviceGateID,
+            runtimeGate: firstCapability.runtimeGate,
+            artifactSuffix: second.artifactSuffix,
+            marker: second.marker
+        )
+        var rejectedDuplicateRuntimeGate = false
+        do {
+            try validateProductRuntimeCapabilities(duplicateRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: gatesByID)
+        } catch {
+            rejectedDuplicateRuntimeGate = true
+        }
+        guard rejectedDuplicateRuntimeGate else {
+            throw HarnessError.invalid("product runtime capability fixture must reject duplicate runtime semantics")
+        }
+    }
+    var invalidGateMap = gatesByID
+    if let simulatorGateID = firstCapability.simulatorGateIDs.first,
+       let simulatorGate = gatesByID[simulatorGateID] {
+        invalidGateMap[simulatorGateID] = replacingCommand(
+            simulatorGate,
+            with: simulatorGate.command.replacingOccurrences(of: "GATE=\(firstCapability.runtimeGate)", with: "GATE=\(firstCapability.runtimeGate)-extra")
+        )
+    }
+    var rejectedCommandPrefixCollision = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: invalidGateMap)
+    } catch {
+        rejectedCommandPrefixCollision = true
+    }
+    guard rejectedCommandPrefixCollision else {
+        throw HarnessError.invalid("product runtime capability fixture must reject runtime gate prefix collisions")
+    }
+    var unpinnedGateMap = gatesByID
+    if let simulatorGateID = firstCapability.simulatorGateIDs.first,
+       let simulatorGate = gatesByID[simulatorGateID] {
+        unpinnedGateMap[simulatorGateID] = replacingCommand(
+            simulatorGate,
+            with: simulatorGate.command.replacingOccurrences(of: " ORLIX_SIMULATOR_ID=\(requiredSimulatorID)", with: "")
+        )
+    }
+    var rejectedUnpinnedSimulator = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: l4GateIDs, gatesByID: unpinnedGateMap)
+    } catch {
+        rejectedUnpinnedSimulator = true
+    }
+    guard rejectedUnpinnedSimulator else {
+        throw HarnessError.invalid("product runtime capability fixture must reject an unpinned simulator command")
+    }
+    var rejectedMissingL4Classification = false
+    do {
+        try validateProductRuntimeCapabilities(roadmap.productRuntimeCapabilities, l3GateIDs: l3GateIDs, l4GateIDs: [], gatesByID: gatesByID)
+    } catch {
+        rejectedMissingL4Classification = true
+    }
+    guard rejectedMissingL4Classification else {
+        throw HarnessError.invalid("product runtime capability fixture must reject a materialized device gate outside L4")
     }
     print("pass: semantic-frontier-check")
 }

@@ -8443,3 +8443,9 @@ Timestamp: `2026-07-06T20:29:32Z`.
 
 - Missing `simulator-runtime-real-stack` reports now follow the same exact pinned runtime-validation generator policy as the explicitly recognized simulator-runtime kind.
 - This changes autonomous continuation only. It does not weaken simulator identity, prerequisites, physical-device policy, or readiness claims.
+## 2026-07-12 Canonical Product Capability Inventory
+
+- Added a closed-world product capability inventory to the agent-neutral TCTI roadmap as the prerequisite for symmetric simulator and approved-device validation.
+- Existing duplicate first-syscall L3 gate names are explicit aliases of one semantic capability and one materialized L4 gate. Other device instances remain absent rather than being represented by fictional IDs.
+- Validation requires exact L3 coverage, unique runtime semantics, exact parsed and pinned runtime-validation commands, simulator proof metadata, and valid materialized L4 device gates. The inventory does not authorize phone execution or claim matrix equality.
+- Product runtime behavior, generated evidence, upstream trees, physical execution, and release state are unchanged.
