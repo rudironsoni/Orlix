@@ -1732,13 +1732,13 @@ PY
 }
 
 capture_launch() {
-	local launch_pid
+	local launch_pid launch_status=0 launch_was_running=0
+	local launch_args=()
+	simulator_launch_arguments launch_args
 	set +e
 		if [ "$destination" = "iphonesimulator" ] || [ "$destination" = "iOS Simulator" ]; then
 			local launch_status log_stream_pid
-			local launch_args=()
 			touch "$artifact_dir/launch.json" "$artifact_dir/launch.log"
-			simulator_launch_arguments launch_args
 			xcrun simctl terminate "$device_id" "$bundle_id" >/dev/null 2>&1 || true
 			local stopped=0
 			for _ in $(seq 1 50); do
@@ -1787,6 +1787,7 @@ capture_launch() {
 			--console \
 			--device "$device_id" \
 			"$bundle_id" \
+			"${launch_args[@]}" \
 			>"$artifact_dir/launch-console.log" 2>"$artifact_dir/launch.stderr" &
 	fi
 	launch_pid=$!
@@ -1794,9 +1795,19 @@ capture_launch() {
 
 	sleep "$capture_seconds"
 	if kill -0 "$launch_pid" >/dev/null 2>&1; then
+		launch_was_running=1
 		kill "$launch_pid" >/dev/null 2>&1 || true
 	fi
-	wait "$launch_pid" >/dev/null 2>&1 || true
+	set +e
+	wait "$launch_pid" >/dev/null 2>&1
+	launch_status=$?
+	set -e
+	if [ "$launch_was_running" -eq 0 ] && [ "$launch_status" -ne 0 ]; then
+		failure_stage="physical-device-launch"
+		failure_kind="command-failure"
+		failure_exit_status="$launch_status"
+		die "Launching Orlix on the physical iPhone failed."
+	fi
 }
 
 collect_simulator_terminal_capture() {

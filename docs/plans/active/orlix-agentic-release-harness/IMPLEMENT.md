@@ -177,3 +177,10 @@
 - Focused fixtures distinguish a signing-only profile change from an adjacent runtime build-setting change. The existing L3 simulator matrix remains current without rerunning it.
 - `product-build-prepare` had the same path-only defect: it bumped build 21 to 22 for the signing-only app-target profile line, then physical preflight rejected its own dirty tree. Build preparation now ignores the same exact signing/version key set while still bumping for dependencies, sources, linker settings, and other runtime-affecting project changes.
 - The generated bump was reverted to 21. `make product-build-prepare` now leaves build 21 unchanged, preserving the exact L3 product identity. Release archive retains its independent automatic TestFlight build bump.
+
+### Checkpoint: Physical Launch Failure Classification
+
+- The first `tcti-mlibc-smoke` device attempt built and installed successfully, but iOS rejected launch because the approved phone was locked. No guest or TCTI runtime failure occurred.
+- Physical runtime launches now forward the same capability-specific app arguments as simulator launches.
+- An early nonzero `devicectl` launch exit now fails at `physical-device-launch` instead of being misreported as a missing first-syscall marker.
+- A focused fixture proves argument forwarding and fail-fast launch classification. Product runtime behavior and readiness truth are unchanged.
