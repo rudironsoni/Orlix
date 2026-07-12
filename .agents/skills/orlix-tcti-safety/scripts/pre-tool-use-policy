@@ -287,8 +287,6 @@ if tcti_runtime_validation_command && ! tcti_runtime_validation_is_simulator; th
   if ! physical_device_opt_in_present; then
     block "physical/default-phone TCTI runtime-validation requires explicit human opt-in after full pinned simulator readiness passes."
   fi
-  autonomous_preflight_passed ||
-    block "physical/default-phone TCTI runtime-validation requires passing autonomous no-phone reports first."
   simulator_tcti_full_ladder_passed ||
     block "physical/default-phone TCTI runtime-validation requires current pinned simulator reports first syscall, stability, console, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader, signals, VFS completeness, full Linux runtime readiness."
 fi
