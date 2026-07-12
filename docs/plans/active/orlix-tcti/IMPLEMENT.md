@@ -8340,3 +8340,20 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - `tcti-xcresult-summary-parser-check` covers result-bundle path extraction and structured failure-text parsing.
 - `rtk proxy swiftc -parse tools/tcti/orlix-tcti-gate.swift`, `rtk proxy make tcti-gate TARGET=tcti-xcresult-summary-parser-check`, and `rtk proxy make agent-harness-check` passed.
 - No OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device gate, production assembly, or gadget behavior changed.
+
+### Checkpoint: XCTest External DerivedData Path Diagnosis
+
+- The pinned-simulator baseline built successfully and reached `Testing started`, but the XCTest runner did not establish its connection and no test method executed.
+- The result-bundle spindump shows dyld blocked in `sandboxd` approval while opening a dependency. The runner had not loaded XCTest, OrlixOS, OrlixKernel, or TCTI.
+- Xcode injected physical `/Volumes/.../Xcode/DerivedData` paths into the simulator process even though DerivedData is mounted at the normal Apple path under `~/Library/Developer/Xcode/DerivedData`.
+- The owning `xcode-offload` repository now has a tested correction that routes DerivedData, build products, intermediates, and module caches through the normal mounted Apple path. Package caching remains external.
+- `swift test` passed all 84 `xcode-offload` tests, and `make ci` passed before installation and simulator retry.
+- The repaired path executed 20 baseline XCTest methods. The runner connection and dyld loading succeeded; 18 tests passed and two existing architecture-policy checks rejected host-only TCTI runner sources under the kernel overlay.
+- The selected kernel kselftest XCTest then executed through the OrlixOS terminal session and passed in 9.27 seconds. Its captured output includes `ok 11 - signal_wait_probe`, `ok 4 - waitpid observes signal termination status`, and `ORLIX-KSELFTEST-END`.
+- The selected gate process was interrupted while Xcode collected post-test diagnostics, so this execution did not finalize a current `tcti-kernel-kselftest-subset/report.json` and is not claimed as a gate pass.
+- The shared test host was 1 GB because unrelated OCI and tar environment fixtures were embedded in every lane. The kselftest gate now uses the existing fixture-skip setting, and the project skip branch removes stale target-local `EnvironmentRuntimeTestFixtures` before signing.
+- The optimized rerun removed the stale 789 MB fixture directory, reduced `OrlixTestRunner.app` from about 1 GB to 237 MB and 36 files, and reduced the app signing pass from roughly 78 minutes to roughly 18 minutes on the same external sparsebundle.
+- `Build/TCTI/reports/tcti-kernel-kselftest-subset/report.json` passed with one selected XCTest executed, one passed, zero failures, zero skips, `ORLIX-KSELFTEST-END`, and all forbidden-behavior fields false.
+- OCI and environment runtime gates retain the default full-fixture path and their existing zero-skip requirements.
+- This is an environment/tooling correction. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch.
+- Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.

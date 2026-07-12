@@ -2594,6 +2594,7 @@ func runKernelKselftestSubset() throws -> Int32 {
         "-destination", "platform=iOS Simulator,id=\(simulatorID)",
         "-only-testing:\(xcodeTest)",
         "ORLIX_PROFILE=\(kernelProfile)",
+        "ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES",
         "test",
     ]
     evidence["xcodebuild_command"] = xcodeArguments.dropFirst(2).joined(separator: " ")

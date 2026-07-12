@@ -406,6 +406,8 @@ targets:
           if [ "${ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES:-NO}" != YES ]; then
               "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" environment-runtime-test-fixtures PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
               copy_if_present "$ORLIX_BUILD_ROOT/OrlixOS/environment-runtime-test-fixtures" "EnvironmentRuntimeTestFixtures"
+          else
+              rm -rf "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/EnvironmentRuntimeTestFixtures"
           fi
     settings:
       base:
