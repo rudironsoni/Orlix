@@ -6,12 +6,16 @@ struct Roadmap: Decodable {
     let description: String
     let gates: [Gate]
     let runtimePreflightGateIDs: [String]
+    let pyramidLevelGateIDs: [String: [String]]
+    let historicalRemediationGateIDs: [String]
 
     enum CodingKeys: String, CodingKey {
         case area
         case description
         case gates
         case runtimePreflightGateIDs = "runtime_preflight_gate_ids"
+        case pyramidLevelGateIDs = "pyramid_level_gate_ids"
+        case historicalRemediationGateIDs = "historical_remediation_gate_ids"
     }
 }
 
@@ -365,6 +369,17 @@ enum PyramidLevel: Int, CaseIterable {
     case l3
     case l4
     case l5
+
+    init?(label: String) {
+        guard label.count == 2,
+              label.first == "L",
+              let value = Int(label.dropFirst()) else {
+            return nil
+        }
+        self.init(rawValue: value)
+    }
+
+    var label: String { "L\(rawValue)" }
 }
 
 struct GateStatus: Encodable {
@@ -5835,7 +5850,62 @@ func validateReportProofTierMetadata(_ object: [String: Any], path: String) thro
     }
 }
 
+func explicitPyramidLevels(_ roadmap: Roadmap) throws -> [String: PyramidLevel] {
+    let expectedLabels = Set(PyramidLevel.allCases.map(\.label))
+    guard Set(roadmap.pyramidLevelGateIDs.keys) == expectedLabels else {
+        throw HarnessError.invalid("roadmap pyramid_level_gate_ids must define exactly L0 through L5")
+    }
+    var result: [String: PyramidLevel] = [:]
+    for (label, ids) in roadmap.pyramidLevelGateIDs {
+        guard let level = PyramidLevel(label: label) else {
+            throw HarnessError.invalid("roadmap contains invalid pyramid level \(label)")
+        }
+        for id in ids {
+            guard result.updateValue(level, forKey: id) == nil else {
+                throw HarnessError.invalid("roadmap gate \(id) appears in multiple pyramid levels")
+            }
+        }
+    }
+    return result
+}
+
+func validateRoadmapFrontierMetadata(_ roadmap: Roadmap) throws {
+    let byID = Dictionary(uniqueKeysWithValues: roadmap.gates.map { ($0.id, $0) })
+    guard byID.count == roadmap.gates.count else {
+        throw HarnessError.invalid("roadmap gate IDs must be unique")
+    }
+    let levels = try explicitPyramidLevels(roadmap)
+    let historical = Set(roadmap.historicalRemediationGateIDs)
+    guard historical.count == roadmap.historicalRemediationGateIDs.count else {
+        throw HarnessError.invalid("historical_remediation_gate_ids must be unique")
+    }
+    let classified = Set(levels.keys).union(historical)
+    let allIDs = Set(byID.keys)
+    guard classified == allIDs else {
+        let missing = allIDs.subtracting(classified).sorted()
+        let unknown = classified.subtracting(allIDs).sorted()
+        throw HarnessError.invalid("roadmap frontier metadata mismatch; missing=\(missing.joined(separator: ",")); unknown=\(unknown.joined(separator: ","))")
+    }
+    guard Set(levels.keys).isDisjoint(with: historical) else {
+        throw HarnessError.invalid("historical remediation gates must not appear in pyramid levels")
+    }
+    for gate in roadmap.gates where !historical.contains(gate.id) {
+        let historicalPrerequisites = gate.prerequisites.filter(historical.contains)
+        guard historicalPrerequisites.isEmpty else {
+            throw HarnessError.invalid("permanent gate \(gate.id) depends on historical remediation: \(historicalPrerequisites.joined(separator: ","))")
+        }
+    }
+    let expectedCounts = ["L0": 4, "L1": 25, "L2": 29, "L3": 16, "L4": 1, "L5": 0]
+    for (label, count) in expectedCounts where roadmap.pyramidLevelGateIDs[label]?.count != count {
+        throw HarnessError.invalid("roadmap \(label) count must remain \(count) during frontier migration")
+    }
+    guard historical.count == 40 else {
+        throw HarnessError.invalid("roadmap historical remediation count must remain 40 during frontier migration")
+    }
+}
+
 func validateRoadmapSimulatorPolicy(_ roadmap: Roadmap) throws {
+    try validateRoadmapFrontierMetadata(roadmap)
     let gates = roadmapGatesWithRuntimePreflight(roadmap)
     try validateProofTierPolicy(gates)
     let ids = Set(gates.map(\.id))
@@ -5985,28 +6055,21 @@ func selectedStatusWithSafety(from statuses: [GateStatus], runtimePreflightGateI
     return eligible.first
 }
 
-func inferredPyramidLevel(_ status: GateStatus) -> PyramidLevel {
-    if status.proofTier == "release" { return .l5 }
-    if status.physicalDevice || status.proofTier == "device" { return .l4 }
-    if status.kind == "simulator-runtime" || status.proofTier == "simulator" { return .l3 }
-    if ["kernel", "kselftest", "mlibc", "mlibc-uapi", "shell", "coreutils", "oci"].contains(status.proofTier) { return .l2 }
-    if status.kind == "rail" || status.kind == "safety" { return .l0 }
-    return .l1
-}
-
-func isPermanentFrontierGate(_ status: GateStatus) -> Bool {
-    !status.kind.contains("reducer") && !status.kind.contains("fix") &&
-        !status.kind.contains("diagnostic") && !status.kind.contains("root-cause")
-}
-
-func semanticFrontier(from statuses: [GateStatus]) -> GateStatus? {
+func semanticFrontier(
+    from statuses: [GateStatus],
+    pyramidLevels: [String: PyramidLevel],
+    historicalRemediationGateIDs: Set<String>
+) -> GateStatus? {
     let statePriority = ["fail": 0, "ready": 1, "missing": 2, "stale": 3]
-    let acceptancePriority = ["release": 0, "readiness": 1, "blocker": 2, "probe": 3]
+    let acceptancePriority = ["blocker": 0, "readiness": 1, "release": 2, "probe": 3]
     return statuses
-        .filter { !$0.satisfiesPrerequisite && $0.prerequisitesSatisfied && isPermanentFrontierGate($0) }
+        .filter {
+            !$0.satisfiesPrerequisite && $0.prerequisitesSatisfied &&
+                pyramidLevels[$0.id] != nil && !historicalRemediationGateIDs.contains($0.id)
+        }
         .sorted {
-            let left = (inferredPyramidLevel($0).rawValue, statePriority[$0.state] ?? 4, acceptancePriority[$0.acceptanceWeight] ?? 4, $0.id)
-            let right = (inferredPyramidLevel($1).rawValue, statePriority[$1.state] ?? 4, acceptancePriority[$1.acceptanceWeight] ?? 4, $1.id)
+            let left = (pyramidLevels[$0.id]!.rawValue, acceptancePriority[$0.acceptanceWeight] ?? 4, statePriority[$0.state] ?? 4, $0.id)
+            let right = (pyramidLevels[$1.id]!.rawValue, acceptancePriority[$1.acceptanceWeight] ?? 4, statePriority[$1.state] ?? 4, $1.id)
             return left < right
         }
         .first
@@ -6902,18 +6965,29 @@ func validateSemanticFrontierFixtures() throws {
     let component = policyFixtureStatus(id: "component-mlibc", kind: "real-stack-mlibc", proofTier: "mlibc", acceptanceWeight: "blocker", realStackRequired: true, state: "stale", reason: "semantic mlibc input changed")
     let simulator = policyFixtureStatus(id: "runtime-userland-marker", command: "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-userland-marker", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "missing", reason: "simulator product capability missing")
     let l0Failure = policyFixtureStatus(id: "source-policy", kind: "rail", proofTier: "rail", acceptanceWeight: "blocker", state: "fail", reason: "source policy failed")
+    let l2Readiness = policyFixtureStatus(id: "component-readiness", kind: "real-stack-mlibc", proofTier: "mlibc", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "component readiness failed")
+    let levels: [String: PyramidLevel] = [
+        l0Failure.id: .l0,
+        component.id: .l2,
+        l2Readiness.id: .l2,
+        simulator.id: .l3,
+    ]
+    let historical = Set([historicalReducer.id, historicalFix.id])
 
     let firstOrdering = [historicalReducer, simulator, historicalFix, component]
     let secondOrdering = Array(firstOrdering.reversed())
-    guard semanticFrontier(from: firstOrdering)?.id == component.id,
-          semanticFrontier(from: secondOrdering)?.id == component.id else {
+    guard semanticFrontier(from: firstOrdering, pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == component.id,
+          semanticFrontier(from: secondOrdering, pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == component.id else {
         throw HarnessError.invalid("semantic frontier must ignore roadmap order and historical remediation gates")
     }
-    guard semanticFrontier(from: [component, l0Failure, simulator])?.id == l0Failure.id else {
+    guard semanticFrontier(from: [component, l0Failure, simulator], pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == l0Failure.id else {
         throw HarnessError.invalid("semantic frontier must select the lowest unresolved pyramid level")
     }
-    guard semanticFrontier(from: [historicalReducer, historicalFix]) == nil else {
+    guard semanticFrontier(from: [historicalReducer, historicalFix], pyramidLevels: levels, historicalRemediationGateIDs: historical) == nil else {
         throw HarnessError.invalid("historical remediation gates must not form the permanent product frontier")
+    }
+    guard semanticFrontier(from: [l2Readiness, component], pyramidLevels: levels, historicalRemediationGateIDs: historical)?.id == component.id else {
+        throw HarnessError.invalid("same-level blocker gates must precede readiness gates regardless of state")
     }
     print("pass: semantic-frontier-check")
 }
