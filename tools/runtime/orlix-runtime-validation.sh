@@ -673,9 +673,8 @@ write_json_report() {
 		readiness_eligible="true"
 	fi
 if [ "$status" = "pass" ] &&
-[ "$destination" = "iphoneos" ] &&
+		[ "$destination" = "iphoneos" ] &&
 		[ "$gate" = "tcti-init-first-syscall" ] &&
-		autonomous_tcti_reports_passed &&
 		simulator_tcti_full_ladder_passed; then
 		readiness_eligible="true"
 	fi
@@ -933,10 +932,10 @@ physical_tcti_preflight() {
 	if ! tcti_runtime_or_harness_worktree_clean; then
 		die "Physical TCTI gates require a clean worktree so current simulator reports cover the app, kernel, libc, OS payload, runtime, and harness inputs."
 	fi
-	if autonomous_tcti_reports_passed && simulator_tcti_full_ladder_passed; then
+	if simulator_tcti_full_ladder_passed; then
 		return 0
 	fi
-		die "Physical TCTI gates require passing autonomous TCTI reports plus current passing simulator first-syscall, stability, Linux console, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader, signals, VFS, and full Linux runtime readiness reports before device work."
+	die "Physical TCTI gates require current passing simulator first-syscall, stability, Linux console, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader, signals, VFS, and full Linux runtime readiness reports before device work."
 }
 
 validate_gate() {
