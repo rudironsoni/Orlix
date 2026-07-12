@@ -400,6 +400,8 @@ check_skills() {
     "$root/tools/runtime/tests/test-simulator-runtime-identity.sh"
   expect_command_passes "incremental OrlixOS payload embed fixtures" \
     "$root/tools/runtime/tests/test-sync-payload.sh"
+  expect_command_passes "installed simulator app identity fixtures" \
+    "$root/tools/runtime/tests/test-simulator-installed-app-current.sh"
   grep -q 'tcti_runtime_validation_command' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" &&
     grep -q 'runtime-validation' "$root/.agents/skills/orlix-tcti-safety/scripts/pre-tool-use-policy" ||
     fail "pre-tool-use-policy must match TCTI runtime-validation commands"

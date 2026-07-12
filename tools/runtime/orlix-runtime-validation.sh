@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export HOMEBREW_NO_AUTO_UPDATE="${HOMEBREW_NO_AUTO_UPDATE:-1}"
+
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/orlix-runtime-report-selection.sh"
 
 product_version="$(awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
@@ -1553,6 +1555,14 @@ PY
 		fi
 		run_command_with_timeout 10 /dev/null /dev/null \
 			xcrun simctl terminate "$device_id" "$bundle_id" || true
+		if tools/runtime/orlix-simulator-installed-app-current.sh \
+			"$device_id" "$bundle_id" "$product_version" "$product_build_id"; then
+			printf 'Reusing installed Orlix %s (%s) on simulator %s.\n' \
+				"$product_version" "$product_build_id" "$device_id" \
+				>"$artifact_dir/install-reused.txt"
+			touch "$artifact_dir/install.json" "$artifact_dir/install.log"
+			return
+		fi
 		run_command_with_timeout 10 /dev/null /dev/null \
 			xcrun simctl uninstall "$device_id" "$bundle_id" || true
 		local install_status
