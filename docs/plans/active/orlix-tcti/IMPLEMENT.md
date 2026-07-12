@@ -8358,6 +8358,14 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - This is an environment/tooling correction. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime, generated upstream source, physical-device behavior, production assembly, or gadget dispatch.
 - Full TCTI completion, simulator readiness, physical-device readiness, release readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
 
+### Checkpoint: Simulator Gate Launch Argument Preservation
+
+- Runtime validation now terminates the previously installed simulator app and waits for its process to exit before launching the next gate. This prevents a rapid relaunch from retaining the previous process and dropping the new gate's kernel command-line arguments.
+- The first build-21 static BusyBox shell-command run reached an interactive `/bin/sh` prompt but lacked the requested `orlix.exec` and `orlix.argv*` arguments. It was a launch race, not a TCTI execution failure.
+- The corrected rerun produced `Build/Reports/runtime/tcti-static-busybox-shell-command-20260712T110937Z-71802.json`, passed on iOS 26.5 build 23F77, executed static PIE `/bin/sh` through TCTI, emitted `ORLIX-TCTI-BUSYBOX-USABLE`, exited successfully, and kept every forbidden-behavior field false.
+- This changes runtime-validation process control only. It does not change OrlixKernel, OrlixMLibC, OrlixOS, HostAdapter, app runtime behavior, generated upstream sources, physical-device behavior, production assembly, or gadget dispatch.
+- Full simulator readiness, physical-device readiness, release readiness, package readiness, and app-visible `ORLIX-USERLAND-TCTI-OK` remain unproven.
+
 ### Checkpoint: Incremental Payload Embedding And Simulator Runtime Identity
 
 - Measured on the external DerivedData mount, the first build after build-21 metadata changed completed in 613.81 seconds. The second identical build completed in 54.16 seconds, and the build after adding content-stable kernel archive reuse completed in 59.84 seconds. The incremental path is more than 10x faster and no longer runs the payload embed or signs `OrlixOS.framework` when payload inputs are unchanged.
