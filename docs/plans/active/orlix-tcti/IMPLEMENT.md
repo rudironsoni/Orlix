@@ -8464,3 +8464,9 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Historical fuzz and remediation work cannot preempt permanent product promotion. Current permanent failures still stop and remain reducer-first with `runtime_patch_allowed=false`.
 - Without explicit physical opt-in, current `agent-next` produces the blocked physical-device envelope rather than selecting historical work or pretending the goal is complete.
 - No phone command ran. Product-identity equality, the remaining device matrix, L5, and TestFlight remain unproven.
+
+## 2026-07-12 Approved-Device Signing Policy
+
+- The selected mlibc phone gate stopped at Xcode signing because runtime-validation had no development team. It did not reach installation, launch, guest execution, or TCTI runtime behavior.
+- Pinned Apple Development team `A9C4N82KYY` and automatic signing in the agent-neutral environment policy and every canonical L4 command.
+- No product runtime behavior changed. The mlibc device capability remains unproven until rerun from a clean checkpoint.
