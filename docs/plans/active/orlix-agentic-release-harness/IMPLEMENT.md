@@ -38,3 +38,16 @@
 - Same-level acceptance ordering requires an explicit policy and fixtures. `blocker` work must not be accidentally delayed behind broader readiness claims.
 - Scoped readiness eligibility must be tied to a canonical gate contract rather than accepted from an arbitrary report boolean.
 - Required next model checkpoint: migrate explicit `pyramid_level` and disposition metadata, validate the real-roadmap inventory, remove historical remediation from permanent prerequisites, and add dependency-aware fixtures before replacing live selection.
+
+### Checkpoint: Explicit Frontier Metadata
+
+- Added compact top-level roadmap lists for explicit L0 through L5 membership and historical-remediation disposition. This avoids repeating metadata inside all 115 large gate objects while making classification independent of `kind` and `proof_tier` inference.
+- Roadmap validation now requires every gate ID to appear exactly once in either one pyramid level or the historical-remediation list. Unknown IDs, missing IDs, duplicate membership, and overlap fail validation.
+- Locked the reviewed migration inventory at L0=4, L1=25, L2=29, L3=16, L4=1, L5=0, and historical remediation=40 until the compact gate graph adds or removes capabilities intentionally.
+- Removed three historical remediation prerequisites from permanent simulator gates: runtime stability, Linux console usability, and full shell usability. Historical reducers and fixes remain available for dynamic selection after a current failure.
+- The pure semantic frontier now requires explicit level and disposition inputs. Silent L1 fallback and substring-based permanent-gate classification are removed from this decision boundary.
+- Same-level ordering now evaluates acceptance weight before result state, selecting blockers before readiness, release, and probes. A cross-state fixture proves that a stale blocker precedes a failing readiness gate.
+- The live selector remains unchanged pending a real-roadmap status fixture and explicit dynamic reducer scheduling.
+- Evidence: `rtk proxy swiftc -parse .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift` passed; `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift validate-roadmap` passed; `rtk proxy .agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift semantic-frontier-check` passed; `rtk git diff --check` passed.
+- Adversarial review found and closed one comparator defect: acceptance weight now precedes state, and the cross-state blocker/readiness fixture passes. The reviewer reported no remaining blocking comparator finding.
+- Final verification also passed `rtk proxy make agent-harness-check`, `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`, and `rtk proxy make tcti-gate TARGET=tcti-report-schema-check`.

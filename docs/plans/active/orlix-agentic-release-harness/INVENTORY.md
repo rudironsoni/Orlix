@@ -16,6 +16,8 @@ The current TCTI roadmap contains 115 gates:
 
 The 40 historical remediation entries are 19 reducers, 19 fixes, one diagnostic, and one root-cause gate. They remain available for dynamic failure reduction but must not participate in ordinary frontier ordering.
 
+The roadmap records these counts in compact `pyramid_level_gate_ids` and `historical_remediation_gate_ids` lists. Harness validation requires complete, unique membership and prevents permanent gates from depending on historical remediation.
+
 ## Product Matrix Gap
 
 The target L3/L4 matrix has the same 19 capability instances on both destinations: app launch, OrlixOS session and payload, kernel boot, first syscall, runtime stability, console output, BusyBox start and command, full shell, mlibc process, Coreutils, package behavior, dynamic loader, signals, VFS, OCI rootfs command, interactive terminal, full readiness, userland marker, and clean exit.
