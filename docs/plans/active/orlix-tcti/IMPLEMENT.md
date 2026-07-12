@@ -8432,3 +8432,4 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - `tcti-mlibc-dynamic-loader-smoke` reached its PT_INTERP-backed workload, emitted the required mlibc and dynamic-loader evidence, and passed one selected XCTest with zero failures before Xcode stalled during finalization.
 - The gate now accepts that complete selected-suite evidence without requiring Xcode's delayed final banner. Explicit failures and missing markers remain failures.
 - The corrected rerun passed. This is a harness-only result-contract repair; product behavior and readiness policy are unchanged.
+- The same final-banner dependency was removed from the remaining mlibc sysdeps, libc-subset, pthread/TLS, and linked syscall/UAPI gates. The selected pthread/TLS rerun passed.
