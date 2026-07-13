@@ -1,0 +1,9 @@
+/* Live Activity */
+"Orlix" = "Orlix";
+"active" = "aktywne";
+"1 active session" = "1 aktywna sesja";
+"%lld active sessions" = "%lld aktywnych sesji";
+
+/* Lock Screen widget */
+"Open Orlix" = "Otwórz Orlix";
+"Open Orlix from the Lock Screen." = "Otwórz Orlix z ekranu blokady.";

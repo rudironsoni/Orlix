@@ -1,0 +1,27 @@
+---
+import LegalPage from "../components/LegalPage.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { SITE } from "../lib/site";
+---
+
+<BaseLayout
+  title="Terms of Use - Orlix"
+  description="Distribution terms for Orlix have not yet been published."
+  canonicalPath="/terms"
+  ogType="article"
+>
+  <LegalPage title="Terms of Use">
+    <section>
+      <h2>Not yet published</h2>
+      <p>
+        This imported website is not an approved source of distribution terms for Orlix. The upstream
+        VVTerm App Store EULA does not apply to Orlix binaries.
+      </p>
+      <p>
+        Source code published at{" "}
+        <a href={SITE.githubUrl} target="_blank" rel="noopener noreferrer">{SITE.githubUrl}</a>{" "}
+        is licensed under GPL-3.0 as described in the repository.
+      </p>
+    </section>
+  </LegalPage>
+</BaseLayout>

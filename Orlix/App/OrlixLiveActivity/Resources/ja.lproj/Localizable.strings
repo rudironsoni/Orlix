@@ -1,0 +1,9 @@
+/* Live Activity */
+"Orlix" = "Orlix";
+"active" = "アクティブ";
+"1 active session" = "アクティブなセッション 1 件";
+"%lld active sessions" = "アクティブなセッション %lld 件";
+
+/* Lock Screen widget */
+"Open Orlix" = "Orlixを開く";
+"Open Orlix from the Lock Screen." = "ロック画面からOrlixを開きます。";
