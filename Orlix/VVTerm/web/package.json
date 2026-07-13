@@ -1,0 +1,21 @@
+{
+  "name": "vvterm-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "astro": "^6.0.7",
+    "tailwindcss": "^4.2.2"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.98",
+    "astro-icon": "^1.1.5"
+  }
+}
