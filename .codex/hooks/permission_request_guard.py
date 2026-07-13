@@ -31,7 +31,7 @@ if unauthorized_release_command(payload, policy):
     block("Permission cannot override release_gate_eligible=false. Complete simulator and device promotion first.")
 
 if external_ssd_bypass_violation(payload):
-    block("Permission cannot bypass the external-SSD Xcode storage contract. Use the configured wrappers and xcode-storage-doctor.")
+    block("Permission cannot bypass the external-SSD Xcode storage contract. Use the configured wrappers and xcode-offload doctor --root \"$(external-ssd-root)\" --require-shims --strict.")
 
 if 'prefix_rule": ["python3"]' in text or "prefix_rule = [\"python3\"]" in text:
     block("Do not request broad Python escalation rules. Request a narrow command prefix.")

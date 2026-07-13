@@ -393,14 +393,17 @@ The certified backend is the sparsebundle mounted at the normal Apple path.
 Before diagnosing Xcode or simulator failures, run:
 
 ```sh
-export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-xcode-storage-doctor
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+xcode-offload doctor \
+  --root "$(external-ssd-root)" \
+  --require-shims \
+  --strict
 ```
 
 Expected outside restrictive sandboxes:
 
 ```text
-OK xcode external storage doctor passed
+All checks report PASS and the command exits 0.
 ```
 
 If this fails, treat it as an environment issue first. Do not change project
@@ -472,7 +475,7 @@ SIGTERM(15)
 Check environment first:
 
 ```sh
-xcode-storage-doctor
+xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
 xcrun simctl bootstatus ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 -b
 xcrun simctl list devices available
 ```
@@ -579,9 +582,9 @@ already uploaded build number.
 Use these when starting a task that depends on Xcode or Simulator:
 
 ```sh
-export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-xcode-storage-doctor
+xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
 
 xcrun simctl bootstatus ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 -b
 
