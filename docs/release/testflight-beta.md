@@ -21,11 +21,11 @@ Use the external SSD-backed Xcode wrapper path:
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 ```
 
-Use one simulator for beta validation:
+Use the pinned simulator for beta validation:
 
 ```text
-iPhone 17, iOS 26.5
-UDID: E65F0D05-980C-4368-8CDC-2D2BF3E05757
+Orlix-iPhone-15-Pro-Max, iOS 26.5
+UDID: ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ```
 
 If multiple simulators are booted, shut down all except the chosen simulator before app-hosted validation.
@@ -99,6 +99,17 @@ Do not commit App Store Connect private keys or provisioning profiles.
 
 ## Upload
 
+Telemetry remains disabled while the external infrastructure is unavailable:
+
+```sh
+make beta-archive \
+  ORLIX_DEVELOPMENT_TEAM=<Apple team id> \
+  ORLIX_ANALYTICS_ENABLED=NO \
+  ORLIX_OBSERVABILITY_ENABLED=NO
+```
+
+Analytics and observability are independent release feature flags and default to `NO`. A disabled feature does not require a backend credential and does not initialize its client. Enable a feature only after its backend is live and verified. `ORLIX_ANALYTICS_ENABLED=YES` requires `ORLIX_OPENPANEL_CLIENT_ID`; `ORLIX_OBSERVABILITY_ENABLED=YES` requires `ORLIX_SIGNOZ_INGESTION_KEY`.
+
 If `make beta-archive` succeeds, upload with Xcode Organizer or export using the archive at:
 
 ```text
@@ -143,6 +154,8 @@ The first beta must not claim:
 - Full upstream Linux, OrlixMLibC, or Coreutils conformance.
 - Package ladder completion beyond what current evidence proves.
 - Runtime behavior from archive packaging evidence alone.
+
+In this document, OCI means Open Container Initiative.
 
 ## Post-Beta Catalog
 

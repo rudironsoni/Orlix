@@ -112,3 +112,5 @@ init.*.zsh
 
 # Local agent token accounting state
 /.tokensave/
+__pycache__/
+*.py[cod]
