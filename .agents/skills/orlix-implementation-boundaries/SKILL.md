@@ -1,6 +1,6 @@
 ---
 name: orlix-implementation-boundaries
-description: Use before implementing or triaging Orlix changes when ownership could involve OrlixKernel, OrlixMLibC, OrlixOS, OrlixHostAdapter, OrlixTerminal, upstream Linux, upstream mlibc, packages, product payloads, session APIs, or generated trees. Routes fixes to the correct layer and blocks wrong-layer shortcuts.
+description: Use before implementing or triaging Orlix changes when ownership could involve OrlixKernel, OrlixMLibC, OrlixOS, OrlixHostAdapter, the VVTerm-derived Orlix app, upstream Linux, upstream mlibc, packages, product payloads, session APIs, or generated trees. Routes fixes to the correct layer and blocks wrong-layer shortcuts.
 ---
 
 # Orlix Implementation Boundaries
@@ -13,7 +13,7 @@ Use this skill before changing code for non-trivial Orlix behavior, especially k
 - Libc behavior: `OrlixMLibC/Sources` and `OrlixMLibC/Tests`.
 - Delivered OS Kit, app-facing Linux session API, target-derived payload metadata, curated distribution policy, and package/rootfs assembly: `OrlixOS`.
 - Private iOS mechanics: `OrlixHostAdapter/Sources`.
-- iOS host UI, Ghostty rendering, and terminal presentation: `OrlixTerminal`.
+- iOS and iPadOS application UI, Ghostty rendering, terminal presentation, and imported VVTerm features: the VVTerm-derived Orlix app source compiled directly into the app target.
 - Architecture truth: `docs/architecture`, `docs/adr`, and `docs/reference`.
 
 ## Refusals
@@ -27,6 +27,8 @@ Do not:
 - move libc behavior into `OrlixKernel`;
 - move syscall semantics into `OrlixOS`;
 - recreate a separate `OrlixKit` target/module; `OrlixOS` is the Kit;
+- create a reusable `OrlixTerminal` framework, generic product boundary, or current-controller rewrite before importing and validating the complete pinned VVTerm mobile application;
+- refactor or expand `TerminalViewController`, or compile it into the production VVTerm-derived target; it is isolated in a temporary, separate developer-only diagnostic app target because its `libghostty-spm` dependency conflicts with VVTerm's vendored Ghostty build;
 - hardcode product bundle identifiers or payload resource names in runtime code when they belong in `project.yml` or target metadata;
 - disable upstream package capabilities or invent package-specific linker/tool wrappers instead of fixing OrlixOS package-toolchain inputs;
 - add public runtime facades or shell/package management APIs;

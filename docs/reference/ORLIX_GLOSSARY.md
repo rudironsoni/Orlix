@@ -651,3 +651,75 @@ An explicit `run_kselftest.sh --override-timeout` value supplied by the XCTest p
 ## Product Initramfs
 
 The OrlixOS-owned product/root-assembly boot payload for normal Orlix startup. It is delivered through the `OrlixOS` payload bundle, separate from the test initramfs.
+
+## Remote Host
+
+A remotely reachable server or provider resource known to Orlix. A Remote Host is not a Connection Profile or live terminal.
+
+## Connection Profile
+
+The saved transport, authentication reference, user, port, jump chain, forwarding, VPN, and connection-policy choices used to reach a Remote Host.
+
+## Terminal Target
+
+A typed destination for a terminal: a Remote Host, Local Instance, or Container.
+
+## VVTerm-Derived Orlix Application
+
+The Orlix iOS and iPadOS application built by importing pinned VVTerm source with preserved history and compiling that application source directly under Orlix identity. It preserves VVTerm's recognizable feature-first source organization and SwiftUI application root. It is not a reusable `OrlixTerminal` framework and is not a rewrite based on `TerminalViewController`.
+
+## Legacy Terminal Fallback
+
+The current `TerminalViewController`, retained temporarily in a separate developer-only diagnostic app target during the VVTerm-derived mobile cutover. Its `libghostty-spm` dependency is not linked into the production target that uses VVTerm's vendored Ghostty build. It is not a product foundation, is not expanded or refactored, and is removed after the verified mobile cutover.
+
+## Terminal Session
+
+The live connection or local process relationship between one Terminal Target and a terminal backend. It is distinct from a Herdr Session.
+
+## Terminal Workspace
+
+Orlix's native product projection of a Herdr Workspace. It does not own a competing Tab, split, or Pane topology.
+
+## Terminal Pane
+
+Orlix's native presentation of a Herdr Pane. Herdr remains authoritative for its identity and lifecycle.
+
+## Local Runtime
+
+The single running Orlix Linux runtime containing one upstream OrlixKernel and its Local Instances.
+
+## Local Instance
+
+A persistent, namespaced Linux userspace system inside the Local Runtime. Do not call it a kernel, VM, environment, or Container.
+
+## Container
+
+An OCI application workload assigned to exactly one Local Instance. A Container cannot exist independently of a Local Instance.
+
+## Herdr Server
+
+The background Herdr process that owns Panes, terminal processes, layout, and persistent Session state.
+
+## Herdr Client
+
+A native Orlix UI, raw Herdr TUI, CLI, or socket consumer attached to a Herdr Server.
+
+## Herdr Session
+
+A persistent Herdr server namespace. Named Sessions have separate Panes, sockets, and persisted runtime state; use Workspaces first and named Sessions only for complete separation.
+
+## Herdr Workspace
+
+Herdr's top-level project container, normally used for one repo, task, or investigation.
+
+## Herdr Tab
+
+A layout inside a Herdr Workspace.
+
+## Herdr Pane
+
+A real terminal owned by the Herdr Server and preserved across client detach while the Server continues running.
+
+## External Pane Backend
+
+A transport endpoint that supplies terminal input, output, resize, reconnect, and lifecycle behavior to a Herdr Pane without taking ownership of Herdr topology.
