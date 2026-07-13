@@ -1,57 +1,46 @@
-# VVTerm Import Provenance
+# Orlix Application Source Provenance
 
 ## Scope
 
-This document records the immutable source and native artifact inputs for the VVTerm-derived Orlix application. It is an engineering provenance record, not a legal approval. Public distribution remains blocked on the legal and App Store gates in ADR 0024.
+This document records the immutable source and native artifact inputs for the Orlix application. It is an engineering provenance record, not a legal approval. Public distribution remains blocked on the legal and App Store gates in ADR 0024.
 
 ## Source import
 
 - Upstream: `https://github.com/vivy-company/vvterm.git`
 - Pinned upstream commit: `791eebae946b0831ffff3ac839e0f2b75d076458`
 - Retrieval date: 2026-07-13
-- Original subtree import path: `Orlix/VVTerm`
 - Current Orlix fork path: `Orlix/App`
 - Import method: non-squashed Git subtree
 - Orlix subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`
 - Subtree trailer: `git-subtree-split: 791eebae946b0831ffff3ac839e0f2b75d076458`
 
-The import command was:
-
-```sh
-git remote add vvterm-upstream https://github.com/vivy-company/vvterm.git
-git fetch vvterm-upstream 791eebae946b0831ffff3ac839e0f2b75d076458
-git subtree add --prefix=Orlix/VVTerm vvterm-upstream 791eebae946b0831ffff3ac839e0f2b75d076458
-```
-
-The Orlix fork was then fully renamed and moved from `Orlix/VVTerm` to
-`Orlix/App`. The final integration commit renews the subtree metadata at the
-current path with `git-subtree-dir: Orlix/App` and the same immutable
-`git-subtree-split` revision.
+The source was imported with a non-squashed subtree and then fully renamed at `Orlix/App`. The final integration commit records `git-subtree-dir: Orlix/App` and the same immutable `git-subtree-split` revision. Existing pushed history preserves the exact original import command and intermediate path.
 
 Updates must fetch an explicitly reviewed full commit and use a non-squashed subtree pull. A branch name alone is never a release input:
 
 ```sh
-git fetch vvterm-upstream <full-reviewed-commit>
-git subtree pull --prefix=Orlix/App vvterm-upstream <full-reviewed-commit>
+git remote add source-origin https://github.com/vivy-company/vvterm.git
+git fetch source-origin <full-reviewed-commit>
+git subtree pull --prefix=Orlix/App source-origin <full-reviewed-commit>
 ```
 
 After every update, compare the imported sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The imported Xcode project is retained as an upstream baseline and provenance reference. `project.yml` remains the authoritative Orlix project definition.
 
 ## Swift package baseline
 
-The pinned upstream `Package.resolved` records:
+The pinned baseline `Package.resolved` records:
 
-| Package | Version or upstream declaration | Immutable revision |
+| Package | Version or baseline declaration | Immutable revision |
 | --- | --- | --- |
 | `mlx-swift` | 0.29.1 | `072b684acaae80b6a463abab3a103732f33774bf` |
 | `swift-cloudflared` | 0.1.2 | `1be78afe5dae7a20ce0837ce34085f03a77f7587` |
 | `swift-mosh` | 0.1.6 | `bb4eacdf65303b2ecce624a91e98298c4ee94fca` |
 | `swift-numerics` | 1.1.1 | `0c0290ff6b24942dadb83a929ffaaa1481df04a2` |
-| `swift-umami` | mutable `main` declaration in upstream | `e7a14c16d745ec1d7e4355f35407f8407808475a` in the baseline lockfile |
+| `swift-umami` | mutable `main` declaration in the source baseline | `e7a14c16d745ec1d7e4355f35407f8407808475a` in the baseline lockfile |
 | `tweetnacl-swiftwrap` | 1.1.0 | `f8fd111642bf2336b11ef9ea828510693106e954` |
 | `ZIPFoundation` | 0.9.9 | `edbeaa39b426e54702194b0a601342322f01e400` |
 
-Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone fork project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned upstream dependency remains recorded here only so the pristine source graph remains auditable.
+Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned baseline dependency remains recorded here only so the pristine source graph remains auditable.
 
 ## Native source versions and rebuild entry points
 
@@ -68,11 +57,11 @@ cd Orlix/App
 ./scripts/build.sh ssh
 ```
 
-The Ghostty script must default to the full pinned commit above, not the upstream mutable `custom-io` branch. OpenSSL and libssh2 versions remain pinned in the script. A rebuilt artifact may replace a committed archive only after its source inputs, command, toolchain, target SDK, architectures, and resulting hashes are recorded.
+The Ghostty script must default to the full pinned commit above, not the mutable `custom-io` branch. OpenSSL and libssh2 versions remain pinned in the script. A rebuilt artifact may replace a committed archive only after its source inputs, command, toolchain, target SDK, architectures, and resulting hashes are recorded.
 
 ## Committed native artifact hashes
 
-Hashes use SHA-256 and were recomputed after the Orlix fork identity correction. The six Ghostty archives received a length-preserving replacement of the stale embedded `app.vivy.VivyTerm` value with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.Orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed the upstream developer's absolute `VivyTerm` build paths. The resulting archives passed format checks and the final application linked successfully.
+Hashes use SHA-256 and were recomputed after the Orlix identity correction. The six Ghostty archives received a length-preserving replacement of a stale embedded source-product identifier with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.Orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed foreign developer workspace paths. The resulting archives passed format checks and the final application linked successfully.
 
 | Artifact | SHA-256 |
 | --- | --- |
@@ -95,7 +84,6 @@ Hashes use SHA-256 and were recomputed after the Orlix fork identity correction.
 ## Licenses and notices
 
 - Imported application license: `Orlix/App/LICENSE`, GPL-3.0.
-- Upstream App Store terms: `Orlix/App/UPSTREAM-APPSTORE-BINARY-LICENSE.md`. Orlix does not assume these terms grant Orlix distribution rights.
 - Imported dependency notices: `Orlix/App/THIRD_PARTY_NOTICES.md`.
 
 Before public distribution, the capability and provenance gate must verify that source offers, modification notices, copyright notices, dependency licenses, App Store terms, export classification, and every statically linked dependency have written legal approval. Missing approval blocks the release.

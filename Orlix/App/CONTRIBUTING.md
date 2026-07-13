@@ -22,7 +22,7 @@ Requirements:
 Setup:
 
 ```bash
-git clone https://github.com/rudironsoni/orlix.git
+git clone https://github.com/rudironsoni/OrlixSystem.git
 cd orlix
 ./scripts/build.sh all
 open Orlix.xcodeproj

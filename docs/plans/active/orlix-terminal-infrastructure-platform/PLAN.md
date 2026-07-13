@@ -2,12 +2,12 @@
 
 ## 1. Summary and release contract
 
-Import pinned VVTerm directly as the Orlix iOS and iPadOS application, preserving its complete application and UX foundation while keeping OrlixOS as the delivered Linux Kit and upstream Linux as the runtime authority. Do not create an intermediate `OrlixTerminal` framework or rebuild VVTerm around the current UIKit terminal.
+Compile the complete native application under `Orlix/App` directly as the Orlix iOS and iPadOS product while keeping OrlixOS as the delivered Linux Kit and upstream Linux as the runtime authority. Do not create an intermediate `OrlixTerminal` framework or restore the retired UIKit prototype.
 
 The work ships mobile first, followed by macOS:
 
 1. **iOS and iPadOS Terminal and Local Runtime release**
-   - The complete pinned VVTerm application compiled directly as Orlix on iOS and iPadOS.
+   - The complete native Orlix application compiled directly on iOS and iPadOS.
    - Full SSH, Mosh, TSSH/tsshd, remote-file, forwarding, VPN, cloud-discovery, authentication, and Apple system-integration surface.
    - Herdr as the authoritative, first-class terminal multiplexer.
    - Complete local Orlix Linux runtime on iOS and iPadOS.
@@ -70,25 +70,24 @@ App-created and user-created Herdr resources coexist as follows:
 - **OrlixMLibC** owns libc and syscall support needed by Herdr, Docker-compatible userspace services, and packages.
 - **OrlixOS** remains the Kit. It owns the Local Runtime and Local Instance lifecycle API, distribution policy, rootfs and package assembly, OCI control-plane integration, and app-facing Linux sessions.
 - **OrlixHostAdapter** owns only private Apple and Darwin mechanics. It does not acquire Linux lifecycle, Docker, Herdr, or container policy.
-- The **Orlix iOS and iPadOS app target** compiles the imported VVTerm application source directly. VVTerm's SwiftUI application root, feature-first organization, Ghostty rendering, catalogs, remote transports, CloudKit, Keychain, StoreKit, and platform integrations remain the product foundation.
-- Do not create a reusable `OrlixTerminal` module or preserve the current UIKit lifecycle as the composition root. The production target has exactly one SwiftUI `@main`, supplied by the Orlix application fork.
-- Isolate `TerminalViewController` in a separate developer-only diagnostic app target because it uses `libghostty-spm` while VVTerm vendors its own Ghostty build. Do not compile or link the controller into production, expose it in product navigation, or use it as a foundation for new work.
-- Preserve VVTerm's macOS-compatible source, resources, packages, and conditional compilation during mobile work, but do not create or implement the Mac target until the published mobile releases unblock it.
+- The **Orlix iOS and iPadOS app target** compiles the native application source directly. Its SwiftUI application root, feature-first organization, Ghostty rendering, catalogs, remote transports, CloudKit, Keychain, StoreKit, and platform integrations remain the product foundation.
+- Do not create a reusable `OrlixTerminal` module or restore the retired UIKit lifecycle. The production target has exactly one SwiftUI `@main`, supplied by `OrlixApp`.
+- Preserve the macOS-compatible source, resources, packages, and conditional compilation during mobile work, but do not create or implement the Mac target until the published mobile releases unblock it.
 
 ### Direct import and upstream maintenance
 
-- Import the pinned repository at `Orlix/App` using a non-squashed, history-preserving Git subtree. Record `https://github.com/vivy-company/vvterm` as the upstream remote and retain the upstream commit in merge history and provenance.
-- Keep Orlix-specific changes as narrow commits on top of the imported tree. Do not reformat or reorganize upstream files without a product requirement.
-- Update by fetching an explicitly reviewed immutable upstream commit and running the documented subtree pull or merge command. Never use a branch name alone as a release input.
-- After every update, audit `project.yml` against upstream changes to sources, packages, resources, entitlements, privacy manifests, tests, UI tests, extensions, and targets. A newly added upstream input must be translated or explicitly recorded as unavailable with a reviewed reason.
+- Keep the pinned source ancestry at `Orlix/App` through the existing non-squashed subtree history and immutable provenance record.
+- Keep Orlix-specific changes as narrow commits on top of the imported tree. Do not reformat or reorganize imported files without a product requirement.
+- Any future source update must use an explicitly reviewed immutable commit and the documented subtree procedure. Never use a branch name alone as a release input.
+- After every update, audit `project.yml` against changes to sources, packages, resources, entitlements, privacy manifests, tests, UI tests, extensions, and targets. A newly added input must be translated or explicitly recorded as unavailable with a reviewed reason.
 
 ### Dependency, identity, and compliance translation
 
 - Provenance enumerates immutable commits for `mlx-swift`, `swift-cloudflared`, `swift-mosh`, `swift-numerics`, `swift-umami`, TweetNaCl, and ZIPFoundation, plus the exact vendored Ghostty, libssh2, and OpenSSL revisions. Record artifact hashes, rebuild commands, licenses, and notices for every vendored binary or generated library.
 - Replace mutable dependency declarations before release. This includes Ghostty build scripts that default to mutable `custom-io` and any package declaration such as `swift-umami` on `main`, even when `Package.resolved` currently pins a commit.
-- Maintain an explicit stale-identity map and fail the release scan if VVTerm-owned values remain in app, unit-test, UI-test, or Live Activity bundle IDs; CloudKit containers or record/storage prefixes; Keychain groups; Cloudflare URL schemes or constants; widget kinds; StoreKit products or team data; product names; usage strings; APNs environments; or network entitlements.
+- Maintain an explicit stale-identity map and fail the release scan if non-Orlix values remain in app, unit-test, UI-test, or Live Activity bundle IDs; CloudKit containers or record/storage prefixes; Keychain groups; Cloudflare URL schemes or constants; widget kinds; StoreKit products or team data; product names; usage strings; APNs environments; or network entitlements.
 - Record provisioning-profile and CloudKit production-schema evidence for the translated Orlix identifiers before release.
-- Merge the Orlix and VVTerm privacy manifests as a schema-valid union. Preserve every required API reason and collected-data declaration unless evidence proves it inapplicable.
+- Preserve the application privacy manifest as a schema-valid union of all required API reasons and collected-data declarations unless evidence proves an entry inapplicable.
 - Document the encryption export classification and verify the exported app's `Info.plist` against its actual SSH, Mosh, libssh2, and OpenSSL behavior. A pre-existing false encryption declaration is not accepted as evidence.
 
 ### App-facing types
@@ -130,11 +129,11 @@ Add a commercially licensed upstream Herdr extension for externally managed Pane
 
 ### Remote transport and security architecture
 
-Replace VVTerm's libssh2 execution path after parity with a narrow XCFramework derived from pinned `trzsz-ssh` for standard SSH and TSSH. Keep protocol work upstream-shaped:
+Replace Orlix's libssh2 execution path after parity with a narrow XCFramework derived from pinned `trzsz-ssh` for standard SSH and TSSH. Keep protocol work upstream-shaped:
 
 - Direct and jump-host SSH, PTY and exec requests, local, remote, and dynamic forwarding, SFTP, SCP, SSH configuration semantics, agent forwarding, and TSSH share one audited SSH core.
 - TSSH QUIC and KCP remain upstream `trzsz-ssh` and `tsshd` behavior. Do not independently reimplement these protocols.
-- Mosh uses VVTerm's existing Swift integration, validated against upstream Mosh 1.4.0 servers and protocol behavior.
+- Mosh uses Orlix's existing Swift integration, validated against upstream Mosh 1.4.0 servers and protocol behavior.
 - A Network.framework dialer is used for every app-native connection so Tailscale, NetBird, path changes, Wi-Fi/cellular handover, and VPN routing receive Apple path evaluation.
 - Hardware signers are callbacks into an Apple identity broker, so private Secure Enclave, YubiKey PIV, and FIDO2 material never enters the transport library.
 - Required authentication includes password, software keys, passphrases, keyboard-interactive, OpenSSH user certificates, trusted host certificate authorities, Secure Enclave, YubiKey PIV over supported NFC or wired transports, FIDO2, OpenPubkey, and in-app agent forwarding.
@@ -146,7 +145,7 @@ Replace VVTerm's libssh2 execution path after parity with a narrow XCFramework d
 - VPN-over-SSH and VPN-over-TSSH use an approved Network Extension packet tunnel, with DNS, routes, exclusions, statistics, widgets, Control Center, Shortcuts, and Live Activities.
 - Remote provider catalogs cover AWS, Azure, Linode, DigitalOcean, Tailscale, and NetBird. They include AWS access-key and SSO/STS accounts, EC2 and EKS discovery, EC2 serial console, Azure OAuth resources, Linode LISH, DigitalOcean resources, Tailscale OAuth, NetBird personal-access-token authentication, and self-hosted NetBird management URLs.
 - Kubernetes covers multi-cluster kubeconfig import, browsing, exec/log terminals, EKS kubeconfig generation, and node debugging through normal Kubernetes APIs.
-- Cloudflare Access and existing VVTerm connection modes remain supported.
+- Cloudflare Access and existing Orlix connection modes remain supported.
 - RootShell is a behavioral reference and regression oracle only. Its application source and proprietary implementation are not copied. Its unrelated AI-agent and local-tool features are outside this project.
 
 Arbitrary external macOS `ssh-agent` and 1Password socket consumption is deferred. The first release supports Orlix-owned agent services, in-app keys, hardware identities, and app-group-safe communication. A later last-resort sprint may investigate an approved helper broker. No public UI advertises arbitrary external-agent access until it is proven in the exported Mac App Store package.
@@ -225,7 +224,7 @@ The update is an automatic, idempotent in-place migration:
 - Preserve `SelectedTheme.light` and `SelectedTheme.dark`.
 - Convert the current default local terminal into the initial Workspace in Herdr's default Session.
 - Convert existing persistent environments and OCI records without deleting their roots or blobs.
-- Do not migrate VVTerm application data, credentials, servers, workspaces, or purchases from the separate VVTerm app.
+- Do not migrate application data, credentials, servers, workspaces, or purchases from unrelated source products.
 - Do not rerun interrupted commands.
 - Remote Mosh and TSSH sessions may reattach only through real protocol state.
 - If local processes no longer exist after app termination, restore labels, layout, cwd hints, environment, theme, and target binding, then show an explicit restart action.
@@ -238,7 +237,7 @@ Use `iCloud.com.rudironsoni.Orlix` for Orlix CloudKit data:
 - Eligible passwords and software keys use iCloud Keychain by default, with a device-only opt-out.
 - Secure Enclave, YubiKey, FIDO2, and external-agent identities sync references and metadata only.
 
-Preserve VVTerm's temporary universal Pro tier:
+Preserve Orlix's temporary universal Pro tier:
 
 - Monthly: `com.rudironsoni.Orlix.pro.monthly`, USD 6.49.
 - Yearly: `com.rudironsoni.Orlix.pro.yearly`, USD 24.99.
@@ -252,19 +251,18 @@ Preserve VVTerm's temporary universal Pro tier:
 1. **Documentation, legal, and provenance**
    - Create `docs/plans/active/orlix-terminal-infrastructure-platform/PLAN.md` and `IMPLEMENT.md`.
    - Update the canonical glossary with all Remote Host, Connection Profile, Terminal Target, Herdr, Local Runtime, Local Instance, and Container terms.
-   - Add ADRs for the VVTerm fork and GPL gate, Herdr authority and external Pane backend, one-kernel Local Instances, cross-platform App Store helper model, and full Docker Engine compatibility without `dockerd` or `runc`.
+   - Add ADRs for the Orlix application foundation and GPL gate, Herdr authority and external Pane backend, one-kernel Local Instances, cross-platform App Store helper model, and full Docker Engine compatibility without `dockerd` or `runc`.
    - Reconcile the executable-content policy in ADR 0023. Downloadable Herdr marketplace content, Linux packages, images, and plugins remain blocked from public distribution until legal and App Review approval explicitly permits them.
    - Add third-party notices, corresponding-source commitments, immutable revision pins, modification notices, and retrieval dates.
    - Preserve the current TCTI active plan and proof ordering. This project references that lane as a dependency and does not redirect it.
 
-2. **#50, direct full VVTerm mobile application foundation**
-   - Establish a pristine build and test baseline for the pinned VVTerm revision before import.
-   - Import the pinned VVTerm repository with preserved history and provenance, and compile its application source directly as the Orlix iOS and iPadOS app.
-   - Preserve VVTerm's recognizable `App`, `Core`, `Features`, `GhosttyTerminal`, `Compatibility`, `Generated`, and `Resources` organization. Do not introduce a generic app framework or reusable terminal module.
-   - Retain and validate the complete imported VVTerm mobile feature surface through a parity ledger: terminal, tabs and splits, remote files, hosts and Workspaces, discovery, themes, keyboard accessories, presets, stats, voice input, security, sync, StoreKit, onboarding, privacy, and Live Activities.
+2. **#50, complete native Orlix mobile application foundation**
+   - Preserve the recorded pristine build and test baseline for the pinned imported revision.
+   - Compile the application source directly as the Orlix iOS and iPadOS app with preserved history and provenance.
+   - Preserve the `App`, `Core`, `Features`, `GhosttyTerminal`, `Compatibility`, `Generated`, and `Resources` organization. Do not introduce a generic app framework or reusable terminal module.
+   - Retain and validate the complete mobile feature surface through a parity ledger: terminal, tabs and splits, remote files, hosts and Workspaces, discovery, themes, keyboard accessories, presets, stats, voice input, security, sync, StoreKit, onboarding, privacy, and Live Activities.
    - Translate the mobile app, Live Activity, packages, vendor libraries, resources, entitlements, unit tests, and UI tests into the XcodeGen source of truth.
-   - Preserve Orlix telemetry controls, beta observability, simulator hooks, release wiring, and applicable launch arguments. Do not preserve the UIKit `AppDelegate` or `SceneDelegate` lifecycle as the production composition root.
-   - Isolate `TerminalViewController` and `libghostty-spm` in a separate developer-only diagnostic app target. Production Orlix has only the Orlix application SwiftUI `@main`. Delete the fallback only at the verified mobile cutover.
+   - Preserve Orlix telemetry controls, beta observability, simulator hooks, release wiring, and applicable launch arguments. The retired UIKit application, duplicate assets, and conflicting Ghostty package are removed. Production Orlix has only the `OrlixApp` SwiftUI `@main`.
 
 3. **#49, imported-feature capability and provenance gate**
    - Run only after #50 has imported the complete pinned application. Derive the capability inventory from actual imported sources and built targets, never from a speculative pre-import catalog.
@@ -272,7 +270,7 @@ Preserve VVTerm's temporary universal Pro tier:
    - Fail closed when a feature, dependency, identifier, entitlement, privacy declaration, license, build input, or test target lacks immutable evidence.
 
 4. **#51, Default Local Instance terminal target**
-   - Run only after #49 and #50. Add the Default Local Instance as a typed `TerminalTarget` backed directly by OrlixOS, never as a VVTerm Server or SSH connection.
+   - Run only after #49 and #50. Add the Default Local Instance as a typed `TerminalTarget` backed directly by OrlixOS, never as a Remote Host or SSH connection.
    - Prove terminal input, output, resize, close, background, foreground, and restart behavior through the Orlix application.
    - Keep Local Runtime and Linux policy out of the Swift application and OrlixHostAdapter. Route it through OrlixOS and the existing upstream-Linux ownership boundaries.
 
@@ -300,12 +298,12 @@ Preserve VVTerm's temporary universal Pro tier:
 8. **Native macOS product, last**
    - Start only after the mobile terminal and container releases are in good shape and published to the App Store.
    - Add the macOS app target, arm64 macOS OrlixKernel and OrlixOS slice, user-scoped runtime service, shared sockets, embedded helpers, native Herdr CLI, external-shell validation, shared-folder grants, and Docker contexts.
-   - Reuse the macOS-compatible VVTerm source retained during the mobile implementation. Do not replace it with a separate Mac application architecture.
+   - Reuse the macOS-compatible source retained during the mobile implementation. Do not replace it with a separate Mac application architecture.
    - Release only after the complete terminal, remote, Herdr, Local Runtime, container, Docker, helper, and App Store gates pass on macOS.
 
 ## 4. Test and release gates
 
-### VVTerm mobile baseline and parity gate
+### Orlix mobile baseline and parity gate
 
 - Run every actual pristine upstream target at the pinned commit: one unit target containing 62 Swift test files and one UI target containing 5 Swift test files. Upstream has no separate integration or snapshot target at this pin, so do not claim those suites ran.
 - Record the exact iPhone and iPad destinations, commands, pass/fail counts, skips with reasons, logs, and `.xcresult` paths for pristine upstream and Orlix-derived runs.
@@ -372,7 +370,7 @@ Convert every recurring release-note failure class from builds 34 through 120 in
 
 ### App Store and final verification
 
-- Written legal approval is required for the VVTerm GPL/App Store model and any statically linked copyleft dependencies.
+- Written legal approval is required for the imported GPL source/App Store model and any statically linked copyleft dependencies.
 - A commercial Herdr agreement covering the pinned revision, native embedding, Orlix Linux distribution, protocol extension, plugins, marketplace, and all supported platforms is required.
 - App Review and entitlement approval are required for Network Extension, CloudKit, Keychain groups, app groups, Live Activities, StoreKit, helper services, Herdr marketplace behavior, downloaded Linux content, images, and Docker plugins.
 - If full Herdr or the requested Linux Docker surface cannot be approved, the affected public release stops. Do not silently ship a reduced substitute.
@@ -385,7 +383,7 @@ Convert every recurring release-note failure class from builds 34 through 120 in
 
 All revisions were retrieved on 2026-07-13 and must be recorded as immutable full commits in the provenance document:
 
-- VVTerm: `791eebae946b0831ffff3ac839e0f2b75d076458`, GPL-3.0 source. No VVTerm App Store EULA rights are assumed for Orlix.
+- Imported application source: `791eebae946b0831ffff3ac839e0f2b75d076458`, GPL-3.0. Immutable origin details remain in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md`.
 - Herdr: `3a8490f6515dfea13292ae28e34f1174d2f68af1`, commercially licensed instead of relying on AGPL-3.0-or-later.
 - RootShell public issue/reference repository: `d1062b80be3df0cbd2a9c9066f38404151b9f688`; release history read through 1.0.9 build 120.
 - Orchard: `f4cd83796c8d24851fea4e17a95ec46fb371f56d`, MIT reference.

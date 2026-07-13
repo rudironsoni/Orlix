@@ -29,7 +29,7 @@ Durable architecture decisions live in this directory. `AGENTS.md` and skills ma
 
 ## Terminal, Multiplexing, And Infrastructure
 
-- `0024-adopt-vvterm-as-the-cross-platform-app-foundation.md`
+- `0024-adopt-orlix-native-application-foundation.md`
 - `0025-make-herdr-authoritative-for-terminal-topology.md`
 - `0026-use-one-kernel-with-namespaced-local-instances.md`
 - `0027-use-app-store-only-cross-platform-host-integration.md`

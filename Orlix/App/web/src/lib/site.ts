@@ -3,12 +3,12 @@ import zh from "../i18n/translations/zh.json";
 
 export const SITE = {
   name: "Orlix",
-  siteUrl: "https://github.com/rudironsoni/orlix",
+  siteUrl: "https://github.com/rudironsoni/OrlixSystem",
   title: "Orlix - SSH Terminal and SFTP Client for iPhone, iPad, and Mac",
   description:
     "Your servers. Everywhere. Native SSH terminal and SFTP client for iPhone, iPad, and Mac with Mosh, Tailscale SSH, Cloudflare Tunnel SSH, iCloud sync, and Keychain security.",
-  appStoreUrl: "https://github.com/rudironsoni/orlix",
-  githubUrl: "https://github.com/rudironsoni/orlix",
+  appStoreUrl: "https://github.com/rudironsoni/OrlixSystem",
+  githubUrl: "https://github.com/rudironsoni/OrlixSystem",
   discordUrl: "https://discord.gg/zemMZtrkSb",
   appStoreId: "6757482822",
   umamiWebsiteId: "22711a63-9ec0-491c-ad86-71cb0b6ad4dd",
@@ -83,8 +83,8 @@ export const softwareSchema = {
   ],
   description:
     "SSH terminal and SFTP remote file browser for iPhone, iPad, and Mac with standard SSH, Mosh, Tailscale SSH, and Cloudflare Tunnel SSH.",
-  url: "https://github.com/rudironsoni/orlix/",
-  image: "https://github.com/rudironsoni/orlix/og.png",
+  url: "https://github.com/rudironsoni/OrlixSystem/",
+  image: "https://github.com/rudironsoni/OrlixSystem/og.png",
   author: {
     "@type": "Organization",
     name: "Orlix contributors",
@@ -115,13 +115,13 @@ export const websiteSchema = {
     {
       "@type": "WebSite",
       name: "Orlix",
-      url: "https://github.com/rudironsoni/orlix/",
+      url: "https://github.com/rudironsoni/OrlixSystem/",
     },
     {
       "@type": "Organization",
       name: "Orlix contributors",
-      url: "https://github.com/rudironsoni/orlix/",
-      logo: "https://github.com/rudironsoni/orlix/logo.png",
+      url: "https://github.com/rudironsoni/OrlixSystem/",
+      logo: "https://github.com/rudironsoni/OrlixSystem/logo.png",
     },
     {
       "@type": "FAQPage",

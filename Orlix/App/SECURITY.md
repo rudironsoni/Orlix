@@ -11,7 +11,7 @@ Older versions may not receive security updates.
 
 ## Reporting a Vulnerability
 
-Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/rudironsoni/orlix/security/advisories/new).
+Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/rudironsoni/OrlixSystem/security/advisories/new).
 
 Use the subject prefix `"[Security]"` and include:
 

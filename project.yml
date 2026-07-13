@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 29
+    CURRENT_PROJECT_VERSION: 30
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -38,9 +38,6 @@ settings:
         - ORLIX_APP_HOSTED_BOOT=1
         - ORLIX_BETA_OBSERVABILITY=1
 packages:
-  GhosttyKit:
-    url: https://github.com/Lakr233/libghostty-spm.git
-    exactVersion: 1.2.2
   MLXSwift:
     url: https://github.com/ml-explore/mlx-swift
     revision: 072b684acaae80b6a463abab3a103732f33774bf
@@ -350,7 +347,7 @@ targets:
       - path: Orlix/App/Orlix/Generated
       - path: Orlix/App/Orlix/GhosttyTerminal
       - path: Orlix/App/OrlixShared
-      - path: Orlix/Sources/Telemetry.swift
+      - path: Orlix/App/Orlix/Core/Analytics/OrlixTelemetry.swift
       - path: Orlix/App/Orlix/Assets.xcassets
         buildPhase: resources
       - path: Orlix/App/Orlix/Resources
@@ -495,7 +492,6 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/App/OrlixTests
-      - path: Orlix/Tests/XCTest/OrlixAppTests/TelemetryTests.swift
     dependencies:
       - target: Orlix
       - package: SwiftMosh
@@ -537,49 +533,6 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
         TEST_TARGET_NAME: Orlix
-  OrlixLegacyTerminal:
-    type: application
-    platform: iOS
-    sources:
-      - path: Orlix/Sources
-        excludes:
-          - PrivacyInfo.xcprivacy
-      - path: Orlix/Assets.xcassets
-      - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
-        buildPhase: resources
-    dependencies:
-      - target: OrlixOS
-        embed: true
-      - target: OrlixKernel
-        embed: true
-      - package: GhosttyKit
-        products:
-          - GhosttyTerminal
-          - GhosttyTheme
-      - package: OpenTelemetrySwift
-        product: OpenTelemetryProtocolExporterHTTP
-      - package: OpenTelemetrySwiftCore
-        products:
-          - OpenTelemetryApi
-          - OpenTelemetrySdk
-    settings:
-      base:
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_STYLE: Automatic
-        INFOPLIST_FILE: Orlix/Sources/Info.plist
-        ORLIX_ANALYTICS_ENABLED: NO
-        ORLIX_OBSERVABILITY_ENABLED: NO
-        ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
-        ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT: https://otlp.orlix.rudironsoni.cloud
-        ORLIX_TELEMETRY_ENVIRONMENT: development
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.LegacyTerminal
-        PRODUCT_NAME: OrlixLegacyTerminal
-        PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
-      configs:
-        Debug:
-          ORLIX_TELEMETRY_ENVIRONMENT: simulator-validation
-        Release:
-          ORLIX_TELEMETRY_ENVIRONMENT: testflight
   OrlixTestRunner:
     type: application
     platform: iOS
@@ -824,13 +777,6 @@ schemes:
       storeKitConfiguration: Orlix/App/OrlixStoreKit.storekit
     archive:
       config: Release
-  OrlixLegacyTerminal:
-    build:
-      targets:
-        OrlixLegacyTerminal: all
-    run:
-      config: Debug
-      executable: OrlixLegacyTerminal
   "OrlixOS Tests":
     build:
       targets:

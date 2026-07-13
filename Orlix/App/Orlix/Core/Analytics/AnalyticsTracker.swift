@@ -3,7 +3,7 @@ import Foundation
 import UIKit
 #endif
 
-/// Compatibility surface for the imported Orlix feature call sites.
+/// Compatibility surface for Orlix feature call sites.
 ///
 /// Orlix does not send Orlix's Umami analytics. Product telemetry is owned by
 /// `OrlixTelemetry`, is separately configured, and remains disabled unless the

@@ -16,7 +16,7 @@ Use the App Store as the only distribution channel on every supported platform. 
 
 Publish the full terminal, remote transport, Herdr surface, and Local Runtime on iOS and iPadOS first. Publish the mobile container and Docker release second. Begin the native macOS product only after both mobile releases are in good shape and published to the App Store. There is no public remote-only Mac phase: the eventual Mac release includes the full local Orlix runtime and follows the same terminal and container product contract.
 
-Mobile implementation must preserve VVTerm's macOS-compatible source, resources, package declarations, and conditional compilation and must avoid unnecessary UIKit-only assumptions in shared feature code. This is foundation work only. It does not authorize early implementation of the Mac target, Mac OrlixKernel slice, runtime service, helper tools, external Herdr CLI, or Docker contexts.
+Mobile implementation must preserve the native application's macOS-compatible source, resources, package declarations, and conditional compilation and must avoid unnecessary UIKit-only assumptions in shared feature code. This is foundation work only. It does not authorize early implementation of the Mac target, Mac OrlixKernel slice, runtime service, helper tools, external Herdr CLI, or Docker contexts.
 
 On macOS, embed normal CLI and helper executables under `Orlix.app/Contents/MacOS` using an `Embed Helper Tools` copy phase, Code Sign On Copy, Hardened Runtime, `SKIP_INSTALL=YES`, and disabled `CODE_SIGN_INJECT_BASE_ENTITLEMENTS`. App-launched helpers use App Sandbox and sandbox inheritance as Apple documents. Exported App Store packages are inspected for identifier, architecture, signature, runtime flags, and entitlements.
 

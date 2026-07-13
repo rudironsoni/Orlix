@@ -24,7 +24,7 @@ private struct ContactOption: Identifiable {
 }
 
 private let contactOptions: [ContactOption] = [
-    ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/orlix/issues")
+    ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/OrlixSystem/issues")
 ]
 
 // MARK: - About Settings View
@@ -112,7 +112,7 @@ struct AboutSettingsView: View {
             }
 
             Section("Support") {
-                Link(destination: URL(string: "https://github.com/rudironsoni/orlix/issues")!) {
+                Link(destination: URL(string: "https://github.com/rudironsoni/OrlixSystem/issues")!) {
                     Label("Report an Issue", systemImage: "exclamationmark.bubble")
                 }
                 .tint(.primary)
@@ -120,14 +120,14 @@ struct AboutSettingsView: View {
             }
 
             Section("Links") {
-                Link(destination: URL(string: "https://github.com/rudironsoni/orlix")!) {
+                Link(destination: URL(string: "https://github.com/rudironsoni/OrlixSystem")!) {
                     Label("Visit Website", systemImage: "globe")
                 }
                 .tint(.primary)
                 .foregroundStyle(.primary)
 
-                Link(destination: URL(string: "https://github.com/vivy-company/vvterm")!) {
-                    Label("Upstream Source", systemImage: "chevron.left.forwardslash.chevron.right")
+                Link(destination: URL(string: "https://github.com/rudironsoni/OrlixSystem")!) {
+                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
                 .tint(.primary)
                 .foregroundStyle(.primary)
@@ -187,7 +187,7 @@ struct AboutSettingsView: View {
             Section {
                 #if os(iOS)
                 Button {
-                    openURL("https://github.com/rudironsoni/orlix")
+                    openURL("https://github.com/rudironsoni/OrlixSystem")
                 } label: {
                     HStack {
                         Text(verbatim: copyrightLine)

@@ -138,7 +138,7 @@ The signed app resource bundle carried by the `OrlixOS` framework. It contains t
 
 ## Terminal UI Surface
 
-The libghostty-spm-provided terminal presentation layer used by `Orlix`. It renders terminal I/O but does not own Linux execution or shell semantics.
+The vendored libghostty-backed terminal presentation layer used by `Orlix`. It renders terminal I/O but does not own Linux execution or shell semantics.
 
 ## Orlix Terminal Backend
 
@@ -664,13 +664,9 @@ The saved transport, authentication reference, user, port, jump chain, forwardin
 
 A typed destination for a terminal: a Remote Host, Local Instance, or Container.
 
-## VVTerm-Derived Orlix Application
+## Orlix Native Application
 
-The Orlix iOS and iPadOS application built by importing pinned VVTerm source with preserved history and compiling that application source directly under Orlix identity. It preserves VVTerm's recognizable feature-first source organization and SwiftUI application root. It is not a reusable `OrlixTerminal` framework and is not a rewrite based on `TerminalViewController`.
-
-## Legacy Terminal Fallback
-
-The current `TerminalViewController`, retained temporarily in a separate developer-only diagnostic app target during the VVTerm-derived mobile cutover. Its `libghostty-spm` dependency is not linked into the production target that uses VVTerm's vendored Ghostty build. It is not a product foundation, is not expanded or refactored, and is removed after the verified mobile cutover.
+The sole production iOS and iPadOS application, compiled directly from the feature-first source organization and SwiftUI application root under `Orlix/App`. It is not a reusable `OrlixTerminal` framework, and no retired UIKit application target or fallback is retained.
 
 ## Terminal Session
 
