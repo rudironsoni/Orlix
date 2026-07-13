@@ -26,6 +26,10 @@ ORLIX_ASC_API_KEY_ID ?=
 ORLIX_ASC_API_ISSUER_ID ?=
 ORLIX_FASTLANE_API_KEY_PATH ?= $(HOME)/.config/fastlane/appstore_api_key.json
 ORLIX_BETA_IPA_PATH ?= $(ORLIX_BETA_EXPORT_DIR)/Orlix.ipa
+ORLIX_OPENPANEL_CLIENT_ID ?=
+ORLIX_SIGNOZ_INGESTION_KEY ?=
+ORLIX_ANALYTICS_ENABLED ?= NO
+ORLIX_OBSERVABILITY_ENABLED ?= NO
 ORLIX_XCODE_ROOT ?= $(ORLIX_EXTERNAL_SSD_ROOT)/Xcode
 ORLIX_XCODEBUILD_ARCHIVE ?= /usr/bin/xcodebuild
 ORLIX_XCODEBUILD_EXPORT ?= /usr/bin/xcodebuild
@@ -296,6 +300,17 @@ beta-archive: beta-bump-build-number
 	xcodegen generate --spec project.yml; \
 	[ -n "$(ORLIX_DEVELOPMENT_TEAM)" ] || { echo "ORLIX_DEVELOPMENT_TEAM is required to archive for TestFlight" >&2; exit 1; }; \
 	archive_settings=(DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" CODE_SIGN_STYLE="$(ORLIX_CODE_SIGN_STYLE)"); \
+	case "$(ORLIX_ANALYTICS_ENABLED)" in YES|NO) ;; *) echo "ORLIX_ANALYTICS_ENABLED must be YES or NO" >&2; exit 2;; esac; \
+	case "$(ORLIX_OBSERVABILITY_ENABLED)" in YES|NO) ;; *) echo "ORLIX_OBSERVABILITY_ENABLED must be YES or NO" >&2; exit 2;; esac; \
+	archive_settings+=(ORLIX_ANALYTICS_ENABLED="$(ORLIX_ANALYTICS_ENABLED)" ORLIX_OBSERVABILITY_ENABLED="$(ORLIX_OBSERVABILITY_ENABLED)"); \
+	if [ "$(ORLIX_ANALYTICS_ENABLED)" = YES ]; then \
+		[ -n "$(ORLIX_OPENPANEL_CLIENT_ID)" ] || { echo "ORLIX_OPENPANEL_CLIENT_ID is required when analytics is enabled" >&2; exit 1; }; \
+		archive_settings+=(ORLIX_OPENPANEL_CLIENT_ID="$(ORLIX_OPENPANEL_CLIENT_ID)"); \
+	fi; \
+	if [ "$(ORLIX_OBSERVABILITY_ENABLED)" = YES ]; then \
+		[ -n "$(ORLIX_SIGNOZ_INGESTION_KEY)" ] || { echo "ORLIX_SIGNOZ_INGESTION_KEY is required when observability is enabled" >&2; exit 1; }; \
+		archive_settings+=(ORLIX_SIGNOZ_INGESTION_KEY="$(ORLIX_SIGNOZ_INGESTION_KEY)"); \
+	fi; \
 	xcodebuild_signing_flags=(); \
 	if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then xcodebuild_signing_flags+=(-allowProvisioningUpdates); fi; \
 	if [ -n "$(ORLIX_ASC_API_KEY_PATH)$(ORLIX_ASC_API_KEY_ID)$(ORLIX_ASC_API_ISSUER_ID)" ]; then \

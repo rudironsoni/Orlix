@@ -1,5 +1,11 @@
 # IMPLEMENT.md
 
+### Checkpoint: Unproven Release Driver Removed
+
+- Removed the uncommitted `beta-release` and `beta-release-l4` driver draft after skeptical review showed it trusted an arbitrary successful L0-L3 command, could repeat App Store Connect mutations after an interrupted state write, and did not bind archive/IPA identity to canonical L3 semantic product evidence.
+- Retained the existing explicit archive, validation, export, and upload targets. Retained independent analytics and observability archive flags, both defaulting to `NO`, because that behavior is locally tested and does not depend on external infrastructure.
+- A future resumable L5 driver must consume canonical current L3 evidence, reconcile exact remote App Store Connect state before mutation, and prove interruption recovery before it can be committed as a release lane.
+
 ### Checkpoint: Feature-Flagged Beta Telemetry
 
 - Added privacy-scoped OpenPanel analytics and SigNoz OpenTelemetry traces and metrics to the app without changing Linux, TCTI, HostAdapter, OrlixOS, or generated upstream behavior.
