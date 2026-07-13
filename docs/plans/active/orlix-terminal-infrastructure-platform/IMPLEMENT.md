@@ -71,3 +71,13 @@ exit 0
 ```
 
 The stale-reference scan found `OrlixTerminal` only in explicit prohibitions. These checks prove documentation and harness consistency only. They do not prove imported application behavior.
+
+## 2026-07-13 pinned VVTerm subtree import
+
+- Added `https://github.com/vivy-company/vvterm.git` as the local `vvterm-upstream` remote.
+- Fetched immutable commit `791eebae946b0831ffff3ac839e0f2b75d076458`.
+- Imported the complete repository at `Orlix/VVTerm` with a non-squashed Git subtree.
+- Subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`.
+- Recorded package pins, native source versions, artifact hashes, rebuild entry points, license paths, and update policy in `docs/reference/VVTERM_PROVENANCE.md`.
+
+The subtree import preserves the upstream application, Live Activity, shared source, resources, packages, vendor libraries, scripts, unit tests, UI tests, and upstream project as a baseline reference. It does not by itself prove that the Orlix XcodeGen target compiles or launches the imported application.
