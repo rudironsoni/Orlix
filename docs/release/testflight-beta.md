@@ -36,7 +36,7 @@ Run prerequisite checks:
 
 ```sh
 brew bundle check --file Brewfile
-xcode-storage-doctor
+xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
 make beta-prerequisites
 ```
 

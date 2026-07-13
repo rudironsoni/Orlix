@@ -184,3 +184,9 @@
 - Physical runtime launches now forward the same capability-specific app arguments as simulator launches.
 - An early nonzero `devicectl` launch exit now fails at `physical-device-launch` instead of being misreported as a missing first-syscall marker.
 - A focused fixture proves argument forwarding and fail-fast launch classification. Product runtime behavior and readiness truth are unchanged.
+
+### Checkpoint: Xcode-Offload Doctor Instruction Migration
+
+- Replaced the removed `xcode-storage-doctor` command in current repository guidance and Codex guard remediation with `xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict`.
+- Preserved historical implementation-log references that describe commands and results from earlier repository states.
+- The replacement command passed every reported Xcode, CoreSimulator, mount, DerivedData, archive, and wrapper check. Hook syntax, `make agent-hooks-check`, `git diff --check`, and `make agent-harness-check` also passed.

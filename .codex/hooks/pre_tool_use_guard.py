@@ -50,7 +50,7 @@ if unauthorized_release_command(payload, policy):
     block("The current TCTI task envelope has release_gate_eligible=false. Complete simulator and device promotion before beta release commands.")
 
 if external_ssd_bypass_violation(payload):
-    block("Xcode storage must use the configured external-SSD wrappers. Use normal xcrun/xcodebuild through the required PATH, then run xcode-storage-doctor.")
+    block("Xcode storage must use the configured external-SSD wrappers. Use normal xcrun/xcodebuild through the required PATH, then run xcode-offload doctor --root \"$(external-ssd-root)\" --require-shims --strict.")
 
 if is_git_commit_or_push(payload):
     for message in oversized_goal_messages(root):
