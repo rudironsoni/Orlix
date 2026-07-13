@@ -333,6 +333,8 @@ def unauthorized_physical_command(payload, policy):
     executable = tokens[0]
     physical = (
         executable == "make" and any(token == "DESTINATION=iphoneos" for token in tokens)
+    ) or (
+        executable == "make" and "beta-release-l4" in tokens[1:]
     ) or executable.endswith("devicectl") or (
         executable.endswith("xcrun") and "devicectl" in tokens[1:]
     )
@@ -345,11 +347,20 @@ def unauthorized_release_command(payload, policy):
     if patch_targets_only_hooks(_normalise_escaped_newlines(flattened_text(payload))):
         return False
     tokens = normalized_command_tokens(payload)
-    release_targets = {"beta-archive", "beta-validate-archive", "beta-export-archive", "beta-upload"}
+    release_targets = {
+        "beta-archive", "beta-validate-archive", "beta-export-archive", "beta-upload", "beta-release"
+    }
     release = bool(tokens) and tokens[0] == "make" and any(token in release_targets for token in tokens[1:])
-    return release and not (
-        policy.get("_authorization_current") is True and policy.get("release_gate_eligible") is True
+    gate_ids = policy.get("simulator_readiness_gate_ids")
+    missing = policy.get("simulator_readiness_missing_gate_ids")
+    simulator_ready = (
+        policy.get("simulator_gates_complete") is True
+        and isinstance(gate_ids, list)
+        and bool(gate_ids)
+        and isinstance(missing, list)
+        and not missing
     )
+    return release and not (policy.get("_authorization_current") is True and simulator_ready)
 
 
 def external_ssd_bypass_violation(payload):

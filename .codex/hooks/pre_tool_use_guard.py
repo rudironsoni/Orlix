@@ -47,7 +47,7 @@ if unauthorized_physical_command(payload, policy):
     block("The current TCTI task envelope has physical_device_allowed=false. Complete the simulator frontier and regenerate the envelope first.")
 
 if unauthorized_release_command(payload, policy):
-    block("The current TCTI task envelope has release_gate_eligible=false. Complete simulator and device promotion before beta release commands.")
+    block("External beta publication requires current, complete mandatory simulator L0-L3 evidence. Physical-device L4 evidence is optional and does not authorize release.")
 
 if external_ssd_bypass_violation(payload):
     block("Xcode storage must use the configured external-SSD wrappers. Use normal xcrun/xcodebuild through the required PATH, then run xcode-offload doctor --root \"$(external-ssd-root)\" --require-shims --strict.")

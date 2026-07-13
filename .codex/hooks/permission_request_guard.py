@@ -28,7 +28,7 @@ if unauthorized_physical_command(payload, policy):
     block("Permission cannot override physical_device_allowed=false. Complete the simulator frontier first.")
 
 if unauthorized_release_command(payload, policy):
-    block("Permission cannot override release_gate_eligible=false. Complete simulator and device promotion first.")
+    block("Permission cannot override the external-beta requirement for current, complete mandatory simulator L0-L3 evidence. Physical-device L4 evidence is optional.")
 
 if external_ssd_bypass_violation(payload):
     block("Permission cannot bypass the external-SSD Xcode storage contract. Use the configured wrappers and xcode-offload doctor --root \"$(external-ssd-root)\" --require-shims --strict.")

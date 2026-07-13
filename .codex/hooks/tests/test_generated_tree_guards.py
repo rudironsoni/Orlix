@@ -118,22 +118,102 @@ class GeneratedTreeGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("physical_device_allowed=false", result.stderr)
 
+    def test_pre_tool_guard_allows_rtk_phone_command_only_with_device_authorization(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            exec_command_payload("rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-userland-marker"),
+            {"physical_device_allowed": True},
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_pre_tool_guard_blocks_optional_l4_target_without_device_authorization(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-release-l4 ORLIX_PHYSICAL_VALIDATION_OPT_IN=YES"),
+            {"physical_device_allowed": False},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("physical_device_allowed=false", result.stderr)
+
     def test_pre_tool_guard_blocks_beta_upload_before_release_promotion(self):
         result = run_hook_in_repo(
             PRE_TOOL_GUARD,
             bash_payload("rtk proxy make beta-upload"),
-            {"release_gate_eligible": False},
+            {
+                "simulator_gates_complete": False,
+                "simulator_readiness_gate_ids": ["simulator-l3"],
+                "simulator_readiness_missing_gate_ids": ["simulator-l3"],
+            },
         )
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("release_gate_eligible=false", result.stderr)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
 
-    def test_pre_tool_guard_blocks_release_when_envelope_is_missing(self):
+    def test_pre_tool_guard_blocks_top_level_beta_release_before_simulator_completion(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-release"),
+            {
+                "simulator_gates_complete": False,
+                "simulator_readiness_gate_ids": ["simulator-l3"],
+                "simulator_readiness_missing_gate_ids": ["simulator-l3"],
+            },
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
+
+    def test_pre_tool_guard_blocks_release_when_policy_is_missing(self):
         command = "make " + "be" + "ta-upload"
         result = run_hook(PRE_TOOL_GUARD, bash_payload(command))
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("release_gate_eligible=false", result.stderr)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
+
+    def test_pre_tool_guard_allows_beta_release_with_current_complete_simulator_evidence_without_l4(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-upload"),
+            {
+                "simulator_gates_complete": True,
+                "simulator_readiness_gate_ids": ["simulator-l3"],
+                "simulator_readiness_missing_gate_ids": [],
+                "physical_device_allowed": False,
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_pre_tool_guard_blocks_stale_complete_simulator_evidence(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-archive"),
+            {
+                "simulator_gates_complete": False,
+                "simulator_readiness_gate_ids": ["simulator-l3"],
+                "simulator_readiness_missing_gate_ids": [],
+            },
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
+
+    def test_pre_tool_guard_blocks_partial_simulator_evidence_even_with_optional_l4(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-export-archive"),
+            {
+                "simulator_gates_complete": True,
+                "simulator_readiness_gate_ids": ["simulator-tcti-full-linux-runtime-readiness"],
+                "simulator_readiness_missing_gate_ids": ["simulator-tcti-full-linux-runtime-readiness"],
+                "physical_device_allowed": True,
+            },
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
 
     def test_pre_tool_guard_allows_release_name_in_read_only_search(self):
         command = "rtk grep -n '" + "be" + "ta-archive' Makefile"
@@ -173,11 +253,25 @@ class GeneratedTreeGuardTests(unittest.TestCase):
         result = run_hook_in_repo(
             PERMISSION_GUARD,
             bash_payload(command),
-            {"release_gate_eligible": False},
+            {
+                "simulator_gates_complete": False,
+                "simulator_readiness_gate_ids": ["simulator-l3"],
+                "simulator_readiness_missing_gate_ids": ["simulator-l3"],
+            },
         )
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("release_gate_eligible=false", result.stderr)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
+
+    def test_legacy_release_gate_boolean_does_not_authorize_beta(self):
+        result = run_hook_in_repo(
+            PRE_TOOL_GUARD,
+            bash_payload("rtk proxy make beta-upload"),
+            {"release_gate_eligible": True},
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("current, complete mandatory simulator L0-L3 evidence", result.stderr)
 
     def test_pre_tool_guard_blocks_direct_generated_report_write(self):
         result = run_hook(
