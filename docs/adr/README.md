@@ -27,6 +27,14 @@ Durable architecture decisions live in this directory. `AGENTS.md` and skills ma
 - `0019-keep-make-targets-linux-shaped.md`
 - `0023-use-release-development-profiles-and-curated-orlixos-distribution.md`
 
+## Terminal, Multiplexing, And Infrastructure
+
+- `0024-adopt-vvterm-as-the-cross-platform-app-foundation.md`
+- `0025-make-herdr-authoritative-for-terminal-topology.md`
+- `0026-use-one-kernel-with-namespaced-local-instances.md`
+- `0027-use-app-store-only-cross-platform-host-integration.md`
+- `0028-provide-full-docker-engine-compatibility-through-orlixos.md`
+
 ## Boot, Devices, And Lifecycle
 
 - `0005-use-profile-device-trees-for-boot-data.md`
