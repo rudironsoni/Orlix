@@ -26,7 +26,7 @@ Violations may result in:
 
 ## Reporting
 
-Report issues through the [Orlix issue tracker](https://github.com/rudironsoni/orlix/issues).
+Report issues through the [Orlix issue tracker](https://github.com/rudironsoni/OrlixSystem/issues).
 
 This project is maintained by a solo developer. Responses may take time - please be patient.
 

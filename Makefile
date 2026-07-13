@@ -87,7 +87,7 @@ product-build-prepare:
 		OrlixHostAdapter/Makefile OrlixHostAdapter/Sources \
 		OrlixMLibC/Makefile OrlixMLibC/Sources \
 		OrlixOS/Makefile OrlixOS/Sources \
-		Orlix/Makefile Orlix/Sources OrlixTestRunner/Sources \
+		Orlix/Makefile Orlix/App OrlixTestRunner/Sources \
 	); \
 	working_changes="$$(git status --porcelain=v1 --untracked-files=all -- "$${product_paths[@]}" | grep -v ' project.yml$$' || true)"; \
 	project_nonsemantic_keys='CURRENT_PROJECT_VERSION|MARKETING_VERSION|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER'; \
@@ -122,7 +122,7 @@ product-build-version-check: product-build-prepare
 			OrlixHostAdapter/Makefile OrlixHostAdapter/Sources \
 			OrlixMLibC/Makefile OrlixMLibC/Sources \
 			OrlixOS/Makefile OrlixOS/Sources \
-			Orlix/Makefile Orlix/Sources OrlixTestRunner/Sources \
+			Orlix/Makefile Orlix/App OrlixTestRunner/Sources \
 		); \
 		git diff --quiet "$$baseline" HEAD -- "$${product_paths[@]}" || { \
 			echo "product inputs changed after CURRENT_PROJECT_VERSION=$$current was established; run make product-build-prepare and commit project.yml" >&2; \

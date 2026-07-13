@@ -86,21 +86,21 @@ struct AboutView: View {
                     title: String(localized: "Visit Website"),
                     icon: "globe",
                     isSystemImage: true,
-                    url: "https://github.com/rudironsoni/orlix"
+                    url: "https://github.com/rudironsoni/OrlixSystem"
                 )
 
                 LinkButton(
-                    title: String(localized: "Upstream Source"),
+                    title: String(localized: "Source Code"),
                     icon: "chevron.left.forwardslash.chevron.right",
                     isSystemImage: true,
-                    url: "https://github.com/vivy-company/vvterm"
+                    url: "https://github.com/rudironsoni/OrlixSystem"
                 )
 
                 LinkButton(
                     title: String(localized: "Report an Issue"),
                     icon: "exclamationmark.bubble",
                     isSystemImage: true,
-                    url: "https://github.com/rudironsoni/orlix/issues"
+                    url: "https://github.com/rudironsoni/OrlixSystem/issues"
                 )
 
                 LinkButton(

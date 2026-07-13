@@ -7,7 +7,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
   },
-  site: "https://github.com/rudironsoni/orlix",
+  site: "https://github.com/rudironsoni/OrlixSystem",
   output: "static",
   build: {
     format: "directory",

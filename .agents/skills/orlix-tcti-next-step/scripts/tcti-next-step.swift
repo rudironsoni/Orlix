@@ -1038,7 +1038,7 @@ let productExecutionInvalidationPatterns = [
     "OrlixOS/Makefile",
     "OrlixOS/Sources/**",
     "Orlix/Makefile",
-    "Orlix/Sources/**",
+    "Orlix/App/**",
     "OrlixTestRunner/Sources/**",
 ]
 
@@ -7300,7 +7300,7 @@ func validateSemanticFreshnessFixtures() throws {
         ("host-adapter-reruns-product", runtimeGate, "OrlixHostAdapter/Sources/OrlixHostAdapter/runtime/runtime.c", true),
         ("mlibc-reruns-product", runtimeGate, "OrlixMLibC/Sources/patches/0007-example.patch", true),
         ("coreutils-input-reruns-product", runtimeGate, "OrlixOS/Sources/make/packages.mk", true),
-        ("app-source-reruns-product", runtimeGate, "Orlix/Sources/OrlixApp.swift", true),
+        ("app-source-reruns-product", runtimeGate, "Orlix/App/Orlix/App/OrlixApp.swift", true),
         ("project-build-id-reruns-product", runtimeGate, "project.yml", true),
         ("project-build-id-does-not-rerun-kernel-proof", kernelGate, "project.yml", false),
         ("environment-policy-does-not-rebuild-product", runtimeGate, ".agents/skills/orlix-tcti-next-step/references/environment-policy.json", false),

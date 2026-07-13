@@ -1,7 +1,7 @@
 # Orlix
 
-[![macOS](https://img.shields.io/badge/macOS-13.3+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/orlix)
-[![iOS](https://img.shields.io/badge/iOS-16.1+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/orlix)
+[![macOS](https://img.shields.io/badge/macOS-13.3+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/OrlixSystem)
+[![iOS](https://img.shields.io/badge/iOS-16.1+-black?style=flat-square&logo=apple)](https://github.com/rudironsoni/OrlixSystem)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?style=flat-square&logo=swift&logoColor=white)](https://swift.org)
 [![Source License](https://img.shields.io/badge/Source-GPL%203.0-blue?style=flat-square)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ff69b4?style=flat-square&logo=github)](https://github.com/sponsors/rudironsoni)
@@ -14,7 +14,7 @@ Your servers. Everywhere.
 
 Orlix is a cross-platform SSH terminal app for Apple platforms. The current codebase targets iOS and macOS, uses Ghostty for terminal rendering, libssh2/OpenSSL for SSH transport, CloudKit for sync, and Keychain for local credential storage.
 
-This application is an Orlix-owned fork of [VVTerm](https://github.com/vivy-company/vvterm), imported at commit `791eebae946b0831ffff3ac839e0f2b75d076458`. The fork retains the upstream GPL license, copyright notice, and third-party attributions. Orlix product names, identifiers, targets, schemes, storage namespaces, and user-facing identity are independent from the upstream application.
+This is the Orlix application maintained by `rudironsoni`. Its immutable source history and native artifact inputs are recorded in the repository provenance documents. The application retains the required GPL license, copyright notices, and third-party attributions while all current product names, identifiers, targets, schemes, storage namespaces, links, and user-facing identity belong to Orlix.
 
 ## Current State
 
@@ -128,7 +128,7 @@ OrlixUITests/                  # UI tests
 Vendor/                         # Vendored native dependencies
 docs/specs/                     # Feature specs and implementation notes
 scripts/                        # Vendor build scripts
-web/                            # Imported Astro site, renamed for the Orlix fork
+web/                            # Orlix Astro marketing site
 ```
 
 ## Requirements
@@ -148,8 +148,8 @@ brew install zig cmake
 ## Building From Source
 
 ```bash
-git clone https://github.com/rudironsoni/orlix.git
-cd orlix
+git clone https://github.com/rudironsoni/OrlixSystem.git
+cd OrlixSystem/Orlix/App
 
 # Build native vendor libraries (GhosttyKit + libssh2/OpenSSL)
 ./scripts/build.sh all

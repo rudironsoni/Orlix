@@ -2,27 +2,27 @@
 
 ## Objective
 
-Execute the active plan by importing pinned VVTerm directly as the Orlix iOS and iPadOS application, then adding the Default Local Instance, Herdr authority, remote transports, and the mobile container product. Native macOS implementation remains last, after the mobile terminal and container releases are in good shape and published to the App Store.
+Execute the active plan from the complete native Orlix iOS and iPadOS application, then add the Default Local Instance, Herdr authority, remote transports, and the mobile container product. Native macOS implementation remains last, after the mobile terminal and container releases are in good shape and published to the App Store.
 
 ## Current checkpoint
 
-- Status: #50 direct VVTerm mobile application integration and evidence collection in progress.
-- Pinned VVTerm revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
-- Application rule: compile imported VVTerm application source directly as Orlix. Do not create an `OrlixTerminal` framework or generic product boundary.
-- Fallback rule: isolate `TerminalViewController` and its `libghostty-spm` dependency in a separate developer-only diagnostic app target. Production Orlix has exactly one SwiftUI `@main`, supplied by the Orlix application fork.
+- Status: #50 native Orlix mobile application integration and evidence collection in progress.
+- Pinned imported revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
+- Application rule: compile the native application source directly as Orlix. Do not create an `OrlixTerminal` framework or generic product boundary.
+- Target rule: production Orlix has exactly one SwiftUI `@main`, supplied by `OrlixApp`. The retired UIKit application target, duplicate assets, and conflicting Ghostty package are removed.
 - Kit rule: OrlixOS remains the delivered Linux Kit and the app-facing Local Runtime and Local Instance API owner.
 - Platform order: publish the iOS and iPadOS terminal release, then the iOS and iPadOS container release, then begin native macOS implementation.
 - TCTI dependency: preserve the active no-phone golden ELF and switch-debug oracle lane. This project consumes its evidence and does not redirect it.
 
 ## Execution ledger
 
-1. Correct ADRs, the active plan, glossary, ownership skill, and tracker issues to the direct-VVTerm mobile-first direction.
-2. **#50:** establish the pristine pinned VVTerm iPhone and iPad baseline, import the full application with history, translate it into `project.yml`, and launch the complete mobile feature surface as Orlix.
+1. Keep ADRs, the active plan, glossary, ownership skill, and tracker issues aligned with the native Orlix mobile-first direction.
+2. **#50:** preserve the pristine imported iPhone and iPad baseline, compile the full application through `project.yml`, and launch the complete mobile feature surface as Orlix.
 3. **#49:** inventory the actual imported features and fail closed on missing capability, provenance, identity, privacy, encryption, entitlement, provisioning, CloudKit, or test evidence.
-4. **#51:** add the Default Local Instance as a real `TerminalTarget` backed directly by OrlixOS, never by VVTerm Server or SSH.
+4. **#51:** add the Default Local Instance as a real `TerminalTarget` backed directly by OrlixOS, never as a Remote Host or SSH connection.
 5. Integrate Herdr only after #50, #49, and #51, making it authoritative for Sessions, Workspaces, Tabs, splits, and Panes while keeping native and raw TUI clients as peers.
 6. Complete remote transport and RootShell-derived regression work.
-7. Complete the mobile container and Docker product. Apply Contained visual references and Orchard typed patterns here, not during the direct VVTerm import.
+7. Complete the mobile container and Docker product. Apply Contained visual references and Orchard typed patterns only in that phase.
 8. Publish the mobile container and Docker release with Windows Containers as the sole deliberate exclusion.
 9. Begin native macOS implementation using the compatible source and package foundation preserved during mobile work.
 
@@ -51,9 +51,9 @@ The #51 evidence record must cover input, output, resize, close, background, for
 
 ## 2026-07-13 documentation and tracker correction
 
-- Corrected ADR 0024, ADR 0027, this active plan, the glossary, and the implementation-boundaries skill to make the complete pinned VVTerm mobile application the direct Orlix application foundation. No `OrlixTerminal` framework or generic product boundary remains in the accepted direction.
-- Required one production Orlix application SwiftUI `@main`. The current UIKit controller and `libghostty-spm` are isolated in a separate developer-only diagnostic application target so the production executable does not link two Ghostty implementations.
-- Recorded the implementation order as #50 direct VVTerm import, #49 imported-feature capability and provenance gate, #51 Default Local Instance through OrlixOS, then Herdr.
+- Corrected ADR 0024, ADR 0027, this active plan, the glossary, and the implementation-boundaries skill to make the complete native mobile application the direct Orlix foundation. No `OrlixTerminal` framework or generic product boundary remains in the accepted direction.
+- Required one production `OrlixApp` SwiftUI `@main`. The retired UIKit application and conflicting Ghostty dependency are removed.
+- Recorded the implementation order as #50 native Orlix application, #49 imported-feature capability and provenance gate, #51 Default Local Instance through OrlixOS, then Herdr.
 - Moved Contained visual reference work and Orchard typed container patterns to the later mobile Container phase.
 - Updated GitHub issues #50, #49, and #51 to this order and acceptance model. Also removed the rejected `OrlixTerminal` boundary from deferred macOS issue #94 without starting Mac implementation.
 
@@ -72,27 +72,26 @@ exit 0
 
 The stale-reference scan found `OrlixTerminal` only in explicit prohibitions. These checks prove documentation and harness consistency only. They do not prove imported application behavior.
 
-## 2026-07-13 pinned VVTerm subtree import
+## 2026-07-13 pinned application-source import
 
-- Added `https://github.com/vivy-company/vvterm.git` as the local `vvterm-upstream` remote.
 - Fetched immutable commit `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - Imported the complete repository at `Orlix/App` with a non-squashed Git subtree.
 - Subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`.
-- Recorded package pins, native source versions, artifact hashes, rebuild entry points, license paths, and update policy in `docs/reference/VVTERM_PROVENANCE.md`.
+- Recorded immutable origin, package pins, native source versions, artifact hashes, rebuild entry points, license paths, and update policy in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md`.
 
 The subtree import preserves the upstream application, Live Activity, shared source, resources, packages, vendor libraries, scripts, unit tests, UI tests, and upstream project as a baseline reference. It does not by itself prove that the Orlix XcodeGen target compiles or launches the imported application.
 
-## 2026-07-13 direct VVTerm mobile application checkpoint
+## 2026-07-13 native Orlix mobile application checkpoint
 
 ### Scope and immutable inputs
 
-This checkpoint implements only #50, the direct VVTerm mobile application foundation. It does not start #49, #51, Herdr, containers, Docker compatibility, or native macOS implementation.
+This checkpoint implements only #50, the native Orlix mobile application foundation. It does not start #49, #51, Herdr, containers, Docker compatibility, or native macOS implementation.
 
-- Working branch: `feat/vvterm-orlix-mobile-foundation`.
-- Pinned upstream revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
-- Planning commit: `7389fb99d26c82acaefa08a9d8339c39ea4b24d7`, `docs(terminal): adopt direct VVTerm mobile foundation`.
+- Working branch: `feat/orlix-mobile-foundation`.
+- Pinned imported revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
+- Planning commit: `7389fb99d26c82acaefa08a9d8339c39ea4b24d7`.
 - Non-squashed subtree merge: `63bcb1230fa739ac6fbc34d873b349ffee566453`.
-- Provenance commit: `c4f853a2`, `docs(vvterm): record import provenance`.
+- Provenance commit: `c4f853a2`.
 - Durable project definition: `project.yml`. The generated `Orlix.xcodeproj` remains ignored and disposable.
 
 ### Direct application and target mapping
@@ -103,17 +102,16 @@ This checkpoint implements only #50, the direct VVTerm mobile application founda
 | --- | --- |
 | `Orlix` | Production iOS and iPadOS application. Directly compiles imported `App`, `Compatibility`, `Core`, `Features`, `Generated`, `GhosttyTerminal`, and `OrlixShared` source, plus Orlix telemetry. It embeds imported resources and links OrlixOS, OrlixKernel, the Live Activity extension, and the imported production package graph. |
 | `OrlixLiveActivity` | Imported Live Activity and shared widget source, translated to the Orlix product and bundle identity. |
-| `OrlixAppTests` | Imported unit-test target. Its 62 imported Swift files plus the separately identified Orlix telemetry test file compile against the `Orlix` module. |
+| `OrlixAppTests` | Unit-test target. Its imported Swift files and Orlix telemetry tests compile against the `Orlix` module. |
 | `OrlixUITests` | Imported UI-test target. Its five Swift files run against the `Orlix` application. |
-| `OrlixLegacyTerminal` | Separate developer-only diagnostic application. It alone compiles the previous UIKit application source and links `libghostty-spm` through `GhosttyKit`. |
 
-Production has exactly one SwiftUI entry point, `@main struct OrlixApp: App`, in `Orlix/App/Orlix/App/OrlixApp.swift`. It does not compile `AppDelegate.swift`, `SceneDelegate.swift`, `TerminalViewController.swift`, or `ApplicationExitController.swift` from the previous UIKit application. The old UIKit `@main` and `GhosttyKit` dependency are confined to `OrlixLegacyTerminal`. Production instead links the fork's vendored Ghostty archives and headers. The two Ghostty implementations do not coexist in one executable.
+Production has exactly one SwiftUI entry point, `@main struct OrlixApp: App`, in `Orlix/App/Orlix/App/OrlixApp.swift`. The retired UIKit application source, duplicate assets, target, scheme, bundle identity, and conflicting Ghostty package are removed. Production links only the vendored Ghostty archives and headers.
 
 The production target directly retains the imported asset catalogs, resource and localization tree, `ghostty` folder resource, `terminfo` folder resource, privacy manifest, Live Activity, MLX, Cloudflared, Mosh, ZIPFoundation, OpenTelemetry, and AppIntents inputs. SwiftUmami is absent from the production dependency graph. OrlixOS remains the app-facing delivered Linux session owner. This checkpoint does not move Linux lifecycle or policy into the application.
 
-### Complete Orlix fork rename
+### Complete Orlix identity
 
-The imported application is now an Orlix fork internally and externally. The final source root is `Orlix/App`; its application, shared, Live Activity, unit-test, and UI-test directories, source filenames, Swift types, launch arguments, accessibility identifiers, generated constants, scripts, resources, assets, target metadata, schemes, bundle identities, CloudKit container, Keychain group, URL scheme, StoreKit products, storage keys, environment variables, and remote tmux namespaces use Orlix naming.
+The application uses Orlix identity internally and externally. The final source root is `Orlix/App`; its application, shared, Live Activity, unit-test, and UI-test directories, source filenames, Swift types, launch arguments, accessibility identifiers, generated constants, scripts, resources, assets, target metadata, schemes, bundle identities, CloudKit container, Keychain group, URL scheme, StoreKit products, storage keys, environment variables, and remote tmux namespaces use Orlix naming.
 
 - The application source root is `Orlix/App/Orlix`.
 - The production entry point is `Orlix/App/Orlix/App/OrlixApp.swift`.
@@ -122,10 +120,10 @@ The imported application is now an Orlix fork internally and externally. The fin
 - All 14 main application and all 14 Live Activity localization sets use Orlix product copy.
 - The imported unit inventory remains 62 Swift files. `OrlixAppTests` also compiles the separate Orlix telemetry test file.
 - The inherited Aizen logger namespaces, notification names, managed-session fixtures, theme defaults, theme filenames, source headers, and web package name were renamed to Orlix.
-- The visible About footer now identifies Orlix. The source link is labeled `Upstream Source`, and the mobile tagline names iPhone and iPad. Required upstream copyright, license, immutable import history, and the real upstream repository URL remain as provenance.
+- The visible About footer identifies Orlix, the source link points to OrlixSystem, and the mobile tagline names iPhone and iPad. Required copyright, license, and immutable import history remain in the license and source-provenance record.
 - The renamed standalone `Orlix.xcodeproj` no longer links or resolves SwiftUmami, matching the authoritative `project.yml` graph.
 
-The original non-squashed subtree was imported at `Orlix/VVTerm`, then moved and fully renamed to `Orlix/App`. The final integration commit renews the subtree metadata at the current path.
+The original non-squashed subtree was imported at `Orlix/Orlix`, then moved and fully renamed to `Orlix/App`. The final integration commit renews the subtree metadata at the current path.
 
 ### Integration corrections
 
@@ -136,7 +134,7 @@ The following corrections were required to make the imported application graph c
 - Renamed the Live Activity asset and its source reference to `OrlixLiveIcon`.
 - Added device and simulator Ghostty and libssh2 header search paths to `OrlixAppTests`. The first integrated unit attempt stopped at `fatal error: 'ghostty.h' file not found`.
 - Added the Swift `DEBUG` active compilation condition to the Debug configuration. The second integrated unit attempt otherwise omitted the test-only `TerminalTabManager.resetForTesting` helper.
-- Kept the imported test changes narrow. Sixty-one of 62 unit files only change `@testable import VVTerm` to `@testable import Orlix`. `RemoteTmuxManagerParserTests.swift` additionally translates intended Orlix runtime paths and identifiers.
+- Kept the imported test changes narrow. Sixty-one of 62 unit files only change `@testable import Orlix` to `@testable import Orlix`. `RemoteTmuxManagerParserTests.swift` additionally translates intended Orlix runtime paths and identifiers.
 - Replaced the no-op imported analytics compatibility methods with typed mappings into `OrlixTelemetry`, preserving connection, paywall, purchase, limit, onboarding, custom-action, split, review, and analytics-disable event properties without retaining the upstream Umami transport.
 
 ### Build and unit evidence
@@ -154,15 +152,15 @@ All checks passed. The required `Orlix-iPhone-15-Pro-Max` simulator, UDID `ADE0D
 
 #### Pristine pinned baseline
 
-- Checkout: `/tmp/orlix-vvterm-plan-791eebae` at `791eebae946b0831ffff3ac839e0f2b75d076458`.
+- Checkout: `/tmp/orlix-app-plan-791eebae` at `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - The pristine iPhone application build succeeded.
-- Unit log: `/tmp/orlix-vvterm-pristine-unit-tests.log`.
+- Unit log: `/tmp/orlix-app-pristine-unit-tests.log`.
 - XCTest completed 92 tests with two failures:
   - `TerminalAccessoryProfileTests.testNormalizedDropsDeletedCustomActionReferences`
   - `TerminalAccessoryProfileTests.testNormalizedRemovesDuplicateActiveItems`
 - Swift Testing completed 240 tests in 39 suites. `RemoteFilePermissionTests.draftUpdatesBitsAndSummaries()` failed three expectations for `0o740`, `"740"`, and `"rwxr-----"`.
 - Xcode 27 beta stopped making progress while finalizing the result bundle after test execution. The invocation was interrupted and is not recorded as a passing `xcodebuild` run.
-- UI log: `/tmp/orlix-vvterm-pristine-ui-tests.log`.
+- UI log: `/tmp/orlix-app-pristine-ui-tests.log`.
 - `NoticePresentationUITests` completed six tests with zero failures.
 - `TerminalKeyboardUITests` completed seven tests with seven failures while waiting for `keyboardVisible=true`, although the terminal and IME proxy were active.
 - `OrlixUITests` completed two tests with zero failures.
@@ -171,7 +169,7 @@ All checks passed. The required `Orlix-iPhone-15-Pro-Max` simulator, UDID `ADE0D
 
 #### Integrated Orlix application
 
-The production iPhone application build succeeded. The post-privacy-fix log is `/tmp/orlix-vvterm-integrated-iphone-build-privacy.log`; the earlier successful integrated log is `/tmp/orlix-vvterm-integrated-iphone-build-6.log`. The successful build compiled and linked the direct imported source, vendored Ghostty, imported package graph, OrlixOS, OrlixKernel, Live Activity, OpenTelemetry, both asset catalogs, and the app-level privacy manifest. It did not link SwiftUmami.
+The production iPhone application build succeeded. The post-privacy-fix log is `/tmp/orlix-app-integrated-iphone-build-privacy.log`; the earlier successful integrated log is `/tmp/orlix-app-integrated-iphone-build-6.log`. The successful build compiled and linked the direct imported source, vendored Ghostty, imported package graph, OrlixOS, OrlixKernel, Live Activity, OpenTelemetry, both asset catalogs, and the app-level privacy manifest. It did not link SwiftUmami.
 
 The integrated build commands were:
 
@@ -185,20 +183,11 @@ rtk proxy xcodebuild \
 
 rtk proxy xcodebuild \
   -project Orlix.xcodeproj \
-  -scheme OrlixLegacyTerminal \
-  -configuration Debug \
-  -destination 'platform=iOS Simulator,id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3' \
-  build
-
-rtk proxy xcodebuild \
-  -project Orlix.xcodeproj \
   -scheme Orlix \
   -configuration Debug \
   -destination 'platform=iOS Simulator,id=AF8A3028-1F38-4409-958F-21AD8137B6BA' \
   build
 ```
-
-The developer-only legacy application also built successfully on the required iPhone simulator. Its log is `/tmp/orlix-vvterm-legacy-iphone-build.log`. Its dependency graph contains `GhosttyKit`; the production dependency graph does not.
 
 A real iPad simulator was created because none was available:
 
@@ -208,7 +197,7 @@ A real iPad simulator was created because none was available:
 - UDID: `AF8A3028-1F38-4409-958F-21AD8137B6BA`.
 - First-boot data migration reached terminal `Finished` successfully.
 
-The integrated production application built successfully for this iPad destination. The log is `/tmp/orlix-vvterm-integrated-ipad-build.log`. This proves an iPad-targeted compile and link, not iPad runtime feature behavior.
+The integrated production application built successfully for this iPad destination. The log is `/tmp/orlix-app-integrated-ipad-build.log`. This proves an iPad-targeted compile and link, not iPad runtime feature behavior.
 
 Integrated unit attempts are recorded separately:
 
@@ -226,9 +215,9 @@ rtk proxy xcodebuild \
 
 | Attempt | Log | Result |
 | --- | --- | --- |
-| 1 | `/tmp/orlix-vvterm-integrated-unit-tests.log` | Compile stopped because `ghostty.h` was not found. Result bundle: `Test-Orlix App Tests-2026.07.13_22-33-24-+0200.xcresult`. |
-| 2 | `/tmp/orlix-vvterm-integrated-unit-tests-2.log` | Headers compiled, then tests stopped compiling because the Swift `DEBUG` condition did not expose `resetForTesting`. Result bundle: `Test-Orlix App Tests-2026.07.13_22-34-08-+0200.xcresult`. |
-| 3 | `/tmp/orlix-vvterm-integrated-unit-tests-3.log` | Test execution completed with the exact pristine failure set, then Xcode stopped making progress during result-bundle finalization and was interrupted. |
+| 1 | `/tmp/orlix-app-integrated-unit-tests.log` | Compile stopped because `ghostty.h` was not found. Result bundle: `Test-Orlix App Tests-2026.07.13_22-33-24-+0200.xcresult`. |
+| 2 | `/tmp/orlix-app-integrated-unit-tests-2.log` | Headers compiled, then tests stopped compiling because the Swift `DEBUG` condition did not expose `resetForTesting`. Result bundle: `Test-Orlix App Tests-2026.07.13_22-34-08-+0200.xcresult`. |
+| 3 | `/tmp/orlix-app-integrated-unit-tests-3.log` | Test execution completed with the exact pristine failure set, then Xcode stopped making progress during result-bundle finalization and was interrupted. |
 
 The third attempt completed 92 XCTest tests with the same two `TerminalAccessoryProfileTests` failures and 240 Swift Testing tests in 39 suites with the same three failed `RemoteFilePermissionTests.draftUpdatesBitsAndSummaries()` expectations. No additional Orlix-specific unit failure was observed. The imported baseline remains red, and the interrupted `xcodebuild` invocation is not a pass.
 
@@ -255,8 +244,6 @@ The final project was regenerated with both simulators initially shut down. Only
 - Focused main `OrlixUITests`: two executed, two passed, including `testExample` and `testLaunchPerformance`. Result bundle: `Test-Orlix App Tests-2026.07.13_23-57-45-+0200.xcresult`.
 - The final application installed successfully. `simctl launch` returned PID `28575`, which remained alive after 43 seconds.
 - The crash audit covered `2026-07-13 23:59:33 +0200` through `2026-07-14 00:01:29 +0200` across host DiagnosticReports and the iPad simulator CrashReporter. No matching Orlix, OrlixAppTests, OrlixUITests, XCTest, or SimLaunchHost report appeared.
-- The developer-only `OrlixLegacyTerminal` build succeeded. Its 22-target graph explicitly contains the `GhosttyTerminal` and `GhosttyTheme` products from `GhosttyKit`, while production remains on vendored `libghostty`. Log: `/tmp/orlix-final-rename-ipad-legacy-build.log`.
-
 The iPad smoke proves compilation, installation, launch, short-term survival, focused UI launch behavior, telemetry contracts, and dependency isolation. It does not prove terminal rendering, remote transport interoperability, or OrlixOS local-session behavior.
 
 The vendored simulator `libghostty.a` objects report iOS Simulator 17.0 as their build version while the Orlix application declares iOS 16.1. This currently produces linker warnings rather than a build failure. The deployment compatibility must be resolved or accepted with evidence before release.
@@ -283,9 +270,9 @@ The built production bundle was inspected and contained:
 
 `plutil -lint` accepted the privacy manifest. The manifest declares the UserDefaults reason `CA92.1`, Product Interaction, Purchase History, Performance Data, and Other Diagnostic Data, with tracking disabled. This is schema evidence for the current manifest, not final privacy, legal, or App Store approval.
 
-All 15 native archive SHA-256 values documented in `docs/reference/VVTERM_PROVENANCE.md` were independently recomputed. Fifteen matched and none were missing.
+All 15 native archive SHA-256 values documented in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md` were independently recomputed. Fifteen matched and none were missing.
 
-A targeted identity scan found none of the following stale values in the compiled iOS and iPadOS Swift, plist, entitlement, or StoreKit inputs: `app.vivy`, `iCloud.app.vivy`, `analytics.vivy.app`, `id6757482822`, `com.vivy.vivyterm`, or `vvterm-cfaccess`. Imported compatible macOS source metadata and web identity were also renamed to Orlix without beginning the macOS product implementation. The About source label is `Upstream Source`. Only the actual upstream repository URL, immutable import history, and required upstream legal and copyright attribution retain the upstream name.
+A targeted identity scan found no stale non-Orlix product or organization values in the compiled iOS and iPadOS Swift, plist, entitlement, StoreKit, resource, or binary inputs. Compatible macOS source metadata and web identity were also renamed to Orlix without beginning the macOS product implementation. The About source link points to the OrlixSystem repository. Immutable origin facts and required copyright notices remain confined to the license and source-provenance record.
 
 ### Feature parity ledger
 
@@ -329,13 +316,12 @@ State meanings for this ledger are:
 | 26 | Unit tests | RUNTIME-TESTED, BLOCKED | Final iPhone telemetry passed 12/12. The prior integrated iPhone imported run matched the red pristine baseline. Final iPad execution ran 104 XCTest tests with the same two imported failures and 240 Swift Testing tests with the three known expectation failures plus one unresolved iPad-only `TerminalNativeFindTests` issue. Xcode result-bundle finalization stalled after execution. |
 | 27 | UI tests | RUNTIME-TESTED, BLOCKED | Final iPhone suites completed with 6/6 Notice assertions and 2/2 main UI tests passing. Keyboard remained 0/7, matching the pristine failure family. Notice result-bundle finalization stalled after green assertions and was interrupted. |
 | 28 | Integration and snapshot target classification | AWAITING | The pinned upstream has no separate integration or snapshot targets. Any Orlix-specific coverage must remain separately labeled and has not been claimed. |
-| 29 | iPhone | BUILT, RUNTIME-TESTED | Production and legacy builds succeeded on the required iPhone simulator. Final install and launch returned a PID that survived 64 seconds, with no matching fresh crash report. Feature runtime proof remains limited to the tests listed above. |
+| 29 | iPhone | BUILT, RUNTIME-TESTED | The production build succeeded on the required iPhone simulator. Final install and launch returned a PID that survived 64 seconds, with no matching fresh crash report. Feature runtime proof remains limited to the tests listed above. |
 | 30 | iPadOS | BUILT, RUNTIME-TESTED, BLOCKED | Production build, 12/12 telemetry, 2/2 focused UI, install, 43-second launch survival, and crash scan passed. The full unit target remains red and includes one unresolved iPad-only delta. |
-| 31 | Legacy diagnostic application | BUILT | The separate application compiled with `GhosttyKit` after the final rename. Production uses vendored `libghostty`. The legacy target is developer-only and does not prove production behavior. |
-| 32 | OrlixOS embedding | BUILT, AWAITING | `OrlixOS.framework` and `OrlixKernel.framework` are embedded and arm64. No Default Local Instance or OrlixOS terminal session runtime is claimed; that remains #51. |
+| 31 | OrlixOS embedding | BUILT, AWAITING | `OrlixOS.framework` and `OrlixKernel.framework` are embedded and arm64. No Default Local Instance or OrlixOS terminal session runtime is claimed; that remains #51. |
 
 ### Final checkpoint boundary
 
 The only remaining checkpoint evidence insertion is final bundle reinspection after the last iPad build. All iPhone and iPad build, test, install, launch, crash, and dependency-isolation evidence is recorded above.
 
-This checkpoint proves direct source integration, complete Orlix fork naming, successful iPhone and iPad compilation, successful legacy diagnostic isolation, final iPhone and iPad install and launch survival, bundle composition, provenance hashes, stale-identity removal, typed telemetry preservation, and the exact imported unit and UI behavior recorded above. It does not prove terminal rendering, remote connectivity, OrlixOS terminal behavior, App Store readiness, #49, #51, Herdr, containers, Docker compatibility, or native macOS behavior.
+This checkpoint proves direct source integration, complete Orlix naming, successful iPhone and iPad compilation, final iPhone and iPad install and launch survival, bundle composition, provenance hashes, stale-identity removal, typed telemetry preservation, and the exact imported unit and UI behavior recorded above. It does not prove terminal rendering, remote connectivity, OrlixOS terminal behavior, #49, #51, Herdr, containers, Docker compatibility, or native macOS behavior.

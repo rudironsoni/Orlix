@@ -2,25 +2,23 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0024
 
 ## Context
 
 The iOS host app could be a blank XCTest host, a diagnostic harness, or the actual terminal-shaped app that users will recognize. Orlix needs iOS-hosted proof, but the product direction is Linux inside an iOS app with terminal interaction.
 
-The MobileGhosttyApp example from `Lakr233/libghostty-spm` shows the intended app shape: a UIKit terminal app with a terminal view, navigation-hosted controller, theme handling, and app lifecycle integration.
+The first host-app prototype used a UIKit terminal controller. The production direction now requires the complete native Orlix application surface on iOS and iPadOS.
 
 ## Decision
 
-Create the iOS host app as `Orlix`, with app sources under `Orlix/Sources` and tests under `Orlix/Tests` when needed. It should follow the MobileGhosttyApp terminal-first shape rather than a blank proof-only host.
-
-Depend on `libghostty-spm` for the terminal UI surface, theme handling, and app structure inspiration. Depend on `OrlixOS` for the delivered OS session and payload surface. Do not use `ShellCraftKit` as the execution backend. Orlix owns terminal bytes through Linux console/terminal plumbing.
+Create the iOS host app as `Orlix` rather than a blank proof-only host. ADR 0024 supersedes the prototype layout: production sources and tests live under `Orlix/App`, terminal presentation uses the vendored Ghostty integration, and `OrlixOS` remains the delivered OS session and payload surface. Do not use a sandbox shell as the execution backend. Orlix owns terminal bytes through Linux console and terminal plumbing.
 
 ## Consequences
 
 `Orlix` is the iOS app that consumes `OrlixOS`, embeds the required frameworks, and launches the delivered OrlixOS session for proof and product development.
 
-The initial app may follow the example's UIKit structure, terminal view, theme handling, and lifecycle shape, but the backend session must be Orlix-backed as soon as the Linux console path exists.
+The retired UIKit prototype is not retained as a target or fallback. The production SwiftUI application is the only Orlix application target.
 
 Before the Linux console path exists, `Orlix` may show non-interactive Orlix boot/proof logs. It must not use a fake shell, sandbox shell, or local execution backend to simulate product behavior.
 

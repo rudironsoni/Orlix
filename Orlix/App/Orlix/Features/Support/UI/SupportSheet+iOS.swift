@@ -24,7 +24,7 @@ struct SupportSettingsView: View {
     }
 
     private let contactOptions: [ContactOption] = [
-        ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/orlix/issues")
+        ContactOption(title: String(localized: "GitHub"), subtitle: String(localized: "Report Issue"), icon: "exclamationmark.triangle.fill", iconImage: nil, iconText: nil, color: .red, url: "https://github.com/rudironsoni/OrlixSystem/issues")
     ]
 
     var body: some View {
@@ -75,7 +75,7 @@ struct SupportSettingsView: View {
 
             Section {
                 Button {
-                    openURL("https://github.com/rudironsoni/orlix")
+                    openURL("https://github.com/rudironsoni/OrlixSystem")
                 } label: {
                     HStack {
                         Text("Orlix")
