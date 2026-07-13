@@ -1,5 +1,27 @@
 # IMPLEMENT.md
 
+### Checkpoint: Feature-Flagged Beta Telemetry
+
+- Added privacy-scoped OpenPanel analytics and SigNoz OpenTelemetry traces and metrics to the app without changing Linux, TCTI, HostAdapter, OrlixOS, or generated upstream behavior.
+- Analytics and observability are independent build features. `ORLIX_ANALYTICS_ENABLED` and `ORLIX_OBSERVABILITY_ENABLED` default to `NO` in `project.yml`. A disabled feature creates no client, requires no credential, sends no data, and exposes no unavailable privacy toggle.
+- Enabling analytics requires a valid approved OpenPanel endpoint and client ID. Enabling observability requires a valid approved SigNoz OTLP/HTTP endpoint and ingestion key. Both still retain independent persistent user opt-outs.
+- Added lifecycle metric flushing when the app backgrounds or terminates, moved the launch start boundary to app-delegate construction, and synchronized the boot-start timestamp with terminal-output callbacks.
+- The release lane accepts credential-free archives while both features are disabled. A feature set to `YES` fails closed unless its corresponding credential is present, and the feature-flag values participate in the resumable release identity.
+- Pinned-simulator evidence: `Orlix App Tests` executed 11 tests with 0 failures and 0 skips on `Orlix-iPhone-15-Pro-Max` (`ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`, iOS 26.5). Result bundle: `~/Library/Developer/Xcode/DerivedData/Logs/Test/Test-Orlix App Tests-2026.07.13_15-23-06-+0200.xcresult`.
+- The built Debug app records both feature flags as `NO`. No matching Orlix or XCTest crash report was created after the run. The release-harness suite executed 8 tests with 0 failures, and `git diff --check` passed.
+- OpenPanel and SigNoz deployment belong to the external infrastructure GitOps repository. This app repository contains no backend Compose, proxy, database, migration, DNS, TLS, retention, dashboard, or alerting configuration. Live ingestion, backend privacy behavior, archive credential readback, and TestFlight telemetry remain unproven here.
+- No archive, upload, App Store Connect mutation, TestFlight distribution, or physical-device command ran in this checkpoint. Release readiness remains false.
+
+### Draft: External TestFlight Release Slice
+
+- Added an initial `make beta-release` L0-L3 then L5 driver with local phase state. It is not yet an authorized or proven release lane.
+- Skeptical review found that the draft still trusts an arbitrary successful L0-L3 command, cannot reconcile an App Store Connect mutation completed immediately before a local state-write failure, and has a build-bump interruption window. It must bind canonical current L3 evidence and semantic product identity, query exact remote build state on resume, and fail closed on unparseable build-number lookup before publication.
+- Archive, validation, export, upload, processing/Beta App Review, and external-beta configuration are represented as separate phases. Local phase skipping alone does not prove remote idempotency or exactly-once mutation.
+- Added `make beta-release-l4` as a separate physical-validation lane. It fails closed unless `ORLIX_PHYSICAL_VALIDATION_OPT_IN=YES` and an explicit `ORLIX_RELEASE_L4_COMMAND` are supplied. No phone or release command was run for this checkpoint.
+- The draft post-processing configuration targets external group `Orlix External Beta` and a maximum public-link limit of 100. No live group mutation, build assignment, processing wait, Beta App Review submission, or public-link readback has succeeded.
+- Added focused release-harness tests covering syntax, phase ordering, resumable state behavior, and the public-link limit. OCI wording is explicit as Open Container Initiative.
+- Validation required for this checkpoint: `bash -n tools/release/testflight-beta.sh`, `ruby -c tools/release/configure-testflight-group.rb`, `python3 -m unittest tools/release/test_testflight_beta.py`, `make -n beta-release`, `make -n beta-release-l4`, and `git diff --check`. Phone, archive, export, upload, App Store Connect, TestFlight, and release execution remain intentionally unrun.
+
 ## 2026-07-12
 
 ### Checkpoint: Plan Activation

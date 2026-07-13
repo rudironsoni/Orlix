@@ -15,7 +15,7 @@ L0 source and policy
 
 Humans steer product intent and approve physical and release access. Agents inspect, plan, execute, review, repair, validate, publish, and maintain the harness.
 
-Completion requires one Orlix app build to pass L3 and L4, emit app-visible `ORLIX-USERLAND-TCTI-OK` from real Linux userspace through OrlixKernel and TCTI on both destinations, keep all forbidden behavior false, and be confirmed in TestFlight.
+Completion requires one Orlix app build to pass L3 and, when physical validation is explicitly authorized, L4, emit app-visible `ORLIX-USERLAND-TCTI-OK` from real Linux userspace through OrlixKernel and TCTI, keep all forbidden behavior false, and be confirmed in TestFlight. L4 is a separate opt-in lane and does not block the default L5 external-beta lane.
 
 ## Harness Engineering Principles
 
@@ -151,7 +151,15 @@ TestFlight upload
 App Store Connect build confirmation
 ```
 
-L5 requires complete L3 and L4 matrices for the same marketing version, build number, and semantic product fingerprint. Release evidence records archive, IPA, bundle ID, signing team, product identity, upload timestamp, App Store Connect build, and processing state.
+L5 requires the complete L3 matrix for the same marketing version, build number, and semantic product fingerprint. L4 remains separately visible and opt-in; when run, it must use that same product identity, but missing L4 evidence does not block an external beta. Release evidence records archive, IPA, bundle ID, signing team, product identity, upload timestamp, App Store Connect build, processing state, Beta App Review state, external group assignment, and public-link state.
+
+## External Beta Telemetry
+
+The beta integrates with self-hosted OpenPanel Community for anonymous product analytics and self-hosted SigNoz Community for OpenTelemetry traces and metrics. This repository owns only the app-side event, signal, privacy, feature-flag, and endpoint configuration contracts. Backend provisioning, migrations, credentials, DNS, TLS, retention, dashboards, alerting, and operations belong to the external infrastructure GitOps repository. OCI continues to mean Open Container Initiative.
+
+OpenPanel accepts only these app-owned events: `app_started`, `terminal_activated`, `linux_session_unavailable`, `boot_started`, `boot_finished`, `first_terminal_output`, `boot_watchdog_fired`, and `theme_changed`. SigNoz accepts `orlix.app.launch` and `orlix.linux.boot` spans plus app-launch, boot-outcome, watchdog, boot-duration, and first-terminal-output-latency metrics. `service.name` is `orlix-ios`; `service.version` is `MARKETING_VERSION.CURRENT_PROJECT_VERSION`; environments are `development`, `simulator-validation`, and `testflight`.
+
+Telemetry must never export identity, installation IDs, device fingerprints, terminal commands or output, Linux console text, environment IDs, filesystem paths, guest addresses or memory, raw errors, email, location, advertising IDs, or session replay. Analytics and diagnostics have independent persistent opt-outs. Release configuration comes from target-derived plist settings and build-scoped ingestion credentials. Unit/request tests prove schema and privacy boundaries; live backend ingestion remains separate release evidence.
 
 ## Semantic Freshness And Reuse
 
@@ -181,9 +189,9 @@ Frontier selection:
 4. Select one eligible high-value gate in that level.
 5. Complete affected L0 through L2 prerequisites.
 6. Complete the full L3 simulator matrix.
-7. Require explicit physical authorization.
-8. Complete the identical L4 device matrix.
-9. Complete L5 and confirm TestFlight.
+7. Make L5 eligible for the exact L3-validated product identity.
+8. When physical validation is explicitly authorized, complete the identical L4 device matrix and require it to match that product identity.
+9. Complete L5 and confirm TestFlight without making absent optional L4 evidence a blocker.
 10. Mark the goal complete.
 
 Unaffected maintenance state cannot preempt the product frontier. Reducers are selected only for current failures.
@@ -212,7 +220,7 @@ Agents report immediately when a PR is pushed, feedback is addressed, a gate fai
 
 ## Mechanical Guardrails
 
-Hooks and structural tests block generated and upstream edits, wrong-layer Linux behavior, fake output, phone work before simulator completion and authorization, release before phone completion, unauthorized runtime patches, unauthorized assembly or gadget dispatch, external-SSD bypass, and unstructured or inconsistent reports.
+Hooks and structural tests block generated and upstream edits, wrong-layer Linux behavior, fake output, phone work before simulator completion and authorization, release before simulator completion, unauthorized runtime patches, unauthorized assembly or gadget dispatch, external-SSD bypass, and unstructured or inconsistent reports. They keep optional L4 state visible without treating it as an L5 prerequisite.
 
 Guardrail failures identify the invariant, owning layer, durable path, and exact recovery command.
 
@@ -234,23 +242,23 @@ Quality grades cover agent legibility, observability, isolation, architecture en
 2. Inventory current checks into L0 through L5 and identify duplicate, historical, superseded, and missing gates.
 3. Define the compact gate graph, destination-independent IDs, semantic input groups, and report contracts.
 4. Define one canonical L3/L4 product-capability list and instantiate it for `iphonesimulator` and `iphoneos`; destination instances share semantic inputs, acceptance, and product identity while adapters own only launch and evidence capture.
-5. Derive L3 and L4 completion from the canonical matrix, and derive L5 eligibility from exact L3/L4 capability and product-identity equality. A single phone smoke gate or producer-owned readiness boolean is insufficient.
+5. Derive L3 and L4 completion from the canonical matrix, and derive L5 eligibility from complete current L3 evidence. If optional L4 evidence exists, require exact capability and product-identity equality. A single phone smoke gate or producer-owned readiness boolean is insufficient.
 6. Replace historical first-unresolved selection with safety-filtered pyramid-frontier selection only after the permanent frontier can represent the complete L3, L4, and L5 objective.
-7. Implement symmetric simulator and device destination adapters.
+7. Implement symmetric simulator and device destination adapters. Keep L4 physical execution explicit and opt-in.
 8. Shrink the roadmap and selector through progressive disclosure and focused skills.
 9. Add mechanical architecture, generated-tree, metadata, and promotion checks.
 10. Import current valid evidence without rerunning semantically unchanged work.
 11. Add missing simulator userland-marker coverage and complete L3.
-12. Run the identical matrix on the approved iPhone and complete L4.
+12. Run the identical matrix on the approved iPhone and complete L4 only after explicit physical authorization. L5 remains independently runnable after mandatory L0-L3.
 13. Reduce and repair only concrete current failures with scoped, tested PRs.
-14. Build, archive, validate, export, upload, and confirm the beta in TestFlight.
+14. Build, archive, validate, export, upload, process, submit Beta App Review, configure the `Orlix External Beta` group, and confirm the active public link limit is at most 100. Resume from recorded phases without rebuilding or reuploading an unchanged archive/IPA.
 15. Enable recurring knowledge, quality, and harness gardening.
 16. Remove obsolete compatibility aliases and historical permanent gates after migration validation.
 
 ## Acceptance
 
-Harness fixtures cover semantic invalidation, proof-only changes, frontier selection, destination symmetry, reducer scheduling, authorization, generated-tree protection, L3-to-L4 promotion, L4-to-L5 promotion, resume behavior, and TestFlight confirmation.
+Harness fixtures cover semantic invalidation, proof-only changes, frontier selection, destination symmetry, reducer scheduling, authorization, generated-tree protection, L3-to-optional-L4 promotion, L3-to-L5 promotion, optional-L4 identity mismatch, resume behavior, and TestFlight confirmation.
 
 Runtime fixtures cover identical payload construction, marker provenance, exit status, fatal logs, crash reports, forbidden behavior, runtime identity, incremental reuse, timeout classification, and cleanup.
 
-The goal is complete only when current evidence proves required L0 through L5 gates, both product matrices, app-visible Linux userspace output, clean safety evidence, and confirmed TestFlight publication for one exact build.
+The goal is complete only when current evidence proves required L0 through L3, L5, and, when opted in, L4, plus app-visible Linux userspace output, clean safety evidence, and confirmed TestFlight publication for one exact build. OCI means Open Container Initiative throughout this plan.
