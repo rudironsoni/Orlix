@@ -1,0 +1,26 @@
+---
+import LegalPage from "../components/LegalPage.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { SITE } from "../lib/site";
+---
+
+<BaseLayout
+  title="Privacy Policy - Orlix"
+  description="The approved Orlix privacy policy has not yet been published."
+  canonicalPath="/privacy"
+  ogType="article"
+>
+  <LegalPage title="Privacy Policy">
+    <section>
+      <h2>Not yet published</h2>
+      <p>
+        This imported website is not the approved privacy policy for Orlix. Privacy declarations,
+        distribution disclosures, and contact information must be reviewed before this page is deployed.
+      </p>
+      <p>
+        Current source and development information is available at{" "}
+        <a href={SITE.githubUrl} target="_blank" rel="noopener noreferrer">{SITE.githubUrl}</a>.
+      </p>
+    </section>
+  </LegalPage>
+</BaseLayout>

@@ -1,0 +1,11 @@
+title = "Orlix Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "False positive: PEM boundary literals in SSH key template generator."
+paths = [
+  '''^Orlix/Services/SSH/SSHKeyGenerator\.swift$''',
+  '''^Orlix/Services/SSH/SSHKeyGenerator\.swift$''',
+]

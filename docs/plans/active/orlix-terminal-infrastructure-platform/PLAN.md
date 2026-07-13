@@ -25,7 +25,7 @@ The work ships mobile first, followed by macOS:
    - Includes the macOS OrlixKernel and OrlixOS slice, user-scoped runtime service, embedded helpers, native Herdr CLI, external-shell access, and Docker contexts.
    - Has no public remote-only phase.
 
-Both releases are App Store-only. Missing licensing approval, required entitlements, executable-content approval, helper validation, or App Review acceptance blocks the affected public release. Features are never advertised when unavailable.
+Each public release is App Store-only. Missing licensing approval, required entitlements, executable-content approval, helper validation, or App Review acceptance blocks the affected public release. Features are never advertised when unavailable.
 
 Minimum deployment targets are:
 
@@ -71,13 +71,13 @@ App-created and user-created Herdr resources coexist as follows:
 - **OrlixOS** remains the Kit. It owns the Local Runtime and Local Instance lifecycle API, distribution policy, rootfs and package assembly, OCI control-plane integration, and app-facing Linux sessions.
 - **OrlixHostAdapter** owns only private Apple and Darwin mechanics. It does not acquire Linux lifecycle, Docker, Herdr, or container policy.
 - The **Orlix iOS and iPadOS app target** compiles the imported VVTerm application source directly. VVTerm's SwiftUI application root, feature-first organization, Ghostty rendering, catalogs, remote transports, CloudKit, Keychain, StoreKit, and platform integrations remain the product foundation.
-- Do not create a reusable `OrlixTerminal` module or preserve the current UIKit lifecycle as the composition root. The production target has exactly one SwiftUI `@main`, supplied by the VVTerm-derived application.
+- Do not create a reusable `OrlixTerminal` module or preserve the current UIKit lifecycle as the composition root. The production target has exactly one SwiftUI `@main`, supplied by the Orlix application fork.
 - Isolate `TerminalViewController` in a separate developer-only diagnostic app target because it uses `libghostty-spm` while VVTerm vendors its own Ghostty build. Do not compile or link the controller into production, expose it in product navigation, or use it as a foundation for new work.
 - Preserve VVTerm's macOS-compatible source, resources, packages, and conditional compilation during mobile work, but do not create or implement the Mac target until the published mobile releases unblock it.
 
 ### Direct import and upstream maintenance
 
-- Import the pinned repository at `Orlix/VVTerm` using a non-squashed, history-preserving Git subtree. Record `https://github.com/vivy-company/vvterm` as the upstream remote and retain the upstream commit in merge history and provenance.
+- Import the pinned repository at `Orlix/App` using a non-squashed, history-preserving Git subtree. Record `https://github.com/vivy-company/vvterm` as the upstream remote and retain the upstream commit in merge history and provenance.
 - Keep Orlix-specific changes as narrow commits on top of the imported tree. Do not reformat or reorganize upstream files without a product requirement.
 - Update by fetching an explicitly reviewed immutable upstream commit and running the documented subtree pull or merge command. Never use a branch name alone as a release input.
 - After every update, audit `project.yml` against upstream changes to sources, packages, resources, entitlements, privacy manifests, tests, UI tests, extensions, and targets. A newly added upstream input must be translated or explicitly recorded as unavailable with a reviewed reason.
@@ -261,10 +261,10 @@ Preserve VVTerm's temporary universal Pro tier:
    - Establish a pristine build and test baseline for the pinned VVTerm revision before import.
    - Import the pinned VVTerm repository with preserved history and provenance, and compile its application source directly as the Orlix iOS and iPadOS app.
    - Preserve VVTerm's recognizable `App`, `Core`, `Features`, `GhosttyTerminal`, `Compatibility`, `Generated`, and `Resources` organization. Do not introduce a generic app framework or reusable terminal module.
-   - Port every implemented VVTerm mobile feature through a parity ledger: terminal, tabs and splits, remote files, hosts and Workspaces, discovery, themes, keyboard accessories, presets, stats, voice input, security, sync, StoreKit, onboarding, privacy, and Live Activities.
+   - Retain and validate the complete imported VVTerm mobile feature surface through a parity ledger: terminal, tabs and splits, remote files, hosts and Workspaces, discovery, themes, keyboard accessories, presets, stats, voice input, security, sync, StoreKit, onboarding, privacy, and Live Activities.
    - Translate the mobile app, Live Activity, packages, vendor libraries, resources, entitlements, unit tests, and UI tests into the XcodeGen source of truth.
    - Preserve Orlix telemetry controls, beta observability, simulator hooks, release wiring, and applicable launch arguments. Do not preserve the UIKit `AppDelegate` or `SceneDelegate` lifecycle as the production composition root.
-   - Isolate `TerminalViewController` and `libghostty-spm` in a separate developer-only diagnostic app target. Production Orlix has only the VVTerm-derived SwiftUI `@main`. Delete the fallback only at the verified mobile cutover.
+   - Isolate `TerminalViewController` and `libghostty-spm` in a separate developer-only diagnostic app target. Production Orlix has only the Orlix application SwiftUI `@main`. Delete the fallback only at the verified mobile cutover.
 
 3. **#49, imported-feature capability and provenance gate**
    - Run only after #50 has imported the complete pinned application. Derive the capability inventory from actual imported sources and built targets, never from a speculative pre-import catalog.
@@ -273,7 +273,7 @@ Preserve VVTerm's temporary universal Pro tier:
 
 4. **#51, Default Local Instance terminal target**
    - Run only after #49 and #50. Add the Default Local Instance as a typed `TerminalTarget` backed directly by OrlixOS, never as a VVTerm Server or SSH connection.
-   - Prove terminal input, output, resize, close, background, foreground, and restart behavior through the VVTerm-derived application.
+   - Prove terminal input, output, resize, close, background, foreground, and restart behavior through the Orlix application.
    - Keep Local Runtime and Linux policy out of the Swift application and OrlixHostAdapter. Route it through OrlixOS and the existing upstream-Linux ownership boundaries.
 
 5. **Herdr and remote transport**

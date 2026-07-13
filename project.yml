@@ -2,7 +2,7 @@ name: Orlix
 options:
   bundleIdPrefix: com.rudironsoni
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "16.1"
   generateEmptyDirectories: true
 configs:
   Debug: debug
@@ -28,6 +28,10 @@ settings:
         - DEBUG=1
         - ORLIX_APP_HOSTED_BOOT=1
         - ORLIX_BETA_OBSERVABILITY=1
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+        - $(inherited)
+        - DEBUG
+        - ORLIX_BETA_OBSERVABILITY
     Release:
       GCC_PREPROCESSOR_DEFINITIONS:
         - $(inherited)
@@ -37,6 +41,24 @@ packages:
   GhosttyKit:
     url: https://github.com/Lakr233/libghostty-spm.git
     exactVersion: 1.2.2
+  MLXSwift:
+    url: https://github.com/ml-explore/mlx-swift
+    revision: 072b684acaae80b6a463abab3a103732f33774bf
+  SwiftCloudflared:
+    url: https://github.com/wiedymi/swift-cloudflared.git
+    revision: 1be78afe5dae7a20ce0837ce34085f03a77f7587
+  SwiftMosh:
+    url: https://github.com/wiedymi/swift-mosh
+    revision: bb4eacdf65303b2ecce624a91e98298c4ee94fca
+  SwiftNumerics:
+    url: https://github.com/apple/swift-numerics
+    revision: 0c0290ff6b24942dadb83a929ffaaa1481df04a2
+  TweetNaclSwiftwrap:
+    url: https://github.com/bitmark-inc/tweetnacl-swiftwrap.git
+    revision: f8fd111642bf2336b11ef9ea828510693106e954
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    revision: edbeaa39b426e54702194b0a601342322f01e400
   OpenTelemetrySwift:
     url: https://github.com/open-telemetry/opentelemetry-swift.git
     exactVersion: 2.4.1
@@ -321,8 +343,210 @@ targets:
     type: application
     platform: iOS
     sources:
+      - path: Orlix/App/Orlix/App
+      - path: Orlix/App/Orlix/Compatibility
+      - path: Orlix/App/Orlix/Core
+      - path: Orlix/App/Orlix/Features
+      - path: Orlix/App/Orlix/Generated
+      - path: Orlix/App/Orlix/GhosttyTerminal
+      - path: Orlix/App/OrlixShared
+      - path: Orlix/Sources/Telemetry.swift
+      - path: Orlix/App/Orlix/Assets.xcassets
+        buildPhase: resources
+      - path: Orlix/App/Orlix/Resources
+        buildPhase: resources
+        excludes:
+          - Assets.xcassets
+          - ghostty
+          - terminfo
+      - path: Orlix/App/Orlix/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: Orlix/App/Orlix/Resources/ghostty
+        buildPhase: resources
+        type: folder
+      - path: Orlix/App/Orlix/Resources/terminfo
+        buildPhase: resources
+        type: folder
+      - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - target: OrlixOS
+        embed: true
+      - target: OrlixKernel
+        embed: true
+      - target: OrlixLiveActivity
+        embed: true
+      - package: MLXSwift
+        products:
+          - MLX
+          - MLXNN
+          - MLXFFT
+      - package: SwiftCloudflared
+        product: Cloudflared
+      - package: SwiftMosh
+        products:
+          - MoshCore
+          - MoshBootstrap
+      - package: ZIPFoundation
+        product: ZIPFoundation
+      - package: OpenTelemetrySwift
+        product: OpenTelemetryProtocolExporterHTTP
+      - package: OpenTelemetrySwiftCore
+        products:
+          - OpenTelemetryApi
+          - OpenTelemetrySdk
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Orlix/App/Orlix-iOS/Orlix.entitlements
+        PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
+        DEAD_CODE_STRIPPING: YES
+        ENABLE_PREVIEWS: YES
+        GENERATE_INFOPLIST_FILE: NO
+        CLANG_CXX_LANGUAGE_STANDARD: gnu++20
+        HEADER_SEARCH_PATHS[sdk=iphoneos*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/include
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+        HEADER_SEARCH_PATHS[sdk=iphonesimulator*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/include
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+        INFOPLIST_FILE: Orlix/App/Orlix-iOS/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Orlix
+        INFOPLIST_KEY_CFBundleName: Orlix
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        IPHONEOS_DEPLOYMENT_TARGET: "16.1"
+        LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
+        LIBRARY_SEARCH_PATHS[sdk=iphoneos*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/lib
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/ios/lib
+        LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/lib
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/ios-simulator/lib
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lghostty
+          - -lssh2
+          - -lssl
+          - -lcrypto
+          - -lc++
+          - -lz
+          - -framework
+          - Metal
+          - -framework
+          - QuartzCore
+          - -framework
+          - UIKit
+        OTHER_MTLFLAGS: -Wno-c++17-extensions
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
+        PRODUCT_NAME: Orlix
+        ORLIX_ANALYTICS_ENABLED: NO
+        ORLIX_OBSERVABILITY_ENABLED: NO
+        ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
+        ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT: https://otlp.orlix.rudironsoni.cloud
+        ORLIX_TELEMETRY_ENVIRONMENT: development
+        REGISTER_APP_GROUPS: YES
+        STRING_CATALOG_GENERATE_SYMBOLS: YES
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTS_MACCATALYST: NO
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_OBJC_BRIDGING_HEADER: Orlix/App/Orlix/ghostty-bridging-header.h
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
+          ORLIX_TELEMETRY_ENVIRONMENT: simulator-validation
+        Release:
+          APS_ENVIRONMENT: production
+          ORLIX_TELEMETRY_ENVIRONMENT: testflight
+  OrlixLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Orlix/App/OrlixLiveActivity
+        excludes:
+          - Assets.xcassets
+          - Info.plist
+      - path: Orlix/App/OrlixShared
+    resources:
+      - path: Orlix/App/OrlixLiveActivity/Assets.xcassets
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        DEAD_CODE_STRIPPING: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Orlix/App/OrlixLiveActivity/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "16.1"
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.liveactivity
+        PRODUCT_NAME: OrlixLiveActivity
+        SKIP_INSTALL: YES
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+  OrlixAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Orlix/App/OrlixTests
+      - path: Orlix/Tests/XCTest/OrlixAppTests/TelemetryTests.swift
+    dependencies:
+      - target: Orlix
+      - package: SwiftMosh
+        product: MoshBootstrap
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS[sdk=iphoneos*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/include
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+        HEADER_SEARCH_PATHS[sdk=iphonesimulator*]:
+          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/include
+          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixAppTests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
+        BUNDLE_LOADER: $(TEST_HOST)
+        STRING_CATALOG_GENERATE_SYMBOLS: NO
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_EMIT_LOC_STRINGS: NO
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+  OrlixUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Orlix/App/OrlixUITests
+    dependencies:
+      - target: Orlix
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixUITests
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_EMIT_LOC_STRINGS: NO
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: 1,2
+        TEST_TARGET_NAME: Orlix
+  OrlixLegacyTerminal:
+    type: application
+    platform: iOS
+    sources:
       - path: Orlix/Sources
+        excludes:
+          - PrivacyInfo.xcprivacy
       - path: Orlix/Assets.xcassets
+      - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - target: OrlixOS
         embed: true
@@ -333,45 +557,29 @@ targets:
           - GhosttyTerminal
           - GhosttyTheme
       - package: OpenTelemetrySwift
-        products:
-          - OpenTelemetryProtocolExporterHTTP
+        product: OpenTelemetryProtocolExporterHTTP
       - package: OpenTelemetrySwiftCore
         products:
           - OpenTelemetryApi
           - OpenTelemetrySdk
-    resources:
-      - path: Orlix/Sources/PrivacyInfo.xcprivacy
     settings:
       base:
-        CODE_SIGN_STYLE: Automatic
-        PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
-        INFOPLIST_FILE: Orlix/Sources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
-        PRODUCT_NAME: Orlix
-        ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
+        CODE_SIGN_STYLE: Automatic
+        INFOPLIST_FILE: Orlix/Sources/Info.plist
         ORLIX_ANALYTICS_ENABLED: NO
-        ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT: https://otlp.orlix.rudironsoni.cloud
         ORLIX_OBSERVABILITY_ENABLED: NO
+        ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
+        ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT: https://otlp.orlix.rudironsoni.cloud
         ORLIX_TELEMETRY_ENVIRONMENT: development
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.LegacyTerminal
+        PRODUCT_NAME: OrlixLegacyTerminal
+        PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
       configs:
         Debug:
           ORLIX_TELEMETRY_ENVIRONMENT: simulator-validation
         Release:
           ORLIX_TELEMETRY_ENVIRONMENT: testflight
-  OrlixAppTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Orlix/Tests/XCTest/OrlixAppTests
-    dependencies:
-      - target: Orlix
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixAppTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
-        BUNDLE_LOADER: $(TEST_HOST)
   OrlixTestRunner:
     type: application
     platform: iOS
@@ -613,8 +821,16 @@ schemes:
     run:
       config: Debug
       executable: Orlix
+      storeKitConfiguration: Orlix/App/OrlixStoreKit.storekit
     archive:
       config: Release
+  OrlixLegacyTerminal:
+    build:
+      targets:
+        OrlixLegacyTerminal: all
+    run:
+      config: Debug
+      executable: OrlixLegacyTerminal
   "OrlixOS Tests":
     build:
       targets:
@@ -640,11 +856,13 @@ schemes:
       targets:
         Orlix: all
         OrlixAppTests: test
+        OrlixUITests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - name: OrlixAppTests
+        - name: OrlixUITests
   "OrlixKernel Log Parser Tests":
     build:
       targets:

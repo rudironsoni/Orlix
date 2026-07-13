@@ -15,7 +15,12 @@ final class TelemetryTests: XCTestCase {
         XCTAssertEqual(
             Set(OrlixAnalyticsEvent.allCases.map(\.rawValue)),
             [
-                "app_started", "terminal_activated", "linux_session_unavailable",
+                "app_started", "app_launched", "connection_succeeded", "paywall_viewed",
+                "paywall_cta_tapped", "purchase_started", "purchased", "purchase_succeeded",
+                "purchase_cancelled", "purchase_pending", "purchase_failed", "limit_hit",
+                "free_plan_generation_assigned", "welcome_completed", "custom_action_created",
+                "split_pane_created", "review_prompt_requested", "analytics_disabled",
+                "terminal_activated", "linux_session_unavailable",
                 "boot_started", "boot_finished", "first_terminal_output",
                 "boot_watchdog_fired", "theme_changed",
             ]
@@ -99,6 +104,30 @@ final class TelemetryTests: XCTestCase {
         XCTAssertEqual(payload["name"] as? String, "app_started")
         let properties = try XCTUnwrap(payload["properties"] as? [String: String])
         XCTAssertEqual(properties, ["environment": "testflight", "service_version": "0.1.24"])
+    }
+
+    func testOpenPanelRequestPreservesFeatureProperties() throws {
+        let transport = RecordingTransport(autoComplete: false)
+        let telemetry = makeTelemetry(transport: transport)
+
+        telemetry.track(.purchaseFailed, properties: [
+            "source": "settings",
+            "product": "com.rudironsoni.Orlix.pro.monthly",
+            "reason": "cancelled",
+        ])
+        telemetry.synchronizeForTesting()
+
+        let request = try XCTUnwrap(transport.requests.first)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["name"] as? String, "purchase_failed")
+        let properties = try XCTUnwrap(payload["properties"] as? [String: String])
+        XCTAssertEqual(properties["source"], "settings")
+        XCTAssertEqual(properties["product"], "com.rudironsoni.Orlix.pro.monthly")
+        XCTAssertEqual(properties["reason"], "cancelled")
+        XCTAssertEqual(properties["environment"], "testflight")
+        XCTAssertEqual(properties["service_version"], "0.1.24")
     }
 
     func testAnalyticsQueueBoundsOutstandingWorkAndOptOutCancelsIt() {
@@ -191,7 +220,7 @@ final class TelemetryTests: XCTestCase {
         let testFile = URL(fileURLWithPath: #filePath)
         let root = testFile.deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let manifest = root.appendingPathComponent("Orlix/Sources/PrivacyInfo.xcprivacy")
+        let manifest = root.appendingPathComponent("Orlix/App/Orlix/PrivacyInfo.xcprivacy")
         let data = try Data(contentsOf: manifest)
         let plist = try XCTUnwrap(
             PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
@@ -202,6 +231,7 @@ final class TelemetryTests: XCTestCase {
             Set(collected.compactMap { $0["NSPrivacyCollectedDataType"] as? String }),
             [
                 "NSPrivacyCollectedDataTypeProductInteraction",
+                "NSPrivacyCollectedDataTypePurchaseHistory",
                 "NSPrivacyCollectedDataTypePerformanceData",
                 "NSPrivacyCollectedDataTypeOtherDiagnosticData",
             ]

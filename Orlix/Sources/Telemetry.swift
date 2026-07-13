@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import OpenTelemetryApi
 import OpenTelemetryProtocolExporterHttp
 import OpenTelemetrySdk
@@ -11,6 +12,23 @@ enum OrlixTelemetryEnvironment: String, Equatable {
 
 enum OrlixAnalyticsEvent: String, CaseIterable {
     case appStarted = "app_started"
+    case appLaunched = "app_launched"
+    case connectionSucceeded = "connection_succeeded"
+    case paywallViewed = "paywall_viewed"
+    case paywallCTATapped = "paywall_cta_tapped"
+    case purchaseStarted = "purchase_started"
+    case purchased
+    case purchaseSucceeded = "purchase_succeeded"
+    case purchaseCancelled = "purchase_cancelled"
+    case purchasePending = "purchase_pending"
+    case purchaseFailed = "purchase_failed"
+    case limitHit = "limit_hit"
+    case freePlanGenerationAssigned = "free_plan_generation_assigned"
+    case welcomeCompleted = "welcome_completed"
+    case customActionCreated = "custom_action_created"
+    case splitPaneCreated = "split_pane_created"
+    case reviewPromptRequested = "review_prompt_requested"
+    case analyticsDisabled = "analytics_disabled"
     case terminalActivated = "terminal_activated"
     case linuxSessionUnavailable = "linux_session_unavailable"
     case bootStarted = "boot_started"
@@ -22,6 +40,7 @@ enum OrlixAnalyticsEvent: String, CaseIterable {
 
 struct OrlixTrackPayload: Equatable {
     let event: OrlixAnalyticsEvent
+    let properties: [String: String]
 }
 
 enum OrlixBootOutcome: String, Equatable {
@@ -48,9 +67,10 @@ struct OrlixTelemetryConfiguration: Equatable {
     let serviceVersion: String
 
     init(
-        environment processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
+        environment suppliedProcessEnvironment: [String: String]? = nil,
         info: [String: Any] = Bundle.main.infoDictionary ?? [:]
     ) {
+        let processEnvironment = suppliedProcessEnvironment ?? orlixTelemetryProcessEnvironment()
         analyticsEnabled = Self.featureEnabled(
             processEnvironment["ORLIX_ANALYTICS_ENABLED"] ?? info["ORLIXAnalyticsEnabled"] as? String
         )
@@ -119,6 +139,24 @@ struct OrlixTelemetryConfiguration: Equatable {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("$(") else { return nil }
         return trimmed
+    }
+}
+
+private func orlixTelemetryProcessEnvironment() -> [String: String] {
+    let keys = [
+        "ORLIX_ANALYTICS_ENABLED",
+        "ORLIX_OBSERVABILITY_ENABLED",
+        "ORLIX_OPENPANEL_TRACK_ENDPOINT",
+        "ORLIX_OPENPANEL_CLIENT_ID",
+        "ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT",
+        "ORLIX_SIGNOZ_INGESTION_KEY",
+        "ORLIX_TELEMETRY_ENVIRONMENT",
+        "SIMULATOR_UDID",
+        "XCTestConfigurationFilePath",
+    ]
+    return keys.reduce(into: [:]) { environment, key in
+        guard let value = getenv(key) else { return }
+        environment[key] = String(cString: value)
     }
 }
 
@@ -291,11 +329,11 @@ final class OrlixTelemetry: @unchecked Sendable {
         queue.sync {}
     }
 
-    func track(_ event: OrlixAnalyticsEvent) {
+    func track(_ event: OrlixAnalyticsEvent, properties: [String: String] = [:]) {
         queue.async { [self] in
             guard analyticsEnabled, configuration.analyticsConfigured else { return }
             guard analyticsQueue.count < queueLimit else { return }
-            analyticsQueue.append(OrlixTrackPayload(event: event))
+            analyticsQueue.append(OrlixTrackPayload(event: event, properties: properties))
             drainAnalytics()
         }
     }
@@ -350,14 +388,14 @@ final class OrlixTelemetry: @unchecked Sendable {
         }
         analyticsRequestInFlight = true
         let generation = analyticsGeneration
+        var properties = payload.properties
+        properties["environment"] = configuration.environment.rawValue
+        properties["service_version"] = configuration.serviceVersion
         let body = OpenPanelRequest(
             type: "track",
             payload: .init(
                 name: payload.event.rawValue,
-                properties: [
-                    "environment": configuration.environment.rawValue,
-                    "service_version": configuration.serviceVersion,
-                ]
+                properties: properties
             )
         )
         guard let data = try? JSONEncoder().encode(body) else {

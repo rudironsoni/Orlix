@@ -1,0 +1,80 @@
+import Foundation
+
+enum PurchaseState: Equatable {
+    case idle
+    case purchasing
+    case purchased
+    case failed(String)
+
+    static func == (lhs: PurchaseState, rhs: PurchaseState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.purchasing, .purchasing), (.purchased, .purchased):
+            return true
+        case (.failed(let lhsMessage), .failed(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        default:
+            return false
+        }
+    }
+}
+
+enum RestoreState: Equatable {
+    case idle
+    case restoring
+    case restored(hasAccess: Bool)
+    case failed(String)
+
+    static func == (lhs: RestoreState, rhs: RestoreState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.restoring, .restoring):
+            return true
+        case (.restored(let lhsHasAccess), .restored(let rhsHasAccess)):
+            return lhsHasAccess == rhsHasAccess
+        case (.failed(let lhsMessage), .failed(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        default:
+            return false
+        }
+    }
+}
+
+enum PaywallSource: String {
+    case general
+    case serverLimit = "server_limit"
+    case workspaceLimit = "workspace_limit"
+    case tabLimit = "tab_limit"
+    case fileTabLimit = "file_tab_limit"
+    case splitPane = "split_pane"
+    case customEnvironment = "custom_environment"
+    case snippetLimit = "snippet_limit"
+    case welcome
+    case settings
+    case sidebarBanner = "sidebar_banner"
+    case dockerStats = "docker_stats"
+}
+
+enum OrlixProducts {
+    static let proMonthly = "com.rudironsoni.Orlix.pro.monthly"
+    static let proYearly = "com.rudironsoni.Orlix.pro.yearly"
+    static let proLifetime = "com.rudironsoni.Orlix.pro.lifetime"
+
+    static let subscriptionGroupId = "orlix_pro"
+    static let allProducts = [proMonthly, proYearly, proLifetime]
+}
+
+enum StoreError: LocalizedError {
+    case verificationFailed
+    case productNotFound
+    case purchaseFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .verificationFailed:
+            return String(localized: "Purchase verification failed")
+        case .productNotFound:
+            return String(localized: "Product not found")
+        case .purchaseFailed(let message):
+            return String(format: String(localized: "Purchase failed: %@"), message)
+        }
+    }
+}

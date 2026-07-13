@@ -9,7 +9,8 @@ This document records the immutable source and native artifact inputs for the VV
 - Upstream: `https://github.com/vivy-company/vvterm.git`
 - Pinned upstream commit: `791eebae946b0831ffff3ac839e0f2b75d076458`
 - Retrieval date: 2026-07-13
-- Imported path: `Orlix/VVTerm`
+- Original subtree import path: `Orlix/VVTerm`
+- Current Orlix fork path: `Orlix/App`
 - Import method: non-squashed Git subtree
 - Orlix subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`
 - Subtree trailer: `git-subtree-split: 791eebae946b0831ffff3ac839e0f2b75d076458`
@@ -22,11 +23,16 @@ git fetch vvterm-upstream 791eebae946b0831ffff3ac839e0f2b75d076458
 git subtree add --prefix=Orlix/VVTerm vvterm-upstream 791eebae946b0831ffff3ac839e0f2b75d076458
 ```
 
+The Orlix fork was then fully renamed and moved from `Orlix/VVTerm` to
+`Orlix/App`. The final integration commit renews the subtree metadata at the
+current path with `git-subtree-dir: Orlix/App` and the same immutable
+`git-subtree-split` revision.
+
 Updates must fetch an explicitly reviewed full commit and use a non-squashed subtree pull. A branch name alone is never a release input:
 
 ```sh
 git fetch vvterm-upstream <full-reviewed-commit>
-git subtree pull --prefix=Orlix/VVTerm vvterm-upstream <full-reviewed-commit>
+git subtree pull --prefix=Orlix/App vvterm-upstream <full-reviewed-commit>
 ```
 
 After every update, compare the imported sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The imported Xcode project is retained as an upstream baseline and provenance reference. `project.yml` remains the authoritative Orlix project definition.
@@ -45,7 +51,7 @@ The pinned upstream `Package.resolved` records:
 | `tweetnacl-swiftwrap` | 1.1.0 | `f8fd111642bf2336b11ef9ea828510693106e954` |
 | `ZIPFoundation` | 0.9.9 | `edbeaa39b426e54702194b0a601342322f01e400` |
 
-Orlix release inputs must use immutable revisions in `project.yml`. The upstream Umami transport and endpoint are not Orlix product dependencies. They are removed or neutralized during the identity adaptation. The pinned baseline is retained here so the pristine source graph remains auditable.
+Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone fork project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned upstream dependency remains recorded here only so the pristine source graph remains auditable.
 
 ## Native source versions and rebuild entry points
 
@@ -57,7 +63,7 @@ Orlix release inputs must use immutable revisions in `project.yml`. The upstream
 The imported rebuild entry points are:
 
 ```sh
-cd Orlix/VVTerm
+cd Orlix/App
 ./scripts/build.sh ghostty
 ./scripts/build.sh ssh
 ```
@@ -66,30 +72,30 @@ The Ghostty script must default to the full pinned commit above, not the upstrea
 
 ## Committed native artifact hashes
 
-Hashes use SHA-256 and were computed from subtree commit `63bcb1230fa739ac6fbc34d873b349ffee566453`.
+Hashes use SHA-256 and were recomputed after the Orlix fork identity correction. The six Ghostty archives received a length-preserving replacement of the stale embedded `app.vivy.VivyTerm` value with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.Orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed the upstream developer's absolute `VivyTerm` build paths. The resulting archives passed format checks and the final application linked successfully.
 
 | Artifact | SHA-256 |
 | --- | --- |
-| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64-simulator/libghostty-fat.a` | `910e49b35289f6da0fb6f87c805a45cd9609ff6fe7c261d9df782efcebf1f2ef` |
-| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64/libghostty-fat.a` | `077fe2b18e8e42672429e1f770cfc17b1dc896489109eb709d0e3aead44495c5` |
-| `Vendor/libghostty/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a` | `9ddcdbb460a03c061231e156bb86707ac431cc611558d2728e14dae8dc5ed6cd` |
-| `Vendor/libghostty/ios-simulator/lib/libghostty.a` | `744b4b3b09ccf65f11817c0f92580a9f3953394d2a2f778670f4751cbe428c6f` |
-| `Vendor/libghostty/ios/lib/libghostty.a` | `b6ca359aa73668f38c1c6dd9c3ec3470a6ece86e0ccd866df00e0e3108c78e8f` |
-| `Vendor/libghostty/lib/libghostty.a` | `17d459bf5d1b837b1fd4598f464a3ade4c1c3a1f8fdb8d75fe6d09f41e864692` |
-| `Vendor/libssh2/ios-simulator/lib/libcrypto.a` | `f8b2fea8cde077af6e13d1984d212eb728c65a1d16b285fb915b7bef9fd49fd8` |
-| `Vendor/libssh2/ios-simulator/lib/libssh2.a` | `c743b2b8ba531d6667149523cdb92e99f3a1733739719ef6735eb5fc1b40a0bc` |
-| `Vendor/libssh2/ios-simulator/lib/libssl.a` | `e70cdfcca95ccd3251ac8775ccaa4e36af0947c1ad58dcb37f16248e84f3f45b` |
-| `Vendor/libssh2/ios/lib/libcrypto.a` | `c798b2c7b634d9c5ba5d195281417e19a8bb320e8cd99286e45928cc03d86d50` |
-| `Vendor/libssh2/ios/lib/libssh2.a` | `33dbb9a126a1e1d3c40e53ba0cbbe2119068c1db2b9b416aa08f05f81ba7df15` |
-| `Vendor/libssh2/ios/lib/libssl.a` | `e019ce7c0193e6adf7a43cc15b2eefd6d6f3ed65ce7b96a0f46e2464e6d284a8` |
-| `Vendor/libssh2/macos/lib/libcrypto.a` | `6c9f1eb37cbc2e8c1890d9d05ba917163c0ed66e3efa4cee189e707522a54935` |
-| `Vendor/libssh2/macos/lib/libssh2.a` | `98b4b6b6cbac4bed2cc213c9580d798cda9008e90ada70fba26324da7c0e705a` |
-| `Vendor/libssh2/macos/lib/libssl.a` | `8af58ebf85d375f7ecf95a7ecd708fbaa6db5f52d55f0861cde55a330c68e60f` |
+| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64-simulator/libghostty-fat.a` | `988be2b71cd39268d6bd37ad837c4eefe7d303e628c97b2e1904c82a8e9f3434` |
+| `Vendor/libghostty/GhosttyKit.xcframework/ios-arm64/libghostty-fat.a` | `be381b87be062209f3df3436ab6323a2ccaab90b4d7085285cb247b02d3c011e` |
+| `Vendor/libghostty/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a` | `24657ed0d641468e33adb4e94f57482a1c888373eb95530095e60f302aa9d961` |
+| `Vendor/libghostty/ios-simulator/lib/libghostty.a` | `a6f574a9ae82841c5352040a250a088ea709666872b1632f7e4365ffd0932d4e` |
+| `Vendor/libghostty/ios/lib/libghostty.a` | `174ba3a25d226c4e8d389be1414d525d2329beb97662efc45b4937f71ab9b9d4` |
+| `Vendor/libghostty/lib/libghostty.a` | `4d7e2fde81f3b2a65510eebb7f4b5283cb6bed4fa640887d2d86aeca20b1d5ba` |
+| `Vendor/libssh2/ios-simulator/lib/libcrypto.a` | `dfeea8d36da6f355a7c6fde456f4fddecc3bf0a744f54d72d56ee35283493b44` |
+| `Vendor/libssh2/ios-simulator/lib/libssh2.a` | `903fb853fd3a89f237e38e48cab0487ae3470c7dcbaa655c008988ab15888eab` |
+| `Vendor/libssh2/ios-simulator/lib/libssl.a` | `c674f7ab79f41e4d4cc37b5a1c24ec9ee7532b07093fe78f9bd2189b21c530b1` |
+| `Vendor/libssh2/ios/lib/libcrypto.a` | `36c18281e9bd8a38a5f4398c1c928fd8b021622239beac3e01786819b86803f5` |
+| `Vendor/libssh2/ios/lib/libssh2.a` | `77e1817bd3a5e30cb71ea7779e368df77e4e26cd8fed050edd14676b342f7cf1` |
+| `Vendor/libssh2/ios/lib/libssl.a` | `d4772f6bb8c3e271f255b6ac16fbe72a9070537e28fa778b10adca6dc0d0fe70` |
+| `Vendor/libssh2/macos/lib/libcrypto.a` | `5cf352407c36053b23b33c03c3873481c1201fee54b912cf3465388a7aa1107c` |
+| `Vendor/libssh2/macos/lib/libssh2.a` | `ada64acbb596b5d22ae8a7d58c5b00499004dad8f636ea0e57770b688b463de7` |
+| `Vendor/libssh2/macos/lib/libssl.a` | `783e6581ccd9cf57757b1cf011460688b759b2df20875ff01a6ff2186dcbc0f0` |
 
 ## Licenses and notices
 
-- Imported application license: `Orlix/VVTerm/LICENSE`, GPL-3.0.
-- Upstream App Store terms: `Orlix/VVTerm/LICENSE-APPSTORE.md`. Orlix does not assume these terms grant Orlix distribution rights.
-- Imported dependency notices: `Orlix/VVTerm/THIRD_PARTY_NOTICES.md`.
+- Imported application license: `Orlix/App/LICENSE`, GPL-3.0.
+- Upstream App Store terms: `Orlix/App/UPSTREAM-APPSTORE-BINARY-LICENSE.md`. Orlix does not assume these terms grant Orlix distribution rights.
+- Imported dependency notices: `Orlix/App/THIRD_PARTY_NOTICES.md`.
 
 Before public distribution, the capability and provenance gate must verify that source offers, modification notices, copyright notices, dependency licenses, App Store terms, export classification, and every statically linked dependency have written legal approval. Missing approval blocks the release.
