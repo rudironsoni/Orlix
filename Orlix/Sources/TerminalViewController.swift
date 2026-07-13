@@ -15,6 +15,8 @@ final class TerminalViewController: UIViewController {
 #endif
 
     private var didStartBoot = false
+    private var bootStartedAt: Date?
+    private var didRecordFirstTerminalOutput = false
     private let bootQueue = DispatchQueue(label: "com.rudironsoni.terminal.boot", qos: .userInitiated)
     private let terminalOutputLock = NSLock()
     private var pendingTerminalOutput = ""
@@ -107,11 +109,13 @@ final class TerminalViewController: UIViewController {
             return
         }
         didStartBoot = true
+        OrlixTelemetry.shared.track(.terminalActivated)
 
         simulatorCapture.reset()
         terminalSession.receive("Orlix\r\n")
         simulatorCapture.append("Orlix\r\n")
         guard let session = linuxSession else {
+            OrlixTelemetry.shared.track(.linuxSessionUnavailable)
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
             Self.terminalUILogger.error("linux session unavailable at terminal activation")
 #endif
@@ -127,6 +131,11 @@ final class TerminalViewController: UIViewController {
         let startMessage = launchConfiguration.startMessage(for: session) + "\r\n"
         terminalSession.receive(startMessage)
         simulatorCapture.append(startMessage)
+        let startedAt = Date()
+        terminalOutputLock.lock()
+        bootStartedAt = startedAt
+        terminalOutputLock.unlock()
+        OrlixTelemetry.shared.track(.bootStarted)
         startBootWatchdog(for: session)
         bootQueue.async { [weak self] in
             let status = session.boot()
@@ -137,6 +146,12 @@ final class TerminalViewController: UIViewController {
                 )
 #endif
                 self?.cancelBootWatchdog()
+                let finishedAt = Date()
+                let outcome: OrlixBootOutcome = status == .ok ? .succeeded : .failed
+                OrlixTelemetry.shared.track(.bootFinished)
+                OrlixTelemetry.shared.record(
+                    .linuxBoot(startedAt: startedAt, finishedAt: finishedAt, outcome: outcome)
+                )
                 let statusMessage = status.message + "\r\n"
                 self?.terminalSession.receive(statusMessage)
                 self?.simulatorCapture.append(statusMessage)
@@ -181,19 +196,33 @@ final class TerminalViewController: UIViewController {
 
     private func enqueueTerminalOutput(_ text: String) {
         cancelBootWatchdog()
+        terminalOutputLock.lock()
+        let isFirstOutput = !didRecordFirstTerminalOutput
+        let firstOutputBootStart = bootStartedAt
+        if isFirstOutput {
+            didRecordFirstTerminalOutput = true
+        }
+        pendingTerminalOutput += text
+        let needsFlush = !terminalOutputFlushScheduled
+        terminalOutputFlushScheduled = true
+        terminalOutputLock.unlock()
+
+        if isFirstOutput {
+            OrlixTelemetry.shared.track(.firstTerminalOutput)
+            if let firstOutputBootStart {
+                OrlixTelemetry.shared.record(
+                    .firstTerminalOutput(
+                        latencyMilliseconds: Date().timeIntervalSince(firstOutputBootStart) * 1_000
+                    )
+                )
+            }
+        }
 #if DEBUG || ORLIX_BETA_OBSERVABILITY
         Self.terminalUILogger.info(
             "terminal ui output received bytes=\(text.utf8.count, privacy: .public)"
         )
 #endif
-        terminalOutputLock.lock()
-        pendingTerminalOutput += text
-        guard !terminalOutputFlushScheduled else {
-            terminalOutputLock.unlock()
-            return
-        }
-        terminalOutputFlushScheduled = true
-        terminalOutputLock.unlock()
+        guard needsFlush else { return }
 
         DispatchQueue.main.async { [weak self] in
             self?.flushTerminalOutput()
@@ -216,6 +245,8 @@ final class TerminalViewController: UIViewController {
         cancelBootWatchdog()
         let workItem = DispatchWorkItem { [weak self, weak session] in
             guard let self, let session else { return }
+            OrlixTelemetry.shared.track(.bootWatchdogFired)
+            OrlixTelemetry.shared.record(.watchdog)
             let message = Self.bootWatchdogMessage(for: session)
             self.terminalSession.receive(message)
             self.simulatorCapture.append(message)
@@ -320,9 +351,51 @@ final class TerminalViewController: UIViewController {
 
     private func configureThemeMenu() {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "paintpalette"),
-            menu: buildThemeMenu()
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: buildOptionsMenu()
         )
+    }
+
+    private func buildOptionsMenu() -> UIMenu {
+        let telemetry = OrlixTelemetry.shared
+        var privacyActions: [UIMenuElement] = []
+        if telemetry.isAnalyticsAvailable {
+            privacyActions.append(analyticsMenuAction())
+        }
+        if telemetry.isDiagnosticsAvailable {
+            privacyActions.append(diagnosticsMenuAction())
+        }
+        var children: [UIMenuElement] = [buildThemeMenu()]
+        if !privacyActions.isEmpty {
+            children.append(UIMenu(title: "Privacy", children: privacyActions))
+        }
+        return UIMenu(title: "Options", children: children)
+    }
+
+    private func analyticsMenuAction() -> UIAction {
+        let analytics = UIAction(
+            title: "Share Anonymous Usage Analytics",
+            image: UIImage(systemName: "chart.bar"),
+            state: OrlixTelemetry.shared.isAnalyticsEnabled ? .on : .off
+        ) { [weak self] _ in
+            let telemetry = OrlixTelemetry.shared
+            telemetry.setAnalyticsEnabled(!telemetry.isAnalyticsEnabled)
+            self?.configureThemeMenu()
+        }
+        return analytics
+    }
+
+    private func diagnosticsMenuAction() -> UIAction {
+        let diagnostics = UIAction(
+            title: "Share Anonymous Diagnostics",
+            image: UIImage(systemName: "waveform.path.ecg"),
+            state: OrlixTelemetry.shared.isDiagnosticsEnabled ? .on : .off
+        ) { [weak self] _ in
+            let telemetry = OrlixTelemetry.shared
+            telemetry.setDiagnosticsEnabled(!telemetry.isDiagnosticsEnabled)
+            self?.configureThemeMenu()
+        }
+        return diagnostics
     }
 
     private func buildThemeMenu() -> UIMenu {
@@ -404,6 +477,7 @@ final class TerminalViewController: UIViewController {
         if let backgroundColor = UIColor(hexString: theme.background) {
             view.backgroundColor = backgroundColor
         }
+        OrlixTelemetry.shared.track(.themeChanged)
     }
 }
 

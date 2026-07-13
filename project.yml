@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 21
+    CURRENT_PROJECT_VERSION: 29
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -37,6 +37,12 @@ packages:
   GhosttyKit:
     url: https://github.com/Lakr233/libghostty-spm.git
     exactVersion: 1.2.2
+  OpenTelemetrySwift:
+    url: https://github.com/open-telemetry/opentelemetry-swift.git
+    exactVersion: 2.4.1
+  OpenTelemetrySwiftCore:
+    url: https://github.com/open-telemetry/opentelemetry-swift-core.git
+    exactVersion: 2.4.1
 targets:
   OrlixKernel:
     type: framework
@@ -326,6 +332,15 @@ targets:
         products:
           - GhosttyTerminal
           - GhosttyTheme
+      - package: OpenTelemetrySwift
+        products:
+          - OpenTelemetryProtocolExporterHTTP
+      - package: OpenTelemetrySwiftCore
+        products:
+          - OpenTelemetryApi
+          - OpenTelemetrySdk
+    resources:
+      - path: Orlix/Sources/PrivacyInfo.xcprivacy
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
@@ -334,6 +349,29 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
         PRODUCT_NAME: Orlix
+        ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
+        ORLIX_ANALYTICS_ENABLED: NO
+        ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT: https://otlp.orlix.rudironsoni.cloud
+        ORLIX_OBSERVABILITY_ENABLED: NO
+        ORLIX_TELEMETRY_ENVIRONMENT: development
+      configs:
+        Debug:
+          ORLIX_TELEMETRY_ENVIRONMENT: simulator-validation
+        Release:
+          ORLIX_TELEMETRY_ENVIRONMENT: testflight
+  OrlixAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Orlix/Tests/XCTest/OrlixAppTests
+    dependencies:
+      - target: Orlix
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixAppTests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
+        BUNDLE_LOADER: $(TEST_HOST)
   OrlixTestRunner:
     type: application
     platform: iOS
@@ -597,6 +635,16 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixKernelHostedTests
+  "Orlix App Tests":
+    build:
+      targets:
+        Orlix: all
+        OrlixAppTests: test
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - name: OrlixAppTests
   "OrlixKernel Log Parser Tests":
     build:
       targets:

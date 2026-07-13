@@ -22,6 +22,20 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>ORLIXOpenPanelClientID</key>
+    <string>$(ORLIX_OPENPANEL_CLIENT_ID)</string>
+    <key>ORLIXAnalyticsEnabled</key>
+    <string>$(ORLIX_ANALYTICS_ENABLED)</string>
+    <key>ORLIXOpenPanelTrackEndpoint</key>
+    <string>$(ORLIX_OPENPANEL_TRACK_ENDPOINT)</string>
+    <key>ORLIXSigNozIngestionKey</key>
+    <string>$(ORLIX_SIGNOZ_INGESTION_KEY)</string>
+    <key>ORLIXObservabilityEnabled</key>
+    <string>$(ORLIX_OBSERVABILITY_ENABLED)</string>
+    <key>ORLIXSigNozOTLPHTTPEndpoint</key>
+    <string>$(ORLIX_SIGNOZ_OTLP_HTTP_ENDPOINT)</string>
+    <key>ORLIXTelemetryEnvironment</key>
+    <string>$(ORLIX_TELEMETRY_ENVIRONMENT)</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
