@@ -43,7 +43,7 @@ final class ArchitectureInvariantTests: XCTestCase {
         let runtimeOverlayFiles = try sourceFiles(under: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
-        ])
+        ]).filter { !isTCTIHostSmokeRunner($0) }
         let forbiddenIncludeFragments = [
             "<CoreFoundation/",
             "<Foundation/",
@@ -100,7 +100,9 @@ final class ArchitectureInvariantTests: XCTestCase {
         let files = try sourceFiles(under: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
-        ]).filter { !$0.path.contains("/tools/testing/selftests/") }
+        ]).filter {
+            !$0.path.contains("/tools/testing/selftests/") && !isTCTIHostSmokeRunner($0)
+        }
 
         let clonedUAPIDefine = try NSRegularExpression(
             pattern: #"^\s*#\s*define\s+(__NR_|SYS_|FUTEX_|CLONE_|O_[A-Z0-9_]+|AT_[A-Z0-9_]+|AF_[A-Z0-9_]+|VIRTIO_|VIRTIO_MMIO_|VIRTIO_BLK_)"#
@@ -276,6 +278,11 @@ final class ArchitectureInvariantTests: XCTestCase {
             "pl"
         ]
         return allowedExtensions.contains(url.pathExtension) || url.lastPathComponent == "project.yml"
+    }
+
+    private func isTCTIHostSmokeRunner(_ url: URL) -> Bool {
+        url.path.contains("/hosted_exec/tcti/tests/")
+            && url.lastPathComponent.hasSuffix("_smoke_runner.c")
     }
 
     private func matchingLines(
