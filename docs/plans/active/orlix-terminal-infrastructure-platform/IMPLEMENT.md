@@ -653,3 +653,9 @@ make agent-harness-check
 - Regenerated the authoritative Swift package resolution. It contains 32 pins with SHA-256 `e87bd90e34626ead2825ad45a8de13f4e1132e6fda81286eb03c844f33dc013e`.
 - Updated release-input provenance and privacy/license audit evidence for the resolved graph. `make app-release-inputs-test` passed.
 - `make agent-harness-check` passed, `make tcti-gate TARGET=tcti-plan-consistency` passed, RuleSync generation/check passed, and the previously corrected architecture invariant suite passed 20 of 20 tests.
+
+#### 2026-07-14 OpenCode schema checkpoint
+
+- Added the official OpenCode configuration schema reference to `opencode.jsonc` so editors and OpenCode can validate the existing repository configuration.
+- Validation: `jq empty opencode.jsonc` and `git diff --check` passed.
+- This configuration-only checkpoint adds no application, terminal, OrlixOS, kernel, runtime, package, or release proof.
