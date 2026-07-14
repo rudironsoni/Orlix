@@ -11,11 +11,11 @@
       "url": "https://github.com/ml-explore/mlx-swift"
     },
     "OpenTelemetrySwift": {
-      "revision": "21374ac2439aee4e206721ef91a7e8bf4c0579d6",
+      "revision": "9a6d6a8aed22c415bb1673206e337824635f818b",
       "url": "https://github.com/open-telemetry/opentelemetry-swift.git"
     },
     "OpenTelemetrySwiftCore": {
-      "revision": "84b9e341cbb7b4dd62cd1b89cd9e008995084132",
+      "revision": "06f8a460a66f813758d22f09025d85df45450a63",
       "url": "https://github.com/open-telemetry/opentelemetry-swift-core.git"
     },
     "SwiftCloudflared": {
@@ -31,18 +31,18 @@
       "url": "https://github.com/apple/swift-numerics"
     },
     "TweetNaclSwiftwrap": {
-      "revision": "f8fd111642bf2336b11ef9ea828510693106e954",
+      "revision": "a7776eb5388467ec553b855846e24438288e2da5",
       "url": "https://github.com/bitmark-inc/tweetnacl-swiftwrap.git"
     },
     "ZIPFoundation": {
-      "revision": "edbeaa39b426e54702194b0a601342322f01e400",
+      "revision": "22787ffb59de99e5dc1fbfe80b19c97a904ad48d",
       "url": "https://github.com/weichsel/ZIPFoundation.git"
     }
   },
   "swift_package_resolution": {
     "path": "Orlix.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
-    "sha256": "fbfb181219b355d4500e5279a4cd75cb7345532cab65e141f9c9f1f02c190f2d",
-    "pin_count": 30
+    "sha256": "e87bd90e34626ead2825ad45a8de13f4e1132e6fda81286eb03c844f33dc013e",
+    "pin_count": 32
   },
   "native_sources": {
     "ghostty": {

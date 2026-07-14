@@ -578,3 +578,22 @@ exit 1
 ```
 
 No runtime image, simulator device, sparsebundle, or repository product source was deleted or replaced. A real build, link map, archive, signed entitlement check, and exported privacy inspection remain unavailable until the system-scope repair runs with user authorization.
+
+#### 2026-07-14 repo-wide harness and machine-policy ownership correction
+
+- Removed TCTI task-envelope, physical-device, release-readiness, and external-SSD policy from Codex lifecycle hooks. RuleSync now generates only four repo-wide lifecycle adapters for pre-tool, permission, post-tool, and stop events.
+- Added hook-scope regression tests that compare generated hooks with `.rulesync/hooks.json`, reject subsystem or machine terms in active hooks, and require retired adapters to remain absent. The hook suite passed 40 tests with zero failures.
+- Replaced the generic `agent-harness-check` dependency on `orlix-tcti-next-step/scripts/harness-check` with `.agents/tests/harness-check`. The generic checker validates hooks, skill entrypoints, Codex agent/subagent syntax, and RuleSync MCP JSON without selecting TCTI work.
+- Removed repository auto-detection of `external-ssd-root` from the top-level, OrlixKernel, OrlixMLibC, and OrlixOS build roots, runtime validation, TCTI gate tool, and beta archive command. Repository defaults now use `Build`; `ORLIX_BUILD_ROOT` remains the explicit override.
+- Moved this Mac's Xcode/CoreSimulator external-storage guidance to the personal RuleSync source at `rudironsoni-agent-harness/personal-coding-agents/.rulesync/rules/10-personal-coding-rules.md` and regenerated `~/.codex/AGENTS.md`.
+- Added `make tcti-kernel-tests` as explicit product proof. It compiles the TCTI KUnit object, runs the executable syscall-dispatch workload runner, then runs the complete Orlix kernel kselftest rootfs through an app-hosted `tcti_runtime` session.
+- `make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime` passed. This proves the KUnit object build and named executable workload runner, not execution of every KUnit case.
+- The first full `make tcti-kernel-tests` reached the real app-hosted build and XCTest attachment, but produced no `ORLIX-KSELFTEST-END` marker, left an incomplete result bundle, and stalled after the simulator XCTest runner exited. The invocation was terminated and remains failed/unverified.
+
+#### 2026-07-14 compatible Swift package update
+
+- Updated TweetNaclSwiftwrap to upstream `master` revision `a7776eb5388467ec553b855846e24438288e2da5`, ZIPFoundation to 0.9.20, OpenTelemetry Swift to 2.5.0, and OpenTelemetry Swift Core to 2.5.1.
+- Evaluated MLXSwift 0.31.6, but it requires iOS 17.0. Retained MLXSwift 0.29.1 as the latest version compatible with the product's iOS 16.1 deployment contract.
+- Regenerated the authoritative Swift package resolution. It contains 32 pins with SHA-256 `e87bd90e34626ead2825ad45a8de13f4e1132e6fda81286eb03c844f33dc013e`.
+- Updated release-input provenance and privacy/license audit evidence for the resolved graph. `make app-release-inputs-test` passed.
+- `make agent-harness-check` passed, `make tcti-gate TARGET=tcti-plan-consistency` passed, RuleSync generation/check passed, and the previously corrected architecture invariant suite passed 20 of 20 tests.

@@ -52,16 +52,16 @@ packages:
     revision: 0c0290ff6b24942dadb83a929ffaaa1481df04a2
   TweetNaclSwiftwrap:
     url: https://github.com/bitmark-inc/tweetnacl-swiftwrap.git
-    revision: f8fd111642bf2336b11ef9ea828510693106e954
+    revision: a7776eb5388467ec553b855846e24438288e2da5
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
-    revision: edbeaa39b426e54702194b0a601342322f01e400
+    revision: 22787ffb59de99e5dc1fbfe80b19c97a904ad48d
   OpenTelemetrySwift:
     url: https://github.com/open-telemetry/opentelemetry-swift.git
-    revision: 21374ac2439aee4e206721ef91a7e8bf4c0579d6
+    revision: 9a6d6a8aed22c415bb1673206e337824635f818b
   OpenTelemetrySwiftCore:
     url: https://github.com/open-telemetry/opentelemetry-swift-core.git
-    revision: 84b9e341cbb7b4dd62cd1b89cd9e008995084132
+    revision: 06f8a460a66f813758d22f09025d85df45450a63
 targets:
   OrlixKernel:
     type: framework
