@@ -229,3 +229,12 @@
 - External Xcode storage health passed, the required `Orlix-iPhone-15-Pro-Max` simulator was the only booted simulator, and a current build-30 `tcti-simulator-stability` rerun completed after the full kernel, payload, app build, install, and launch path. It failed after the 45-second capture with no TCTI `svc #0` marker, no structured `linux_exec_start_thread` event, and no captured fatal runtime marker.
 - The refreshed execve/binfmt report now identifies build 30 and the current simulator report, but still fails `simulator-report-current` and `simulator-exec-start-thread`. The validated envelope classifies the result as `environment_only_failure`, sets `must_stop=true`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and keeps `release_gate_eligible=false`.
 - No archive, IPA export, TestFlight upload, App Store Connect mutation, build-number bump, physical-device execution, or release claim occurred.
+
+### 2026-07-14 Checkpoint: Beta Simulator Gate Retry Remains Red
+
+- The clean retry reached real XCTest execution after all repository dependency, project-generation, external-storage, simulator-health, and single-simulator checks passed.
+- The OrlixOS target-derived metadata stage executed two selected tests with zero failures and zero skips.
+- The corrected PTY selector executed one selected test. The hosted Linux guest reached `/init`, then failed to refresh its executable user page with `ret=-1` and panicked with `Orlix: failed to synchronize hosted user mappings`. XCTest recorded one test, one failure, and one unexpected failure.
+- Xcode stalled after the explicit suite summary. The finalizer was interrupted only after more than 90 seconds without output. This preserved the result while keeping the gate failed.
+- Regenerated status and next-task artifacts identify commit `a6873e51` and retain `release_gate_eligible=false`, `readiness_gate_eligible=false`, `simulator_gates_complete=false`, and `physical_device_allowed=false`. The validated selected envelope remains environment-owned, `must_stop=true`, and forbids runtime and harness patches.
+- The release flow stopped before archive. No product identity, App Store Connect state, archive, IPA, or uploaded build changed.

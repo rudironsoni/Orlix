@@ -8495,3 +8495,12 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Both golden executions remain `proof_tier=seed`, `acceptance_weight=probe`, `real_stack_required=false`, `can_claim_runtime_readiness=false`, and `release_gate_eligible=false`. They narrow decoder coverage but do not replace Linux execve, pinned-simulator entry, first-syscall, or product readiness evidence.
 - The selected execve/binfmt reducer expected failure and replayed the current gate with actual failure and exit code 2. The replay reproduced the missing current passing simulator entry evidence exactly. The direct documented `make tcti-gate TARGET=tcti-repro REPRO=Build/...` form was blocked by the generated-tree command guard; the allowlisted reproducer skill wrapper completed the same read-only replay without editing generated artifacts.
 - Canonical status still selects `tcti-kernel-execve-binfmt-elf-smoke`. The validated envelope remains `environment_only_failure` with `must_stop=true`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `continue_refresh_allowed=false`. No runtime, gadget, simulator, phone, archive, or TestFlight action is authorized by this oracle checkpoint.
+
+## 2026-07-14 Build-30 Beta Retry Classification Refresh
+
+- A clean beta simulator gate retry passed the environment and simulator preflight and executed the corrected PTY XCTest exactly once.
+- The Linux guest reached `/init`, then hosted executable-page refresh returned `-1`. The kernel panicked with `Orlix: failed to synchronize hosted user mappings`, and XCTest reported one unexpected failure.
+- The explicit XCTest failure summary was preserved before interrupting Xcode after more than 90 seconds of silent result-bundle finalization.
+- Regenerated `status.json` and `next-task.json` now identify commit `a6873e51`. All eleven simulator-readiness capabilities remain incomplete, and the selected gate remains `tcti-kernel-execve-binfmt-elf-smoke`.
+- `agent-task-envelope-check` passed. The current envelope remains `environment_only_failure` with `must_stop=true`, `continue_refresh_allowed=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `release_gate_eligible=false`, and `physical_device_allowed=false`.
+- The TCTI next-step stop condition therefore forbids another autonomous gate, runtime repair, harness repair, phone work, archive, or upload from this evidence.

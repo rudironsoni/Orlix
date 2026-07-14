@@ -24,7 +24,7 @@ git fetch source-origin <full-reviewed-commit>
 git subtree pull --prefix=Orlix/App source-origin <full-reviewed-commit>
 ```
 
-After every update, compare the imported sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The imported Xcode project is retained as an upstream baseline and provenance reference. `project.yml` remains the authoritative Orlix project definition.
+After every update, compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline and provenance reference. `project.yml` remains the authoritative Orlix project definition.
 
 ## Swift package baseline
 
