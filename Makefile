@@ -7,8 +7,7 @@ MLIBC_MAKE := $(MAKE) -f OrlixMLibC/Makefile
 ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
 APP_MAKE := $(MAKE) -f Orlix/Makefile
 PROFILE ?= release
-ORLIX_EXTERNAL_SSD_ROOT ?= $(shell external-ssd-root 2>/dev/null)
-ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(CURDIR)/Build)
+ORLIX_BUILD_ROOT ?= $(CURDIR)/Build
 ORLIXOS_BASE_ROOT_TREE := $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(PROFILE)/base-tree
 ORLIX_BETA_SCHEME ?= Orlix
 ORLIX_BETA_ARCHIVE_DIR ?= $(ORLIX_BUILD_ROOT)/Release
@@ -30,17 +29,17 @@ ORLIX_OPENPANEL_CLIENT_ID ?=
 ORLIX_SIGNOZ_INGESTION_KEY ?=
 ORLIX_ANALYTICS_ENABLED ?= NO
 ORLIX_OBSERVABILITY_ENABLED ?= NO
-ORLIX_XCODE_ROOT ?= $(ORLIX_EXTERNAL_SSD_ROOT)/Xcode
-ORLIX_XCODEBUILD_ARCHIVE ?= /usr/bin/xcodebuild
-ORLIX_XCODEBUILD_EXPORT ?= /usr/bin/xcodebuild
+ORLIX_XCODEBUILD_ARCHIVE ?= xcodebuild
+ORLIX_XCODEBUILD_EXPORT ?= xcodebuild
 ORLIX_BETA_SIMULATOR_ID ?= ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
+ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
 TCTI_GATE_SOURCE := tools/tcti/orlix-tcti-gate.swift
 TCTI_GATE_BIN := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate
 TCTI_GATE_BUILD_ID := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate.build-id
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check tcti-gate-tool tcti-kernel-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -279,20 +278,32 @@ tcti-gate: tcti-gate-tool
 tcti-gate-list: tcti-gate-tool
 	@"$(TCTI_GATE_BIN)" --list
 
+tcti-kernel-tests:
+	@$(KERNEL_MAKE) kunit-run PROFILE=tcti_runtime
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixKernel Conformance" \
+		-configuration Debug \
+		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
+		-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession \
+		ORLIX_PROFILE=tcti_runtime \
+		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		test
+
 agent-harness-check:
-	@.agents/skills/orlix-tcti-next-step/scripts/harness-check all
+	@.agents/tests/harness-check all
 
 agent-hooks-check:
-	@.agents/skills/orlix-tcti-next-step/scripts/harness-check hooks
+	@.agents/tests/harness-check hooks
 
 agent-skills-check:
-	@.agents/skills/orlix-tcti-next-step/scripts/harness-check skills
+	@.agents/tests/harness-check skills
 
 agent-subagents-check:
-	@.agents/skills/orlix-tcti-next-step/scripts/harness-check subagents
+	@.agents/tests/harness-check subagents
 
 agent-mcp-check:
-	@.agents/skills/orlix-tcti-next-step/scripts/harness-check mcp
+	@.agents/tests/harness-check mcp
 
 agent-status:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
@@ -341,9 +352,7 @@ beta-archive: beta-bump-build-number
 	$(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE=release ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphoneos ORLIX_KERNEL_BASE_ROOT_TREE_INPUT="$(ORLIXOS_BASE_ROOT_TREE)"; \
 	$(MAKE) -f OrlixOS/Makefile kernel-payload PROFILE=release; \
 	mkdir -p "$(ORLIX_BETA_ARCHIVE_DIR)"; \
-	TMPDIR="$(ORLIX_XCODE_ROOT)/tmp/" "$(ORLIX_XCODEBUILD_ARCHIVE)" \
-		-derivedDataPath "$(ORLIX_XCODE_ROOT)/DerivedData" \
-		-clonedSourcePackagesDirPath "$(ORLIX_XCODE_ROOT)/PackageCache" \
+	"$(ORLIX_XCODEBUILD_ARCHIVE)" \
 		-project Orlix.xcodeproj \
 		-scheme "$(ORLIX_BETA_SCHEME)" \
 		-configuration Release \

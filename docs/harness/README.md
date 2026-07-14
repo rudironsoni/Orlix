@@ -8,7 +8,7 @@ This directory describes how Codex agents should work in Orlix. Architecture tru
 - `.codex/agents`: project agents for planner, implementer, and reviewer roles.
 - `.agents/skills`: reusable Orlix workflows.
 - `.codex/rules`: command approval policy.
-- `.codex/hooks`: deterministic lifecycle checks.
+- `.codex/hooks`: deterministic, repo-wide lifecycle checks.
 - `docs/plans`: active and completed task plans.
 - `docs/codex-handoffs`: durable handoffs for long sessions or compaction risk.
 - `docs/harness/MEMORY.md`: curated durable lessons for agents.
@@ -27,6 +27,13 @@ making status claims. Reconcile old remaining-work lists against current source,
 tests, and commits before selecting a task. After each coherent checkpoint,
 append to `IMPLEMENT.md` with exact evidence and the remaining work that still
 matches the current repo.
+
+Lifecycle hooks do not own subsystem correctness, TCTI authorization, release
+readiness, physical-device policy, or machine configuration. Those contracts
+belong to named product tests and gates. `make tcti-kernel-tests` compiles the
+TCTI KUnit object, runs its executable kernel workload runner, and runs the full
+Orlix kernel kselftest rootfs through the `tcti_runtime` profile. The KUnit object
+build is not proof that every KUnit case executed.
 
 The hooks may block mutations before active plan context is loaded. After a
 mutation, commits and pushes may be blocked until the active implementation log

@@ -1,4 +1,0 @@
-#!/usr/bin/env sh
-set -eu
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-exec "$root/.agents/skills/orlix-tcti-next-step/scripts/session-start-context"

@@ -12,15 +12,7 @@ import time
 from pathlib import Path
 
 GENERATED_PATTERNS = (
-    "Build/OrlixKernel",
-    "Build/OrlixKernel/upstream/linux-",
-    "Build/OrlixKernel/src/linux-",
-    "Build/OrlixMLibC",
-    "Build/OrlixOS",
-    "Build/AgentHarness",
-    "Build/Reports/runtime",
-    "Build/TCTI/reports",
-    "Build/TCTI/reproducers",
+    "Build/",
 )
 GENERATED_PATH_RE = re.compile(
     r"(?:\./)?(?:" + "|".join(re.escape(pattern) for pattern in GENERATED_PATTERNS) + r")"
@@ -247,19 +239,6 @@ def generated_tree_write_violation(payload):
     return mentions_generated_tree(text)
 
 
-def selected_task_policy(root):
-    path = root / "Build" / "AgentHarness" / "orlix-tcti" / "next-task.json"
-    try:
-        value = json.loads(path.read_text())
-        if not isinstance(value, dict):
-            return {}
-        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-        value["_authorization_current"] = value.get("git_sha") == head
-        return value
-    except Exception:
-        return {}
-
-
 def patch_targets_only_hooks(text):
     if "*** Begin Patch" not in text:
         return False
@@ -282,68 +261,6 @@ def normalized_command_tokens(payload):
         while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
             tokens.pop(0)
     return tokens
-
-
-def unauthorized_physical_command(payload, policy):
-    if patch_targets_only_hooks(_normalise_escaped_newlines(flattened_text(payload))):
-        return False
-    tokens = normalized_command_tokens(payload)
-    if not tokens:
-        return False
-    executable = tokens[0]
-    physical = (
-        executable == "make" and any(token == "DESTINATION=iphoneos" for token in tokens)
-    ) or (
-        executable == "make" and "beta-release-l4" in tokens[1:]
-    ) or executable.endswith("devicectl") or (
-        executable.endswith("xcrun") and "devicectl" in tokens[1:]
-    )
-    return physical and not (
-        policy.get("_authorization_current") is True and policy.get("physical_device_allowed") is True
-    )
-
-
-def unauthorized_release_command(payload, policy):
-    if patch_targets_only_hooks(_normalise_escaped_newlines(flattened_text(payload))):
-        return False
-    tokens = normalized_command_tokens(payload)
-    release_targets = {
-        "beta-archive", "beta-validate-archive", "beta-export-archive", "beta-upload", "beta-release"
-    }
-    release = bool(tokens) and tokens[0] == "make" and any(token in release_targets for token in tokens[1:])
-    gate_ids = policy.get("simulator_readiness_gate_ids")
-    missing = policy.get("simulator_readiness_missing_gate_ids")
-    simulator_ready = (
-        policy.get("simulator_gates_complete") is True
-        and isinstance(gate_ids, list)
-        and bool(gate_ids)
-        and isinstance(missing, list)
-        and not missing
-    )
-    return release and not (policy.get("_authorization_current") is True and simulator_ready)
-
-
-def external_ssd_bypass_violation(payload):
-    text = _normalise_escaped_newlines(flattened_text(payload))
-    if patch_targets_only_hooks(text):
-        return False
-    tokens = normalized_command_tokens(payload)
-    if not tokens:
-        return False
-    executable = tokens[0]
-    command = " ".join(tokens)
-    if executable.startswith("/Applications/Xcode.app/Contents/Developer/usr/bin/"):
-        return True
-    if executable in {"/usr/bin/xcrun", "/usr/bin/xcodebuild"}:
-        return True
-    if executable.endswith("xcodebuild"):
-        if "/Volumes/1TB" in command:
-            return True
-        if any(token in {"-derivedDataPath", "-clonedSourcePackagesDirPath"} for token in tokens):
-            return True
-        if any(re.match(r"^(?:SYMROOT|OBJROOT|CLANG_MODULE_CACHE_PATH|SWIFT_MODULE_CACHE_PATH)=", token) for token in tokens):
-            return True
-    return False
 
 
 def active_plan_dirs(root):

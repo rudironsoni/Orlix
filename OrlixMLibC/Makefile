@@ -10,8 +10,7 @@ PROFILE ?= release
 ORLIX_PROJECT_YML ?= $(REPO_ROOT)/project.yml
 ORLIX_PRODUCT_VERSION ?= $(shell awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
 ORLIX_PRODUCT_BUILD_ID ?= $(shell awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
-ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
-ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(REPO_ROOT)/Build)
+ORLIX_BUILD_ROOT ?= $(REPO_ROOT)/Build
 ORLIX_OS_TARGET_SETTINGS ?= $(REPO_ROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
 include $(ORLIX_OS_TARGET_SETTINGS)
 

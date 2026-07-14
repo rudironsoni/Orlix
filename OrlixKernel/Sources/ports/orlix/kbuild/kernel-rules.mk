@@ -19,8 +19,7 @@ ORLIX_PROFILES := release development tcti_runtime
 type ?= kunit
 libc ?= orlixmlibc
 
-ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
-ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(CURDIR)/Build)
+ORLIX_BUILD_ROOT ?= $(CURDIR)/Build
 ORLIX_PROJECT_YML ?= $(CURDIR)/project.yml
 ORLIX_PRODUCT_VERSION ?= $(shell awk -F': *' '/^[[:space:]]*MARKETING_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")
 ORLIX_PRODUCT_BUILD_ID ?= $(shell awk -F': *' '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $$2); print $$2; exit }' "$(ORLIX_PROJECT_YML)")

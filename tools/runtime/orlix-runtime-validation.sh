@@ -99,12 +99,7 @@ artifact_dir="${report%.md}.artifacts"
 mkdir -p "$artifact_dir"
 
 if [ -z "$build_root" ]; then
-	external_root="$(external-ssd-root 2>/dev/null || true)"
-	if [ -n "$external_root" ]; then
-		build_root="$external_root/Xcode/OrlixSystem/Build"
-	else
-		build_root="$PWD/Build"
-	fi
+	build_root="$PWD/Build"
 fi
 
 die() {

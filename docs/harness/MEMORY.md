@@ -24,6 +24,10 @@ This file is curated repo-local memory for coding agents. Keep entries short, st
 
 ## Recurring Failure Modes
 
+- Putting subsystem or machine policy in repo lifecycle hooks. Hooks enforce
+  repo-wide workflow invariants only. Kernel behavior belongs to KUnit and
+  kselftest, while host integration belongs to explicit runtime gates.
+
 - Patching generated upstream trees instead of fixing the owning Orlix layer.
 - Treating a durable upstream patch as the default fix before proving the Linux/kernel surface, OrlixOS rootfs input, package toolchain input, and upstream project behavior.
 - Modifying upstream tests through a durable patch and then treating the patched suite as exact upstream conformance.

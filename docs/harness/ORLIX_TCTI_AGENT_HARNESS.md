@@ -26,7 +26,8 @@ Codex-specific integration remains under `.codex/`:
 - `.codex/hooks/`
 - `.codex/subagents/`
 
-Codex hooks call skill-local scripts. They should not become the canonical project workflow.
+Codex lifecycle hooks are subsystem-neutral and do not call TCTI skill scripts.
+TCTI safety and correctness are explicit test and gate results, not hook state.
 Sandbox mode, approval policy, secrets, and machine-local MCP credentials belong in `~/.codex/config.toml`, not in the committed repo adapter.
 
 ## MCP
@@ -45,6 +46,7 @@ Use agent-neutral targets:
 
 - `make agent-harness-check`
 - `make agent-hooks-check`
+- `make tcti-kernel-tests`
 - `make agent-skills-check`
 - `make agent-subagents-check`
 - `make agent-mcp-check`
@@ -93,7 +95,7 @@ The roadmap is tiered so the harness manages proof toward real Linux userspace i
 
 Golden ELF, switch-debug, reducer, and switch-vs-gadget gates are `proof_tier=seed`, `acceptance_weight=probe`, `real_stack_required=false`, and `can_claim_runtime_readiness=false`. They are microscopes for decoder bring-up, exact regressions, no-phone reducers, and switch-vs-gadget differentials. They are not proof that Linux userspace works.
 
-Runtime readiness must move through the real stack: OrlixKernel syscall/exec/fault/wait/console behavior, kselftest or kernel-interface subsets, real OrlixMLibC-linked binaries, shell behavior, real Coreutils or upstream package commands, OrlixOS OCI/rootfs/session materialization, app-hosted simulator execution, device certification, and only then release/default-flip gates.
+Runtime readiness must move through the real stack: OrlixKernel syscall/exec/fault/wait/console behavior, KUnit kernel invariants, Linux kselftests executed through TCTI, real OrlixMLibC-linked binaries, shell behavior, real Coreutils or upstream package commands, OrlixOS OCI/rootfs/session materialization, app-hosted simulator execution, device certification, and only then release/default-flip gates.
 
 `agent-task-envelope-check` and `agent-harness-check` enforce this contract. They reject seed gates that claim runtime readiness, Coreutils gates backed only by seed probes, OCI gates without OrlixOS rootfs/session proof, device gates without simulator and real-stack prerequisites, and passing report fixtures without proof-tier metadata.
 
