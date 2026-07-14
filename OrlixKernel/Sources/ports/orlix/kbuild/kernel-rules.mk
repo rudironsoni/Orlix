@@ -1873,6 +1873,7 @@ __kernel-archive: __prepare-kbuild
 			printf '  ORLIXOBJS %s %s objects\n' "$$platform" "$${#objs[@]}" >&2; \
 		else \
 			objs=(); \
+			config_fingerprint="$$(shasum -a 256 "$(ORLIX_KERNEL_BUILD_DIR)/.config" | awk '{ print substr($$1, 1, 16) }')"; \
 			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
 			src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
 			[ -s "$$src" ] || { echo "missing Linux source: $$src" >&2; exit 1; }; \
@@ -1902,12 +1903,14 @@ __kernel-archive: __prepare-kbuild
 			needs_build=1; \
 			if [ -s "$$obj" ] && \
 				[ "$$obj" -nt "$$src" ] && \
-				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ]; then \
+				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
+				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
+				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ]; then \
 				needs_build=0; \
 			fi; \
 			if [ "$$needs_build" -eq 1 ]; then \
 				printf '  ORLIXCC %s %s\n' "$$platform" "$$src_rel" >&2; \
-				/usr/bin/env -u SDKROOT $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+				/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
 				if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 					echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 					exit 1; \

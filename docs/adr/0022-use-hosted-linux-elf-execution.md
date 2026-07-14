@@ -23,7 +23,11 @@ The primary userspace package format remains ordinary AArch64 Linux ELF. Linux `
 
 OrlixMLibC remains the libc for Orlix-built Linux userspace. Normal unmodified AArch64 Linux binaries issuing `svc #0` are compatibility targets.
 
-Native host execution is no longer the required initial physical-iPhone backend. It may remain as an optional development or future backend, but it is not the TestFlight/App Store path.
+Direct host execution of guest Linux ELF is not a product-development or release backend. It may remain as a separate low-level oracle or benchmark, but it is not product evidence and it is not the TestFlight/App Store path.
+
+This is a hybrid execution design, not an all-interpreted system. The Orlix app, OrlixKernel, OrlixHostAdapter, device and storage backends, terminal rendering, and signed app-native transports continue to execute natively. Linux syscalls, VFS, scheduling, signals, PTYs, containers, and process semantics execute natively inside OrlixKernel. TCTI is limited to ordinary guest AArch64 Linux EL0 instructions whose Linux ELF text cannot safely or legally become host-executable on App Store iPhone and iPad builds.
+
+Product development and simulator validation use the same TCTI guest backend and executable-memory restrictions as the published app. Simulator-only host capabilities must not substitute for release-equivalent proof. A separate direct-native guest oracle may be used for comparison or diagnosis, but it cannot satisfy product gates. App Store guest ELF text must not use executable anonymous mappings, generated executable pages, JIT, MAP_JIT, or RWX memory.
 
 The first physical-iPhone userspace backend is Orlix TCTI. TCTI belongs under `arch/orlix` and only owns guest AArch64 EL0 instruction fetch, decode, data-only gadget-program dispatch, guest register execution, guest memory fast paths, `svc #0` exits, user fault exits, yield/signal exits, unsupported-instruction reporting, and hot-path counters.
 
@@ -51,6 +55,8 @@ Linux ELF / AArch64 Linux userspace
 - No public Orlix syscall facade is added.
 - TCTI must call the existing `arch/orlix` Linux syscall dispatch path rather than adding a syscall emulator.
 - Guest text may be read by TCTI as data, but never mapped executable by the host.
+- Host-native Orlix components and Linux kernel semantics do not pass through TCTI.
+- Direct native guest execution may exist only as a separate oracle or benchmark and cannot satisfy product-development, simulator-readiness, or release gates.
 - TCTI performance claims require exact workload, device or simulator, build configuration, command, baseline, counters, and Markdown report.
 - Runtime proof must use boot progress, Linux console/PTY, HostAdapter console mirror, `linux-console` logs, and `host-vm` traces. UIKit screen state is not the proof surface.
 

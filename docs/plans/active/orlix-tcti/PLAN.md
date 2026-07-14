@@ -13,12 +13,15 @@ This is not an iSH runtime port and not a demo. Linux is already the runtime:
 
 TCTI only executes guest AArch64 EL0 instructions until Linux needs control again.
 
+Orlix is a hybrid native and TCTI system. App code, OrlixKernel, OrlixHostAdapter, signed transports, terminal rendering, device backends, and Linux kernel semantics remain native. Product development, simulator validation, and release use TCTI for guest Linux ELF instruction execution.
+
 ## Success Criteria
 
 - ADR 0022 no longer says native host execution is the required initial backend.
 - ADR 0022 preserves Linux ELF, Linux UAPI, syscall numbers, errno behavior, VFS, fd tables, signals, wait/reaping, `execve`, and process semantics in OrlixKernel.
 - Orlix TCTI exists under `arch/orlix`, not HostAdapter.
 - TCTI does not decode Linux syscall policy, model Linux processes, or own VFS/fd/signal/wait/exec semantics.
+- Simulator validation must exercise the same TCTI guest backend and executable-memory restrictions as TestFlight and App Store builds. Direct-native guest execution may be used only by a separate low-level oracle or benchmark and cannot satisfy product gates.
 - Guest ELF text remains host data. No guest ELF text path requests `vm_protect(... EXECUTE ...)`, guest-text `mmap(... PROT_EXEC ...)`, JIT, MAP_JIT, RWX, or generated executable memory.
 - Neither this plan nor the full TCTI objective can be marked complete by documentation, harness rails, or no-phone seed proofs alone. Completion requires local no-phone test targets, machine-readable JSON reports, checked-in golden artifacts, reducer artifacts, static audits, gadget readiness where required, and physical-device runtime evidence.
 - The repo can select the next eligible TCTI gate without a human naming it. `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti` must produce and validate a machine-readable next-task envelope from current reports and the skill-owned roadmap.
@@ -270,7 +273,7 @@ rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/s
 ```
 
 - Current hook state: compiled and linked in the development KUnit path, not stub-only, but runtime-incomplete and not physical-device proven.
-- `development_defconfig` remains the explicit native development profile. `release_defconfig` uses TCTI because the native backend requires host-executable mappings that the App Store-safe HostAdapter rejects. Neither profile enables the switch-debug oracle.
+- `development_defconfig` and `release_defconfig` both use TCTI so product development and simulator proof match the published app. Neither profile enables the switch-debug oracle.
 
 ## Exact Files To Change
 
@@ -351,27 +354,20 @@ Add Kconfig:
 
 Profile defaults:
 
-- `development_defconfig`: `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y` and `CONFIG_ORLIX_HOSTED_EXEC_TCTI=n`
+- `development_defconfig`: `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=n` and `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`
 - `release_defconfig`: `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=n` and `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=n` in both product profiles
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y` only when TCTI and debug/test configs enable it
 - `CONFIG_ORLIX_TCTI_KUNIT_TEST=y` only in test/debug configs
 
-`make tcti-gate TARGET=tcti-plan-consistency` must fail unless development uses only the native backend, release uses only TCTI, and the release profile keeps `CONFIG_ORLIX_TCTI_DEBUG_SWITCH` disabled.
+`make tcti-gate TARGET=tcti-plan-consistency` must fail unless development and release both use only TCTI and both keep `CONFIG_ORLIX_TCTI_DEBUG_SWITCH` disabled.
 
-Reason for the split:
+Reason for the product profile policy:
 
-- Development retains the native backend for explicit local diagnosis.
-- Release must use the ADR 0022 no-JIT TCTI path. Selecting native for TestFlight deterministically fails before Linux userspace because executable guest mappings are forbidden.
+- Product development and simulator validation must exercise the App Store-compatible guest backend.
+- Signed host-native Orlix code and Linux kernel semantics remain native.
+- Direct-native guest execution is a separate oracle or benchmark, never product proof.
 - Selecting TCTI does not claim runtime readiness. Simulator and release gates still decide whether the build can ship.
-
-Any future proposal to make development use TCTI must wait until:
-
-- `make tcti-gate TARGET=tcti-contract` passes
-- `make tcti-gate TARGET=tcti-golden-elf` passes
-- `make tcti-gate TARGET=tcti-diff-switch` passes
-- `make tcti-gate TARGET=tcti-appstore-safety-audit` passes
-- physical `tcti-init-first-syscall` passes
 
 Release selection is fixed by architecture. Shipping remains blocked until the
 mandatory simulator matrix and release gates pass with all forbidden behavior
@@ -410,7 +406,7 @@ This hook already exists. Future tasks must audit whether the existing hook is c
 
 Native backend handling:
 
-- Keep native hosted execution as a dev/future backend.
+- Keep native hosted guest execution only as an explicit non-product diagnostic, oracle, test, or benchmark backend. It cannot satisfy product-development, simulator-readiness, or release gates.
 - Do not delete current native trap-frame code in the first TCTI checkpoint.
 - Do not use native host executable mappings for the physical-iPhone TCTI acceptance path.
 

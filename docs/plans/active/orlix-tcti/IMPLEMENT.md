@@ -8522,3 +8522,23 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The current App Store audit passes with `generated_exec_memory=false`, `host_exec_guest_text=false`, `host_x18=false`, `map_jit=false`, `native_ios_api_exposure_to_guest=false`, and `rwx=false`.
 - Plan consistency and the full harness pass. Runtime readiness, the simulator ladder, archive, and TestFlight remain unproven.
 - Product build preparation advanced build 30 to build 31 for the release-backend change.
+
+## 2026-07-14 Hybrid Execution Boundary
+
+- This checkpoint supersedes the preceding native-development product-profile policy and all older checkpoints that recorded native guest execution in a product profile. Development and release product profiles are TCTI-only. Native guest execution is limited to an explicit non-product diagnostic, oracle, test, or benchmark, and previous native-profile safety results are not current product-development, simulator-readiness, or release evidence.
+- Corrected the overloaded use of `native execution`. Signed Orlix app code, OrlixKernel, OrlixHostAdapter, terminal and transport code, device backends, and Linux kernel semantics remain native.
+- TCTI is limited to ordinary guest AArch64 Linux EL0 instructions whose Linux ELF text cannot become host-executable in an App Store build.
+- Product development and simulator validation use the same TCTI guest backend and executable-memory restrictions as the published app.
+- Direct native guest execution may remain only as a separate low-level oracle or benchmark. It cannot satisfy product gates.
+- This clarification does not enable executable guest mappings, generated executable memory, JIT, MAP_JIT, or RWX memory in TestFlight builds.
+
+## 2026-07-14 Build-32 App Store-Compatible Product Proof Correction
+
+- Removed the remaining roadmap, plan, and Kconfig language that treated direct-native guest ELF execution as a product-development or simulator backend. Native guest execution now defaults off and remains only an explicit non-product diagnostic, oracle, test, or benchmark backend. TCTI is the safe Kconfig default and both product defconfigs explicitly select it with switch-debug disabled.
+- Kept signed Orlix host code native. The correction applies only to guest Linux ELF instruction execution and does not move OrlixKernel, OrlixHostAdapter, terminal rendering, transports, device backends, or Linux kernel semantics into TCTI.
+- Guarded the native syscall-gate page, trampoline, preparation, and executable-page mapper reference behind `CONFIG_ORLIX_HOSTED_EXEC_NATIVE`. TCTI builds inline `orlix_hosted_sync_syscall_gate()` as a no-op so common mapping callers remain intact without compiling generated executable-memory machinery.
+- Added the generated kernel config to ccache inputs and a config fingerprint to product-adapter compile commands. Object freshness also depends on both product compile rule files, preventing product archives from reusing objects compiled under a different backend configuration.
+- Corrected the App Store safety audit to resolve the configured external-SSD product build root. A stale repository-local `Build/OrlixKernel` tree had produced a false failure even though the recached external TCTI archive was clean. The audit now inspects development artifacts when present, requires an exact release archive, and never accepts a TCTI oracle archive as release proof.
+- Rebuilt the external `tcti_runtime/iphonesimulator` and `release/iphonesimulator` kernel archives with targeted `CCACHE_RECACHE=1`. The release generated config contains `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`, keeps `CONFIG_ORLIX_HOSTED_EXEC_NATIVE` unset, and keeps `CONFIG_ORLIX_TCTI_DEBUG_SWITCH` unset.
+- `tcti-appstore-safety-audit` passed after scanning 46 source files, one TCTI object, two product/TCTI archives, and four selected product/TCTI objects. Every forbidden-behavior field is false and there are no coverage warnings.
+- `tcti-plan-consistency`, roadmap JSON parsing, safety-hook shell syntax, Swift type checking, `git diff --check`, and strict external-storage health checks passed. Runtime readiness, the simulator ladder, archive, export, upload, and TestFlight availability remain unproven.

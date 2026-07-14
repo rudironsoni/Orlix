@@ -31,7 +31,7 @@
         "tools/tcti/orlix-tcti-gate.swift"
       ],
       "forbidden_scope": [
-        "Keep development native-only and release TCTI-only with switch-debug disabled.",
+        "Keep development and release TCTI-only with switch-debug disabled.",
         "Do not edit generated Linux trees under Build/OrlixKernel/src/linux-*-port.",
         "Do not run simulator or physical-device gates."
       ],
@@ -55,7 +55,7 @@
       ],
       "commit_message_template": "chore(tcti): keep plan and config rails consistent",
       "stop_conditions": [
-        "Stop if development is not native-only or release is not TCTI-only.",
+        "Stop if development or release is not TCTI-only with switch-debug disabled.",
         "Stop if ADR or PLAN stale references contradict the current TCTI ownership model."
       ],
       "proof_tier": "rail",
@@ -173,7 +173,7 @@
         "Do not allow host x18 or w18 in TCTI product assembly or generated gadgets.",
         "Do not allow MAP_JIT, RWX, generated executable memory, or host-executable guest text.",
         "Do not expose guest software to native iOS APIs.",
-        "Do not flip product defconfigs to CONFIG_ORLIX_HOSTED_EXEC_TCTI=y before the product-default gates pass.",
+        "Do not select CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y or CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y in product defconfigs. Development and release product profiles must remain TCTI-only.",
         "Do not edit generated Linux build trees."
       ],
       "expected_report_paths": [
@@ -214,7 +214,7 @@
       "stop_conditions": [
         "Stop on any forbidden executable-memory or x18 finding.",
         "Stop on any HostAdapter Linux trap semantics or native iOS exposure finding.",
-        "Stop if the remediation requires product defconfigs to default to TCTI.",
+        "Stop if the remediation selects native guest execution or the switch-debug oracle in a product defconfig.",
         "Stop if the remediation would delete unrelated HostAdapter boot, memory mapping, terminal, or observability plumbing.",
         "Stop if the selected change cannot preserve native hosted execution behind an explicit non-product debug or test boundary."
       ],

@@ -255,3 +255,13 @@
 - The App Store audit treats the native runtime-generated syscall gate as a release violation only when native is selected by the release profile. With release on TCTI, the current audit passes with every forbidden behavior false.
 - `tcti-plan-consistency`, `tcti-appstore-safety-audit`, Swift typecheck, and the full agent harness check passed. No phone, archive, export, upload, or App Store Connect mutation ran.
 - `make product-build-prepare` advanced the shared product build from 30 to 31 because the release kernel backend changed.
+
+### 2026-07-14 Checkpoint: Product Development Backend Corrected
+
+- This checkpoint supersedes the preceding native-development product-profile policy. Development and release product profiles are TCTI-only, with the switch-debug oracle disabled.
+- Native guest ELF execution is limited to an explicit non-product diagnostic, oracle, test, or benchmark. It cannot satisfy product-development, simulator-readiness, release, archive, or TestFlight gates.
+- Simulator and development evidence counts only when it exercises the App Store-compatible TCTI guest backend and executable-memory restrictions used by the published app. Signed Orlix host components remain native.
+- Previous native-development safety results are historical and cannot be used as current product or release evidence.
+- The App Store audit now resolves the same configured external-SSD build root used by product builds and requires an exact compiled release kernel archive. A stale repository-local archive or a TCTI oracle archive cannot satisfy release proof.
+- Fresh external `tcti_runtime/iphonesimulator` and `release/iphonesimulator` archives contain none of the forbidden native syscall-gate symbols or relocations. The refreshed safety report passes with all forbidden-behavior fields false, 46 source files, one TCTI object, two archives, four selected archive objects, and no coverage warnings.
+- External Xcode and CoreSimulator storage health passed in strict mode. Simulator runtime readiness, archive, export, upload, and TestFlight availability remain unproven.
