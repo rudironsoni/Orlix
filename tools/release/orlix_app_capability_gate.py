@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import plistlib
 import subprocess
@@ -33,6 +34,13 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         fail(f"expected JSON object: {path}")
     return value
+
+
+def sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        fail(f"cannot hash {path}: {error}")
 
 
 def load_plist(path: Path) -> dict[str, Any]:
@@ -90,6 +98,20 @@ def validate_manifest(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     manifest = load_json(manifest_path)
     if manifest.get("schema_version") != 1:
         fail("unsupported release-input manifest schema")
+
+    resolution = manifest.get("swift_package_resolution")
+    if not isinstance(resolution, dict):
+        fail("swift_package_resolution must be an object")
+    resolution_path_value = resolution.get("path")
+    if not isinstance(resolution_path_value, str) or not resolution_path_value:
+        fail("swift_package_resolution.path must be a non-empty string")
+    resolution_path = repo_root / resolution_path_value
+    if sha256(resolution_path) != resolution.get("sha256"):
+        fail("Swift package resolution SHA-256 differs release inputs")
+    resolved = load_json(resolution_path)
+    pins = resolved.get("pins")
+    if not isinstance(pins, list) or len(pins) != resolution.get("pin_count"):
+        fail("Swift package resolution pin count differs release inputs")
 
     required = require_nonempty_strings(manifest.get("capability_requirements"), "capability_requirements")
     if len(required) != len(set(required)):
@@ -170,6 +192,9 @@ def validate_manifest(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
         "capability_manifest_relative_path",
         "privacy_manifest_relative_path",
         "privacy_manifest_source",
+        "privacy_manifest_source_sha256",
+        "privacy_manifest_union_status",
+        "package_license_notice_status",
         "encryption_classification_status",
         "provisioning_status",
         "cloudkit_production_schema_status",
@@ -200,6 +225,19 @@ def validate_manifest(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     privacy_source = repo_root / exported["privacy_manifest_source"]
     if not privacy_source.is_file():
         fail(f"missing privacy manifest source: {exported['privacy_manifest_source']}")
+    if sha256(privacy_source) != exported["privacy_manifest_source_sha256"]:
+        fail("privacy manifest source SHA-256 differs release inputs")
+    required_reason_union = exported.get("privacy_required_reason_union")
+    if not isinstance(required_reason_union, dict) or not required_reason_union:
+        fail("exported_product.privacy_required_reason_union must be a non-empty object")
+    privacy = load_plist(privacy_source)
+    declared_reasons = {
+        item.get("NSPrivacyAccessedAPIType"): item.get("NSPrivacyAccessedAPITypeReasons")
+        for item in privacy.get("NSPrivacyAccessedAPITypes", [])
+        if isinstance(item, dict)
+    }
+    if declared_reasons != required_reason_union:
+        fail("privacy manifest required-reason declarations differ reviewed union")
     scan_forbidden_sources(repo_root, fragments)
     return manifest
 
@@ -330,9 +368,11 @@ def validate_exported_app(
             exported["encryption_classification_status"],
             exported["provisioning_status"],
             exported["cloudkit_production_schema_status"],
+            exported["privacy_manifest_union_status"],
+            exported["package_license_notice_status"],
         )
         if any(status != "approved" for status in statuses):
-            fail("encryption, provisioning, and CloudKit production approvals are required")
+            fail("encryption, provisioning, CloudKit, privacy, and license approvals are required")
 
 
 def parse_args() -> argparse.Namespace:
