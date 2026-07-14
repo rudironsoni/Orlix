@@ -23,17 +23,17 @@ The three non-empty SwiftNIO manifests were byte-identical at SHA-256 `982f20d82
 
 The release gate compares the exported app privacy manifest structurally with this source manifest. A real exported app has not yet passed that gate.
 
-## Package license audit
+## Package-resolution license audit
 
 The same resolved-checkout audit found a root `LICENSE`, `LICENSE.txt`, or equivalent file for 29 of 30 resolved Swift packages. It also found package-specific notice inputs including `grpc-swift/NOTICES.txt` and `opentelemetry-swift/NOTICE`.
 
-The transitive `thrift-swift` checkout at revision `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains no root license or notice file. Its Swift source headers identify the Apache Software Foundation and Apache License 2.0, and instruct distributors to consult a `NOTICE` file for attribution. That required `NOTICE` file is absent from the pinned checkout. Therefore complete distributable notice coverage and legal approval cannot be verified from the resolved source graph. This blocks marking public application distribution approved.
+Resolution alone does not prove that a package target is linked or distributed. `thrift-swift` is introduced by the OpenTelemetry package for its `JaegerExporter` target. Orlix links `OpenTelemetryProtocolExporterHTTP`, `OpenTelemetryApi`, and `OpenTelemetrySdk`; it does not request `JaegerExporter`. Therefore the resolved `thrift-swift` checkout must not be represented as shipped Orlix code without build or link evidence.
 
-`Orlix/App/THIRD_PARTY_NOTICES.md` currently contains the vendored native Ghostty, libssh2, and OpenSSL notices. It does not yet contain a verified distributable notice set for all 30 resolved Swift packages. Do not represent the current notice file as complete.
+`Orlix/App/THIRD_PARTY_NOTICES.md` currently contains the vendored native Ghostty, libssh2, and OpenSSL notices. It does not yet contain a verified distributable notice set for the Swift package products actually linked into the exported Orlix application. Do not use all 30 resolved pins as a substitute for the shipped-product closure, and do not represent the current notice file as complete.
 
 ## Required closure evidence
 
-- Obtain and legally verify the authoritative Apache Thrift NOTICE attribution applicable to the pinned `thrift-swift` revision.
-- Produce and legally review a distributable notice set covering all resolved Swift packages and native artifacts, including required NOTICE content.
+- Capture the actual Swift package product and target closure from a healthy Orlix archive build or link map.
+- Produce and legally review a distributable notice set covering that shipped Swift package closure and all native artifacts, including any required NOTICE content.
 - Build and inspect a real exported iOS and iPadOS application package, including the aggregate privacy report and embedded dependency manifests.
 - Record written legal and App Review decisions before setting `public_distribution_approved` to `true`.

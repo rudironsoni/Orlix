@@ -602,7 +602,7 @@
     "privacy_manifest_source": "Orlix/App/Orlix/PrivacyInfo.xcprivacy",
     "privacy_manifest_source_sha256": "6d3ed45d047b7e3ed09da81372eb18e7360633e04682682b75bb95f8cb4ba6c6",
     "privacy_manifest_union_status": "source_reviewed_export_unverified",
-    "package_license_notice_status": "blocked_missing_thrift_swift_notice",
+    "package_license_notice_status": "blocked_shipped_dependency_notice_inventory_unverified",
     "privacy_required_reason_union": {
       "NSPrivacyAccessedAPICategoryUserDefaults": [
         "CA92.1"
