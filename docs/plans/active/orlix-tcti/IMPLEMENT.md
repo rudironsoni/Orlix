@@ -8513,3 +8513,12 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The App Store safety audit now includes `arch/orlix/kernel/hosted_exec.c` and reports the existing runtime-generated, host-executable syscall gate as `generated_exec_memory=true`. This is a real release blocker, not authorization to enable executable guest mappings.
 - The safety check is a direct invariant check for the syscall-gate page plus trusted executable mapper, with no new authorization protocol.
 - Focused hook tests, Swift typechecks, gate-result policy fixtures, plan consistency, the full agent harness check, and `git diff --check` passed. No phone, archive, export, upload, or App Store Connect mutation ran.
+
+## 2026-07-14 Release TCTI Selection
+
+- Corrected the release product profile to use TCTI and disable native hosted execution. Development remains the explicit native profile.
+- This removes the configuration contradiction that made TestFlight boot through a backend requiring host-executable mappings while HostAdapter correctly rejected executable guest mappings.
+- Plan and safety policy now enforce native development, TCTI release, and no release switch-debug oracle. Per-gate restrictions still prevent unrelated work from changing product profiles.
+- The current App Store audit passes with `generated_exec_memory=false`, `host_exec_guest_text=false`, `host_x18=false`, `map_jit=false`, `native_ios_api_exposure_to_guest=false`, and `rwx=false`.
+- Plan consistency and the full harness pass. Runtime readiness, the simulator ladder, archive, and TestFlight remain unproven.
+- Product build preparation advanced build 30 to build 31 for the release-backend change.

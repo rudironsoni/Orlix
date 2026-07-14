@@ -6902,21 +6902,26 @@ func validateReportStatusContracts() -> [Failure] {
 
 func validateProductDefconfigSafety() -> [Failure] {
     var failures: [Failure] = []
-    for config in [
-        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "development_defconfig"),
-        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig"),
-    ] {
-        do {
-            let text = try readText(config)
-            if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") {
-                failures.append(fail("defconfig-native", "\(relativePath(config)) lacks CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y"))
-            }
-            for forbidden in ["CONFIG_ORLIX_HOSTED_EXEC_TCTI=y", "CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y"] where text.contains(forbidden) {
-                failures.append(fail("defconfig-tcti", "\(relativePath(config)) contains \(forbidden)"))
-            }
-        } catch {
-            failures.append(fail("defconfig-read", "\(relativePath(config)): \(error)"))
+    let development = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "development_defconfig")
+    let release = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig")
+    do {
+        let text = try readText(development)
+        if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") || text.contains("CONFIG_ORLIX_HOSTED_EXEC_TCTI=y") {
+            failures.append(fail("defconfig-development-backend", "\(relativePath(development)) must use only the native development backend"))
         }
+    } catch {
+        failures.append(fail("defconfig-read", "\(relativePath(development)): \(error)"))
+    }
+    do {
+        let text = try readText(release)
+        if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_TCTI=y") || text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") {
+            failures.append(fail("defconfig-release-backend", "\(relativePath(release)) must use only the App Store-safe TCTI backend"))
+        }
+        if text.contains("CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y") {
+            failures.append(fail("defconfig-release-debug", "\(relativePath(release)) must not enable the switch-debug oracle"))
+        }
+    } catch {
+        failures.append(fail("defconfig-read", "\(relativePath(release)): \(error)"))
     }
     return failures
 }
@@ -7393,18 +7398,7 @@ func runPlanConsistency() throws -> Int32 {
     ] where !plan.contains(marker) {
         failures.append(fail("plan-marker", "PLAN.md is missing marker \(marker)"))
     }
-    for config in [
-        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "development_defconfig"),
-        path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig"),
-    ] {
-        let text = try readText(config)
-        if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") {
-            failures.append(fail("defconfig-native", "\(relativePath(config)) lacks CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y"))
-        }
-        for forbidden in ["CONFIG_ORLIX_HOSTED_EXEC_TCTI=y", "CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y"] where text.contains(forbidden) {
-            failures.append(fail("defconfig-tcti", "\(relativePath(config)) contains \(forbidden)"))
-        }
-    }
+    failures.append(contentsOf: validateProductDefconfigSafety())
 
     let status: GateStatus = failures.isEmpty ? .pass : .fail
     let reportURL = try writeReport(report(
@@ -16049,15 +16043,19 @@ func scanSourceForForbiddenBehavior(_ url: URL, patterns: [ForbiddenSourcePatter
             failures.append(fail(pattern.id, "\(relativePath(url)):\(index + 1) \(pattern.message)"))
         }
     }
-    if text.contains("orlix_hosted_syscall_gate_page") &&
-        text.contains("orlix_host_user_map_trusted_executable_page") {
-        flags["generated_exec_memory"] = true
-        failures.append(fail(
-            "runtime-generated-trusted-exec-page",
-            "\(relativePath(url)) populates the hosted syscall-gate page and maps it host-executable"
-        ))
-    }
     return (failures, flags)
+}
+
+func runtimeGeneratedExecutableGateFailure(_ url: URL) -> Failure? {
+    guard let text = try? readText(url),
+          text.contains("orlix_hosted_syscall_gate_page"),
+          text.contains("orlix_host_user_map_trusted_executable_page") else {
+        return nil
+    }
+    return fail(
+        "runtime-generated-trusted-exec-page",
+        "\(relativePath(url)) populates the hosted syscall-gate page and maps it host-executable"
+    )
 }
 
 func runSafetyAudit() throws -> Int32 {
@@ -16104,6 +16102,14 @@ func runSafetyAudit() throws -> Int32 {
         }
     }
 
+    let releaseConfig = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig")
+    let hostedExec = path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "hosted_exec.c")
+    if (try? readText(releaseConfig).contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y")) == true,
+       let failure = runtimeGeneratedExecutableGateFailure(hostedExec) {
+        forbiddenFlags["generated_exec_memory"] = true
+        failures.append(failure)
+    }
+
     let build = repoRoot().appendingPathComponent("Build", isDirectory: true)
     if let enumerator = fileManager.enumerator(at: build, includingPropertiesForKeys: nil) {
         for case let url as URL in enumerator where url.pathExtension == "o" && url.path.contains("/hosted_exec/tcti/") {
@@ -16128,6 +16134,9 @@ func runSafetyAudit() throws -> Int32 {
     }
     let appStoreFixture = path("tools", "tcti", "fixtures", "appstore_safety", "forbidden_exec.c")
     let appStoreFixtureScan = scanSourceForForbiddenBehavior(appStoreFixture, patterns: forbiddenPatterns)
+    if runtimeGeneratedExecutableGateFailure(appStoreFixture) == nil {
+        failures.append(fail("appstore-fixture-runtime-generated-exec", "App Store safety fixture did not trigger runtime-generated syscall-gate detection"))
+    }
     let expectedFixtureFields = [
         "generated_exec_memory",
         "host_exec_guest_text",
