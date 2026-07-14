@@ -536,3 +536,45 @@ exit 1
 ```
 
 No Xcode build, simulator gate, archive, export, upload, or external-system mutation followed this environment failure.
+
+#### 2026-07-14 #49 resolved-versus-shipped dependency correction and environment diagnosis
+
+[CORRECTION] I previously gave an unverified or speculative answer. It should have been labeled, and here is the corrected version. The package-resolution audit treated the missing `thrift-swift` NOTICE as a public-distribution blocker. The pinned OpenTelemetry manifest shows `thrift-swift` is a dependency of its `JaegerExporter` target. Orlix requests `OpenTelemetryProtocolExporterHTTP`, `OpenTelemetryApi`, and `OpenTelemetrySdk`, not `JaegerExporter`. A resolved package is not proof that its unused target ships. The notice blocker is therefore the still-unverified shipped Swift target closure, not specifically `thrift-swift`.
+
+- Changed `package_license_notice_status` to `blocked_shipped_dependency_notice_inventory_unverified`.
+- Updated the privacy and license audit to require a healthy build or link-map-derived shipped product closure before producing the distributable notice set.
+- Reproduced the Xcode health failure and narrowed it to the four system-scope sparsebundle mounts. User-scope DeviceSet, DerivedData, and Archives mounts pass.
+- `xcode-offload mounts repair --scope system --dry-run --verbose` initially stopped because the read-only iOS 26.5 runtime mount had a stale six-hour `SimLaunchHost.arm64` holder. No simulator was booted. After shutting down simulator state, terminating only that holder, and detaching the read-only runtime mount, the configured repair dry run completed successfully.
+- The installed system LaunchDaemon still fails before mounting because it cannot create a timestamped directory below the root-owned external `Xcode/SystemBackups/mounts` path. A direct configured system repair requires user-authorized sudo; non-interactive sudo is unavailable in this session.
+
+Evidence:
+
+```text
+rtk proxy xcode-offload mounts status --root "$(external-ssd-root)" --scope all --json
+user DeviceSet, DerivedData, and Archives checks PASS
+system Caches, Images, Volumes, and XcodeApps mount checks FAIL
+
+rtk proxy lsof +f -- /Library/Developer/CoreSimulator/Volumes/iOS_23F77
+SimLaunchHost.arm64 was the only holder
+
+rtk proxy xcrun simctl shutdown all
+rtk proxy kill -TERM <stale SimLaunchHost pid>
+rtk proxy diskutil unmount /Library/Developer/CoreSimulator/Volumes/iOS_23F77
+Volume iOS 26.5 Simulator unmounted
+
+rtk proxy xcode-offload mounts repair --root "$(external-ssd-root)" --scope system --dry-run --verbose
+exit 0, complete configured repair plan emitted
+
+rtk proxy sudo -n true
+sudo: password required
+exit 1
+
+rtk proxy launchctl kickstart -k system/io.github.rudironsoni.xcode-offload.mounts-system
+exit 0
+
+rtk err xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
+FAIL Cache sparsebundle is not readable by hdiutil: hdiutil: imageinfo failed - image not recognized
+exit 1
+```
+
+No runtime image, simulator device, sparsebundle, or repository product source was deleted or replaced. A real build, link map, archive, signed entitlement check, and exported privacy inspection remain unavailable until the system-scope repair runs with user authorization.
