@@ -230,7 +230,7 @@ beta-simulator-gate: beta-prerequisites
 		-scheme "OrlixRuntime Tests" \
 		-configuration Debug \
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
-		-only-testing:OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput \
+		-only-testing:OrlixRuntimeTests/OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput \
 		test; \
 	xcodebuild \
 		-project Orlix.xcodeproj \
