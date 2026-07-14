@@ -134,7 +134,7 @@ The following corrections were required to make the imported application graph c
 - Renamed the Live Activity asset and its source reference to `OrlixLiveIcon`.
 - Added device and simulator Ghostty and libssh2 header search paths to `OrlixAppTests`. The first integrated unit attempt stopped at `fatal error: 'ghostty.h' file not found`.
 - Added the Swift `DEBUG` active compilation condition to the Debug configuration. The second integrated unit attempt otherwise omitted the test-only `TerminalTabManager.resetForTesting` helper.
-- Kept the imported test changes narrow. Sixty-one of 62 unit files only change `@testable import Orlix` to `@testable import Orlix`. `RemoteTmuxManagerParserTests.swift` additionally translates intended Orlix runtime paths and identifiers.
+- Kept the imported test changes narrow. Sixty-one of 62 unit files only update the test-module import to `@testable import Orlix`. `RemoteTmuxManagerParserTests.swift` additionally translates intended Orlix runtime paths and identifiers.
 - Replaced the no-op imported analytics compatibility methods with typed mappings into `OrlixTelemetry`, preserving connection, paywall, purchase, limit, onboarding, custom-action, split, review, and analytics-disable event properties without retaining the upstream Umami transport.
 
 ### Build and unit evidence
@@ -333,3 +333,19 @@ This checkpoint proves direct source integration, complete Orlix naming, success
 - A later current build-30 TCTI stability run completed its kernel, payload, app build, install, and launch path but captured no first TCTI syscall marker or `linux_exec_start_thread` event during its 45-second runtime window.
 - This evidence does not invalidate the direct Orlix application import. It blocks TestFlight promotion and proves neither Ghostty rendering nor Default Local Instance behavior.
 - #51 Default Local Instance, Herdr, containers, Docker compatibility, and native macOS remain unstarted. The app-fork checkpoint evidence is recorded, but final bundle reinspection is not the only remaining release work. Current TCTI runtime and structured release gates must pass before TestFlight promotion.
+
+#### 2026-07-14 Orlix application identity clarification
+
+- ADR 0024 and the active plan now state the product boundary explicitly: Orlix owns its application fork, Orlix is the sole application identity, and the pinned upstream source is ancestry rather than a product, compatibility layer, target, module, bundle identifier, source path, or public architecture concept.
+- The repository-wide tracked-file and content audit found no upstream product identity in source, project metadata, targets, tests, resources, website content, scripts, ADRs, plans, architecture documentation, or tracked paths.
+- The only remaining upstream-name text occurrences are the immutable repository URL in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md` and the original copyright notice in `Orlix/App/LICENSE`. Those references remain because changing them would falsify provenance or legal attribution.
+- `project.yml` and the retained Xcode project identify the app, tests, UI tests, Live Activity extension, bundle identifiers, and products as Orlix. This checkpoint changes documentation wording only and does not add new runtime proof.
+
+#### 2026-07-14 Beta simulator gate retry
+
+- The clean `make beta-simulator-gate` retry passed dependency, project-generation, package-resolution, Xcode/CoreSimulator health, required-simulator boot, and single-booted-simulator checks.
+- The OrlixOS metadata stage executed both intended tests and passed with zero failures and zero skips.
+- The corrected PTY selector executed `testLinuxPTYCarriesInteractiveShellInputAndOutput` exactly once. The guest reached `/init`, then executable hosted-user-page refresh returned `-1` and the kernel panicked with `Orlix: failed to synchronize hosted user mappings`. XCTest failed the selected case with one unexpected failure.
+- Xcode emitted the complete one-test failure summary, then produced no output for more than 90 seconds during result-bundle finalization. The finalizer was interrupted only after preserving the explicit failure evidence. The gate remains failed.
+- Current TCTI status at commit `a6873e51` still selects `tcti-kernel-execve-binfmt-elf-smoke`. Its validated envelope is `environment_only_failure` with `must_stop=true`, `continue_refresh_allowed=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `release_gate_eligible=false`.
+- No archive, IPA export, upload, App Store Connect mutation, build-number bump, physical-device execution, runtime patch, or harness patch followed this retry.

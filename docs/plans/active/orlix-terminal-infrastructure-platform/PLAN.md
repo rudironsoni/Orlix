@@ -74,9 +74,10 @@ App-created and user-created Herdr resources coexist as follows:
 - Do not create a reusable `OrlixTerminal` module or restore the retired UIKit lifecycle. The production target has exactly one SwiftUI `@main`, supplied by `OrlixApp`.
 - Preserve the macOS-compatible source, resources, packages, and conditional compilation during mobile work, but do not create or implement the Mac target until the published mobile releases unblock it.
 
-### Direct import and upstream maintenance
+### Orlix application fork and upstream maintenance
 
 - Keep the pinned source ancestry at `Orlix/App` through the existing non-squashed subtree history and immutable provenance record.
+- Orlix is the sole application and product identity. The upstream name is retained only in immutable source provenance and legally required attribution. It must not appear in product targets, modules, bundle identifiers, UI, resources, tests, source paths, public documentation concepts, or compatibility branding.
 - Keep Orlix-specific changes as narrow commits on top of the imported tree. Do not reformat or reorganize imported files without a product requirement.
 - Any future source update must use an explicitly reviewed immutable commit and the documented subtree procedure. Never use a branch name alone as a release input.
 - After every update, audit `project.yml` against changes to sources, packages, resources, entitlements, privacy manifests, tests, UI tests, extensions, and targets. A newly added input must be translated or explicitly recorded as unavailable with a reviewed reason.
@@ -265,7 +266,7 @@ Preserve Orlix's temporary universal Pro tier:
    - Preserve Orlix telemetry controls, beta observability, simulator hooks, release wiring, and applicable launch arguments. The retired UIKit application, duplicate assets, and conflicting Ghostty package are removed. Production Orlix has only the `OrlixApp` SwiftUI `@main`.
 
 3. **#49, imported-feature capability and provenance gate**
-   - Run only after #50 has imported the complete pinned application. Derive the capability inventory from actual imported sources and built targets, never from a speculative pre-import catalog.
+   - Run only after #50 has established the complete pinned Orlix application fork. Derive the capability inventory from actual fork sources and built targets, never from a speculative pre-fork catalog.
    - Complete the parity ledger, dependency and vendored-artifact provenance, identity map, privacy-manifest union, encryption classification, provisioning evidence, CloudKit schema evidence, and App Store availability reasons.
    - Fail closed when a feature, dependency, identifier, entitlement, privacy declaration, license, build input, or test target lacks immutable evidence.
 
