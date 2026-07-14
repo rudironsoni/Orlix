@@ -11,15 +11,8 @@ import tempfile
 import time
 from pathlib import Path
 
-GENERATED_PATTERNS = (
-    "Build/",
-)
-GENERATED_PATH_RE = re.compile(
-    r"(?:\./)?(?:" + "|".join(re.escape(pattern) for pattern in GENERATED_PATTERNS) + r")"
-)
 WRITE_TOOL_NAMES = {"apply_patch", "edit", "write", "multiedit"}
 BASH_TOOL_NAMES = {"bash", "exec_command", "functions.exec_command"}
-READ_TOOL_NAMES = {"read", "grep", "glob", "ls"}
 BASH_COMMAND_PREFIX = r"(^|[;&|]\s*)(?:rtk\s+(?:proxy\s+)?)?(?:(?:timeout|gtimeout)\s+\d+\s+)?(?:sudo\s+)?"
 GOAL_MAX_CHARS = 4000
 GOAL_GLOB_DESCRIPTION = "docs/plans/**/GOAL.md and docs/goals/active/**"
@@ -56,9 +49,6 @@ BASH_GIT_MUTATION_RE = re.compile(
 )
 BASH_GIT_COMMIT_PUSH_RE = re.compile(
     BASH_COMMAND_PREFIX + r"git\b[^;&|]*\b(commit|push)\b"
-)
-BASH_REDIRECT_TO_GENERATED_RE = re.compile(
-    r"(?<!<)(?:^|\s)(?:[12]?>|>>|&>)\s*['\"]?" + GENERATED_PATH_RE.pattern
 )
 BASH_SCRIPT_WRITE_RE = re.compile(
     r"\b(?:python3?|node|ruby|perl)\b.*"
@@ -155,19 +145,6 @@ def repo_root():
         return Path.cwd()
 
 
-def mentions_generated_tree(text):
-    text = _normalise_escaped_newlines(text)
-    if "*** Begin Patch" in text:
-        for line in text.splitlines():
-            for marker in ("*** Add File: ", "*** Update File: ", "*** Delete File: "):
-                if line.startswith(marker):
-                    target = line[len(marker):]
-                    if any(pattern in target for pattern in GENERATED_PATTERNS):
-                        return True
-        return False
-    return any(pattern in text for pattern in GENERATED_PATTERNS)
-
-
 def hook_tool_name(payload):
     if not isinstance(payload, dict):
         return ""
@@ -200,43 +177,6 @@ def hook_command(payload):
         if isinstance(value, str):
             return value
     return ""
-
-
-def bash_command_mutates_generated_tree(command):
-    command = _normalise_escaped_newlines(command)
-    if not any(pattern in command for pattern in GENERATED_PATTERNS):
-        return False
-    if mentions_generated_tree(command) and "*** Begin Patch" in command:
-        return True
-    if BASH_REDIRECT_TO_GENERATED_RE.search(command):
-        return True
-    if BASH_SED_IN_PLACE_RE.search(command):
-        return True
-    if BASH_PERL_IN_PLACE_RE.search(command):
-        return True
-    if BASH_GIT_MUTATION_RE.search(command):
-        return True
-    if BASH_MUTATING_COMMAND_RE.search(command):
-        return True
-    if BASH_SCRIPT_WRITE_RE.search(command):
-        return True
-    return False
-
-
-def generated_tree_write_violation(payload):
-    text = flattened_text(payload)
-    if not any(pattern in _normalise_escaped_newlines(text) for pattern in GENERATED_PATTERNS):
-        return False
-
-    tool_name = hook_tool_name(payload)
-    if tool_name in READ_TOOL_NAMES:
-        return False
-    if tool_name in WRITE_TOOL_NAMES:
-        return mentions_generated_tree(text)
-    if tool_name in BASH_TOOL_NAMES:
-        return bash_command_mutates_generated_tree(hook_command(payload))
-
-    return mentions_generated_tree(text)
 
 
 def patch_targets_only_hooks(text):

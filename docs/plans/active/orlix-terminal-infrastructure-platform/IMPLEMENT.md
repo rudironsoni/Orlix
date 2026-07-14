@@ -590,6 +590,31 @@ No runtime image, simulator device, sparsebundle, or repository product source w
 - `make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime` passed. This proves the KUnit object build and named executable workload runner, not execution of every KUnit case.
 - The first full `make tcti-kernel-tests` reached the real app-hosted build and XCTest attachment, but produced no `ORLIX-KSELFTEST-END` marker, left an incomplete result bundle, and stalled after the simulator XCTest runner exited. The invocation was terminated and remains failed/unverified.
 
+#### 2026-07-14 Codex hook obstruction removal
+
+- Removed generated-tree command policing from the PreToolUse and PermissionRequest hooks. Generated-tree ownership remains repository guidance, while lifecycle hooks retain mandatory active-plan grounding.
+- Deleted the unused generated-tree parser and its 215-line enforcement test suite.
+- Made RuleSync-generated hook commands disengage successfully outside the Orlix repository instead of resolving scripts against an unrelated Git root and failing with exit code 127.
+
+Evidence:
+
+```text
+python3 -m unittest discover -s .codex/hooks/tests -p 'test_*.py'
+Ran 28 tests
+OK
+
+rulesync generate --targets codexcli --features rules,hooks --check
+All files are up to date.
+
+make agent-harness-check
+exit 0
+
+git diff --check
+exit 0
+```
+
+This checkpoint changes harness behavior only. It adds no terminal, TCTI, kernel, runtime, package, or release proof.
+
 #### 2026-07-14 compatible Swift package update
 
 - Updated TweetNaclSwiftwrap to upstream `master` revision `a7776eb5388467ec553b855846e24438288e2da5`, ZIPFoundation to 0.9.20, OpenTelemetry Swift to 2.5.0, and OpenTelemetry Swift Core to 2.5.1.

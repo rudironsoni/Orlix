@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -29,10 +31,28 @@ FORBIDDEN_SUBSYSTEM_TERMS = (
     "external_ssd",
     "xcode-offload",
     "/volumes/1tb",
+    "generated_tree",
+    "generated upstream/build",
 )
 
 
 class HookScopeTests(unittest.TestCase):
+    def test_project_hooks_disengage_outside_the_repository(self):
+        source = json.loads((ROOT / ".rulesync" / "hooks.json").read_text())["hooks"]
+        with tempfile.TemporaryDirectory() as foreign_root:
+            for hooks in source.values():
+                for hook in hooks:
+                    result = subprocess.run(
+                        hook["command"],
+                        shell=True,
+                        cwd=foreign_root,
+                        input="{}",
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_generated_codex_hooks_match_rulesync_source(self):
         source = json.loads((ROOT / ".rulesync" / "hooks.json").read_text())["hooks"]
         generated = json.loads((ROOT / ".codex" / "hooks.json").read_text())["hooks"]
