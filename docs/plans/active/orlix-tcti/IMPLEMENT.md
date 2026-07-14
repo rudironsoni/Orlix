@@ -8475,3 +8475,14 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - The initial manual profile setting propagated to framework targets and failed before compilation. The profile specifier is now routed through an app-target-only `project.yml` build setting.
 - Signing-only `project.yml` changes no longer invalidate simulator execution evidence. Content-aware freshness still invalidates project changes that affect versions, dependencies, sources, linker settings, or runtime behavior.
 - Shared build preparation now applies the same exact-key distinction. It no longer dirties `project.yml` immediately before physical preflight for signing-only changes; build 21 remains unchanged.
+
+## 2026-07-14 Build-30 Release Frontier Refresh
+
+- The beta simulator gate exposed a zero-test PTY selector. The corrected selector executed the intended PTY test once, and both that test and the OCI materialized-root test failed with `Kernel panic - not syncing: Orlix: failed to synchronize hosted user mappings`.
+- The agent-status helper previously deadlocked because it waited for a verbose child before draining stdout. Draining stdout before `waitUntilExit()` and sending discarded stderr to `FileHandle.nullDevice` restored bounded status generation. The full agent harness check passed after the correction.
+- Canonical status, next-task generation, and envelope validation selected `tcti-kernel-syscall-dispatch-smoke`. Its exact no-phone refresh command passed and produced the current canonical report.
+- The frontier then selected `tcti-kernel-execve-binfmt-elf-smoke`. Its stale build-29 report lacked a current pinned-simulator stability report, so the envelope classified it as environment-only and required an environment/simulator rerun before product changes.
+- `xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict` passed. `Orlix-iPhone-15-Pro-Max` (`ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`) reached `Device already booted, nothing to do.` and was the only booted simulator.
+- The exact build-30 `tcti-simulator-stability` runtime-validation command completed the full kernel, payload, app build, install, and launch path, then failed because its 45-second capture contained no TCTI `svc #0` marker. The report contains no first-syscall event, no `linux_exec_start_thread` event, and no fatal runtime marker.
+- Rerunning `tcti-kernel-execve-binfmt-elf-smoke` refreshed the report to build 30 and the current simulator artifact. It still fails `simulator-report-current` because the stability report is red and `simulator-exec-start-thread` because the structured entry event is absent.
+- The regenerated envelope remains `environment_only_failure` with `must_stop=true`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `continue_refresh_allowed=false`, `release_gate_eligible=false`, and `physical_device_allowed=false`. No runtime repair, phone gate, archive, or upload is authorized from this state.

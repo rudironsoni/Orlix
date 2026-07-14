@@ -325,3 +325,11 @@ State meanings for this ledger are:
 The only remaining checkpoint evidence insertion is final bundle reinspection after the last iPad build. All iPhone and iPad build, test, install, launch, crash, and dependency-isolation evidence is recorded above.
 
 This checkpoint proves direct source integration, complete Orlix naming, successful iPhone and iPad compilation, final iPhone and iPad install and launch survival, bundle composition, provenance hashes, stale-identity removal, typed telemetry preservation, and the exact imported unit and UI behavior recorded above. It does not prove terminal rendering, remote connectivity, OrlixOS terminal behavior, #49, #51, Herdr, containers, Docker compatibility, or native macOS behavior.
+
+#### 2026-07-14 Post-integration beta runtime gate
+
+- OrlixOS target-derived payload and root-descriptor metadata executed two tests with zero failures on the pinned simulator.
+- The original PTY selector executed zero tests because it omitted the XCTest class. The corrected selector executed the intended PTY test once. That test and the OCI-derived materialized-root test each failed in the hosted Linux runtime with `Kernel panic - not syncing: Orlix: failed to synchronize hosted user mappings`.
+- A later current build-30 TCTI stability run completed its kernel, payload, app build, install, and launch path but captured no first TCTI syscall marker or `linux_exec_start_thread` event during its 45-second runtime window.
+- This evidence does not invalidate the direct Orlix application import. It blocks TestFlight promotion and proves neither Ghostty rendering nor Default Local Instance behavior.
+- #51 Default Local Instance, Herdr, containers, Docker compatibility, and native macOS remain unstarted. The app-fork checkpoint evidence is recorded, but final bundle reinspection is not the only remaining release work. Current TCTI runtime and structured release gates must pass before TestFlight promotion.
