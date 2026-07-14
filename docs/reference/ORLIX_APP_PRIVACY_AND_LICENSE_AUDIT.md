@@ -27,13 +27,13 @@ The release gate compares the exported app privacy manifest structurally with th
 
 The same resolved-checkout audit found a root `LICENSE`, `LICENSE.txt`, or equivalent file for 29 of 30 resolved Swift packages. It also found package-specific notice inputs including `grpc-swift/NOTICES.txt` and `opentelemetry-swift/NOTICE`.
 
-The transitive `thrift-swift` checkout at revision `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains no root license or notice file. Therefore complete distributable notice coverage and legal approval cannot be verified from the resolved source graph. This blocks marking public application distribution approved.
+The transitive `thrift-swift` checkout at revision `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains no root license or notice file. Its Swift source headers identify the Apache Software Foundation and Apache License 2.0, and instruct distributors to consult a `NOTICE` file for attribution. That required `NOTICE` file is absent from the pinned checkout. Therefore complete distributable notice coverage and legal approval cannot be verified from the resolved source graph. This blocks marking public application distribution approved.
 
 `Orlix/App/THIRD_PARTY_NOTICES.md` currently contains the vendored native Ghostty, libssh2, and OpenSSL notices. It does not yet contain a verified distributable notice set for all 30 resolved Swift packages. Do not represent the current notice file as complete.
 
 ## Required closure evidence
 
-- Confirm the license and attribution obligations for `thrift-swift` at the pinned revision from an authoritative source.
+- Obtain and legally verify the authoritative Apache Thrift NOTICE attribution applicable to the pinned `thrift-swift` revision.
 - Produce and legally review a distributable notice set covering all resolved Swift packages and native artifacts, including required NOTICE content.
 - Build and inspect a real exported iOS and iPadOS application package, including the aggregate privacy report and embedded dependency manifests.
 - Record written legal and App Review decisions before setting `public_distribution_approved` to `true`.
