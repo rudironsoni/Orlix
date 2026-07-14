@@ -238,3 +238,12 @@
 - Xcode stalled after the explicit suite summary. The finalizer was interrupted only after more than 90 seconds without output. This preserved the result while keeping the gate failed.
 - Regenerated status and next-task artifacts identify commit `a6873e51` and retain `release_gate_eligible=false`, `readiness_gate_eligible=false`, `simulator_gates_complete=false`, and `physical_device_allowed=false`. The validated selected envelope remains environment-owned, `must_stop=true`, and forbids runtime and harness patches.
 - The release flow stopped before archive. No product identity, App Store Connect state, archive, IPA, or uploaded build changed.
+
+### 2026-07-14 Checkpoint: Edit Veto Removed
+
+- `runtime_patch_allowed` and `harness_patch_allowed` now control autonomous `agent-goal` continuation and handoff. They no longer veto an explicit user-directed source or harness edit.
+- Generated upstream/build trees, physical-device commands, and release commands remain mechanically protected by their independent guards.
+- The result classifier no longer treats a current, test-host-attached product failure as environment-only merely because its evidence mentions the required simulator. A focused fixture covers the PTY-shaped Linux panic case.
+- The App Store safety audit now scans `arch/orlix/kernel/hosted_exec.c` and detects the existing runtime-generated syscall-gate page mapped host-executable. The current report correctly fails with `generated_exec_memory=true`; release eligibility remains false.
+- The safety check is deliberately direct: it flags a file that both populates `orlix_hosted_syscall_gate_page` and calls `orlix_host_user_map_trusted_executable_page`, without adding a new authorization framework.
+- Focused hook tests, Swift typechecks, gate-result policy fixtures, `tcti-plan-consistency`, `agent-harness-check`, and `git diff --check` passed. The safety gate intentionally fails on the real generated executable-memory violation.

@@ -1780,7 +1780,10 @@ func classifyGateResult(_ status: GateStatus) -> GateResultPolicy {
         "selected_device",
         "required simulator",
     ]
-    if environmentTerms.contains(where: { evidenceText.contains($0) }) {
+    let launchedProductFailure = status.reports.contains {
+        $0.exists && !$0.passed && $0.productLaunchAttempted == true && reportExecutionFresh($0)
+    }
+    if !launchedProductFailure && environmentTerms.contains(where: { evidenceText.contains($0) }) {
         return policy(
             classification: "environment_only_failure",
             runtimePatchAllowed: false,
@@ -7503,6 +7506,7 @@ func validateGateResultPolicyFixtures() throws {
         ("remote-process-connection-failure", policyFixtureStatus(id: "xctest-remote-process", kind: "kernel", proofTier: "kernel", acceptanceWeight: "blocker", realStackRequired: true, state: "fail", reason: "Connection to remote process was not established", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", proofTier: "kernel")]), "environment_only_failure", false, false, false, true),
         ("simulator-install-timeout", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "current simulator report failed before launch", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "timeout", failureExitStatus: "124", failureTimeoutSeconds: "120", productLaunchAttempted: false)]), "environment_only_failure", false, false, false, true),
         ("simulator-install-product-rejection-needs-reducer", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "simulator rejected the built app", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-simulator-stability-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: false, failureStage: "simulator-install", failureKind: "command-failure", failureExitStatus: "1", productLaunchAttempted: false)]), "current_runtime_product_failure", false, false, false, true),
+        ("launched-product-panic-with-simulator-text-is-not-environment", policyFixtureStatus(id: "simulator-tcti-linux-pty", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, state: "fail", reason: "required simulator executed the selected XCTest and Linux init panicked", reports: [policyFixtureReport(path: "Build/Reports/runtime/tcti-linux-pty-current.json", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, failureStage: "linux-runtime", failureKind: "kernel-panic", productLaunchAttempted: true)]), "current_runtime_product_failure", false, false, false, true),
         ("forbidden-behavior-violation", policyFixtureStatus(id: "forbidden", state: "fail", reason: "safety report failed", reports: [policyFixtureReport(path: "Build/TCTI/reports/tcti-fixture/report.json", forbiddenBehaviorViolations: ["map_jit"])]), "forbidden_behavior_violation", false, false, false, true),
         ("readiness-gate-pass", policyFixtureStatus(id: "simulator-tcti-runtime-stability", kind: "simulator-runtime", proofTier: "simulator", acceptanceWeight: "readiness", realStackRequired: true, canClaimRuntimeReadiness: true, state: "pass", passed: true, reason: "current simulator readiness report passed", readinessEligible: true), "readiness_gate_pass", false, false, true, false),
     ]

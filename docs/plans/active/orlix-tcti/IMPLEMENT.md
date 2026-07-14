@@ -8504,3 +8504,12 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Regenerated `status.json` and `next-task.json` now identify commit `a6873e51`. All eleven simulator-readiness capabilities remain incomplete, and the selected gate remains `tcti-kernel-execve-binfmt-elf-smoke`.
 - `agent-task-envelope-check` passed. The current envelope remains `environment_only_failure` with `must_stop=true`, `continue_refresh_allowed=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, `release_gate_eligible=false`, and `physical_device_allowed=false`.
 - The TCTI next-step stop condition therefore forbids another autonomous gate, runtime repair, harness repair, phone work, archive, or upload from this evidence.
+
+## 2026-07-14 User-Directed Edit Policy
+
+- The prior statement that the selected envelope forbids all runtime or harness repair is narrowed to autonomous `agent-goal` work. Explicit user-directed edits may proceed within the requested scope even when the advisory patch flags are false.
+- Generated trees, phone work, and archive/upload remain separately blocked until their existing promotion conditions pass.
+- A launched, test-host-attached Linux panic that also mentions the required simulator now remains a product failure classification instead of falling through the environment keyword heuristic.
+- The App Store safety audit now includes `arch/orlix/kernel/hosted_exec.c` and reports the existing runtime-generated, host-executable syscall gate as `generated_exec_memory=true`. This is a real release blocker, not authorization to enable executable guest mappings.
+- The safety check is a direct invariant check for the syscall-gate page plus trusted executable mapper, with no new authorization protocol.
+- Focused hook tests, Swift typechecks, gate-result policy fixtures, plan consistency, the full agent harness check, and `git diff --check` passed. No phone, archive, export, upload, or App Store Connect mutation ran.

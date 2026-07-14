@@ -16042,10 +16042,20 @@ func scanSourceForForbiddenBehavior(_ url: URL, patterns: [ForbiddenSourcePatter
     let lines = text.components(separatedBy: .newlines)
     for (index, line) in lines.enumerated() {
         let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
-        for pattern in patterns where pattern.regex.firstMatch(in: line, range: nsRange) != nil {
+        for pattern in patterns where
+            (pattern.id != "hostadapter-linux-trap-semantics" || relativePath(url).hasPrefix("OrlixHostAdapter/")) &&
+            pattern.regex.firstMatch(in: line, range: nsRange) != nil {
             flags[pattern.field] = true
             failures.append(fail(pattern.id, "\(relativePath(url)):\(index + 1) \(pattern.message)"))
         }
+    }
+    if text.contains("orlix_hosted_syscall_gate_page") &&
+        text.contains("orlix_host_user_map_trusted_executable_page") {
+        flags["generated_exec_memory"] = true
+        failures.append(fail(
+            "runtime-generated-trusted-exec-page",
+            "\(relativePath(url)) populates the hosted syscall-gate page and maps it host-executable"
+        ))
     }
     return (failures, flags)
 }
@@ -16057,6 +16067,7 @@ func runSafetyAudit() throws -> Int32 {
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "include", "asm", "tcti.h"),
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_user_page.c"),
         path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "mm", "tcti_invalidate.c"),
+        path("OrlixKernel", "Sources", "ports", "orlix", "overlay", "arch", "orlix", "kernel", "hosted_exec.c"),
         path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "memory"),
         path("OrlixHostAdapter", "Sources", "OrlixHostAdapter", "runtime"),
     ]

@@ -18,7 +18,6 @@ from orlix_hook_common import (
     tool_mutates_workspace,
     unauthorized_physical_command,
     unauthorized_release_command,
-    unauthorized_tcti_runtime_write,
 )
 
 payload = parse_json(read_stdin_text())
@@ -39,9 +38,6 @@ if active_plan_dirs(root):
 
 if generated_tree_write_violation(payload):
     block("Generated upstream/build trees are read-only for agents. Move the fix to the owning Orlix layer.")
-
-if unauthorized_tcti_runtime_write(payload, policy):
-    block("The current TCTI task envelope has runtime_patch_allowed=false. Classify a current runtime failure before editing TCTI runtime sources.")
 
 if unauthorized_physical_command(payload, policy):
     block("The current TCTI task envelope has physical_device_allowed=false. Complete the simulator frontier and regenerate the envelope first.")

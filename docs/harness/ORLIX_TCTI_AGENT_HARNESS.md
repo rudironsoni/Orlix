@@ -132,11 +132,12 @@ runtime code. The envelope exposes:
 - `result_classification_reason`
 - `owning_layer`
 
-Runtime code edits require `runtime_patch_allowed=true` from the current
-envelope. Stale proof refresh, missing generated artifacts, rail evidence
+`runtime_patch_allowed` and `harness_patch_allowed` control autonomous loop
+handoff. They do not veto an explicit user-directed source or harness edit.
+Stale proof refresh, missing generated artifacts, rail evidence
 contract bugs, proof-tier/report metadata drift, environment-only failures,
 and forbidden behavior violations must not be treated as permission to patch
-OrlixKernel/TCTI runtime code.
+OrlixKernel/TCTI runtime code autonomously.
 
 `agent-goal` continues only when all of these selected-gate policy fields are true for continuation:
 
@@ -145,6 +146,6 @@ OrlixKernel/TCTI runtime code.
 - `runtime_patch_allowed=false`
 - `harness_patch_allowed=false`
 
-The loop stops and prints a structured handoff when the policy says to stop, when runtime or harness patching is required, when forbidden behavior or environment-only failure appears, when tracked source changes appear, or when `MAX_ITERATIONS` or `MAX_COMMANDS` is reached. If a selected command fails at process level, the loop first regenerates `agent-status`, `agent-next`, and `agent-task-envelope-check`, reloads the refreshed selected-gate classifier, and then stops with the classified action policy for that failed gate. The handoff must include readiness truth for full TCTI completion, global runtime readiness, package readiness, release-gate eligibility, physical-device allowance, simulator gate completion, and the app-visible `ORLIX-USERLAND-TCTI-OK` marker. The loop does not patch runtime code unless `runtime_patch_allowed=true`; it does not patch harness code unless `harness_patch_allowed=true`.
+The loop stops and prints a structured handoff when the policy says to stop, when runtime or harness patching is required, when forbidden behavior or environment-only failure appears, when tracked source changes appear, or when `MAX_ITERATIONS` or `MAX_COMMANDS` is reached. If a selected command fails at process level, the loop first regenerates `agent-status`, `agent-next`, and `agent-task-envelope-check`, reloads the refreshed selected-gate classifier, and then stops with the classified action policy for that failed gate. The handoff must include readiness truth for full TCTI completion, global runtime readiness, package readiness, release-gate eligibility, physical-device allowance, simulator gate completion, and the app-visible `ORLIX-USERLAND-TCTI-OK` marker. The autonomous loop does not patch runtime code unless `runtime_patch_allowed=true`; it does not patch harness code unless `harness_patch_allowed=true`. Explicit user-directed edits are outside that autonomous continuation decision.
 
 For `missing_generated_artifact`, the classifier may continue only through a supported no-phone `tcti-gate` command or the exact pinned-simulator `runtime-validation` command when prerequisites are satisfied. This allows `/goal` to generate a selected proof artifact without interpreting missing generated state as runtime implementation authority. Missing artifacts with no known safe generator still require a stop.
