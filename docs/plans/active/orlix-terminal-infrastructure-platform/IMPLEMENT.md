@@ -75,8 +75,8 @@ The stale-reference scan found `OrlixTerminal` only in explicit prohibitions. Th
 ## 2026-07-13 pinned application-source import
 
 - Fetched immutable commit `791eebae946b0831ffff3ac839e0f2b75d076458`.
-- Imported the complete repository at `Orlix/App` with a non-squashed Git subtree.
-- Subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`.
+- Imported the complete repository as a single-parent source snapshot and then moved it to `Orlix/App`.
+- Snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`.
 - Recorded immutable origin, package pins, native source versions, artifact hashes, rebuild entry points, license paths, and update policy in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md`.
 
 The subtree import preserves the upstream application, Live Activity, shared source, resources, packages, vendor libraries, scripts, unit tests, UI tests, and upstream project as a baseline reference. It does not by itself prove that the Orlix XcodeGen target compiles or launches the imported application.
@@ -90,8 +90,8 @@ This checkpoint implements only #50, the native Orlix mobile application foundat
 - Working branch: `feat/orlix-mobile-foundation`.
 - Pinned imported revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - Planning commit: `7389fb99d26c82acaefa08a9d8339c39ea4b24d7`.
-- Non-squashed subtree merge: `63bcb1230fa739ac6fbc34d873b349ffee566453`.
-- Provenance commit: `c4f853a2`.
+- Source snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`.
+- Provenance commit: `583b5467`.
 - Durable project definition: `project.yml`. The generated `Orlix.xcodeproj` remains ignored and disposable.
 
 ### Direct application and target mapping
@@ -123,7 +123,7 @@ The application uses Orlix identity internally and externally. The final source 
 - The visible About footer identifies Orlix, the source link points to OrlixSystem, and the mobile tagline names iPhone and iPad. Required copyright, license, and immutable import history remain in the license and source-provenance record.
 - The renamed standalone `Orlix.xcodeproj` no longer links or resolves SwiftUmami, matching the authoritative `project.yml` graph.
 
-The original non-squashed subtree was imported at `Orlix/Orlix`, then moved and fully renamed to `Orlix/App`. The final integration commit renews the subtree metadata at the current path.
+The original source snapshot was imported at `Orlix/VVTerm`, then moved and fully renamed to `Orlix/App`. No foreign repository ancestry is attached to Orlix.
 
 ### Integration corrections
 
@@ -614,6 +614,37 @@ exit 0
 ```
 
 This checkpoint changes harness behavior only. It adds no terminal, TCTI, kernel, runtime, package, or release proof.
+
+#### 2026-07-14 imported-history repair
+
+- Replaced the two-parent vvterm subtree import with a single-parent Orlix source snapshot at the same pinned upstream commit.
+- Replayed every later first-parent Orlix commit without carrying the imported repository ancestry.
+- Changed the plan and provenance contract to forbid attaching imported repository history. Future updates use reviewed source snapshots.
+- Preserved the imported source exactly: upstream tree `ad7e13ae260293aa5aa2fcce6bcde240617eb383` equals the snapshot tree at `Orlix/VVTerm`.
+- Preserved the complete pre-correction repository state: the replacement tip tree equaled previous tip `207d8064` tree `2449b221c81c4a3ac9fa3f66de995171a3fe94ef` before this documentation correction.
+
+Evidence:
+
+```text
+git show --no-patch --format='%H %P' a73e4494
+a73e449406b757cba16aef9df20e65ae13733e9d 7389fb99d26c82acaefa08a9d8339c39ea4b24d7
+
+git rev-parse 791eebae^{tree} a73e4494:Orlix/VVTerm
+ad7e13ae260293aa5aa2fcce6bcde240617eb383
+ad7e13ae260293aa5aa2fcce6bcde240617eb383
+
+git merge-base --is-ancestor 791eebae HEAD
+exit 1
+
+make app-release-inputs-test
+pass: Orlix application release-input checks fail closed
+
+make tcti-gate TARGET=tcti-plan-consistency
+pass: Build/TCTI/reports/tcti-plan-consistency/report.json
+
+make agent-harness-check
+28 tests, OK
+```
 
 #### 2026-07-14 compatible Swift package update
 

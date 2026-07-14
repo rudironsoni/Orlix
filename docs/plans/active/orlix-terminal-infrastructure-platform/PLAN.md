@@ -76,10 +76,10 @@ App-created and user-created Herdr resources coexist as follows:
 
 ### Orlix application fork and upstream maintenance
 
-- Keep the pinned source ancestry at `Orlix/App` through the existing non-squashed subtree history and immutable provenance record.
+- Keep the pinned source snapshot at `Orlix/App` with an immutable provenance record. Never attach the imported repository's Git ancestry to Orlix.
 - Orlix is the sole application and product identity. The upstream name is retained only in immutable source provenance and legally required attribution. It must not appear in product targets, modules, bundle identifiers, UI, resources, tests, source paths, public documentation concepts, or compatibility branding.
 - Keep Orlix-specific changes as narrow commits on top of the imported tree. Do not reformat or reorganize imported files without a product requirement.
-- Any future source update must use an explicitly reviewed immutable commit and the documented subtree procedure. Never use a branch name alone as a release input.
+- Any future source update must use an explicitly reviewed immutable commit and the documented snapshot procedure. Never use a branch name alone as a release input.
 - After every update, audit `project.yml` against changes to sources, packages, resources, entitlements, privacy manifests, tests, UI tests, extensions, and targets. A newly added input must be translated or explicitly recorded as unavailable with a reviewed reason.
 
 ### Dependency, identity, and compliance translation

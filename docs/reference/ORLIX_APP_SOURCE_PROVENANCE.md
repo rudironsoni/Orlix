@@ -10,21 +10,21 @@ This document records the immutable source and native artifact inputs for the Or
 - Pinned upstream commit: `791eebae946b0831ffff3ac839e0f2b75d076458`
 - Retrieval date: 2026-07-13
 - Current Orlix fork path: `Orlix/App`
-- Import method: non-squashed Git subtree
-- Orlix subtree merge commit: `63bcb1230fa739ac6fbc34d873b349ffee566453`
-- Subtree trailer: `git-subtree-split: 791eebae946b0831ffff3ac839e0f2b75d076458`
+- Import method: single-parent source snapshot
+- Upstream tree: `ad7e13ae260293aa5aa2fcce6bcde240617eb383`
+- Orlix snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`
 
-The source was imported with a non-squashed subtree and then fully renamed at `Orlix/App`. The final integration commit records `git-subtree-dir: Orlix/App` and the same immutable `git-subtree-split` revision. Existing pushed history preserves the exact original import command and intermediate path.
+The source snapshot was imported at `Orlix/VVTerm` and then fully renamed to `Orlix/App`. The snapshot tree exactly matches the pinned upstream tree, but the upstream repository commit ancestry is not part of Orlix history.
 
-Updates must fetch an explicitly reviewed full commit and use a non-squashed subtree pull. A branch name alone is never a release input:
+Updates must fetch an explicitly reviewed full commit, check it out in a temporary directory, replace the imported source files, and commit the result as a normal single-parent Orlix snapshot. A branch name alone is never a release input:
 
 ```sh
-git remote add source-origin https://github.com/vivy-company/vvterm.git
-git fetch source-origin <full-reviewed-commit>
-git subtree pull --prefix=Orlix/App source-origin <full-reviewed-commit>
+git clone --no-checkout https://github.com/vivy-company/vvterm.git /tmp/orlix-app-source
+git -C /tmp/orlix-app-source fetch origin <full-reviewed-commit>
+git -C /tmp/orlix-app-source checkout --detach <full-reviewed-commit>
 ```
 
-After every update, compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline and provenance reference. `project.yml` remains the authoritative Orlix project definition.
+Copy the reviewed working tree into `Orlix/App` without its `.git` directory, then compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline provenance reference. `project.yml` remains the authoritative Orlix project definition.
 
 ## Swift package baseline
 
