@@ -29,8 +29,8 @@ fi
 
 development="$root/OrlixKernel/Sources/ports/orlix/configs/development_defconfig"
 release="$root/OrlixKernel/Sources/ports/orlix/configs/release_defconfig"
-if test -f "$development" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$development"; then
-  warn "development_defconfig must remain native-only."
+if test -f "$development" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$development"; then
+  warn "development_defconfig must remain TCTI-only without switch-debug."
 fi
 if test -f "$release" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$release"; then
   warn "release_defconfig must remain TCTI-only without switch-debug."

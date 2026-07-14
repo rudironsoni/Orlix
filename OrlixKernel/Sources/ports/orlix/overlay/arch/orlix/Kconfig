@@ -43,14 +43,16 @@ config ORLIX_HOSTED_ASYNC_USER_TIMER
 
 config ORLIX_HOSTED_EXEC_NATIVE
 	bool "Use native hosted user execution"
-	default y
+	default n
 	help
 	  Keep the existing HostAdapter trap-frame native execution backend
-	  available as an explicit development backend.
+	  available only as an explicit non-product diagnostic, oracle, test,
+	  or benchmark backend. This backend cannot provide product-development,
+	  simulator-readiness, or release evidence.
 
 config ORLIX_HOSTED_EXEC_TCTI
 	bool "Use Orlix TCTI hosted user execution"
-	default n
+	default y
 	help
 	  Enable the Orlix-owned no-JIT same-ISA threaded interpreter backend
 	  for AArch64 Linux ELF userspace. This backend executes guest text as

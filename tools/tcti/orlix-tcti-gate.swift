@@ -5973,6 +5973,16 @@ func xcodeOffloadOrlixBuildRoot() -> String? {
         .path
 }
 
+func orlixProductBuildRoot() -> URL {
+    if let override = ProcessInfo.processInfo.environment["ORLIX_BUILD_ROOT"], !override.isEmpty {
+        return URL(fileURLWithPath: override, isDirectory: true)
+    }
+    if let externalBuildRoot = xcodeOffloadOrlixBuildRoot() {
+        return URL(fileURLWithPath: externalBuildRoot, isDirectory: true)
+    }
+    return repoRoot().appendingPathComponent("Build", isDirectory: true)
+}
+
 func ociXcodeEnvironmentArguments(kernelProfile: String) -> [String] {
     var arguments = [
         "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
@@ -6906,8 +6916,11 @@ func validateProductDefconfigSafety() -> [Failure] {
     let release = path("OrlixKernel", "Sources", "ports", "orlix", "configs", "release_defconfig")
     do {
         let text = try readText(development)
-        if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") || text.contains("CONFIG_ORLIX_HOSTED_EXEC_TCTI=y") {
-            failures.append(fail("defconfig-development-backend", "\(relativePath(development)) must use only the native development backend"))
+        if !text.contains("CONFIG_ORLIX_HOSTED_EXEC_TCTI=y") || text.contains("CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y") {
+            failures.append(fail("defconfig-development-backend", "\(relativePath(development)) must use only the App Store-compatible TCTI backend"))
+        }
+        if text.contains("CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y") {
+            failures.append(fail("defconfig-development-debug", "\(relativePath(development)) must not enable the switch-debug oracle"))
         }
     } catch {
         failures.append(fail("defconfig-read", "\(relativePath(development)): \(error)"))
@@ -16058,6 +16071,51 @@ func runtimeGeneratedExecutableGateFailure(_ url: URL) -> Failure? {
     )
 }
 
+let forbiddenCompiledArtifactSymbols = [
+    "orlix_hosted_syscall_gate_page",
+    "orlix_hosted_sync_syscall_gate",
+    "orlix_host_user_map_trusted_executable_page",
+]
+
+func forbiddenCompiledArtifactFailures(
+    artifact: String,
+    symbolTable: String,
+    relocations: String
+) -> [Failure] {
+    var failures: [Failure] = []
+    for symbol in forbiddenCompiledArtifactSymbols {
+        if let line = symbolTable.components(separatedBy: .newlines).first(where: { $0.contains(symbol) }) {
+            failures.append(fail(
+                "artifact-forbidden-symbol",
+                "\(artifact) symbol table contains \(symbol): \(line.trimmingCharacters(in: .whitespaces))"
+            ))
+        }
+        if let line = relocations.components(separatedBy: .newlines).first(where: { $0.contains(symbol) }) {
+            failures.append(fail(
+                "artifact-forbidden-relocation",
+                "\(artifact) relocation references \(symbol): \(line.trimmingCharacters(in: .whitespaces))"
+            ))
+        }
+    }
+    return failures
+}
+
+func scanCompiledArtifactForGeneratedExecutableMemory(_ url: URL, inspectRelocations: Bool) -> [Failure] {
+    do {
+        let symbolTable = try runWithFileBackedOutput(["xcrun", "llvm-nm", url.path])
+        let relocations = inspectRelocations
+            ? try runWithFileBackedOutput(["xcrun", "llvm-objdump", "-r", url.path])
+            : ""
+        return forbiddenCompiledArtifactFailures(
+            artifact: relativePath(url),
+            symbolTable: symbolTable,
+            relocations: relocations
+        )
+    } catch {
+        return [fail("artifact-inspection", "could not inspect \(relativePath(url)): \(error)")]
+    }
+}
+
 func runSafetyAudit() throws -> Int32 {
     let target = "tcti-appstore-safety-audit"
     let productionRoots = [
@@ -16073,6 +16131,9 @@ func runSafetyAudit() throws -> Int32 {
     var failures: [Failure] = []
     var scannedFiles = 0
     var scannedObjects = 0
+    var scannedKernelArtifacts = 0
+    var scannedKernelArtifactObjects = 0
+    var scannedKernelArtifactProfiles = Set<String>()
     var warnings: [String] = []
     let forbiddenPatterns = try forbiddenSourcePatterns()
     var forbiddenFlags = forbiddenDefaults()
@@ -16110,7 +16171,7 @@ func runSafetyAudit() throws -> Int32 {
         failures.append(failure)
     }
 
-    let build = repoRoot().appendingPathComponent("Build", isDirectory: true)
+    let build = orlixProductBuildRoot()
     if let enumerator = fileManager.enumerator(at: build, includingPropertiesForKeys: nil) {
         for case let url as URL in enumerator where url.pathExtension == "o" && url.path.contains("/hosted_exec/tcti/") {
             scannedObjects += 1
@@ -16124,6 +16185,41 @@ func runSafetyAudit() throws -> Int32 {
             }
         }
     }
+
+    for profile in ["development", "release", "tcti_runtime"] {
+        for platform in ["iphoneos", "iphonesimulator"] {
+            let artifact = build
+                .appendingPathComponent("OrlixKernel", isDirectory: true)
+                .appendingPathComponent(profile, isDirectory: true)
+                .appendingPathComponent(platform, isDirectory: true)
+                .appendingPathComponent("OrlixKernel.a")
+            guard fileManager.fileExists(atPath: artifact.path) else { continue }
+            scannedKernelArtifacts += 1
+            scannedKernelArtifactProfiles.insert(profile)
+            let artifactFailures = scanCompiledArtifactForGeneratedExecutableMemory(artifact, inspectRelocations: false)
+            if !artifactFailures.isEmpty {
+                forbiddenFlags["generated_exec_memory"] = true
+                failures.append(contentsOf: artifactFailures)
+            }
+            let objects = artifact.deletingLastPathComponent().appendingPathComponent("objects", isDirectory: true)
+            for objectName in ["arch_orlix_kernel_hosted_exec.c.o", "arch_orlix_mm_init.c.o"] {
+                let object = objects.appendingPathComponent(objectName)
+                guard fileManager.fileExists(atPath: object.path) else { continue }
+                scannedKernelArtifactObjects += 1
+                let objectFailures = scanCompiledArtifactForGeneratedExecutableMemory(object, inspectRelocations: true)
+                if !objectFailures.isEmpty {
+                    forbiddenFlags["generated_exec_memory"] = true
+                    failures.append(contentsOf: objectFailures)
+                }
+            }
+        }
+    }
+    if !scannedKernelArtifactProfiles.contains("release") {
+        failures.append(fail(
+            "compiled-release-kernel-artifact-missing",
+            "no release OrlixKernel.a was available for symbol and relocation inspection; development or TCTI oracle artifacts cannot substitute for release proof"
+        ))
+    }
     if scannedObjects == 0 {
         warnings.append("no compiled TCTI object files were available for disassembly coverage")
     }
@@ -16136,6 +16232,17 @@ func runSafetyAudit() throws -> Int32 {
     let appStoreFixtureScan = scanSourceForForbiddenBehavior(appStoreFixture, patterns: forbiddenPatterns)
     if runtimeGeneratedExecutableGateFailure(appStoreFixture) == nil {
         failures.append(fail("appstore-fixture-runtime-generated-exec", "App Store safety fixture did not trigger runtime-generated syscall-gate detection"))
+    }
+    let compiledArtifactFixtureFailures = forbiddenCompiledArtifactFailures(
+        artifact: "compiled-artifact-fixture.o",
+        symbolTable: "0000000000000000 s _orlix_hosted_syscall_gate_page\n0000000000000010 T _orlix_hosted_sync_syscall_gate",
+        relocations: "0000000000000020 ARM64_RELOC_BRANCH26 _orlix_host_user_map_trusted_executable_page"
+    )
+    if compiledArtifactFixtureFailures.count != 3 {
+        failures.append(fail(
+            "appstore-fixture-compiled-artifact",
+            "App Store safety fixture did not detect all compiled syscall-gate symbols and relocations"
+        ))
     }
     let expectedFixtureFields = [
         "generated_exec_memory",
@@ -16177,13 +16284,15 @@ func runSafetyAudit() throws -> Int32 {
     let reportURL = try writeReport(report(
         target: target,
         status: status,
-        summary: "Scanned \(scannedFiles) TCTI source/template file(s) and \(scannedObjects) object file(s).",
+        summary: "Scanned \(scannedFiles) TCTI source/template file(s), \(scannedObjects) TCTI object file(s), \(scannedKernelArtifacts) product/TCTI kernel archive(s), and \(scannedKernelArtifactObjects) product/TCTI kernel object(s).",
         failures: failures,
         artifacts: artifacts,
         forbiddenBehavior: forbiddenFlags,
         counters: [
             "scanned_source_files": scannedFiles,
             "scanned_objects": scannedObjects,
+            "scanned_kernel_artifacts": scannedKernelArtifacts,
+            "scanned_kernel_artifact_objects": scannedKernelArtifactObjects,
         ],
         coverageWarnings: warnings
     ))

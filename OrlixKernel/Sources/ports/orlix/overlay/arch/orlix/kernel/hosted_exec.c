@@ -33,8 +33,10 @@ unsigned long orlix_hosted_active_user_tls;
 unsigned long orlix_hosted_user_active;
 unsigned long orlix_hosted_entry_user_pc;
 unsigned long orlix_hosted_entry_user_callee[12];
+#ifdef CONFIG_ORLIX_HOSTED_EXEC_NATIVE
 static unsigned char orlix_hosted_syscall_gate_page[PAGE_SIZE] __page_aligned_data;
 static bool orlix_hosted_syscall_gate_ready;
+#endif
 static bool orlix_hosted_user_timer_ready;
 
 #define ORLIX_HOSTED_EVENT_COUNT 16
@@ -59,7 +61,9 @@ static struct orlix_hosted_user_event orlix_hosted_user_events[ORLIX_HOSTED_EVEN
 static unsigned int orlix_hosted_user_event_seq;
 static unsigned int orlix_hosted_user_event_next;
 
+#ifdef CONFIG_ORLIX_HOSTED_EXEC_NATIVE
 void orlix_hosted_syscall_gate(void);
+#endif
 
 static void orlix_hosted_sync_user_read_range(unsigned long start,
 					      unsigned long length)
@@ -520,6 +524,7 @@ static int orlix_hosted_handle_kernel_fault(unsigned long pc,
 	return orlix_sync_hosted_kernel_fault(fault_address);
 }
 
+#ifdef CONFIG_ORLIX_HOSTED_EXEC_NATIVE
 asm(
 ".p2align 2\n"
 "	.globl _orlix_hosted_syscall_gate\n"
@@ -600,6 +605,7 @@ asm(
 "	bl	_orlix_hosted_syscall_enter_user\n"
 "	brk	#2\n"
 );
+#endif
 
 void orlix_hosted_capture_host_context(void)
 {
@@ -647,6 +653,7 @@ static void orlix_hosted_save_callee_registers(struct pt_regs *regs)
 			READ_ONCE(orlix_hosted_entry_user_callee[i]);
 }
 
+#ifdef CONFIG_ORLIX_HOSTED_EXEC_NATIVE
 static void orlix_hosted_prepare_syscall_gate(void)
 {
 	u32 *insn = (u32 *)orlix_hosted_syscall_gate_page;
@@ -675,6 +682,7 @@ int orlix_hosted_sync_syscall_gate(void)
 		orlix_hosted_syscall_gate_page,
 		PAGE_SIZE);
 }
+#endif
 
 long orlix_hosted_syscall_dispatch(unsigned long scno, unsigned long arg0,
 				   unsigned long arg1, unsigned long arg2,

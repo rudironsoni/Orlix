@@ -20,7 +20,7 @@ description: Orlix TCTI safety agent harness. Use for App Store, x18, JIT, MAP_J
 ## Forbidden Scope
 
 - Do not implement feature code.
-- Do not enable TCTI in the development profile or the debug-switch oracle in release. Release must use TCTI.
+- Development and release must use TCTI. Do not enable the debug-switch oracle in either product profile.
 - Do not host-execute guest ELF text.
 - Do not approve evidence mode as pass.
 
@@ -44,6 +44,6 @@ description: Orlix TCTI safety agent harness. Use for App Store, x18, JIT, MAP_J
 
 - Stop on JIT, MAP_JIT, RWX, generated executable memory, host executable guest text, or forbidden x18/w18.
 - Stop on HostAdapter-owned Linux semantics.
-- Stop if development does not remain native-only or release does not remain TCTI-only with switch-debug disabled.
+- Stop if development or release is not TCTI-only with switch-debug disabled.
 - Stop if physical device work, including evidence mode, is attempted before the pinned simulator has current passing TCTI reports for first syscall, runtime stability, Linux console usability, static BusyBox start, static BusyBox shell command, full shell usability, package behavior, dynamic loader support, signals, VFS completeness, and full Linux runtime readiness.
 - Stop if physical device work bypasses runtime-validation preflight after the full simulator ladder passes.
