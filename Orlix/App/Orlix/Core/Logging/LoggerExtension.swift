@@ -10,7 +10,7 @@ import os.log
 
 extension Logger {
     /// The app's logging subsystem - must match bundle identifier for proper filtering
-    nonisolated private static let appSubsystem = Bundle.main.bundleIdentifier ?? "win.orlix.app"
+    nonisolated private static let appSubsystem = Bundle.main.bundleIdentifier ?? "com.rudironsoni.Orlix"
 
     /// Create a logger for a specific category
     nonisolated static func forCategory(_ category: String) -> Logger {
