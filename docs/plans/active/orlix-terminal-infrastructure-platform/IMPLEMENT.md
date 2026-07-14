@@ -6,7 +6,7 @@ Execute the active plan from the complete native Orlix iOS and iPadOS applicatio
 
 ## Current checkpoint
 
-- Status: #50 native Orlix mobile application integration and evidence collection in progress.
+- Status: #50 direct native Orlix application integration checkpoint recorded; #49 immutable release-input provenance checkpoint in progress.
 - Pinned imported revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - Application rule: compile the native application source directly as Orlix. Do not create an `OrlixTerminal` framework or generic product boundary.
 - Target rule: production Orlix has exactly one SwiftUI `@main`, supplied by `OrlixApp`. The retired UIKit application target, duplicate assets, and conflicting Ghostty package are removed.
@@ -349,3 +349,90 @@ This checkpoint proves direct source integration, complete Orlix naming, success
 - Xcode emitted the complete one-test failure summary, then produced no output for more than 90 seconds during result-bundle finalization. The finalizer was interrupted only after preserving the explicit failure evidence. The gate remains failed.
 - Current TCTI status at commit `a6873e51` still selects `tcti-kernel-execve-binfmt-elf-smoke`. Its validated envelope is `environment_only_failure` with `must_stop=true`, `continue_refresh_allowed=false`, `runtime_patch_allowed=false`, `harness_patch_allowed=false`, and `release_gate_eligible=false`.
 - No archive, IPA export, upload, App Store Connect mutation, build-number bump, physical-device execution, runtime patch, or harness patch followed this retry.
+
+#### 2026-07-14 plan-context harness concurrency repair
+
+- Parallel read-only tool calls could lose required active-plan paths because each post-tool hook performed an unlocked read-modify-write of the same temporary JSON state file. The observed state retained eight required paths and dropped three paths that had completed successfully, so the next legitimate `make` command was blocked.
+- `.codex/hooks/orlix_hook_common.py` now serializes state updates with `flock` and atomically replaces the JSON state file. Concurrent readers can no longer overwrite one another or expose a partially written state file.
+- `.codex/hooks/tests/test_lifecycle_guards.py` now launches concurrent post-tool read hooks across multiple active plans and proves a subsequent workspace mutation is allowed only after every required path survives.
+
+Evidence:
+
+```text
+rtk proxy python3 -m unittest discover -s .codex/hooks/tests -p 'test_lifecycle_guards.py' -v
+24 tests, including test_plan_context_guard_preserves_concurrent_required_reads
+OK
+
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+pass: Build/TCTI/reports/tcti-plan-consistency/report.json
+
+rtk proxy make agent-harness-check
+pass: all
+```
+
+This repair changes harness state coordination only. It adds no terminal, TCTI, Local Runtime, package, or release proof.
+
+#### 2026-07-14 #49 immutable application release inputs
+
+- Added `docs/reference/ORLIX_APP_RELEASE_INPUTS.json` as the machine-readable application release-input record for the imported source revision, every direct Swift package URL and full commit, pinned Ghostty/OpenSSL/libssh2 source inputs, all 15 committed native archive hashes, and required engineering evidence paths.
+- Replaced the two version-only OpenTelemetry declarations in `project.yml` with the exact commits already present in the resolved graph: `21374ac2439aee4e206721ef91a7e8bf4c0579d6` and `84b9e341cbb7b4dd62cd1b89cd9e008995084132`.
+- Ran the sanctioned product-input version target. `CURRENT_PROJECT_VERSION` advanced from 32 to 33 because this checkpoint changes `project.yml` and `Orlix/App/scripts/build.sh`.
+- Updated `Orlix/App/scripts/build.sh` to reject non-commit Ghostty references, verify OpenSSL 3.2.0 source archive SHA-256 `14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e`, and verify libssh2 1.11.0 source archive SHA-256 `3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461` before extraction.
+- Added `tools/release/orlix-app-release-inputs-check.sh` and its fail-closed regression test. `beta-prerequisites` now runs the same check before beta build work.
+- Updated `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md` to identify the machine-readable record and distinguish engineering input integrity from public-distribution approval.
+
+Evidence:
+
+```text
+rtk proxy bash -n Orlix/App/scripts/build.sh tools/release/orlix-app-release-inputs-check.sh tools/release/tests/test-orlix-app-release-inputs.sh
+exit 0
+
+rtk proxy make app-release-inputs-test
+pass: Orlix application release inputs
+pass: Orlix application release-input checks fail closed
+
+rtk proxy make beta-prerequisites
+exit 0
+
+rtk proxy make product-build-prepare
+bumped CURRENT_PROJECT_VERSION 32 -> 33 for product input changes
+
+rtk proxy make product-build-version-check
+product version unchanged: CURRENT_PROJECT_VERSION=33
+
+rtk proxy xcodegen generate --spec project.yml
+Created project at .../Orlix.xcodeproj
+
+rtk proxy rg -n '21374ac2439aee4e206721ef91a7e8bf4c0579d6|84b9e341cbb7b4dd62cd1b89cd9e008995084132|exactVersion|branch:' Orlix.xcodeproj/project.pbxproj project.yml
+generated project contains both full revisions; project.yml contains no exactVersion or branch declaration
+
+rtk proxy jq -e '<OpenTelemetry resolved-revision equality>' Orlix.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+true
+
+rtk proxy rg -n 'custom-io|exactVersion:|branch:' project.yml Orlix/App/scripts/build.sh docs/reference/ORLIX_APP_RELEASE_INPUTS.json
+exit 1, no matches
+
+rtk git diff --check
+exit 0
+
+rtk proxy make tcti-gate TARGET=tcti-plan-consistency
+pass: Build/TCTI/reports/tcti-plan-consistency/report.json
+
+rtk proxy make agent-harness-check
+pass: all
+```
+
+The first post-change `agent-harness-check` correctly failed because the changed product inputs still carried build 32. After `product-build-prepare` advanced the build to 33, the report-backed kernel-gate freshness assertion and the full harness passed. No harness assertion was weakened to accept stale product evidence.
+
+The required Xcode health check did not pass, so no `xcodebuild -resolvePackageDependencies` or simulator build is claimed for this checkpoint:
+
+```text
+rtk err env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
+FAIL Cache sparsebundle is not readable by hdiutil: hdiutil: imageinfo failed - image not recognized
+```
+
+Current mount status also reports the system CoreSimulator Caches, Images, and Volumes stores and `/Applications/Xcodes` not mounted through their configured sparsebundles. Project source was not changed to compensate for that environment failure.
+
+This is a partial #49 checkpoint. Capability inventory and runtime availability behavior, complete package-license notices, stale exported-product identity validation, entitlement and provisioning-profile validation, CloudKit production-schema evidence, privacy-manifest union review, encryption export classification, App Review approval, and written legal approval remain incomplete. `public_distribution_approved` remains `false`. #51, Herdr, Local Instances, containers, Docker compatibility, and native macOS implementation remain unstarted.
+
+Final post-review verification after all tracked source edits: the focused release-input test passed both positive and deliberate-drift cases, `product-build-version-check` kept build 33, the 24 lifecycle-hook tests passed, `git diff --check` passed, plan consistency passed, and `agent-harness-check` exited 0 with `pass: all`. Both release-input scripts are executable with mode 0755.
