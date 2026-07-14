@@ -40,7 +40,7 @@ ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerm
 TCTI_GATE_SOURCE := tools/tcti/orlix-tcti-gate.swift
 TCTI_GATE_BIN := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate
 TCTI_GATE_BUILD_ID := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate.build-id
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-release-inputs-check app-release-inputs-test tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -130,11 +130,20 @@ product-build-version-check: product-build-prepare
 		}; \
 	fi
 
+app-capability-gate:
+	@python3 tools/release/orlix_app_capability_gate.py validate-manifest --manifest docs/reference/ORLIX_APP_RELEASE_INPUTS.json --repo-root .
+
+app-capability-test:
+	@python3 -m unittest tools/release/tests/test_orlix_app_capability_gate.py
+
 app-release-inputs-check:
 	@tools/release/orlix-app-release-inputs-check.sh
 
 app-release-inputs-test:
 	@tools/release/tests/test-orlix-app-release-inputs.sh
+
+app-exported-product-check:
+	@python3 tools/release/orlix_app_capability_gate.py validate-exported-app --app "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app" --manifest docs/reference/ORLIX_APP_RELEASE_INPUTS.json --repo-root .
 
 beta-prerequisites: check-build-tools app-release-inputs-check
 	@set -euo pipefail; \
@@ -351,6 +360,7 @@ beta-validate-archive:
 	test -d "$$app/Frameworks/OrlixOS.framework" || { echo "missing OrlixOS.framework in archive" >&2; exit 1; }; \
 	test -d "$$app/Frameworks/OrlixKernel.framework" || { echo "missing OrlixKernel.framework in archive" >&2; exit 1; }; \
 	find "$$app" -maxdepth 4 -name 'OrlixOSPayload.*' -print -quit | grep -q . || { echo "missing OrlixOS payload bundle in archive" >&2; exit 1; }; \
+	python3 tools/release/orlix_app_capability_gate.py validate-exported-app --app "$$app" --manifest docs/reference/ORLIX_APP_RELEASE_INPUTS.json --repo-root .; \
 	printf '%s\n' "validated beta archive contents: $(ORLIX_BETA_ARCHIVE_PATH)"
 
 beta-export-archive: beta-validate-archive

@@ -436,3 +436,54 @@ Current mount status also reports the system CoreSimulator Caches, Images, and V
 This is a partial #49 checkpoint. Capability inventory and runtime availability behavior, complete package-license notices, stale exported-product identity validation, entitlement and provisioning-profile validation, CloudKit production-schema evidence, privacy-manifest union review, encryption export classification, App Review approval, and written legal approval remain incomplete. `public_distribution_approved` remains `false`. #51, Herdr, Local Instances, containers, Docker compatibility, and native macOS implementation remain unstarted.
 
 Final post-review verification after all tracked source edits: the focused release-input test passed both positive and deliberate-drift cases, `product-build-version-check` kept build 33, the 24 lifecycle-hook tests passed, `git diff --check` passed, plan consistency passed, and `agent-harness-check` exited 0 with `pass: all`. Both release-input scripts are executable with mode 0755.
+
+#### 2026-07-14 #49 capability and exported-product fail-closed gate
+
+[CORRECTION] I previously gave an unverified or speculative answer. It should have been labeled, and here is the corrected version. The earlier #50 feature-parity record claimed the targeted compiled-input identity scan found no stale identifiers. A new source-level scan found six compiled uses of `win.orlix.app` or `com.orlix` in logging, terminal preset storage, Ghostty notifications, IME, input, and macOS terminal input handling. Those identifiers now use `com.rudironsoni.Orlix`; the focused compiled-input scan returns no remaining forbidden identity fragment.
+
+- Extended `docs/reference/ORLIX_APP_RELEASE_INPUTS.json` with one 36-entry capability inventory covering feature-ledger items 1 through 31 exactly once plus every named planned terminal-infrastructure capability. Each entry records iOS, iPadOS, and macOS state; internal invocation and public-advertising flags; repository evidence; approval requirements; and an actionable unavailable or promotion condition.
+- Kept all public advertising disabled because `public_distribution_approved` remains `false`. Blocked, planned, deferred, and built-but-unverified states are not promoted to runtime proof.
+- Bundled the same manifest in Orlix application resources. This makes the validated record available to application code without creating a second capability catalog. Application UI adoption is not claimed by this checkpoint.
+- Added `tools/release/orlix_app_capability_gate.py`. Its repository mode rejects missing or duplicate capability IDs, incomplete platform maps, invalid invocation or advertising state, missing evidence, incomplete feature-ledger coverage, missing exported-product declarations, and forbidden compiled-input identity fragments.
+- Added exported-application validation for the real `.app`: main and Live Activity bundle identity, display name, encryption declaration, byte-equivalent capability record, structurally equivalent privacy manifest, Live Activity widget kind in the extension executable, signed application entitlements, and embedded provisioning-profile entitlements. The strict public mode additionally requires recorded distribution, encryption, provisioning, and CloudKit production approvals.
+- Integrated repository validation into existing immutable release-input checks and exported-product validation into `beta-validate-archive`. `beta-validate-archive` does not use strict public-approval mode because it is also an engineering archive inspection target. Public distribution remains independently closed.
+- Added eight regression tests covering the valid manifest and fake exported package, missing capability, forbidden source identity, encryption mismatch, missing privacy manifest, provisioning mismatch, and missing public approvals.
+- Ran sanctioned product-input versioning after changing `project.yml`; `CURRENT_PROJECT_VERSION` advanced from 33 to 34.
+
+Evidence:
+
+```text
+rtk proxy make app-capability-test
+8 tests, OK
+
+rtk proxy make app-capability-gate
+pass: Orlix application capability manifest
+
+rtk proxy make app-release-inputs-test
+pass: Orlix application capability manifest
+pass: Orlix application release inputs
+pass: Orlix application release-input checks fail closed
+
+rtk proxy bash -n tools/release/orlix-app-release-inputs-check.sh
+exit 0
+
+rtk proxy make -n beta-validate-archive
+exit 0
+
+rtk proxy make product-build-prepare
+bumped CURRENT_PROJECT_VERSION 33 -> 34 product input changes
+
+rtk proxy make product-build-version-check
+product version unchanged: CURRENT_PROJECT_VERSION=34
+
+rtk proxy xcodegen generate --spec project.yml
+Created project at .../Orlix.xcodeproj
+
+rtk proxy rg -n '<forbidden identity fragments>' Orlix/App/Orlix project.yml Orlix.xcodeproj/project.pbxproj
+exit 1, no matches
+
+rtk git diff --check
+exit 0
+```
+
+No real archive, signed entitlement, provisioning profile, CloudKit production schema, encryption classification, App Review approval, or legal approval was available to validate in this checkpoint. The exported-package gate is regression-tested against synthetic package inputs but has not yet passed a real archive. Complete package-license notice coverage and privacy-manifest union review remain #49 work. #51 remains blocked until #49 finishes and the active TCTI/runtime gates permit implementation.

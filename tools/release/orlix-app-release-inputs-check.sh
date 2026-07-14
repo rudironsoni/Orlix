@@ -13,11 +13,15 @@ elif [ "$#" -ne 0 ]; then
     exit 2
 fi
 
-for command in cmp jq shasum xcodegen; do
+for command in cmp jq python3 shasum xcodegen; do
     command -v "$command" >/dev/null 2>&1 || { echo "missing required command: $command" >&2; exit 1; }
 done
 
 [ -f "$MANIFEST" ] || { echo "missing release-input manifest: $MANIFEST" >&2; exit 1; }
+
+python3 "$SCRIPT_DIR/orlix_app_capability_gate.py" validate-manifest \
+    --manifest "$MANIFEST" \
+    --repo-root "$REPO_ROOT"
 jq -e '.schema_version == 1' "$MANIFEST" >/dev/null || { echo "unsupported release-input manifest schema" >&2; exit 1; }
 jq -e '
     (.swift_packages | length > 0) and

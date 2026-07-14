@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 33
+    CURRENT_PROJECT_VERSION: 34
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -365,6 +365,8 @@ targets:
         buildPhase: resources
         type: folder
       - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: docs/reference/ORLIX_APP_RELEASE_INPUTS.json
         buildPhase: resources
     dependencies:
       - target: OrlixOS
