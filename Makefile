@@ -40,7 +40,7 @@ ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerm
 TCTI_GATE_SOURCE := tools/tcti/orlix-tcti-gate.swift
 TCTI_GATE_BIN := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate
 TCTI_GATE_BUILD_ID := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate.build-id
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-release-inputs-check app-release-inputs-test tcti-gate-tool beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -130,7 +130,13 @@ product-build-version-check: product-build-prepare
 		}; \
 	fi
 
-beta-prerequisites: check-build-tools
+app-release-inputs-check:
+	@tools/release/orlix-app-release-inputs-check.sh
+
+app-release-inputs-test:
+	@tools/release/tests/test-orlix-app-release-inputs.sh
+
+beta-prerequisites: check-build-tools app-release-inputs-check
 	@set -euo pipefail; \
 	command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen is required; run: brew bundle --file Brewfile" >&2; exit 1; }; \
 	command -v xcodebuild >/dev/null 2>&1 || { echo "xcodebuild is required" >&2; exit 1; }; \

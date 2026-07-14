@@ -42,12 +42,22 @@ The pinned baseline `Package.resolved` records:
 
 Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned baseline dependency remains recorded here only so the pristine source graph remains auditable.
 
+## Authoritative release inputs
+
+`docs/reference/ORLIX_APP_RELEASE_INPUTS.json` is the machine-readable release-input record for the Orlix application. It records the imported source commit, every direct Swift package URL and full revision, pinned native source versions and archive hashes, committed native artifact hashes, and required engineering evidence files.
+
+`make app-release-inputs-check` compares that record against the resolved XcodeGen package graph, the vendor build script, the Ghostty version marker, the committed archives, and the required evidence paths. `beta-prerequisites` runs the same check. Version-only or branch-only direct package inputs, changed native artifacts, changed source hashes, or missing evidence fail before beta build work starts.
+
+This check proves engineering release-input integrity only. It does not approve public distribution or complete the separate capability, entitlement, provisioning, CloudKit production-schema, export-classification, privacy, or legal gates.
+
 ## Native source versions and rebuild entry points
 
 - Ghostty fork repository: `https://github.com/wiedymi/ghostty.git`
 - Ghostty source commit: `268a0a9d761fb19673f05d28042488e2002300f2`
 - OpenSSL: 3.2.0
+- OpenSSL source archive SHA-256: `14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e`
 - libssh2: 1.11.0
+- libssh2 source archive SHA-256: `3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461`
 
 The imported rebuild entry points are:
 

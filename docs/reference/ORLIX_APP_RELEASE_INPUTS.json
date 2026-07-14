@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "source_import": {
+    "commit": "791eebae946b0831ffff3ac839e0f2b75d076458",
+    "path": "Orlix/App",
+    "provenance": "docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md"
+  },
+  "swift_packages": {
+    "MLXSwift": {
+      "revision": "072b684acaae80b6a463abab3a103732f33774bf",
+      "url": "https://github.com/ml-explore/mlx-swift"
+    },
+    "OpenTelemetrySwift": {
+      "revision": "21374ac2439aee4e206721ef91a7e8bf4c0579d6",
+      "url": "https://github.com/open-telemetry/opentelemetry-swift.git"
+    },
+    "OpenTelemetrySwiftCore": {
+      "revision": "84b9e341cbb7b4dd62cd1b89cd9e008995084132",
+      "url": "https://github.com/open-telemetry/opentelemetry-swift-core.git"
+    },
+    "SwiftCloudflared": {
+      "revision": "1be78afe5dae7a20ce0837ce34085f03a77f7587",
+      "url": "https://github.com/wiedymi/swift-cloudflared.git"
+    },
+    "SwiftMosh": {
+      "revision": "bb4eacdf65303b2ecce624a91e98298c4ee94fca",
+      "url": "https://github.com/wiedymi/swift-mosh"
+    },
+    "SwiftNumerics": {
+      "revision": "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
+      "url": "https://github.com/apple/swift-numerics"
+    },
+    "TweetNaclSwiftwrap": {
+      "revision": "f8fd111642bf2336b11ef9ea828510693106e954",
+      "url": "https://github.com/bitmark-inc/tweetnacl-swiftwrap.git"
+    },
+    "ZIPFoundation": {
+      "revision": "edbeaa39b426e54702194b0a601342322f01e400",
+      "url": "https://github.com/weichsel/ZIPFoundation.git"
+    }
+  },
+  "native_sources": {
+    "ghostty": {
+      "commit": "268a0a9d761fb19673f05d28042488e2002300f2",
+      "repository": "https://github.com/wiedymi/ghostty.git"
+    },
+    "libssh2": {
+      "archive_sha256": "3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461",
+      "version": "1.11.0"
+    },
+    "openssl": {
+      "archive_sha256": "14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e",
+      "version": "3.2.0"
+    }
+  },
+  "vendor_artifacts": {
+    "Orlix/App/Vendor/libghostty/GhosttyKit.xcframework/ios-arm64-simulator/libghostty-fat.a": "988be2b71cd39268d6bd37ad837c4eefe7d303e628c97b2e1904c82a8e9f3434",
+    "Orlix/App/Vendor/libghostty/GhosttyKit.xcframework/ios-arm64/libghostty-fat.a": "be381b87be062209f3df3436ab6323a2ccaab90b4d7085285cb247b02d3c011e",
+    "Orlix/App/Vendor/libghostty/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a": "24657ed0d641468e33adb4e94f57482a1c888373eb95530095e60f302aa9d961",
+    "Orlix/App/Vendor/libghostty/ios-simulator/lib/libghostty.a": "a6f574a9ae82841c5352040a250a088ea709666872b1632f7e4365ffd0932d4e",
+    "Orlix/App/Vendor/libghostty/ios/lib/libghostty.a": "174ba3a25d226c4e8d389be1414d525d2329beb97662efc45b4937f71ab9b9d4",
+    "Orlix/App/Vendor/libghostty/lib/libghostty.a": "4d7e2fde81f3b2a65510eebb7f4b5283cb6bed4fa640887d2d86aeca20b1d5ba",
+    "Orlix/App/Vendor/libssh2/ios-simulator/lib/libcrypto.a": "dfeea8d36da6f355a7c6fde456f4fddecc3bf0a744f54d72d56ee35283493b44",
+    "Orlix/App/Vendor/libssh2/ios-simulator/lib/libssh2.a": "903fb853fd3a89f237e38e48cab0487ae3470c7dcbaa655c008988ab15888eab",
+    "Orlix/App/Vendor/libssh2/ios-simulator/lib/libssl.a": "c674f7ab79f41e4d4cc37b5a1c24ec9ee7532b07093fe78f9bd2189b21c530b1",
+    "Orlix/App/Vendor/libssh2/ios/lib/libcrypto.a": "36c18281e9bd8a38a5f4398c1c928fd8b021622239beac3e01786819b86803f5",
+    "Orlix/App/Vendor/libssh2/ios/lib/libssh2.a": "77e1817bd3a5e30cb71ea7779e368df77e4e26cd8fed050edd14676b342f7cf1",
+    "Orlix/App/Vendor/libssh2/ios/lib/libssl.a": "d4772f6bb8c3e271f255b6ac16fbe72a9070537e28fa778b10adca6dc0d0fe70",
+    "Orlix/App/Vendor/libssh2/macos/lib/libcrypto.a": "5cf352407c36053b23b33c03c3873481c1201fee54b912cf3465388a7aa1107c",
+    "Orlix/App/Vendor/libssh2/macos/lib/libssh2.a": "ada64acbb596b5d22ae8a7d58c5b00499004dad8f636ea0e57770b688b463de7",
+    "Orlix/App/Vendor/libssh2/macos/lib/libssl.a": "783e6581ccd9cf57757b1cf011460688b759b2df20875ff01a6ff2186dcbc0f0"
+  },
+  "required_evidence": [
+    "Orlix/App/LICENSE",
+    "Orlix/App/THIRD_PARTY_NOTICES.md",
+    "Orlix/App/Orlix/PrivacyInfo.xcprivacy",
+    "Orlix/App/Orlix-iOS/Orlix.entitlements",
+    "Orlix/App/OrlixLiveActivity/Info.plist",
+    "docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md"
+  ],
+  "public_distribution_approved": false
+}

@@ -11,7 +11,9 @@ VENDOR_SSH="$PROJECT_ROOT/Vendor/libssh2"
 BUILD_DIR_SSH="$PROJECT_ROOT/.build/ssh"
 
 OPENSSL_VERSION="3.2.0"
+OPENSSL_SHA256="14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e"
 LIBSSH2_VERSION="1.11.0"
+LIBSSH2_SHA256="3736161e41e2693324deb38c26cfdc3efe6209d634ba4258db1cecff6a5ad461"
 MACOS_DEPLOYMENT_TARGET="13.3"
 IOS_DEPLOYMENT_TARGET="16.0"
 
@@ -69,6 +71,7 @@ check_deps_ghostty() {
 
 check_deps_ssh() {
     require_cmd curl
+    require_cmd shasum
     require_cmd tar
     require_cmd cmake
     require_cmd make
@@ -86,6 +89,11 @@ strip_lib() {
 
 build_ghosttykit() {
     log_section "GhosttyKit"
+
+    if [[ ! "$GHOSTTY_REF" =~ ^[0-9a-f]{40}$ ]]; then
+        log_error "GHOSTTY_REF must be a full 40-character commit, got: $GHOSTTY_REF"
+        exit 1
+    fi
 
     GHOSTTY_WORKDIR="$(mktemp -d "/tmp/ghosttykit.XXXXXX")"
     local workdir="$GHOSTTY_WORKDIR"
@@ -245,20 +253,50 @@ PY
 
 # ---------- libssh2 / OpenSSL ----------
 
+download_verified_archive() {
+    local url="$1"
+    local archive="$2"
+    local expected_sha256="$3"
+
+    if [ ! -f "$archive" ]; then
+        local partial="${archive}.partial"
+        rm -f "$partial"
+        curl --fail --location --retry 3 --output "$partial" "$url"
+        mv "$partial" "$archive"
+    fi
+
+    local actual_sha256
+    actual_sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    if [ "$actual_sha256" != "$expected_sha256" ]; then
+        log_error "SHA-256 mismatch for $archive: expected $expected_sha256, got $actual_sha256"
+        exit 1
+    fi
+}
+
 download_sources() {
     mkdir -p "${BUILD_DIR_SSH}"
     cd "${BUILD_DIR_SSH}"
 
+    local openssl_archive="openssl-${OPENSSL_VERSION}.tar.gz"
+    download_verified_archive \
+        "https://www.openssl.org/source/${openssl_archive}" \
+        "$openssl_archive" \
+        "$OPENSSL_SHA256"
+
     if [ ! -d "openssl-${OPENSSL_VERSION}" ]; then
-        log_info "Downloading OpenSSL ${OPENSSL_VERSION}..."
-        curl -L -O "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
-        tar xzf "openssl-${OPENSSL_VERSION}.tar.gz"
+        log_info "Extracting OpenSSL ${OPENSSL_VERSION}..."
+        tar xzf "$openssl_archive"
     fi
 
+    local libssh2_archive="libssh2-${LIBSSH2_VERSION}.tar.gz"
+    download_verified_archive \
+        "https://www.libssh2.org/download/${libssh2_archive}" \
+        "$libssh2_archive" \
+        "$LIBSSH2_SHA256"
+
     if [ ! -d "libssh2-${LIBSSH2_VERSION}" ]; then
-        log_info "Downloading libssh2 ${LIBSSH2_VERSION}..."
-        curl -L -O "https://www.libssh2.org/download/libssh2-${LIBSSH2_VERSION}.tar.gz"
-        tar xzf "libssh2-${LIBSSH2_VERSION}.tar.gz"
+        log_info "Extracting libssh2 ${LIBSSH2_VERSION}..."
+        tar xzf "$libssh2_archive"
     fi
 }
 
@@ -466,6 +504,10 @@ clean() {
     log_info "Clean complete"
 }
 
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
+
 COMMAND="${1:-all}"
 
 case "${COMMAND}" in
@@ -494,4 +536,4 @@ case "${COMMAND}" in
         print_usage
         exit 1
         ;;
- esac
+esac
