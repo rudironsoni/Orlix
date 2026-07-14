@@ -27,10 +27,11 @@ if printf '%s' "$payload" | grep -q 'todo:' &&
   warn "TODO TCTI targets must exit non-zero and passed=false."
 fi
 
-for config in \
-  "$root/OrlixKernel/Sources/ports/orlix/configs/development_defconfig" \
-  "$root/OrlixKernel/Sources/ports/orlix/configs/release_defconfig"; do
-  if test -f "$config" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$config"; then
-    warn "product defconfig safety is unlocked in $(basename "$config")."
-  fi
-done
+development="$root/OrlixKernel/Sources/ports/orlix/configs/development_defconfig"
+release="$root/OrlixKernel/Sources/ports/orlix/configs/release_defconfig"
+if test -f "$development" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$development"; then
+  warn "development_defconfig must remain native-only."
+fi
+if test -f "$release" && grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' "$release"; then
+  warn "release_defconfig must remain TCTI-only without switch-debug."
+fi

@@ -270,7 +270,7 @@ rtk test env PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/s
 ```
 
 - Current hook state: compiled and linked in the development KUnit path, not stub-only, but runtime-incomplete and not physical-device proven.
-- Pre-rails `development_defconfig` and `release_defconfig` set `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`. That was a release-blocking inconsistency, not a runtime milestone. Product defconfigs must stay native-default until the gates below pass.
+- `development_defconfig` remains the explicit native development profile. `release_defconfig` uses TCTI because the native backend requires host-executable mappings that the App Store-safe HostAdapter rejects. Neither profile enables the switch-debug oracle.
 
 ## Exact Files To Change
 
@@ -349,22 +349,23 @@ Add Kconfig:
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH`
 - `CONFIG_ORLIX_TCTI_KUNIT_TEST`
 
-Initial defaults:
+Profile defaults:
 
-- `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`
-- `CONFIG_ORLIX_HOSTED_EXEC_TCTI=n`
-- `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=n` in product defconfigs
+- `development_defconfig`: `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y` and `CONFIG_ORLIX_HOSTED_EXEC_TCTI=n`
+- `release_defconfig`: `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=n` and `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`
+- `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=n` in both product profiles
 - `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y` only when TCTI and debug/test configs enable it
 - `CONFIG_ORLIX_TCTI_KUNIT_TEST=y` only in test/debug configs
 
-`make tcti-gate TARGET=tcti-plan-consistency` must fail if product `development_defconfig` or `release_defconfig` re-enable `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` or `CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y`, or if they lack `CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y`.
+`make tcti-gate TARGET=tcti-plan-consistency` must fail unless development uses only the native backend, release uses only TCTI, and the release profile keeps `CONFIG_ORLIX_TCTI_DEBUG_SWITCH` disabled.
 
-Reason for not flipping release default immediately:
+Reason for the split:
 
-- An unfinished TCTI scaffold must not replace the currently booting native path until `tcti-init-first-syscall` passes on physical iPhone. The ADR direction is TCTI as the first physical-iPhone beta backend, but the config flip is a gated implementation milestone.
-- Test targets may enable TCTI through generated test configs. Product `development_defconfig` and `release_defconfig` must not default to TCTI until the gates below pass.
+- Development retains the native backend for explicit local diagnosis.
+- Release must use the ADR 0022 no-JIT TCTI path. Selecting native for TestFlight deterministically fails before Linux userspace because executable guest mappings are forbidden.
+- Selecting TCTI does not claim runtime readiness. Simulator and release gates still decide whether the build can ship.
 
-Development default may flip only after:
+Any future proposal to make development use TCTI must wait until:
 
 - `make tcti-gate TARGET=tcti-contract` passes
 - `make tcti-gate TARGET=tcti-golden-elf` passes
@@ -372,11 +373,9 @@ Development default may flip only after:
 - `make tcti-gate TARGET=tcti-appstore-safety-audit` passes
 - physical `tcti-init-first-syscall` passes
 
-Release default may flip only after:
-
-- all first gates pass
-- release physical matrix passes
-- JSON reports show no forbidden behavior
+Release selection is fixed by architecture. Shipping remains blocked until the
+mandatory simulator matrix and release gates pass with all forbidden behavior
+false. Optional physical-device validation remains separately gated.
 
 Build integration:
 

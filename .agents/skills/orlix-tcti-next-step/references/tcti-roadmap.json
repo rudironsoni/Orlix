@@ -31,7 +31,7 @@
         "tools/tcti/orlix-tcti-gate.swift"
       ],
       "forbidden_scope": [
-        "Do not enable CONFIG_ORLIX_HOSTED_EXEC_TCTI in product defconfigs before flip gates pass.",
+        "Keep development native-only and release TCTI-only with switch-debug disabled.",
         "Do not edit generated Linux trees under Build/OrlixKernel/src/linux-*-port.",
         "Do not run simulator or physical-device gates."
       ],
@@ -55,7 +55,7 @@
       ],
       "commit_message_template": "chore(tcti): keep plan and config rails consistent",
       "stop_conditions": [
-        "Stop if product defconfigs default to TCTI.",
+        "Stop if development is not native-only or release is not TCTI-only.",
         "Stop if ADR or PLAN stale references contradict the current TCTI ownership model."
       ],
       "proof_tier": "rail",

@@ -247,3 +247,11 @@
 - The App Store safety audit now scans `arch/orlix/kernel/hosted_exec.c` and detects the existing runtime-generated syscall-gate page mapped host-executable. The current report correctly fails with `generated_exec_memory=true`; release eligibility remains false.
 - The safety check is deliberately direct: it flags a file that both populates `orlix_hosted_syscall_gate_page` and calls `orlix_host_user_map_trusted_executable_page`, without adding a new authorization framework.
 - Focused hook tests, Swift typechecks, gate-result policy fixtures, `tcti-plan-consistency`, `agent-harness-check`, and `git diff --check` passed. The safety gate intentionally fails on the real generated executable-memory violation.
+
+### 2026-07-14 Checkpoint: Release Backend Corrected
+
+- `release_defconfig` now selects `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y` and disables `CONFIG_ORLIX_HOSTED_EXEC_NATIVE`. `development_defconfig` remains native-only.
+- Canonical plan, safety skill, plan-consistency skill, safety hooks, roadmap entry, and gate validation now enforce that split. Selecting TCTI for release does not claim runtime readiness or bypass simulator/release gates.
+- The App Store audit treats the native runtime-generated syscall gate as a release violation only when native is selected by the release profile. With release on TCTI, the current audit passes with every forbidden behavior false.
+- `tcti-plan-consistency`, `tcti-appstore-safety-audit`, Swift typecheck, and the full agent harness check passed. No phone, archive, export, upload, or App Store Connect mutation ran.
+- `make product-build-prepare` advanced the shared product build from 30 to 31 because the release kernel backend changed.

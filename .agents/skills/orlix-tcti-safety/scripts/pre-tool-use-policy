@@ -253,11 +253,14 @@ case "$payload" in
     ;;
 esac
 
-if printf '%s' "$payload" |
-  grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y' &&
-  printf '%s' "$payload" |
-    grep -Eq 'development_defconfig|release_defconfig'; then
-  block "product defconfigs must not default to TCTI/debug-switch before autonomous and physical gates pass."
+if printf '%s' "$payload" | grep -Eq 'development_defconfig' &&
+   printf '%s' "$payload" | grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_TCTI=y'; then
+  block "development_defconfig must remain native-only."
+fi
+
+if printf '%s' "$payload" | grep -Eq 'release_defconfig' &&
+   printf '%s' "$payload" | grep -Eq 'CONFIG_ORLIX_HOSTED_EXEC_NATIVE=y|CONFIG_ORLIX_TCTI_DEBUG_SWITCH=y'; then
+  block "release_defconfig must use TCTI without the switch-debug oracle."
 fi
 
 if printf '%s' "$payload" |

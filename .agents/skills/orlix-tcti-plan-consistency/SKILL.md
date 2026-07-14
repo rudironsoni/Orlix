@@ -20,7 +20,7 @@ description: Orlix TCTI plan-consistency agent harness. Use for ADR, PLAN, IMPLE
 
 - Do not patch around failed consistency checks.
 - Do not update generated trees.
-- Do not flip product defaults as part of consistency repair.
+- Preserve the canonical split: native development, TCTI release, no release switch-debug oracle.
 
 ## Commands It May Run
 
@@ -37,4 +37,4 @@ description: Orlix TCTI plan-consistency agent harness. Use for ADR, PLAN, IMPLE
 ## Stop Conditions
 
 - Stop if ADR/PLAN/IMPLEMENT conflict.
-- Stop if product defconfigs enable TCTI by default.
+- Stop if development is not native-only or release is not TCTI-only.
