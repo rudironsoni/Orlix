@@ -98,15 +98,7 @@ targets:
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
           platform="${PLATFORM_NAME:?}"
-          build_root="${ORLIX_BUILD_ROOT:-}"
-          if [ -z "$build_root" ]; then
-              external_root="$(external-ssd-root 2>/dev/null || true)"
-              if [ -n "$external_root" ]; then
-                  build_root="$external_root/Xcode/OrlixSystem/Build"
-              else
-                  build_root="$SRCROOT/Build"
-              fi
-          fi
+          build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           case "$platform" in
               iphoneos|iphonesimulator) ;;
               *) echo "unsupported OrlixKernel archive platform: $platform" >&2; exit 1 ;;
@@ -193,15 +185,7 @@ targets:
         script: |
           set -eu
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-          build_root="${ORLIX_BUILD_ROOT:-}"
-          if [ -z "$build_root" ]; then
-              external_root="$(external-ssd-root 2>/dev/null || true)"
-              if [ -n "$external_root" ]; then
-                  build_root="$external_root/Xcode/OrlixSystem/Build"
-              else
-                  build_root="$SRCROOT/Build"
-              fi
-          fi
+          build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           ORLIX_BUILD_ROOT="$build_root"
           if [ "${ORLIX_OS_SKIP_PAYLOAD_EMBED:-NO}" = YES ]; then
               echo "Skipping OrlixOS payload embed because ORLIX_OS_SKIP_PAYLOAD_EMBED=YES"
@@ -552,15 +536,7 @@ targets:
           set -eu
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           profile="${ORLIX_PROFILE:-release}"
-          build_root="${ORLIX_BUILD_ROOT:-}"
-          if [ -z "$build_root" ] || [ "$build_root" = "$SRCROOT/Build" ]; then
-              external_root="$(external-ssd-root 2>/dev/null || true)"
-              if [ -n "$external_root" ]; then
-                  build_root="$external_root/Xcode/OrlixSystem/Build"
-              else
-                  build_root="$SRCROOT/Build"
-              fi
-          fi
+          build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
           ORLIX_BUILD_ROOT="$build_root"
           rebuild_kselftest_if_stale() {
             source_root="$ORLIX_BUILD_ROOT/OrlixMLibC/test-initramfs/$profile/$ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME.$extension"

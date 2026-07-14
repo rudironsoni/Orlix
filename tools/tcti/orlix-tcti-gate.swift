@@ -5960,25 +5960,9 @@ func runCoreutilsTestSubset() throws -> Int32 {
     return exitCode(for: status)
 }
 
-func xcodeOffloadOrlixBuildRoot() -> String? {
-    guard let externalRoot = try? run(["external-ssd-root"], check: false)
-        .trimmingCharacters(in: .whitespacesAndNewlines),
-          !externalRoot.isEmpty else {
-        return nil
-    }
-    return URL(fileURLWithPath: externalRoot, isDirectory: true)
-        .appendingPathComponent("Xcode", isDirectory: true)
-        .appendingPathComponent("OrlixSystem", isDirectory: true)
-        .appendingPathComponent("Build", isDirectory: true)
-        .path
-}
-
 func orlixProductBuildRoot() -> URL {
     if let override = ProcessInfo.processInfo.environment["ORLIX_BUILD_ROOT"], !override.isEmpty {
         return URL(fileURLWithPath: override, isDirectory: true)
-    }
-    if let externalBuildRoot = xcodeOffloadOrlixBuildRoot() {
-        return URL(fileURLWithPath: externalBuildRoot, isDirectory: true)
     }
     return repoRoot().appendingPathComponent("Build", isDirectory: true)
 }
@@ -5988,10 +5972,9 @@ func ociXcodeEnvironmentArguments(kernelProfile: String) -> [String] {
         "PATH=\(ProcessInfo.processInfo.environment["HOME"] ?? "")/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
         "ORLIX_PROFILE=\(kernelProfile)",
     ]
-    if let buildRoot = xcodeOffloadOrlixBuildRoot() {
-        arguments.append("ORLIX_BUILD_ROOT=\(buildRoot)")
-        arguments.append("ORLIX_RUNTIME_FIXTURE_ROOT=\(buildRoot)/OrlixOS/environment-runtime-test-fixtures")
-    }
+    let buildRoot = orlixProductBuildRoot().path
+    arguments.append("ORLIX_BUILD_ROOT=\(buildRoot)")
+    arguments.append("ORLIX_RUNTIME_FIXTURE_ROOT=\(buildRoot)/OrlixOS/environment-runtime-test-fixtures")
     return arguments
 }
 

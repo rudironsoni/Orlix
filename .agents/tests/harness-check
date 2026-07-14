@@ -1,0 +1,55 @@
+#!/usr/bin/env sh
+set -eu
+
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$root"
+
+mode="${1:-all}"
+
+check_hooks() {
+  python3 -m unittest discover -s .codex/hooks/tests -p 'test_*.py'
+  rulesync generate --targets codexcli --features hooks --check
+}
+
+check_skills() {
+  for directory in .agents/skills/*; do
+    test -d "$directory" || continue
+    test -f "$directory/SKILL.md" || {
+      printf '%s\n' "missing skill entrypoint: $directory/SKILL.md" >&2
+      return 1
+    }
+  done
+}
+
+check_subagents() {
+  python3 -c 'import pathlib, tomllib; [tomllib.loads(path.read_text()) for path in pathlib.Path(".codex/agents").glob("*.toml")]'
+  for path in .codex/subagents/*.md; do
+    test -s "$path" || {
+      printf '%s\n' "missing or empty subagent adapter: $path" >&2
+      return 1
+    }
+  done
+}
+
+check_mcp() {
+  if test -f .rulesync/mcp.json; then
+    python3 -m json.tool .rulesync/mcp.json >/dev/null
+  fi
+}
+
+case "$mode" in
+  all)
+    check_hooks
+    check_skills
+    check_subagents
+    check_mcp
+    ;;
+  hooks) check_hooks ;;
+  skills) check_skills ;;
+  subagents) check_subagents ;;
+  mcp) check_mcp ;;
+  *)
+    printf '%s\n' "unsupported harness check: $mode" >&2
+    exit 2
+    ;;
+esac

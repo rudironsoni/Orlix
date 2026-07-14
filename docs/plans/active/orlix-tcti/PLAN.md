@@ -1619,8 +1619,14 @@ The audit target is the enforcement mechanism. Do not claim App Store safety fro
 Ownership split:
 
 - KUnit owns kernel-bound unit contracts inside `arch/orlix`: syscall handoff, fault boundaries, mm interaction, invalidation hooks, task/thread state, and TCTI ABI invariants.
+- Linux kselftest owns Linux-visible syscall, exec, fd, signal, wait, namespace, VFS, and device behavior executed through the `tcti_runtime` profile.
 - Swift/host tools own golden ELF build metadata, report schema validation, reducer replay, appstore-safety scanning, differential block execution, memory fuzzing, direct-chain fuzzing, agent status, next-task selection, task-envelope validation, and no-phone gate orchestration.
 - XCTest/runtime validation owns app packaging, HostAdapter mediation, simulator wiring, physical-device lifecycle, device logs, and no-forbidden-host-behavior runtime evidence.
+
+`make tcti-kernel-tests` is the kernel proof entrypoint. It fails unless the TCTI
+KUnit object builds, the executable kernel workload runner passes, and the
+complete Orlix kernel kselftest rootfs completes through an app-hosted
+`tcti_runtime` session. The KUnit object build alone is not KUnit execution proof.
 
 Agent harness checks:
 

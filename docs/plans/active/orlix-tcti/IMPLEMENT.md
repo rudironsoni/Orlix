@@ -8542,3 +8542,11 @@ Timestamp: `2026-07-06T20:29:32Z`.
 - Rebuilt the external `tcti_runtime/iphonesimulator` and `release/iphonesimulator` kernel archives with targeted `CCACHE_RECACHE=1`. The release generated config contains `CONFIG_ORLIX_HOSTED_EXEC_TCTI=y`, keeps `CONFIG_ORLIX_HOSTED_EXEC_NATIVE` unset, and keeps `CONFIG_ORLIX_TCTI_DEBUG_SWITCH` unset.
 - `tcti-appstore-safety-audit` passed after scanning 46 source files, one TCTI object, two product/TCTI archives, and four selected product/TCTI objects. Every forbidden-behavior field is false and there are no coverage warnings.
 - `tcti-plan-consistency`, roadmap JSON parsing, safety-hook shell syntax, Swift type checking, `git diff --check`, and strict external-storage health checks passed. Runtime readiness, the simulator ladder, archive, export, upload, and TestFlight availability remain unproven.
+
+## 2026-07-14 TCTI proof moved out of lifecycle hooks
+
+- Retired Codex lifecycle adapters and skill-local command parsers that blocked TCTI device or release commands. Lifecycle hooks now enforce repo-wide workflow only.
+- Added `make tcti-kernel-tests` to combine the existing TCTI KUnit build and executable workload runner with the complete app-hosted Orlix kselftest rootfs under `tcti_runtime`.
+- `make -f OrlixKernel/Makefile kunit-run PROFILE=tcti_runtime` passed. The KUnit object compiled and the executable syscall-dispatch workload runner passed; this is not evidence that every KUnit case executed.
+- The app-hosted full kselftest attempt built the real `tcti_runtime` simulator kernel and attached XCTest, but did not emit `ORLIX-KSELFTEST-END`. `xcodebuild` remained alive after the simulator test runner exited and left the xcresult without `Info.plist`; the invocation was interrupted and is not a pass.
+- `make agent-harness-check`, the 40-test lifecycle-hook suite, and `make tcti-gate TARGET=tcti-plan-consistency` passed. TCTI runtime readiness remains unproven.

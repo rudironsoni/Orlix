@@ -15,7 +15,7 @@ description: Orlix TCTI safety agent harness. Use for App Store, x18, JIT, MAP_J
 
 - Run TCTI safety checks and plan consistency.
 - Inspect product defconfigs, source diffs, generated-tree references, and TCTI reports.
-- Block unsafe commands through skill-local hook scripts.
+- Validate unsafe TCTI states through named KUnit, kselftest, safety-audit, and runtime gates.
 
 ## Forbidden Scope
 
@@ -28,6 +28,7 @@ description: Orlix TCTI safety agent harness. Use for App Store, x18, JIT, MAP_J
 
 - `rtk proxy make tcti-gate TARGET=tcti-appstore-safety-audit`
 - `rtk proxy make tcti-gate TARGET=tcti-plan-consistency`
+- `rtk proxy make tcti-kernel-tests`
 - `rtk proxy make agent-mcp-check`
 - `rtk grep -n "x18\\|w18\\|MAP_JIT\\|RWX\\|PROT_EXEC\\|vm_protect"`
 

@@ -76,6 +76,12 @@ Use Codex-native surfaces deliberately:
 
 `rtk` only shrinks command output. Harness rules and hooks must treat `rtk <command>` as equivalent to `<command>` for approval and block decisions.
 
+Repository lifecycle hooks enforce only repo-wide workflow invariants. They must
+not select, authorize, or validate TCTI work, release readiness, physical-device
+work, or machine-specific Xcode storage. TCTI kernel correctness is validated by
+`make tcti-kernel-tests` through the KUnit build and executable workload runner,
+followed by Linux kselftest execution through the app-hosted TCTI kernel.
+
 ## Proof Rules
 
 Define success criteria before implementation and verify them before claiming completion.

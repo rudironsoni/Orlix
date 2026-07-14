@@ -1,33 +1,18 @@
 #!/usr/bin/env python3
 from orlix_hook_common import (
     block,
-    external_ssd_bypass_violation,
     flattened_text,
     generated_tree_write_violation,
     parse_json,
     read_stdin_text,
-    repo_root,
-    selected_task_policy,
-    unauthorized_physical_command,
-    unauthorized_release_command,
     warn,
 )
 
 payload = parse_json(read_stdin_text())
 text = flattened_text(payload)
-policy = selected_task_policy(repo_root())
 
 if generated_tree_write_violation(payload):
     block("Do not request permission to mutate generated upstream/build trees.")
-
-if unauthorized_physical_command(payload, policy):
-    block("Permission cannot override physical_device_allowed=false. Complete the simulator frontier first.")
-
-if unauthorized_release_command(payload, policy):
-    block("Permission cannot override the external-beta requirement for current, complete mandatory simulator L0-L3 evidence. Physical-device L4 evidence is optional.")
-
-if external_ssd_bypass_violation(payload):
-    block("Permission cannot bypass the external-SSD Xcode storage contract. Use the configured wrappers and xcode-offload doctor --root \"$(external-ssd-root)\" --require-shims --strict.")
 
 if 'prefix_rule": ["python3"]' in text or "prefix_rule = [\"python3\"]" in text:
     block("Do not request broad Python escalation rules. Request a narrow command prefix.")

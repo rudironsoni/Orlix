@@ -93,8 +93,7 @@ ZSH_VERSION ?= 5.9
 ZSH_URL ?= https://www.zsh.org/pub/zsh-$(ZSH_VERSION).tar.xz
 ZSH_SHA256 ?= 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
 
-ORLIX_EXTERNAL_SSD_ROOT ?= $(shell command -v external-ssd-root >/dev/null 2>&1 && external-ssd-root 2>/dev/null)
-ORLIX_BUILD_ROOT ?= $(if $(ORLIX_EXTERNAL_SSD_ROOT),$(ORLIX_EXTERNAL_SSD_ROOT)/Xcode/OrlixSystem/Build,$(REPO_ROOT)/Build)
+ORLIX_BUILD_ROOT ?= $(REPO_ROOT)/Build
 ORLIXOS_BUILD_ROOT := $(ORLIX_BUILD_ROOT)/OrlixOS
 ORLIXOS_UPSTREAM_DIR := $(ORLIXOS_BUILD_ROOT)/upstream
 ORLIXOS_SRC_DIR := $(ORLIXOS_BUILD_ROOT)/src

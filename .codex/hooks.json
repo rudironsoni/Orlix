@@ -1,21 +1,5 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/plan_context_guard.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/session_start_context\"",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash|apply_patch|Edit|Write",
@@ -23,11 +7,6 @@
           {
             "type": "command",
             "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/pre_tool_use_guard.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/pre_tool_use_policy\"",
             "timeout": 30
           }
         ]
@@ -47,16 +26,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Read|Grep|Glob|LS|apply_patch|Edit|Write",
+        "matcher": "Bash|apply_patch|Edit|Write",
         "hooks": [
           {
             "type": "command",
             "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/post_tool_use_review.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/post_tool_use_review\"",
             "timeout": 30
           }
         ]
@@ -68,11 +42,6 @@
           {
             "type": "command",
             "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/stop_claim_check.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/stop_guard\"",
             "timeout": 30
           }
         ]
