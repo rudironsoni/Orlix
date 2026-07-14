@@ -32,13 +32,13 @@ The pinned baseline `Package.resolved` records:
 
 | Package | Version or baseline declaration | Immutable revision |
 | --- | --- | --- |
-| `mlx-swift` | 0.29.1 | `072b684acaae80b6a463abab3a103732f33774bf` |
+| `mlx-swift` | 0.29.1, latest compatible with iOS 16.1 | `072b684acaae80b6a463abab3a103732f33774bf` |
 | `swift-cloudflared` | 0.1.2 | `1be78afe5dae7a20ce0837ce34085f03a77f7587` |
 | `swift-mosh` | 0.1.6 | `bb4eacdf65303b2ecce624a91e98298c4ee94fca` |
 | `swift-numerics` | 1.1.1 | `0c0290ff6b24942dadb83a929ffaaa1481df04a2` |
 | `swift-umami` | mutable `main` declaration in the source baseline | `e7a14c16d745ec1d7e4355f35407f8407808475a` in the baseline lockfile |
-| `tweetnacl-swiftwrap` | 1.1.0 | `f8fd111642bf2336b11ef9ea828510693106e954` |
-| `ZIPFoundation` | 0.9.9 | `edbeaa39b426e54702194b0a601342322f01e400` |
+| `tweetnacl-swiftwrap` | current upstream `master` | `a7776eb5388467ec553b855846e24438288e2da5` |
+| `ZIPFoundation` | 0.9.20 | `22787ffb59de99e5dc1fbfe80b19c97a904ad48d` |
 
 Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami is absent from both the authoritative Orlix production graph and the renamed standalone project. The Orlix analytics adapter preserves the imported typed product events and properties through `OrlixTelemetry`; it performs no Umami networking. The pinned baseline dependency remains recorded here only so the pristine source graph remains auditable.
 
