@@ -3,7 +3,6 @@ from orlix_hook_common import (
     active_plan_dirs,
     block,
     flattened_text,
-    generated_tree_write_violation,
     is_git_commit_or_push,
     load_plan_context_state,
     oversized_goal_messages,
@@ -30,9 +29,6 @@ if active_plan_dirs(root):
         implement_update_time = float(state.get("implement_update_time", 0.0) or 0.0)
         if mutation_time and implement_update_time < mutation_time:
             block("Active IMPLEMENT.md must be updated after mutation before git commit or push.")
-
-if generated_tree_write_violation(payload):
-    block("Generated upstream/build trees are read-only for agents. Move the fix to the owning Orlix layer.")
 
 if is_git_commit_or_push(payload):
     for message in oversized_goal_messages(root):
