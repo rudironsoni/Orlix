@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import concurrent.futures
 import json
 import os
 import subprocess
@@ -137,6 +138,54 @@ class LifecycleGuardTests(unittest.TestCase):
 
         self.assertEqual(read_result.returncode, 0, read_result.stderr)
         self.assertEqual(mutate_result.returncode, 0, mutate_result.stderr)
+
+    def test_plan_context_guard_preserves_concurrent_required_reads(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as state_tmp:
+            root = Path(tmp)
+            subprocess.run(
+                ["git", "init"],
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+            create_active_plan(root)
+            active = root / "docs" / "plans" / "active"
+            for index in range(1, 8):
+                plan = active / f"demo-{index}"
+                plan.mkdir(parents=True)
+                (plan / "GOAL.md").write_text("# Goal\n")
+                (plan / "PLAN.md").write_text("# Plan\n")
+                (plan / "IMPLEMENT.md").write_text("# IMPLEMENT.md\n")
+
+            paths = ["AGENTS.md"]
+            for plan in sorted(active.iterdir()):
+                paths.extend(
+                    str((plan / name).relative_to(root))
+                    for name in ("GOAL.md", "PLAN.md", "IMPLEMENT.md")
+                )
+            env = hook_env(state_tmp)
+
+            def record_read(path):
+                return run_hook(
+                    POST_TOOL_REVIEW,
+                    bash_payload(f"rtk read {path}", event="PostToolUse"),
+                    cwd=root,
+                    env=env,
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(paths)) as pool:
+                results = list(pool.map(record_read, paths))
+
+            for result in results:
+                self.assertEqual(result.returncode, 0, result.stderr)
+            mutate_result = run_hook(
+                PRE_TOOL_GUARD,
+                write_payload("README.md"),
+                cwd=root,
+                env=env,
+            )
+            self.assertEqual(mutate_result.returncode, 0, mutate_result.stderr)
 
     def test_plan_context_guard_blocks_commit_after_mutation_without_implement_update(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as state_tmp:

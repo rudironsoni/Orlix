@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import fcntl
 import hashlib
 import json
 import os
@@ -414,7 +415,21 @@ def load_plan_context_state(root):
 def save_plan_context_state(root, state):
     path = plan_context_state_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, sort_keys=True))
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    temp_path.write_text(json.dumps(state, sort_keys=True))
+    os.replace(temp_path, path)
+
+
+def update_plan_context_state(root, update):
+    path = plan_context_state_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(f"{path.suffix}.lock")
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        state = load_plan_context_state(root)
+        update(state)
+        save_plan_context_state(root, state)
+        return state
 
 
 def plan_context_loaded(root, state=None):
@@ -506,16 +521,21 @@ def plan_context_post_update(payload):
     root = repo_root()
     if not active_plan_dirs(root):
         return
-    state = load_plan_context_state(root)
-    read_paths = set(state.get("read_paths", []))
-    read_paths.update(plan_read_paths_from_payload(payload))
-    state["read_paths"] = sorted(read_paths)
-    now = time.time()
-    if tool_mutates_workspace(payload):
-        state["mutation_time"] = now
-    if implementation_update_paths_from_payload(payload):
-        state["implement_update_time"] = now
-    save_plan_context_state(root, state)
+    path_updates = plan_read_paths_from_payload(payload)
+    mutation = tool_mutates_workspace(payload)
+    implementation_update = bool(implementation_update_paths_from_payload(payload))
+
+    def update(state):
+        read_paths = set(state.get("read_paths", []))
+        read_paths.update(path_updates)
+        state["read_paths"] = sorted(read_paths)
+        now = time.time()
+        if mutation:
+            state["mutation_time"] = now
+        if implementation_update:
+            state["implement_update_time"] = now
+
+    update_plan_context_state(root, update)
 
 
 def has_implementation_evidence(path):
