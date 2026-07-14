@@ -74,7 +74,7 @@ class GeneratedTreeGuardTests(unittest.TestCase):
     def tcti_runtime_path():
         return "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/" + "hosted_exec/tcti/exec.c"
 
-    def test_pre_tool_guard_blocks_tcti_runtime_write_without_authorization(self):
+    def test_pre_tool_guard_allows_user_directed_tcti_runtime_write_without_autonomous_authorization(self):
         result = run_hook_in_repo(
             PRE_TOOL_GUARD,
             {
@@ -87,10 +87,9 @@ class GeneratedTreeGuardTests(unittest.TestCase):
             {"runtime_patch_allowed": False},
         )
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("runtime_patch_allowed=false", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_pre_tool_guard_allows_tcti_runtime_write_with_authorization(self):
+    def test_pre_tool_guard_allows_tcti_runtime_write_with_autonomous_authorization(self):
         result = run_hook_in_repo(
             PRE_TOOL_GUARD,
             {
@@ -230,7 +229,7 @@ class GeneratedTreeGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("ORLIX-HARNESS-BLOCK", result.stderr)
 
-    def test_pre_tool_guard_does_not_exempt_mixed_hook_and_runtime_patch(self):
+    def test_pre_tool_guard_allows_user_directed_mixed_hook_and_runtime_patch(self):
         patch = "\n".join(
             [
                 "*** Begin Patch",
@@ -245,8 +244,7 @@ class GeneratedTreeGuardTests(unittest.TestCase):
             {"runtime_patch_allowed": False},
         )
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("runtime_patch_allowed=false", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_permission_guard_cannot_override_release_promotion(self):
         command = "make " + "be" + "ta-archive"

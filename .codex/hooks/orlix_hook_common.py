@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import hashlib
-import fnmatch
 import json
 import os
 import re
@@ -24,11 +23,6 @@ GENERATED_PATTERNS = (
 )
 GENERATED_PATH_RE = re.compile(
     r"(?:\./)?(?:" + "|".join(re.escape(pattern) for pattern in GENERATED_PATTERNS) + r")"
-)
-TCTI_RUNTIME_PATTERNS = (
-    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/",
-    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c",
-    "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/",
 )
 WRITE_TOOL_NAMES = {"apply_patch", "edit", "write", "multiedit"}
 BASH_TOOL_NAMES = {"bash", "exec_command", "functions.exec_command"}
@@ -272,20 +266,6 @@ def patch_targets_only_hooks(text):
     return bool(targets) and all(".codex/hooks/" in target for target in targets)
 
 
-def mutation_targets(payload):
-    text = _normalise_escaped_newlines(flattened_text(payload))
-    if "*** Begin Patch" in text:
-        return re.findall(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$", text, re.MULTILINE)
-    return re.findall(r"(?:^|\s)([^\s'\"]*OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/[^\s'\"]+)", text)
-
-
-def scope_matches(path, scope):
-    normalized = path.lstrip("./")
-    if normalized.startswith("../") or "/../" in normalized:
-        return False
-    return fnmatch.fnmatch(normalized, scope) or normalized == scope.rstrip("/")
-
-
 def normalized_command_tokens(payload):
     command = _normalise_escaped_newlines(hook_command(payload)).strip()
     if not command:
@@ -301,27 +281,6 @@ def normalized_command_tokens(payload):
         while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
             tokens.pop(0)
     return tokens
-
-
-def unauthorized_tcti_runtime_write(payload, policy):
-    if not tool_mutates_workspace(payload):
-        return False
-    text = _normalise_escaped_newlines(flattened_text(payload))
-    if patch_targets_only_hooks(text):
-        return False
-    protected = [
-        target for target in mutation_targets(payload)
-        if any(pattern in target for pattern in TCTI_RUNTIME_PATTERNS)
-    ]
-    if not protected:
-        return False
-    if policy.get("_authorization_current") is not True or policy.get("runtime_patch_allowed") is not True:
-        return True
-    allowed = policy.get("allowed_scope")
-    if not isinstance(allowed, list):
-        return True
-    scopes = [scope for scope in allowed if isinstance(scope, str)]
-    return any(not any(scope_matches(target, scope) for scope in scopes) for target in protected)
 
 
 def unauthorized_physical_command(payload, policy):

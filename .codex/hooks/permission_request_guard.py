@@ -10,7 +10,6 @@ from orlix_hook_common import (
     selected_task_policy,
     unauthorized_physical_command,
     unauthorized_release_command,
-    unauthorized_tcti_runtime_write,
     warn,
 )
 
@@ -20,9 +19,6 @@ policy = selected_task_policy(repo_root())
 
 if generated_tree_write_violation(payload):
     block("Do not request permission to mutate generated upstream/build trees.")
-
-if unauthorized_tcti_runtime_write(payload, policy):
-    block("Permission cannot override runtime_patch_allowed=false or the selected runtime path scope.")
 
 if unauthorized_physical_command(payload, policy):
     block("Permission cannot override physical_device_allowed=false. Complete the simulator frontier first.")

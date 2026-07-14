@@ -19,9 +19,10 @@ Inside `/goal`, obey the selected-gate action policy from `Build/AgentHarness/or
 
 If `continue_refresh_allowed=true` and `must_stop=false`, continue executing selected commands through the loop.
 
-Do not patch runtime code unless `runtime_patch_allowed=true`.
-
-Do not patch harness code unless `harness_patch_allowed=true`.
+For autonomous work, patch runtime code only when `runtime_patch_allowed=true`
+and patch harness code only when `harness_patch_allowed=true`. Explicit
+user-directed edits may proceed within the user's stated scope. The policy
+flags still control `agent-goal` continuation and handoff.
 
 If `must_stop=true`, stop and report the classifier result.
 """
