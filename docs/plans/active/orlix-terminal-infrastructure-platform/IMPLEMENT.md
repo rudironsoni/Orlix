@@ -494,7 +494,7 @@ No real archive, signed entitlement, provisioning profile, CloudKit production s
 - Inspected 14 dependency `PrivacyInfo.xcprivacy` files. Three resolved SwiftNIO target manifests declared File Timestamp required-reason API `0A2A.1`; the remaining dependency manifests declared no tracking, collected data, tracking domains, or required-reason APIs.
 - Added File Timestamp `0A2A.1` to the Orlix app manifest alongside existing UserDefaults `CA92.1`. `docs/reference/ORLIX_APP_PRIVACY_AND_LICENSE_AUDIT.md` records the union evidence and limits.
 - Release inputs now pin the full `Package.resolved` hash and pin count, the reviewed privacy source hash, and the exact required-reason union. The validator rejects resolution or privacy-union drift.
-- The license scan found a root license input for 29 of 30 resolved packages plus package-specific notices such as gRPC Swift and OpenTelemetry. The transitive `thrift-swift` checkout at `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains no root license or notice file. The existing distributable notice file covers only the three native vendored dependencies. `package_license_notice_status` therefore remains fail-closed as `blocked_missing_thrift_swift_license`.
+- The license scan found a root license input for 29 of 30 resolved packages plus package-specific notices such as gRPC Swift and OpenTelemetry. The transitive `thrift-swift` checkout at `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains Apache License 2.0 source headers that require a `NOTICE`, but no root license or notice file. The existing distributable notice file covers only the three native vendored dependencies. `package_license_notice_status` therefore remains fail-closed as `blocked_missing_thrift_swift_notice`.
 - The strict public gate now requires approved privacy and package-license status in addition to distribution, encryption, provisioning, and CloudKit production approval.
 - Ran sanctioned product-input versioning after changing the bundled privacy manifest; `CURRENT_PROJECT_VERSION` advanced from 34 to 35.
 
@@ -525,7 +525,7 @@ rtk git diff --check
 exit 0
 ```
 
-This closes the locally derivable privacy source union but does not prove the aggregate privacy report of a real exported package. Complete distributable Swift-package notices, authoritative `thrift-swift` licensing, legal approval, App Review approval, real provisioning, CloudKit production schema, and export encryption classification remain unavailable. #49 and public distribution remain blocked. #51 does not start.
+This closes the locally derivable privacy source union but does not prove the aggregate privacy report of a real exported package. Complete distributable Swift-package notices, the authoritative Apache Thrift NOTICE applicable to `thrift-swift`, legal approval, App Review approval, real provisioning, CloudKit production schema, and export encryption classification remain unavailable. #49 and public distribution remain blocked. #51 does not start.
 
 The required live Xcode health recheck still failed before any archive attempt:
 
