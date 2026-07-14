@@ -39,6 +39,11 @@
       "url": "https://github.com/weichsel/ZIPFoundation.git"
     }
   },
+  "swift_package_resolution": {
+    "path": "Orlix.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+    "sha256": "fbfb181219b355d4500e5279a4cd75cb7345532cab65e141f9c9f1f02c190f2d",
+    "pin_count": 30
+  },
   "native_sources": {
     "ghostty": {
       "commit": "268a0a9d761fb19673f05d28042488e2002300f2",
@@ -76,7 +81,8 @@
     "Orlix/App/Orlix/PrivacyInfo.xcprivacy",
     "Orlix/App/Orlix-iOS/Orlix.entitlements",
     "Orlix/App/OrlixLiveActivity/Info.plist",
-    "docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md"
+    "docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md",
+    "docs/reference/ORLIX_APP_PRIVACY_AND_LICENSE_AUDIT.md"
   ],
   "capability_requirements": [
     "app.foundation",
@@ -594,6 +600,17 @@
     "live_activity_widget_kind": "com.rudironsoni.Orlix.liveactivity",
     "privacy_manifest_relative_path": "PrivacyInfo.xcprivacy",
     "privacy_manifest_source": "Orlix/App/Orlix/PrivacyInfo.xcprivacy",
+    "privacy_manifest_source_sha256": "6d3ed45d047b7e3ed09da81372eb18e7360633e04682682b75bb95f8cb4ba6c6",
+    "privacy_manifest_union_status": "source_reviewed_export_unverified",
+    "package_license_notice_status": "blocked_missing_thrift_swift_license",
+    "privacy_required_reason_union": {
+      "NSPrivacyAccessedAPICategoryUserDefaults": [
+        "CA92.1"
+      ],
+      "NSPrivacyAccessedAPICategoryFileTimestamp": [
+        "0A2A.1"
+      ]
+    },
     "declared_non_exempt_encryption": false,
     "encryption_classification_status": "unverified",
     "provisioning_status": "unverified",

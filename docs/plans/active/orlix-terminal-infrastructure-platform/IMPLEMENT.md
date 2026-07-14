@@ -487,3 +487,52 @@ exit 0
 ```
 
 No real archive, signed entitlement, provisioning profile, CloudKit production schema, encryption classification, App Review approval, or legal approval was available to validate in this checkpoint. The exported-package gate is regression-tested against synthetic package inputs but has not yet passed a real archive. Complete package-license notice coverage and privacy-manifest union review remain #49 work. #51 remains blocked until #49 finishes and the active TCTI/runtime gates permit implementation.
+
+#### 2026-07-14 #49 privacy union and package-license audit
+
+- Audited all 30 pins in the authoritative Swift package resolution, SHA-256 `fbfb181219b355d4500e5279a4cd75cb7345532cab65e141f9c9f1f02c190f2d`.
+- Inspected 14 dependency `PrivacyInfo.xcprivacy` files. Three resolved SwiftNIO target manifests declared File Timestamp required-reason API `0A2A.1`; the remaining dependency manifests declared no tracking, collected data, tracking domains, or required-reason APIs.
+- Added File Timestamp `0A2A.1` to the Orlix app manifest alongside existing UserDefaults `CA92.1`. `docs/reference/ORLIX_APP_PRIVACY_AND_LICENSE_AUDIT.md` records the union evidence and limits.
+- Release inputs now pin the full `Package.resolved` hash and pin count, the reviewed privacy source hash, and the exact required-reason union. The validator rejects resolution or privacy-union drift.
+- The license scan found a root license input for 29 of 30 resolved packages plus package-specific notices such as gRPC Swift and OpenTelemetry. The transitive `thrift-swift` checkout at `18ff09e6b30e589ed38f90a1af23e193b8ecef8e` contains no root license or notice file. The existing distributable notice file covers only the three native vendored dependencies. `package_license_notice_status` therefore remains fail-closed as `blocked_missing_thrift_swift_license`.
+- The strict public gate now requires approved privacy and package-license status in addition to distribution, encryption, provisioning, and CloudKit production approval.
+- Ran sanctioned product-input versioning after changing the bundled privacy manifest; `CURRENT_PROJECT_VERSION` advanced from 34 to 35.
+
+Evidence:
+
+```text
+rtk proxy make app-capability-test
+10 tests, OK
+
+rtk proxy make app-release-inputs-test
+pass: Orlix application capability manifest
+pass: Orlix application release inputs
+pass: Orlix application release-input checks fail closed
+
+rtk proxy plutil -lint Orlix/App/Orlix/PrivacyInfo.xcprivacy
+Orlix/App/Orlix/PrivacyInfo.xcprivacy: OK
+
+rtk proxy make product-build-prepare
+bumped CURRENT_PROJECT_VERSION 34 -> 35 product input changes
+
+rtk proxy make product-build-version-check
+product version unchanged: CURRENT_PROJECT_VERSION=35
+
+rtk proxy xcodegen generate --spec project.yml
+Created project at .../Orlix.xcodeproj
+
+rtk git diff --check
+exit 0
+```
+
+This closes the locally derivable privacy source union but does not prove the aggregate privacy report of a real exported package. Complete distributable Swift-package notices, authoritative `thrift-swift` licensing, legal approval, App Review approval, real provisioning, CloudKit production schema, and export encryption classification remain unavailable. #49 and public distribution remain blocked. #51 does not start.
+
+The required live Xcode health recheck still failed before any archive attempt:
+
+```text
+rtk err xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
+FAIL Cache sparsebundle is not readable by hdiutil: hdiutil: imageinfo failed - image not recognized
+exit 1
+```
+
+No Xcode build, simulator gate, archive, export, upload, or external-system mutation followed this environment failure.

@@ -96,6 +96,20 @@ class CapabilityGateTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.GateError, "capability inventory mismatch"):
             gate.validate_manifest(self.write_manifest(value), REPO_ROOT)
 
+    def test_package_resolution_hash_drift_fails(self) -> None:
+        value = copy.deepcopy(self.manifest)
+        value["swift_package_resolution"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(gate.GateError, "package resolution SHA-256 differs"):
+            gate.validate_manifest(self.write_manifest(value), REPO_ROOT)
+
+    def test_privacy_required_reason_union_drift_fails(self) -> None:
+        value = copy.deepcopy(self.manifest)
+        value["exported_product"]["privacy_required_reason_union"].pop(
+            "NSPrivacyAccessedAPICategoryFileTimestamp"
+        )
+        with self.assertRaisesRegex(gate.GateError, "required-reason declarations differ"):
+            gate.validate_manifest(self.write_manifest(value), REPO_ROOT)
+
     def test_forbidden_identity_in_product_input_fails(self) -> None:
         value = copy.deepcopy(self.manifest)
         value["exported_product"]["forbidden_identity_fragments"].append("OrlixApp")
