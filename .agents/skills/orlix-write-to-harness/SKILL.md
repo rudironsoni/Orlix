@@ -1,25 +1,24 @@
 ---
 name: orlix-write-to-harness
-description: Use before editing Orlix harness files such as AGENTS.md, docs/plans, docs/harness, ADR indexes, .agents/skills, .codex/agents, Codex rules, hooks, or harness-related repo guidance. Ensures changes preserve the repo as the source of truth, avoid duplicate architecture claims, and keep references current.
+description: Use before editing the Orlix ontology brain, AGENTS.md, agent skills, subagents, hooks, generated rules, or harness guidance. Preserves repository source of truth and prevents duplicated or stale status.
 ---
 
 # Orlix Write To Harness
 
-Use this skill before writing Codex harness files.
+Use this skill before writing any repository knowledge or agent-harness surface.
 
 ## Rules
 
-- Keep `AGENTS.md` concise and route to canonical docs.
-- Keep architecture truth in `docs/architecture`, `docs/adr`, and `docs/reference`.
-- Keep task state in `docs/plans/active/<task>/`.
-- Keep durable agent lessons in `docs/harness/MEMORY.md`.
-- Avoid duplicate or competing architecture claims.
-- Update stale references after moving docs or renaming skills/agents.
-- Keep the `OrlixOS`-is-the-Kit decision consistent across ADRs, architecture docs, glossary, skills, agents, and AGENTS.md.
-- Remove stale `OrlixKit` routing unless it is explicitly documented as retired/forbidden.
-- Prefer Codex-native surfaces: `AGENTS.md`, `.codex/agents`, `.agents/skills`, `.codex/rules`, and `.codex/hooks`.
-- Treat `rtk` as an output wrapper in rules and hooks. Guarded bare commands and `rtk`-wrapped equivalents must have the same policy.
+- Keep `AGENTS.md` a concise router into `docs/index.md`, typed knowledge pages, and structured reports.
+- Follow `docs/ontology.md` and `docs/AGENTS.md` for every knowledge mutation.
+- Keep durable architecture, ownership, capabilities, and objectives in typed pages under `docs/objects/` and `docs/concepts/`.
+- Keep current task selection, commands, evidence, failures, and readiness state in structured reports under `Build/AgentHarness/`.
+- Do not create plan journals, implementation logs, handoff archives, or copied status snapshots.
+- Update `docs/log.md`, regenerate `docs/index.md`, and repair every consumer when knowledge changes.
+- Keep OrlixOS as the Kit, upstream Linux as owner of Linux behavior, and OrlixHostAdapter limited to private Apple mechanics.
+- Edit `.rulesync/` as the durable source for generated rules and subagents. Generate only the intended features so hand-maintained skills remain intact.
+- Treat bare commands and `rtk`-wrapped equivalents identically in hooks and rules.
 
 ## Verification
 
-After harness edits, run a stale-reference scan, inspect skill/agent trigger descriptions for clear narrow scope, and verify paired bare/`rtk` command policy where rules are touched.
+Run `make docs-check`, `make agent-harness-check`, a stale legacy-path scan, and the focused tests for any changed hook or workflow.

@@ -170,17 +170,17 @@ Orlix-specific code supplies transport and backend mechanics under `drivers/orli
 The canonical architecture specification is:
 
 ```text
-docs/architecture/ORLIX_UPSTREAM_LINUX_IOS_PORT.md
+docs/concepts/upstream-linux-ownership.md
 ```
 
 Architecture decisions are recorded under:
 
 ```text
-docs/adr/
+docs/objects/architecture-decision/
 ```
 
 Glossary terms resolved during design live in:
 
 ```text
-docs/reference/ORLIX_GLOSSARY.md
+docs/concepts/domain-language.md
 ```

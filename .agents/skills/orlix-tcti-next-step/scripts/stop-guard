@@ -9,11 +9,11 @@ all_changed="$(printf '%s\n%s\n' "$changed" "$staged" | sed '/^$/d' | sort -u)"
 if test -n "$all_changed"; then
   printf '%s' "$payload" | grep -q 'git diff --check' || warn "files changed but final summary does not mention git diff --check."
 fi
-if printf '%s\n' "$all_changed" | grep -Eq '(^\.codex/|^\.agents/skills/|^AGENTS.md|^docs/harness/|^Makefile)'; then
+if printf '%s\n' "$all_changed" | grep -Eq '(^\.codex/|^\.agents/skills/|^AGENTS.md|^docs/|^Makefile)'; then
   printf '%s' "$payload" | grep -Eq 'agent-harness-check|agent-hooks-check|agent-skills-check|agent-subagents-check|agent-mcp-check' ||
     warn "harness files changed but final summary does not mention agent harness checks."
 fi
-if printf '%s\n' "$all_changed" | grep -Eq '(^tools/tcti/|^OrlixKernel/Tests/TCTI/|^docs/plans/active/orlix-tcti/)'; then
+if printf '%s\n' "$all_changed" | grep -Eq '(^tools/tcti/|^OrlixKernel/Tests/TCTI/|^docs/objects/initiative/orlix-tcti\.md|^docs/objects/architecture-decision/0022-)'; then
   printf '%s' "$payload" | grep -Eq 'tcti-plan-consistency|tcti-golden-elf|tcti-appstore-safety-audit' ||
     warn "TCTI files changed but final summary does not mention relevant TCTI gates."
 fi

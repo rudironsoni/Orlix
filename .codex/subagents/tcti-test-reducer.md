@@ -17,7 +17,7 @@ Convert failed TCTI gates into minimal reproducible fixtures and verify `make tc
 
 - `tools/tcti/fixtures/**`
 - `OrlixKernel/Tests/TCTI/golden_elf/**` only for new reduced test cases approved by the planner
-- `docs/plans/active/orlix-tcti/IMPLEMENT.md`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
 
 ## Forbidden files
 

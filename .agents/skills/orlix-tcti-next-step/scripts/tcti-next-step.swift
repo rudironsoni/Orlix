@@ -1013,14 +1013,6 @@ func pathMatches(_ path: String, _ pattern: String) -> Bool {
         let prefix = String(pattern.dropLast(3))
         return path == prefix || path.hasPrefix(prefix + "/")
     }
-    if pattern == "docs/plans/active/*/IMPLEMENT.md" {
-        let components = path.split(separator: "/").map(String.init)
-        return components.count == 5 &&
-            components[0] == "docs" &&
-            components[1] == "plans" &&
-            components[2] == "active" &&
-            components[4] == "IMPLEMENT.md"
-    }
     return path == pattern
 }
 
@@ -6481,8 +6473,7 @@ func dirtyRuntimeOrHarnessWorktree() -> Bool {
         "tools/runtime",
         "tools/tcti",
         "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
-        "docs/plans/active/orlix-tcti/PLAN.md",
-        "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+        "docs/objects/initiative/orlix-tcti.md",
     ]
     guard let output = run("/usr/bin/env", ["git", "status", "--short", "--"] + paths) else {
         return true
@@ -6871,7 +6862,7 @@ func blockedPhysicalOptInEnvelope(from status: StatusDocument, roadmap: Roadmap,
         prerequisiteGates: prerequisites,
         whySelected: "The roadmap has no safer eligible non-phone gate. Phone work stays blocked until the full pinned simulator readiness ladder passes and explicit human opt-in is present. Missing simulator readiness gates: \(status.simulatorReadinessMissingGateIDs.isEmpty ? "none" : status.simulatorReadinessMissingGateIDs.joined(separator: ", ")).",
         allowedScope: [
-            "docs/plans/active/orlix-tcti/IMPLEMENT.md",
+            "Build/AgentHarness/orlix-tcti/next-task.json",
             ".agents/skills/orlix-tcti-next-step/scripts/tcti-next-step.swift",
             ".agents/skills/orlix-tcti-next-step/SKILL.md"
         ],
@@ -7295,8 +7286,7 @@ func validateSemanticFreshnessFixtures() throws {
         allowedScope: ["tools/tcti/orlix-tcti-gate.swift", "OrlixKernel/Tests/TCTI/golden_elf/**"]
     )
     let cases: [(String, Gate, String, Bool)] = [
-        ("implement-checkpoint-does-not-rerun-runtime", runtimeGate, "docs/plans/active/orlix-tcti/IMPLEMENT.md", false),
-        ("harness-doc-does-not-rerun-runtime", runtimeGate, "docs/harness/ORLIX_TCTI_AGENT_HARNESS.md", false),
+        ("initiative-does-not-rerun-runtime", runtimeGate, "docs/objects/initiative/orlix-tcti.md", false),
         ("runtime-tool-does-not-rebuild-product", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", false),
         ("tcti-tool-does-not-rebuild-product", tctiGate, "tools/tcti/orlix-tcti-gate.swift", false),
         ("kernel-port-reruns-kernel-and-runtime", kernelGate, "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c", true),

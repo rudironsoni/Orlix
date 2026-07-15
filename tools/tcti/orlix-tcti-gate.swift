@@ -7363,8 +7363,8 @@ func readText(_ url: URL) throws -> String {
 func runPlanConsistency() throws -> Int32 {
     let target = "tcti-plan-consistency"
     let finalSentence = "Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text."
-    let plan = try readText(path("docs", "plans", "active", "orlix-tcti", "PLAN.md"))
-    let adr = try readText(path("docs", "adr", "0022-use-hosted-linux-elf-execution.md"))
+    let plan = try readText(path("docs", "objects", "initiative", "orlix-tcti.md"))
+    let adr = try readText(path("docs", "objects", "architecture-decision", "0022-use-hosted-linux-elf-execution.md"))
     var failures: [Failure] = []
 
     for pattern in [
@@ -7378,7 +7378,7 @@ func runPlanConsistency() throws -> Int32 {
         }
     }
     if !plan.contains(finalSentence) {
-        failures.append(fail("plan-final-sentence", "PLAN.md is missing the canonical final architecture sentence"))
+        failures.append(fail("initiative-final-sentence", "TCTI initiative is missing the canonical final architecture sentence"))
     }
     if !adr.contains(finalSentence) {
         failures.append(fail("adr-final-sentence", "ADR 0022 is missing the canonical final architecture sentence"))
@@ -7392,7 +7392,7 @@ func runPlanConsistency() throws -> Int32 {
         "tcti-appstore-safety-audit",
         "orlix-aarch64-v1",
     ] where !plan.contains(marker) {
-        failures.append(fail("plan-marker", "PLAN.md is missing marker \(marker)"))
+        failures.append(fail("initiative-marker", "TCTI initiative is missing marker \(marker)"))
     }
     failures.append(contentsOf: validateProductDefconfigSafety())
 
@@ -7405,7 +7405,7 @@ func runPlanConsistency() throws -> Int32 {
     ))
     print("\(status.rawValue): \(relativePath(reportURL))")
     if !failures.isEmpty {
-        print("human scan: rtk grep -n \"native AArch64 code\\|TCTI.*deferred\\|Treating TCTI.*initial package runtime\\|compatibility work, not the first product runtime\" docs/adr/0022-use-hosted-linux-elf-execution.md")
+        print("human scan: rtk grep -n \"native AArch64 code\\|TCTI.*deferred\\|Treating TCTI.*initial package runtime\\|compatibility work, not the first product runtime\" docs/objects/architecture-decision/0022-use-hosted-linux-elf-execution.md")
     }
     return exitCode(for: status)
 }
