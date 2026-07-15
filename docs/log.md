@@ -36,3 +36,7 @@ Started the migration from narrative architecture, ADR, plan, handoff, harness-m
 ## [2026-07-15] correct | Use one terminal multiplex protocol
 
 Replaced boot-command-line terminal geometry and printable resize markers with the versioned binary-safe terminal multiplex protocol, and recorded Linux-console-derived interactive source selection.
+
+## [2026-07-15] track | Separate app-hosted XCTest cleanup
+
+Added a bounded follow-up task for successful app-hosted runtime XCTest runs that leave `xcodebuild` waiting in test-session cleanup. Preserved the accepted Linux console-policy and terminal-transport behavior as regression constraints rather than reopening their implementation.
