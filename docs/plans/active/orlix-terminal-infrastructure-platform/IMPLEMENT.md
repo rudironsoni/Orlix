@@ -699,3 +699,45 @@ pass: Build/TCTI/reports/tcti-plan-consistency/report.json
 ```
 
 This checkpoint changes repository history and its implementation record only. It adds no application, kernel, libc, OrlixOS, terminal, runtime, package, archive, release, or upstream-conformance proof. The independent archive audit still finds forbidden `com.rudi.OrlixApp` identity in all six inspected Ghostty archives; this history migration does not correct or waive that release blocker.
+
+#### 2026-07-15 original commit-time restoration
+
+- Corrected the first linearization implementation. `git rebase --root --no-rebase-merges` preserved author timestamps but assigned the replay time as the committer timestamp for rewritten commits. That metadata change was unintended and was not acceptable as a faithful history migration.
+- Rebuilt the same linear sequence from the verified safety bundle and the original 1,702-entry rewrite order. For every pre-migration non-merge commit, the corrected commit copies the original author name, author email, author timestamp and timezone, committer name, committer email, committer timestamp and timezone. It retains the already-reviewed linear tree and message at the same sequence position.
+- Preserved the first migration checkpoint's own author and committer metadata while reparenting it onto the corrected history. The corrected pre-documentation tip is `3b90dcdfb643847cfe7b0974acf9cd86f1d3947b`.
+- Verified all 1,702 original metadata records position by position against the safety-bundle commits. Verified all 1,703 trees and commit messages against the first linear history. Verified all 1,703 corrected commits have valid SSH signatures for `rudimar@outlook.com`.
+- The corrected pre-documentation history contains 1,703 commits, zero merges, and one root `7957b5ce887363c7ec58a933990838098844f8f3`. Its tip tree is identical to published tip `ef7143029b8222656dc79ee7e8f8a34ba08cbfa2` before this correction record.
+- Publishing this correction requires temporarily allowing the already-authorized force-push to protected `main`. Exact force-with-lease values must guard both `main` and `feat/orlix-mobile-foundation`, and the protection policy must be restored immediately afterward.
+
+Evidence before the correction checkpoint commit:
+
+```text
+.git/verify-preserved-metadata.zsh
+verified 1702 original metadata records and 1703 content records
+
+.git/verify-signatures.zsh
+verified 1703 SSH signatures
+
+git rev-list --count 3b90dcdfb643847cfe7b0974acf9cd86f1d3947b
+1703
+
+git rev-list --count --merges 3b90dcdfb643847cfe7b0974acf9cd86f1d3947b
+0
+
+git rev-list --max-parents=0 3b90dcdfb643847cfe7b0974acf9cd86f1d3947b
+7957b5ce887363c7ec58a933990838098844f8f3
+
+git diff --quiet ef7143029b8222656dc79ee7e8f8a34ba08cbfa2 3b90dcdfb643847cfe7b0974acf9cd86f1d3947b
+exit 0
+
+git fsck --strict --no-dangling --no-reflogs
+exit 0
+
+make agent-harness-check
+28 tests, OK; generated files up to date
+
+make tcti-gate TARGET=tcti-plan-consistency
+pass: Build/TCTI/reports/tcti-plan-consistency/report.json
+```
+
+This correction changes Git metadata and this implementation record only. It adds no application, kernel, libc, OrlixOS, terminal, runtime, package, archive, release, or upstream-conformance proof, and it does not change the separate Ghostty archive identity blocker.
