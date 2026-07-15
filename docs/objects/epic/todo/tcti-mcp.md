@@ -11,6 +11,8 @@ targets:
   - "[TCTI](../../software-component/tcti.md)"
 has_story:
   - "[Expose the TCTI harness through MCP](../../story/todo/expose-tcti-harness-through-mcp.md)"
+depends_on:
+  - "[Orlix TCTI](../doing/orlix-tcti.md)"
 ---
 
 # TCTI MCP

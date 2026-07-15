@@ -8,6 +8,8 @@ status: todo
 summary: "Stabilize the structured TCTI task-envelope and report schemas before exposing them through MCP."
 task_of:
   - "[Expose the TCTI harness through MCP](../../story/todo/expose-tcti-harness-through-mcp.md)"
+blocks:
+  - "[Define the TCTI MCP read interface](define-tcti-mcp-read-interface.md)"
 ---
 
 # Stabilize the TCTI report contract

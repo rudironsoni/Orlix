@@ -44,3 +44,7 @@ Added a bounded follow-up task for successful app-hosted runtime XCTest runs tha
 ## [2026-07-15] resolve | Make app-hosted XCTest cleanup deterministic
 
 Replaced semaphore polling in the app-hosted runtime proof with XCTest-native expectations, preventing the priority-inversion diagnostic that left `xcodebuild` waiting for asynchronous simulator diagnostics after a successful test. Closed the focused cleanup task without changing Linux, HostAdapter, session, console-policy, multiplex, or terminal-geometry behavior.
+
+## [2026-07-15] model | Normalize roadmap priorities and dependencies
+
+Split release work into mobile terminal, mobile container, and native macOS stages, separated the native application and Local Runtime stories, and recorded every epic, story, and task in one durable priority matrix. Added inverse dependency and cycle validation so the authored graph cannot silently drift from the documented execution order.

@@ -8,6 +8,10 @@ status: todo
 summary: "Prove Docker engine-facing behavior after the OCI image and runtime boundaries pass."
 task_of:
   - "[Deliver OCI environment lifecycle](../../story/doing/deliver-oci-environment-lifecycle.md)"
+depends_on:
+  - "[Implement OCI runtime lifecycle](implement-oci-runtime-lifecycle.md)"
+blocks:
+  - "[Validate the mobile container simulator product](validate-mobile-container-simulator-product.md)"
 ---
 
 # Prove Docker engine compatibility

@@ -38,6 +38,8 @@ INVERSES = {
     "superseded_by": "supersedes",
     "amends": "amended_by",
     "amended_by": "amends",
+    "depends_on": "blocks",
+    "blocks": "depends_on",
 }
 HIERARCHY_LINK_TYPES = {
     "has_story": ("epic", "story"),
@@ -185,6 +187,36 @@ def main() -> int:
             for target in rels.get(relation, set()):
                 if path not in page_relations.get(target, {}).get(inverse, set()):
                     problems.append(f"missing-inverse {path.relative_to(root)}: {relation} -> {target.relative_to(root)}")
+
+    dependency_graph = {
+        path: {target for target in rels.get("depends_on", set()) if target in page_relations}
+        for path, rels in page_relations.items()
+    }
+    visit_state: dict[Path, int] = {}
+    visit_stack: list[Path] = []
+    reported_cycles: set[tuple[str, ...]] = set()
+
+    def visit_dependency(path: Path) -> None:
+        visit_state[path] = 1
+        visit_stack.append(path)
+        for target in dependency_graph[path]:
+            if visit_state.get(target, 0) == 0:
+                visit_dependency(target)
+            elif visit_state.get(target) == 1:
+                start = visit_stack.index(target)
+                cycle = [str(item.relative_to(root)) for item in visit_stack[start:]]
+                rotations = [tuple(cycle[index:] + cycle[:index]) for index in range(len(cycle))]
+                canonical = min(rotations)
+                if canonical not in reported_cycles:
+                    reported_cycles.add(canonical)
+                    problems.append(f"dependency-cycle {' -> '.join(canonical + (canonical[0],))}")
+        visit_stack.pop()
+        visit_state[path] = 2
+
+    for path in dependency_graph:
+        if visit_state.get(path, 0) == 0:
+            visit_dependency(path)
+
     for path in page_relations:
         if path not in inbound:
             problems.append(f"orphan {path.relative_to(root)}")

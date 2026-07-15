@@ -10,6 +10,11 @@ targets:
   - "[Orlix](../../product/orlix.md)"
 has_story:
   - "[Deliver OCI environment lifecycle](../../story/doing/deliver-oci-environment-lifecycle.md)"
+depends_on:
+  - "[Native app foundation](native-app-foundation.md)"
+  - "[Orlix TCTI](orlix-tcti.md)"
+blocks:
+  - "[Orlix release](orlix-release.md)"
 ---
 
 # OCI-derived environments

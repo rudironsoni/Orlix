@@ -8,6 +8,10 @@ status: todo
 summary: "Promote TCTI only after the real app-hosted Linux product path satisfies every gate."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
+depends_on:
+  - "[Run authorized TCTI device validation](run-authorized-tcti-device-validation.md)"
+blocks:
+  - "[Validate the mobile terminal simulator product](../doing/validate-mobile-terminal-simulator-product.md)"
 ---
 
 # Promote TCTI as the product default

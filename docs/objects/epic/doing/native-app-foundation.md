@@ -10,6 +10,10 @@ targets:
   - "[Orlix](../../product/orlix.md)"
 has_story:
   - "[Establish native application foundation](../../story/doing/establish-native-application-foundation.md)"
+  - "[Deliver Local Runtime and Local Instances](../../story/doing/deliver-local-runtime-and-instances.md)"
+blocks:
+  - "[OCI-derived environments](oci-derived-environments.md)"
+  - "[Orlix release](orlix-release.md)"
 ---
 
 # Native app foundation

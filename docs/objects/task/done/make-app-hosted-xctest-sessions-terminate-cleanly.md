@@ -8,7 +8,7 @@ updated: 2026-07-15
 status: done
 summary: "Make successful app-hosted runtime XCTest runs release their session resources and let xcodebuild exit cleanly."
 task_of:
-  - "[Establish native application foundation](../../story/doing/establish-native-application-foundation.md)"
+  - "[Deliver Local Runtime and Local Instances](../../story/doing/deliver-local-runtime-and-instances.md)"
 ---
 
 # Make app-hosted XCTest sessions terminate cleanly

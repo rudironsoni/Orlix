@@ -11,6 +11,10 @@ targets:
   - "[TCTI](../../software-component/tcti.md)"
 has_story:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
+blocks:
+  - "[OCI-derived environments](oci-derived-environments.md)"
+  - "[Orlix release](orlix-release.md)"
+  - "[TCTI MCP](../todo/tcti-mcp.md)"
 ---
 
 # Orlix TCTI

@@ -8,6 +8,8 @@ status: doing
 summary: "Resolve OCI image descriptors and materialize immutable content with persistent writable state."
 task_of:
   - "[Deliver OCI environment lifecycle](../../story/doing/deliver-oci-environment-lifecycle.md)"
+blocks:
+  - "[Implement OCI runtime lifecycle](../todo/implement-oci-runtime-lifecycle.md)"
 ---
 
 # Import OCI image content

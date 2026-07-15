@@ -12,6 +12,10 @@ has_task:
   - "[Import OCI image content](../../task/doing/import-oci-image-content.md)"
   - "[Implement OCI runtime lifecycle](../../task/todo/implement-oci-runtime-lifecycle.md)"
   - "[Prove Docker engine compatibility](../../task/todo/prove-docker-engine-compatibility.md)"
+depends_on:
+  - "[Deliver Local Runtime and Local Instances](deliver-local-runtime-and-instances.md)"
+blocks:
+  - "[Validate and publish the mobile container release](../todo/validate-and-publish-mobile-container-release.md)"
 ---
 
 # Deliver OCI environment lifecycle

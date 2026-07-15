@@ -7,9 +7,12 @@ updated: 2026-07-15
 status: doing
 summary: "Bind Herdr panes to local Linux sessions created and delivered by OrlixOS."
 task_of:
-  - "[Establish native application foundation](../../story/doing/establish-native-application-foundation.md)"
+  - "[Deliver Local Runtime and Local Instances](../../story/doing/deliver-local-runtime-and-instances.md)"
 applies:
   - "[Terminal transport multiplex protocol](../../../concepts/terminal-transport-multiplex-protocol.md)"
+blocks:
+  - "[Implement namespaced Local Instance lifecycle](../todo/implement-namespaced-local-instance-lifecycle.md)"
+  - "[Validate mobile platform presentation](../todo/validate-mobile-platform-presentation.md)"
 ---
 
 # Bind local sessions through OrlixOS

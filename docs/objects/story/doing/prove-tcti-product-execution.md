@@ -12,6 +12,8 @@ has_task:
   - "[Complete the pinned simulator TCTI ladder](../../task/doing/complete-pinned-simulator-tcti-ladder.md)"
   - "[Run authorized TCTI device validation](../../task/todo/run-authorized-tcti-device-validation.md)"
   - "[Promote TCTI as the product default](../../task/todo/promote-tcti-as-product-default.md)"
+blocks:
+  - "[Validate and publish the mobile terminal release](validate-and-publish-mobile-terminal-release.md)"
 ---
 
 # Prove TCTI product execution
