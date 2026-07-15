@@ -1,13 +1,15 @@
 ---
-type: initiative
+type: epic
 tags:
-  - initiative
+  - epic
   - orlix-agent-harness
 updated: 2026-07-15
-status: completed
+status: done
 summary: "Establish repository-local agent planning, implementation, review, and evidence workflows."
 targets:
-  - "[Orlix](../product/orlix.md)"
+  - "[Orlix](../../product/orlix.md)"
+has_story:
+  - "[Establish ontology-backed agent harness](../../story/done/establish-ontology-backed-agent-harness.md)"
 ---
 
 # Orlix agent harness

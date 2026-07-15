@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from orlix_hook_common import (
-    active_plan_dirs,
+    doing_work_pages,
     flattened_text,
     invented_mechanism_without_scope,
     load_plan_context_state,
@@ -23,10 +23,10 @@ payload = parse_json(read_stdin_text())
 text = flattened_text(payload)
 root = repo_root()
 
-if active_plan_dirs(root) and not plan_context_loaded(root, load_plan_context_state(root)):
-    warn("Final status was written without loading AGENTS.md, docs/index.md, and every active initiative page.")
+if doing_work_pages(root) and not plan_context_loaded(root, load_plan_context_state(root)):
+    warn("Final status was written without loading AGENTS.md, docs/index.md, and every active epic page.")
 if macos_runtime_wording(text):
-    warn("macOS runtime wording detected. Orlix product runtime proof requires the app-hosted destination defined by the owning initiative.")
+    warn("macOS runtime wording detected. Orlix product runtime proof requires the app-hosted destination defined by the owning work hierarchy.")
 if vague_container_support(text):
     warn("Generic container support wording detected. Name the exact OCI or Docker compatibility boundary.")
 if invented_mechanism_without_scope(text):

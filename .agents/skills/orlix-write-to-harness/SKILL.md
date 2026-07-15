@@ -11,7 +11,8 @@ Use this skill before writing any repository knowledge or agent-harness surface.
 
 - Keep `AGENTS.md` a concise router into `docs/index.md`, typed knowledge pages, and structured reports.
 - Follow `docs/ontology.md` and `docs/AGENTS.md` for every knowledge mutation.
-- Keep durable architecture, ownership, capabilities, and objectives in typed pages under `docs/objects/` and `docs/concepts/`.
+- Keep durable architecture, ownership, capabilities, outcomes, stories, and tasks in typed pages under `docs/objects/` and `docs/concepts/`.
+- Organize work as `epic -> story -> task`, and keep each work page in its matching `todo/`, `doing/`, or `done/` folder.
 - Keep current task selection, commands, evidence, failures, and readiness state in structured reports under `Build/AgentHarness/`.
 - Do not create plan journals, implementation logs, handoff archives, or copied status snapshots.
 - Update `docs/log.md`, regenerate `docs/index.md`, and repair every consumer when knowledge changes.

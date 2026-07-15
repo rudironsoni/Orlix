@@ -24,7 +24,8 @@ Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not 
 - Knowledge index: `docs/index.md`
 - Ontology and maintenance protocol: `docs/ontology.md` and `docs/AGENTS.md`
 - Architecture ownership: `docs/concepts/upstream-linux-ownership.md` and `docs/concepts/component-ownership.md`
-- Active initiatives: pages with `type: initiative` and `status: active` under `docs/objects/initiative/`
+- Work hierarchy: epics, stories, and tasks under matching `todo/`, `doing/`, and `done/` folders in `docs/objects/`
+- Current work context: every page under `docs/objects/{epic,story,task}/doing/`
 - Current execution state: structured reports and task envelopes under `Build/AgentHarness/`
 
 ## Ownership
@@ -65,7 +66,7 @@ The local kernel prototype is retired. Do not restore `LegacyOrlix/`, `OrlixKern
 
 Use Codex-native surfaces deliberately:
 
-- `.codex/agents/orlix-planner.toml` for creating or refining initiative and decision pages.
+- `.codex/agents/orlix-planner.toml` for creating or refining epic, story, task, and decision pages.
 - `.codex/agents/orlix-implementer.toml` for executing the selected structured task envelope without maintaining an implementation journal.
 - `.codex/agents/orlix-reviewer.toml` for skeptical review of assumptions, directives, upstream conformance, and evidence.
 - `.agents/skills/orlix-implementation-boundaries/SKILL.md` before deciding which layer owns a fix.

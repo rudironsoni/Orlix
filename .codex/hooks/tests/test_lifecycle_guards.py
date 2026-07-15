@@ -18,32 +18,43 @@ class OntologyLifecycleGuardTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        (self.root / "docs" / "objects" / "initiative").mkdir(parents=True)
+        (self.root / "docs").mkdir(parents=True)
         (self.root / "AGENTS.md").write_text("# Rules\n")
         (self.root / "docs" / "index.md").write_text("# Index\n")
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def initiative(self, name: str, status: str) -> Path:
-        path = self.root / "docs" / "objects" / "initiative" / f"{name}.md"
-        path.write_text(f"---\ntype: initiative\ntags:\n  - test\nupdated: 2026-07-15\nstatus: {status}\n---\n\n# {name}\n")
+    def work_page(self, kind: str, status: str, name: str) -> Path:
+        path = self.root / "docs" / "objects" / kind / status / f"{name}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"---\ntype: {kind}\ntags:\n  - test\nupdated: 2026-07-15\nstatus: {status}\n---\n\n# {name}\n"
+        )
         return path
 
-    def test_active_initiatives_are_required_context(self):
-        active = self.initiative("active", "active")
-        self.initiative("deferred", "deferred")
-        self.assertEqual(COMMON.active_plan_dirs(self.root), [active])
+    def test_doing_work_hierarchy_is_required_context(self):
+        epic = self.work_page("epic", "doing", "epic")
+        story = self.work_page("story", "doing", "story")
+        task = self.work_page("task", "doing", "task")
+        self.work_page("task", "todo", "future-task")
+        self.work_page("task", "done", "finished-task")
+        self.assertEqual(COMMON.doing_work_pages(self.root), [epic, story, task])
         self.assertEqual(
             COMMON.required_plan_context_paths(self.root),
-            [self.root / "AGENTS.md", self.root / "docs" / "index.md", active],
+            [self.root / "AGENTS.md", self.root / "docs" / "index.md", epic, story, task],
         )
 
-    def test_context_requires_every_active_initiative(self):
-        active = self.initiative("active", "active")
-        state = {"read_paths": [str((self.root / "AGENTS.md").resolve()), str((self.root / "docs" / "index.md").resolve())]}
+    def test_context_requires_every_doing_work_page(self):
+        task = self.work_page("task", "doing", "task")
+        state = {
+            "read_paths": [
+                str((self.root / "AGENTS.md").resolve()),
+                str((self.root / "docs" / "index.md").resolve()),
+            ]
+        }
         self.assertFalse(COMMON.plan_context_loaded(self.root, state))
-        state["read_paths"].append(str(active.resolve()))
+        state["read_paths"].append(str(task.resolve()))
         self.assertTrue(COMMON.plan_context_loaded(self.root, state))
 
     def test_knowledge_commit_requires_log_and_index_updates(self):

@@ -11,6 +11,10 @@ from pathlib import Path
 
 META = {"AGENTS.md", "README.md", "index.md", "log.md", "ontology.md"}
 LINK_KEYS = {
+    "has_story",
+    "story_of",
+    "has_task",
+    "task_of",
     "part_of", "has_part", "depends_on", "blocks", "targets", "owned_by", "owns",
     "applies", "derived_from", "supersedes", "superseded_by", "amends", "amended_by", "relates_to",
 }
@@ -19,15 +23,27 @@ STATUSES = {
     "product": {"active", "retired"},
     "software-component": {"active", "retired"},
     "architecture-decision": {"accepted", "superseded"},
-    "initiative": {"active", "blocked", "deferred", "completed"},
+    "epic": {"todo", "doing", "done"},
+    "story": {"todo", "doing", "done"},
+    "task": {"todo", "doing", "done"},
     "product-capability": {"implemented", "partial", "proposed", "retired"},
     "source": {"current", "superseded"},
 }
 INVERSES = {
+    "has_story": "story_of",
+    "story_of": "has_story",
+    "has_task": "task_of",
+    "task_of": "has_task",
     "supersedes": "superseded_by",
     "superseded_by": "supersedes",
     "amends": "amended_by",
     "amended_by": "amends",
+}
+HIERARCHY_LINK_TYPES = {
+    "has_story": ("epic", "story"),
+    "story_of": ("story", "epic"),
+    "has_task": ("story", "task"),
+    "task_of": ("task", "story"),
 }
 
 
@@ -111,6 +127,21 @@ def main() -> int:
             if kind != expected_kind:
                 problems.append(f"type-path-mismatch {rel}: {kind!r}, expected {expected_kind!r}")
             page_relations[path] = relations(fm, path)
+            if kind in {"epic", "story", "task"}:
+                expected_status = rel.parts[2] if len(rel.parts) == 4 else ""
+                if expected_status not in {"todo", "doing", "done"}:
+                    problems.append(f"missing-status-folder {rel}")
+                elif status != expected_status:
+                    problems.append(f"status-folder-mismatch {rel}: {status!r}, expected {expected_status!r}")
+            if kind == "epic" and not page_relations[path].get("has_story"):
+                problems.append(f"epic-without-story {rel}")
+            if kind == "story":
+                if len(page_relations[path].get("story_of", set())) != 1:
+                    problems.append(f"story-parent-count {rel}")
+                if not page_relations[path].get("has_task"):
+                    problems.append(f"story-without-task {rel}")
+            if kind == "task" and len(page_relations[path].get("task_of", set())) != 1:
+                problems.append(f"task-parent-count {rel}")
             for targets in page_relations[path].values():
                 inbound.update(targets)
         slug = path.stem
@@ -138,6 +169,18 @@ def main() -> int:
                 inbound.add(resolved)
 
     for path, rels in page_relations.items():
+        source_fm = frontmatter(pages[path]) or ""
+        source_kind = scalar(source_fm, "type")
+        for relation, (expected_source, expected_target) in HIERARCHY_LINK_TYPES.items():
+            for target in rels.get(relation, set()):
+                target_fm = frontmatter(pages.get(target, "")) or ""
+                target_kind = scalar(target_fm, "type")
+                if source_kind != expected_source or target_kind != expected_target:
+                    target_label = target.relative_to(root) if target in pages else target
+                    problems.append(
+                        f"bad-hierarchy-target {path.relative_to(root)}: "
+                        f"{relation} -> {target_label}"
+                    )
         for relation, inverse in INVERSES.items():
             for target in rels.get(relation, set()):
                 if path not in page_relations.get(target, {}).get(inverse, set()):

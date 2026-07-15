@@ -1,13 +1,15 @@
 ---
-type: initiative
+type: epic
 tags:
-  - initiative
+  - epic
   - orlix-release
 updated: 2026-07-15
-status: active
+status: doing
 summary: "Ship the signed Orlix application through the deterministic release harness and staged runtime proof order."
 targets:
-  - "[Orlix](../product/orlix.md)"
+  - "[Orlix](../../product/orlix.md)"
+has_story:
+  - "[Validate and publish an Orlix release](../../story/doing/validate-and-publish-orlix-release.md)"
 ---
 
 # Orlix release
