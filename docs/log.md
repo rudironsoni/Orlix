@@ -32,3 +32,7 @@ This append-only log records meaningful knowledge-base actions. Exact file histo
 ## [2026-07-15] reorg | Adopt the Orlix ontology brain
 
 Started the migration from narrative architecture, ADR, plan, handoff, harness-memory, release, and application-spec trees to one typed knowledge graph rooted at `docs/`.
+
+## [2026-07-15] correct | Use one terminal multiplex protocol
+
+Replaced boot-command-line terminal geometry and printable resize markers with the versioned binary-safe terminal multiplex protocol, and recorded Linux-console-derived interactive source selection.

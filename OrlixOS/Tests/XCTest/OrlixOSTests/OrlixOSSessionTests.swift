@@ -1179,8 +1179,8 @@ cgroupPidsLimit: 64,
 	XCTAssertTrue(commandLine.contains("orlix.nonewprivs=1"))
 	XCTAssertTrue(commandLine.contains("orlix.closefds=1"))
 	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
-	XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
-		XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
+	XCTAssertFalse(commandLine.contains("orlix.terminal.rows="))
+	XCTAssertFalse(commandLine.contains("orlix.terminal.cols="))
 		XCTAssertTrue(commandLine.contains("orlix.oomscoreadj=-500"))
         XCTAssertTrue(commandLine.contains("orlix.scheduler.policy=SCHED_FIFO"))
         XCTAssertTrue(commandLine.contains("orlix.scheduler.priority=1"))
@@ -1374,16 +1374,8 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		)
 		XCTAssertTrue(initSource.contains("close_additional_fds();"))
 		XCTAssertTrue(initSource.contains("for (int fd = 3;"))
-		XCTAssertTrue(
-			initSource.contains(
-				"read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultTerminalRowsCommandLineKey)=\","
-			)
-		)
-		XCTAssertTrue(
-			initSource.contains(
-				"read_cmdline_unsigned(\"\(OrlixEnvironmentRootImage.defaultTerminalColumnsCommandLineKey)=\","
-			)
-		)
+		XCTAssertFalse(initSource.contains("orlix.terminal.rows="))
+		XCTAssertFalse(initSource.contains("orlix.terminal.cols="))
 		XCTAssertTrue(initSource.contains("struct winsize"))
 		XCTAssertTrue(initSource.contains("TIOCSWINSZ"))
 		XCTAssertTrue(
@@ -1480,7 +1472,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 			initSource.range(of: "copy_available_or_eof(master, STDOUT_FILENO);")
 		)
 		let consoleEOFRange = try XCTUnwrap(
-			initSource.range(of: "console_fd, master, slave, &resize_decoder);")
+			initSource.range(of: "console_fd, decoder, context);")
 		)
 		XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
 		XCTAssertLessThan(configuredTmpfsRange.lowerBound, hostMountRange.lowerBound)
@@ -1492,8 +1484,8 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		XCTAssertLessThan(ptyHangupReapRange.lowerBound, ptyRange.lowerBound)
 		XCTAssertLessThan(ptyCompletionRange.lowerBound, ptyRange.lowerBound)
 		XCTAssertTrue(initSource.contains("ready = poll(fds, 2, 100);"))
-		XCTAssertTrue(initSource.contains("struct resize_frame_decoder resize_decoder = {0};"))
-		XCTAssertTrue(initSource.contains("ORLIX_INIT_RESIZE_FRAME_SIZE 64"))
+		XCTAssertTrue(initSource.contains("struct orlix_terminal_mux_decoder decoder;"))
+		XCTAssertTrue(initSource.contains("receive_initial_terminal_resize("))
 		XCTAssertTrue(initSource.contains("SYS_capset"))
         XCTAssertTrue(initSource.contains("SYS_capget"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
@@ -6554,6 +6546,12 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         XCTAssertTrue(profile == .release || profile == .development)
 		XCTAssertTrue(kernelCommandLine.contains("console=ttyS0"))
 		XCTAssertTrue(kernelCommandLine.contains("console=hvc0"))
+		XCTAssertEqual(
+			OrlixLinuxSession.interactiveConsoleSource(
+				kernelCommandLine: kernelCommandLine
+			),
+			1
+		)
 	}
 
 	func testTCTIRuntimePayloadUsesDevelopmentBootProfile() {
@@ -6620,13 +6618,13 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         XCTAssertTrue(receivedOutput.values.isEmpty)
     }
 
-    func testTerminalGeometryReplacesConfiguredBootGeometry() throws {
+    func testTerminalGeometryNeverChangesKernelCommandLine() throws {
         let transport = RecordingTerminalTransport()
         let terminal = OrlixTerminalSession(transport: transport)
         let session = OrlixLinuxSession(
             bootConfig: OrlixBootConfig(
                 profile: .development,
-                kernelCommandLine: "console=hvc0 orlix.terminal.rows=24 orlix.terminal.cols=80",
+				kernelCommandLine: "console=ttyS0 console=hvc0",
                 rootImageIdentifier: "test-root",
                 terminalIdentifier: "test-terminal"
             ),
@@ -6635,17 +6633,125 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
         terminal.resize(rows: 41, columns: 132)
 
-        let commandLine = try XCTUnwrap(session.effectiveKernelCommandLine())
-        XCTAssertTrue(commandLine.contains("console=hvc0"))
-        XCTAssertTrue(commandLine.contains("orlix.terminal.rows=41"))
-        XCTAssertTrue(commandLine.contains("orlix.terminal.cols=132"))
-        XCTAssertFalse(commandLine.contains("orlix.terminal.rows=24"))
-        XCTAssertFalse(commandLine.contains("orlix.terminal.cols=80"))
-        XCTAssertEqual(
-            transport.sentInput,
-            [Data("\u{1B}]777;orlix.resize=41x132\u{7}".utf8)]
-        )
+		let commandLine = try XCTUnwrap(session.bootConfig.kernelCommandLine)
+		XCTAssertEqual(commandLine, "console=ttyS0 console=hvc0")
+		XCTAssertFalse(commandLine.contains("orlix.terminal.rows="))
+		XCTAssertFalse(commandLine.contains("orlix.terminal.cols="))
+		XCTAssertEqual(
+			transport.sentInput,
+			[Data([0, 41, 0, 132])]
+		)
     }
+
+	func testInteractiveConsoleSourceFollowsLastLinuxConsoleToken() {
+		XCTAssertEqual(
+			OrlixLinuxSession.interactiveConsoleSource(
+				kernelCommandLine: "console=ttyS0 console=hvc0"
+			),
+			1
+		)
+		XCTAssertEqual(
+			OrlixLinuxSession.interactiveConsoleSource(
+				kernelCommandLine: "console=hvc0 console=ttyS0,115200"
+			),
+			0
+		)
+	}
+
+	func testInteractiveConsoleSourceRejectsMissingOrUnsupportedPolicy() {
+		XCTAssertNil(
+			OrlixLinuxSession.interactiveConsoleSource(
+				kernelCommandLine: "rdinit=/init"
+			)
+		)
+		XCTAssertNil(
+			OrlixLinuxSession.interactiveConsoleSource(
+				kernelCommandLine: "console=hvc0 console=tty0"
+			)
+		)
+	}
+
+	func testSessionConfiguresTransportFromAuthoritativeLinuxConsolePolicy() {
+		let transport = RecordingTerminalTransport()
+		let terminal = OrlixTerminalSession(transport: transport)
+		terminal.resize(rows: 40, columns: 120)
+		let virtioSession = OrlixLinuxSession(
+			bootConfig: OrlixBootConfig(
+				profile: .development,
+				kernelCommandLine: "console=ttyS0 console=hvc0"
+			),
+			terminal: terminal
+		)
+		XCTAssertTrue(virtioSession.configureInteractiveConsole())
+		XCTAssertEqual(transport.configuredSources, [1])
+		XCTAssertEqual(transport.sentInput, [Data([0, 40, 0, 120])])
+
+		let serialSession = OrlixLinuxSession(
+			bootConfig: OrlixBootConfig(
+				profile: .development,
+				kernelCommandLine: "console=hvc0 console=ttyS0"
+			),
+			terminal: terminal
+		)
+		XCTAssertTrue(serialSession.configureInteractiveConsole())
+		XCTAssertEqual(transport.configuredSources, [1, 0])
+		XCTAssertEqual(transport.sentInput, [Data([0, 40, 0, 120])])
+	}
+
+	func testSessionRejectsMissingInteractiveConsolePolicy() {
+		let transport = RecordingTerminalTransport()
+		let session = OrlixLinuxSession(
+			bootConfig: OrlixBootConfig(
+				profile: .development,
+				kernelCommandLine: "rdinit=/init"
+			),
+			terminal: OrlixTerminalSession(transport: transport)
+		)
+		XCTAssertFalse(session.configureInteractiveConsole())
+		XCTAssertTrue(transport.configuredSources.isEmpty)
+	}
+
+	func testTerminalMuxEncoderEscapesEveryBinaryCollisionByte() throws {
+		let encoded = try XCTUnwrap(
+			OrlixTerminalMuxEncoder.frame(
+				type: 1,
+				payload: Data([0x00, 0xc0, 0xdb, 0xff])
+			)
+		)
+		XCTAssertEqual(
+			encoded,
+			Data([
+				0xc0,
+				1, 1, 0, 0, 0, 0, 0, 4,
+				0x00, 0xdb, 0xdc, 0xdb, 0xdd, 0xff,
+				0xc0,
+			])
+		)
+	}
+
+	func testTerminalMuxEncoderUsesBigEndianFixedWidthResizePayload() throws {
+		let encoded = try XCTUnwrap(
+			OrlixTerminalMuxEncoder.frame(
+				type: 2,
+				payload: Data([0x00, 0x2b, 0x00, 0x89])
+			)
+		)
+		XCTAssertEqual(
+			encoded,
+			Data([0xc0, 1, 2, 0, 0, 0, 0, 0, 4, 0, 0x2b, 0, 0x89, 0xc0])
+		)
+	}
+
+	func testInitialResizeIsQueuedBeforeTerminalInput() {
+		let transport = RecordingTerminalTransport()
+		let terminal = OrlixTerminalSession(transport: transport)
+		terminal.resize(rows: 43, columns: 137)
+		terminal.send(Data("abc".utf8))
+		XCTAssertEqual(
+			transport.sentInput,
+			[Data([0, 43, 0, 137]), Data("abc".utf8)]
+		)
+	}
 
     private func repositoryRoot() throws -> URL {
         var url = URL(fileURLWithPath: #filePath)
@@ -14294,8 +14400,8 @@ driver.startConsoleSizes,
 )
 let commandLine = try XCTUnwrap(driver.startKernelCommandLines.first ?? nil)
 XCTAssertTrue(commandLine.contains("orlix.terminal=1"))
-XCTAssertTrue(commandLine.contains("orlix.terminal.rows=33"))
-XCTAssertTrue(commandLine.contains("orlix.terminal.cols=120"))
+XCTAssertFalse(commandLine.contains("orlix.terminal.rows="))
+XCTAssertFalse(commandLine.contains("orlix.terminal.cols="))
 XCTAssertTrue(commandLine.contains("orlix.uid=1000"))
 XCTAssertTrue(commandLine.contains("orlix.gid=100"))
 XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
@@ -17039,6 +17145,7 @@ private final class RecordingTerminalTransport:
 {
     private var outputHandlers: [UUID: @Sendable (Data) -> Void] = [:]
     private(set) var sentInput: [Data] = []
+	private(set) var configuredSources: [UInt32] = []
 
     func attachOutput(
         _ handler: @escaping @Sendable (Data) -> Void
@@ -17055,8 +17162,22 @@ sentInput.append(data)
 }
 
 func resize(rows: UInt32, columns: UInt32) {
-sentInput.append(Data("\u{1B}]777;orlix.resize=\(rows)x\(columns)\u{7}".utf8))
+	let payload = Data([
+		UInt8((rows >> 8) & 0xff), UInt8(rows & 0xff),
+		UInt8((columns >> 8) & 0xff), UInt8(columns & 0xff),
+	])
+	sentInput.append(payload)
 }
+
+	func configureOutputSource(_ source: UInt32) -> Bool {
+		sentInput.removeAll()
+		configuredSources.append(source)
+		return source == 0 || source == 1
+	}
+
+	func clearRecentOutput() {}
+
+	func recentOutput() -> Data { Data() }
 
 func emit(_ data: Data) {
         for handler in outputHandlers.values {

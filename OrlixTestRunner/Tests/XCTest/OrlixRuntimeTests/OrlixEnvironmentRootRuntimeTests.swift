@@ -942,6 +942,7 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 		let recorder = EnvironmentRootOutputRecorder(terminalLog: terminalLog)
         let bootStatus = EnvironmentRootBootStatusRecorder()
         let completion = DispatchSemaphore(value: 0)
+		session.terminal.resize(rows: 24, columns: 80)
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
             let text = recorder.text

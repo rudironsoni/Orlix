@@ -164,6 +164,8 @@ targets:
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
+          - $(SRCROOT)/OrlixOS/Sources/init/terminal_mux.c
+          - $(SRCROOT)/OrlixOS/Sources/init/terminal_mux.h
           - $(SRCROOT)/OrlixOS/Sources/init/rootinit.c
           - $(SRCROOT)/OrlixOS/Sources/make/config.mk
           - $(SRCROOT)/OrlixOS/Sources/make/packages.mk

@@ -56,6 +56,7 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         let recorder = PTYOutputRecorder(terminalLog: terminalLog)
         let bootStatus = PTYBootStatusRecorder()
         let completion = DispatchSemaphore(value: 0)
+		session.terminal.resize(rows: 24, columns: 80)
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
             let text = recorder.text

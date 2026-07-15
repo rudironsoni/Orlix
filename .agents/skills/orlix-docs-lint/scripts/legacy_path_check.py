@@ -27,7 +27,9 @@ SKIPPED_PARTS = {
 
 def skipped(path: Path) -> bool:
     parts = path.relative_to(ROOT).parts
-    return any(parts[: len(prefix)] == prefix for prefix in SKIPPED_PARTS)
+    return "node_modules" in parts or any(
+        parts[: len(prefix)] == prefix for prefix in SKIPPED_PARTS
+    )
 
 
 def main() -> int:

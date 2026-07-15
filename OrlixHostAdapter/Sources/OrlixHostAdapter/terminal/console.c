@@ -220,6 +220,15 @@ orlix_host_console_enqueue_input(const void *bytes, unsigned long length)
     return copied;
 }
 
+__attribute__((visibility("default"))) void
+orlix_host_console_clear_input(void)
+{
+    os_unfair_lock_lock(&OrlixHostConsoleInputLock);
+    OrlixHostConsoleInputHead = 0;
+    OrlixHostConsoleInputLength = 0;
+    os_unfair_lock_unlock(&OrlixHostConsoleInputLock);
+}
+
 __attribute__((visibility("hidden"))) unsigned long
 orlix_host_console_read_input(void *bytes, unsigned long length)
 {

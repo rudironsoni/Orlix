@@ -26,6 +26,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "terminal_mux.h"
+
 #define ORLIX_INIT_CMDLINE_SIZE 16384
 #define ORLIX_INIT_MAX_RLIMITS 16
 #define ORLIX_INIT_MAX_CGROUP_UNIFIED 8
@@ -38,7 +40,6 @@
 #define ORLIX_INIT_MAX_NAMESPACE_JOINS 8
 #define ORLIX_INIT_MAX_SYSCTLS 16
 #define ORLIX_INIT_MAX_SUPPLEMENTARY_GROUPS 32
-#define ORLIX_INIT_RESIZE_PREFIX "\033]777;orlix.resize="
 #define ORLIX_INIT_OOM_SCORE_ADJ_MIN -1000
 #define ORLIX_INIT_OOM_SCORE_ADJ_MAX 1000
 #define ORLIX_INIT_HOST_MOUNT_TARGET_SIZE 256
@@ -1080,21 +1081,6 @@ static int apply_pty_winsize(int fd, unsigned long rows, unsigned long columns)
 	return ioctl(fd, TIOCSWINSZ, &size);
 }
 
-static void apply_initial_pty_winsize(int master, int slave)
-{
-	unsigned long rows = 0;
-	unsigned long columns = 0;
-
-	if (read_cmdline_unsigned("orlix.terminal.rows=", &rows) != 0 ||
-	    read_cmdline_unsigned("orlix.terminal.cols=", &columns) != 0)
-		return;
-
-	if (apply_pty_winsize(slave, rows, columns) != 0 &&
-	    apply_pty_winsize(master, rows, columns) != 0)
-		write_literal(STDERR_FILENO,
-			      "orlix-init: set PTY window size failed\n");
-}
-
 static void install_stdio(int fd)
 {
 	for (int target = STDIN_FILENO; target <= STDERR_FILENO; target++) {
@@ -2132,141 +2118,38 @@ static int copy_available_or_eof(int input_fd, int output_fd)
 	return write_all(output_fd, buffer, (size_t)bytes);
 }
 
-#define ORLIX_INIT_RESIZE_FRAME_SIZE 64
-
-struct resize_frame_decoder {
-	unsigned char buffer[ORLIX_INIT_RESIZE_FRAME_SIZE];
-	size_t length;
+struct terminal_mux_dispatch_context {
+	int master;
+	int slave;
+	int saw_resize;
 };
 
-static int parse_resize_frame(const unsigned char *buffer, size_t length,
-			      unsigned long *rows, unsigned long *columns)
+static int dispatch_terminal_mux_event(
+	const struct orlix_terminal_mux_event *event, void *opaque)
 {
-	const char prefix[] = ORLIX_INIT_RESIZE_PREFIX;
-	size_t prefix_length = sizeof(prefix) - 1;
-	size_t cursor;
-	unsigned long parsed_rows = 0;
-	unsigned long parsed_columns = 0;
+	struct terminal_mux_dispatch_context *context = opaque;
 
-	if (length < prefix_length || memcmp(buffer, prefix, prefix_length) != 0)
+	switch (event->type) {
+	case ORLIX_TERMINAL_MUX_EVENT_DATA:
+		return write_all(context->master, event->data, event->data_length);
+	case ORLIX_TERMINAL_MUX_EVENT_RESIZE:
+		if (apply_pty_winsize(context->slave, event->rows,
+				      event->columns) != 0 &&
+		    apply_pty_winsize(context->master, event->rows,
+				      event->columns) != 0)
+			return -1;
+		context->saw_resize = 1;
 		return 0;
-
-	cursor = prefix_length;
-	while (cursor < length && buffer[cursor] >= '0' &&
-	       buffer[cursor] <= '9') {
-		parsed_rows = parsed_rows * 10 + (unsigned long)(buffer[cursor] - '0');
-		if (parsed_rows > USHRT_MAX)
-			return -1;
-		cursor++;
-	}
-
-	if (cursor >= length || buffer[cursor] != 'x')
-		return -1;
-	cursor++;
-
-	while (cursor < length && buffer[cursor] >= '0' &&
-	       buffer[cursor] <= '9') {
-		parsed_columns = parsed_columns * 10 +
-				 (unsigned long)(buffer[cursor] - '0');
-		if (parsed_columns > USHRT_MAX)
-			return -1;
-		cursor++;
-	}
-
-	if (cursor >= length || buffer[cursor] != '\a' || cursor + 1 != length ||
-	    parsed_rows == 0 || parsed_columns == 0)
-		return -1;
-
-	*rows = parsed_rows;
-	*columns = parsed_columns;
-	return 1;
-}
-
-static int flush_resize_decoder(struct resize_frame_decoder *decoder, int master)
-{
-	int status = write_all(master, decoder->buffer, decoder->length);
-
-	decoder->length = 0;
-	return status;
-}
-
-static int resize_frame_can_continue(const unsigned char *buffer, size_t length,
-				     size_t prefix_length)
-{
-	unsigned long value = 0;
-	int saw_row = 0;
-	int saw_separator = 0;
-	int saw_column = 0;
-
-	for (size_t cursor = prefix_length; cursor < length; cursor++) {
-		unsigned char byte = buffer[cursor];
-
-		if (byte >= '0' && byte <= '9') {
-			value = value * 10 + (unsigned long)(byte - '0');
-			if (value > USHRT_MAX)
-				return 0;
-			if (saw_separator)
-				saw_column = 1;
-			else
-				saw_row = 1;
-			continue;
-		}
-		if (byte == 'x' && saw_row && !saw_separator) {
-			saw_separator = 1;
-			value = 0;
-			continue;
-		}
-		if (byte == '\a')
-			return saw_separator && saw_column && cursor + 1 == length;
+	case ORLIX_TERMINAL_MUX_EVENT_UNSUPPORTED:
+	case ORLIX_TERMINAL_MUX_EVENT_PROTOCOL_ERROR:
 		return 0;
 	}
-	return 1;
+	return -1;
 }
 
-static int decode_console_byte(struct resize_frame_decoder *decoder,
-			       unsigned char byte, int master, int slave)
-{
-	const unsigned char prefix[] = ORLIX_INIT_RESIZE_PREFIX;
-	const size_t prefix_length = sizeof(prefix) - 1;
-	unsigned long rows = 0;
-	unsigned long columns = 0;
-
-	if (decoder->length == 0 && byte != prefix[0])
-		return write_all(master, &byte, 1);
-
-	if (decoder->length >= sizeof(decoder->buffer)) {
-		if (flush_resize_decoder(decoder, master) != 0)
-			return -1;
-		return decode_console_byte(decoder, byte, master, slave);
-	}
-
-	decoder->buffer[decoder->length++] = byte;
-	if (decoder->length <= prefix_length) {
-		if (memcmp(decoder->buffer, prefix, decoder->length) == 0)
-			return 0;
-		return flush_resize_decoder(decoder, master);
-	}
-
-	if (!resize_frame_can_continue(decoder->buffer, decoder->length,
-				       prefix_length))
-		return flush_resize_decoder(decoder, master);
-
-	if (byte != '\a')
-		return 0;
-
-	if (parse_resize_frame(decoder->buffer, decoder->length,
-			       &rows, &columns) <= 0)
-		return flush_resize_decoder(decoder, master);
-
-	decoder->length = 0;
-	if (apply_pty_winsize(slave, rows, columns) != 0 &&
-	    apply_pty_winsize(master, rows, columns) != 0)
-		return -1;
-	return 0;
-}
-
-static int relay_console_available_or_eof(int console_fd, int master, int slave,
-					  struct resize_frame_decoder *decoder)
+static int relay_console_available_or_eof(
+	int console_fd, struct orlix_terminal_mux_decoder *decoder,
+	struct terminal_mux_dispatch_context *context)
 {
 	unsigned char buffer[4096];
 	ssize_t bytes;
@@ -2277,17 +2160,24 @@ static int relay_console_available_or_eof(int console_fd, int master, int slave,
 
 	if (bytes < 0)
 		return -1;
-	if (bytes == 0) {
-		if (decoder->length > 0 && flush_resize_decoder(decoder, master) != 0)
-			return -1;
-		return 1;
-	}
+	if (bytes == 0)
+		return orlix_terminal_mux_decoder_finish(
+			decoder, dispatch_terminal_mux_event, context) == 0 ? 1 : -1;
+	return orlix_terminal_mux_decoder_feed(
+		decoder, buffer, (size_t)bytes, dispatch_terminal_mux_event,
+		context);
+}
 
-	for (size_t offset = 0; offset < (size_t)bytes; offset++) {
-		if (decode_console_byte(decoder, buffer[offset], master, slave) != 0)
+static int receive_initial_terminal_resize(
+	int console_fd, struct orlix_terminal_mux_decoder *decoder,
+	struct terminal_mux_dispatch_context *context)
+{
+	while (!context->saw_resize) {
+		int status = relay_console_available_or_eof(console_fd, decoder,
+							   context);
+		if (status != 0)
 			return -1;
 	}
-
 	return 0;
 }
 
@@ -2342,10 +2232,10 @@ static void write_shell_exit_status(int exit_status)
 	write_literal(STDERR_FILENO, "\n");
 }
 
-static int relay_pty(int console_fd, int master, int slave, pid_t shell,
-		     int *child_status)
+static int relay_pty(int console_fd, int master, pid_t shell,
+		     int *child_status, struct orlix_terminal_mux_decoder *decoder,
+		     struct terminal_mux_dispatch_context *context)
 {
-	struct resize_frame_decoder resize_decoder = {0};
 	struct pollfd fds[] = {
 		{
 			.fd = console_fd,
@@ -2381,7 +2271,7 @@ static int relay_pty(int console_fd, int master, int slave, pid_t shell,
 
 	if ((console_revents & POLLIN) != 0) {
 		int copy_status = relay_console_available_or_eof(
-			console_fd, master, slave, &resize_decoder);
+			console_fd, decoder, context);
 			if (copy_status > 0) {
 				fds[0].fd = -1;
 				console_revents = 0;
@@ -2887,6 +2777,8 @@ static int run_pty_shell(int console_fd)
 	pid_t shell;
 	int status;
 	int child_status = -1;
+	struct orlix_terminal_mux_decoder decoder;
+	struct terminal_mux_dispatch_context dispatch = {0};
 
 	if (master < 0) {
 		write_literal(STDERR_FILENO, "orlix-init: open PTY master failed\n");
@@ -2899,7 +2791,15 @@ static int run_pty_shell(int console_fd)
 		return 1;
 	}
 
-	apply_initial_pty_winsize(master, slave);
+	dispatch.master = master;
+	dispatch.slave = slave;
+	orlix_terminal_mux_decoder_init(&decoder);
+	make_transport_raw(console_fd);
+	if (receive_initial_terminal_resize(console_fd, &decoder, &dispatch) != 0) {
+		close(slave);
+		close(master);
+		return 1;
+	}
 	shell = start_command_on_pty(master, slave);
 	if (shell < 0) {
 		write_literal(STDERR_FILENO, "orlix-init: fork shell failed\n");
@@ -2909,8 +2809,8 @@ static int run_pty_shell(int console_fd)
 	}
 
 write_process_started(shell);
-make_transport_raw(console_fd);
-status = relay_pty(console_fd, master, slave, shell, &child_status);
+status = relay_pty(console_fd, master, shell, &child_status, &decoder,
+		   &dispatch);
 close(slave);
 	if (child_status < 0) {
 		if (wait_for_shell_exit(shell, &child_status) > 0) {

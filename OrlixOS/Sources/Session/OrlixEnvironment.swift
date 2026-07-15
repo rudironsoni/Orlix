@@ -1293,8 +1293,6 @@ public struct OrlixEnvironmentRootImage: Equatable, Sendable {
 	public static let defaultNoNewPrivilegesCommandLineKey = "orlix.nonewprivs"
 	public static let defaultCloseAdditionalFdsCommandLineKey = "orlix.closefds"
 	public static let defaultTerminalCommandLineKey = "orlix.terminal"
-	public static let defaultTerminalRowsCommandLineKey = "orlix.terminal.rows"
-	public static let defaultTerminalColumnsCommandLineKey = "orlix.terminal.cols"
 	public static let defaultOOMScoreAdjustmentCommandLineKey = "orlix.oomscoreadj"
     public static let defaultSchedulerPolicyCommandLineKey = "orlix.scheduler.policy"
     public static let defaultSchedulerPriorityCommandLineKey = "orlix.scheduler.priority"
@@ -1766,13 +1764,6 @@ return node
 			tokens.append(
 				"\(defaultTerminalCommandLineKey)=\(defaultTerminal ? 1 : 0)"
 			)
-		}
-		if let rows = descriptor.defaultTerminalRows,
-		   let columns = descriptor.defaultTerminalColumns,
-		   rows > 0,
-		   columns > 0 {
-			tokens.append("\(defaultTerminalRowsCommandLineKey)=\(rows)")
-			tokens.append("\(defaultTerminalColumnsCommandLineKey)=\(columns)")
 		}
 		if let defaultOOMScoreAdjustment = descriptor.defaultOOMScoreAdjustment {
 			tokens.append("\(defaultOOMScoreAdjustmentCommandLineKey)=\(defaultOOMScoreAdjustment)")

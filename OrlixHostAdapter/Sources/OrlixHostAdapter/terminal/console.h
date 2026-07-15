@@ -12,6 +12,8 @@ orlix_host_console_set_output_fd(enum orlix_host_console_source source, int fd);
 __attribute__((visibility("default"))) unsigned long
 orlix_host_console_enqueue_input(const void *bytes, unsigned long length);
 __attribute__((visibility("default"))) void
+orlix_host_console_clear_input(void);
+__attribute__((visibility("default"))) void
 orlix_host_console_recent_output_clear(enum orlix_host_console_source source);
 __attribute__((visibility("default"))) unsigned long
 orlix_host_console_recent_output_snapshot(enum orlix_host_console_source source,

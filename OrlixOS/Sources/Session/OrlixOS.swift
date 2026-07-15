@@ -52,6 +52,9 @@ private func orlix_host_console_enqueue_input(
     _ length: UInt
 ) -> UInt
 
+@_silgen_name("orlix_host_console_clear_input")
+private func orlix_host_console_clear_input()
+
 @_silgen_name("orlix_host_console_recent_output_clear")
 private func orlix_host_console_recent_output_clear(_ source: UInt32)
 
@@ -830,6 +833,9 @@ protocol OrlixTerminalTransport: AnyObject {
 	) -> OrlixTerminalOutput
 	func send(_ data: Data)
 	func resize(rows: UInt32, columns: UInt32)
+	func configureOutputSource(_ source: UInt32) -> Bool
+	func clearRecentOutput()
+	func recentOutput() -> Data
 }
 
 public final class OrlixTerminalOutput: @unchecked Sendable {
@@ -898,6 +904,22 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
         defer { geometryLock.unlock() }
         return geometry
     }
+
+	func configureOutputSource(_ source: UInt32) -> Bool {
+		transport.configureOutputSource(source)
+	}
+
+	func clearRecentOutput() {
+		transport.clearRecentOutput()
+	}
+
+	func recentOutput() -> Data {
+		transport.recentOutput()
+	}
+
+	func transportDidBecomeReady(rows: UInt32, columns: UInt32) {
+		transport.resize(rows: rows, columns: columns)
+	}
 }
 
 public final class OrlixLinuxSession: @unchecked Sendable {
@@ -990,16 +1012,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
     }
 
     public var recentConsoleOutput: Data {
-        let capacity = 64 * 1024
-        var bytes = [UInt8](repeating: 0, count: capacity)
-        let count = bytes.withUnsafeMutableBytes { buffer in
-            orlix_host_console_recent_output_snapshot(
-                COrlixHostConsoleSource.virtio,
-                buffer.baseAddress,
-                UInt(capacity)
-            )
-        }
-        return Data(bytes.prefix(Int(count)))
+		terminal.recentOutput()
     }
 
     public var recentConsoleOutputText: String {
@@ -1061,6 +1074,9 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 			kernelCommandLine: resolvedKernelCommandLine,
 			terminal: terminal
 		)
+		if let consoleSize = ociRuntimeSession.consoleSize {
+			terminal.resize(rows: consoleSize.height, columns: consoleSize.width)
+		}
 	}
 
 	private static func ociRuntimeKernelCommandLine(
@@ -1074,15 +1090,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 			descriptor: session.environment,
 			kernelCommandLine: kernelCommandLine
 		)
-		var terminalTokens = [session.terminal ? "orlix.terminal=1" : "orlix.terminal=0"]
-		if let consoleSize = session.consoleSize {
-			terminalTokens.append(
-				"\(OrlixEnvironmentRootImage.defaultTerminalRowsCommandLineKey)=\(consoleSize.height)"
-			)
-			terminalTokens.append(
-				"\(OrlixEnvironmentRootImage.defaultTerminalColumnsCommandLineKey)=\(consoleSize.width)"
-			)
-		}
+		let terminalTokens = [session.terminal ? "orlix.terminal=1" : "orlix.terminal=0"]
 		let terminalToken = terminalTokens.joined(separator: " ")
 		guard let base, !base.isEmpty else {
 			return terminalToken
@@ -1127,8 +1135,14 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 	}
 
     public func boot() -> OrlixBootStatus {
+		guard terminal.latestGeometry != nil else {
+			return .invalidConfig
+		}
+		guard configureInteractiveConsole() else {
+			return .invalidConfig
+		}
         orlix_host_boot_progress_reset()
-        orlix_host_console_recent_output_clear(COrlixHostConsoleSource.virtio)
+		terminal.clearRecentOutput()
         orlix_host_boot_progress_record(COrlixBootStage.sessionCreated, 0, 0, 0)
         orlix_host_boot_progress_record(COrlixBootStage.payloadRegistering, 0, 0, 0)
 
@@ -1174,7 +1188,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
                     return status
                 }
 
-                guard let kernelCommandLine = effectiveKernelCommandLine(),
+				guard let kernelCommandLine = bootConfig.kernelCommandLine,
                       !kernelCommandLine.isEmpty
                 else {
                     return boot(nil)
@@ -1185,23 +1199,31 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         }
     }
 
-    func effectiveKernelCommandLine() -> String? {
-        guard let geometry = terminal.latestGeometry else {
-            return bootConfig.kernelCommandLine
-        }
 
-        let rowsKey = "orlix.terminal.rows="
-        let columnsKey = "orlix.terminal.cols="
-        var tokens = bootConfig.kernelCommandLine?
-            .split(whereSeparator: { $0.isWhitespace })
-            .map(String.init) ?? []
-        tokens.removeAll {
-            $0.hasPrefix(rowsKey) || $0.hasPrefix(columnsKey)
-        }
-        tokens.append("\(rowsKey)\(geometry.rows)")
-        tokens.append("\(columnsKey)\(geometry.columns)")
-        return tokens.joined(separator: " ")
-    }
+	static func interactiveConsoleSource(kernelCommandLine: String?) -> UInt32? {
+		guard let kernelCommandLine else { return nil }
+		guard let token = kernelCommandLine
+			.split(whereSeparator: { $0.isWhitespace })
+			.last(where: { $0.hasPrefix("console=") }) else { return nil }
+		let name = token.dropFirst("console=".count).split(separator: ",").first
+		switch name {
+		case "ttyS0": return COrlixHostConsoleSource.serial
+		case "hvc0": return COrlixHostConsoleSource.virtio
+		default: return nil
+		}
+	}
+
+	func configureInteractiveConsole() -> Bool {
+		guard let source = Self.interactiveConsoleSource(
+			kernelCommandLine: bootConfig.kernelCommandLine
+		) else { return false }
+		guard terminal.configureOutputSource(source) else { return false }
+		guard let geometry = terminal.latestGeometry else { return false }
+		terminal.transportDidBecomeReady(
+			rows: geometry.rows, columns: geometry.columns
+		)
+		return true
+	}
 
     private func registerRootImagesForBoot() -> Bool {
         if let materializedRootImage {
@@ -7967,6 +7989,31 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 	}
 }
 
+enum OrlixTerminalMuxEncoder {
+	static let maximumPayloadSize = 4096
+
+	static func frame(type: UInt8, payload: Data) -> Data? {
+		guard payload.count <= maximumPayloadSize else { return nil }
+		var frame = Data([1, type, 0, 0])
+		let length = UInt32(payload.count)
+		frame.append(contentsOf: [
+			UInt8((length >> 24) & 0xff), UInt8((length >> 16) & 0xff),
+			UInt8((length >> 8) & 0xff), UInt8(length & 0xff),
+		])
+		frame.append(payload)
+		var encoded = Data([0xc0])
+		for byte in frame {
+			switch byte {
+			case 0xc0: encoded.append(contentsOf: [0xdb, 0xdc])
+			case 0xdb: encoded.append(contentsOf: [0xdb, 0xdd])
+			default: encoded.append(byte)
+			}
+		}
+		encoded.append(0xc0)
+		return encoded
+	}
+}
+
 private final class HostConsoleTerminalTransport:
     OrlixTerminalTransport,
     @unchecked Sendable
@@ -7974,6 +8021,7 @@ private final class HostConsoleTerminalTransport:
     private let pipe = Pipe()
     private let lock = NSLock()
     private var outputHandlers: [UUID: @Sendable (Data) -> Void] = [:]
+	private var selectedSource: UInt32?
 
     init() {
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
@@ -7983,15 +8031,13 @@ private final class HostConsoleTerminalTransport:
             }
             self?.emit(data)
         }
-        orlix_host_console_set_output_fd(
-            COrlixHostConsoleSource.virtio,
-            pipe.fileHandleForWriting.fileDescriptor
-        )
     }
 
     deinit {
         pipe.fileHandleForReading.readabilityHandler = nil
-        orlix_host_console_set_output_fd(COrlixHostConsoleSource.virtio, -1)
+		if let selectedSource {
+			orlix_host_console_set_output_fd(selectedSource, -1)
+		}
     }
 
     func attachOutput(
@@ -8008,14 +8054,16 @@ private final class HostConsoleTerminalTransport:
     }
 
 	func send(_ data: Data) {
-		data.withUnsafeBytes { buffer in
-			guard let baseAddress = buffer.baseAddress else {
-				return
-            }
-            _ = orlix_host_console_enqueue_input(
-                baseAddress,
-                UInt(buffer.count)
-			)
+		if data.isEmpty {
+			sendFrame(type: 1, payload: data)
+			return
+		}
+		var offset = 0
+		while offset < data.count {
+			let end = min(offset + OrlixTerminalMuxEncoder.maximumPayloadSize,
+				      data.count)
+			sendFrame(type: 1, payload: data.subdata(in: offset..<end))
+			offset = end
 		}
 	}
 
@@ -8026,7 +8074,66 @@ private final class HostConsoleTerminalTransport:
 			return
 		}
 
-		send(Data("\u{1B}]777;orlix.resize=\(rows)x\(columns)\u{7}".utf8))
+		let payload = Data([
+			UInt8((rows >> 8) & 0xff), UInt8(rows & 0xff),
+			UInt8((columns >> 8) & 0xff), UInt8(columns & 0xff),
+		])
+		sendFrame(type: 2, payload: payload)
+	}
+
+	func configureOutputSource(_ source: UInt32) -> Bool {
+		guard source == COrlixHostConsoleSource.serial ||
+		      source == COrlixHostConsoleSource.virtio else { return false }
+		lock.lock()
+		let previous = selectedSource
+		selectedSource = source
+		lock.unlock()
+		if let previous, previous != source {
+			orlix_host_console_set_output_fd(previous, -1)
+		}
+		orlix_host_console_set_output_fd(
+			source, pipe.fileHandleForWriting.fileDescriptor
+		)
+		orlix_host_console_clear_input()
+		return true
+	}
+
+	func clearRecentOutput() {
+		guard let selectedSource else { return }
+		orlix_host_console_recent_output_clear(selectedSource)
+	}
+
+	func recentOutput() -> Data {
+		guard let selectedSource else { return Data() }
+		let capacity = 64 * 1024
+		var bytes = [UInt8](repeating: 0, count: capacity)
+		let count = bytes.withUnsafeMutableBytes { buffer in
+			orlix_host_console_recent_output_snapshot(
+				selectedSource, buffer.baseAddress, UInt(capacity)
+			)
+		}
+		return Data(bytes.prefix(Int(count)))
+	}
+
+	private func sendFrame(type: UInt8, payload: Data) {
+		guard let encoded = OrlixTerminalMuxEncoder.frame(
+			type: type, payload: payload
+		) else { return }
+		enqueue(encoded)
+	}
+
+	private func enqueue(_ data: Data) {
+		data.withUnsafeBytes { buffer in
+			guard let baseAddress = buffer.baseAddress else { return }
+			var offset = 0
+			while offset < buffer.count {
+				let written = orlix_host_console_enqueue_input(
+					baseAddress.advanced(by: offset), UInt(buffer.count - offset)
+				)
+				guard written > 0 else { return }
+				offset += Int(written)
+			}
+		}
 	}
 
 	private func emit(_ data: Data) {

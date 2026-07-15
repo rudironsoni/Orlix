@@ -1258,4 +1258,16 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     XCTAssertEqual(memcmp(virtioBuffer, virtio, sizeof(virtio) - 1), 0);
 }
 
+- (void)testConsoleInputClearRemovesStaleSessionBytes
+{
+    const char input[] = "stale";
+    unsigned char buffer[sizeof(input)] = {0};
+
+    orlix_host_console_clear_input();
+    XCTAssertEqual(orlix_host_console_enqueue_input(input, sizeof(input)),
+                   sizeof(input));
+    orlix_host_console_clear_input();
+    XCTAssertEqual(orlix_host_console_read_input(buffer, sizeof(buffer)), 0UL);
+}
+
 @end

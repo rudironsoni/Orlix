@@ -702,6 +702,7 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             )
         }
         let recorder = TerminalOutputRecorder()
+		session.terminal.resize(rows: 24, columns: 80)
         let completion = DispatchSemaphore(value: 0)
         let bootStatus = BootStatusRecorder()
         let output = session.terminal.attachOutput { data in
@@ -2035,6 +2036,7 @@ private final class OrlixPayloadE2fsprogsRuntimeProof: @unchecked Sendable {
             )
         )
         let recorder = TerminalOutputRecorder()
+		session.terminal.resize(rows: 24, columns: 80)
         let completion = DispatchSemaphore(value: 0)
         let bootStatus = BootStatusRecorder()
         let output = session.terminal.attachOutput { data in
@@ -2431,6 +2433,7 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
             ],
             terminal: terminal
         )
+		terminal.resize(rows: 24, columns: 80)
         DispatchQueue.global(qos: .userInitiated).async {
             let status = session.boot()
             bootStatus.set(status)
@@ -2664,6 +2667,7 @@ private final class OrlixOCIDerivedLiveRegistryAlpineRootfsImportProof:
 			],
 			terminal: terminal
 		)
+		terminal.resize(rows: 24, columns: 80)
 		DispatchQueue.global(qos: .userInitiated).async {
 			let status = session.boot()
 			bootStatus.set(status)
