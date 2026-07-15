@@ -11,7 +11,7 @@ story_of:
 has_task:
   - "[Keep Herdr authoritative for terminal topology](../../task/doing/keep-herdr-authoritative-for-terminal-topology.md)"
   - "[Bind local sessions through OrlixOS](../../task/doing/bind-local-sessions-through-orlixos.md)"
-  - "[Make app-hosted XCTest sessions terminate cleanly](../../task/todo/make-app-hosted-xctest-sessions-terminate-cleanly.md)"
+  - "[Make app-hosted XCTest sessions terminate cleanly](../../task/done/make-app-hosted-xctest-sessions-terminate-cleanly.md)"
   - "[Validate native platform presentation](../../task/todo/validate-native-platform-presentation.md)"
 ---
 

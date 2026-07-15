@@ -95,7 +95,12 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 
         let recorder = PTYOutputRecorder(terminalLog: terminalLog)
 		let bootStatus = PTYBootStatusRecorder()
-        let completion = DispatchSemaphore(value: 0)
+		let firstOutput = XCTestExpectation(
+			description: "first interactive terminal output"
+		)
+		let completion = XCTestExpectation(
+			description: "interactive terminal proof completed"
+		)
 		if serialConsoleProof {
 			session.terminal.resize(rows: 31, columns: 101)
 			try Self.verifySerialSourceSelection(session: session)
@@ -126,12 +131,14 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 			}
 		}
         let output = session.terminal.attachOutput { data in
-            recorder.append(data)
+			if recorder.append(data) {
+				firstOutput.fulfill()
+			}
             let text = recorder.text
 
             if let marker = Self.firstWrongRootfsMarker(in: text) {
                 terminalLog.writeLine("wrong rootfs marker=\(marker)")
-                completion.signal()
+				completion.fulfill()
             }
 
             if !recorder.hasSentProofCommands,
@@ -157,7 +164,7 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
 			if Self.containsTerminalCondition(
 				text, serialConsoleProof: self.serialConsoleProof
 			) {
-                completion.signal()
+				completion.fulfill()
             }
         }
         defer { output.cancel() }
@@ -168,37 +175,42 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
             terminalLog.writeLine("boot returned status=\(status.message)")
             bootStatus.set(status)
             if status != .ok {
-                completion.signal()
+				if recorder.byteCount == 0 {
+					firstOutput.fulfill()
+				}
+				completion.fulfill()
             }
         }
 
         let deadline = Date().addingTimeInterval(Self.timeout)
-        let firstOutputDeadline = Date().addingTimeInterval(Self.firstOutputTimeout)
-        while completion.wait(timeout: .now() + .seconds(1)) != .success {
-            if recorder.byteCount == 0,
-               Date() >= firstOutputDeadline {
-                terminalLog.writeLine("no terminal output after \(Int(Self.firstOutputTimeout)) seconds")
-                throw OrlixPTYRuntimeProofError.noTerminalOutput(
-                    Self.firstOutputTimeout,
-                    terminalLog.url
-                )
-            }
-            if Date() >= deadline {
-                let text = recorder.text
-                if let marker = Self.firstFatalMarker(in: text) {
-                    throw OrlixPTYRuntimeProofError.fatalMarker(marker)
-                }
-                if let marker = Self.firstWrongRootfsMarker(in: text) {
-                    throw OrlixPTYRuntimeProofError.wrongRootfs(marker, terminalLog.url)
-                }
-                terminalLog.writeLine("timeout byteCount=\(recorder.byteCount)")
-                throw OrlixPTYRuntimeProofError.timeout(
-                    Self.timeout,
-                    text,
-                    terminalLog.url,
-                    terminalLog.tail()
-                )
-            }
+		if XCTWaiter.wait(
+			for: [firstOutput],
+			timeout: Self.firstOutputTimeout
+		) != .completed,
+		   recorder.byteCount == 0 {
+			terminalLog.writeLine("no terminal output after \(Int(Self.firstOutputTimeout)) seconds")
+			throw OrlixPTYRuntimeProofError.noTerminalOutput(
+				Self.firstOutputTimeout,
+				terminalLog.url
+			)
+		}
+
+		let remaining = max(0, deadline.timeIntervalSinceNow)
+		if XCTWaiter.wait(for: [completion], timeout: remaining) != .completed {
+			let text = recorder.text
+			if let marker = Self.firstFatalMarker(in: text) {
+				throw OrlixPTYRuntimeProofError.fatalMarker(marker)
+			}
+			if let marker = Self.firstWrongRootfsMarker(in: text) {
+				throw OrlixPTYRuntimeProofError.wrongRootfs(marker, terminalLog.url)
+			}
+			terminalLog.writeLine("timeout byteCount=\(recorder.byteCount)")
+			throw OrlixPTYRuntimeProofError.timeout(
+				Self.timeout,
+				text,
+				terminalLog.url,
+				terminalLog.tail()
+			)
         }
 
         if let status = bootStatus.value, status != .ok {
@@ -607,11 +619,14 @@ private final class PTYOutputRecorder: @unchecked Sendable {
 		return sentResizeCommands
 	}
 
-    func append(_ data: Data) {
+    @discardableResult
+    func append(_ data: Data) -> Bool {
         lock.lock()
+		let isFirstOutput = storage.isEmpty
         storage.append(data)
         lock.unlock()
         terminalLog.append(data)
+		return isFirstOutput
     }
 
     func markProofCommandsSent() {

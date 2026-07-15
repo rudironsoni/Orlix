@@ -40,3 +40,7 @@ Replaced boot-command-line terminal geometry and printable resize markers with t
 ## [2026-07-15] track | Separate app-hosted XCTest cleanup
 
 Added a bounded follow-up task for successful app-hosted runtime XCTest runs that leave `xcodebuild` waiting in test-session cleanup. Preserved the accepted Linux console-policy and terminal-transport behavior as regression constraints rather than reopening their implementation.
+
+## [2026-07-15] resolve | Make app-hosted XCTest cleanup deterministic
+
+Replaced semaphore polling in the app-hosted runtime proof with XCTest-native expectations, preventing the priority-inversion diagnostic that left `xcodebuild` waiting for asynchronous simulator diagnostics after a successful test. Closed the focused cleanup task without changing Linux, HostAdapter, session, console-policy, multiplex, or terminal-geometry behavior.
