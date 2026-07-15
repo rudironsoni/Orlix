@@ -741,3 +741,34 @@ pass: Build/TCTI/reports/tcti-plan-consistency/report.json
 ```
 
 This correction changes Git metadata and this implementation record only. It adds no application, kernel, libc, OrlixOS, terminal, runtime, package, archive, release, or upstream-conformance proof, and it does not change the separate Ghostty archive identity blocker.
+
+#### 2026-07-15 Default Local Instance terminal checkpoint
+
+- Added one persistent `Orlix` entry to the mobile server list. It opens a Ghostty terminal backed directly by `OrlixLinuxSession` and `OrlixTerminalSession` from `OrlixOS`. It does not create a fake remote server, route through SSH, or introduce a general target abstraction.
+- The terminal starts Ghostty on demand, installs its surface after asynchronous Ghostty initialization, forwards input and resize events to the Orlix terminal session, feeds session output into Ghostty, and closes the session when navigation releases the view.
+- Removed the obsolete empty-list overlay because the server list always contains the local Orlix entry. The existing toolbar remains the remote-server creation path.
+- Added a focused UI test that opens the local entry and waits for actual `OrlixOS` session output, rather than treating navigation or terminal allocation as runtime proof.
+
+Evidence:
+
+```text
+xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
+OK xcode external storage doctor passed
+
+xcodebuild -project Orlix.xcodeproj -scheme Orlix -configuration Debug \
+  -destination id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 \
+  CODE_SIGNING_ALLOWED=NO build
+** BUILD SUCCEEDED **
+
+xcodebuild -quiet -project Orlix.xcodeproj -scheme 'Orlix App Tests' \
+  -destination id=ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3 \
+  -only-testing:OrlixUITests/DefaultLocalInstanceUITests/testOpensDefaultLocalInstanceTerminal \
+  -collect-test-diagnostics never test
+1 test passed, 0 failed, 0 skipped
+result: /Users/rudironsoni/Library/Developer/Xcode/DerivedData/Logs/Test/Test-Orlix App Tests-2026.07.15_09-57-26-+0200.xcresult
+
+recent Orlix and OrlixUITests crash-report scan
+0 matching reports
+```
+
+This proves the app opens the directly backed local terminal and receives real Orlix session output on the pinned simulator. It does not yet prove terminal input echo, resize delivery, close, background, foreground, restart, a POSIX shell prompt, or the ADR 0017 package ladder, so #51 remains active.
