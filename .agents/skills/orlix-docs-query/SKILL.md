@@ -1,6 +1,6 @@
 ---
 name: orlix-docs-query
-description: Answer Orlix architecture, ownership, decision, initiative, capability, provenance, and relationship questions from the canonical docs ontology.
+description: Answer Orlix architecture, ownership, decision, epic, story, task, capability, provenance, and relationship questions from the canonical docs ontology.
 ---
 
 # Orlix Docs Query

@@ -10,7 +10,7 @@ hooks = true
 max_depth = 1
 
 [agents."tcti-planner"]
-description = "Orlix TCTI planner: reads the typed initiative, reports, and harness status; selects the next safe no-phone task; refuses runtime expansion when prerequisites are missing. See .codex/subagents/tcti-planner.md."
+description = "Orlix TCTI planner: reads the typed epic, story, and task hierarchy, reports, and harness status; selects the next safe no-phone task; refuses runtime expansion when prerequisites are missing. See .codex/subagents/tcti-planner.md."
 
 [agents."tcti-oracle-engineer"]
 description = "Orlix TCTI oracle engineer: implements no-phone switch-debug semantic oracle, golden ELF validation, and reducers only after planner and safety scope are clear. See .codex/subagents/tcti-oracle-engineer.md."

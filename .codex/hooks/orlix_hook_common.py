@@ -73,16 +73,19 @@ def _frontmatter_scalar(text: str, key: str) -> str:
     return value.group(1).strip() if value else ""
 
 
-def active_plan_dirs(root: Path) -> list[Path]:
-    initiative_root = root / "docs" / "objects" / "initiative"
-    if not initiative_root.is_dir():
-        return []
-    return sorted(path for path in initiative_root.glob("*.md") if _frontmatter_scalar(path.read_text(errors="replace"), "status") == "active")
+def doing_work_pages(root: Path) -> list[Path]:
+    objects_root = root / "docs" / "objects"
+    pages: list[Path] = []
+    for kind in ("epic", "story", "task"):
+        status_root = objects_root / kind / "doing"
+        if status_root.is_dir():
+            pages.extend(status_root.glob("*.md"))
+    return sorted(pages)
 
 
 def required_plan_context_paths(root: Path) -> list[Path]:
     paths = [root / "AGENTS.md", root / "docs" / "index.md"]
-    paths.extend(active_plan_dirs(root))
+    paths.extend(doing_work_pages(root))
     return [path for path in paths if path.is_file()]
 
 
@@ -151,7 +154,7 @@ def is_git_commit_or_push(payload) -> bool:
 
 
 def oversized_goal_messages(root: Path) -> list[str]:
-    return [f"{path.relative_to(root)} exceeds the 16000 character initiative limit" for path in active_plan_dirs(root) if len(path.read_text(errors="replace")) > 16000]
+    return [f"{path.relative_to(root)} exceeds the 16000 character work-page limit" for path in doing_work_pages(root) if len(path.read_text(errors="replace")) > 16000]
 
 
 def plan_context_post_update(payload) -> None:

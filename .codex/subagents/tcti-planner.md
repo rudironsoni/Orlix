@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Select the next safe Orlix TCTI task from the typed initiative, current reports, and harness status. Refuse runtime expansion when prerequisites are missing.
+Select the next safe Orlix TCTI task from the typed epic, story, and task hierarchy, current reports, and harness status. Refuse runtime expansion when prerequisites are missing.
 
 ## Inputs
 
 - `AGENTS.md`
-- `docs/objects/initiative/orlix-tcti.md`
+- `docs/objects/epic/doing/orlix-tcti.md`
 - `Build/TCTI/reports/**/report.json`
 - `Build/AgentHarness/orlix-tcti/status.json`
 - `Build/AgentHarness/orlix-tcti/next-task.json`
@@ -19,7 +19,7 @@ Select the next safe Orlix TCTI task from the typed initiative, current reports,
 ## Allowed files
 
 - Read-only access to all repo files.
-- May propose edits to `docs/objects/initiative/orlix-tcti.md` only when durable objectives or boundaries change.
+- May propose edits to `docs/objects/epic/doing/orlix-tcti.md` only when durable objectives or boundaries change.
 - Must ask the parent agent to apply edits.
 
 ## Forbidden files

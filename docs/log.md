@@ -7,6 +7,10 @@ updated: 2026-07-15
 ---
 # Orlix Knowledge Log
 
+## [2026-07-15] model | Replace initiatives with a work hierarchy
+
+Replaced the flat initiative object type with a strict `epic -> story -> task` hierarchy. Added `todo`, `doing`, and `done` status folders for every work type, migrated durable work and its consumers, and made lifecycle hooks load the complete doing hierarchy before mutations.
+
 ## [2026-07-15] correct | Preserve escaped source links
 
 Clarified that Markdown links are resolved from the linking page under `docs/` and may escape to repository source files when the resolved target remains inside the repository. Restored clickable source links in migrated capability material and kept absolute local paths forbidden.

@@ -6473,7 +6473,7 @@ func dirtyRuntimeOrHarnessWorktree() -> Bool {
         "tools/runtime",
         "tools/tcti",
         "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
-        "docs/objects/initiative/orlix-tcti.md",
+        "docs/objects/epic/doing/orlix-tcti.md",
     ]
     guard let output = run("/usr/bin/env", ["git", "status", "--short", "--"] + paths) else {
         return true
@@ -7286,7 +7286,7 @@ func validateSemanticFreshnessFixtures() throws {
         allowedScope: ["tools/tcti/orlix-tcti-gate.swift", "OrlixKernel/Tests/TCTI/golden_elf/**"]
     )
     let cases: [(String, Gate, String, Bool)] = [
-        ("initiative-does-not-rerun-runtime", runtimeGate, "docs/objects/initiative/orlix-tcti.md", false),
+        ("epic-does-not-rerun-runtime", runtimeGate, "docs/objects/epic/doing/orlix-tcti.md", false),
         ("runtime-tool-does-not-rebuild-product", runtimeGate, "tools/runtime/orlix-runtime-validation.sh", false),
         ("tcti-tool-does-not-rebuild-product", tctiGate, "tools/tcti/orlix-tcti-gate.swift", false),
         ("kernel-port-reruns-kernel-and-runtime", kernelGate, "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/syscall.c", true),

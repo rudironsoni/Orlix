@@ -1,14 +1,16 @@
 ---
-type: initiative
+type: epic
 tags:
-  - initiative
+  - epic
   - tcti-mcp
 updated: 2026-07-15
-status: deferred
+status: todo
 summary: "Expose TCTI workflow state through an MCP only after the underlying structured harness is stable."
 targets:
-  - "[Orlix](../product/orlix.md)"
-  - "[TCTI](../software-component/tcti.md)"
+  - "[Orlix](../../product/orlix.md)"
+  - "[TCTI](../../software-component/tcti.md)"
+has_story:
+  - "[Expose the TCTI harness through MCP](../../story/todo/expose-tcti-harness-through-mcp.md)"
 ---
 
 # TCTI MCP

@@ -1,6 +1,6 @@
 ---
 name: orlix-docs-ingest
-description: Add or update Orlix knowledge in the canonical docs ontology. Use for architecture, decision, initiative, capability, terminology, provenance, and durable lesson changes.
+description: Add or update Orlix knowledge in the canonical docs ontology. Use for architecture, decision, epic, story, task, capability, terminology, provenance, and durable lesson changes.
 ---
 
 # Orlix Docs Ingest

@@ -1,14 +1,16 @@
 ---
-type: initiative
+type: epic
 tags:
-  - initiative
+  - epic
   - orlix-tcti
 updated: 2026-07-15
-status: active
+status: doing
 summary: "Complete safe, conformant hosted Linux ELF execution through TCTI."
 targets:
-  - "[Orlix](../product/orlix.md)"
-  - "[TCTI](../software-component/tcti.md)"
+  - "[Orlix](../../product/orlix.md)"
+  - "[TCTI](../../software-component/tcti.md)"
+has_story:
+  - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 ---
 
 # Orlix TCTI

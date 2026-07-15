@@ -20,7 +20,9 @@ Read this file and [the ontology](ontology.md) before changing Orlix knowledge. 
 - `objects/product/`: delivered products with identity.
 - `objects/software-component/`: maintained software components with ownership boundaries.
 - `objects/architecture-decision/`: durable decisions with preserved ADR identifiers.
-- `objects/initiative/`: active, blocked, deferred, or completed work with durable goals and acceptance boundaries.
+- `objects/epic/{todo,doing,done}/`: durable outcomes and acceptance boundaries.
+- `objects/story/{todo,doing,done}/`: user-valued increments, each linked to exactly one epic.
+- `objects/task/{todo,doing,done}/`: bounded executable work units, each linked to exactly one story.
 - `objects/product-capability/`: user-visible or operational capabilities with independent lifecycle state.
 - `concepts/`: reusable architecture, terminology, ownership, proof, and workflow knowledge.
 - `sources/`: faithful source summaries and machine-readable inputs.
@@ -36,7 +38,10 @@ Read this file and [the ontology](ontology.md) before changing Orlix knowledge. 
 - Treat a capability status of `implemented` as source and focused-test presence only. It is not runtime or release proof.
 - Use relative Markdown links within `docs/`. Use code formatting for repository paths outside `docs/`.
 - Add a new link type only when the relationship recurs and `relates_to` would lose useful meaning.
-- Update both ends of mirrored `supersedes` and `amends` relationships.
+- Keep `epic -> story -> task` relationships mirrored with `has_story`/`story_of` and `has_task`/`task_of`.
+- Keep every work page in the folder matching its `todo`, `doing`, or `done` status.
+- Put durable outcomes, acceptance boundaries, and work decomposition in epic, story, and task pages. Keep exact commands, results, failures, and selected next work in structured reports.
+- Update both ends of mirrored hierarchy, `supersedes`, and `amends` relationships.
 - Regenerate `index.md` after page changes and append a concise entry to `log.md` for meaningful knowledge changes.
 
 ## Workflows

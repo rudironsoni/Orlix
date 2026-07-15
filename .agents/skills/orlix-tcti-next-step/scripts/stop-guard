@@ -13,7 +13,7 @@ if printf '%s\n' "$all_changed" | grep -Eq '(^\.codex/|^\.agents/skills/|^AGENTS
   printf '%s' "$payload" | grep -Eq 'agent-harness-check|agent-hooks-check|agent-skills-check|agent-subagents-check|agent-mcp-check' ||
     warn "harness files changed but final summary does not mention agent harness checks."
 fi
-if printf '%s\n' "$all_changed" | grep -Eq '(^tools/tcti/|^OrlixKernel/Tests/TCTI/|^docs/objects/initiative/orlix-tcti\.md|^docs/objects/architecture-decision/0022-)'; then
+if printf '%s\n' "$all_changed" | grep -Eq '(^tools/tcti/|^OrlixKernel/Tests/TCTI/|^docs/objects/epic/doing/orlix-tcti\.md|^docs/objects/architecture-decision/0022-)'; then
   printf '%s' "$payload" | grep -Eq 'tcti-plan-consistency|tcti-golden-elf|tcti-appstore-safety-audit' ||
     warn "TCTI files changed but final summary does not mention relevant TCTI gates."
 fi
