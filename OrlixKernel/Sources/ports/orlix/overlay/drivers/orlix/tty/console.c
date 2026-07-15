@@ -155,6 +155,13 @@ static int __init orlix_tty_driver_init(void)
 	driver->type = TTY_DRIVER_TYPE_SERIAL;
 	driver->subtype = SERIAL_TYPE_NORMAL;
 	driver->init_termios = tty_std_termios;
+	driver->init_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP |
+					 INLCR | IGNCR | ICRNL | IXON);
+	driver->init_termios.c_oflag &= ~OPOST;
+	driver->init_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG |
+					 IEXTEN);
+	driver->init_termios.c_cflag &= ~(CSIZE | PARENB);
+	driver->init_termios.c_cflag |= CS8;
 	tty_set_operations(driver, &orlix_tty_ops);
 
 	ret = tty_register_driver(driver);

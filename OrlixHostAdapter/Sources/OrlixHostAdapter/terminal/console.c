@@ -248,6 +248,19 @@ orlix_host_console_clear_input(enum orlix_host_console_source source)
     os_unfair_lock_unlock(&input->lock);
 }
 
+__attribute__((visibility("default"))) unsigned long
+orlix_host_console_pending_input(enum orlix_host_console_source source)
+{
+    struct OrlixHostConsoleInputState *input = OrlixHostConsoleInput(source);
+    unsigned long length;
+
+    if (!input) return 0;
+    os_unfair_lock_lock(&input->lock);
+    length = input->length;
+    os_unfair_lock_unlock(&input->lock);
+    return length;
+}
+
 __attribute__((visibility("hidden"))) unsigned long
 orlix_host_console_read_input(enum orlix_host_console_source source,
                               void *bytes, unsigned long length)

@@ -1267,7 +1267,11 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     XCTAssertEqual(orlix_host_console_enqueue_input(
                        ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, input, sizeof(input)),
                    sizeof(input));
+    XCTAssertEqual(orlix_host_console_pending_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_VIRTIO), sizeof(input));
     orlix_host_console_clear_input(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    XCTAssertEqual(orlix_host_console_pending_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_VIRTIO), 0UL);
     XCTAssertEqual(orlix_host_console_read_input(
                        ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, sizeof(buffer)),
                    0UL);

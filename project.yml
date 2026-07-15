@@ -164,6 +164,8 @@ targets:
           - $(SRCROOT)/OrlixOS/Makefile
           - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
+          - $(SRCROOT)/OrlixOS/Sources/init/console_policy.c
+          - $(SRCROOT)/OrlixOS/Sources/init/console_policy.h
           - $(SRCROOT)/OrlixOS/Sources/init/terminal_mux.c
           - $(SRCROOT)/OrlixOS/Sources/init/terminal_mux.h
           - $(SRCROOT)/OrlixOS/Sources/init/rootinit.c
@@ -239,6 +241,8 @@ targets:
               $SRCROOT/OrlixOS/Sources/distribution/manifest.mk
               $SRCROOT/OrlixOS/Sources/distribution/target-settings.xcconfig
               $SRCROOT/OrlixOS/Sources/init/init.c
+              $SRCROOT/OrlixOS/Sources/init/console_policy.c
+              $SRCROOT/OrlixOS/Sources/init/console_policy.h
             $SRCROOT/OrlixOS/Sources/init/rootinit.c
             $SRCROOT/OrlixOS/Sources/make/config.mk
             $SRCROOT/OrlixOS/Sources/make/packages.mk
@@ -841,6 +845,7 @@ schemes:
         - name: OrlixRuntimeTests
           selectedTests:
             - OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput
+            - OrlixRuntimeTests/testSerialConsolePolicyCarriesInteractiveTerminalAndResize
   "OrlixKernel Conformance":
     build:
       targets:

@@ -56,6 +56,9 @@ private func orlix_host_console_enqueue_input(
 @_silgen_name("orlix_host_console_clear_input")
 private func orlix_host_console_clear_input(_ source: UInt32)
 
+@_silgen_name("orlix_host_console_pending_input")
+private func orlix_host_console_pending_input(_ source: UInt32) -> UInt
+
 @_silgen_name("orlix_host_console_recent_output_clear")
 private func orlix_host_console_recent_output_clear(_ source: UInt32)
 
@@ -69,6 +72,33 @@ private func orlix_host_console_recent_output_snapshot(
 private enum COrlixHostConsoleSource {
     static let serial: UInt32 = 0
     static let virtio: UInt32 = 1
+}
+
+@_spi(OrlixPrivateTesting)
+public enum OrlixTerminalTransportDiagnostics {
+	public static let serialSource: UInt32 = COrlixHostConsoleSource.serial
+	public static let virtioSource: UInt32 = COrlixHostConsoleSource.virtio
+
+	public static func setOutputFD(source: UInt32, fd: Int32) {
+		orlix_host_console_set_output_fd(source, fd)
+	}
+
+	@discardableResult
+	public static func enqueueInput(source: UInt32, data: Data) -> UInt {
+		data.withUnsafeBytes {
+			orlix_host_console_enqueue_input(
+				source, $0.baseAddress, UInt($0.count)
+			)
+		}
+	}
+
+	public static func clearInput(source: UInt32) {
+		orlix_host_console_clear_input(source)
+	}
+
+	public static func pendingInput(source: UInt32) -> UInt {
+		orlix_host_console_pending_input(source)
+	}
 }
 
 @_silgen_name("orlix_host_resources_set_payload_root_path")

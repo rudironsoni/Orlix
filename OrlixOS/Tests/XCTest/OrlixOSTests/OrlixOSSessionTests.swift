@@ -1500,7 +1500,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		XCTAssertTrue(initSource.contains("apply_sysctl(&config->sysctls[i]);"))
 	}
 
-	func testInitPrefersVirtioConsoleForInteractiveTerminalInput() throws {
+	func testInitUsesAuthoritativeLinuxConsolePolicyForInteractiveTerminalInput() throws {
 		let sourceRoot = try repositoryRoot()
 		let initSource = try String(
 			contentsOf: sourceRoot
@@ -1510,15 +1510,10 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 			contentsOf: sourceRoot
 				.appendingPathComponent("OrlixOS/Sources/make/rootfs.mk")
 		)
-		let candidatesRange = try XCTUnwrap(
-			initSource.range(of: "static const char *const tty_candidates[]")
-		)
-		let candidatesSource = initSource[candidatesRange.lowerBound...]
-		let hvcRange = try XCTUnwrap(candidatesSource.range(of: "\"/dev/hvc0\""))
-		let ttyS0Range = try XCTUnwrap(candidatesSource.range(of: "\"/dev/ttyS0\""))
-
-		XCTAssertLessThan(hvcRange.lowerBound, ttyS0Range.lowerBound)
-		XCTAssertTrue(rootfsMakefile.contains("transport=/dev/hvc0"))
+		XCTAssertFalse(initSource.contains("tty_candidates"))
+		XCTAssertFalse(initSource.contains("open(\"/dev/console\""))
+		XCTAssertTrue(initSource.contains("orlix_console_policy_resolve("))
+		XCTAssertTrue(rootfsMakefile.contains("transport=linux-console-policy"))
 	}
 
 	func testEnvironmentRootImageRejectsUnsafeDefaultCommandExecutable() throws {
@@ -6644,18 +6639,29 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
     }
 
 	func testInteractiveConsoleSourceFollowsLastLinuxConsoleToken() {
-		XCTAssertEqual(
-			OrlixLinuxSession.interactiveConsoleSource(
-				kernelCommandLine: "console=ttyS0 console=hvc0"
-			),
-			1
-		)
-		XCTAssertEqual(
-			OrlixLinuxSession.interactiveConsoleSource(
-				kernelCommandLine: "console=hvc0 console=ttyS0,115200"
-			),
-			0
-		)
+		let cases: [(String, UInt32?)] = [
+			("console=ttyS0 console=hvc0", 1),
+			("console=hvc0 console=ttyS0", 0),
+			("console=ttyS0,115200n8", 0),
+			("console=hvc0", 1),
+			("rdinit=/init", nil),
+			("console=tty0", nil),
+			("console=hvc0 console=tty0", nil),
+			("console=hvc0 console=hvc0", 1),
+			("console=hvc0,9600n8", 1),
+			("console=", nil),
+			("console=ttyS0 console=", nil),
+		]
+
+		for (commandLine, expectedSource) in cases {
+			XCTAssertEqual(
+				OrlixLinuxSession.interactiveConsoleSource(
+					kernelCommandLine: commandLine
+				),
+				expectedSource,
+				commandLine
+			)
+		}
 	}
 
 	func testInteractiveConsoleSourceRejectsMissingOrUnsupportedPolicy() {

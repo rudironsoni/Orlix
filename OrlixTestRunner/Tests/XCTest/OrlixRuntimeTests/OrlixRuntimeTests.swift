@@ -1,4 +1,4 @@
-@testable import OrlixOS
+@_spi(OrlixPrivateTesting) @testable import OrlixOS
 import Foundation
 import XCTest
 
@@ -11,6 +11,16 @@ final class OrlixRuntimeTests: XCTestCase {
         XCTAssertTrue(output.contains("ORLIX_PTY_TTY_OK"))
         XCTAssertTrue(output.contains("ORLIX_PTY_DONE"))
         XCTAssertTrue(output.contains("/dev/pts/"))
+    }
+
+    func testSerialConsolePolicyCarriesInteractiveTerminalAndResize() throws {
+        let output = try OrlixPTYRuntimeProofRunner(serialConsoleProof: true).run()
+
+        XCTAssertTrue(output.contains("ORLIX_SERIAL_INPUT_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SERIAL_INITIAL_SIZE=31 101"))
+        XCTAssertTrue(output.contains("ORLIX_SERIAL_RESIZED_SIZE=43 119"))
+        XCTAssertTrue(output.contains("ORLIX_SERIAL_DONE"))
+        XCTAssertFalse(output.contains("ORLIX_VIRTIO_INPUT_LEAK"))
     }
 }
 
@@ -28,6 +38,24 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         """#,
         #"printf '%s%s\n' ORLIX_PTY_ DONE"#,
     ].joined(separator: "\r") + "\r"
+	private static let serialInitialScript = [
+		#"printf '%s%s\n' ORLIX_SERIAL_INPUT_ OK"#,
+		#"shopt -s checkwinsize"#,
+		#":"#,
+		#"printf '%s%s%s %s\n' ORLIX_SERIAL_INITIAL_ SIZE= "$LINES" "$COLUMNS""#,
+		#"printf '%s%s\n' ORLIX_SERIAL_INITIAL_ DONE"#,
+	].joined(separator: "\r") + "\r"
+	private static let serialResizeScript = [
+		#":"#,
+		#"printf '%s%s%s %s\n' ORLIX_SERIAL_RESIZED_ SIZE= "$LINES" "$COLUMNS""#,
+		#"printf '%s%s\n' ORLIX_SERIAL_ DONE"#,
+	].joined(separator: "\r") + "\r"
+
+	private let serialConsoleProof: Bool
+
+	init(serialConsoleProof: Bool = false) {
+		self.serialConsoleProof = serialConsoleProof
+	}
 
     func run() throws -> String {
         guard let rootImageIdentifier =
@@ -38,9 +66,21 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         guard let profile = OrlixOSDistribution.bundledBootProfile else {
             throw OrlixPTYRuntimeProofError.missingBundledBootProfile
         }
-        let session = OrlixLinuxSession(
+        var kernelCommandLine: String?
+		if serialConsoleProof {
+			guard let bundledCommandLine = OrlixOSPayload.kernelCommandLine else {
+				throw OrlixPTYRuntimeProofError.missingKernelCommandLine
+			}
+			let remainder = bundledCommandLine
+				.split(whereSeparator: { $0.isWhitespace })
+				.filter { !$0.hasPrefix("console=") }
+				.joined(separator: " ")
+			kernelCommandLine = "console=hvc0 console=ttyS0 \(remainder)"
+		}
+		let session = OrlixLinuxSession(
             bootConfig: OrlixBootConfig(
                 profile: profile,
+				kernelCommandLine: kernelCommandLine,
                 rootImageIdentifier: rootImageIdentifier,
                 terminalIdentifier: "orlix.test.pty.runtime"
             )
@@ -54,9 +94,37 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         terminalLog.writeLine("terminalIdentifier=\(session.bootConfig.terminalIdentifier)")
 
         let recorder = PTYOutputRecorder(terminalLog: terminalLog)
-        let bootStatus = PTYBootStatusRecorder()
+		let bootStatus = PTYBootStatusRecorder()
         let completion = DispatchSemaphore(value: 0)
-		session.terminal.resize(rows: 24, columns: 80)
+		if serialConsoleProof {
+			session.terminal.resize(rows: 31, columns: 101)
+			try Self.verifySerialSourceSelection(session: session)
+		} else {
+			session.terminal.resize(rows: 24, columns: 80)
+		}
+		let virtioOutput = Pipe()
+		let virtioRecorder = PTYRawOutputRecorder()
+		if serialConsoleProof {
+			virtioOutput.fileHandleForReading.readabilityHandler = { handle in
+				let data = handle.availableData
+				if !data.isEmpty {
+					virtioRecorder.append(data)
+				}
+			}
+			OrlixTerminalTransportDiagnostics.setOutputFD(
+				source: OrlixTerminalTransportDiagnostics.virtioSource,
+				fd: virtioOutput.fileHandleForWriting.fileDescriptor
+			)
+		}
+		defer {
+			if serialConsoleProof {
+				OrlixTerminalTransportDiagnostics.setOutputFD(
+					source: OrlixTerminalTransportDiagnostics.virtioSource,
+					fd: -1
+				)
+				virtioOutput.fileHandleForReading.readabilityHandler = nil
+			}
+		}
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
             let text = recorder.text
@@ -70,10 +138,25 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
                Self.containsShellPrompt(text) {
                 terminalLog.writeLine("shell prompt detected; sending PTY proof commands")
                 recorder.markProofCommandsSent()
-                session.terminal.send(Data(Self.commandScript.utf8))
+				if self.serialConsoleProof {
+					Self.enqueueVirtioInputLeakProbe()
+					session.terminal.send(Data(Self.serialInitialScript.utf8))
+				} else {
+					session.terminal.send(Data(Self.commandScript.utf8))
+				}
             }
 
-            if Self.containsTerminalCondition(text) {
+			if self.serialConsoleProof,
+			   !recorder.hasSentResizeCommands,
+			   text.contains("ORLIX_SERIAL_INITIAL_DONE") {
+				recorder.markResizeCommandsSent()
+				session.terminal.resize(rows: 43, columns: 119)
+				session.terminal.send(Data(Self.serialResizeScript.utf8))
+			}
+
+			if Self.containsTerminalCondition(
+				text, serialConsoleProof: self.serialConsoleProof
+			) {
                 completion.signal()
             }
         }
@@ -131,7 +214,17 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         if let marker = Self.firstWrongRootfsMarker(in: text) {
             throw OrlixPTYRuntimeProofError.wrongRootfs(marker, terminalLog.url)
         }
-        try Self.validate(text)
+		if serialConsoleProof {
+			try Self.validateSerial(text)
+			guard virtioRecorder.byteCount > 0 else {
+				throw OrlixPTYRuntimeProofError.missingVirtioDiagnosticOutput
+			}
+			guard !virtioRecorder.text.contains("ORLIX_SERIAL_INPUT_OK") else {
+				throw OrlixPTYRuntimeProofError.serialOutputReachedVirtio
+			}
+		} else {
+			try Self.validate(text)
+		}
         return text
     }
 
@@ -158,13 +251,82 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         }
     }
 
-    private static func containsTerminalCondition(_ rawOutput: String) -> Bool {
+    private static func containsTerminalCondition(
+		_ rawOutput: String,
+		serialConsoleProof: Bool
+	) -> Bool {
         let output = normalized(rawOutput)
 
-        return output.contains(doneMarker) ||
+		return output.contains(
+			serialConsoleProof ? "ORLIX_SERIAL_DONE" : doneMarker
+		) ||
             firstFatalMarker(in: output) != nil ||
             firstWrongRootfsMarker(in: output) != nil
     }
+
+	private static func verifySerialSourceSelection(
+		session: OrlixLinuxSession
+	) throws {
+		let serialStale = Data("serial-stale".utf8)
+		let virtioStale = Data("virtio-stale".utf8)
+
+		let serial = OrlixTerminalTransportDiagnostics.serialSource
+		let virtio = OrlixTerminalTransportDiagnostics.virtioSource
+		OrlixTerminalTransportDiagnostics.clearInput(source: serial)
+		OrlixTerminalTransportDiagnostics.clearInput(source: virtio)
+		OrlixTerminalTransportDiagnostics.enqueueInput(
+			source: serial, data: serialStale
+		)
+		OrlixTerminalTransportDiagnostics.enqueueInput(
+			source: virtio, data: virtioStale
+		)
+		guard session.configureInteractiveConsole() else {
+			throw OrlixPTYRuntimeProofError.serialSourceNotSelected
+		}
+		let resizePayload = Data([0, 31, 0, 101])
+		guard let resizeFrame = OrlixTerminalMuxEncoder.frame(
+			type: 2, payload: resizePayload
+		) else {
+			throw OrlixPTYRuntimeProofError.initialResizeWasNotQueued
+		}
+		guard OrlixTerminalTransportDiagnostics.pendingInput(source: serial) ==
+			UInt(resizeFrame.count) else {
+			throw OrlixPTYRuntimeProofError.selectedSerialInputNotCleared
+		}
+		guard OrlixTerminalTransportDiagnostics.pendingInput(source: virtio) ==
+			UInt(virtioStale.count) else {
+			throw OrlixPTYRuntimeProofError.unselectedVirtioInputWasCleared
+		}
+		OrlixTerminalTransportDiagnostics.clearInput(source: virtio)
+	}
+
+	private static func enqueueVirtioInputLeakProbe() {
+		let payload = Data("printf '%s\\n' ORLIX_VIRTIO_INPUT_LEAK\r".utf8)
+		guard let frame = OrlixTerminalMuxEncoder.frame(type: 1, payload: payload)
+		else { return }
+		OrlixTerminalTransportDiagnostics.enqueueInput(
+			source: OrlixTerminalTransportDiagnostics.virtioSource,
+			data: frame
+		)
+	}
+
+	private static func validateSerial(_ output: String) throws {
+		if let marker = firstFatalMarker(in: output) {
+			throw OrlixPTYRuntimeProofError.fatalMarker(marker)
+		}
+		for marker in [
+			"ORLIX_SERIAL_INPUT_OK",
+			"ORLIX_SERIAL_INITIAL_SIZE=31 101",
+			"ORLIX_SERIAL_INITIAL_DONE",
+			"ORLIX_SERIAL_RESIZED_SIZE=43 119",
+			"ORLIX_SERIAL_DONE",
+		] where !output.contains(marker) {
+			throw OrlixPTYRuntimeProofError.missingMarker(marker)
+		}
+		if output.contains("ORLIX_VIRTIO_INPUT_LEAK") {
+			throw OrlixPTYRuntimeProofError.virtioInputReachedSerialProcess
+		}
+	}
 
     private static func validate(_ output: String) throws {
         if let marker = firstFatalMarker(in: output) {
@@ -265,6 +427,14 @@ private enum OrlixPTYRuntimeProofError: Error, CustomStringConvertible {
     case missingProductPayloadBundle
     case missingProductRootImageMetadata
     case missingBundledBootProfile
+	case missingKernelCommandLine
+	case serialSourceNotSelected
+	case selectedSerialInputNotCleared
+	case initialResizeWasNotQueued
+	case unselectedVirtioInputWasCleared
+	case virtioInputReachedSerialProcess
+	case missingVirtioDiagnosticOutput
+	case serialOutputReachedVirtio
     case nonProductPayload(String)
     case bootFailed(OrlixBootStatus)
     case noTerminalOutput(TimeInterval, URL)
@@ -284,6 +454,22 @@ private enum OrlixPTYRuntimeProofError: Error, CustomStringConvertible {
             return "missing OrlixOS product root image identifier in target metadata"
         case .missingBundledBootProfile:
             return "missing OrlixOS payload boot profile metadata"
+		case .missingKernelCommandLine:
+			return "missing OrlixOS payload kernel command line metadata"
+		case .serialSourceNotSelected:
+			return "OrlixOS did not select serial from the final console=ttyS0 token"
+		case .selectedSerialInputNotCleared:
+			return "selected serial input did not contain only the initial resize frame"
+		case .initialResizeWasNotQueued:
+			return "initial serial resize frame could not be encoded"
+		case .unselectedVirtioInputWasCleared:
+			return "selecting serial unexpectedly cleared unselected virtio input"
+		case .virtioInputReachedSerialProcess:
+			return "virtio input reached the serial interactive process"
+		case .missingVirtioDiagnosticOutput:
+			return "virtio diagnostic console produced no isolated output"
+		case .serialOutputReachedVirtio:
+			return "serial interactive output appeared in the virtio stream"
         case let .nonProductPayload(stamp):
             return "OrlixOS payload bundle is not packaged from the product rootfs: \(stamp)"
         case let .bootFailed(status):
@@ -363,11 +549,35 @@ private final class PTYBootStatusRecorder: @unchecked Sendable {
     }
 }
 
+private final class PTYRawOutputRecorder: @unchecked Sendable {
+	private let lock = NSLock()
+	private var storage = Data()
+
+	var text: String {
+		lock.lock()
+		defer { lock.unlock() }
+		return String(decoding: storage, as: UTF8.self)
+	}
+
+	var byteCount: Int {
+		lock.lock()
+		defer { lock.unlock() }
+		return storage.count
+	}
+
+	func append(_ data: Data) {
+		lock.lock()
+		storage.append(data)
+		lock.unlock()
+	}
+}
+
 private final class PTYOutputRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private let terminalLog: PTYTerminalLog
     private var storage = Data()
     private var sentProofCommands = false
+	private var sentResizeCommands = false
 
     init(terminalLog: PTYTerminalLog) {
         self.terminalLog = terminalLog
@@ -391,6 +601,12 @@ private final class PTYOutputRecorder: @unchecked Sendable {
         return storage.count
     }
 
+	var hasSentResizeCommands: Bool {
+		lock.lock()
+		defer { lock.unlock() }
+		return sentResizeCommands
+	}
+
     func append(_ data: Data) {
         lock.lock()
         storage.append(data)
@@ -403,4 +619,10 @@ private final class PTYOutputRecorder: @unchecked Sendable {
         sentProofCommands = true
         lock.unlock()
     }
+
+	func markResizeCommandsSent() {
+		lock.lock()
+		sentResizeCommands = true
+		lock.unlock()
+	}
 }

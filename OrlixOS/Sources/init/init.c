@@ -26,6 +26,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "console_policy.h"
 #include "terminal_mux.h"
 
 #define ORLIX_INIT_CMDLINE_SIZE 16384
@@ -184,36 +185,74 @@ static void write_unsigned_decimal(int fd, unsigned long value)
 	(void)write_all(fd, &buffer[offset], sizeof(buffer) - offset - 1);
 }
 
+static int read_kernel_command_line(char *buffer, size_t size)
+{
+	ssize_t bytes;
+	int fd;
+
+	if (size < 2)
+		return -1;
+	fd = open("/proc/cmdline", O_RDONLY);
+	if (fd < 0)
+		return -1;
+	do {
+		bytes = read(fd, buffer, size - 1);
+	} while (bytes < 0 && errno == EINTR);
+	close(fd);
+	if (bytes <= 0 || (size_t)bytes == size - 1)
+		return -1;
+	if (buffer[bytes - 1] == '\n')
+		bytes--;
+	buffer[bytes] = '\0';
+	return 0;
+}
+
 static int open_controlling_tty(void)
 {
-	static const char *const tty_candidates[] = {
-		"/dev/hvc0",
-		"/dev/ttyS0",
-		NULL,
-	};
-	int fd = -1;
+	char command_line[ORLIX_INIT_CMDLINE_SIZE];
+	enum orlix_console_device device;
+	const char *path;
+	int policy_result;
+	int fd;
 
 	if (setsid() < 0 && errno != EPERM)
 		write_literal(STDERR_FILENO, "orlix-init: setsid failed\n");
 
-	for (const char *const *path = tty_candidates; *path != NULL; path++) {
-		write_literal(STDERR_FILENO, "orlix-init: opening tty candidate ");
-		write_literal(STDERR_FILENO, *path);
-		write_literal(STDERR_FILENO, "\n");
-		fd = open(*path, O_RDWR | O_NONBLOCK);
-		if (fd >= 0) {
-			int flags = fcntl(fd, F_GETFL, 0);
-
-			if (flags >= 0)
-				(void)fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-			break;
-		}
+	if (read_kernel_command_line(command_line, sizeof(command_line)) != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-init: Linux console policy unreadable\n");
+		return -1;
 	}
+	policy_result = orlix_console_policy_resolve(command_line, &device);
+	if (policy_result == ORLIX_CONSOLE_POLICY_MISSING)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: Linux console policy missing\n");
+	else if (policy_result == ORLIX_CONSOLE_POLICY_EMPTY)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: final Linux console is empty\n");
+	else if (policy_result == ORLIX_CONSOLE_POLICY_UNSUPPORTED)
+		write_literal(STDERR_FILENO,
+			      "orlix-init: final Linux console is unsupported\n");
+	if (policy_result != ORLIX_CONSOLE_POLICY_OK)
+		return -1;
+	path = orlix_console_device_path(device);
+	if (path == NULL)
+		return -1;
 
+	write_literal(STDERR_FILENO, "orlix-init: opening configured tty ");
+	write_literal(STDERR_FILENO, path);
+	write_literal(STDERR_FILENO, "\n");
+	fd = open(path, O_RDWR | O_NONBLOCK);
 	if (fd < 0) {
-		fd = open("/dev/console", O_RDWR);
-		if (fd < 0)
-			return -1;
+		write_literal(STDERR_FILENO,
+			      "orlix-init: configured Linux console unavailable\n");
+		return -1;
+	}
+	{
+		int flags = fcntl(fd, F_GETFL, 0);
+
+		if (flags >= 0)
+			(void)fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 	}
 
 	if (ioctl(fd, TIOCSCTTY, 0) < 0 && errno != EPERM)
@@ -261,6 +300,13 @@ static int mount_if_needed(const char *source, const char *target,
 	return -1;
 }
 
+static int mount_proc_filesystem(void)
+{
+	if (ensure_dir("/proc", 0555) != 0)
+		return -1;
+	return mount_if_needed("proc", "/proc", "proc", 0, NULL);
+}
+
 static void mount_device_filesystem(void)
 {
 	if (ensure_dir("/dev", 0755) == 0 &&
@@ -291,8 +337,7 @@ static void install_standard_fd_aliases(void)
 
 static void mount_runtime_filesystems(void)
 {
-	if (ensure_dir("/proc", 0555) == 0 &&
-	    mount_if_needed("proc", "/proc", "proc", 0, NULL) != 0)
+	if (mount_proc_filesystem() != 0)
 		write_literal(STDERR_FILENO, "orlix-init: mount /proc failed\n");
 
 	if (ensure_dir("/sys", 0555) == 0 &&
@@ -1026,7 +1071,7 @@ static void make_transport_raw(int fd)
 	termios.c_cc[VMIN] = 1;
 	termios.c_cc[VTIME] = 0;
 
-	if (tcsetattr(fd, TCSAFLUSH, &termios) != 0)
+	if (tcsetattr(fd, TCSANOW, &termios) != 0)
 		write_literal(STDERR_FILENO,
 			      "orlix-init: tcsetattr transport failed\n");
 }
@@ -2841,6 +2886,11 @@ int main(void)
 	terminal = terminal_enabled();
 	if (!terminal)
 		goto runtime_setup;
+	if (mount_proc_filesystem() != 0) {
+		write_literal(STDERR_FILENO,
+			      "orlix-init: unable to read Linux console policy\n");
+		return 127;
+	}
 	tty = open_controlling_tty();
 	if (tty < 0) {
 		write_literal(STDERR_FILENO,
@@ -2848,6 +2898,7 @@ int main(void)
 		return 127;
 	}
 
+	make_transport_raw(tty);
 	install_stdio(tty);
 	write_literal(STDERR_FILENO, "orlix-init: stdio installed\n");
 runtime_setup:
