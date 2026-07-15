@@ -21,12 +21,11 @@ Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not 
 
 ## First Reads
 
-- Architecture: `docs/architecture/ORLIX_UPSTREAM_LINUX_IOS_PORT.md`
-- Glossary: `docs/reference/ORLIX_GLOSSARY.md`
-- ADR index: `docs/adr/README.md`
-- Harness guide: `docs/harness/README.md`
-- Agent memory: `docs/harness/MEMORY.md`
-- Active plans: `docs/plans/active/`
+- Knowledge index: `docs/index.md`
+- Ontology and maintenance protocol: `docs/ontology.md` and `docs/AGENTS.md`
+- Architecture ownership: `docs/concepts/upstream-linux-ownership.md` and `docs/concepts/component-ownership.md`
+- Active initiatives: pages with `type: initiative` and `status: active` under `docs/objects/initiative/`
+- Current execution state: structured reports and task envelopes under `Build/AgentHarness/`
 
 ## Ownership
 
@@ -66,13 +65,13 @@ The local kernel prototype is retired. Do not restore `LegacyOrlix/`, `OrlixKern
 
 Use Codex-native surfaces deliberately:
 
-- `.codex/agents/orlix-planner.toml` for non-trivial planning and `docs/plans/active/<task>/PLAN.md`.
-- `.codex/agents/orlix-implementer.toml` for executing an active plan and maintaining `IMPLEMENT.md`.
+- `.codex/agents/orlix-planner.toml` for creating or refining initiative and decision pages.
+- `.codex/agents/orlix-implementer.toml` for executing the selected structured task envelope without maintaining an implementation journal.
 - `.codex/agents/orlix-reviewer.toml` for skeptical review of assumptions, directives, upstream conformance, and evidence.
 - `.agents/skills/orlix-implementation-boundaries/SKILL.md` before deciding which layer owns a fix.
 - `.agents/skills/orlix-upstream-conformance/SKILL.md` for upstream Linux, mlibc, Coreutils, or other upstream test suites.
 - `.agents/skills/orlix-runtime-claim-verification/SKILL.md` before claiming fixed, green, complete, runtime-ready, package-ready, or upstream-test success.
-- `.agents/skills/orlix-write-to-harness/SKILL.md` before editing this harness, plans, skills, agents, hooks, rules, ADR indexes, or agent memory.
+- `.agents/skills/orlix-write-to-harness/SKILL.md` before editing the ontology, harness, skills, agents, hooks, or generated rules.
 
 `rtk` only shrinks command output. Harness rules and hooks must treat `rtk <command>` as equivalent to `<command>` for approval and block decisions.
 

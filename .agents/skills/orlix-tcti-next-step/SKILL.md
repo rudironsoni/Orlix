@@ -15,7 +15,7 @@ description: Orlix TCTI next-step agent harness. Use when continuing TCTI work, 
 
 ## Allowed Scope
 
-- Read `AGENTS.md`, `PLAN.md`, `IMPLEMENT.md`, and TCTI reports.
+- Read `AGENTS.md`, `docs/index.md`, `docs/objects/initiative/orlix-tcti.md`, and current TCTI reports.
 - Read `.agents/skills/orlix-tcti-next-step/references/tcti-roadmap.json`.
 - Read `.agents/skills/orlix-tcti-next-step/references/environment-policy.json`.
 - Run agent-neutral harness checks and TCTI no-phone status checks.

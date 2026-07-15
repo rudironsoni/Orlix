@@ -17,7 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools/release"))
 import orlix_app_capability_gate as gate  # noqa: E402
 
 
-MANIFEST = REPO_ROOT / "docs/reference/ORLIX_APP_RELEASE_INPUTS.json"
+MANIFEST = REPO_ROOT / "docs/sources/release/orlix-app-release-inputs.json"
 
 
 class CapabilityGateTests(unittest.TestCase):

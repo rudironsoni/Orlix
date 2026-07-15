@@ -350,7 +350,7 @@ targets:
         type: folder
       - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
         buildPhase: resources
-      - path: docs/reference/ORLIX_APP_RELEASE_INPUTS.json
+      - path: docs/sources/release/orlix-app-release-inputs.json
         buildPhase: resources
     dependencies:
       - target: OrlixOS

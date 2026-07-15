@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MANIFEST="$REPO_ROOT/docs/reference/ORLIX_APP_RELEASE_INPUTS.json"
+MANIFEST="$REPO_ROOT/docs/sources/release/orlix-app-release-inputs.json"
 
 if [ "${1:-}" = "--manifest" ]; then
     [ "$#" -eq 2 ] || { echo "usage: $0 [--manifest <path>]" >&2; exit 2; }

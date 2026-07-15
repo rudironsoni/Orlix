@@ -14,7 +14,7 @@ Use this skill before changing code for non-trivial Orlix behavior, especially k
 - Delivered OS Kit, app-facing Linux session API, target-derived payload metadata, curated distribution policy, and package/rootfs assembly: `OrlixOS`.
 - Private iOS mechanics: `OrlixHostAdapter/Sources`.
 - iOS and iPadOS application UI, Ghostty rendering, terminal presentation, and app features: the native Orlix application source compiled directly into the production app target.
-- Architecture truth: `docs/architecture`, `docs/adr`, and `docs/reference`.
+- Architecture truth: typed decision, component, capability, and concept pages reachable from `docs/index.md`.
 
 ## Refusals
 

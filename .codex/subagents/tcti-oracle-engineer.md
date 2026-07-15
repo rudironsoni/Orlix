@@ -19,7 +19,7 @@ Implement no-phone TCTI semantic-oracle work: switch-debug execution, golden ELF
 - `tools/tcti/orlix-tcti-gate.swift`
 - `OrlixKernel/Tests/TCTI/golden_elf/**`
 - `tools/tcti/fixtures/golden_elf/**`
-- `docs/plans/active/orlix-tcti/IMPLEMENT.md`
+- `Build/AgentHarness/orlix-tcti/next-task.json`
 - Files listed in `Build/AgentHarness/orlix-tcti/next-task.json` `allowed_scope`.
 
 ## Forbidden files

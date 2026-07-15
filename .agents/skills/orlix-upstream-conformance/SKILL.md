@@ -21,6 +21,6 @@ Upstream conformance work proves that Orlix matches upstream-owned behavior. The
 
 ## Evidence
 
-Record exact commands, upstream versions/commits, logs, failures, skips, crash checks, final markers, and the patch/override root-cause chain in `docs/plans/active/<task>/IMPLEMENT.md`.
+Record exact commands, upstream versions and commits, logs, failures, skips, crash checks, final markers, and the patch or override root-cause chain in the workflow's structured report under `Build/AgentHarness/`.
 
 For Coreutils full-suite claims, success requires the upstream suite marker with zero failures and zero skips for the expected test count. Partial or targeted runs are not full proof.
