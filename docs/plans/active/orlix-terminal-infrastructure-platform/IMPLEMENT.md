@@ -32,7 +32,7 @@ For each checkpoint, record exact commands, immutable commits, dependency and ar
 
 The #50 baseline record must include:
 
-- the upstream remote, pinned commit, history-preserving subtree import command and location, and documented immutable update command;
+- the upstream remote, pinned commit, reviewed source-snapshot import location, and documented immutable update command;
 - all mobile sources, resources, localizations, packages, vendor libraries, entitlements, privacy manifests, Live Activity inputs, unit tests, and UI tests translated into `project.yml`;
 - pristine and Orlix-derived iPhone and iPad runs for the one upstream unit target with 62 Swift files and one UI target with 5 Swift files;
 - separately labeled Orlix integration or snapshot coverage because the pinned upstream does not provide separate integration or snapshot targets;
@@ -76,10 +76,10 @@ The stale-reference scan found `OrlixTerminal` only in explicit prohibitions. Th
 
 - Fetched immutable commit `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - Imported the complete repository as a single-parent source snapshot and then moved it to `Orlix/App`.
-- Snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`.
+- Snapshot commit: `12f057b6806a96ea3d8c5964f869ffb07667cf83` after the 2026-07-15 repository history linearization.
 - Recorded immutable origin, package pins, native source versions, artifact hashes, rebuild entry points, license paths, and update policy in `docs/reference/ORLIX_APP_SOURCE_PROVENANCE.md`.
 
-The subtree import preserves the upstream application, Live Activity, shared source, resources, packages, vendor libraries, scripts, unit tests, UI tests, and upstream project as a baseline reference. It does not by itself prove that the Orlix XcodeGen target compiles or launches the imported application.
+The reviewed source snapshot preserves the upstream application, Live Activity, shared source, resources, packages, vendor libraries, scripts, unit tests, UI tests, and upstream project as a baseline reference. It does not by itself prove that the Orlix XcodeGen target compiles or launches the imported application.
 
 ## 2026-07-13 native Orlix mobile application checkpoint
 
@@ -90,7 +90,7 @@ This checkpoint implements only #50, the native Orlix mobile application foundat
 - Working branch: `feat/orlix-mobile-foundation`.
 - Pinned imported revision: `791eebae946b0831ffff3ac839e0f2b75d076458`.
 - Planning commit: `7389fb99d26c82acaefa08a9d8339c39ea4b24d7`.
-- Source snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`.
+- Source snapshot commit: `12f057b6806a96ea3d8c5964f869ffb07667cf83` after the 2026-07-15 repository history linearization.
 - Provenance commit: `583b5467`.
 - Durable project definition: `project.yml`. The generated `Orlix.xcodeproj` remains ignored and disposable.
 
@@ -659,3 +659,43 @@ make agent-harness-check
 - Added the official OpenCode configuration schema reference to `opencode.jsonc` so editors and OpenCode can validate the existing repository configuration.
 - Validation: `jq empty opencode.jsonc` and `git diff --check` passed.
 - This configuration-only checkpoint adds no application, terminal, OrlixOS, kernel, runtime, package, or release proof.
+
+#### 2026-07-15 repository history linearization
+
+- Replaced the GitHub merge tip `7d065317e9e47bd2e002538f7b8b9c4882288161` and source branch tip `368b5ba3312f2766295f619032c21f396667c26a` with one complete linear replay. The old source contained 1,734 commits, including 32 merges and 1,702 non-merge commits. The replay contains all 1,702 non-merge commits, zero merges, and one root.
+- Preserved the complete source content. The old source and pre-documentation replay tip `ee1405ce638ab70be029829663c9cd3ca3987aeb` both have tree `d8a0fdc3dd3c57f8b1f22013d944167301d66d7e`, and `git diff --quiet 368b5ba3312f2766295f619032c21f396667c26a ee1405ce638ab70be029829663c9cd3ca3987aeb` passed.
+- Reworded the imported VVTerm source-snapshot commit as `12f057b6806a96ea3d8c5964f869ffb07667cf83` with its immutable upstream URL, source commit, and snapshot directory. Removed misleading `git-subtree-mainline` and `git-subtree-split` trailers because no imported repository ancestry remains attached.
+- Created and verified `/private/tmp/OrlixSystem-pre-linear-history-20260715T005355Z.bundle` before mutation. The bundle is 100.4 MB, has SHA-256 `de27c2fa3198d1a7b00f706f1abbdeac282e25a3e609ef1bd725bef82569708e`, and contains all local heads, remote-tracking heads, worktree heads, `refs/stash`, saved original refs, Codex turn refs, and `HEAD`.
+- Restored the global repository lifecycle hook path after the disposable replay finished so the checkpoint commit and publish remain subject to the normal Orlix workflow guards.
+- Audited every stale local and remote branch against the selected source tree. Branches with useful changes were already integrated or superseded. The remaining plan-only patch edits retired `IXLandSystem` and committed generated Linux trees, and the runtime-proof branch targets retired `OrlixTerminal` ownership, so those branches are rejected rather than integrated. Clean linked worktrees and all audited stale branch refs are approved for deletion after the protected publish. Both existing stashes remain preserved.
+- The publish contract is exact ref equality: `main` and `feat/orlix-mobile-foundation` must point to the same signed linear tip. GitHub merge commits must be disabled and `main` must require linear history with force-push and deletion prohibited.
+
+Evidence before the documentation checkpoint commit:
+
+```text
+git rebase --root --no-rebase-merges
+success: 1,702 commits replayed without conflicts
+
+git rev-list --count ee1405ce638ab70be029829663c9cd3ca3987aeb
+1702
+
+git rev-list --count --merges ee1405ce638ab70be029829663c9cd3ca3987aeb
+0
+
+git rev-list --max-parents=0 ee1405ce638ab70be029829663c9cd3ca3987aeb
+acf4e64f8992e828756ba0923dc9b63ca91d4280
+
+git fsck --strict --no-dangling --no-reflogs
+exit 0
+
+git verify-commit HEAD
+pass: checkpoint commit has a valid SSH signature for rudimar@outlook.com
+
+make agent-harness-check
+28 tests, OK; generated files up to date
+
+make tcti-gate TARGET=tcti-plan-consistency
+pass: Build/TCTI/reports/tcti-plan-consistency/report.json
+```
+
+This checkpoint changes repository history and its implementation record only. It adds no application, kernel, libc, OrlixOS, terminal, runtime, package, archive, release, or upstream-conformance proof. The independent archive audit still finds forbidden `com.rudi.OrlixApp` identity in all six inspected Ghostty archives; this history migration does not correct or waive that release blocker.
