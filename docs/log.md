@@ -7,6 +7,10 @@ updated: 2026-07-15
 ---
 # Orlix Knowledge Log
 
+## [2026-07-15] start | Bind local session terminal geometry
+
+Moved the local-session binding task into doing and recorded the current ownership limit: OrlixOS exposes an instance-shaped session API, while the hosted kernel, boot progress, console input, and active HostAdapter output registration remain process-global.
+
 ## [2026-07-15] model | Replace initiatives with a work hierarchy
 
 Replaced the flat initiative object type with a strict `epic -> story -> task` hierarchy. Added `todo`, `doing`, and `done` status folders for every work type, migrated durable work and its consumers, and made lifecycle hooks load the complete doing hierarchy before mutations.

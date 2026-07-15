@@ -5,12 +5,21 @@ import UIKit
 #if os(iOS)
 struct DefaultLocalInstanceTerminalView: View {
     @EnvironmentObject private var ghosttyApp: Ghostty.App
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameKey) private var terminalThemeName = "Orlix Dark"
+    @AppStorage(CloudKitSyncConstants.terminalThemeNameLightKey) private var terminalThemeNameLight = "Orlix Light"
+    @AppStorage(CloudKitSyncConstants.terminalUsePerAppearanceThemeKey) private var usePerAppearanceTheme = true
+
+    private var effectiveThemeName: String {
+        guard usePerAppearanceTheme else { return terminalThemeName }
+        return colorScheme == .dark ? terminalThemeName : terminalThemeNameLight
+    }
 
     var body: some View {
         GeometryReader { geometry in
             DefaultLocalInstanceTerminalRepresentable(size: geometry.size)
         }
-        .background(Color.black)
+        .background(ThemeColorParser.backgroundColor(for: effectiveThemeName)!)
         .navigationTitle("Orlix")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -36,10 +45,9 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
         uiView.installTerminalIfNeeded(
             app: ghosttyApp.app,
             appWrapper: ghosttyApp,
-            coordinator: context.coordinator,
-            size: size
+            coordinator: context.coordinator
         )
-        uiView.resizeTerminal(to: size)
+        uiView.updateAvailableSize(size)
     }
 
     static func dismantleUIView(_ uiView: LocalTerminalContainerView, coordinator: Coordinator) {
@@ -48,14 +56,11 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
 
     final class LocalTerminalContainerView: UIView {
         private(set) weak var terminal: GhosttyTerminalView?
+        private var lastReportedSize: CGSize?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
-            backgroundColor = .black
-            accessibilityIdentifier = "orlix.local-instance.terminal"
-            accessibilityLabel = "Orlix local terminal"
-            accessibilityValue = "initializing"
-            isAccessibilityElement = true
+            backgroundColor = .clear
         }
 
         @available(*, unavailable)
@@ -63,16 +68,20 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             fatalError("init(coder:) has not been implemented")
         }
 
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            synchronizeTerminalGeometry()
+        }
+
         func installTerminalIfNeeded(
             app: ghostty_app_t?,
             appWrapper: Ghostty.App,
-            coordinator: Coordinator,
-            size: CGSize
+            coordinator: Coordinator
         ) {
             guard terminal == nil, let app else { return }
 
-            let initialSize = size.width > 0 && size.height > 0
-                ? size
+            let initialSize = bounds.width > 0 && bounds.height > 0
+                ? bounds.size
                 : CGSize(width: 800, height: 600)
             let terminal = GhosttyTerminalView(
                 frame: CGRect(origin: .zero, size: initialSize),
@@ -82,51 +91,90 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
                 paneId: "orlix.local.default",
                 useCustomIO: true
             )
+            terminal.accessibilityIdentifier = "orlix.local-instance.terminal"
+            terminal.accessibilityLabel = "Orlix local terminal"
+            terminal.accessibilityValue = "initializing"
+            terminal.isAccessibilityElement = true
+            terminal.acceptsTerminalInput = true
             terminal.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            coordinator.attach(to: terminal, container: self)
-            terminal.onReady = { [weak coordinator, weak terminal] in
-                guard let terminal else { return }
-                coordinator?.start(on: terminal)
+            coordinator.attach(to: terminal)
+            terminal.onReady = { [weak self, weak coordinator, weak terminal] in
+                guard let self, let terminal else { return }
+                self.synchronizeTerminalGeometry(force: true)
+                coordinator?.terminalDidBecomeReady(terminal)
             }
             addSubview(terminal)
             self.terminal = terminal
-            terminal.sizeDidChange(initialSize)
+            synchronizeTerminalGeometry(force: true)
         }
 
-        func resizeTerminal(to size: CGSize) {
-            guard size.width > 0, size.height > 0, let terminal else { return }
-            terminal.frame = CGRect(origin: .zero, size: size)
+        func updateAvailableSize(_ size: CGSize) {
+            guard size.width > 0, size.height > 0 else { return }
+            if bounds.size != size {
+                setNeedsLayout()
+            }
+            synchronizeTerminalGeometry()
+        }
+
+        private func synchronizeTerminalGeometry(force: Bool = false) {
+            guard bounds.width > 0, bounds.height > 0, let terminal else { return }
+            let size = bounds.size
+            terminal.frame = bounds
+            guard force || size != lastReportedSize else { return }
+            lastReportedSize = size
             terminal.sizeDidChange(size)
         }
     }
 
     final class Coordinator: @unchecked Sendable {
         private weak var terminal: GhosttyTerminalView?
-        private weak var container: LocalTerminalContainerView?
         private var session: OrlixLinuxSession?
         private var output: OrlixTerminalOutput?
         private var started = false
+        private var isTerminalReady = false
+        private var latestGridSize: (rows: UInt32, columns: UInt32)?
+        private var lastForwardedGridSize: (rows: UInt32, columns: UInt32)?
 
         @MainActor
-        func attach(to terminal: GhosttyTerminalView, container: LocalTerminalContainerView) {
+        func attach(to terminal: GhosttyTerminalView) {
             self.terminal = terminal
-            self.container = container
             terminal.writeCallback = { [weak self] data in
                 self?.session?.terminal.send(data)
             }
             terminal.setupWriteCallback()
             terminal.onResize = { [weak self] columns, rows in
                 guard columns > 0, rows > 0 else { return }
-                self?.session?.terminal.resize(
-                    rows: UInt32(rows),
-                    columns: UInt32(columns)
-                )
+                DispatchQueue.main.async {
+                    self?.recordGridSize(rows: UInt32(rows), columns: UInt32(columns))
+                }
             }
         }
 
         @MainActor
-        func start(on terminal: GhosttyTerminalView) {
-            guard !started else { return }
+        func terminalDidBecomeReady(_ terminal: GhosttyTerminalView) {
+            isTerminalReady = true
+            if let size = terminal.terminalSize(), size.rows > 0, size.columns > 0 {
+                recordGridSize(rows: UInt32(size.rows), columns: UInt32(size.columns))
+            } else {
+                startIfReady()
+            }
+        }
+
+        @MainActor
+        private func recordGridSize(rows: UInt32, columns: UInt32) {
+            let size = (rows: rows, columns: columns)
+            latestGridSize = size
+            if let session,
+               lastForwardedGridSize?.rows != rows || lastForwardedGridSize?.columns != columns {
+                session.terminal.resize(rows: rows, columns: columns)
+                lastForwardedGridSize = size
+            }
+            startIfReady()
+        }
+
+        @MainActor
+        private func startIfReady() {
+            guard isTerminalReady, let latestGridSize, !started else { return }
             started = true
 
             guard let profile = OrlixOSDistribution.bundledBootProfile,
@@ -145,18 +193,18 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             )
             self.session = session
 
+            session.terminal.resize(
+                rows: latestGridSize.rows,
+                columns: latestGridSize.columns
+            )
+            lastForwardedGridSize = latestGridSize
+
             output = session.terminal.attachOutput { [weak self] data in
                 DispatchQueue.main.async {
                     self?.terminal?.feedData(data)
-                    self?.container?.accessibilityValue = "output"
+                    self?.terminal?.accessibilityValue = "output"
                 }
             }
-
-            let terminalSize = terminal.terminalSize()
-            session.terminal.resize(
-                rows: UInt32(terminalSize?.rows ?? 24),
-                columns: UInt32(terminalSize?.columns ?? 80)
-            )
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self, session] in
                 let status = session.boot()
@@ -174,12 +222,14 @@ private struct DefaultLocalInstanceTerminalRepresentable: UIViewRepresentable {
             output = nil
             session = nil
             terminal = nil
-            container = nil
+            latestGridSize = nil
+            lastForwardedGridSize = nil
+            isTerminalReady = false
         }
 
         @MainActor
         private func showError(_ message: String) {
-            container?.accessibilityValue = "failed"
+            terminal?.accessibilityValue = "failed"
             terminal?.feedData(Data("\r\n\u{001B}[31m\(message)\u{001B}[0m\r\n".utf8))
         }
     }

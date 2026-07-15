@@ -1480,7 +1480,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 			initSource.range(of: "copy_available_or_eof(master, STDOUT_FILENO);")
 		)
 		let consoleEOFRange = try XCTUnwrap(
-			initSource.range(of: "copy_available_or_eof(console_fd, master);")
+			initSource.range(of: "console_fd, master, slave, &resize_decoder);")
 		)
 		XCTAssertLessThan(runtimeMountRange.lowerBound, hostMountRange.lowerBound)
 		XCTAssertLessThan(configuredTmpfsRange.lowerBound, hostMountRange.lowerBound)
@@ -1492,6 +1492,8 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		XCTAssertLessThan(ptyHangupReapRange.lowerBound, ptyRange.lowerBound)
 		XCTAssertLessThan(ptyCompletionRange.lowerBound, ptyRange.lowerBound)
 		XCTAssertTrue(initSource.contains("ready = poll(fds, 2, 100);"))
+		XCTAssertTrue(initSource.contains("struct resize_frame_decoder resize_decoder = {0};"))
+		XCTAssertTrue(initSource.contains("ORLIX_INIT_RESIZE_FRAME_SIZE 64"))
 		XCTAssertTrue(initSource.contains("SYS_capset"))
         XCTAssertTrue(initSource.contains("SYS_capget"))
         XCTAssertTrue(initSource.contains("PR_CAPBSET_DROP"))
@@ -6550,7 +6552,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: payloadURL.path))
         XCTAssertTrue(profile == .release || profile == .development)
-        XCTAssertTrue(kernelCommandLine.contains("console=ttyS0"))
+		XCTAssertTrue(kernelCommandLine.contains("console=ttyS0"))
 		XCTAssertTrue(kernelCommandLine.contains("console=hvc0"))
 	}
 
@@ -6616,6 +6618,33 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         transport.emit(Data("late output\r\n".utf8))
 
         XCTAssertTrue(receivedOutput.values.isEmpty)
+    }
+
+    func testTerminalGeometryReplacesConfiguredBootGeometry() throws {
+        let transport = RecordingTerminalTransport()
+        let terminal = OrlixTerminalSession(transport: transport)
+        let session = OrlixLinuxSession(
+            bootConfig: OrlixBootConfig(
+                profile: .development,
+                kernelCommandLine: "console=hvc0 orlix.terminal.rows=24 orlix.terminal.cols=80",
+                rootImageIdentifier: "test-root",
+                terminalIdentifier: "test-terminal"
+            ),
+            terminal: terminal
+        )
+
+        terminal.resize(rows: 41, columns: 132)
+
+        let commandLine = try XCTUnwrap(session.effectiveKernelCommandLine())
+        XCTAssertTrue(commandLine.contains("console=hvc0"))
+        XCTAssertTrue(commandLine.contains("orlix.terminal.rows=41"))
+        XCTAssertTrue(commandLine.contains("orlix.terminal.cols=132"))
+        XCTAssertFalse(commandLine.contains("orlix.terminal.rows=24"))
+        XCTAssertFalse(commandLine.contains("orlix.terminal.cols=80"))
+        XCTAssertEqual(
+            transport.sentInput,
+            [Data("\u{1B}]777;orlix.resize=41x132\u{7}".utf8)]
+        )
     }
 
     private func repositoryRoot() throws -> URL {

@@ -102,6 +102,17 @@ final class OrlixKernelConformanceTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
     }
 
+    func testPTYTerminalProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelPTYTerminal)
+
+        XCTAssertTrue(output.contains("pty_terminal_probe"))
+        XCTAssertTrue(output.contains("Linux PTY master allocates"))
+        XCTAssertTrue(output.contains("Linux PTY slave attaches"))
+        XCTAssertTrue(output.contains("PTY master resize reaches slave"))
+        XCTAssertTrue(output.contains("PTY slave resize reaches master"))
+        XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
+    }
+
     func testSignalWaitProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelSignalWait)
 

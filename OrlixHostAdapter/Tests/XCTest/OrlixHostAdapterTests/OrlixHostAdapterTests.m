@@ -1097,15 +1097,19 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     unsigned char buffer[32] = {0};
     const char payload[] = "linux console boot\n";
 
-    orlix_host_console_recent_output_clear();
-    orlix_host_console_write(payload, sizeof(payload) - 1);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload, sizeof(payload) - 1);
     XCTAssertGreaterThan(orlix_host_console_recent_output_snapshot(
+                             ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
                              buffer,
                              sizeof(buffer)),
                          0UL);
 
-    orlix_host_console_recent_output_clear();
-    XCTAssertEqual(orlix_host_console_recent_output_snapshot(buffer,
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    XCTAssertEqual(orlix_host_console_recent_output_snapshot(
+                                                             ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                                                             buffer,
                                                              sizeof(buffer)),
                    0UL);
 }
@@ -1115,11 +1119,13 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     unsigned char buffer[64] = {0};
     const char payload[] = "console mirror line\n";
 
-    orlix_host_console_recent_output_clear();
-    orlix_host_console_write(payload, sizeof(payload) - 1);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload, sizeof(payload) - 1);
 
     unsigned long count =
-        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+        orlix_host_console_recent_output_snapshot(
+            ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, sizeof(buffer));
     XCTAssertEqual(count, sizeof(payload) - 1);
     XCTAssertEqual(memcmp(buffer, payload, sizeof(payload) - 1), 0);
 }
@@ -1131,12 +1137,15 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     const char second[] = "-second";
     const char expected[] = "first-second";
 
-    orlix_host_console_recent_output_clear();
-    orlix_host_console_write(first, sizeof(first) - 1);
-    orlix_host_console_write(second, sizeof(second) - 1);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             first, sizeof(first) - 1);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             second, sizeof(second) - 1);
 
     unsigned long count =
-        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+        orlix_host_console_recent_output_snapshot(
+            ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, sizeof(buffer));
     XCTAssertEqual(count, sizeof(expected) - 1);
     XCTAssertEqual(memcmp(buffer, expected, sizeof(expected) - 1), 0);
 }
@@ -1146,10 +1155,13 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     unsigned char buffer[5] = {0};
     const char payload[] = "abcdef";
 
-    orlix_host_console_recent_output_clear();
-    orlix_host_console_write(payload, sizeof(payload) - 1);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload, sizeof(payload) - 1);
 
-    XCTAssertEqual(orlix_host_console_recent_output_snapshot(buffer,
+    XCTAssertEqual(orlix_host_console_recent_output_snapshot(
+                                                             ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                                                             buffer,
                                                              sizeof(buffer)),
                    5UL);
     XCTAssertEqual(memcmp(buffer, "abcde", 5), 0);
@@ -1166,10 +1178,12 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
         payloadBytes[index] = (unsigned char)('a' + (index % 26));
     }
 
-    orlix_host_console_recent_output_clear();
-    orlix_host_console_write(payload.bytes, payload.length);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload.bytes, payload.length);
 
     unsigned long count = orlix_host_console_recent_output_snapshot(
+        ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
         snapshot.mutableBytes,
         snapshot.length);
     XCTAssertEqual(count, 65536UL);
@@ -1183,7 +1197,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
 {
     unsigned char buffer[65536] = {0};
 
-    orlix_host_console_recent_output_clear();
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
     dispatch_apply(128,
                    dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
                    ^(size_t index) {
@@ -1192,12 +1206,14 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
                                              sizeof(payload),
                                              "line-%03zu\n",
                                              index);
-                       orlix_host_console_write(payload,
+                       orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                                                payload,
                                                 (unsigned long)length);
                    });
 
     unsigned long count =
-        orlix_host_console_recent_output_snapshot(buffer, sizeof(buffer));
+        orlix_host_console_recent_output_snapshot(
+            ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, sizeof(buffer));
     XCTAssertGreaterThan(count, 0UL);
     XCTAssertLessThanOrEqual(count, (unsigned long)sizeof(buffer));
 }
@@ -1207,13 +1223,39 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     orlix_host_boot_progress_event_t events[4] = {0};
     const char payload[] = "first console byte";
 
-    orlix_host_console_recent_output_clear();
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
     orlix_host_boot_progress_reset();
-    orlix_host_console_write(payload, sizeof(payload) - 1);
-    orlix_host_console_write(payload, sizeof(payload) - 1);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload, sizeof(payload) - 1);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             payload, sizeof(payload) - 1);
 
     XCTAssertEqual(orlix_host_boot_progress_snapshot(events, 4), 1U);
     XCTAssertEqual(events[0].stage, ORLIX_HOST_BOOT_STAGE_FIRST_CONSOLE_OUTPUT);
+}
+
+- (void)testConsoleSourcesKeepRecentOutputIndependent
+{
+    unsigned char serialBuffer[32] = {0};
+    unsigned char virtioBuffer[32] = {0};
+    const char serial[] = "serial";
+    const char virtio[] = "virtio";
+
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_SERIAL);
+    orlix_host_console_recent_output_clear(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_SERIAL,
+                             serial, sizeof(serial) - 1);
+    orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                             virtio, sizeof(virtio) - 1);
+
+    unsigned long serialCount = orlix_host_console_recent_output_snapshot(
+        ORLIX_HOST_CONSOLE_SOURCE_SERIAL, serialBuffer, sizeof(serialBuffer));
+    unsigned long virtioCount = orlix_host_console_recent_output_snapshot(
+        ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, virtioBuffer, sizeof(virtioBuffer));
+    XCTAssertEqual(serialCount, sizeof(serial) - 1);
+    XCTAssertEqual(virtioCount, sizeof(virtio) - 1);
+    XCTAssertEqual(memcmp(serialBuffer, serial, sizeof(serial) - 1), 0);
+    XCTAssertEqual(memcmp(virtioBuffer, virtio, sizeof(virtio) - 1), 0);
 }
 
 @end

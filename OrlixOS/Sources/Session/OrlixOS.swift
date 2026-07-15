@@ -44,7 +44,7 @@ private enum COrlixBootStage {
 }
 
 @_silgen_name("orlix_host_console_set_output_fd")
-private func orlix_host_console_set_output_fd(_ fd: CInt)
+private func orlix_host_console_set_output_fd(_ source: UInt32, _ fd: CInt)
 
 @_silgen_name("orlix_host_console_enqueue_input")
 private func orlix_host_console_enqueue_input(
@@ -53,13 +53,19 @@ private func orlix_host_console_enqueue_input(
 ) -> UInt
 
 @_silgen_name("orlix_host_console_recent_output_clear")
-private func orlix_host_console_recent_output_clear()
+private func orlix_host_console_recent_output_clear(_ source: UInt32)
 
 @_silgen_name("orlix_host_console_recent_output_snapshot")
 private func orlix_host_console_recent_output_snapshot(
+    _ source: UInt32,
     _ bytes: UnsafeMutableRawPointer?,
     _ capacity: UInt
 ) -> UInt
+
+private enum COrlixHostConsoleSource {
+    static let serial: UInt32 = 0
+    static let virtio: UInt32 = 1
+}
 
 @_silgen_name("orlix_host_resources_set_payload_root_path")
 private func orlix_host_resources_set_payload_root_path(
@@ -853,6 +859,8 @@ public final class OrlixTerminalOutput: @unchecked Sendable {
 
 public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable {
     private let transport: OrlixTerminalTransport
+    private let geometryLock = NSLock()
+    private var geometry: (rows: UInt32, columns: UInt32)?
 
     public convenience init() {
         self.init(transport: HostConsoleTerminalTransport())
@@ -874,8 +882,22 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
 	}
 
 	public func resize(rows: UInt32, columns: UInt32) {
+		guard rows > 0, rows <= UInt32(UInt16.max),
+		      columns > 0, columns <= UInt32(UInt16.max)
+		else {
+			return
+		}
+		geometryLock.lock()
+		geometry = (rows, columns)
+		geometryLock.unlock()
 		transport.resize(rows: rows, columns: columns)
 	}
+
+    var latestGeometry: (rows: UInt32, columns: UInt32)? {
+        geometryLock.lock()
+        defer { geometryLock.unlock() }
+        return geometry
+    }
 }
 
 public final class OrlixLinuxSession: @unchecked Sendable {
@@ -972,6 +994,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         var bytes = [UInt8](repeating: 0, count: capacity)
         let count = bytes.withUnsafeMutableBytes { buffer in
             orlix_host_console_recent_output_snapshot(
+                COrlixHostConsoleSource.virtio,
                 buffer.baseAddress,
                 UInt(capacity)
             )
@@ -1105,7 +1128,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
 
     public func boot() -> OrlixBootStatus {
         orlix_host_boot_progress_reset()
-        orlix_host_console_recent_output_clear()
+        orlix_host_console_recent_output_clear(COrlixHostConsoleSource.virtio)
         orlix_host_boot_progress_record(COrlixBootStage.sessionCreated, 0, 0, 0)
         orlix_host_boot_progress_record(COrlixBootStage.payloadRegistering, 0, 0, 0)
 
@@ -1151,7 +1174,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
                     return status
                 }
 
-                guard let kernelCommandLine = bootConfig.kernelCommandLine,
+                guard let kernelCommandLine = effectiveKernelCommandLine(),
                       !kernelCommandLine.isEmpty
                 else {
                     return boot(nil)
@@ -1160,6 +1183,24 @@ public final class OrlixLinuxSession: @unchecked Sendable {
                 return kernelCommandLine.withCString { boot($0) }
             }
         }
+    }
+
+    func effectiveKernelCommandLine() -> String? {
+        guard let geometry = terminal.latestGeometry else {
+            return bootConfig.kernelCommandLine
+        }
+
+        let rowsKey = "orlix.terminal.rows="
+        let columnsKey = "orlix.terminal.cols="
+        var tokens = bootConfig.kernelCommandLine?
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init) ?? []
+        tokens.removeAll {
+            $0.hasPrefix(rowsKey) || $0.hasPrefix(columnsKey)
+        }
+        tokens.append("\(rowsKey)\(geometry.rows)")
+        tokens.append("\(columnsKey)\(geometry.columns)")
+        return tokens.joined(separator: " ")
     }
 
     private func registerRootImagesForBoot() -> Bool {
@@ -7943,13 +7984,14 @@ private final class HostConsoleTerminalTransport:
             self?.emit(data)
         }
         orlix_host_console_set_output_fd(
+            COrlixHostConsoleSource.virtio,
             pipe.fileHandleForWriting.fileDescriptor
         )
     }
 
     deinit {
         pipe.fileHandleForReading.readabilityHandler = nil
-        orlix_host_console_set_output_fd(-1)
+        orlix_host_console_set_output_fd(COrlixHostConsoleSource.virtio, -1)
     }
 
     func attachOutput(

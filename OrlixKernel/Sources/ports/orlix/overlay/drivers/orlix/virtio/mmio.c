@@ -682,7 +682,8 @@ static void orlix_virtio_mmio_process_console_output_desc(
 		if (!buffer)
 			return;
 
-		orlix_host_console_write(buffer, length);
+		orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+					 buffer, length);
 		*written += length;
 
 		if (!(flags & VRING_DESC_F_NEXT))

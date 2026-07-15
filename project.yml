@@ -232,10 +232,11 @@ targets:
           if [ "$payload_needs_rebuild" = 1 ]; then
               "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" kernel-payload PROFILE="$profile" ORLIX_BUILD_ROOT="$ORLIX_BUILD_ROOT"
           else
-              payload_inputs="
-          $SRCROOT/OrlixOS/Makefile
-          $SRCROOT/OrlixOS/Sources/distribution/manifest.mk
-          $SRCROOT/OrlixOS/Sources/init/init.c
+            payload_inputs="
+              $SRCROOT/OrlixOS/Makefile
+              $SRCROOT/OrlixOS/Sources/distribution/manifest.mk
+              $SRCROOT/OrlixOS/Sources/distribution/target-settings.xcconfig
+              $SRCROOT/OrlixOS/Sources/init/init.c
             $SRCROOT/OrlixOS/Sources/init/rootinit.c
             $SRCROOT/OrlixOS/Sources/make/config.mk
             $SRCROOT/OrlixOS/Sources/make/packages.mk
@@ -786,6 +787,16 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixAppTests
+        - name: OrlixUITests
+  "Orlix Release UI Tests":
+    build:
+      targets:
+        Orlix: all
+        OrlixUITests: test
+    test:
+      config: Release
+      gatherCoverageData: false
+      targets:
         - name: OrlixUITests
   "OrlixKernel Log Parser Tests":
     build:

@@ -10,7 +10,7 @@ story_of:
   - "[Native app foundation](../../epic/doing/native-app-foundation.md)"
 has_task:
   - "[Keep Herdr authoritative for terminal topology](../../task/doing/keep-herdr-authoritative-for-terminal-topology.md)"
-  - "[Bind local sessions through OrlixOS](../../task/todo/bind-local-sessions-through-orlixos.md)"
+  - "[Bind local sessions through OrlixOS](../../task/doing/bind-local-sessions-through-orlixos.md)"
   - "[Validate native platform presentation](../../task/todo/validate-native-platform-presentation.md)"
 ---
 

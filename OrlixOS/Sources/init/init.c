@@ -2132,9 +2132,15 @@ static int copy_available_or_eof(int input_fd, int output_fd)
 	return write_all(output_fd, buffer, (size_t)bytes);
 }
 
+#define ORLIX_INIT_RESIZE_FRAME_SIZE 64
+
+struct resize_frame_decoder {
+	unsigned char buffer[ORLIX_INIT_RESIZE_FRAME_SIZE];
+	size_t length;
+};
+
 static int parse_resize_frame(const unsigned char *buffer, size_t length,
-			      size_t offset, unsigned long *rows,
-			      unsigned long *columns, size_t *consumed)
+			      unsigned long *rows, unsigned long *columns)
 {
 	const char prefix[] = ORLIX_INIT_RESIZE_PREFIX;
 	size_t prefix_length = sizeof(prefix) - 1;
@@ -2142,11 +2148,10 @@ static int parse_resize_frame(const unsigned char *buffer, size_t length,
 	unsigned long parsed_rows = 0;
 	unsigned long parsed_columns = 0;
 
-	if (length - offset < prefix_length ||
-	    memcmp(buffer + offset, prefix, prefix_length) != 0)
+	if (length < prefix_length || memcmp(buffer, prefix, prefix_length) != 0)
 		return 0;
 
-	cursor = offset + prefix_length;
+	cursor = prefix_length;
 	while (cursor < length && buffer[cursor] >= '0' &&
 	       buffer[cursor] <= '9') {
 		parsed_rows = parsed_rows * 10 + (unsigned long)(buffer[cursor] - '0');
@@ -2168,19 +2173,102 @@ static int parse_resize_frame(const unsigned char *buffer, size_t length,
 		cursor++;
 	}
 
-	if (cursor >= length || buffer[cursor] != '\a')
+	if (cursor >= length || buffer[cursor] != '\a' || cursor + 1 != length ||
+	    parsed_rows == 0 || parsed_columns == 0)
 		return -1;
 
 	*rows = parsed_rows;
 	*columns = parsed_columns;
-	*consumed = cursor - offset + 1;
 	return 1;
 }
 
-static int relay_console_available_or_eof(int console_fd, int master, int slave)
+static int flush_resize_decoder(struct resize_frame_decoder *decoder, int master)
+{
+	int status = write_all(master, decoder->buffer, decoder->length);
+
+	decoder->length = 0;
+	return status;
+}
+
+static int resize_frame_can_continue(const unsigned char *buffer, size_t length,
+				     size_t prefix_length)
+{
+	unsigned long value = 0;
+	int saw_row = 0;
+	int saw_separator = 0;
+	int saw_column = 0;
+
+	for (size_t cursor = prefix_length; cursor < length; cursor++) {
+		unsigned char byte = buffer[cursor];
+
+		if (byte >= '0' && byte <= '9') {
+			value = value * 10 + (unsigned long)(byte - '0');
+			if (value > USHRT_MAX)
+				return 0;
+			if (saw_separator)
+				saw_column = 1;
+			else
+				saw_row = 1;
+			continue;
+		}
+		if (byte == 'x' && saw_row && !saw_separator) {
+			saw_separator = 1;
+			value = 0;
+			continue;
+		}
+		if (byte == '\a')
+			return saw_separator && saw_column && cursor + 1 == length;
+		return 0;
+	}
+	return 1;
+}
+
+static int decode_console_byte(struct resize_frame_decoder *decoder,
+			       unsigned char byte, int master, int slave)
+{
+	const unsigned char prefix[] = ORLIX_INIT_RESIZE_PREFIX;
+	const size_t prefix_length = sizeof(prefix) - 1;
+	unsigned long rows = 0;
+	unsigned long columns = 0;
+
+	if (decoder->length == 0 && byte != prefix[0])
+		return write_all(master, &byte, 1);
+
+	if (decoder->length >= sizeof(decoder->buffer)) {
+		if (flush_resize_decoder(decoder, master) != 0)
+			return -1;
+		return decode_console_byte(decoder, byte, master, slave);
+	}
+
+	decoder->buffer[decoder->length++] = byte;
+	if (decoder->length <= prefix_length) {
+		if (memcmp(decoder->buffer, prefix, decoder->length) == 0)
+			return 0;
+		return flush_resize_decoder(decoder, master);
+	}
+
+	if (!resize_frame_can_continue(decoder->buffer, decoder->length,
+				       prefix_length))
+		return flush_resize_decoder(decoder, master);
+
+	if (byte != '\a')
+		return 0;
+
+	if (parse_resize_frame(decoder->buffer, decoder->length,
+			       &rows, &columns) <= 0)
+		return flush_resize_decoder(decoder, master);
+
+	decoder->length = 0;
+	if (apply_pty_winsize(slave, rows, columns) != 0 &&
+	    apply_pty_winsize(master, rows, columns) != 0)
+		return -1;
+	return 0;
+}
+
+static int relay_console_available_or_eof(int console_fd, int master, int slave,
+					  struct resize_frame_decoder *decoder)
 {
 	unsigned char buffer[4096];
-	size_t offset = 0;
 	ssize_t bytes;
 
 	do {
@@ -2189,29 +2277,15 @@ static int relay_console_available_or_eof(int console_fd, int master, int slave)
 
 	if (bytes < 0)
 		return -1;
-	if (bytes == 0)
+	if (bytes == 0) {
+		if (decoder->length > 0 && flush_resize_decoder(decoder, master) != 0)
+			return -1;
 		return 1;
+	}
 
-	while (offset < (size_t)bytes) {
-		unsigned long rows = 0;
-		unsigned long columns = 0;
-		size_t consumed = 0;
-		int parsed = parse_resize_frame(buffer, (size_t)bytes, offset,
-						&rows, &columns, &consumed);
-
-		if (parsed > 0) {
-			if (apply_pty_winsize(slave, rows, columns) != 0 &&
-			    apply_pty_winsize(master, rows, columns) != 0)
-				return -1;
-			offset += consumed;
-			continue;
-		}
-		if (parsed < 0)
+	for (size_t offset = 0; offset < (size_t)bytes; offset++) {
+		if (decode_console_byte(decoder, buffer[offset], master, slave) != 0)
 			return -1;
-
-		if (write_all(master, &buffer[offset], 1) != 0)
-			return -1;
-		offset++;
 	}
 
 	return 0;
@@ -2271,6 +2345,7 @@ static void write_shell_exit_status(int exit_status)
 static int relay_pty(int console_fd, int master, int slave, pid_t shell,
 		     int *child_status)
 {
+	struct resize_frame_decoder resize_decoder = {0};
 	struct pollfd fds[] = {
 		{
 			.fd = console_fd,
@@ -2305,8 +2380,8 @@ static int relay_pty(int console_fd, int master, int slave, pid_t shell,
 		short pty_revents = fds[1].revents;
 
 	if ((console_revents & POLLIN) != 0) {
-		int copy_status = relay_console_available_or_eof(console_fd,
-								 master, slave);
+		int copy_status = relay_console_available_or_eof(
+			console_fd, master, slave, &resize_decoder);
 			if (copy_status > 0) {
 				fds[0].fd = -1;
 				console_revents = 0;

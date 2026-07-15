@@ -52,7 +52,7 @@ static ssize_t orlix_tty_write(struct tty_struct *tty, const u8 *bytes,
 			       size_t length)
 {
 	(void)tty;
-	orlix_host_console_write(bytes, length);
+	orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_SERIAL, bytes, length);
 	return length;
 }
 
@@ -75,7 +75,7 @@ static void orlix_tty_console_write(struct console *console,
 				    unsigned int length)
 {
 	(void)console;
-	orlix_host_console_write(bytes, length);
+	orlix_host_console_write(ORLIX_HOST_CONSOLE_SOURCE_SERIAL, bytes, length);
 }
 
 static struct tty_driver *orlix_tty_console_device(struct console *console,

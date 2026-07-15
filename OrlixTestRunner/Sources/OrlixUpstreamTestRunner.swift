@@ -129,6 +129,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=fd_alias_probe"
     )
 
+    static let kernelPTYTerminal = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=pty_terminal_probe"
+    )
+
     static let kernelSignalWait = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
