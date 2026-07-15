@@ -33,6 +33,7 @@ struct ServerListScreen: View {
     @State private var navigationBarAppearanceToken = UUID()
     @State private var showingCustomEnvironmentAlert = false
     @State private var addServerPrefill: ServerFormPrefill?
+    @State private var showingLocalInstance = false
 
     private var canAddServer: Bool {
         !serverManager.workspaces.isEmpty
@@ -40,22 +41,24 @@ struct ServerListScreen: View {
 
     var body: some View {
         List {
+            Section("Local") {
+                Button {
+                    showingLocalInstance = true
+                } label: {
+                    Label("Orlix", systemImage: "terminal")
+                }
+                .accessibilityIdentifier("orlix.local-instance.open")
+            }
             serversSection
             activeConnectionsSection
         }
         .id(listRefreshIdentity)
-        .overlay(alignment: .center) {
-            if filteredServers.isEmpty {
-                NoServersEmptyState(
-                    onAddServer: { presentAddServer() },
-                    onAddWorkspace: { showingAddWorkspace = true },
-                    requiresWorkspace: serverManager.workspaces.isEmpty
-                )
-            }
-        }
         .searchable(text: $searchText, prompt: "Search servers")
         .navigationTitle("Servers")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showingLocalInstance) {
+            DefaultLocalInstanceTerminalView()
+        }
         .id(navigationBarAppearanceToken)
         .toolbar {
             ToolbarItem(placement: .principal) {
