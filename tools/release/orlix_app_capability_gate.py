@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import plistlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -90,7 +91,10 @@ def scan_forbidden_sources(repo_root: Path, fragments: list[str]) -> None:
         except (OSError, UnicodeDecodeError) as error:
             fail(f"cannot scan product input {path}: {error}")
         for fragment in fragments:
-            if fragment in text:
+            identity = re.compile(
+                rf"(?<![A-Za-z0-9_]){re.escape(fragment)}(?![A-Za-z0-9_])"
+            )
+            if identity.search(text):
                 fail(f"forbidden product identity fragment {fragment!r} in {path.relative_to(repo_root)}")
 
 

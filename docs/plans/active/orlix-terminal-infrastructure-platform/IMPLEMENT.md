@@ -772,3 +772,46 @@ recent Orlix and OrlixUITests crash-report scan
 ```
 
 This proves the app opens the directly backed local terminal and receives real Orlix session output on the pinned simulator. It does not yet prove terminal input echo, resize delivery, close, background, foreground, restart, a POSIX shell prompt, or the ADR 0017 package ladder, so #51 remains active.
+
+#### 2026-07-15 TestFlight publication preflight
+
+- Installed the missing `pkgconf` dependency declared by `Brewfile`; `brew bundle check --verbose --file Brewfile` then passed.
+- Narrowed the release identity source scan to complete identifier tokens. The previous substring scan rejected the legitimate `OrlixOS` API type `OrlixTerminalSession` as if it were the retired `OrlixTerminal` product. Exact retired product identities remain forbidden, and exported-product plist checks are unchanged.
+- The external Xcode storage doctor, release prerequisites, Release simulator install, and complete simulator beta gate passed on `Orlix-iPhone-15-Pro-Max` (`ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3`).
+- The beta gate passed two OrlixOS payload metadata tests, one interactive Linux PTY input/output test, and one OCI-derived materialized-root test. Zero tests failed or skipped. The final Xcode invocation entered diagnostic collection despite a successful test; terminating only that collector allowed Xcode to finalize the successful result bundle.
+- No recent Orlix, OrlixRuntime, or pinned-simulator crash report was found.
+- TestFlight publication stopped before build-number mutation, archive, export, or upload because the login keychain denied private-key use. `beta-signing-diagnostics` found the Apple Distribution identity and ten provisioning profiles, then its direct codesign probe failed with `errSecInternalComponent`. `security show-keychain-info` reported `User interaction is not allowed`.
+
+Evidence:
+
+```text
+xcode-offload doctor --root "$(external-ssd-root)" --require-shims --strict
+OK xcode external storage doctor passed
+
+python3 -m unittest tools.release.tests.test_orlix_app_capability_gate
+7 tests passed
+
+make app-release-inputs-test
+pass
+
+make beta-prerequisites
+pass
+
+make beta-install-simulator
+pass; launched com.rudironsoni.Orlix
+
+make beta-simulator-gate
+4 tests passed, 0 failed, 0 skipped
+/Users/rudironsoni/Library/Developer/Xcode/DerivedData/Logs/Test/Test-OrlixOS Tests-2026.07.15_10-37-23-+0200.xcresult
+/Users/rudironsoni/Library/Developer/Xcode/DerivedData/Logs/Test/Test-OrlixRuntime Tests-2026.07.15_10-45-28-+0200.xcresult
+/Users/rudironsoni/Library/Developer/Xcode/DerivedData/Logs/Test/Test-OrlixRuntime Tests-2026.07.15_10-46-51-+0200.xcresult
+
+make beta-signing-diagnostics \
+  ORLIX_DEVELOPMENT_TEAM=ZQ3L7M567L \
+  ORLIX_CODE_SIGN_IDENTITY='Apple Distribution'
+5 valid identities; 10 provisioning profiles
+SigningProbe.framework: errSecInternalComponent
+exit 2
+```
+
+The remaining publication prerequisite is an interactive unlock of the login keychain so the Apple Distribution private key is usable. No TestFlight build was uploaded or claimed by this checkpoint.
