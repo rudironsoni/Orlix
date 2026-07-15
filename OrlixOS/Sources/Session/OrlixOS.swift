@@ -48,12 +48,13 @@ private func orlix_host_console_set_output_fd(_ source: UInt32, _ fd: CInt)
 
 @_silgen_name("orlix_host_console_enqueue_input")
 private func orlix_host_console_enqueue_input(
+	_ source: UInt32,
     _ bytes: UnsafeRawPointer?,
     _ length: UInt
 ) -> UInt
 
 @_silgen_name("orlix_host_console_clear_input")
-private func orlix_host_console_clear_input()
+private func orlix_host_console_clear_input(_ source: UInt32)
 
 @_silgen_name("orlix_host_console_recent_output_clear")
 private func orlix_host_console_recent_output_clear(_ source: UInt32)
@@ -8094,7 +8095,7 @@ private final class HostConsoleTerminalTransport:
 		orlix_host_console_set_output_fd(
 			source, pipe.fileHandleForWriting.fileDescriptor
 		)
-		orlix_host_console_clear_input()
+		orlix_host_console_clear_input(source)
 		return true
 	}
 
@@ -8123,11 +8124,13 @@ private final class HostConsoleTerminalTransport:
 	}
 
 	private func enqueue(_ data: Data) {
+		guard let selectedSource else { return }
 		data.withUnsafeBytes { buffer in
 			guard let baseAddress = buffer.baseAddress else { return }
 			var offset = 0
 			while offset < buffer.count {
 				let written = orlix_host_console_enqueue_input(
+					selectedSource,
 					baseAddress.advanced(by: offset), UInt(buffer.count - offset)
 				)
 				guard written > 0 else { return }

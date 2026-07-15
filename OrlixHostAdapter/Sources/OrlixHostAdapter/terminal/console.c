@@ -38,10 +38,18 @@ static struct OrlixHostConsoleOutputState
         },
     };
 
-static os_unfair_lock OrlixHostConsoleInputLock = OS_UNFAIR_LOCK_INIT;
-static unsigned char OrlixHostConsoleInput[ORLIX_HOST_CONSOLE_INPUT_BYTES];
-static unsigned long OrlixHostConsoleInputHead;
-static unsigned long OrlixHostConsoleInputLength;
+struct OrlixHostConsoleInputState {
+    os_unfair_lock lock;
+    unsigned char bytes[ORLIX_HOST_CONSOLE_INPUT_BYTES];
+    unsigned long head;
+    unsigned long length;
+};
+
+static struct OrlixHostConsoleInputState
+    OrlixHostConsoleInputs[ORLIX_HOST_CONSOLE_SOURCE_COUNT] = {
+        {.lock = OS_UNFAIR_LOCK_INIT},
+        {.lock = OS_UNFAIR_LOCK_INIT},
+    };
 
 static struct OrlixHostConsoleOutputState *OrlixHostConsoleOutput(
     enum orlix_host_console_source source)
@@ -50,6 +58,13 @@ static struct OrlixHostConsoleOutputState *OrlixHostConsoleOutput(
         return NULL;
     }
     return &OrlixHostConsoleOutputs[(unsigned long)source];
+}
+
+static struct OrlixHostConsoleInputState *OrlixHostConsoleInput(
+    enum orlix_host_console_source source)
+{
+    if ((unsigned long)source >= ORLIX_HOST_CONSOLE_SOURCE_COUNT) return NULL;
+    return &OrlixHostConsoleInputs[(unsigned long)source];
 }
 
 static void OrlixHostConsoleWriteFileDescriptor(
@@ -183,24 +198,26 @@ __attribute__((visibility("default"))) void orlix_host_console_set_output_fd(
 }
 
 __attribute__((visibility("default"))) unsigned long
-orlix_host_console_enqueue_input(const void *bytes, unsigned long length)
+orlix_host_console_enqueue_input(enum orlix_host_console_source source,
+                                 const void *bytes, unsigned long length)
 {
+    struct OrlixHostConsoleInputState *input = OrlixHostConsoleInput(source);
     const unsigned char *cursor = bytes;
     unsigned long copied = 0;
 
-    if (!bytes || length == 0) {
+    if (!input || !bytes || length == 0) {
         return 0;
     }
 
-    os_unfair_lock_lock(&OrlixHostConsoleInputLock);
+    os_unfair_lock_lock(&input->lock);
     while (copied < length &&
-           OrlixHostConsoleInputLength < ORLIX_HOST_CONSOLE_INPUT_BYTES) {
+           input->length < ORLIX_HOST_CONSOLE_INPUT_BYTES) {
         unsigned long tail =
-            (OrlixHostConsoleInputHead + OrlixHostConsoleInputLength) %
+            (input->head + input->length) %
             ORLIX_HOST_CONSOLE_INPUT_BYTES;
         unsigned long contiguous = ORLIX_HOST_CONSOLE_INPUT_BYTES - tail;
         unsigned long available =
-            ORLIX_HOST_CONSOLE_INPUT_BYTES - OrlixHostConsoleInputLength;
+            ORLIX_HOST_CONSOLE_INPUT_BYTES - input->length;
         unsigned long remaining = length - copied;
         unsigned long chunk = contiguous;
 
@@ -211,58 +228,62 @@ orlix_host_console_enqueue_input(const void *bytes, unsigned long length)
             chunk = remaining;
         }
 
-        memcpy(&OrlixHostConsoleInput[tail], cursor + copied, (size_t)chunk);
+        memcpy(&input->bytes[tail], cursor + copied, (size_t)chunk);
         copied += chunk;
-        OrlixHostConsoleInputLength += chunk;
+        input->length += chunk;
     }
-    os_unfair_lock_unlock(&OrlixHostConsoleInputLock);
+    os_unfair_lock_unlock(&input->lock);
 
     return copied;
 }
 
 __attribute__((visibility("default"))) void
-orlix_host_console_clear_input(void)
+orlix_host_console_clear_input(enum orlix_host_console_source source)
 {
-    os_unfair_lock_lock(&OrlixHostConsoleInputLock);
-    OrlixHostConsoleInputHead = 0;
-    OrlixHostConsoleInputLength = 0;
-    os_unfair_lock_unlock(&OrlixHostConsoleInputLock);
+    struct OrlixHostConsoleInputState *input = OrlixHostConsoleInput(source);
+    if (!input) return;
+    os_unfair_lock_lock(&input->lock);
+    input->head = 0;
+    input->length = 0;
+    os_unfair_lock_unlock(&input->lock);
 }
 
 __attribute__((visibility("hidden"))) unsigned long
-orlix_host_console_read_input(void *bytes, unsigned long length)
+orlix_host_console_read_input(enum orlix_host_console_source source,
+                              void *bytes, unsigned long length)
 {
+    struct OrlixHostConsoleInputState *input = OrlixHostConsoleInput(source);
     unsigned char *cursor = bytes;
     unsigned long copied = 0;
 
-    if (!bytes || length == 0) {
+    if (!input || !bytes || length == 0) {
         return 0;
     }
 
-    os_unfair_lock_lock(&OrlixHostConsoleInputLock);
-    while (copied < length && OrlixHostConsoleInputLength > 0) {
+    os_unfair_lock_lock(&input->lock);
+    while (copied < length && input->length > 0) {
         unsigned long contiguous =
-            ORLIX_HOST_CONSOLE_INPUT_BYTES - OrlixHostConsoleInputHead;
+            ORLIX_HOST_CONSOLE_INPUT_BYTES - input->head;
         unsigned long chunk = contiguous;
         unsigned long remaining = length - copied;
 
-        if (chunk > OrlixHostConsoleInputLength) {
-            chunk = OrlixHostConsoleInputLength;
+        if (chunk > input->length) {
+            chunk = input->length;
         }
         if (chunk > remaining) {
             chunk = remaining;
         }
 
         memcpy(cursor + copied,
-               &OrlixHostConsoleInput[OrlixHostConsoleInputHead],
+               &input->bytes[input->head],
                (size_t)chunk);
-        OrlixHostConsoleInputHead =
-            (OrlixHostConsoleInputHead + chunk) %
+        input->head =
+            (input->head + chunk) %
             ORLIX_HOST_CONSOLE_INPUT_BYTES;
-        OrlixHostConsoleInputLength -= chunk;
+        input->length -= chunk;
         copied += chunk;
     }
-    os_unfair_lock_unlock(&OrlixHostConsoleInputLock);
+    os_unfair_lock_unlock(&input->lock);
 
     return copied;
 }

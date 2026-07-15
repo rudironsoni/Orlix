@@ -1263,11 +1263,33 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     const char input[] = "stale";
     unsigned char buffer[sizeof(input)] = {0};
 
-    orlix_host_console_clear_input();
-    XCTAssertEqual(orlix_host_console_enqueue_input(input, sizeof(input)),
+    orlix_host_console_clear_input(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    XCTAssertEqual(orlix_host_console_enqueue_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, input, sizeof(input)),
                    sizeof(input));
-    orlix_host_console_clear_input();
-    XCTAssertEqual(orlix_host_console_read_input(buffer, sizeof(buffer)), 0UL);
+    orlix_host_console_clear_input(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    XCTAssertEqual(orlix_host_console_read_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, sizeof(buffer)),
+                   0UL);
+}
+
+- (void)testConsoleInputSourcesRemainIndependent
+{
+    const char serial[] = "serial-input";
+    unsigned char buffer[sizeof(serial)] = {0};
+
+    orlix_host_console_clear_input(ORLIX_HOST_CONSOLE_SOURCE_SERIAL);
+    orlix_host_console_clear_input(ORLIX_HOST_CONSOLE_SOURCE_VIRTIO);
+    XCTAssertEqual(orlix_host_console_enqueue_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_SERIAL,
+                       serial, sizeof(serial)), sizeof(serial));
+    XCTAssertEqual(orlix_host_console_read_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_VIRTIO,
+                       buffer, sizeof(buffer)), 0UL);
+    XCTAssertEqual(orlix_host_console_read_input(
+                       ORLIX_HOST_CONSOLE_SOURCE_SERIAL,
+                       buffer, sizeof(buffer)), sizeof(serial));
+    XCTAssertEqual(memcmp(buffer, serial, sizeof(serial)), 0);
 }
 
 @end

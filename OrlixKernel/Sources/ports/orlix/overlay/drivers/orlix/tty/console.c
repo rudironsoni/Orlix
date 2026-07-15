@@ -6,22 +6,42 @@
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
+#include <linux/tty_flip.h>
 #include <linux/tty_port.h>
+#include <linux/workqueue.h>
 #include <internal/asm/host_console.h>
 
 static struct tty_driver *orlix_tty_driver;
 static struct tty_port orlix_tty_port;
+static struct delayed_work orlix_tty_input_work;
+
+static void orlix_tty_poll_input(struct work_struct *work)
+{
+	u8 bytes[256];
+	unsigned long copied;
+
+	(void)work;
+	copied = orlix_host_console_read_input(
+		ORLIX_HOST_CONSOLE_SOURCE_SERIAL, bytes, sizeof(bytes));
+	if (copied > 0) {
+		tty_insert_flip_string(&orlix_tty_port, bytes, copied);
+		tty_flip_buffer_push(&orlix_tty_port);
+	}
+	schedule_delayed_work(&orlix_tty_input_work, msecs_to_jiffies(10));
+}
 
 static int orlix_tty_activate(struct tty_port *port, struct tty_struct *tty)
 {
 	(void)port;
 	(void)tty;
+	schedule_delayed_work(&orlix_tty_input_work, 0);
 	return 0;
 }
 
 static void orlix_tty_shutdown(struct tty_port *port)
 {
 	(void)port;
+	cancel_delayed_work_sync(&orlix_tty_input_work);
 }
 
 static const struct tty_port_operations orlix_tty_port_ops = {
@@ -118,6 +138,7 @@ static int __init orlix_tty_driver_init(void)
 	int ret;
 
 	tty_port_init(&orlix_tty_port);
+	INIT_DELAYED_WORK(&orlix_tty_input_work, orlix_tty_poll_input);
 	orlix_tty_port.ops = &orlix_tty_port_ops;
 
 	driver = tty_alloc_driver(1, TTY_DRIVER_RESET_TERMIOS |

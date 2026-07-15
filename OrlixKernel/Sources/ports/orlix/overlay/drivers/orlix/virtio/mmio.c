@@ -580,7 +580,8 @@ static bool orlix_virtio_mmio_process_console_input_desc(
 		if (!buffer)
 			return true;
 
-		copied = orlix_host_console_read_input(buffer, length);
+		copied = orlix_host_console_read_input(
+			ORLIX_HOST_CONSOLE_SOURCE_VIRTIO, buffer, length);
 		*written += copied;
 		if (copied < length)
 			return *written > 0;

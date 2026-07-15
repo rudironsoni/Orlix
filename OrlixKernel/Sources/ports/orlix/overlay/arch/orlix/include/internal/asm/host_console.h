@@ -9,6 +9,7 @@ enum orlix_host_console_source {
 
 void orlix_host_console_write(enum orlix_host_console_source source,
 			      const void *bytes, unsigned long length);
-unsigned long orlix_host_console_read_input(void *bytes, unsigned long length);
+unsigned long orlix_host_console_read_input(enum orlix_host_console_source source,
+					    void *bytes, unsigned long length);
 
 #endif

@@ -10,9 +10,10 @@ enum orlix_host_console_source {
 __attribute__((visibility("default"))) void
 orlix_host_console_set_output_fd(enum orlix_host_console_source source, int fd);
 __attribute__((visibility("default"))) unsigned long
-orlix_host_console_enqueue_input(const void *bytes, unsigned long length);
+orlix_host_console_enqueue_input(enum orlix_host_console_source source,
+                                 const void *bytes, unsigned long length);
 __attribute__((visibility("default"))) void
-orlix_host_console_clear_input(void);
+orlix_host_console_clear_input(enum orlix_host_console_source source);
 __attribute__((visibility("default"))) void
 orlix_host_console_recent_output_clear(enum orlix_host_console_source source);
 __attribute__((visibility("default"))) unsigned long
@@ -24,6 +25,7 @@ orlix_host_console_write(enum orlix_host_console_source source,
                          const void *bytes,
                          unsigned long length);
 __attribute__((visibility("hidden"))) unsigned long
-orlix_host_console_read_input(void *bytes, unsigned long length);
+orlix_host_console_read_input(enum orlix_host_console_source source,
+                              void *bytes, unsigned long length);
 
 #endif
