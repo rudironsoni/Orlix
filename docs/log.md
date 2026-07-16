@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-15
+updated: 2026-07-16
 ---
 # Orlix Knowledge Log
+
+## [2026-07-16] correct | Return TCTI proof to owning tests
+
+Removed the centralized Swift gate, golden-ELF and reducer workflow, TCTI-specific product profile, and proposed TCTI report MCP. Routed structured engine proof to KUnit, Linux-visible behavior to kselftest, libc and package behavior to upstream suites, private Darwin mechanics to HostAdapter XCTest, and product integration to OrlixOS and native app XCTest. The remaining task envelope records scope and order without interpreting results.
 
 ## [2026-07-15] start | Bind local session terminal geometry
 

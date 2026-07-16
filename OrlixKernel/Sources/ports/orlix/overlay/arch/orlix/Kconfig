@@ -62,18 +62,18 @@ config ORLIX_HOSTED_EXEC_TCTI
 config ORLIX_TCTI_DEBUG_SWITCH
 	bool "Enable Orlix TCTI switch debug oracle"
 	depends on ORLIX_HOSTED_EXEC_TCTI
-	default y if DEBUG_KERNEL
+	default n
 	help
 	  Build the slow switch-dispatch correctness oracle used to test TCTI
-	  decoding, fault, syscall, and register semantics. It is not the
-	  physical-iPhone performance backend.
+	  decoding, fault, syscall, and register semantics. Keep this test-only
+	  implementation disabled in product profiles.
 
 config ORLIX_TCTI_SYSCALL_TRACE
 	bool "Trace every Orlix TCTI syscall entry and return"
 	depends on ORLIX_HOSTED_EXEC_TCTI
 	default n
 	help
-	  Enable full per-syscall TCTI tracing. The default TCTI runtime keeps
+	  Enable full per-syscall TCTI tracing. Normal TCTI execution keeps
 	  syscall-entry reporting bounded so app-hosted Linux workloads are not
 	  throttled by console mirroring.
 

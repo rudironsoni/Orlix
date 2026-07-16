@@ -4,7 +4,7 @@ tags:
   - task
   - release
   - mobile-terminal
-updated: 2026-07-15
+updated: 2026-07-16
 status: doing
 summary: "Validate the complete mobile terminal product on the selected simulator."
 task_of:
@@ -21,4 +21,4 @@ blocks:
 
 # Validate the mobile terminal simulator product
 
-Advance the exact mobile terminal release candidate through source policy, focused reducer, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, Herdr, Local Runtime, and TCTI contract. OCI and Docker behavior belongs to the later mobile container release.
+Advance the exact mobile terminal release candidate through source policy, focused owning regression tests, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, Herdr, Local Runtime, and TCTI contract. OCI and Docker behavior belongs to the later mobile container release.

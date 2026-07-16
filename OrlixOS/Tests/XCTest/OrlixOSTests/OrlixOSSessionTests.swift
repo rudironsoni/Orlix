@@ -6549,17 +6549,12 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 		)
 	}
 
-	func testTCTIRuntimePayloadUsesDevelopmentBootProfile() {
-		XCTAssertEqual(
-			OrlixOSPayload.bootProfile(forPayloadProfile: "tcti_runtime"),
-			.development
-		)
-	}
-
 	func testRootImageDescriptorsComeFromOrlixOSTargetMetadata() throws {
 		let productRootIdentifier = try XCTUnwrap(
 			OrlixOSPayload.productRootImageIdentifier
-        )
+		)
+		let profile = try XCTUnwrap(OrlixOSPayload.selectedBootProfile)
+		let profileName = profile == .release ? "release" : "development"
         let descriptors = OrlixOSPayload.rootImageDescriptors
 
         XCTAssertFalse(productRootIdentifier.isEmpty)
@@ -6576,6 +6571,12 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
             let kernelCommandLine = try XCTUnwrap(descriptor.kernelCommandLine)
             XCTAssertTrue(kernelCommandLine.contains("rdinit=/init"))
             XCTAssertTrue(kernelCommandLine.contains("orlix.root=initramfs-only"))
+            XCTAssertEqual(
+                kernelCommandLine.split(whereSeparator: { $0.isWhitespace })
+                    .filter { $0.hasPrefix("orlix.profile=") },
+                ["orlix.profile=\(profileName)"],
+                "\(descriptor.role) root image must match the payload boot profile"
+            )
             XCTAssertNotNil(descriptor.initrdBundleName)
             XCTAssertNotNil(descriptor.initrdBundleExtension)
             XCTAssertNotNil(descriptor.initrdResource)

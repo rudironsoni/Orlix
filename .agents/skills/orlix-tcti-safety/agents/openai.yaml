@@ -1,7 +1,0 @@
-dependencies:
-  subagents:
-    - .codex/subagents/tcti-safety-reviewer.md
-    - .codex/subagents/tcti-release-gate-reviewer.md
-  commands:
-    - make tcti-gate TARGET=tcti-appstore-safety-audit
-    - make tcti-gate TARGET=tcti-plan-consistency

@@ -1,0 +1,134 @@
+#!/usr/bin/env sh
+set -eu
+
+mode="${1:-}"
+root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+output_dir="$root/Build/AgentHarness/orlix-tcti"
+status_path="$output_dir/status.json"
+envelope_path="$output_dir/next-task.json"
+
+mkdir -p "$output_dir"
+
+python3 - "$mode" "$root" "$status_path" "$envelope_path" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+
+mode, root_text, status_text, envelope_text = sys.argv[1:]
+root = pathlib.Path(root_text)
+status_path = pathlib.Path(status_text)
+envelope_path = pathlib.Path(envelope_text)
+head = subprocess.check_output(
+    ["git", "rev-parse", "HEAD"], cwd=root, text=True
+).strip()
+
+suites = [
+    {
+        "id": "kernel-kunit-kselftest",
+        "owner": "OrlixKernel and upstream Linux",
+        "command": "make tcti-kernel-tests",
+        "proves": "TCTI structured execution plus Linux-visible kernel interfaces",
+    },
+    {
+        "id": "mlibc",
+        "owner": "OrlixMLibC and upstream mlibc",
+        "command": "make mlibc-tests PROFILE=development",
+        "proves": "libc behavior through the upstream mlibc suite",
+    },
+    {
+        "id": "coreutils",
+        "owner": "OrlixOS package integration and upstream Coreutils",
+        "command": "make coreutils-tests PROFILE=development",
+        "proves": "packaged Coreutils behavior through its upstream suite",
+    },
+    {
+        "id": "hostadapter",
+        "owner": "OrlixHostAdapter",
+        "command": "make hostadapter-tests",
+        "proves": "private Darwin memory and source-preserving terminal transport mechanics",
+    },
+    {
+        "id": "orlixos",
+        "owner": "OrlixOS",
+        "command": "make orlixos-tests",
+        "proves": "payload, session, and app-facing OS Kit behavior",
+    },
+    {
+        "id": "app",
+        "owner": "native Orlix app",
+        "command": "make app-tests",
+        "proves": "application integration and presentation",
+    },
+    {
+        "id": "app-hosted-runtime",
+        "owner": "native app plus OrlixOS session",
+        "command": "make runtime-tests PROFILE=development",
+        "proves": "app-hosted OCI lifecycle, shell, serial and virtio PTY, input, output, and resize integration",
+    },
+]
+
+status = {
+    "schema_version": 1,
+    "area": "orlix-tcti",
+    "git_sha": head,
+    "product_profiles": ["release", "development"],
+    "test_suites": suites,
+    "completion": "unverified",
+    "completion_reason": "Owning suites must provide their own current results.",
+}
+
+envelope = {
+    "schema_version": 1,
+    "area": "orlix-tcti",
+    "git_sha": head,
+    "selected_task": "complete-pinned-simulator-tcti-ladder",
+    "task_page": "docs/objects/task/doing/complete-pinned-simulator-tcti-ladder.md",
+    "selected_test_suite": suites[0],
+    "ordered_test_suites": suites,
+    "scope_contract": {
+        "allowed_owners": [
+            "OrlixKernel KUnit and Linux kselftest",
+            "OrlixMLibC tests",
+            "upstream Coreutils tests",
+            "OrlixHostAdapter XCTest",
+            "OrlixOS XCTest",
+            "native app XCTest",
+        ],
+        "forbidden_substitutes": [
+            "host-side TCTI behavioral models",
+            "terminal text or log parsing as TCTI proof",
+            "generated-tree edits",
+            "a TCTI-specific product profile",
+        ],
+    },
+    "completion": "unverified",
+}
+
+if mode == "status":
+    status_path.write_text(json.dumps(status, indent=2) + "\n")
+    print(json.dumps(status, indent=2))
+elif mode == "next":
+    status_path.write_text(json.dumps(status, indent=2) + "\n")
+    envelope_path.write_text(json.dumps(envelope, indent=2) + "\n")
+    print(json.dumps(envelope, indent=2))
+elif mode == "check":
+    if not envelope_path.is_file():
+        raise SystemExit(f"missing task envelope: {envelope_path}")
+    observed = json.loads(envelope_path.read_text())
+    if observed != envelope:
+        raise SystemExit("task envelope is stale; run make agent-next AREA=orlix-tcti")
+    encoded = json.dumps(observed)
+    forbidden = [
+        "tcti_" + "runtime",
+        "tcti-" + "gate",
+        "golden_" + "elf",
+        "tcti-" + "repro",
+    ]
+    matches = [value for value in forbidden if value in encoded]
+    if matches:
+        raise SystemExit(f"task envelope contains retired contracts: {matches}")
+    print("Orlix TCTI task envelope valid")
+else:
+    raise SystemExit("usage: scope-envelope status|next|check")
+PY

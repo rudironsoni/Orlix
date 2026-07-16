@@ -3351,6 +3351,7 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	}
 }
 
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_DEBUG_SWITCH)
 int tcti_switch_debug_execute_decoded(struct mm_struct *mm,
 				      struct pt_regs *regs,
 				      const struct tcti_decoded_instruction *decoded,
@@ -3420,3 +3421,4 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 		return result;
 	}
 }
+#endif

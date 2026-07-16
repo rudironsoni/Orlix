@@ -25,10 +25,8 @@
 #include "block_cache.h"
 #include "decode_aarch64.h"
 #include "engine.h"
-#include "execve_binfmt_smoke.h"
 #include "gadget_program.h"
 #include "report.h"
-#include "syscall_dispatch_smoke.h"
 
 #define TCTI_ELF_IMAGE_SCAN_GRANULE (64UL * 1024UL)
 #define TCTI_ELF_IMAGE_SCAN_LIMIT (16UL * 1024UL * 1024UL)
@@ -867,33 +865,6 @@ void tcti_prepare_syscall_handoff(struct pt_regs *regs)
 	regs->syscallno = regs->regs[8];
 	regs->pc += sizeof(u32);
 }
-
-#if IS_ENABLED(CONFIG_ORLIX_TCTI_KUNIT_TEST)
-bool tcti_kernel_syscall_dispatch_smoke_for_tests(
-	struct pt_regs *regs,
-	struct tcti_kernel_syscall_dispatch_smoke_result *out)
-{
-	if (!regs || !out)
-		return false;
-
-	memset(out, 0, sizeof(*out));
-
-	return tcti_kernel_syscall_dispatch_smoke_execute(
-		regs, out, orlix_syscall_dispatch);
-}
-
-bool tcti_kernel_execve_binfmt_elf_smoke_for_tests(
-	const struct tcti_kernel_execve_binfmt_elf_smoke_payload *payload,
-	struct pt_regs *regs,
-	struct tcti_kernel_execve_binfmt_elf_smoke_result *out)
-{
-	if (!payload || !regs || !out)
-		return false;
-
-	return tcti_kernel_execve_binfmt_elf_smoke_execute(
-		payload, regs, out, start_thread);
-}
-#endif
 
 bool tcti_prepare_successful_execve_return(struct pt_regs *regs)
 {

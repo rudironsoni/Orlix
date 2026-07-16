@@ -3,7 +3,7 @@ type: concept
 tags:
   - roadmap
   - guidance
-updated: 2026-07-15
+updated: 2026-07-16
 summary: "Order Orlix epics, stories, and tasks by their hard delivery dependencies, parallel work, optional proof, and external approvals."
 applies:
   - "[Orlix](../objects/product/orlix.md)"
@@ -11,7 +11,7 @@ applies:
 
 # Product roadmap priority and dependencies
 
-This page records the durable execution order across the complete epic, story, and task graph. Object status belongs to the individual ontology pages, and the current executable TCTI gate belongs to the [structured task envelope](../../Build/AgentHarness/orlix-tcti/next-task.md). Do not copy volatile gate status into this roadmap.
+This page records the durable execution order across the complete epic, story, and task graph. Object status belongs to the individual ontology pages, and the current TCTI scope belongs to the structured task envelope under `Build/AgentHarness/orlix-tcti/`. Native owning test results remain authoritative for behavior.
 
 ## Dependency semantics
 
@@ -23,14 +23,13 @@ This page records the durable execution order across the complete epic, story, a
 
 ## Priority sequence
 
-1. **P0, preserve the harness and start long-lead approvals.** Keep the ontology and structured reports authoritative, and begin Herdr, mobile terminal, and downloaded-content approval work because external lead time can run in parallel.
-2. **P1, complete the pinned TCTI simulator gate.** The [current TCTI task envelope](../../Build/AgentHarness/orlix-tcti/next-task.md) selects the exact command. Local session binding, Herdr topology work, and OCI image import may progress in parallel without claiming the blocked product tiers.
+1. **P0, preserve the ontology and start long-lead approvals.** Keep the typed roadmap authoritative, and begin Herdr, mobile terminal, and downloaded-content approval work because external lead time can run in parallel.
+2. **P1, complete the owning TCTI test ladder.** Run KUnit, kselftest, mlibc, Coreutils, HostAdapter, OrlixOS, app, and app-hosted simulator tests in promotion order. Local session binding, Herdr topology work, and OCI image import may progress in parallel without claiming the blocked product tiers.
 3. **P2, unlock the product foundations.** After the pinned simulator proof, integrate the approved Herdr platform, implement and prove Local Instance isolation, complete authorized TCTI device proof when authorized, promote TCTI, and validate mobile presentation.
 4. **P3, validate and publish the mobile terminal release.** The first public release proves terminal, Herdr, Local Runtime, TCTI, and mobile presentation. It does not claim OCI or Docker behavior.
 5. **P4, complete OCI lifecycle and Docker compatibility.** Build on proven Local Instance isolation, imported OCI content, and the released terminal foundation.
 6. **P5, validate and publish the mobile container release.** Add OCI, Docker, and downloaded-content behavior while preserving the mobile terminal contract.
 7. **P6, implement and publish native macOS.** Reuse the two proven mobile product contracts, then add the native Mac target and host integration.
-8. **P7, expose the stable TCTI harness through MCP.** Stabilize report contracts before adding the read interface so workflow tooling cannot freeze a volatile schema.
 
 ## Epic and story dependency matrix
 
@@ -44,7 +43,6 @@ This page records the durable execution order across the complete epic, story, a
 | [OCI-derived environments](../objects/epic/doing/oci-derived-environments.md) | [Deliver OCI environment lifecycle](../objects/story/doing/deliver-oci-environment-lifecycle.md) | P1, P4 | Local Runtime and Local Instances | Mobile container release |
 | [Orlix release](../objects/epic/doing/orlix-release.md) | [Validate and publish the mobile container release](../objects/story/todo/validate-and-publish-mobile-container-release.md) | P5 | Mobile terminal release and OCI lifecycle | Native macOS release |
 | [Orlix release](../objects/epic/doing/orlix-release.md) | [Validate and publish the native macOS release](../objects/story/todo/validate-and-publish-native-macos-release.md) | P6 | Mobile container release | Native Mac publication |
-| [TCTI MCP](../objects/epic/todo/tcti-mcp.md) | [Expose the TCTI harness through MCP](../objects/story/todo/expose-tcti-harness-through-mcp.md) | P7 | Stable TCTI report contract and completed TCTI workflow | Read-oriented workflow integration |
 
 The release epic spans three stages, so its completion depends on native, TCTI, and OCI work even though the mobile terminal story can finish before OCI and Docker. Story edges define the promotion order within that epic.
 
@@ -79,8 +77,6 @@ The release epic spans three stages, so its completion depends on native, TCTI, 
 | P6 | [Implement the native macOS product](../objects/task/todo/implement-native-macos-product.md) | Mobile container archive | Native macOS validation |
 | P6 | [Validate the native macOS product](../objects/task/todo/validate-native-macos-product.md) | Native macOS implementation | Native macOS archive |
 | P6, external upload | [Archive, export, and upload the native macOS release](../objects/task/todo/archive-export-and-upload-native-macos-release.md) | Native macOS validation | Native Mac publication |
-| P7 | [Stabilize the TCTI report contract](../objects/task/todo/stabilize-tcti-report-contract.md) | Mature structured TCTI reports | TCTI MCP read interface |
-| P7 | [Define the TCTI MCP read interface](../objects/task/todo/define-tcti-mcp-read-interface.md) | Stable TCTI report contract | Read-oriented TCTI workflow access |
 
 ## Governing decisions and evidence
 

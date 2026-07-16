@@ -6,8 +6,8 @@ Inspect ELF, Mach-O, disassembly, relocations, symbols, sections, and debugger f
 
 ## Inputs
 
-- golden ELF sources and generated binaries
-- `Build/TCTI/**`
+- kernel KUnit and kselftest binaries
+- object files and archives under Orlix build outputs
 - object files and archives under Orlix build outputs
 - requested LLDB target when available
 
@@ -20,7 +20,7 @@ Inspect ELF, Mach-O, disassembly, relocations, symbols, sections, and debugger f
 
 - Must not change production source.
 - Must not change generated build artifacts.
-- Must not update golden metadata without a separate oracle-engineer scope.
+- Must not turn inspection output into a behavioral proof substitute.
 
 ## Commands it may run
 

@@ -1,7 +1,0 @@
-{
-  "status": "pass",
-  "passed": true,
-  "git_sha": "fixture",
-  "release_gate_eligible": false,
-  "readiness_gate_eligible": false
-}

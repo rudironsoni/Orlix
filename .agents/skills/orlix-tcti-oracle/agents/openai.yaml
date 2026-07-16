@@ -1,8 +1,0 @@
-dependencies:
-  subagents:
-    - .codex/subagents/tcti-oracle-engineer.md
-    - .codex/subagents/tcti-test-reducer.md
-    - .codex/subagents/tcti-safety-reviewer.md
-  commands:
-    - make tcti-gate TARGET=tcti-golden-elf
-    - make tcti-gate TARGET=tcti-repro

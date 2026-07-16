@@ -3,7 +3,7 @@ type: epic
 tags:
   - epic
   - orlix-tcti
-updated: 2026-07-15
+updated: 2026-07-16
 status: doing
 summary: "Complete safe, conformant hosted Linux ELF execution through TCTI."
 targets:
@@ -14,7 +14,6 @@ has_story:
 blocks:
   - "[OCI-derived environments](oci-derived-environments.md)"
   - "[Orlix release](orlix-release.md)"
-  - "[TCTI MCP](../todo/tcti-mcp.md)"
 ---
 
 # Orlix TCTI
@@ -25,17 +24,17 @@ TCTI executes ordinary unmodified AArch64 Linux ELF user instructions until Linu
 
 Guest ELF text remains host data. Product paths cannot request executable protection for guest text, JIT, `MAP_JIT`, RWX, or generated executable memory. Simulator and physical-device validation use the same TCTI backend and executable-memory restrictions. Direct-native guest execution is limited to a low-level oracle or benchmark and cannot satisfy product gates.
 
-Proof advances from seed probes through kernel, kselftest, OrlixMLibC, OrlixMLibC-linked UAPI, shell, Coreutils, OCI, app-hosted simulator, device, and release tiers. Golden ELFs and reducers prove narrow behavior only. Phone work remains ineligible until the complete pinned-simulator readiness ladder passes. The product default cannot flip until real `/init` reaches `svc #0`, enters Linux syscall dispatch, emits Linux console output through the app-hosted path, and every forbidden-behavior check is false.
+Proof advances through kernel KUnit, Linux kselftest, upstream mlibc tests, OrlixMLibC-linked UAPI, upstream Coreutils tests, HostAdapter XCTest, OrlixOS XCTest, native app XCTest, app-hosted simulator, device, and release tiers. Phone work remains ineligible until the complete pinned-simulator readiness ladder passes. The product default cannot flip until real `/init` reaches `svc #0`, enters Linux syscall dispatch, emits Linux console output through the app-hosted path, and every forbidden-behavior check is false.
 
-The autonomous entry points are `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti`. The selected task, allowed scope, prerequisites, proof tier, classifier state, and exact evidence paths belong to `Build/AgentHarness/orlix-tcti/next-task.json` and the current reports. This page does not copy their status.
+The scope-envelope entry points are `make agent-status AREA=orlix-tcti`, `make agent-next AREA=orlix-tcti`, and `make agent-task-envelope-check AREA=orlix-tcti`. The envelope records owning suites and their order. It does not execute tests, interpret native results, or claim readiness.
 
-## Autonomous Test Contract
+## Owning Test Contract
 
-The harness uses stable gate IDs, commands, proof tiers, acceptance weights, real-stack requirements, and machine-readable results.
+Each layer owns its assertions and native result format. TCTI engine correctness belongs to KUnit, Linux-visible behavior belongs to kselftest, libc and package behavior belong to their upstream suites, private Darwin transport belongs to HostAdapter XCTest, and product integration belongs to OrlixOS or native app XCTest.
 
 ## Failure Reduction
 
-A failing higher-tier gate selects a reproducible reducer before production code changes. Narrow reducer success does not satisfy the failed product gate.
+A failing assertion is minimized into the same owning suite. A host-side behavioral model, terminal-text parser, or cross-layer aggregate cannot replace the failed test.
 
 ## TCTI Concurrency Model
 
@@ -49,6 +48,6 @@ Thread-pointer transitions are explicit TCTI correctness and safety boundaries.
 
 Virtio carries device mechanics. It does not carry Linux process, syscall, signal, or memory-management policy.
 
-The durable implementation contract includes the `tcti-appstore-safety-audit` gate and `orlix-aarch64-v1` guest profile.
+The durable implementation contract includes App Store executable-memory invariants in native XCTest.
 
 Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text.

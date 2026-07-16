@@ -94,42 +94,6 @@ prefix_rule(
   ],
 )
 
-prefix_rule(
-  pattern = ["make", "runtime-validation", "DESTINATION=iphoneos"],
-  decision = "forbidden",
-  justification = "Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
-  match = [
-    "make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
-  ],
-  not_match = [
-    "make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
-  ],
-)
-
-prefix_rule(
-  pattern = ["rtk", "make", "runtime-validation", "DESTINATION=iphoneos"],
-  decision = "forbidden",
-  justification = "rtk does not change side effects. Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
-  match = [
-    "rtk make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
-  ],
-  not_match = [
-    "rtk make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
-  ],
-)
-
-prefix_rule(
-  pattern = ["rtk", "proxy", "make", "runtime-validation", "DESTINATION=iphoneos"],
-  decision = "forbidden",
-  justification = "rtk proxy does not change side effects. Explicit physical TCTI runtime-validation is forbidden until pinned simulator readiness and runtime preflight permit physical work.",
-  match = [
-    "rtk proxy make runtime-validation DESTINATION=iphoneos GATE=tcti-init-first-syscall",
-  ],
-  not_match = [
-    "rtk proxy make runtime-validation DESTINATION=iphonesimulator GATE=tcti-init-first-syscall",
-  ],
-)
-
 
 
 

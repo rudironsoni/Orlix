@@ -42,7 +42,6 @@ static struct tcti_block *tcti_block_find_locked(struct mm_struct *mm,
 
 static void tcti_block_free(struct tcti_block *block)
 {
-	kfree(block->pages);
 	kfree(block);
 }
 
@@ -138,7 +137,6 @@ int tcti_block_cache_insert(struct mm_struct *mm,
 	block->code_generation = code_generation;
 	block->instruction_count = instruction_count;
 	block->program_words = program_words;
-	INIT_HLIST_HEAD(&block->incoming_patch_slots);
 	memcpy(block->program, program, program_words * sizeof(*program));
 
 	spin_lock_irqsave(&tcti_global_cache_lock, flags);

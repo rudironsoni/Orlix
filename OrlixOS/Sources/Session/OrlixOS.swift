@@ -424,7 +424,7 @@ enum OrlixOSPayload {
         switch profile {
         case "release":
             return .release
-        case "development", "tcti_runtime":
+        case "development":
             return .development
         default:
             return nil

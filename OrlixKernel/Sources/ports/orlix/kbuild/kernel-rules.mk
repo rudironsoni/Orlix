@@ -14,7 +14,8 @@ LINUX_REMOTE ?= https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 ORLIX_HEADERS_INSTALL_JOBS ?= 1
 
 PROFILE ?= release
-ORLIX_PROFILES := release development tcti_runtime
+ORLIX_PROFILES := release development
+ORLIX_KERNEL_KUNIT ?= 0
 
 type ?= kunit
 libc ?= orlixmlibc
@@ -117,11 +118,11 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/engine.c \
-arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/report.c \
-arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c \
-arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/decode_aarch64.c \
-arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/gadget_program.c \
-arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/report.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/decode_aarch64.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/gadget_program.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tlb.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/idle.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/irq.c \
@@ -1016,6 +1017,23 @@ arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \
 	lib/fdt_strerror.c \
 	lib/fdt_empty_tree.c \
 	lib/fdt_addresses.c
+
+ifeq ($(ORLIX_KERNEL_KUNIT),1)
+ORLIX_KERNEL_LINUX_SOURCES += \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.c \
+	lib/kunit/assert.c \
+	lib/kunit/attributes.c \
+	lib/kunit/device.c \
+	lib/kunit/hooks.c \
+	lib/kunit/platform.c \
+	lib/kunit/resource.c \
+	lib/kunit/static_stub.c \
+	lib/kunit/string-stream.c \
+	lib/kunit/test.c \
+	lib/kunit/try-catch.c \
+	lib/kunit/user_alloc.c
+endif
+
 ORLIX_KUNIT_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/kunit/$(PROFILE)
 ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)
 ORLIX_MLIBC_SYSROOT ?= $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
@@ -1133,7 +1151,7 @@ endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kunit-run kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-run __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1142,7 +1160,6 @@ help:
 	@printf '%s\n' '  build                     build the app-hosted OrlixKernel iOS artifact'
 	@printf '%s\n' '  test                      run test type(s), default: type=kunit'
 	@printf '%s\n' '  test type=kunit           build Linux KUnit-selected Orlix tests'
-	@printf '%s\n' '  kunit-run                 attempt no-phone execution of selected Orlix KUnit tests'
 	@printf '%s\n' '  test type=kunit,kselftest build KUnit and Linux kselftest artifacts'
 	@printf '%s\n' '  kselftest                 install OrlixMLibC-built kselftests'
 	@printf '%s\n' '  headers_install           install Linux UAPI headers for OrlixMLibC'
@@ -1159,8 +1176,6 @@ headers_install: __headers-install
 
 kunit: __kunit
 
-kunit-run: __kunit-run
-
 kselftest-install: __kselftest-install
 
 kselftest: kselftest-install __kselftest-initramfs
@@ -1174,9 +1189,8 @@ test:
 	for selected in $(TEST_TYPES); do \
 		case "$$selected" in \
 			kunit) $(MAKE) kunit PROFILE="$(PROFILE)" ;; \
-			kunit-run) $(MAKE) kunit-run PROFILE="$(PROFILE)" ;; \
 			kselftest) $(MAKE) kselftest PROFILE="$(PROFILE)" libc="$(libc)" ;; \
-			*) echo "unsupported test type: $$selected (expected kunit, kunit-run, or kselftest)" >&2; exit 1 ;; \
+			*) echo "unsupported test type: $$selected (expected kunit or kselftest)" >&2; exit 1 ;; \
 		esac; \
 	done
 
@@ -1362,6 +1376,10 @@ __validate-profile: __validate-linux-abi
 		*" $$profile "*) ;; \
 		*) echo "unsupported PROFILE=$$profile (expected one of: $(ORLIX_PROFILES))" >&2; exit 1 ;; \
 	esac; \
+	case "$(ORLIX_KERNEL_KUNIT)" in \
+		0|1) ;; \
+		*) echo "ORLIX_KERNEL_KUNIT must be 0 or 1" >&2; exit 1 ;; \
+	esac; \
 	case "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" in \
 		4096|16384) ;; \
 		"") echo "missing OrlixOS target Linux page size: ORLIX_OS_LINUX_PAGE_SIZE" >&2; exit 1 ;; \
@@ -1507,6 +1525,8 @@ __prepare-kbuild: __prepare-port
 	if [ -s "$$ready_stamp" ] && \
 		[ "$$ready_stamp" -nt "$(ORLIX_PROFILE_CONFIG)" ] && \
 		[ "$$ready_stamp" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
+		grep -Fxq "kunit=$(ORLIX_KERNEL_KUNIT)" "$$ready_stamp" && \
+		{ [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] || [ "$$ready_stamp" -nt "$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig" ]; } && \
 		[ -s "$$build_dir/.config" ] && \
 		[ -s "$$build_dir/include/generated/autoconf.h" ] && \
 		[ -s "$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
@@ -1539,14 +1559,20 @@ __prepare-kbuild: __prepare-port
 		echo "GNU sed is required by Linux Kbuild on this host; install gnu-sed or set LINUX_SED=/path/to/gnu/sed" >&2; \
 		exit 1; \
 	fi; \
+	coreutils_dir=""; \
+	if readlink -e / >/dev/null 2>&1; then coreutils_dir="$$(dirname "$$(command -v readlink)")"; \
+	elif [ -x /opt/homebrew/opt/coreutils/libexec/gnubin/readlink ]; then coreutils_dir=/opt/homebrew/opt/coreutils/libexec/gnubin; \
+	else echo "GNU readlink is required by Linux Kbuild; install coreutils" >&2; exit 1; fi; \
 	linux_llvm_bin="$(LINUX_LLVM_BIN)"; \
-	PATH="$$linux_sed_dir:$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
+	PATH="$$linux_sed_dir:$$coreutils_dir:$${linux_llvm_bin:+$$linux_llvm_bin:}$$PATH"; \
 	export PATH; \
 	sed --version >/dev/null 2>&1 || { echo "GNU sed is required by Linux Kbuild on this host" >&2; exit 1; }; \
 	command -v llvm-ar >/dev/null 2>&1 || { echo "llvm-ar is required by Linux Kbuild; install LLVM or set LINUX_LLVM_BIN=/path/to/llvm/bin" >&2; exit 1; }; \
 	if [ -s "$$build_dir/.config" ] && \
 		[ "$$build_dir/.config" -nt "$(ORLIX_PROFILE_CONFIG)" ] && \
-		[ "$$build_dir/.config" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ]; then \
+		[ "$$build_dir/.config" -nt "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" ] && \
+		{ [ "$(ORLIX_KERNEL_KUNIT)" = 1 ] && grep -Fxq 'CONFIG_KUNIT=y' "$$build_dir/.config" || [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] && ! grep -Fxq 'CONFIG_KUNIT=y' "$$build_dir/.config"; } && \
+		{ [ "$(ORLIX_KERNEL_KUNIT)" = 0 ] || [ "$$build_dir/.config" -nt "$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig" ]; }; then \
 		echo "resuming partial Orlix Kbuild output: $$build_dir (profile $(PROFILE))"; \
 	else \
 		for attempt in 1 2 3 4 5; do \
@@ -1559,6 +1585,9 @@ __prepare-kbuild: __prepare-port
 	fi; \
 	[ -n "$(ORLIX_KERNEL_HOST_SDKROOT)" ] || { echo "macOS SDK is required for Linux Kbuild host tools; set ORLIX_KERNEL_HOST_SDKROOT=/path/to/MacOSX.sdk" >&2; exit 1; }; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
+	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
+		"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$$build_dir" "$$build_dir/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
+	fi; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o security/selinux/avc.o; \
 	for dtb in release development; do \
 		[ -f "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" ] || { echo "missing profile DTB: $$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" >&2; exit 1; }; \
@@ -1577,7 +1606,7 @@ __prepare-kbuild: __prepare-port
 	[ -s "$$build_dir/usr/initramfs_inc_data" ] || { echo "missing generated initramfs input: $$build_dir/usr/initramfs_inc_data" >&2; exit 1; }; \
 	linker_script="$$build_dir/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds"; \
 	[ -s "$$linker_script" ] || { echo "missing generated Orlix Kbuild linker script: $$linker_script" >&2; exit 1; }; \
-	printf 'profile=%s\nlinux_version=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" > "$$ready_stamp"; \
+	printf 'profile=%s\nlinux_version=%s\nkunit=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(ORLIX_KERNEL_KUNIT)" > "$$ready_stamp"; \
 	echo "verified Orlix Kbuild linker script: $$linker_script"; \
 	echo "prepared Orlix Kbuild output without a standalone image: $$build_dir (profile $(PROFILE))"
 
@@ -1712,66 +1741,6 @@ __kunit: __prepare-kbuild
 	fi; \
 	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
-
-__kunit-run: __kunit
-	@set -euo pipefail; \
-	test_name="tcti_kernel_syscall_dispatch_smoke_reaches_linux_dispatch"; \
-	test_obj="$(ORLIX_KUNIT_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o"; \
-	nm_cmd="$(ORLIX_KERNEL_NM)"; \
-	if [ -z "$$nm_cmd" ] || ! command -v "$$nm_cmd" >/dev/null 2>&1; then \
-		if command -v llvm-nm >/dev/null 2>&1; then nm_cmd="llvm-nm"; \
-		elif command -v xcrun >/dev/null 2>&1; then nm_cmd="xcrun llvm-nm"; \
-		else echo "missing nm for Orlix KUnit run symbol audit" >&2; exit 1; fi; \
-	fi; \
-	echo "ORLIX-KUNIT-RUNNER-BEGIN"; \
-	echo "ORLIX-KUNIT-RUNNER profile=$(PROFILE) arch=$(ORLIX_PORT_ARCH)"; \
-	echo "ORLIX-KUNIT-RUNNER test=$$test_name"; \
-	echo "ORLIX-KUNIT-RUNNER test_object=$$test_obj"; \
-	if [ ! -s "$$test_obj" ]; then \
-		echo "ORLIX-KUNIT-RUNNER test_object_present=false"; \
-		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
-		exit 2; \
-	fi; \
-	echo "ORLIX-KUNIT-RUNNER test_object_present=true"; \
-	symbols_file="$${TMPDIR:-/tmp}/orlix-kunit-symbols-$$$$.txt"; \
-	trap 'rm -f "$$symbols_file"' EXIT; \
-	if ! $$nm_cmd "$$test_obj" > "$$symbols_file"; then \
-		echo "ORLIX-KUNIT-RUNNER test_symbol_present=false"; \
-		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
-		exit 2; \
-	fi; \
-	if ! grep -q "$$test_name" "$$symbols_file"; then \
-		echo "ORLIX-KUNIT-RUNNER test_symbol_present=false"; \
-		echo "ORLIX-KUNIT-RUNNER-END status=error"; \
-		exit 2; \
-	fi; \
-	echo "ORLIX-KUNIT-RUNNER test_symbol_present=true"; \
-	echo "ORLIX-KUNIT-RUNNER execution_attempted=true"; \
-	runner_dir="$(ORLIX_BUILD_ROOT)/OrlixKernel/kunit-run/$(PROFILE)"; \
-	tcti_dir="$(ORLIX_LINUX_OVERLAY)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti"; \
-	host_include="$$tcti_dir/tests/host_include"; \
-	runner="$$runner_dir/tcti_syscall_dispatch_smoke_runner"; \
-	hostcc="$(ORLIX_KERNEL_HOSTCC)"; \
-	mkdir -p "$$runner_dir"; \
-	"$$hostcc" -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
-		-DORLIX_TCTI_HOST_TEST_RUNNER=1 \
-		-I"$$host_include" -I"$$tcti_dir" \
-		-c "$$tcti_dir/decode_aarch64.c" \
-		-o "$$runner_dir/decode_aarch64.o"; \
-	"$$hostcc" -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
-		-DORLIX_TCTI_HOST_TEST_RUNNER=1 \
-		-I"$$host_include" -I"$$tcti_dir" \
-		-c "$$tcti_dir/tests/tcti_syscall_dispatch_smoke_runner.c" \
-		-o "$$runner_dir/tcti_syscall_dispatch_smoke_runner.o"; \
-	"$$hostcc" "$$runner_dir/tcti_syscall_dispatch_smoke_runner.o" \
-		"$$runner_dir/decode_aarch64.o" -o "$$runner"; \
-	set +e; "$$runner"; runner_rc=$$?; set -e; \
-	if [ $$runner_rc -eq 0 ]; then \
-		echo "ORLIX-KUNIT-RUNNER-END status=pass"; \
-	else \
-		echo "ORLIX-KUNIT-RUNNER-END status=fail"; \
-	fi; \
-	exit $$runner_rc
 
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \

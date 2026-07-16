@@ -43,7 +43,7 @@ final class ArchitectureInvariantTests: XCTestCase {
         let runtimeOverlayFiles = try sourceFiles(under: [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
-        ]).filter { !isTCTIHostSmokeRunner($0) }
+        ])
         let forbiddenIncludeFragments = [
             "<CoreFoundation/",
             "<Foundation/",
@@ -101,7 +101,7 @@ final class ArchitectureInvariantTests: XCTestCase {
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix",
             "OrlixKernel/Sources/ports/orlix/overlay/drivers/orlix"
         ]).filter {
-            !$0.path.contains("/tools/testing/selftests/") && !isTCTIHostSmokeRunner($0)
+            !$0.path.contains("/tools/testing/selftests/")
         }
 
         let clonedUAPIDefine = try NSRegularExpression(
@@ -192,6 +192,69 @@ final class ArchitectureInvariantTests: XCTestCase {
         )
     }
 
+    func testTCTIProductProfilesDisableNativeExecutionAndDebugOracle() throws {
+        let productProfiles = [
+            "OrlixKernel/Sources/ports/orlix/configs/release_defconfig",
+            "OrlixKernel/Sources/ports/orlix/configs/development_defconfig"
+        ]
+        let configDirectory = root.appendingPathComponent(
+            "OrlixKernel/Sources/ports/orlix/configs"
+        )
+        let observedProfiles = try FileManager.default
+            .contentsOfDirectory(atPath: configDirectory.path)
+            .filter { $0.hasSuffix("_defconfig") }
+            .sorted()
+
+        XCTAssertEqual(
+            observedProfiles,
+            ["development_defconfig", "release_defconfig"],
+            "kernel tests must not introduce a private product profile"
+        )
+
+        for relativePath in productProfiles {
+            let config = try String(contentsOf: root.appendingPathComponent(relativePath))
+
+            XCTAssertTrue(
+                config.contains("# CONFIG_ORLIX_HOSTED_EXEC_NATIVE is not set"),
+                "\(relativePath) must not enable direct native guest execution"
+            )
+            XCTAssertTrue(
+                config.contains("CONFIG_ORLIX_HOSTED_EXEC_TCTI=y"),
+                "\(relativePath) must use the TCTI hosted execution backend"
+            )
+            XCTAssertTrue(
+                config.contains("# CONFIG_ORLIX_TCTI_DEBUG_SWITCH is not set"),
+                "\(relativePath) must exclude the test-only switch debug oracle"
+            )
+        }
+    }
+
+    func testTCTIProductionSourcesDoNotRequestJITRWXOrHostX18() throws {
+        let files = try sourceFiles(under: [
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include/asm/tcti.h",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_user_page.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/mm/tcti_invalidate.c",
+            "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/kernel/hosted_exec.c",
+            "OrlixHostAdapter/Sources/OrlixHostAdapter/memory",
+            "OrlixHostAdapter/Sources/OrlixHostAdapter/runtime"
+        ]).filter { !$0.path.contains("/tests/") }
+        let forbiddenToken = try NSRegularExpression(
+            pattern: #"(?<![A-Za-z0-9_])(?:MAP_JIT|[wx]18)(?![A-Za-z0-9_])"#
+        )
+        let rwx = try NSRegularExpression(
+            pattern: #"(?:PROT_READ|VM_PROT_READ)[^;\n]*(?:PROT_WRITE|VM_PROT_WRITE)[^;\n]*(?:PROT_EXEC|VM_PROT_EXECUTE)"#
+        )
+
+        let hits = try matchingLines(in: files) { line in
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            return forbiddenToken.firstMatch(in: line, range: range) != nil
+                || rwx.firstMatch(in: line, range: range) != nil
+        }
+
+        XCTAssertTrue(hits.isEmpty, hits.joined(separator: "\n"))
+    }
+
     func testOrlixKernelDeviceTreesExposeVirtioFsHostFolderNode() throws {
         let deviceTreePaths = [
             "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/boot/dts/release.dts",
@@ -278,11 +341,6 @@ final class ArchitectureInvariantTests: XCTestCase {
             "pl"
         ]
         return allowedExtensions.contains(url.pathExtension) || url.lastPathComponent == "project.yml"
-    }
-
-    private func isTCTIHostSmokeRunner(_ url: URL) -> Bool {
-        url.path.contains("/hosted_exec/tcti/tests/")
-            && url.lastPathComponent.hasSuffix("_smoke_runner.c")
     }
 
     private func matchingLines(

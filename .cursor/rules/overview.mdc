@@ -1,3 +1,7 @@
+---
+globs: **/*
+---
+
 # AGENTS.md
 
 These rules apply to every task in this repository unless the user explicitly overrides them.

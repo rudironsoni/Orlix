@@ -3,7 +3,7 @@ type: epic
 tags:
   - epic
   - orlix-release
-updated: 2026-07-15
+updated: 2026-07-16
 status: doing
 summary: "Ship the signed Orlix application through the deterministic release harness and staged runtime proof order."
 targets:
@@ -22,7 +22,7 @@ depends_on:
 
 Ship the signed Orlix application through the deterministic release harness and staged runtime proof order: mobile terminal first, mobile container second, and native macOS third.
 
-Promotion follows L0 source and policy checks, L1 unit and reducer proof, L2 component integration, L3 complete simulator product validation, optional authorized L4 identical physical-device validation, and L5 archive, export, upload, and App Store Connect confirmation. A release claim requires one exact product identity and semantic fingerprint across every required tier.
+Promotion follows L0 source and policy checks, L1 owning unit and regression tests, L2 component integration, L3 complete simulator product validation, optional authorized L4 identical physical-device validation, and L5 archive, export, upload, and App Store Connect confirmation. A release claim requires one exact product identity and semantic fingerprint across every required tier.
 
 L3 and L4 exercise the same app-hosted capability contract for each staged release. The mobile terminal candidate covers application launch, OrlixOS payload and session, kernel boot, TCTI first syscall and stability, Linux console, BusyBox, OrlixMLibC, Coreutils, packages, loader, signals, VFS, interactive terminal behavior, userspace marker provenance, and clean exit. The later mobile container candidate adds OCI command execution and Docker behavior without weakening the terminal contract. A marker passes only when real Linux userspace emits it through the product session path. Harness text, argv diagnostics, and metadata cannot substitute.
 

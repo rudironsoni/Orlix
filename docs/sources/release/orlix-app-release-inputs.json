@@ -459,7 +459,7 @@
       "internal_invocation_allowed": {"ios": true, "ipados": true, "macos": false},
       "public_advertising_allowed": {"ios": false, "ipados": false, "macos": false},
       "action": "Complete the TCTI and ADR 0017 runtime ladder before claiming a local Linux terminal or Local Instance.",
-      "approval_requirements": ["tcti_runtime_readiness", "adr_0017_runtime_ladder", "public_distribution_approval"]
+      "approval_requirements": ["runtime_readiness", "adr_0017_runtime_ladder", "public_distribution_approval"]
     },
     {
       "id": "remote.tssh_forwarding_vpn",
@@ -536,8 +536,8 @@
       "platform_states": {"ios": "blocked", "ipados": "blocked", "macos": "deferred"},
       "internal_invocation_allowed": {"ios": false, "ipados": false, "macos": false},
       "public_advertising_allowed": {"ios": false, "ipados": false, "macos": false},
-      "action": "Complete current no-phone, simulator, and ADR 0017 runtime gates before implementing or advertising Local Instances.",
-      "approval_requirements": ["tcti_runtime_readiness", "adr_0017_runtime_ladder", "implementation", "public_distribution_approval"]
+      "action": "Complete the owning KUnit, kselftest, mlibc, Coreutils, HostAdapter, OrlixOS, app, simulator, and ADR 0017 runtime tiers before implementing or advertising Local Instances.",
+      "approval_requirements": ["runtime_readiness", "adr_0017_runtime_ladder", "implementation", "public_distribution_approval"]
     },
     {
       "id": "container.oci",

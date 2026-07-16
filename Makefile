@@ -34,12 +34,11 @@ ORLIX_XCODEBUILD_EXPORT ?= xcodebuild
 ORLIX_BETA_SIMULATOR_ID ?= ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3
 ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMULATOR_ID)
 ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
+ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
+ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-TCTI_GATE_SOURCE := tools/tcti/orlix-tcti-gate.swift
-TCTI_GATE_BIN := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate
-TCTI_GATE_BUILD_ID := $(ORLIX_BUILD_ROOT)/TCTI/bin/orlix-tcti-gate.build-id
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests tcti-gate-tool tcti-kernel-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate runtime-validation tcti-gate tcti-gate-list docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check agent-goal beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -52,6 +51,15 @@ help:
 	@printf '%s\n' '  OrlixMLibC/Makefile'
 	@printf '%s\n' '  OrlixOS/Makefile'
 	@printf '%s\n' '  Orlix/Makefile'
+	@printf '%s\n' ''
+	@printf '%s\n' 'Owning test suites:'
+	@printf '%s\n' '  tcti-kernel-tests run TCTI KUnit and app-hosted Linux kselftests'
+	@printf '%s\n' '  mlibc-tests         run the upstream mlibc suite through OrlixOS'
+	@printf '%s\n' '  coreutils-tests     run the upstream Coreutils suite through OrlixOS'
+	@printf '%s\n' '  hostadapter-tests   run private Darwin transport and memory tests'
+	@printf '%s\n' '  orlixos-tests       run OrlixOS unit tests'
+	@printf '%s\n' '  app-tests           run native Orlix app and UI tests'
+	@printf '%s\n' '  runtime-tests       run app-hosted OrlixOS runtime integration tests'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Beta targets:'
 	@printf '%s\n' '  beta-prerequisites  verify local TestFlight build prerequisites'
@@ -104,9 +112,9 @@ product-build-prepare:
 	if [ "$$needs_bump" = true ]; then \
 		next="$$((current + 1))"; \
 		perl -0pi -e 's/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*)[0-9]+([[:space:]]*)$$/$${1}'"$$next"'$${2}/m or die "CURRENT_PROJECT_VERSION not found\n"' project.yml; \
-		if [ "$${ORLIX_TCTI_HARNESS_QUIET:-0}" != 1 ]; then printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next for product input changes"; fi; \
+		printf '%s\n' "bumped CURRENT_PROJECT_VERSION $$current -> $$next for product input changes"; \
 	else \
-		if [ "$${ORLIX_TCTI_HARNESS_QUIET:-0}" != 1 ]; then printf '%s\n' "product version unchanged: CURRENT_PROJECT_VERSION=$$current"; fi; \
+		printf '%s\n' "product version unchanged: CURRENT_PROJECT_VERSION=$$current"; \
 	fi
 
 product-build-version-check: product-build-prepare
@@ -254,40 +262,83 @@ beta-simulator-gate: beta-prerequisites
 		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
 
-runtime-validation: product-build-version-check beta-prerequisites
-	@tools/runtime/orlix-runtime-validation.sh
-
-tcti-gate-tool:
-	@set -euo pipefail; \
-	mkdir -p "$(dir $(TCTI_GATE_BIN))"; \
-	build_id="$$( { shasum -a 256 "$(TCTI_GATE_SOURCE)"; swiftc --version 2>&1; } | shasum -a 256 | awk '{ print $$1 }')"; \
-	if [ -x "$(TCTI_GATE_BIN)" ] && [ -s "$(TCTI_GATE_BUILD_ID)" ] && [ "$$(cat "$(TCTI_GATE_BUILD_ID)")" = "$$build_id" ]; then \
-		printf '%s\n' "reusing TCTI gate tool: $(TCTI_GATE_BIN)" >&2; \
-	else \
-		tmp="$(TCTI_GATE_BIN).tmp"; \
-		swiftc "$(TCTI_GATE_SOURCE)" -o "$$tmp"; \
-		mv "$$tmp" "$(TCTI_GATE_BIN)"; \
-		printf '%s\n' "$$build_id" > "$(TCTI_GATE_BUILD_ID)"; \
-		printf '%s\n' "built TCTI gate tool: $(TCTI_GATE_BIN)" >&2; \
-	fi
-
-tcti-gate: tcti-gate-tool
-	@test -n "$(TARGET)" || { echo "TARGET is required. Run: make tcti-gate-list" >&2; exit 2; }
-	@"$(TCTI_GATE_BIN)" "$(TARGET)"
-
-tcti-gate-list: tcti-gate-tool
-	@"$(TCTI_GATE_BIN)" --list
-
-tcti-kernel-tests:
-	@$(KERNEL_MAKE) kunit-run PROFILE=tcti_runtime
+tcti-kernel-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixKernel Conformance" \
+		-configuration Debug \
+		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
+		ORLIX_PROFILE=development \
+		ORLIX_KERNEL_KUNIT=1 \
+		ORLIX_BUILD_ROOT='$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)' \
+		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		build-for-testing
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "OrlixKernel Conformance" \
 		-configuration Debug \
 		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
 		-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession \
-		ORLIX_PROFILE=tcti_runtime \
+		test-without-building
+
+mlibc-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixMLibC Conformance" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		ORLIX_PROFILE='$(PROFILE)' \
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		test
+
+coreutils-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixPackages Conformance" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		ORLIX_PROFILE='$(PROFILE)' \
+		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		test
+
+hostadapter-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixHostAdapter Tests" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		test
+
+orlixos-tests: xcodeproj console-policy-tests terminal-mux-tests
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixOS Tests" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		test
+
+app-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "Orlix App Tests" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		test
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixTestRunner Tests" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		-only-testing:OrlixTestRunnerTests/ArchitectureInvariantTests \
+		test
+
+runtime-tests: xcodeproj
+	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
+		-project Orlix.xcodeproj \
+		-scheme "OrlixRuntime Tests" \
+		-configuration Debug \
+		-destination '$(ORLIX_TEST_DESTINATION)' \
+		ORLIX_PROFILE='$(PROFILE)' \
 		test
 
 docs-check:
@@ -321,10 +372,6 @@ agent-next:
 agent-task-envelope-check:
 	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
 	@.agents/skills/orlix-tcti-next-step/scripts/task-envelope-check
-
-agent-goal:
-	@test "$(AREA)" = "orlix-tcti" || { echo "AREA=orlix-tcti required" >&2; exit 2; }
-	@.agents/skills/orlix-tcti-next-step/scripts/goal-loop
 
 beta-archive: beta-bump-build-number
 	@set -euo pipefail; \

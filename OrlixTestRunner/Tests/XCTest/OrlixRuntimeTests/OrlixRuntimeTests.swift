@@ -9,6 +9,11 @@ final class OrlixRuntimeTests: XCTestCase {
 
         XCTAssertTrue(output.contains("ORLIX_PTY_INPUT_OK"))
         XCTAssertTrue(output.contains("ORLIX_PTY_TTY_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SHELL_SIMPLE_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SHELL_PIPELINE_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SHELL_ENV_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SHELL_REDIRECTION_OK"))
+        XCTAssertTrue(output.contains("ORLIX_SHELL_SCRIPT_OK"))
         XCTAssertTrue(output.contains("ORLIX_PTY_DONE"))
         XCTAssertTrue(output.contains("/dev/pts/"))
     }
@@ -36,6 +41,11 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         #"""
         if command -v tty >/dev/null 2>&1; then tty; elif /bin/test -x /bin/tty; then /bin/tty; elif /bin/test -x /usr/bin/tty; then /usr/bin/tty; else printf '%s%s\n' ORLIX_PTY_ TTY_PATH_MISSING; fi
         """#,
+        #"printf '%s\n' ORLIX_SHELL_SIMPLE_OK"#,
+        #"printf '%s\n' alpha beta | { read first; read second; test \"$first:$second\" = alpha:beta; } && printf '%s\n' ORLIX_SHELL_PIPELINE_OK"#,
+        #"ORLIX_SHELL_VALUE=present; export ORLIX_SHELL_VALUE; test \"$ORLIX_SHELL_VALUE\" = present && printf '%s\n' ORLIX_SHELL_ENV_OK"#,
+        #"printf '%s\n' redirected > /tmp/orlix-shell-redirection; read redirected < /tmp/orlix-shell-redirection; test \"$redirected\" = redirected && printf '%s\n' ORLIX_SHELL_REDIRECTION_OK"#,
+        #"printf '%s\n' \"printf '%s\\n' ORLIX_SHELL_SCRIPT_OK\" > /tmp/orlix-shell-script.sh; /bin/sh /tmp/orlix-shell-script.sh"#,
         #"printf '%s%s\n' ORLIX_PTY_ DONE"#,
     ].joined(separator: "\r") + "\r"
 	private static let serialInitialScript = [
@@ -358,6 +368,15 @@ private final class OrlixPTYRuntimeProofRunner: @unchecked Sendable {
         }
         guard output.contains("/dev/pts/") else {
             throw OrlixPTYRuntimeProofError.missingPTYPath(output)
+        }
+        for marker in [
+            "ORLIX_SHELL_SIMPLE_OK",
+            "ORLIX_SHELL_PIPELINE_OK",
+            "ORLIX_SHELL_ENV_OK",
+            "ORLIX_SHELL_REDIRECTION_OK",
+            "ORLIX_SHELL_SCRIPT_OK",
+        ] where !output.contains(marker) {
+            throw OrlixPTYRuntimeProofError.missingMarker(marker)
         }
         guard output.contains(doneMarker) else {
             throw OrlixPTYRuntimeProofError.missingMarker(doneMarker)

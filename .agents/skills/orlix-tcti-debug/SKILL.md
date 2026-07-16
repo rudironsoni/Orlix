@@ -19,7 +19,7 @@ description: Orlix TCTI debug agent harness. Use for LLDB, disassembly, ELF, Mac
 ## Forbidden Scope
 
 - Do not mutate source while inspecting.
-- Do not update golden metadata without an oracle task.
+- Do not turn inspection output into a behavioral proof substitute.
 - Do not guess instruction encodings.
 - Do not use a custom Orlix MCP.
 

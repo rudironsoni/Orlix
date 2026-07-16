@@ -843,9 +843,6 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixRuntimeTests
-          selectedTests:
-            - OrlixRuntimeTests/testLinuxPTYCarriesInteractiveShellInputAndOutput
-            - OrlixRuntimeTests/testSerialConsolePolicyCarriesInteractiveTerminalAndResize
   "OrlixKernel Conformance":
     build:
       targets:

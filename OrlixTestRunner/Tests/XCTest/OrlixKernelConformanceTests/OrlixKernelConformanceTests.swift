@@ -108,6 +108,22 @@ final class OrlixKernelConformanceTests: XCTestCase {
         XCTAssertTrue(output.contains("pty_terminal_probe"))
         XCTAssertTrue(output.contains("Linux PTY master allocates"))
         XCTAssertTrue(output.contains("Linux PTY slave attaches"))
+        XCTAssertTrue(
+            output.contains(
+                "PTY slave raw line discipline preserves transport bytes"
+            )
+        )
+        XCTAssertTrue(
+            output.contains("PTY master input reaches slave unchanged")
+        )
+        XCTAssertTrue(
+            output.contains("PTY slave output reaches master unchanged")
+        )
+        XCTAssertTrue(
+            output.contains(
+                "PTY child stdin stdout and stderr attach to slave"
+            )
+        )
         XCTAssertTrue(output.contains("PTY master resize reaches slave"))
         XCTAssertTrue(output.contains("PTY slave resize reaches master"))
         XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
@@ -322,34 +338,12 @@ final class OrlixKernelConformanceTests: XCTestCase {
         XCTAssertTrue(
             output.contains("path errno fixture created through Linux VFS")
         )
-        XCTAssertTrue(output.contains("ORLIX-ORACLE-BEGIN path-errno"))
-        XCTAssertTrue(
-            output.contains(
-                #"{"operation":"open","path":"missing","errno":2"#
-            )
-        )
         XCTAssertTrue(output.contains("missing path returns ENOENT"))
-        XCTAssertTrue(
-            output.contains(
-                #"{"operation":"open","path":"regular/child","errno":20"#
-            )
-        )
         XCTAssertTrue(output.contains("non-directory child returns ENOTDIR"))
-        XCTAssertTrue(
-            output.contains(
-                #"{"operation":"stat","path":"loop-a","errno":40"#
-            )
-        )
         XCTAssertTrue(output.contains("symlink loop returns ELOOP"))
-        XCTAssertTrue(
-            output.contains(
-                #"{"operation":"stat","path":"regular/","errno":20"#
-            )
-        )
         XCTAssertTrue(
             output.contains("trailing slash on regular file returns ENOTDIR")
         )
-        XCTAssertTrue(output.contains("ORLIX-ORACLE-END path-errno"))
         XCTAssertTrue(output.contains("path errno fixture cleaned"))
         XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
     }
@@ -668,6 +662,9 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testKselftestRootfsCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernel)
 
+        XCTAssertTrue(output.contains("KTAP version 1"))
+        XCTAssertTrue(output.contains("orlix-tcti"))
+        XCTAssertFalse(output.contains("not ok"))
         XCTAssertTrue(output.contains("environment_entry_probe"))
         XCTAssertTrue(output.contains("environment entry child exited cleanly"))
         XCTAssertTrue(output.contains("mount_namespace_probe"))

@@ -79,8 +79,8 @@ Use Codex-native surfaces deliberately:
 Repository lifecycle hooks enforce only repo-wide workflow invariants. They must
 not select, authorize, or validate TCTI work, release readiness, physical-device
 work, or machine-specific Xcode storage. TCTI kernel correctness is validated by
-`make tcti-kernel-tests` through the KUnit build and executable workload runner,
-followed by Linux kselftest execution through the app-hosted TCTI kernel.
+`make tcti-kernel-tests` through KUnit and Linux kselftest execution inside the
+app-hosted TCTI kernel.
 
 ## Proof Rules
 

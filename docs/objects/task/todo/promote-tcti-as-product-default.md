@@ -3,9 +3,9 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-15
+updated: 2026-07-16
 status: todo
-summary: "Promote TCTI only after the real app-hosted Linux product path satisfies every gate."
+summary: "Promote TCTI only after every owning suite proves the real app-hosted Linux product path."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 depends_on:
