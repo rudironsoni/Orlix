@@ -1,0 +1,35 @@
+diff --git a/options/internal/generic/threads.cpp b/options/internal/generic/threads.cpp
+--- a/options/internal/generic/threads.cpp
++++ b/options/internal/generic/threads.cpp
+@@ -138,6 +138,13 @@ int thread_join(struct __mlibc_thread_data *thread, void *ret) {
+ 			mlibc::thread_testcancel();
+ 	}
+ 
++	while (auto tid = __atomic_load_n(&tcb->tid, __ATOMIC_ACQUIRE)) {
++		if (int e = sysdep<FutexWait>(&tcb->tid, tid, nullptr); e == EINTR)
++			mlibc::thread_testcancel();
++		else if (e && e != EAGAIN)
++			return e;
++	}
++
+ 	if(ret && tcb->returnValueType == TcbThreadReturnValue::Pointer)
+ 		*reinterpret_cast<void **>(ret) = tcb->returnValue.voidPtr;
+ 	else if(ret && tcb->returnValueType == TcbThreadReturnValue::Integer)
+diff --git a/sysdeps/linux/generic/sysdeps.cpp b/sysdeps/linux/generic/sysdeps.cpp
+--- a/sysdeps/linux/generic/sysdeps.cpp
++++ b/sysdeps/linux/generic/sysdeps.cpp
+@@ -219,4 +219,4 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *pid_out, void *stack) {
+ 	unsigned long flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
+ 		| CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS
+-		| CLONE_PARENT_SETTID;
++		| CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
+ 
+@@ -250,7 +250,7 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *pid_out, void *stack) {
+ 	tcb = reinterpret_cast<void *>(user_desc);
+ #endif
+ 
+-	auto ret = __mlibc_spawn_thread(flags, stack, pid_out, nullptr, tcb);
++	auto ret = __mlibc_spawn_thread(flags, stack, pid_out, pid_out, tcb);
+ 	if (ret < 0)
+ 		return ret;
+ 

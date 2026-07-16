@@ -5,6 +5,7 @@
 #include <linux/mman.h>
 #include <linux/sched/mm.h>
 #include <linux/syscalls.h>
+#include <asm/hosted_exec.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/unistd.h>
@@ -3003,6 +3004,21 @@ static void tcti_static_pie_initial_tls_uses_pt_tls(struct kunit *test)
 							     &phdr,
 							     &initial_tls));
 }
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+static void tcti_prepare_user_entry_accepts_pt_tls_alignment(struct kunit *test)
+{
+	unsigned long old_tls = current->thread.user_tls;
+	unsigned long initial_tls = ORLIX_HOSTED_USER_BASE + PAGE_SIZE + 4;
+
+	KUNIT_ASSERT_LT(test, initial_tls, ORLIX_HOSTED_STACK_TOP);
+	KUNIT_EXPECT_EQ(test, initial_tls,
+			orlix_hosted_prepare_user_entry(initial_tls));
+	KUNIT_EXPECT_EQ(test, initial_tls, current->thread.user_tls);
+
+	current->thread.user_tls = old_tls;
+}
+#endif
 
 static void tcti_block_cache_returns_cached_program(struct kunit *test)
 {
@@ -6191,6 +6207,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_resume_user_updates_guest_memory),
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	KUNIT_CASE(tcti_prepare_user_entry_accepts_pt_tls_alignment),
+#endif
 	KUNIT_CASE(tcti_block_cache_returns_cached_program),
 	KUNIT_CASE(tcti_gadget_program_executes_multiple_decoded_instructions),
 	KUNIT_CASE(tcti_gadget_program_executes_branch_register),

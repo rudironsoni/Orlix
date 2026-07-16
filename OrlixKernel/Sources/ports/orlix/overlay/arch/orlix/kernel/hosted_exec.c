@@ -229,8 +229,7 @@ static void orlix_hosted_restore_user_tls(void)
 static bool orlix_hosted_valid_user_tls(unsigned long user_tls)
 {
 	return user_tls >= ORLIX_HOSTED_USER_BASE &&
-		user_tls < ORLIX_HOSTED_STACK_TOP &&
-		!(user_tls & (sizeof(unsigned long) - 1));
+		user_tls < ORLIX_HOSTED_STACK_TOP;
 }
 
 static void orlix_hosted_preserve_captured_user_tls(unsigned long user_tls)

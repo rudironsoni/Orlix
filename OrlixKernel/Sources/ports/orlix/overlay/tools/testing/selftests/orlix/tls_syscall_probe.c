@@ -6,18 +6,16 @@
 
 #include "orlix_kselftest_user.h"
 
+#define TLS_COOKIE UINT64_C(0x4f524c4958544c53)
+
+static __thread volatile uintptr_t tls_cookie = TLS_COOKIE;
+
 static uintptr_t read_tls_register(void)
 {
 	uintptr_t value;
 
 	__asm__ volatile("mrs %0, tpidr_el0" : "=r"(value));
 	return value;
-}
-
-static bool has_hosted_user_tls_shape(uintptr_t value)
-{
-	return value >= UINT64_C(0x100000000) &&
-		value < UINT64_C(0x200000000);
 }
 
 int main(void)
@@ -36,8 +34,8 @@ int main(void)
 	pid = getpid();
 	after_getpid_tls = read_tls_register();
 
-	orlix_test_result(has_hosted_user_tls_shape(initial_tls),
-			  "mlibc starts with hosted userspace TLS");
+	orlix_test_result(initial_tls != 0 && tls_cookie == TLS_COOKIE,
+			  "mlibc starts with usable userspace TLS");
 	orlix_test_result(tid > 0, "gettid syscall returns a task id");
 	orlix_test_result(after_gettid_tls == initial_tls,
 			  "raw syscall preserves userspace TLS");
