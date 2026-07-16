@@ -92,11 +92,14 @@ int main(void)
 {
 	bool child_created;
 	bool device_read;
+	bool device_weight_written = false;
+	bool device_weight_visible = false;
 	char device[32];
 	char weight[64];
 	char max[64];
+	char qos[64];
 
-	orlix_test_plan(8);
+	orlix_test_plan(9);
 	orlix_test_result(file_contains(CGROUP_ROOT "/cgroup.controllers", "io"),
 			  "cgroup v2 reports io controller");
 	orlix_test_result(write_file(CGROUP_ROOT "/cgroup.subtree_control",
@@ -120,12 +123,31 @@ int main(void)
 	orlix_test_result(device_read, "writable state block device major:minor is readable");
 	if (device_read)
 		device_read = build_control_value(weight, sizeof(weight), device,
-						  "200") &&
-			      build_control_value(max, sizeof(max), device,
-						  "rbps=1048576");
+					  "200") &&
+			build_control_value(max, sizeof(max), device,
+					    "rbps=1048576") &&
+			build_control_value(qos, sizeof(qos), device,
+					    "enable=1");
+	orlix_test_result(device_read &&
+			  write_file(CGROUP_ROOT "/io.cost.qos", qos),
+			  "io.cost.qos enables per-device IO cost control");
+	if (child_created && device_read) {
+		errno = 0;
+		device_weight_written = write_file(CGROUP_CHILD "/io.weight",
+						  weight);
+		if (!device_weight_written)
+			orlix_test_comment_uint("io.weight write errno ",
+						(unsigned int)errno);
+		if (device_weight_written) {
+			device_weight_visible = file_contains(
+				CGROUP_CHILD "/io.weight", device);
+			if (!device_weight_visible)
+				orlix_test_comment("io.weight missing device ",
+						   device, orlix_strlen(device));
+		}
+	}
 	orlix_test_result(child_created && device_read &&
-				  write_file(CGROUP_CHILD "/io.weight", weight) &&
-				  file_contains(CGROUP_CHILD "/io.weight", device),
+			  device_weight_written && device_weight_visible,
 			  "io.weight accepts OCI blockIO device weight");
 	orlix_test_result(child_created && device_read &&
 				  write_file(CGROUP_CHILD "/io.max", max) &&

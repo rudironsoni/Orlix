@@ -18,18 +18,19 @@ diff --git a/options/internal/generic/threads.cpp b/options/internal/generic/thr
 diff --git a/sysdeps/linux/generic/sysdeps.cpp b/sysdeps/linux/generic/sysdeps.cpp
 --- a/sysdeps/linux/generic/sysdeps.cpp
 +++ b/sysdeps/linux/generic/sysdeps.cpp
-@@ -219,4 +219,4 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *pid_out, void *stack) {
+@@ -219,4 +219,5 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *pid_out, void *stack) {
  	unsigned long flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
  		| CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS
 -		| CLONE_PARENT_SETTID;
 +		| CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
++	auto child_tid = &reinterpret_cast<Tcb *>(tcb)->tid;
  
 @@ -250,7 +250,7 @@ int Sysdeps<Clone>::operator()(void *tcb, pid_t *pid_out, void *stack) {
  	tcb = reinterpret_cast<void *>(user_desc);
  #endif
  
 -	auto ret = __mlibc_spawn_thread(flags, stack, pid_out, nullptr, tcb);
-+	auto ret = __mlibc_spawn_thread(flags, stack, pid_out, pid_out, tcb);
++	auto ret = __mlibc_spawn_thread(flags, stack, pid_out, child_tid, tcb);
  	if (ret < 0)
  		return ret;
  

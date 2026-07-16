@@ -272,6 +272,14 @@ final class OrlixKernelConformanceTests: XCTestCase {
         XCTAssertFalse(output.contains("# exec /orlix/mount_namespace_probe"))
     }
 
+    func testCgroupIOProbeCompletesThroughOrlixOSTerminalSession() throws {
+        let output = try OrlixUpstreamXCTest.run(.kernelCgroupIO)
+
+        XCTAssertTrue(output.contains("cgroup_io_probe"))
+        XCTAssertTrue(output.contains("ORLIX-KSELFTEST-END"))
+        XCTAssertFalse(output.contains("not ok"))
+    }
+
     func testCgroupNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelCgroupNamespace)
 
@@ -461,6 +469,7 @@ final class OrlixKernelConformanceTests: XCTestCase {
     }
 
     func testVirtioFSMountProbeSpecUsesHostDirectoryFixture() {
+        XCTAssertTrue(OrlixUpstreamTestRunSpec.kernel.hostDirectoryFixture)
         XCTAssertTrue(OrlixUpstreamTestRunSpec.kernelVirtioFSMount.hostDirectoryFixture)
         XCTAssertFalse(OrlixUpstreamTestRunSpec.kernelVirtioMMIOContract.hostDirectoryFixture)
         XCTAssertFalse(OrlixUpstreamTestRunSpec.kernelVirtioNetDevice.hostDirectoryFixture)

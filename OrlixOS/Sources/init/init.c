@@ -796,6 +796,24 @@ static const char *cgroup_controller_for_file(const char *file)
 	return NULL;
 }
 
+static void enable_cgroup_iocost_for_weight(const char *value)
+{
+	char qos[ORLIX_INIT_CGROUP_VALUE_SIZE + 16];
+	const char *separator = strchr(value, ' ');
+	size_t device_length;
+
+	if (separator == NULL)
+		return;
+	device_length = (size_t)(separator - value);
+	if (device_length == 0 || memchr(value, ':', device_length) == NULL)
+		return;
+	if (device_length + sizeof(" enable=1") > sizeof(qos))
+		die("cgroup io cost configuration too long");
+	memcpy(qos, value, device_length);
+	memcpy(qos + device_length, " enable=1", sizeof(" enable=1"));
+	write_cgroup_control("/sys/fs/cgroup", "io.cost.qos", qos);
+}
+
 static void apply_cgroup_unified_entry(const char *path, const char *file,
 				       const char *value)
 {
@@ -815,6 +833,8 @@ static void apply_cgroup_unified_entry(const char *path, const char *file,
 	    (int)sizeof(directory))
 		die("cgroups path too long");
 	enable_cgroup_controller(path, controller);
+	if (strcmp(file, "io.weight") == 0)
+		enable_cgroup_iocost_for_weight(value);
 	if (ensure_dir_recursive(directory, 0755) != 0)
 		die("create cgroup path");
 	write_cgroup_control(directory, file, value);

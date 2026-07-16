@@ -162,9 +162,13 @@ static bool default_test_is_runnable(const char *name, size_t name_len)
 {
 	static const char crossboot_verify[] =
 		"environment_state_crossboot_verify_probe";
+	static const char oci_prefix[] = "oci_";
 
 	if (selected_test[0])
 		return true;
+	if (name_len >= sizeof(oci_prefix) - 1 &&
+	    orlix_memcmp(name, oci_prefix, sizeof(oci_prefix) - 1) == 0)
+		return false;
 	return name_len != sizeof(crossboot_verify) - 1 ||
 	       orlix_memcmp(name, crossboot_verify, name_len) != 0;
 }

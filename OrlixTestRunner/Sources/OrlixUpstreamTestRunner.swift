@@ -78,7 +78,8 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-KSELFTEST-END",
         expectedCoreutilsTotal: nil,
         timeout: 300,
-        kernelCommandLineSuffix: nil
+        kernelCommandLineSuffix: nil,
+        hostDirectoryFixture: true
     )
 
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
@@ -183,6 +184,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=cgroup_v2_probe"
+    )
+
+    static let kernelCgroupIO = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        expectedCoreutilsTotal: nil,
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=cgroup_io_probe"
     )
 
     static let kernelCgroupPids = OrlixUpstreamTestRunSpec(
