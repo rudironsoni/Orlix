@@ -2742,6 +2742,149 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_high;
 	u8 lane;
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ABS &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RBIT) {
+		u64 source[2];
+		u64 result[2] = {};
+		u8 operation = decoded->simd_arithmetic_op - TCTI_SIMD_ARITH_ABS;
+		bool saturated = false;
+
+		if (decoded->result_size != sizeof(u64) &&
+		    decoded->result_size != 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		if (operation >= TCTI_SIMD_ARITH_REV64 - TCTI_SIMD_ARITH_ABS) {
+			u8 byte;
+
+			for (byte = 0; byte < decoded->result_size; byte++) {
+				u8 source_word = byte / sizeof(u64);
+				u8 source_shift = (byte % sizeof(u64)) * 8;
+				u8 value = source[source_word] >> source_shift;
+				u8 destination_byte = byte;
+
+				switch (decoded->simd_arithmetic_op) {
+				case TCTI_SIMD_ARITH_REV64:
+				case TCTI_SIMD_ARITH_REV32: {
+					u8 group_size = decoded->simd_arithmetic_op ==
+						TCTI_SIMD_ARITH_REV64 ? 8 : 4;
+					u8 group_offset = byte & (group_size - 1);
+					u8 element_offset = group_offset %
+						decoded->access_size;
+
+					destination_byte = (byte & ~(group_size - 1)) +
+						group_size - decoded->access_size -
+						(group_offset / decoded->access_size) *
+						decoded->access_size + element_offset;
+					break;
+				}
+				case TCTI_SIMD_ARITH_REV16:
+					destination_byte = byte ^ 1U;
+					break;
+				case TCTI_SIMD_ARITH_CNT:
+					value = hweight8(value);
+					break;
+				case TCTI_SIMD_ARITH_NOT:
+					value = ~value;
+					break;
+				default: {
+					u8 reversed = 0;
+					u8 bit;
+
+					for (bit = 0; bit < 8; bit++)
+						reversed |= ((value >> bit) & 1U) <<
+							(7U - bit);
+					value = reversed;
+					break;
+				}
+				}
+
+				result[destination_byte / sizeof(u64)] |=
+					(u64)value <<
+					((destination_byte % sizeof(u64)) * 8);
+			}
+		} else {
+			u8 lane_count;
+			u8 bits;
+			u64 mask;
+
+			if (decoded->access_size != sizeof(u8) &&
+			    decoded->access_size != sizeof(u16) &&
+			    decoded->access_size != sizeof(u32) &&
+			    decoded->access_size != sizeof(u64))
+				return -EOPNOTSUPP;
+
+			bits = decoded->access_size * 8;
+			mask = GENMASK_ULL(bits - 1, 0);
+			lane_count = decoded->result_size / decoded->access_size;
+			for (lane = 0; lane < lane_count; lane++) {
+				u8 byte = lane * decoded->access_size;
+				u8 word = byte / sizeof(u64);
+				u8 shift = (byte % sizeof(u64)) * 8;
+				u64 value = (source[word] >> shift) & mask;
+				u64 lane_result = 0;
+
+				switch (decoded->simd_arithmetic_op) {
+				case TCTI_SIMD_ARITH_ABS:
+					lane_result = value & BIT_ULL(bits - 1) ?
+						(-value & mask) : value;
+					break;
+				case TCTI_SIMD_ARITH_NEG:
+					lane_result = -value & mask;
+					break;
+				case TCTI_SIMD_ARITH_SQABS:
+					if (value == BIT_ULL(bits - 1)) {
+						lane_result = BIT_ULL(bits - 1) - 1;
+						saturated = true;
+					} else {
+						lane_result = value & BIT_ULL(bits - 1) ?
+							(-value & mask) : value;
+					}
+					break;
+				case TCTI_SIMD_ARITH_SQNEG:
+					if (value == BIT_ULL(bits - 1)) {
+						lane_result = BIT_ULL(bits - 1) - 1;
+						saturated = true;
+					} else {
+						lane_result = -value & mask;
+					}
+					break;
+				case TCTI_SIMD_ARITH_CLS: {
+					bool sign = value & BIT_ULL(bits - 1);
+					int bit;
+
+					for (bit = bits - 2; bit >= 0; bit--) {
+						if (!!(value & BIT_ULL(bit)) != sign)
+							break;
+						lane_result++;
+					}
+					break;
+				}
+				default: {
+					int bit;
+
+					for (bit = bits - 1; bit >= 0; bit--) {
+						if (value & BIT_ULL(bit))
+							break;
+						lane_result++;
+					}
+					break;
+				}
+				}
+
+				result[word] |= (lane_result & mask) << shift;
+			}
+		}
+
+		if (saturated)
+			current->thread.user_fpsr |= AARCH64_FPSR_QC;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USRA) {
 		u64 source_low;
 		u64 source_high;
