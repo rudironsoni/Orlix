@@ -2917,6 +2917,66 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SADDL &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_USUBL) {
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		u8 wide_size = decoded->access_size * 2;
+		u8 lane_count;
+		u8 operation = decoded->simd_arithmetic_op -
+			TCTI_SIMD_ARITH_SADDL;
+		bool is_unsigned = operation & 1U;
+		bool subtract = operation & 2U;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    (decoded->simd_source_index != 0 &&
+		     decoded->simd_source_index !=
+			sizeof(u64) / decoded->access_size))
+			return -EOPNOTSUPP;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		lane_count = decoded->result_size / wide_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_lane = decoded->simd_source_index + lane;
+			u8 source_byte = source_lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u8 result_byte = lane * wide_size;
+			u8 result_word = result_byte / sizeof(u64);
+			u8 result_shift = (result_byte % sizeof(u64)) * 8;
+			u64 narrow_mask =
+				GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			u64 wide_mask = GENMASK_ULL(wide_size * 8 - 1, 0);
+			u64 left_lane =
+				(left[source_word] >> source_shift) & narrow_mask;
+			u64 right_lane =
+				(right[source_word] >> source_shift) & narrow_mask;
+			u64 extended_left = is_unsigned ? left_lane :
+				sign_extend64(left_lane,
+					decoded->access_size * 8 - 1);
+			u64 extended_right = is_unsigned ? right_lane :
+				sign_extend64(right_lane,
+					decoded->access_size * 8 - 1);
+			u64 lane_result = subtract ?
+				extended_left - extended_right :
+				extended_left + extended_right;
+
+			result[result_word] |=
+				(lane_result & wide_mask) << result_shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if ((decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_ADD &&
 	     decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_SUB) ||
 	    (decoded->access_size != sizeof(u8) &&
