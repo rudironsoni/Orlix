@@ -82,12 +82,8 @@
 #define AARCH64_SIMD_EXT_PATTERN 0x2e000000U
 #define AARCH64_SIMD_DUP_GPR_MASK 0xbfe0fc00U
 #define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
-#define AARCH64_SIMD_AND_8B_MASK 0xff20fc00U
-#define AARCH64_SIMD_AND_8B_PATTERN 0x0e201c00U
-#define AARCH64_SIMD_AND_16B_MASK 0xff20fc00U
-#define AARCH64_SIMD_AND_16B_PATTERN 0x4e201c00U
-#define AARCH64_SIMD_BIT_8B_MASK 0xff20fc00U
-#define AARCH64_SIMD_BIT_8B_PATTERN 0x2e201c00U
+#define AARCH64_SIMD_VECTOR_LOGICAL_MASK 0x9f20fc00U
+#define AARCH64_SIMD_VECTOR_LOGICAL_PATTERN 0x0e201c00U
 #define AARCH64_SIMD_ADD_MASK 0xff20fc00U
 #define AARCH64_SIMD_ADD_PATTERN 0x4e208400U
 #define AARCH64_SIMD_SUB_MASK 0xff20fc00U
@@ -1387,42 +1383,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_AND_8B_MASK) ==
-	    AARCH64_SIMD_AND_8B_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.logical_op = TCTI_LOGICAL_AND;
-		return decoded;
-	}
+	if ((instruction & AARCH64_SIMD_VECTOR_LOGICAL_MASK) ==
+	    AARCH64_SIMD_VECTOR_LOGICAL_PATTERN) {
+		u8 operation = ((instruction >> 22) & 0x3U) |
+			       ((instruction >> 27) & 0x4U);
 
-	if ((instruction & AARCH64_SIMD_AND_16B_MASK) ==
-	    AARCH64_SIMD_AND_16B_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = instruction & BIT(30) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
-		decoded.logical_op = TCTI_LOGICAL_AND;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_BIT_8B_MASK) ==
-	    AARCH64_SIMD_BIT_8B_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.logical_op = TCTI_LOGICAL_BIT;
+		decoded.logical_op = operation;
 		return decoded;
 	}
 

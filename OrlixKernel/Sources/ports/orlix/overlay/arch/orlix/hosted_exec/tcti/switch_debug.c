@@ -2520,10 +2520,10 @@ static int tcti_execute_simd_vector_logical(
 	u64 right_high;
 	u64 destination_low;
 	u64 destination_high;
-	u8 lane;
+	u64 result_low;
+	u64 result_high;
 
-	if ((decoded->logical_op != TCTI_LOGICAL_AND &&
-	     decoded->logical_op != TCTI_LOGICAL_BIT) ||
+	if (decoded->logical_op > TCTI_LOGICAL_BIF ||
 	    (decoded->access_size != sizeof(u64) &&
 	     decoded->access_size != 2 * sizeof(u64)))
 		return -EOPNOTSUPP;
@@ -2532,21 +2532,57 @@ static int tcti_execute_simd_vector_logical(
 	left_high = current->thread.user_simd[decoded->rn * 2 + 1];
 	right_low = current->thread.user_simd[decoded->rm * 2];
 	right_high = current->thread.user_simd[decoded->rm * 2 + 1];
-	if (decoded->logical_op == TCTI_LOGICAL_BIT) {
+	if (decoded->logical_op >= TCTI_LOGICAL_BSL) {
 		destination_low = current->thread.user_simd[decoded->rd * 2];
 		destination_high =
 			current->thread.user_simd[decoded->rd * 2 + 1];
-		tcti_write_simd_fp_register(
-			decoded->rd, decoded->access_size,
-			(destination_low & ~right_low) | (left_low & right_low),
-			(destination_high & ~right_high) |
-				(left_high & right_high));
-		regs->pc += sizeof(u32);
-		return 0;
 	}
+
+	switch (decoded->logical_op) {
+	case TCTI_LOGICAL_AND:
+		result_low = left_low & right_low;
+		result_high = left_high & right_high;
+		break;
+	case TCTI_LOGICAL_BIC:
+		result_low = left_low & ~right_low;
+		result_high = left_high & ~right_high;
+		break;
+	case TCTI_LOGICAL_ORR:
+		result_low = left_low | right_low;
+		result_high = left_high | right_high;
+		break;
+	case TCTI_LOGICAL_ORN:
+		result_low = left_low | ~right_low;
+		result_high = left_high | ~right_high;
+		break;
+	case TCTI_LOGICAL_EOR:
+		result_low = left_low ^ right_low;
+		result_high = left_high ^ right_high;
+		break;
+	case TCTI_LOGICAL_BSL:
+		result_low = (left_low & destination_low) |
+			     (right_low & ~destination_low);
+		result_high = (left_high & destination_high) |
+			      (right_high & ~destination_high);
+		break;
+	case TCTI_LOGICAL_BIT:
+		result_low = (destination_low & ~right_low) |
+			     (left_low & right_low);
+		result_high = (destination_high & ~right_high) |
+			      (left_high & right_high);
+		break;
+	case TCTI_LOGICAL_BIF:
+		result_low = (destination_low & right_low) |
+			     (left_low & ~right_low);
+		result_high = (destination_high & right_high) |
+			      (left_high & ~right_high);
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
 	tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
-				    left_low & right_low,
-				    left_high & right_high);
+				    result_low, result_high);
 	regs->pc += sizeof(u32);
 	return 0;
 }

@@ -59,9 +59,13 @@ enum tcti_memory_index_mode {
 
 enum tcti_logical_op {
 	TCTI_LOGICAL_AND = 0,
+	TCTI_LOGICAL_BIC,
 	TCTI_LOGICAL_ORR,
+	TCTI_LOGICAL_ORN,
 	TCTI_LOGICAL_EOR,
+	TCTI_LOGICAL_BSL,
 	TCTI_LOGICAL_BIT,
+	TCTI_LOGICAL_BIF,
 };
 
 enum tcti_simd_modified_immediate_op {

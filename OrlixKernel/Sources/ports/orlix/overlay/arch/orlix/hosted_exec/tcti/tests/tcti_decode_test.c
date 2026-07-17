@@ -1786,6 +1786,37 @@ tcti_decode_recognizes_complete_simd_shift_left_long_family(struct kunit *test)
 			tcti_decode_aarch64(0x0f40a400U).decode_class);
 }
 
+static void
+tcti_decode_recognizes_complete_simd_vector_logical_family(struct kunit *test)
+{
+	u8 operation;
+	u8 q;
+
+	for (operation = 0; operation < 8; operation++) {
+		for (q = 0; q < 2; q++) {
+			u32 instruction = 0x0e201c00U |
+				(operation >= 4 ? BIT(29) : 0) |
+				((u32)(operation & 0x3U) << 22) |
+				(q ? BIT(30) : 0) | (2U << 16) |
+				(1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_LOGICAL,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+			KUNIT_EXPECT_EQ(test, q ? 16U : 8U,
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test, q ? 16U : 8U,
+					decoded.result_size);
+			KUNIT_EXPECT_EQ(test, operation, decoded.logical_op);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		}
+	}
+}
+
 static void tcti_decode_recognizes_simd_and_16b(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -5198,6 +5229,119 @@ static void tcti_switch_executes_simd_mov_d1_d0(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x850cULL, regs.pc);
 }
 
+static void
+tcti_switch_executes_complete_simd_vector_logical_family(struct kunit *test)
+{
+	static const enum tcti_logical_op operations[] = {
+		TCTI_LOGICAL_AND, TCTI_LOGICAL_BIC,
+		TCTI_LOGICAL_ORR, TCTI_LOGICAL_ORN,
+		TCTI_LOGICAL_EOR, TCTI_LOGICAL_BSL,
+		TCTI_LOGICAL_BIT, TCTI_LOGICAL_BIF,
+	};
+	const u64 left[2] = {
+		0x0f0ff0f055aa55aaULL, 0x123456789abcdef0ULL,
+	};
+	const u64 right[2] = {
+		0x33cc33cca5a5a5a5ULL, 0xfedcba9876543210ULL,
+	};
+	const u64 destination[2] = {
+		0xaa55aa553c3cc3c3ULL, 0x0ff00ff0aa55aa55ULL,
+	};
+	struct pt_regs regs = {};
+	size_t index;
+
+	regs.pc = 0x8470;
+	for (index = 0; index < ARRAY_SIZE(operations); index++) {
+		struct tcti_decoded_instruction decoded;
+		u64 expected[2];
+		u32 instruction = 0x0e201c00U |
+			(index >= 4 ? BIT(29) : 0) |
+			((u32)(index & 0x3U) << 22) | BIT(30) |
+			(2U << 16) | (1U << 5);
+		int ret;
+
+		current->thread.user_simd[0] = destination[0];
+		current->thread.user_simd[1] = destination[1];
+		current->thread.user_simd[2] = left[0];
+		current->thread.user_simd[3] = left[1];
+		current->thread.user_simd[4] = right[0];
+		current->thread.user_simd[5] = right[1];
+		current->thread.user_simd_valid = 0;
+
+		switch (operations[index]) {
+		case TCTI_LOGICAL_AND:
+			expected[0] = left[0] & right[0];
+			expected[1] = left[1] & right[1];
+			break;
+		case TCTI_LOGICAL_BIC:
+			expected[0] = left[0] & ~right[0];
+			expected[1] = left[1] & ~right[1];
+			break;
+		case TCTI_LOGICAL_ORR:
+			expected[0] = left[0] | right[0];
+			expected[1] = left[1] | right[1];
+			break;
+		case TCTI_LOGICAL_ORN:
+			expected[0] = left[0] | ~right[0];
+			expected[1] = left[1] | ~right[1];
+			break;
+		case TCTI_LOGICAL_EOR:
+			expected[0] = left[0] ^ right[0];
+			expected[1] = left[1] ^ right[1];
+			break;
+		case TCTI_LOGICAL_BSL:
+			expected[0] = (left[0] & destination[0]) |
+				      (right[0] & ~destination[0]);
+			expected[1] = (left[1] & destination[1]) |
+				      (right[1] & ~destination[1]);
+			break;
+		case TCTI_LOGICAL_BIT:
+			expected[0] = (destination[0] & ~right[0]) |
+				      (left[0] & right[0]);
+			expected[1] = (destination[1] & ~right[1]) |
+				      (left[1] & right[1]);
+			break;
+		case TCTI_LOGICAL_BIF:
+			expected[0] = (destination[0] & right[0]) |
+				      (left[0] & ~right[0]);
+			expected[1] = (destination[1] & right[1]) |
+				      (left[1] & ~right[1]);
+			break;
+		default:
+			KUNIT_FAIL(test, "unexpected vector logical operation");
+			return;
+		}
+
+		decoded = tcti_decode_aarch64(instruction);
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+							&decoded, NULL);
+
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, expected[0],
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, expected[1],
+				current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test, 0x8474ULL + index * 2 * sizeof(u32),
+				regs.pc);
+
+		current->thread.user_simd[0] = destination[0];
+		current->thread.user_simd[1] = destination[1];
+		current->thread.user_simd_valid = 0;
+		decoded = tcti_decode_aarch64(instruction & ~BIT(30));
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+							&decoded, NULL);
+
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, expected[0],
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test, 0x8478ULL + index * 2 * sizeof(u32),
+				regs.pc);
+	}
+}
+
 static void tcti_switch_executes_simd_and_16b(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -7183,6 +7327,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_xtn_4h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ushll_8h),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_left_long_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_vector_logical_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_and_16b),
 	KUNIT_CASE(tcti_decode_recognizes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_decode_recognizes_simd_cmeq_4s),
@@ -7281,6 +7426,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_dup_2d_gpr),
 	KUNIT_CASE(tcti_switch_executes_simd_mov_d1_d0),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_xtn_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_vector_logical_family),
 	KUNIT_CASE(tcti_switch_executes_simd_and_16b),
 	KUNIT_CASE(tcti_switch_executes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_switch_executes_simd_cmeq_4s),
