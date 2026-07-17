@@ -2218,6 +2218,52 @@ static void tcti_decode_recognizes_complete_simd_umov_family(struct kunit *test)
 			tcti_decode_aarch64(0x4e013c00U).decode_class);
 }
 
+static void
+tcti_decode_recognizes_complete_simd_ins_gpr_family(struct kunit *test)
+{
+	static const u8 access_sizes[] = {
+		sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64),
+	};
+	size_t size_index;
+
+	for (size_index = 0; size_index < ARRAY_SIZE(access_sizes);
+	     size_index++) {
+		u8 access_size = access_sizes[size_index];
+		u8 lane_shift = __builtin_ctz((unsigned int)access_size);
+		u8 lane_count = 16 / access_size;
+		u8 lane;
+
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 imm5 = (lane << (lane_shift + 1)) |
+				  BIT(lane_shift);
+			u32 instruction = 0x4e001c00U |
+				((u32)imm5 << 16) | (4U << 5) | 5U;
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ(test,
+				TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 5U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 4U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, access_size,
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test, access_size,
+					decoded.result_size);
+			KUNIT_EXPECT_EQ(test, lane,
+					decoded.simd_destination_index);
+			KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_INS_GPR,
+					decoded.simd_element_move_op);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x4e001c00U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x4e101c00U).decode_class);
+}
+
 static void tcti_decode_recognizes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -5589,6 +5635,55 @@ static void tcti_switch_executes_complete_simd_umov_family(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8834ULL, regs.pc);
 }
 
+static void
+tcti_switch_executes_complete_simd_ins_gpr_family(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[0] = 0x7766554433221100ULL;
+	current->thread.user_simd[1] = 0xffeeddccbbaa9988ULL;
+	current->thread.user_simd_valid = 0;
+	regs.regs[8] = 0x0123456789abcdefULL;
+	regs.pc = 0x8838;
+
+	decoded = tcti_decode_aarch64(0x4e1f1d00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7766554433221100ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0xefeeddccbbaa9988ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 0x883cULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x4e1e1d00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xcdefddccbbaa9988ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 0x8840ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x4e1c1d00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x89abcdefbbaa9988ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 0x8844ULL, regs.pc);
+
+	decoded = tcti_decode_aarch64(0x4e181d00U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8848ULL, regs.pc);
+}
+
 static void tcti_switch_executes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -7039,6 +7134,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h1),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_x_d1),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_umov_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_ins_gpr_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4h),
@@ -7133,6 +7229,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_x_d1),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_umov_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_ins_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4h),
