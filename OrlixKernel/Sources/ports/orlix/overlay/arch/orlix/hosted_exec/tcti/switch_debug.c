@@ -2342,7 +2342,8 @@ static int tcti_execute_simd_vector_element_move(
 		return 0;
 	}
 
-	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_USHLL) {
+	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_SSHLL ||
+	    decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_USHLL) {
 		u64 low = 0;
 		u64 high = 0;
 		u8 lane_count;
@@ -2365,6 +2366,8 @@ static int tcti_execute_simd_vector_element_move(
 			u8 dest_word = dest_byte / sizeof(u64);
 			u8 dest_shift = (dest_byte % sizeof(u64)) * 8;
 			u64 widened;
+			u64 destination_mask =
+				GENMASK_ULL(decoded->access_size * 16 - 1, 0);
 
 			if (source_byte + decoded->access_size >
 			    2 * sizeof(u64))
@@ -2372,7 +2375,13 @@ static int tcti_execute_simd_vector_element_move(
 
 			widened = (current->thread.user_simd[decoded->rn * 2 +
 				   source_word] >> source_shift) &
-				  GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+				   GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			if (decoded->simd_element_move_op ==
+			    TCTI_SIMD_ELEMENT_MOVE_SSHLL)
+				widened = sign_extend64(widened,
+						 decoded->access_size * 8 - 1);
+			widened = (widened << decoded->shift_amount) &
+				  destination_mask;
 			if (dest_word)
 				high |= widened << dest_shift;
 			else
