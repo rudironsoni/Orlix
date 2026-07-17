@@ -3574,6 +3574,68 @@ static int tcti_execute_simd_vector_compare(
 	u64 high = 0;
 	u8 lane;
 
+	if (!decoded->immediate &&
+	    decoded->simd_compare_op >= TCTI_SIMD_COMPARE_CMEQ &&
+	    decoded->simd_compare_op <= TCTI_SIMD_COMPARE_CMHS) {
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
+			return -EOPNOTSUPP;
+
+		for (lane = 0;
+		     lane < decoded->result_size / decoded->access_size; lane++) {
+			u8 lane_bits = decoded->access_size * 8;
+			u8 byte_offset = lane * decoded->access_size;
+			u8 word = byte_offset / sizeof(u64);
+			u8 shift = (byte_offset % sizeof(u64)) * 8;
+			u64 mask = GENMASK_ULL(lane_bits - 1, 0);
+			u64 left =
+				(current->thread.user_simd[decoded->rn * 2 + word] >>
+				 shift) & mask;
+			u64 right =
+				(current->thread.user_simd[decoded->rm * 2 + word] >>
+				 shift) & mask;
+			bool matches;
+
+			switch (decoded->simd_compare_op) {
+			case TCTI_SIMD_COMPARE_CMTST:
+				matches = (left & right) != 0;
+				break;
+			case TCTI_SIMD_COMPARE_CMEQ:
+				matches = left == right;
+				break;
+			case TCTI_SIMD_COMPARE_CMGT:
+				matches = sign_extend64(left, lane_bits - 1) >
+					sign_extend64(right, lane_bits - 1);
+				break;
+			case TCTI_SIMD_COMPARE_CMHI:
+				matches = left > right;
+				break;
+			case TCTI_SIMD_COMPARE_CMGE:
+				matches = sign_extend64(left, lane_bits - 1) >=
+					sign_extend64(right, lane_bits - 1);
+				break;
+			case TCTI_SIMD_COMPARE_CMHS:
+				matches = left >= right;
+				break;
+			default:
+				return -EOPNOTSUPP;
+			}
+			if (word)
+				high |= (matches ? mask : 0) << shift;
+			else
+				low |= (matches ? mask : 0) << shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			low, high);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_compare_op == TCTI_SIMD_COMPARE_CMHI) {
 		u64 left_low;
 		u64 left_high;

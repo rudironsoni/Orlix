@@ -201,6 +201,10 @@ enum tcti_simd_vector_arithmetic_op {
 enum tcti_simd_vector_compare_op {
 	TCTI_SIMD_COMPARE_CMEQ = 0,
 	TCTI_SIMD_COMPARE_CMHI,
+	TCTI_SIMD_COMPARE_CMTST,
+	TCTI_SIMD_COMPARE_CMGT,
+	TCTI_SIMD_COMPARE_CMGE,
+	TCTI_SIMD_COMPARE_CMHS,
 };
 
 enum tcti_fp_scalar_move_op {

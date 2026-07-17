@@ -120,6 +120,8 @@
 #define AARCH64_SIMD_SHIFT_BY_REGISTER_PATTERN 0x0e204400U
 #define AARCH64_SIMD_CMEQ_MASK 0xbf20fc00U
 #define AARCH64_SIMD_CMEQ_PATTERN 0x2e208c00U
+#define AARCH64_SIMD_THREE_SAME_MASK 0x9f200400U
+#define AARCH64_SIMD_THREE_SAME_PATTERN 0x0e200400U
 #define AARCH64_SIMD_CMEQ_ZERO_4S_MASK 0xfffffc00U
 #define AARCH64_SIMD_CMEQ_ZERO_4S_PATTERN 0x4ea09800U
 #define AARCH64_SIMD_CMEQ_4S_MASK 0xffe0fc00U
@@ -1729,6 +1731,40 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_THREE_SAME_PATTERN) {
+		u8 opcode = (instruction >> 11) & 0x1fU;
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+		bool u = instruction & BIT(29);
+		enum tcti_simd_vector_compare_op operation;
+
+		if (opcode == 6)
+			operation = u ? TCTI_SIMD_COMPARE_CMHI :
+				TCTI_SIMD_COMPARE_CMGT;
+		else if (opcode == 7)
+			operation = u ? TCTI_SIMD_COMPARE_CMHS :
+				TCTI_SIMD_COMPARE_CMGE;
+		else if (opcode == 17)
+			operation = u ? TCTI_SIMD_COMPARE_CMEQ :
+				TCTI_SIMD_COMPARE_CMTST;
+		else
+			goto not_simd_compare_register;
+
+		if (!q && size == 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_COMPARE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_compare_op = operation;
+		return decoded;
+	}
+not_simd_compare_register:
 	if ((instruction & AARCH64_SIMD_CMEQ_MASK) ==
 	    AARCH64_SIMD_CMEQ_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
