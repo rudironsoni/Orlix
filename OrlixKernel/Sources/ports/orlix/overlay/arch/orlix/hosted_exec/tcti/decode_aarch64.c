@@ -110,6 +110,9 @@
 #define AARCH64_SIMD_MIN_MAX_PATTERN 0x0e206400U
 #define AARCH64_SIMD_ABSOLUTE_DIFFERENCE_MASK 0x9f20f400U
 #define AARCH64_SIMD_ABSOLUTE_DIFFERENCE_PATTERN 0x0e207400U
+#define AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_MASK 0x9f20fc00U
+#define AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_PATTERN 0x0e207000U
+#define AARCH64_SIMD_ABSOLUTE_DIFFERENCE_ACCUMULATE_LONG_PATTERN 0x0e205000U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
@@ -1672,6 +1675,32 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SMAX + operation;
 		return decoded;
 	}
+	if ((instruction & AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_MASK) ==
+	    AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_PATTERN ||
+	    (instruction & AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_MASK) ==
+	    AARCH64_SIMD_ABSOLUTE_DIFFERENCE_ACCUMULATE_LONG_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		u8 operation =
+			((instruction & AARCH64_SIMD_ABSOLUTE_DIFFERENCE_LONG_MASK) ==
+			 AARCH64_SIMD_ABSOLUTE_DIFFERENCE_ACCUMULATE_LONG_PATTERN ?
+			 2 : 0) | !!(instruction & BIT(29));
+
+		if (size == 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_source_index = instruction & BIT(30) ?
+			sizeof(u64) / decoded.access_size : 0;
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SABDL + operation;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_ABSOLUTE_DIFFERENCE_MASK) ==
 	    AARCH64_SIMD_ABSOLUTE_DIFFERENCE_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;

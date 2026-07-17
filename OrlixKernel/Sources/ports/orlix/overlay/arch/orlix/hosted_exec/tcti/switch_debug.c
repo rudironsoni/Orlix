@@ -2742,6 +2742,83 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_high;
 	u8 lane;
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SABDL &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_UABAL) {
+		u64 accumulator[2];
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		u8 wide_size = decoded->access_size * 2;
+		u8 lane_count;
+		u8 operation = decoded->simd_arithmetic_op - TCTI_SIMD_ARITH_SABDL;
+		bool is_unsigned = operation & 1U;
+		bool accumulate = operation & 2U;
+		u64 narrow_mask;
+		u64 wide_mask;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    (decoded->simd_source_index != 0 &&
+		     decoded->simd_source_index !=
+			sizeof(u64) / decoded->access_size))
+			return -EOPNOTSUPP;
+
+		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
+		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		lane_count = decoded->result_size / wide_size;
+		narrow_mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		wide_mask = GENMASK_ULL(wide_size * 8 - 1, 0);
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_lane = decoded->simd_source_index + lane;
+			u8 source_byte = source_lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u8 result_byte = lane * wide_size;
+			u8 result_word = result_byte / sizeof(u64);
+			u8 result_shift = (result_byte % sizeof(u64)) * 8;
+			u64 left_lane = (left[source_word] >> source_shift) &
+				narrow_mask;
+			u64 right_lane = (right[source_word] >> source_shift) &
+				narrow_mask;
+			u64 difference;
+
+			if (is_unsigned) {
+				difference = left_lane >= right_lane ?
+					left_lane - right_lane : right_lane - left_lane;
+			} else {
+				s64 signed_left = sign_extend64(
+					left_lane, decoded->access_size * 8 - 1);
+				s64 signed_right = sign_extend64(
+					right_lane, decoded->access_size * 8 - 1);
+
+				difference = signed_left >= signed_right ?
+					(u64)(signed_left - signed_right) :
+					(u64)(signed_right - signed_left);
+			}
+
+			if (accumulate) {
+				u64 accumulator_lane =
+					(accumulator[result_word] >> result_shift) &
+					wide_mask;
+
+				difference += accumulator_lane;
+			}
+			result[result_word] |=
+				(difference & wide_mask) << result_shift;
+		}
+
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ABS &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RBIT) {
 		u64 source[2];
