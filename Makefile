@@ -7,7 +7,9 @@ MLIBC_MAKE := $(MAKE) -f OrlixMLibC/Makefile
 ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
 APP_MAKE := $(MAKE) -f Orlix/Makefile
 PROFILE ?= release
+-include $(CURDIR)/.orlix.local.xcconfig
 ORLIX_BUILD_ROOT ?= $(CURDIR)/Build
+export ORLIX_BUILD_ROOT
 ORLIXOS_BASE_ROOT_TREE := $(ORLIX_BUILD_ROOT)/OrlixOS/rootfs/$(PROFILE)/base-tree
 ORLIX_BETA_SCHEME ?= Orlix
 ORLIX_BETA_ARCHIVE_DIR ?= $(ORLIX_BUILD_ROOT)/Release
@@ -479,8 +481,8 @@ run:
 
 clean:
 	@set -euo pipefail; \
-	if [ -L Build ]; then echo "refusing to clean symlinked Build directory" >&2; exit 1; fi; \
-	rm -rf Build
+	if [ -L '$(ORLIX_BUILD_ROOT)' ]; then echo "refusing to clean symlinked Build directory" >&2; exit 1; fi; \
+	rm -rf '$(ORLIX_BUILD_ROOT)'
 	@$(HOSTADAPTER_MAKE) clean
 	@$(APP_MAKE) clean
 
@@ -491,17 +493,17 @@ mrproper:
 	@$(ORLIXOS_MAKE) mrproper
 	@$(APP_MAKE) mrproper
 terminal-mux-tests:
-	@mkdir -p Build/Tests/terminal-mux
+	@mkdir -p '$(ORLIX_BUILD_ROOT)/Tests/terminal-mux'
 	@$(CC) -std=c17 -Wall -Wextra -Werror \
 		OrlixOS/Sources/init/terminal_mux.c \
 		OrlixOS/Tests/TerminalMux/terminal_mux_tests.c \
-		-o Build/Tests/terminal-mux/terminal_mux_tests
-	@Build/Tests/terminal-mux/terminal_mux_tests
+		-o '$(ORLIX_BUILD_ROOT)/Tests/terminal-mux/terminal_mux_tests'
+	@'$(ORLIX_BUILD_ROOT)/Tests/terminal-mux/terminal_mux_tests'
 
 console-policy-tests:
-	@mkdir -p Build/Tests/console-policy
+	@mkdir -p '$(ORLIX_BUILD_ROOT)/Tests/console-policy'
 	@$(CC) -std=c17 -Wall -Wextra -Werror \
 		OrlixOS/Sources/init/console_policy.c \
 		OrlixOS/Tests/ConsolePolicy/console_policy_tests.c \
-		-o Build/Tests/console-policy/console_policy_tests
-	@Build/Tests/console-policy/console_policy_tests
+		-o '$(ORLIX_BUILD_ROOT)/Tests/console-policy/console_policy_tests'
+	@'$(ORLIX_BUILD_ROOT)/Tests/console-policy/console_policy_tests'
