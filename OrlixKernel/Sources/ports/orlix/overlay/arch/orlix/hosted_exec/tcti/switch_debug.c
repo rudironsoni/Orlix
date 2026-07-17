@@ -2186,26 +2186,38 @@ static int tcti_execute_simd_vector_element_move(
 
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_EXT) {
 		u8 buffer[4 * sizeof(u64)];
-		u8 result[2 * sizeof(u64)];
+		u8 result[2 * sizeof(u64)] = {};
 		u64 low;
-		u64 high;
+		u64 high = 0;
 
-		if (decoded->access_size != 2 * sizeof(u64) ||
-		    decoded->result_size != 2 * sizeof(u64) ||
-		    decoded->shift_amount >= 2 * sizeof(u64))
+		if ((decoded->access_size != sizeof(u64) &&
+		     decoded->access_size != 2 * sizeof(u64)) ||
+		    decoded->result_size != decoded->access_size ||
+		    decoded->shift_amount >= decoded->result_size)
 			return -EOPNOTSUPP;
 
 		put_unaligned_le64(current->thread.user_simd[decoded->rn * 2],
 				   buffer);
-		put_unaligned_le64(current->thread.user_simd[decoded->rn * 2 + 1],
-				   buffer + sizeof(u64));
-		put_unaligned_le64(current->thread.user_simd[decoded->rm * 2],
-				   buffer + 2 * sizeof(u64));
-		put_unaligned_le64(current->thread.user_simd[decoded->rm * 2 + 1],
-				   buffer + 3 * sizeof(u64));
-		memcpy(result, buffer + decoded->shift_amount, sizeof(result));
+		if (decoded->result_size == sizeof(u64)) {
+			put_unaligned_le64(
+				current->thread.user_simd[decoded->rm * 2],
+				buffer + sizeof(u64));
+		} else {
+			put_unaligned_le64(
+				current->thread.user_simd[decoded->rn * 2 + 1],
+				buffer + sizeof(u64));
+			put_unaligned_le64(
+				current->thread.user_simd[decoded->rm * 2],
+				buffer + 2 * sizeof(u64));
+			put_unaligned_le64(
+				current->thread.user_simd[decoded->rm * 2 + 1],
+				buffer + 3 * sizeof(u64));
+		}
+		memcpy(result, buffer + decoded->shift_amount,
+		       decoded->result_size);
 		low = get_unaligned_le64(result);
-		high = get_unaligned_le64(result + sizeof(u64));
+		if (decoded->result_size == 2 * sizeof(u64))
+			high = get_unaligned_le64(result + sizeof(u64));
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 					    low, high);
 		regs->pc += sizeof(u32);
