@@ -2918,6 +2918,52 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SHSUB ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UHSUB) {
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		u64 mask;
+		u8 lane_count;
+		bool is_unsigned = decoded->simd_arithmetic_op ==
+			TCTI_SIMD_ARITH_UHSUB;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
+			return -EOPNOTSUPP;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		lane_count = decoded->result_size / decoded->access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 shift = (byte % sizeof(u64)) * 8;
+			u64 left_lane = (left[word] >> shift) & mask;
+			u64 right_lane = (right[word] >> shift) & mask;
+			s64 left_value = is_unsigned ? left_lane :
+				sign_extend64(left_lane,
+					decoded->access_size * 8 - 1);
+			s64 right_value = is_unsigned ? right_lane :
+				sign_extend64(right_lane,
+					decoded->access_size * 8 - 1);
+			u64 lane_result = (left_value - right_value) >> 1;
+
+			result[word] |= (lane_result & mask) << shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SADDW &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_USUBW) {
 		u64 wide[2];
