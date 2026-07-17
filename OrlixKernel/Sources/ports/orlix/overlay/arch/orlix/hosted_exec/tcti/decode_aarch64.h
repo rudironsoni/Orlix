@@ -38,7 +38,6 @@ enum tcti_decode_class {
 	TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL,
-	TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE,
 	TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 	TCTI_DECODE_SIMD_VECTOR_COMPARE,
 	TCTI_DECODE_SIMD_VECTOR_REDUCTION,
@@ -63,6 +62,13 @@ enum tcti_logical_op {
 	TCTI_LOGICAL_ORR,
 	TCTI_LOGICAL_EOR,
 	TCTI_LOGICAL_BIT,
+};
+
+enum tcti_simd_modified_immediate_op {
+	TCTI_SIMD_MODIMM_MOVI = 0,
+	TCTI_SIMD_MODIMM_MVNI,
+	TCTI_SIMD_MODIMM_ORR,
+	TCTI_SIMD_MODIMM_BIC,
 };
 
 enum tcti_simd_reduction_op {
@@ -131,6 +137,8 @@ enum tcti_data_processing_1source_op {
 
 enum tcti_simd_vector_arithmetic_op {
 	TCTI_SIMD_ARITH_ADD = 0,
+	TCTI_SIMD_ARITH_SUB,
+	TCTI_SIMD_ARITH_FNEG,
 	TCTI_SIMD_ARITH_USRA,
 	TCTI_SIMD_ARITH_USHL,
 	TCTI_SIMD_ARITH_USHR,
@@ -168,6 +176,7 @@ enum tcti_fp_int_convert_op {
 	TCTI_FP_INT_FCVTZU_FIXED,
 	TCTI_FP_INT_FCVTZU_SIMD,
 	TCTI_FP_INT_UCVTF_SIMD,
+	TCTI_FP_INT_SCVTF_SIMD,
 };
 
 enum tcti_multiply_add_sub_op {
@@ -219,6 +228,7 @@ struct tcti_decoded_instruction {
 	u64 logical_immediate;
 	enum tcti_memory_index_mode memory_index_mode;
 	enum tcti_logical_op logical_op;
+	enum tcti_simd_modified_immediate_op simd_modified_immediate_op;
 	enum tcti_simd_vector_arithmetic_op simd_arithmetic_op;
 	enum tcti_simd_vector_compare_op simd_compare_op;
 	enum tcti_move_wide_op move_wide_op;

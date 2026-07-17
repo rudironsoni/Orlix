@@ -64,24 +64,8 @@
 #define AARCH64_CLREX 0xd5033f5fU
 #define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f007c00U
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08007c00U
-#define AARCH64_SIMD_MOVI_D_ZERO_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_D_ZERO_PATTERN 0x2f00e400U
-#define AARCH64_SIMD_MOVI_2D_ZERO_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_2D_ZERO_PATTERN 0x6f00e400U
-#define AARCH64_SIMD_MOVI_2D_ONES_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_2D_ONES_PATTERN 0x6f07e7e0U
-#define AARCH64_SIMD_MOVI_32BIT_SHIFTED_MASK 0x9f800400U
-#define AARCH64_SIMD_MOVI_32BIT_SHIFTED_PATTERN 0x0f000400U
-#define AARCH64_SIMD_MOVI_BYTE_MASK 0xbff8fc00U
-#define AARCH64_SIMD_MOVI_BYTE_PATTERN 0x0f00e400U
-#define AARCH64_SIMD_MOVI_2S_0X100_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_2S_0X100_PATTERN 0x0f002420U
-#define AARCH64_SIMD_MOVI_4S_0X1_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_4S_0X1_PATTERN 0x4f000420U
-#define AARCH64_SIMD_MOVI_4S_0X41_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_4S_0X41_PATTERN 0x4f020420U
-#define AARCH64_SIMD_MOVI_16B_0XDF_MASK 0xffffffe0U
-#define AARCH64_SIMD_MOVI_16B_0XDF_PATTERN 0x4f06e7e0U
+#define AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK 0x9ff80c00U
+#define AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN 0x0f000400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_PATTERN 0x6e000400U
 #define AARCH64_SIMD_XTN_8B_MASK 0xfffffc00U
@@ -110,10 +94,8 @@
 #define AARCH64_SIMD_INS_GPR_PATTERN 0x4e001c00U
 #define AARCH64_SIMD_EXT_16B_MASK 0xffe08400U
 #define AARCH64_SIMD_EXT_16B_PATTERN 0x6e000000U
-#define AARCH64_SIMD_DUP_4S_GPR_MASK 0xfffffc00U
-#define AARCH64_SIMD_DUP_4S_GPR_PATTERN 0x4e040c00U
-#define AARCH64_SIMD_DUP_2D_GPR_MASK 0xfffffc00U
-#define AARCH64_SIMD_DUP_2D_GPR_PATTERN 0x4e080c00U
+#define AARCH64_SIMD_DUP_GPR_MASK 0xbfe0fc00U
+#define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
 #define AARCH64_SIMD_AND_8B_MASK 0xff20fc00U
 #define AARCH64_SIMD_AND_8B_PATTERN 0x0e201c00U
 #define AARCH64_SIMD_AND_16B_MASK 0xff20fc00U
@@ -122,6 +104,10 @@
 #define AARCH64_SIMD_BIT_8B_PATTERN 0x2e201c00U
 #define AARCH64_SIMD_ADD_MASK 0xff20fc00U
 #define AARCH64_SIMD_ADD_PATTERN 0x4e208400U
+#define AARCH64_SIMD_SUB_MASK 0xff20fc00U
+#define AARCH64_SIMD_SUB_PATTERN 0x6e208400U
+#define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
+#define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
 #define AARCH64_SIMD_USHR_4S_MASK 0xff80fc00U
 #define AARCH64_SIMD_USHR_4S_PATTERN 0x6f000400U
 #define AARCH64_SIMD_USRA_4S_MASK 0xffe0fc00U
@@ -211,18 +197,18 @@
 #define AARCH64_FCVTZU_GPR_S_PATTERN 0x1e390000U
 #define AARCH64_FCVTZU_X_D_MASK 0xfffffc00U
 #define AARCH64_FCVTZU_X_D_PATTERN 0x9e790000U
+#define AARCH64_FCVTZU_W_D_MASK 0xfffffc00U
+#define AARCH64_FCVTZU_W_D_PATTERN 0x1e790000U
 #define AARCH64_FCVTZU_X_D_FIXED_MASK 0xffff0000U
 #define AARCH64_FCVTZU_X_D_FIXED_PATTERN 0x9e590000U
 #define AARCH64_FCVTZU_D_D_MASK 0xfffffc00U
 #define AARCH64_FCVTZU_D_D_PATTERN 0x7ee1b800U
 #define AARCH64_UCVTF_D_D_MASK 0xfffffc00U
 #define AARCH64_UCVTF_D_D_PATTERN 0x7e61d800U
+#define AARCH64_SCVTF_D_D_MASK 0xfffffc00U
+#define AARCH64_SCVTF_D_D_PATTERN 0x5e61d800U
 #define AARCH64_UCVTF_2D_2D_MASK 0xfffffc00U
 #define AARCH64_UCVTF_2D_2D_PATTERN 0x6e61d800U
-#define AARCH64_SIMD_ORR_4S_0X30_MASK 0xffffffe0U
-#define AARCH64_SIMD_ORR_4S_0X30_PATTERN 0x4f011600U
-#define AARCH64_SIMD_BIC_4S_IMM_MASK 0xfff8fc00U
-#define AARCH64_SIMD_BIC_4S_IMM_PATTERN 0x6f001400U
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
@@ -234,6 +220,124 @@
 static u32 tcti_bits(u32 value, u8 shift, u8 width)
 {
 	return (value >> shift) & ((1U << width) - 1U);
+}
+
+static u8 tcti_simd_modified_imm8(u32 instruction)
+{
+	return (((instruction >> 16) & 0x7U) << 5) |
+	       ((instruction >> 5) & 0x1fU);
+}
+
+static u64 tcti_replicate_u32(u32 value)
+{
+	return (u64)value | ((u64)value << 32);
+}
+
+static u64 tcti_replicate_u16(u16 value)
+{
+	u64 pattern = value;
+
+	pattern |= pattern << 16;
+	return pattern | (pattern << 32);
+}
+
+static u64 tcti_replicate_u8(u8 value)
+{
+	u64 pattern = value;
+
+	pattern |= pattern << 8;
+	pattern |= pattern << 16;
+	return pattern | (pattern << 32);
+}
+
+static u64 tcti_expand_simd_modified_bitmask(u8 imm8)
+{
+	u64 pattern = 0;
+	u8 byte;
+
+	for (byte = 0; byte < 8; byte++) {
+		if (imm8 & BIT(byte))
+			pattern |= 0xffULL << (byte * 8);
+	}
+
+	return pattern;
+}
+
+static u32 tcti_expand_simd_fp32_immediate(u8 imm8)
+{
+	u32 sign = (imm8 >> 7) & 1U;
+	u32 exponent_bit = (imm8 >> 6) & 1U;
+	u32 fraction = imm8 & 0x3fU;
+
+	return (sign << 31) | ((!exponent_bit) << 30) |
+	       ((exponent_bit ? 0x1fU : 0) << 25) | (fraction << 19);
+}
+
+static u64 tcti_expand_simd_fp64_immediate(u8 imm8)
+{
+	u64 sign = (imm8 >> 7) & 1U;
+	u64 exponent_bit = (imm8 >> 6) & 1U;
+	u64 fraction = imm8 & 0x3fU;
+
+	return (sign << 63) | ((u64)!exponent_bit << 62) |
+	       ((exponent_bit ? 0xffULL : 0) << 54) | (fraction << 48);
+}
+
+static bool tcti_decode_simd_modified_immediate(
+	u32 instruction, struct tcti_decoded_instruction *decoded)
+{
+	u8 cmode = (instruction >> 12) & 0xfU;
+	u8 imm8 = tcti_simd_modified_imm8(instruction);
+	bool q = instruction & BIT(30);
+	bool op = instruction & BIT(29);
+	u64 pattern;
+
+	decoded->decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+	decoded->rd = instruction & 0x1fU;
+	decoded->result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+	decoded->access_size = decoded->result_size;
+	decoded->simd_fp = true;
+	decoded->simd_modified_immediate_op = TCTI_SIMD_MODIMM_MOVI;
+
+	if (cmode <= 7) {
+		u8 base_cmode = cmode & ~1U;
+		u32 lane = (u32)imm8 << ((base_cmode >> 1) * 8);
+
+		pattern = tcti_replicate_u32(lane);
+		decoded->simd_modified_immediate_op = (cmode & 1U) ?
+			(op ? TCTI_SIMD_MODIMM_BIC : TCTI_SIMD_MODIMM_ORR) :
+			(op ? TCTI_SIMD_MODIMM_MVNI : TCTI_SIMD_MODIMM_MOVI);
+	} else if (cmode <= 11) {
+		u8 base_cmode = cmode & ~1U;
+		u16 lane = (u16)imm8 << (((base_cmode - 8) >> 1) * 8);
+
+		pattern = tcti_replicate_u16(lane);
+		decoded->simd_modified_immediate_op = (cmode & 1U) ?
+			(op ? TCTI_SIMD_MODIMM_BIC : TCTI_SIMD_MODIMM_ORR) :
+			(op ? TCTI_SIMD_MODIMM_MVNI : TCTI_SIMD_MODIMM_MOVI);
+	} else if (cmode == 12 || cmode == 13) {
+		u8 shift = cmode == 12 ? 8 : 16;
+		u32 lane = ((u32)imm8 << shift) | (BIT(shift) - 1U);
+
+		pattern = tcti_replicate_u32(lane);
+		decoded->simd_modified_immediate_op = op ?
+			TCTI_SIMD_MODIMM_MVNI : TCTI_SIMD_MODIMM_MOVI;
+	} else if (cmode == 14 && !op) {
+		pattern = tcti_replicate_u8(imm8);
+	} else if (cmode == 14) {
+		pattern = tcti_expand_simd_modified_bitmask(imm8);
+	} else if (!op) {
+		u32 lane = tcti_expand_simd_fp32_immediate(imm8);
+
+		pattern = tcti_replicate_u32(lane);
+	} else {
+		if (!q)
+			return false;
+		pattern = tcti_expand_simd_fp64_immediate(imm8);
+	}
+
+	decoded->logical_immediate = pattern;
+	return true;
 }
 
 static bool tcti_decode_load_store_variant(u8 size, u8 opc, bool *load,
@@ -1078,122 +1182,10 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_MOVI_2D_ZERO_MASK) ==
-	    AARCH64_SIMD_MOVI_2D_ZERO_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_D_ZERO_MASK) ==
-	    AARCH64_SIMD_MOVI_D_ZERO_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_2D_ONES_MASK) ==
-	    AARCH64_SIMD_MOVI_2D_ONES_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = ~0ULL;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_32BIT_SHIFTED_MASK) ==
-	    AARCH64_SIMD_MOVI_32BIT_SHIFTED_PATTERN) {
-		u8 cmode = (instruction >> 12) & 0xfU;
-
-		if (cmode <= 6 && !(cmode & 1)) {
-			u8 imm8 = (((instruction >> 16) & 0x7U) << 5) |
-				  ((instruction >> 5) & 0x1fU);
-			u32 lane = (u32)imm8 << ((cmode >> 1) * 8);
-
-			decoded.decode_class =
-				TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-			decoded.rd = instruction & 0x1fU;
-			decoded.logical_immediate =
-				(u64)lane | ((u64)lane << 32);
-			decoded.result_size = (instruction & BIT(30)) ?
-					      2 * sizeof(u64) : sizeof(u64);
-			decoded.access_size = decoded.result_size;
-			decoded.simd_fp = true;
-			return decoded;
-		}
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_BYTE_MASK) ==
-	    AARCH64_SIMD_MOVI_BYTE_PATTERN) {
-		u8 imm8 = (((instruction >> 16) & 0x7U) << 5) |
-			  ((instruction >> 5) & 0x1fU);
-		u64 byte_pattern = (u64)imm8;
-
-		byte_pattern |= byte_pattern << 8;
-		byte_pattern |= byte_pattern << 16;
-		byte_pattern |= byte_pattern << 32;
-
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = byte_pattern;
-		decoded.result_size = (instruction & BIT(30)) ?
-				      2 * sizeof(u64) : sizeof(u64);
-		decoded.access_size = decoded.result_size;
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_2S_0X100_MASK) ==
-	    AARCH64_SIMD_MOVI_2S_0X100_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0x0000010000000100ULL;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_4S_0X1_MASK) ==
-	    AARCH64_SIMD_MOVI_4S_0X1_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0x0000000100000001ULL;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_4S_0X41_MASK) ==
-	    AARCH64_SIMD_MOVI_4S_0X41_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0x0000004100000041ULL;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_MOVI_16B_0XDF_MASK) ==
-	    AARCH64_SIMD_MOVI_16B_0XDF_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.logical_immediate = 0xdfdfdfdfdfdfdfdfULL;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
+	if ((instruction & AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK) ==
+	    AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN) {
+		if (!tcti_decode_simd_modified_immediate(instruction, &decoded))
+			decoded.decode_class = TCTI_DECODE_UNSUPPORTED;
 		return decoded;
 	}
 
@@ -1429,27 +1421,23 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_DUP_4S_GPR_MASK) ==
-	    AARCH64_SIMD_DUP_4S_GPR_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.immediate = true;
-		return decoded;
-	}
+	if ((instruction & AARCH64_SIMD_DUP_GPR_MASK) ==
+	    AARCH64_SIMD_DUP_GPR_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+		bool q = instruction & BIT(30);
 
-	if ((instruction & AARCH64_SIMD_DUP_2D_GPR_MASK) ==
-	    AARCH64_SIMD_DUP_2D_GPR_PATTERN) {
+		if (!imm5 || (imm5 & (imm5 - 1)) || imm5 > sizeof(u64) ||
+		    (imm5 == sizeof(u64) && !q))
+			return decoded;
+
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = imm5;
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.immediate = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_DUP;
 		return decoded;
 	}
 
@@ -1507,6 +1495,34 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_ADD;
+		return decoded;
+	}
+	if ((instruction & AARCH64_SIMD_SUB_MASK) ==
+	    AARCH64_SIMD_SUB_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+
+		if (size != 2 && size != 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1f;
+		decoded.rn = (instruction >> 5) & 0x1f;
+		decoded.rm = (instruction >> 16) & 0x1f;
+		decoded.access_size = size == 2 ? sizeof(u32) : sizeof(u64);
+		decoded.result_size = 16;
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SUB;
+		return decoded;
+	}
+	if ((instruction & AARCH64_SIMD_FNEG_2D_MASK) ==
+	    AARCH64_SIMD_FNEG_2D_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1f;
+		decoded.rn = (instruction >> 5) & 0x1f;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FNEG;
 		return decoded;
 	}
 
@@ -1956,6 +1972,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.fp_int_op = TCTI_FP_INT_FCVTZU;
 		return decoded;
 	}
+	if ((instruction & AARCH64_FCVTZU_W_D_MASK) ==
+	    AARCH64_FCVTZU_W_D_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u32);
+		decoded.simd_fp = true;
+		decoded.fp_int_op = TCTI_FP_INT_FCVTZU;
+		return decoded;
+	}
 
 	if ((instruction & AARCH64_FCVTZU_X_D_FIXED_MASK) ==
 	    AARCH64_FCVTZU_X_D_FIXED_PATTERN) {
@@ -1994,6 +2021,18 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SCVTF_D_D_MASK) ==
+	    AARCH64_SCVTF_D_D_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.fp_int_op = TCTI_FP_INT_SCVTF_SIMD;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_UCVTF_2D_2D_MASK) ==
 	    AARCH64_UCVTF_2D_2D_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
@@ -2003,34 +2042,6 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.fp_int_op = TCTI_FP_INT_UCVTF_SIMD;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_ORR_4S_0X30_MASK) ==
-	    AARCH64_SIMD_ORR_4S_0X30_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.logical_op = TCTI_LOGICAL_ORR;
-		decoded.logical_immediate = 0x0000003000000030ULL;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_BIC_4S_IMM_MASK) ==
-	    AARCH64_SIMD_BIC_4S_IMM_PATTERN) {
-		u8 lane_immediate = (((instruction >> 16) & 0x7U) << 5) |
-				    ((instruction >> 5) & 0x1fU);
-		u32 lane_mask = ~((u32)lane_immediate);
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_LOGICAL_IMMEDIATE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.access_size = 2 * sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.logical_op = TCTI_LOGICAL_AND;
-		decoded.logical_immediate = lane_mask | ((u64)lane_mask << 32);
 		return decoded;
 	}
 
