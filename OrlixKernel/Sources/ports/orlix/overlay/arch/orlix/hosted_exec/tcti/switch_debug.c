@@ -2713,6 +2713,26 @@ static u64 tcti_simd_saturating_add_sub_lane(u64 left, u64 right, u8 bits,
 	}
 }
 
+static u64 tcti_simd_saturating_mul_high_lane(u64 left, u64 right, u8 bits,
+	bool rounding, bool *saturated)
+{
+	u64 mask = GENMASK_ULL(bits - 1, 0);
+	s64 signed_left = sign_extend64(left & mask, bits - 1);
+	s64 signed_right = sign_extend64(right & mask, bits - 1);
+	s64 minimum = -(1LL << (bits - 1));
+	s64 maximum = (1LL << (bits - 1)) - 1;
+	s64 product;
+
+	if (signed_left == minimum && signed_right == minimum) {
+		*saturated = true;
+		return (u64)maximum;
+	}
+	product = signed_left * signed_right;
+	if (rounding)
+		product += 1LL << (bits - 2);
+	return (u64)(product >> (bits - 1)) & mask;
+}
+
 static int tcti_execute_simd_vector_arithmetic(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -3232,6 +3252,50 @@ static int tcti_execute_simd_vector_arithmetic(
 			u64 lane_result = tcti_simd_saturating_add_sub_lane(
 				left_lane, right_lane, decoded->access_size * 8,
 				is_unsigned, subtract, &saturated);
+
+			result[word] |= lane_result << shift;
+		}
+		if (saturated)
+			current->thread.user_fpsr |= AARCH64_FPSR_QC;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQDMULH ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRDMULH) {
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		u64 mask;
+		u8 lane_count;
+		bool rounding = decoded->simd_arithmetic_op ==
+			TCTI_SIMD_ARITH_SQRDMULH;
+		bool saturated = false;
+
+		if ((decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
+			return -EOPNOTSUPP;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		lane_count = decoded->result_size / decoded->access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 shift = (byte % sizeof(u64)) * 8;
+			u64 left_lane = (left[word] >> shift) & mask;
+			u64 right_lane = (right[word] >> shift) & mask;
+			u64 lane_result = tcti_simd_saturating_mul_high_lane(
+				left_lane, right_lane, decoded->access_size * 8,
+				rounding, &saturated);
 
 			result[word] |= lane_result << shift;
 		}
