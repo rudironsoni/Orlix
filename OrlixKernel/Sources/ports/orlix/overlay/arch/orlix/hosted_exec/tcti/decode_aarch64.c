@@ -92,8 +92,8 @@
 #define AARCH64_SIMD_USHR_4S_PATTERN 0x6f000400U
 #define AARCH64_SIMD_USRA_4S_MASK 0xffe0fc00U
 #define AARCH64_SIMD_USRA_4S_PATTERN 0x6f201400U
-#define AARCH64_SIMD_USHL_4S_MASK 0xff20fc00U
-#define AARCH64_SIMD_USHL_4S_PATTERN 0x6e204400U
+#define AARCH64_SIMD_SHIFT_BY_REGISTER_MASK 0x9f20e400U
+#define AARCH64_SIMD_SHIFT_BY_REGISTER_PATTERN 0x0e204400U
 #define AARCH64_SIMD_CMEQ_MASK 0xbf20fc00U
 #define AARCH64_SIMD_CMEQ_PATTERN 0x2e208c00U
 #define AARCH64_SIMD_CMEQ_ZERO_4S_MASK 0xfffffc00U
@@ -1144,21 +1144,25 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_USHL_4S_MASK) ==
-	    AARCH64_SIMD_USHL_4S_PATTERN) {
+	if ((instruction & AARCH64_SIMD_SHIFT_BY_REGISTER_MASK) ==
+	    AARCH64_SIMD_SHIFT_BY_REGISTER_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
+		u8 opcode = (instruction >> 11) & 0x1fU;
+		u8 operation;
+		bool q = instruction & BIT(30);
 
-		if (size != 2)
+		if (opcode < 8 || opcode > 11 || (!q && size == 3))
 			return decoded;
 
+		operation = (opcode - 8) * 2 + !!(instruction & BIT(29));
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USHL;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SSHL + operation;
 		return decoded;
 	}
 
@@ -1461,24 +1465,6 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.shift_amount = 64 - imm;
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USRA;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_USHL_4S_MASK) ==
-	    AARCH64_SIMD_USHL_4S_PATTERN) {
-		u8 size = (instruction >> 22) & 0x3U;
-
-		if (size != 2)
-			return decoded;
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USHL;
 		return decoded;
 	}
 

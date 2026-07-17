@@ -24,6 +24,7 @@
 #define AARCH64_FPSR_IOC BIT(0)
 #define AARCH64_FPSR_DZC BIT(1)
 #define AARCH64_FPSR_IXC BIT(4)
+#define AARCH64_FPSR_QC BIT(27)
 
 static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
 
@@ -2587,6 +2588,74 @@ static int tcti_execute_simd_vector_logical(
 	return 0;
 }
 
+static u64 tcti_simd_shift_lane(u64 value, u8 bits, s8 shift,
+				bool is_unsigned, bool rounding,
+				bool saturating, bool *saturated)
+{
+	u64 mask = bits == 64 ? ~0ULL : GENMASK_ULL(bits - 1, 0);
+	s64 signed_value = sign_extend64(value & mask, bits - 1);
+
+	value &= mask;
+	if (shift < 0) {
+		u8 right = -(int)shift;
+
+		if (right >= bits) {
+			if (rounding)
+				return 0;
+			return is_unsigned || signed_value >= 0 ? 0 : mask;
+		}
+
+		if (is_unsigned) {
+			u64 result = value >> right;
+
+			if (rounding)
+				result += (value >> (right - 1)) & 1U;
+			return result & mask;
+		}
+
+		{
+			s64 result = signed_value >> right;
+
+			if (rounding)
+				result += (value >> (right - 1)) & 1U;
+			return (u64)result & mask;
+		}
+	}
+
+	if (!saturating)
+		return shift >= bits ? 0 : (value << shift) & mask;
+
+	if (is_unsigned) {
+		if (shift >= bits ? value != 0 : value > (mask >> shift)) {
+			*saturated = true;
+			return mask;
+		}
+		return (value << shift) & mask;
+	}
+
+	{
+		s64 maximum = bits == 64 ? S64_MAX : (1LL << (bits - 1)) - 1;
+		s64 minimum = bits == 64 ? S64_MIN : -(1LL << (bits - 1));
+
+		if (shift >= bits) {
+			if (!signed_value)
+				return 0;
+			*saturated = true;
+			return signed_value > 0 ? (u64)maximum & mask :
+						 (u64)minimum & mask;
+		}
+		if (signed_value > (maximum >> shift)) {
+			*saturated = true;
+			return (u64)maximum & mask;
+		}
+		if (signed_value < (minimum >> shift)) {
+			*saturated = true;
+			return (u64)minimum & mask;
+		}
+		return ((u64)signed_value << shift) & mask;
+	}
+}
+
 static int tcti_execute_simd_vector_arithmetic(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -2667,45 +2736,51 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
-	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USHL) {
-		u64 source_low;
-		u64 source_high;
-		u64 shift_low;
-		u64 shift_high;
-		u64 result_low = 0;
-		u64 result_high = 0;
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SSHL &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_UQRSHL) {
+		u64 source[2];
+		u64 shifts[2];
+		u64 result[2] = {};
+		u8 lane_count;
+		bool saturated = false;
+		u8 operation = decoded->simd_arithmetic_op -
+			       TCTI_SIMD_ARITH_SSHL;
+		bool is_unsigned = operation & 1U;
+		bool saturating = (operation / 2) & 1U;
+		bool rounding = operation >= 4;
 
-		if (decoded->access_size != sizeof(u32) ||
-		    decoded->result_size != 2 * sizeof(u64))
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
 			return -EOPNOTSUPP;
 
-		source_low = current->thread.user_simd[decoded->rn * 2];
-		source_high = current->thread.user_simd[decoded->rn * 2 + 1];
-		shift_low = current->thread.user_simd[decoded->rm * 2];
-		shift_high = current->thread.user_simd[decoded->rm * 2 + 1];
-		for (lane = 0; lane < 4; lane++) {
-			u64 source_word = lane < 2 ? source_low : source_high;
-			u64 shift_word = lane < 2 ? shift_low : shift_high;
-			u32 value = (source_word >> ((lane % 2) * 32)) &
-				    GENMASK(31, 0);
-			s32 shift = (s32)((shift_word >> ((lane % 2) * 32)) &
-					  GENMASK(31, 0));
-			u64 result;
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		shifts[0] = current->thread.user_simd[decoded->rm * 2];
+		shifts[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		lane_count = decoded->result_size / decoded->access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 bit_shift = (byte % sizeof(u64)) * 8;
+			u64 mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			u64 value = (source[word] >> bit_shift) & mask;
+			s8 shift = (s8)((shifts[word] >> bit_shift) & 0xffU);
+			u64 lane_result = tcti_simd_shift_lane(
+				value, decoded->access_size * 8, shift,
+				is_unsigned, rounding, saturating, &saturated);
 
-			if (shift >= 32 || shift <= -32)
-				result = 0;
-			else if (shift >= 0)
-				result = ((u64)value << shift) & GENMASK_ULL(31, 0);
-			else
-				result = value >> -shift;
-
-			if (lane < 2)
-				result_low |= result << (lane * 32);
-			else
-				result_high |= result << ((lane - 2) * 32);
+			result[word] |= lane_result << bit_shift;
 		}
+
+		if (saturated)
+			current->thread.user_fpsr |= AARCH64_FPSR_QC;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    result_low, result_high);
+					    result[0], result[1]);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
