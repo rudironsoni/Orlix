@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-16
+updated: 2026-07-17
 ---
 # Orlix Knowledge Log
+
+## [2026-07-17] constrain | Require complete AArch64 ISA-on-ISA coverage
+
+Made complete guest-exposed AArch64 EL0 ISA coverage a blocking TCTI architecture and promotion requirement. Workload opcodes now serve only as prioritization and regression evidence. Added a dedicated task for architectural decode, production lowering and gadget execution, exact state semantics, structured exceptions, KUnit and kselftest proof, and an independent coverage audit informed by the reviewed OpenMinis reference without copying its implementation.
 
 ## [2026-07-16] correct | Return TCTI proof to owning tests
 

@@ -3,12 +3,14 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-17
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
 part_of:
   - "[Orlix](../product/orlix.md)"
+derived_from:
+  - "[TCTI reference review](../../sources/tcti/reference-review.md)"
 ---
 
 # ADR 0022: Use Linux ELF With Orlix TCTI On iOS
@@ -44,6 +46,8 @@ Product development and simulator validation use the same TCTI guest backend and
 
 The first physical-iPhone userspace backend is Orlix TCTI. TCTI belongs under `arch/orlix` and only owns guest AArch64 EL0 instruction fetch, decode, data-only gadget-program dispatch, guest register execution, guest memory fast paths, `svc #0` exits, user fault exits, yield/signal exits, unsupported-instruction reporting, and hot-path counters.
 
+TCTI implements the complete AArch64 EL0 instruction set exposed to the guest, including integer, branch, load/store, atomic, SIMD, floating-point, crypto, and system-register behavior available in the declared guest ISA profile. Package workloads may prioritize implementation order, but they do not define instruction coverage. An architecturally valid instruction in the exposed profile may not be replaced by an unsupported-instruction exit, a hard-coded workload special case, or a reduced semantic approximation. Reserved, unallocated, privileged, and unadvertised optional-extension encodings must produce their architecturally defined exception or deterministic TCTI exit.
+
 Guest ELF text pages remain host data mappings. Linux `VM_EXEC` remains meaningful, but TCTI enforces execute permission using Linux-owned VMA/PTE or Orlix arch/mm metadata. TCTI must not require JIT, MAP_JIT, RWX memory, generated executable memory, host executable page permissions for guest ELF text, Mach-O translated guest binaries, modified guest binaries, Wasm, or QEMU.
 
 The execution stack is:
@@ -64,6 +68,7 @@ Linux ELF / AArch64 Linux userspace
 ## Consequences
 
 - Raw unmodified AArch64 Linux binaries issuing normal Linux `svc #0` are first-class compatibility targets.
+- TCTI completeness requires full decode, lowering, and semantic coverage of the guest-exposed AArch64 EL0 ISA profile. Passing mlibc, Coreutils, or another workload does not establish ISA completeness.
 - Orlix-built packages remain Linux ELF binaries linked against OrlixMLibC.
 - No public Orlix syscall facade is added.
 - TCTI must call the existing `arch/orlix` Linux syscall dispatch path rather than adding a syscall emulator.

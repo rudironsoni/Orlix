@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-15
+updated: 2026-07-17
 status: current
 summary: "Canonical repository source for tcti reference review."
 ---
@@ -72,12 +72,20 @@ This review records reference material used for the Orlix TCTI plan. The first i
 ## Secondary References
 
 - Upstream iSH: `https://github.com/ish-app/ish`, commit `997642f3787cc63e65f7134b7bb0362c74bff8e0`.
-- OpenMinis iSH ARM64: `https://github.com/OpenMinis/ish-arm64`, commit `a5e0a1e358e42a539ff916b4098628fd7f55e3fa`.
+- OpenMinis iSH ARM64: `https://github.com/OpenMinis/ish-arm64`, commits `a5e0a1e358e42a539ff916b4098628fd7f55e3fa` and `8932511fa0ab6abf77d5ead19503476d8b816f4f`.
 - `https://github.com/OpenMinis/ish-arm64/blob/master/README_arm64.md`
 - `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/asbestos.c`
 - `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/asbestos.h`
 - `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gen.c`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/crypto_helpers.c`
 - `https://github.com/OpenMinis/ish-arm64/tree/master/asbestos/guest-arm64/gadgets-aarch64`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/bits.S`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/control.S`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/crypto.S`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/entry.S`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/gadgets.h`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/math.S`
+- `https://github.com/OpenMinis/ish-arm64/blob/master/asbestos/guest-arm64/gadgets-aarch64/memory.S`
 - `https://github.com/OpenMinis/ish-arm64/blob/master/emu/tlb.h`
 - `https://github.com/OpenMinis/ish-arm64/blob/master/kernel/arch/arm64/calls.c`
 - ios-linuxkit: `https://github.com/rcarmo/ios-linuxkit`, commit `312f1093bd008918036d845d0725a345f3bc342e`.
@@ -88,6 +96,8 @@ This review records reference material used for the Orlix TCTI plan. The first i
 
 ## Secondary Comparison Notes
 
+OpenMinis provides an independent inventory of decoder masks, modified-immediate expansion, crypto helpers, and gadget-family decomposition. Orlix uses that inventory to audit its own implementation. No OpenMinis production code or runtime ownership is adopted by this review.
+
 - OpenMinis confirms the no-JIT model: basic blocks lower into arrays of gadget function pointers and operands. Execution tail-calls through precompiled gadget functions. No guest text becomes host-executable.
 - OpenMinis is useful for performance targets: persistent TLB, block chaining, page-index invalidation, assembly hot paths, NEON and crypto expansion, and 48-bit guest VA pressure from Node, Go, Rust, and JVM workloads.
 - OpenMinis also shows what Orlix must not copy as architecture: fakefs, syscall emulator, native offload, bind mounts as Linux semantics, DebugServer APIs, V8 binary patching, and app-level guest process ownership.
@@ -97,7 +107,7 @@ This review records reference material used for the Orlix TCTI plan. The first i
 ## Orlix Corrections From This Read
 
 - The implementation should prioritize the TCTI pipeline and gadget lowering path over adding broad instruction semantics into the debug switch oracle.
-- Opcode expansion remains trace-led, but every new opcode should land in decoder plus lowering/gadget contracts. Switch-debug coverage is allowed only as an oracle paired with the real TCTI path.
+- [CORRECTION] Workload traces may prioritize implementation and supply regression opcodes, but they do not define the supported ISA. TCTI completion requires an independent inventory of every legal instruction in the guest-exposed AArch64 EL0 profile, with production decode, lowering, gadget execution, architectural semantics, and deterministic exception behavior. Switch-debug coverage is allowed only as an oracle paired with the real TCTI path.
 - Orlix must keep the stronger plan requirement that `FETCH`, `READ`, and `WRITE` are separate access classes. The primary branch's fetch-through-read behavior is a known weakness to avoid.
 - Orlix block invalidation should move beyond whole-cache scans before serious chaining. Page-index reverse lookup remains a required design point.
 - Orlix performance claims require counters and workload reports. No speed claim follows from the reference design or from a compile-only check.
