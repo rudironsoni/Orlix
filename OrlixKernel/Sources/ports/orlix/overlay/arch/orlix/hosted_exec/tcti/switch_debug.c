@@ -2977,6 +2977,72 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SMAXP &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_UMINP) {
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		u64 mask;
+		u8 lane_count;
+		u8 pairs_per_source;
+		u8 operation = decoded->simd_arithmetic_op -
+			TCTI_SIMD_ARITH_SMAXP;
+		bool is_unsigned = operation & 1U;
+		bool minimum = operation & 2U;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
+			return -EOPNOTSUPP;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		lane_count = decoded->result_size / decoded->access_size;
+		pairs_per_source = lane_count / 2;
+		for (lane = 0; lane < lane_count; lane++) {
+			u64 *source = lane < pairs_per_source ? left : right;
+			u8 pair = lane % pairs_per_source;
+			u8 first_byte = pair * 2 * decoded->access_size;
+			u8 second_byte = first_byte + decoded->access_size;
+			u8 first_word = first_byte / sizeof(u64);
+			u8 second_word = second_byte / sizeof(u64);
+			u8 first_shift = (first_byte % sizeof(u64)) * 8;
+			u8 second_shift = (second_byte % sizeof(u64)) * 8;
+			u8 result_byte = lane * decoded->access_size;
+			u8 result_word = result_byte / sizeof(u64);
+			u8 result_shift = (result_byte % sizeof(u64)) * 8;
+			u64 first = (source[first_word] >> first_shift) & mask;
+			u64 second = (source[second_word] >> second_shift) & mask;
+			u64 selected;
+
+			if (is_unsigned) {
+				selected = minimum ?
+					(first < second ? first : second) :
+					(first > second ? first : second);
+			} else {
+				s64 signed_first = sign_extend64(first,
+					decoded->access_size * 8 - 1);
+				s64 signed_second = sign_extend64(second,
+					decoded->access_size * 8 - 1);
+
+				selected = minimum ?
+					(signed_first < signed_second ? first : second) :
+					(signed_first > signed_second ? first : second);
+			}
+			result[result_word] |= selected << result_shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if ((decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_ADD &&
 	     decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_SUB) ||
 	    (decoded->access_size != sizeof(u8) &&
