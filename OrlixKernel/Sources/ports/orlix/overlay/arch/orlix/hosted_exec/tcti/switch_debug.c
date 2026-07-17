@@ -2264,14 +2264,18 @@ static int tcti_execute_simd_vector_element_move(
 		return 0;
 	}
 
-	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_UZP1) {
+	if (decoded->simd_element_move_op >= TCTI_SIMD_ELEMENT_MOVE_UZP1 &&
+	    decoded->simd_element_move_op <= TCTI_SIMD_ELEMENT_MOVE_ZIP2) {
 		u64 source[4];
-		u64 low = 0;
-		u64 high = 0;
-		u8 lanes_per_source;
-		u8 lane;
+		u64 result[2] = {};
+		u8 lane_count;
+		u8 half;
+		u8 destination_lane;
 
-		if (decoded->access_size != sizeof(u16) ||
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
 		    (decoded->result_size != sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)))
 			return -EOPNOTSUPP;
@@ -2280,26 +2284,60 @@ static int tcti_execute_simd_vector_element_move(
 		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
 		source[2] = current->thread.user_simd[decoded->rm * 2];
 		source[3] = current->thread.user_simd[decoded->rm * 2 + 1];
-		lanes_per_source = decoded->result_size / (2 * sizeof(u16));
+		lane_count = decoded->result_size / decoded->access_size;
+		half = lane_count / 2;
 
-		for (lane = 0; lane < decoded->result_size / sizeof(u16);
-		     lane++) {
-			u8 source_lane = (lane % lanes_per_source) * 2;
-			u8 source_word = (lane < lanes_per_source ? 0 : 2) +
-					 source_lane / 4;
-			u8 source_shift = (source_lane % 4) * 16;
-			u8 dest_shift = (lane % 4) * 16;
-			u64 value = (source[source_word] >> source_shift) &
-				    GENMASK_ULL(15, 0);
+		for (destination_lane = 0; destination_lane < lane_count;
+		     destination_lane++) {
+			u8 source_vector;
+			u8 source_lane;
+			u8 source_byte;
+			u8 source_word;
+			u8 source_shift;
+			u8 destination_byte = destination_lane *
+					      decoded->access_size;
+			u8 destination_word = destination_byte / sizeof(u64);
+			u8 destination_shift =
+				(destination_byte % sizeof(u64)) * 8;
+			u64 mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			u64 lane_value;
 
-			if (lane < 4)
-				low |= value << dest_shift;
-			else
-				high |= value << dest_shift;
+			switch (decoded->simd_element_move_op) {
+			case TCTI_SIMD_ELEMENT_MOVE_UZP1:
+			case TCTI_SIMD_ELEMENT_MOVE_UZP2:
+				source_vector = destination_lane >= half;
+				source_lane = (destination_lane % half) * 2 +
+					(decoded->simd_element_move_op ==
+					 TCTI_SIMD_ELEMENT_MOVE_UZP2);
+				break;
+			case TCTI_SIMD_ELEMENT_MOVE_TRN1:
+			case TCTI_SIMD_ELEMENT_MOVE_TRN2:
+				source_vector = destination_lane & 1U;
+				source_lane = (destination_lane / 2) * 2 +
+					(decoded->simd_element_move_op ==
+					 TCTI_SIMD_ELEMENT_MOVE_TRN2);
+				break;
+			case TCTI_SIMD_ELEMENT_MOVE_ZIP1:
+			case TCTI_SIMD_ELEMENT_MOVE_ZIP2:
+				source_vector = destination_lane & 1U;
+				source_lane = destination_lane / 2 +
+					(decoded->simd_element_move_op ==
+					 TCTI_SIMD_ELEMENT_MOVE_ZIP2 ? half : 0);
+				break;
+			default:
+				return -EOPNOTSUPP;
+			}
+
+			source_byte = source_lane * decoded->access_size;
+			source_word = source_vector * 2 +
+				      source_byte / sizeof(u64);
+			source_shift = (source_byte % sizeof(u64)) * 8;
+			lane_value = (source[source_word] >> source_shift) & mask;
+			result[destination_word] |= lane_value << destination_shift;
 		}
 
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    low, high);
+					    result[0], result[1]);
 		regs->pc += sizeof(u32);
 		return 0;
 	}

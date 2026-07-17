@@ -79,9 +79,8 @@
 #define AARCH64_SIMD_USHLL2_8H_16B_PATTERN 0x6f08a400U
 #define AARCH64_SIMD_USHLL2_4S_8H_PATTERN 0x6f10a400U
 #define AARCH64_SIMD_USHLL2_2D_4S_PATTERN 0x6f20a400U
-#define AARCH64_SIMD_UZP1_4H_MASK 0xffe0fc00U
-#define AARCH64_SIMD_UZP1_4H_PATTERN 0x0e401800U
-#define AARCH64_SIMD_UZP1_8H_PATTERN 0x4e401800U
+#define AARCH64_SIMD_PERMUTE_MASK 0xbf208c00U
+#define AARCH64_SIMD_PERMUTE_PATTERN 0x0e000800U
 #define AARCH64_SIMD_UMOV_W_H_MASK 0xffe3fc00U
 #define AARCH64_SIMD_UMOV_W_H_PATTERN 0x0e023c00U
 #define AARCH64_SIMD_UMOV_X_D_MASK 0xffe3fc00U
@@ -1278,29 +1277,45 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_UZP1_4H_MASK) ==
-	    AARCH64_SIMD_UZP1_4H_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u16);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UZP1;
-		return decoded;
-	}
+	if ((instruction & AARCH64_SIMD_PERMUTE_MASK) ==
+	    AARCH64_SIMD_PERMUTE_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		u8 operation = (instruction >> 12) & 0x7U;
 
-	if ((instruction & AARCH64_SIMD_UZP1_4H_MASK) ==
-	    AARCH64_SIMD_UZP1_8H_PATTERN) {
+		if (size == 3 && !(instruction & BIT(30)))
+			return decoded;
+
+		switch (operation) {
+		case 1:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UZP1;
+			break;
+		case 5:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UZP2;
+			break;
+		case 2:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_TRN1;
+			break;
+		case 6:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_TRN2;
+			break;
+		case 3:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_ZIP1;
+			break;
+		case 7:
+			decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_ZIP2;
+			break;
+		default:
+			return decoded;
+		}
+
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u16);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = 1U << size;
+		decoded.result_size = (instruction & BIT(30)) ?
+			2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
-		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UZP1;
 		return decoded;
 	}
 

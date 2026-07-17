@@ -1962,6 +1962,64 @@ static void tcti_decode_recognizes_simd_ext_16b(struct kunit *test)
 			decoded.simd_element_move_op);
 }
 
+static void tcti_decode_recognizes_complete_simd_permute_family(
+	struct kunit *test)
+{
+	static const struct {
+		u8 encoding;
+		enum tcti_simd_element_move_op operation;
+	} operations[] = {
+		{ 1, TCTI_SIMD_ELEMENT_MOVE_UZP1 },
+		{ 5, TCTI_SIMD_ELEMENT_MOVE_UZP2 },
+		{ 2, TCTI_SIMD_ELEMENT_MOVE_TRN1 },
+		{ 6, TCTI_SIMD_ELEMENT_MOVE_TRN2 },
+		{ 3, TCTI_SIMD_ELEMENT_MOVE_ZIP1 },
+		{ 7, TCTI_SIMD_ELEMENT_MOVE_ZIP2 },
+	};
+	size_t operation_index;
+	u8 q;
+	u8 size;
+
+	for (operation_index = 0; operation_index < ARRAY_SIZE(operations);
+	     operation_index++) {
+		for (q = 0; q <= 1; q++) {
+			for (size = 0; size <= 3; size++) {
+				u32 instruction;
+				struct tcti_decoded_instruction decoded;
+
+				if (!q && size == 3)
+					continue;
+				instruction = 0x0e000800U | ((u32)q << 30) |
+					      ((u32)size << 22) | (2U << 16) |
+					      ((u32)operations[operation_index].encoding << 12) |
+					      (1U << 5);
+				decoded = tcti_decode_aarch64(instruction);
+
+				KUNIT_EXPECT_EQ(test,
+					TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test,
+					operations[operation_index].operation,
+					decoded.simd_element_move_op);
+				KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+				KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+				KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+				KUNIT_EXPECT_EQ(test, 1U << size,
+					decoded.access_size);
+				KUNIT_EXPECT_EQ(test, q ? 16U : 8U,
+					decoded.result_size);
+			}
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0ec01800U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0e000800U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0e004800U).decode_class);
+}
+
 static void tcti_decode_recognizes_simd_uzp1_4h(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -5245,6 +5303,53 @@ static void tcti_switch_executes_simd_cmeq_4s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x880cULL, regs.pc);
 }
 
+static void tcti_switch_executes_complete_simd_permute_family(
+	struct kunit *test)
+{
+	static const struct {
+		u8 encoding;
+		u64 expected_low;
+		u64 expected_high;
+	} cases[] = {
+		{ 1, 0x0016001400120010ULL, 0x0026002400220020ULL },
+		{ 5, 0x0017001500130011ULL, 0x0027002500230021ULL },
+		{ 2, 0x0022001200200010ULL, 0x0026001600240014ULL },
+		{ 6, 0x0023001300210011ULL, 0x0027001700250015ULL },
+		{ 3, 0x0021001100200010ULL, 0x0023001300220012ULL },
+		{ 7, 0x0025001500240014ULL, 0x0027001700260016ULL },
+	};
+	struct pt_regs regs = {};
+	size_t index;
+
+	regs.pc = 0x8480;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u32 instruction = 0x0e000800U | BIT(30) | BIT(22) |
+				  (2U << 16) | ((u32)cases[index].encoding << 12) |
+				  (1U << 5);
+		struct tcti_decoded_instruction decoded;
+		int ret;
+
+		current->thread.user_simd[2] = 0x0013001200110010ULL;
+		current->thread.user_simd[3] = 0x0017001600150014ULL;
+		current->thread.user_simd[4] = 0x0023002200210020ULL;
+		current->thread.user_simd[5] = 0x0027002600250024ULL;
+		current->thread.user_simd[0] = ~0ULL;
+		current->thread.user_simd[1] = ~0ULL;
+		current->thread.user_simd_valid = 0;
+		decoded = tcti_decode_aarch64(instruction);
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							NULL);
+
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_low,
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_high,
+				current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test, 0x8484ULL + index * sizeof(u32), regs.pc);
+	}
+}
+
 static void tcti_switch_executes_simd_uzp1_4h(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -6721,6 +6826,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_cmeq_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ld1r_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ext_16b),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_permute_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h1),
@@ -6813,6 +6919,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_and_16b),
 	KUNIT_CASE(tcti_switch_executes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_switch_executes_simd_cmeq_4s),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_permute_family),
 	KUNIT_CASE(tcti_switch_executes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),
