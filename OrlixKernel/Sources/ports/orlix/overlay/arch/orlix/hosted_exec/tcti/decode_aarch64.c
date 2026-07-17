@@ -117,6 +117,9 @@
 #define AARCH64_SIMD_REV_PATTERN 0x0e200800U
 #define AARCH64_SIMD_REV16_PATTERN 0x0e201800U
 #define AARCH64_SIMD_BIT_COUNT_PATTERN 0x0e205800U
+#define AARCH64_SIMD_CMGT_ZERO_PATTERN 0x0e208800U
+#define AARCH64_SIMD_CMEQ_ZERO_PATTERN 0x0e209800U
+#define AARCH64_SIMD_CMLT_ZERO_PATTERN 0x0e20a800U
 #define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
 #define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
 #define AARCH64_SIMD_USHR_4S_MASK 0xff80fc00U
@@ -129,8 +132,6 @@
 #define AARCH64_SIMD_CMEQ_PATTERN 0x2e208c00U
 #define AARCH64_SIMD_THREE_SAME_MASK 0x9f200400U
 #define AARCH64_SIMD_THREE_SAME_PATTERN 0x0e200400U
-#define AARCH64_SIMD_CMEQ_ZERO_4S_MASK 0xfffffc00U
-#define AARCH64_SIMD_CMEQ_ZERO_4S_PATTERN 0x4ea09800U
 #define AARCH64_SIMD_CMEQ_4S_MASK 0xffe0fc00U
 #define AARCH64_SIMD_CMEQ_4S_PATTERN 0x6ea08c00U
 #define AARCH64_SIMD_CMHI_2D_MASK 0xff20fc00U
@@ -1890,16 +1891,36 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_CMEQ_ZERO_4S_MASK) ==
-	    AARCH64_SIMD_CMEQ_ZERO_4S_PATTERN) {
+	if ((instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    AARCH64_SIMD_CMGT_ZERO_PATTERN ||
+	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    AARCH64_SIMD_CMEQ_ZERO_PATTERN ||
+	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    AARCH64_SIMD_CMLT_ZERO_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK;
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+		bool u = instruction & BIT(29);
+
+		if ((!q && size == 3) ||
+		    (pattern == AARCH64_SIMD_CMLT_ZERO_PATTERN && u))
+			return decoded;
+
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_COMPARE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.immediate = true;
-		decoded.simd_compare_op = TCTI_SIMD_COMPARE_CMEQ;
+		if (pattern == AARCH64_SIMD_CMGT_ZERO_PATTERN)
+			decoded.simd_compare_op = u ? TCTI_SIMD_COMPARE_CMGE :
+				TCTI_SIMD_COMPARE_CMGT;
+		else if (pattern == AARCH64_SIMD_CMEQ_ZERO_PATTERN)
+			decoded.simd_compare_op = u ? TCTI_SIMD_COMPARE_CMLE :
+				TCTI_SIMD_COMPARE_CMEQ;
+		else
+			decoded.simd_compare_op = TCTI_SIMD_COMPARE_CMLT;
 		return decoded;
 	}
 

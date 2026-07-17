@@ -217,6 +217,8 @@ enum tcti_simd_vector_compare_op {
 	TCTI_SIMD_COMPARE_CMGT,
 	TCTI_SIMD_COMPARE_CMGE,
 	TCTI_SIMD_COMPARE_CMHS,
+	TCTI_SIMD_COMPARE_CMLE,
+	TCTI_SIMD_COMPARE_CMLT,
 };
 
 enum tcti_fp_scalar_move_op {
