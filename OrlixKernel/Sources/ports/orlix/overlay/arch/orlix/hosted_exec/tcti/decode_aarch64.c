@@ -104,6 +104,8 @@
 #define AARCH64_SIMD_SATURATING_MUL_HIGH_PATTERN 0x0e20b400U
 #define AARCH64_SIMD_MUL_PMUL_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MUL_PMUL_PATTERN 0x0e209c00U
+#define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
+#define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
 #define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
 #define AARCH64_SIMD_USHR_4S_MASK 0xff80fc00U
@@ -1615,6 +1617,25 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = polynomial ?
 			TCTI_SIMD_ARITH_PMUL : TCTI_SIMD_ARITH_MUL;
+		return decoded;
+	}
+	if ((instruction & AARCH64_SIMD_MLA_MLS_MASK) ==
+	    AARCH64_SIMD_MLA_MLS_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+
+		if (size == 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = instruction & BIT(29) ?
+			TCTI_SIMD_ARITH_MLS : TCTI_SIMD_ARITH_MLA;
 		return decoded;
 	}
 	if ((instruction & AARCH64_SIMD_FNEG_2D_MASK) ==
