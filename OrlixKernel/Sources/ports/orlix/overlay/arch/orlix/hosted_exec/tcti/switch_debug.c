@@ -2819,6 +2819,63 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ADDHN &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RSUBHN) {
+		u64 left[2];
+		u64 right[2];
+		u64 narrowed = 0;
+		u8 narrow_size = decoded->access_size / 2;
+		u8 lane_count;
+		u8 operation = decoded->simd_arithmetic_op - TCTI_SIMD_ARITH_ADDHN;
+		bool subtract = operation & 1U;
+		bool rounding = operation & 2U;
+		u64 wide_mask;
+		u64 narrow_mask;
+
+		if ((decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->simd_destination_index !=
+			(decoded->result_size == 2 * sizeof(u64)))
+			return -EOPNOTSUPP;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		wide_mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		narrow_mask = GENMASK_ULL(narrow_size * 8 - 1, 0);
+		lane_count = 2 * sizeof(u64) / decoded->access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_byte = lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u64 left_lane = (left[source_word] >> source_shift) &
+				wide_mask;
+			u64 right_lane = (right[source_word] >> source_shift) &
+				wide_mask;
+			u64 result = subtract ? left_lane - right_lane :
+				left_lane + right_lane;
+
+			if (rounding)
+				result += BIT_ULL(narrow_size * 8 - 1);
+			result = (result >> (narrow_size * 8)) & narrow_mask;
+			narrowed |= result << (lane * narrow_size * 8);
+		}
+
+		if (decoded->simd_destination_index)
+			tcti_write_simd_fp_register(
+				decoded->rd, 2 * sizeof(u64),
+				current->thread.user_simd[decoded->rd * 2], narrowed);
+		else
+			tcti_write_simd_fp_register(decoded->rd, sizeof(u64),
+						    narrowed, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ABS &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RBIT) {
 		u64 source[2];
