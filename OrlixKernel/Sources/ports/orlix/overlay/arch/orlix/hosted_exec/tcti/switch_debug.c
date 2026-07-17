@@ -2372,8 +2372,13 @@ static int tcti_execute_simd_vector_element_move(
 
 			narrowed |= value << destination_shift;
 		}
-		tcti_write_simd_fp_register(decoded->rd, sizeof(u64), narrowed,
-					    0);
+		if (decoded->simd_destination_index)
+			tcti_write_simd_fp_register(
+				decoded->rd, 2 * sizeof(u64),
+				current->thread.user_simd[decoded->rd * 2], narrowed);
+		else
+			tcti_write_simd_fp_register(decoded->rd, sizeof(u64),
+						    narrowed, 0);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
