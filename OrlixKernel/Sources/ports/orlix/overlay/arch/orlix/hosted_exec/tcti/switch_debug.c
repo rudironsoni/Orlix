@@ -2726,7 +2726,13 @@ static int tcti_execute_simd_vector_arithmetic(
 
 	if ((decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_ADD &&
 	     decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_SUB) ||
-	    decoded->result_size != 2 * sizeof(u64))
+	    (decoded->access_size != sizeof(u8) &&
+	     decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32) &&
+	     decoded->access_size != sizeof(u64)) ||
+	    (decoded->result_size != sizeof(u64) &&
+	     decoded->result_size != 2 * sizeof(u64)) ||
+	    decoded->access_size > decoded->result_size)
 		return -EOPNOTSUPP;
 
 	left_low = current->thread.user_simd[decoded->rn * 2];
@@ -2734,47 +2740,31 @@ static int tcti_execute_simd_vector_arithmetic(
 	right_low = current->thread.user_simd[decoded->rm * 2];
 	right_high = current->thread.user_simd[decoded->rm * 2 + 1];
 
-	if (decoded->access_size == sizeof(u32)) {
-		u64 result_low = 0;
-		u64 result_high = 0;
+	{
+		u64 left[2] = { left_low, left_high };
+		u64 right[2] = { right_low, right_high };
+		u64 result[2] = {};
+		u64 mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		u8 lane_count = decoded->result_size / decoded->access_size;
 
-		for (lane = 0; lane < 4; lane++) {
-			u64 left_word = lane < 2 ? left_low : left_high;
-			u64 right_word = lane < 2 ? right_low : right_high;
-			u64 left = (left_word >> ((lane % 2) * 32)) &
-				   GENMASK_ULL(31, 0);
-			u64 right = (right_word >> ((lane % 2) * 32)) &
-				    GENMASK_ULL(31, 0);
-			u64 result;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 shift = (byte % sizeof(u64)) * 8;
+			u64 left_lane = (left[word] >> shift) & mask;
+			u64 right_lane = (right[word] >> shift) & mask;
+			u64 result_lane;
 
 			if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_ADD)
-				result = left + right;
+				result_lane = left_lane + right_lane;
 			else
-				result = left - right;
-			result &= GENMASK_ULL(31, 0);
-
-			if (lane < 2)
-				result_low |= result << (lane * 32);
-			else
-				result_high |= result << ((lane - 2) * 32);
+				result_lane = left_lane - right_lane;
+			result[word] |= (result_lane & mask) << shift;
 		}
+
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    result_low, result_high);
-		regs->pc += sizeof(u32);
-		return 0;
+					    result[0], result[1]);
 	}
-
-	if (decoded->access_size != sizeof(u64))
-		return -EOPNOTSUPP;
-
-	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_ADD)
-		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    left_low + right_low,
-					    left_high + right_high);
-	else
-		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    left_low - right_low,
-					    left_high - right_high);
 	regs->pc += sizeof(u32);
 	return 0;
 }

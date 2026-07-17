@@ -84,10 +84,8 @@
 #define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
 #define AARCH64_SIMD_VECTOR_LOGICAL_MASK 0x9f20fc00U
 #define AARCH64_SIMD_VECTOR_LOGICAL_PATTERN 0x0e201c00U
-#define AARCH64_SIMD_ADD_MASK 0xff20fc00U
-#define AARCH64_SIMD_ADD_PATTERN 0x4e208400U
-#define AARCH64_SIMD_SUB_MASK 0xff20fc00U
-#define AARCH64_SIMD_SUB_PATTERN 0x6e208400U
+#define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
+#define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
 #define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
 #define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
 #define AARCH64_SIMD_USHR_4S_MASK 0xff80fc00U
@@ -1400,38 +1398,23 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_ADD_MASK) ==
-	    AARCH64_SIMD_ADD_PATTERN) {
+	if ((instruction & AARCH64_SIMD_ADD_SUB_MASK) ==
+	    AARCH64_SIMD_ADD_SUB_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
 
-		if (size != 2 && size != 3)
+		if (!q && size == 3)
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = size == 2 ? sizeof(u32) : sizeof(u64);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_ADD;
-		return decoded;
-	}
-	if ((instruction & AARCH64_SIMD_SUB_MASK) ==
-	    AARCH64_SIMD_SUB_PATTERN) {
-		u8 size = (instruction >> 22) & 0x3U;
-
-		if (size != 2 && size != 3)
-			return decoded;
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded.rd = instruction & 0x1f;
-		decoded.rn = (instruction >> 5) & 0x1f;
-		decoded.rm = (instruction >> 16) & 0x1f;
-		decoded.access_size = size == 2 ? sizeof(u32) : sizeof(u64);
-		decoded.result_size = 16;
-		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SUB;
+		decoded.simd_arithmetic_op = instruction & BIT(29) ?
+			TCTI_SIMD_ARITH_SUB : TCTI_SIMD_ARITH_ADD;
 		return decoded;
 	}
 	if ((instruction & AARCH64_SIMD_FNEG_2D_MASK) ==
