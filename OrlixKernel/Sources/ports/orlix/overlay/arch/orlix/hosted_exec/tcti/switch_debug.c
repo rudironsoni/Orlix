@@ -2861,6 +2861,62 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SADDW &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_USUBW) {
+		u64 wide[2];
+		u64 narrow[2];
+		u64 result[2] = {};
+		u8 wide_size = decoded->access_size * 2;
+		u8 lane_count;
+		u8 operation = decoded->simd_arithmetic_op -
+			TCTI_SIMD_ARITH_SADDW;
+		bool is_unsigned = operation & 1U;
+		bool subtract = operation & 2U;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    (decoded->simd_source_index != 0 &&
+		     decoded->simd_source_index !=
+			sizeof(u64) / decoded->access_size))
+			return -EOPNOTSUPP;
+
+		wide[0] = current->thread.user_simd[decoded->rn * 2];
+		wide[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		narrow[0] = current->thread.user_simd[decoded->rm * 2];
+		narrow[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		lane_count = decoded->result_size / wide_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 wide_byte = lane * wide_size;
+			u8 wide_word = wide_byte / sizeof(u64);
+			u8 wide_shift = (wide_byte % sizeof(u64)) * 8;
+			u8 narrow_byte =
+				(decoded->simd_source_index + lane) *
+				decoded->access_size;
+			u8 narrow_word = narrow_byte / sizeof(u64);
+			u8 narrow_shift = (narrow_byte % sizeof(u64)) * 8;
+			u64 wide_mask = GENMASK_ULL(wide_size * 8 - 1, 0);
+			u64 narrow_mask =
+				GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+			u64 wide_lane = (wide[wide_word] >> wide_shift) & wide_mask;
+			u64 narrow_lane =
+				(narrow[narrow_word] >> narrow_shift) & narrow_mask;
+			u64 extended = is_unsigned ? narrow_lane :
+				sign_extend64(narrow_lane,
+					decoded->access_size * 8 - 1);
+			u64 lane_result = subtract ?
+				wide_lane - extended : wide_lane + extended;
+
+			result[wide_word] |=
+				(lane_result & wide_mask) << wide_shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if ((decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_ADD &&
 	     decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_SUB) ||
 	    (decoded->access_size != sizeof(u8) &&
