@@ -74,10 +74,8 @@
 #define AARCH64_SIMD_SHIFT_LEFT_LONG_PATTERN 0x0f00a400U
 #define AARCH64_SIMD_PERMUTE_MASK 0xbf208c00U
 #define AARCH64_SIMD_PERMUTE_PATTERN 0x0e000800U
-#define AARCH64_SIMD_UMOV_W_H_MASK 0xffe3fc00U
-#define AARCH64_SIMD_UMOV_W_H_PATTERN 0x0e023c00U
-#define AARCH64_SIMD_UMOV_X_D_MASK 0xffe3fc00U
-#define AARCH64_SIMD_UMOV_X_D_PATTERN 0x4e003c00U
+#define AARCH64_SIMD_UMOV_MASK 0xbfe0fc00U
+#define AARCH64_SIMD_UMOV_PATTERN 0x0e003c00U
 #define AARCH64_SIMD_INS_GPR_MASK 0xffe0fc00U
 #define AARCH64_SIMD_INS_GPR_PATTERN 0x4e001c00U
 #define AARCH64_SIMD_EXT_16B_MASK 0xffe08400U
@@ -1278,34 +1276,25 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_UMOV_W_H_MASK) ==
-	    AARCH64_SIMD_UMOV_W_H_PATTERN) {
+	if ((instruction & AARCH64_SIMD_UMOV_MASK) ==
+	    AARCH64_SIMD_UMOV_PATTERN) {
 		u8 imm5 = (instruction >> 16) & 0x1fU;
+		u8 lane_shift;
+		bool q = instruction & BIT(30);
 
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u16);
-		decoded.result_size = sizeof(u32);
-		decoded.simd_source_index = imm5 >> 2;
-		decoded.simd_fp = true;
-		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UMOV;
-		return decoded;
-	}
+		if (!imm5)
+			return decoded;
 
-	if ((instruction & AARCH64_SIMD_UMOV_X_D_MASK) ==
-	    AARCH64_SIMD_UMOV_X_D_PATTERN) {
-		u8 imm5 = (instruction >> 16) & 0x1fU;
-
-		if (imm5 != 8 && imm5 != 24)
+		lane_shift = __builtin_ctz((unsigned int)imm5);
+		if (lane_shift > 3 || q != (lane_shift == 3))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_source_index = imm5 == 24 ? 1 : 0;
+		decoded.access_size = BIT(lane_shift);
+		decoded.result_size = q ? sizeof(u64) : sizeof(u32);
+		decoded.simd_source_index = imm5 >> (lane_shift + 1);
 		decoded.simd_fp = true;
 		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_UMOV;
 		return decoded;

@@ -2166,6 +2166,58 @@ static void tcti_decode_recognizes_simd_umov_x_d1(struct kunit *test)
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
 
+static void tcti_decode_recognizes_complete_simd_umov_family(struct kunit *test)
+{
+	static const u8 access_sizes[] = {
+		sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64),
+	};
+	size_t size_index;
+
+	for (size_index = 0; size_index < ARRAY_SIZE(access_sizes);
+	     size_index++) {
+		u8 access_size = access_sizes[size_index];
+		u8 lane_shift = __builtin_ctz((unsigned int)access_size);
+		u8 lane_count = 16 / access_size;
+		u8 lane;
+
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 imm5 = (lane << (lane_shift + 1)) |
+				  BIT(lane_shift);
+			u32 instruction = 0x0e003c00U |
+				(access_size == sizeof(u64) ? BIT(30) : 0) |
+				((u32)imm5 << 16) | (4U << 5) | 5U;
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ(test,
+				TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 5U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 4U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, access_size,
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test,
+				access_size == sizeof(u64) ? sizeof(u64) :
+								 sizeof(u32),
+				decoded.result_size);
+			KUNIT_EXPECT_EQ(test, lane,
+					decoded.simd_source_index);
+			KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UMOV,
+					decoded.simd_element_move_op);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0e003c00U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0e103c00U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x0e083c00U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(0x4e013c00U).decode_class);
+}
+
 static void tcti_decode_recognizes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -5509,6 +5561,34 @@ static void tcti_switch_executes_simd_umov_x_d1(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x882cULL, regs.pc);
 }
 
+static void tcti_switch_executes_complete_simd_umov_family(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[6] = 0x7766554433221100ULL;
+	current->thread.user_simd[7] = 0xab8967452301efcdULL;
+	regs.regs[15] = ~0ULL;
+	regs.pc = 0x882c;
+
+	decoded = tcti_decode_aarch64(0x0e1f3c6fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xabULL, regs.regs[15]);
+	KUNIT_EXPECT_EQ(test, 0x8830ULL, regs.pc);
+
+	current->thread.user_simd[7] = 0x89abcdef01234567ULL;
+	regs.regs[15] = ~0ULL;
+	decoded = tcti_decode_aarch64(0x0e1c3c6fU);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x89abcdefULL, regs.regs[15]);
+	KUNIT_EXPECT_EQ(test, 0x8834ULL, regs.pc);
+}
+
 static void tcti_switch_executes_simd_ins_gpr_s0(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -6958,6 +7038,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_w_h1),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umov_x_d1),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_umov_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4h),
@@ -7051,6 +7132,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_x_d1),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_umov_family),
 	KUNIT_CASE(tcti_switch_executes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4h),

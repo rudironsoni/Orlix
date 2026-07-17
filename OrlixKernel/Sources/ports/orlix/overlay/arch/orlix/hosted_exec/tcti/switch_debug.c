@@ -2244,7 +2244,9 @@ static int tcti_execute_simd_vector_element_move(
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_UMOV) {
 		u8 byte_offset;
 
-		if (!((decoded->access_size == sizeof(u16) &&
+		if (!(((decoded->access_size == sizeof(u8) ||
+		        decoded->access_size == sizeof(u16) ||
+		        decoded->access_size == sizeof(u32)) &&
 		       decoded->result_size == sizeof(u32)) ||
 		      (decoded->access_size == sizeof(u64) &&
 		       decoded->result_size == sizeof(u64))))
