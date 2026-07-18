@@ -110,6 +110,8 @@
 #define AARCH64_SIMD_SCALAR_SATURATING_MUL_HIGH_PATTERN 0x5e20b400U
 #define AARCH64_SIMD_MUL_PMUL_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MUL_PMUL_PATTERN 0x0e209c00U
+#define AARCH64_SIMD_PMULL_MASK 0xbf20fc00U
+#define AARCH64_SIMD_PMULL_PATTERN 0x0e20e000U
 #define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_MIN_MAX_MASK 0x9f20f400U
@@ -1770,6 +1772,25 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			TCTI_SIMD_ARITH_SQRDMULH : TCTI_SIMD_ARITH_SQDMULH;
 		return decoded;
 	}
+	if ((instruction & AARCH64_SIMD_PMULL_MASK) ==
+	    AARCH64_SIMD_PMULL_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+
+		if (size != 0 && size != 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_source_index = !!(instruction & BIT(30));
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_PMULL;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_MUL_PMUL_MASK) ==
 	    AARCH64_SIMD_MUL_PMUL_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;

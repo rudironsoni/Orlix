@@ -2888,6 +2888,42 @@ static void tcti_decode_recognizes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_decode_recognizes_complete_simd_pmull_family(struct kunit *test)
+{
+	u8 q;
+	u8 size;
+
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 4; size++) {
+			u32 instruction = 0x0e20e000U | (q ? BIT(30) : 0) |
+					  ((u32)size << 22) | (2U << 16) |
+					  (1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			if (size != 0 && size != 3) {
+				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+				continue;
+			}
+
+			KUNIT_EXPECT_EQ(test,
+					TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+			KUNIT_EXPECT_EQ(test, 1U << size,
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+			KUNIT_EXPECT_EQ(test, q, decoded.simd_source_index);
+			KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_PMULL,
+					decoded.simd_arithmetic_op);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		}
+	}
+}
+
 static void tcti_decode_recognizes_complete_simd_mla_mls_family(struct kunit *test)
 {
 	u8 subtract;
@@ -8828,6 +8864,66 @@ static void tcti_switch_executes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_switch_executes_complete_simd_pmull_family(struct kunit *test)
+{
+	struct pt_regs regs = {};
+	u8 execution_count = 0;
+	u8 q;
+	u8 size;
+
+	regs.pc = 0x87e0;
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 4; size++) {
+			u64 left;
+			u64 right;
+			u64 expected_low;
+			u64 expected_high;
+			u32 instruction;
+			struct tcti_decoded_instruction decoded;
+			int ret;
+
+			if (size != 0 && size != 3)
+				continue;
+
+			if (size == 0) {
+				left = 0x5757575757575757ULL;
+				right = 0x1313131313131313ULL;
+				expected_low = 0x0589058905890589ULL;
+				expected_high = 0x0589058905890589ULL;
+			} else {
+				left = 0x8000000000000001ULL;
+				right = 3;
+				expected_low = 0x8000000000000003ULL;
+				expected_high = 1;
+			}
+
+			instruction = 0x0e20e000U | (q ? BIT(30) : 0) |
+				      ((u32)size << 22) | (2U << 16) |
+				      (1U << 5);
+			decoded = tcti_decode_aarch64(instruction);
+			current->thread.user_simd[2] = q ? U64_MAX : left;
+			current->thread.user_simd[3] = q ? left : U64_MAX;
+			current->thread.user_simd[4] = q ? U64_MAX : right;
+			current->thread.user_simd[5] = q ? right : U64_MAX;
+			current->thread.user_simd_valid = 0;
+
+			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+							 &decoded, NULL);
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, expected_low,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, expected_high,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 1,
+					current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test,
+					0x87e0ULL + execution_count * sizeof(u32),
+					regs.pc);
+		}
+	}
+}
+
 static void tcti_switch_executes_complete_simd_mla_mls_family(struct kunit *test)
 {
 	struct pt_regs regs = {};
@@ -12534,6 +12630,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_min_max_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_shift_left_immediate_family),
@@ -12662,6 +12759,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_min_max_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_shift_left_immediate_family),
