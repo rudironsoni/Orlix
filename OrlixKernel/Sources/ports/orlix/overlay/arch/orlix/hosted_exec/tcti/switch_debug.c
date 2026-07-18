@@ -3478,16 +3478,21 @@ static int tcti_execute_simd_vector_arithmetic(
 		     decoded->access_size != sizeof(u16) &&
 		     decoded->access_size != sizeof(u32) &&
 		     decoded->access_size != sizeof(u64)) ||
-		    (decoded->result_size != sizeof(u64) &&
+		    (decoded->simd_scalar &&
+		     decoded->result_size != decoded->access_size) ||
+		    (!decoded->simd_scalar &&
+		     decoded->result_size != sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)) ||
-		    decoded->access_size > decoded->result_size)
+		    (!decoded->simd_scalar &&
+		     decoded->access_size > decoded->result_size))
 			return -EOPNOTSUPP;
 
 		source[0] = current->thread.user_simd[decoded->rn * 2];
 		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
 		shifts[0] = current->thread.user_simd[decoded->rm * 2];
 		shifts[1] = current->thread.user_simd[decoded->rm * 2 + 1];
-		lane_count = decoded->result_size / decoded->access_size;
+		lane_count = decoded->simd_scalar ? 1 :
+			decoded->result_size / decoded->access_size;
 		for (lane = 0; lane < lane_count; lane++) {
 			u8 byte = lane * decoded->access_size;
 			u8 word = byte / sizeof(u64);

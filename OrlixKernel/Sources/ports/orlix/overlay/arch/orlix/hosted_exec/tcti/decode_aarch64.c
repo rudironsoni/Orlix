@@ -146,7 +146,7 @@
 #define AARCH64_SIMD_CMLT_ZERO_PATTERN 0x0e20a800U
 #define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
 #define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
-#define AARCH64_SIMD_SHIFT_BY_REGISTER_MASK 0x9f20e400U
+#define AARCH64_SIMD_SHIFT_BY_REGISTER_MASK 0x8f20e400U
 #define AARCH64_SIMD_SHIFT_BY_REGISTER_PATTERN 0x0e204400U
 #define AARCH64_SIMD_CMEQ_MASK 0xbf20fc00U
 #define AARCH64_SIMD_CMEQ_PATTERN 0x2e208c00U
@@ -1305,8 +1305,11 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 opcode = (instruction >> 11) & 0x1fU;
 		u8 operation;
 		bool q = instruction & BIT(30);
+		bool scalar = instruction & BIT(28);
 
-		if (opcode < 8 || opcode > 11 || (!q && size == 3))
+		if (opcode < 8 || opcode > 11 || (scalar && !q) ||
+		    (!scalar && !q && size == 3) ||
+		    (scalar && (opcode == 8 || opcode == 10) && size != 3))
 			return decoded;
 
 		operation = (opcode - 8) * 2 + !!(instruction & BIT(29));
@@ -1315,8 +1318,10 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.access_size = BIT(size);
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? decoded.access_size :
+			(q ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SSHL + operation;
 		return decoded;
 	}
