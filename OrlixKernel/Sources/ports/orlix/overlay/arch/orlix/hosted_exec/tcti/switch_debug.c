@@ -2733,6 +2733,125 @@ static u64 tcti_simd_saturating_mul_high_lane(u64 left, u64 right, u8 bits,
 	return (u64)(product >> (bits - 1)) & mask;
 }
 
+static u8 tcti_aes_rotate_left(u8 value, u8 amount)
+{
+	return (value << amount) | (value >> (8 - amount));
+}
+
+static u8 tcti_aes_gf_multiply(u8 left, u8 right)
+{
+	u8 result = 0;
+	u8 bit;
+
+	for (bit = 0; bit < 8; bit++) {
+		bool high = left & BIT(7);
+
+		if (right & BIT(0))
+			result ^= left;
+		left <<= 1;
+		if (high)
+			left ^= 0x1bU;
+		right >>= 1;
+	}
+	return result;
+}
+
+static u8 tcti_aes_gf_inverse(u8 value)
+{
+	u8 result = 1;
+	u8 base = value;
+	u8 exponent = 254;
+
+	if (!value)
+		return 0;
+	while (exponent) {
+		if (exponent & 1U)
+			result = tcti_aes_gf_multiply(result, base);
+		base = tcti_aes_gf_multiply(base, base);
+		exponent >>= 1;
+	}
+	return result;
+}
+
+static u8 tcti_aes_substitute(u8 value)
+{
+	u8 inverse = tcti_aes_gf_inverse(value);
+
+	return inverse ^ tcti_aes_rotate_left(inverse, 1) ^
+	       tcti_aes_rotate_left(inverse, 2) ^
+	       tcti_aes_rotate_left(inverse, 3) ^
+	       tcti_aes_rotate_left(inverse, 4) ^ 0x63U;
+}
+
+static u8 tcti_aes_inverse_substitute(u8 value)
+{
+	u8 inverse_affine = tcti_aes_rotate_left(value, 1) ^
+				    tcti_aes_rotate_left(value, 3) ^
+				    tcti_aes_rotate_left(value, 6) ^ 0x05U;
+
+	return tcti_aes_gf_inverse(inverse_affine);
+}
+
+static void tcti_aes_shift_rows(u8 state[16], bool inverse)
+{
+	u8 source[16];
+	u8 row;
+	u8 column;
+
+	memcpy(source, state, sizeof(source));
+	for (row = 0; row < 4; row++) {
+		for (column = 0; column < 4; column++) {
+			u8 source_column = inverse ?
+				(column + 4 - row) % 4 : (column + row) % 4;
+
+			state[row + column * 4] =
+				source[row + source_column * 4];
+		}
+	}
+}
+
+static void tcti_aes_mix_columns(u8 state[16], bool inverse)
+{
+	u8 column;
+
+	for (column = 0; column < 4; column++) {
+		u8 *value = &state[column * 4];
+		u8 source[4] = { value[0], value[1], value[2], value[3] };
+
+		if (inverse) {
+			value[0] = tcti_aes_gf_multiply(source[0], 0x0e) ^
+				tcti_aes_gf_multiply(source[1], 0x0b) ^
+				tcti_aes_gf_multiply(source[2], 0x0d) ^
+				tcti_aes_gf_multiply(source[3], 0x09);
+			value[1] = tcti_aes_gf_multiply(source[0], 0x09) ^
+				tcti_aes_gf_multiply(source[1], 0x0e) ^
+				tcti_aes_gf_multiply(source[2], 0x0b) ^
+				tcti_aes_gf_multiply(source[3], 0x0d);
+			value[2] = tcti_aes_gf_multiply(source[0], 0x0d) ^
+				tcti_aes_gf_multiply(source[1], 0x09) ^
+				tcti_aes_gf_multiply(source[2], 0x0e) ^
+				tcti_aes_gf_multiply(source[3], 0x0b);
+			value[3] = tcti_aes_gf_multiply(source[0], 0x0b) ^
+				tcti_aes_gf_multiply(source[1], 0x0d) ^
+				tcti_aes_gf_multiply(source[2], 0x09) ^
+				tcti_aes_gf_multiply(source[3], 0x0e);
+		} else {
+			value[0] = tcti_aes_gf_multiply(source[0], 2) ^
+				tcti_aes_gf_multiply(source[1], 3) ^
+				source[2] ^ source[3];
+			value[1] = source[0] ^
+				tcti_aes_gf_multiply(source[1], 2) ^
+				tcti_aes_gf_multiply(source[2], 3) ^ source[3];
+			value[2] = source[0] ^ source[1] ^
+				tcti_aes_gf_multiply(source[2], 2) ^
+				tcti_aes_gf_multiply(source[3], 3);
+			value[3] = tcti_aes_gf_multiply(source[0], 3) ^
+				source[1] ^ source[2] ^
+				tcti_aes_gf_multiply(source[3], 2);
+		}
+	}
+}
+
 static int tcti_execute_simd_vector_arithmetic(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -2741,6 +2860,58 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_low;
 	u64 right_high;
 	u8 lane;
+
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_AESE &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_AESIMC) {
+		u8 state[16];
+		u8 source[16];
+		u8 index;
+
+		if (decoded->access_size != 2 * sizeof(u64) ||
+		    decoded->result_size != 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+
+		put_unaligned_le64(current->thread.user_simd[decoded->rd * 2],
+				   state);
+		put_unaligned_le64(current->thread.user_simd[decoded->rd * 2 + 1],
+				   state + sizeof(u64));
+		put_unaligned_le64(current->thread.user_simd[decoded->rn * 2],
+				   source);
+		put_unaligned_le64(current->thread.user_simd[decoded->rn * 2 + 1],
+				   source + sizeof(u64));
+
+		switch (decoded->simd_arithmetic_op) {
+		case TCTI_SIMD_ARITH_AESE:
+			for (index = 0; index < sizeof(state); index++)
+				state[index] =
+					tcti_aes_substitute(state[index] ^ source[index]);
+			tcti_aes_shift_rows(state, false);
+			break;
+		case TCTI_SIMD_ARITH_AESD:
+			for (index = 0; index < sizeof(state); index++)
+				state[index] = tcti_aes_inverse_substitute(
+					state[index] ^ source[index]);
+			tcti_aes_shift_rows(state, true);
+			break;
+		case TCTI_SIMD_ARITH_AESMC:
+			memcpy(state, source, sizeof(state));
+			tcti_aes_mix_columns(state, false);
+			break;
+		case TCTI_SIMD_ARITH_AESIMC:
+			memcpy(state, source, sizeof(state));
+			tcti_aes_mix_columns(state, true);
+			break;
+		default:
+			return -EOPNOTSUPP;
+		}
+
+		tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64),
+					    get_unaligned_le64(state),
+					    get_unaligned_le64(
+						    state + sizeof(u64)));
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->immediate &&
 	    (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQSHL ||

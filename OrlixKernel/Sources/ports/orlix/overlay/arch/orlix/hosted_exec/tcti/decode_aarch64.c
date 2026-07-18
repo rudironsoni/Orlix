@@ -116,6 +116,8 @@
 #define AARCH64_SIMD_MLAL_PATTERN 0x0e208000U
 #define AARCH64_SIMD_MLSL_PATTERN 0x0e20a000U
 #define AARCH64_SIMD_MULL_PATTERN 0x0e20c000U
+#define AARCH64_SIMD_AES_MASK 0xffff8c00U
+#define AARCH64_SIMD_AES_PATTERN 0x4e280800U
 #define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_MIN_MAX_MASK 0x9f20f400U
@@ -1776,6 +1778,18 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			TCTI_SIMD_ARITH_SQRDMULH : TCTI_SIMD_ARITH_SQDMULH;
 		return decoded;
 	}
+	if ((instruction & AARCH64_SIMD_AES_MASK) == AARCH64_SIMD_AES_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_AESE +
+					     ((instruction >> 12) & 0x3U);
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_MULTIPLY_LONG_MASK) ==
 		    AARCH64_SIMD_MLAL_PATTERN ||
 	    (instruction & AARCH64_SIMD_MULTIPLY_LONG_MASK) ==

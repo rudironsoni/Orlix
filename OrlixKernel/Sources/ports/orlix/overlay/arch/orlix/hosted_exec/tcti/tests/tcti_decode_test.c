@@ -2888,6 +2888,35 @@ static void tcti_decode_recognizes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_decode_recognizes_complete_simd_aes_family(struct kunit *test)
+{
+	struct {
+		u32 instruction;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x4e284820U, TCTI_SIMD_ARITH_AESE },
+		{ 0x4e285820U, TCTI_SIMD_ARITH_AESD },
+		{ 0x4e286820U, TCTI_SIMD_ARITH_AESMC },
+		{ 0x4e287820U, TCTI_SIMD_ARITH_AESIMC },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[index].instruction);
+
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+		KUNIT_EXPECT_EQ(test, cases[index].operation,
+				decoded.simd_arithmetic_op);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	}
+}
+
 static void
 tcti_decode_recognizes_complete_simd_multiply_long_family(struct kunit *test)
 {
@@ -8920,6 +8949,56 @@ static void tcti_switch_executes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_switch_executes_complete_simd_aes_family(struct kunit *test)
+{
+	struct {
+		u32 instruction;
+		u64 source_low;
+		u64 source_high;
+		u64 expected_low;
+		u64 expected_high;
+	} cases[] = {
+		{ 0x4e284820U, 0xbfc6cdd4dbe2e9f0ULL,
+		  0x878e959ca3aab1b8ULL, 0x61cd6c70c4e0e88cULL,
+		  0xc2ba9b606ce146e7ULL },
+		{ 0x4e285820U, 0xbfc6cdd4dbe2e9f0ULL,
+		  0x878e959ca3aab1b8ULL, 0x6f3ac8609a47e217ULL,
+		  0x2d1f9a9697a0b1fcULL },
+		{ 0x4e286820U, 0x0706050403020100ULL,
+		  0x0f0e0d0c0b0a0908ULL, 0x0104030605000702ULL,
+		  0x090c0b0e0d080f0aULL },
+		{ 0x4e287820U, 0x0706050403020100ULL,
+		  0x0f0e0d0c0b0a0908ULL, 0x090c0b0e0d080f0aULL,
+		  0x0104030605000702ULL },
+	};
+	struct pt_regs regs = {};
+	size_t index;
+
+	regs.pc = 0x87b0;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[index].instruction);
+		int ret;
+
+		current->thread.user_simd[0] = 0x0706050403020100ULL;
+		current->thread.user_simd[1] = 0x0f0e0d0c0b0a0908ULL;
+		current->thread.user_simd[2] = cases[index].source_low;
+		current->thread.user_simd[3] = cases[index].source_high;
+		current->thread.user_simd_valid = 0;
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_low,
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_high,
+				current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test,
+				0x87b0ULL + (index + 1) * sizeof(u32), regs.pc);
+	}
+}
+
 static void
 tcti_switch_executes_complete_simd_multiply_long_family(struct kunit *test)
 {
@@ -12809,6 +12888,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_aes_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_multiply_long_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mla_mls_family),
@@ -12939,6 +13019,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_aes_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_multiply_long_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mla_mls_family),
