@@ -27,6 +27,15 @@
 #define AARCH64_FPSR_IXC BIT(4)
 #define AARCH64_FPSR_QC BIT(27)
 
+extern u64 tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzs_x_s(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzs_x_d(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzu_w_s(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzu_w_d(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzu_x_s(u64 value, u64 fractional_bits);
+extern u64 tcti_native_fcvtzu_x_d(u64 value, u64 fractional_bits);
+
 static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
 
 static enum tcti_access
@@ -957,37 +966,6 @@ static int tcti_fp64_bits_to_s64_zero(u64 value, u64 *result)
 		return -EOPNOTSUPP;
 
 	*result = negative ? (~magnitude + 1) : magnitude;
-	return 0;
-}
-
-static int tcti_fp64_bits_to_u64_fixed_zero(u64 value, u8 fractional_bits,
-					    u64 *result)
-{
-	u64 exponent_bits = (value >> 52) & 0x7ffU;
-	u64 fraction = value & GENMASK_ULL(51, 0);
-	__uint128_t scaled;
-	u64 mantissa;
-	int exponent;
-	int shift;
-
-	if (!result || (value & BIT_ULL(63)) || exponent_bits == 0x7ffU)
-		return -EOPNOTSUPP;
-	if (!exponent_bits) {
-		*result = 0;
-		return 0;
-	}
-
-	exponent = (int)exponent_bits - 1023;
-	shift = exponent + fractional_bits - 52;
-	mantissa = BIT_ULL(52) | fraction;
-	if (shift >= 0) {
-		scaled = (__uint128_t)mantissa << shift;
-		if (scaled > U64_MAX)
-			return -EOPNOTSUPP;
-		*result = (u64)scaled;
-	} else {
-		*result = mantissa >> -shift;
-	}
 	return 0;
 }
 
@@ -6178,6 +6156,72 @@ static int tcti_execute_fp_conditional_select(
 	return 0;
 }
 
+static u64 tcti_execute_native_fcvt_fixed(
+	const struct tcti_decoded_instruction *decoded, u64 value)
+{
+	bool unsigned_conversion =
+		decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED;
+	bool double_source = decoded->access_size == sizeof(u64);
+	bool wide_result = decoded->result_size == sizeof(u64);
+
+	if (unsigned_conversion) {
+		if (wide_result)
+			return double_source ?
+				tcti_native_fcvtzu_x_d(value, decoded->shift_amount) :
+				tcti_native_fcvtzu_x_s(value, decoded->shift_amount);
+		return double_source ?
+			tcti_native_fcvtzu_w_d(value, decoded->shift_amount) :
+			tcti_native_fcvtzu_w_s(value, decoded->shift_amount);
+	}
+
+	if (wide_result)
+		return double_source ?
+			tcti_native_fcvtzs_x_d(value, decoded->shift_amount) :
+			tcti_native_fcvtzs_x_s(value, decoded->shift_amount);
+	return double_source ?
+		tcti_native_fcvtzs_w_d(value, decoded->shift_amount) :
+		tcti_native_fcvtzs_w_s(value, decoded->shift_amount);
+}
+
+static int tcti_execute_fp_fixed_convert(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	u64 host_fpcr;
+	u64 host_fpsr;
+	u64 guest_fpsr;
+	u64 value = current->thread.user_simd[decoded->rn * 2];
+	u64 result;
+
+	preempt_disable();
+	asm volatile(
+		"mrs %0, fpcr\n"
+		"mrs %1, fpsr\n"
+		"msr fpcr, %2\n"
+		"msr fpsr, %3\n"
+		"isb\n"
+		: "=&r" (host_fpcr), "=&r" (host_fpsr)
+		: "r" (current->thread.user_fpcr),
+		  "r" (current->thread.user_fpsr)
+		: "memory");
+
+	result = tcti_execute_native_fcvt_fixed(decoded, value);
+
+	asm volatile(
+		"mrs %0, fpsr\n"
+		"msr fpcr, %1\n"
+		"msr fpsr, %2\n"
+		"isb\n"
+		: "=&r" (guest_fpsr)
+		: "r" (host_fpcr), "r" (host_fpsr)
+		: "memory");
+	current->thread.user_fpsr = guest_fpsr;
+	preempt_enable();
+
+	tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size, result);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int tcti_execute_fp_int_convert(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -6186,6 +6230,10 @@ static int tcti_execute_fp_int_convert(
 	u64 host_fpcr;
 	u64 host_fpsr;
 	u64 guest_fpsr;
+
+	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS_FIXED ||
+	    decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED)
+		return tcti_execute_fp_fixed_convert(regs, decoded);
 
 	if ((decoded->fp_int_op == TCTI_FP_INT_FCVTZS ||
 	     decoded->fp_int_op == TCTI_FP_INT_FCVTZU) &&
@@ -6373,20 +6421,6 @@ static int tcti_execute_fp_int_convert(
 			return -EOPNOTSUPP;
 		}
 		tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size,
-				       result);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED &&
-	    decoded->access_size == sizeof(u64) &&
-	    decoded->result_size == sizeof(u64)) {
-		value = current->thread.user_simd[decoded->rn * 2];
-		if (tcti_fp64_bits_to_u64_fixed_zero(value,
-						     decoded->shift_amount,
-						     &result))
-			return -EOPNOTSUPP;
-		tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u64),
 				       result);
 		regs->pc += sizeof(u32);
 		return 0;

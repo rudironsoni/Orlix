@@ -299,8 +299,8 @@
 #define AARCH64_FCVTZU_X_D_PATTERN 0x9e790000U
 #define AARCH64_FCVTZU_W_D_MASK 0xfffffc00U
 #define AARCH64_FCVTZU_W_D_PATTERN 0x1e790000U
-#define AARCH64_FCVTZU_X_D_FIXED_MASK 0xffff0000U
-#define AARCH64_FCVTZU_X_D_FIXED_PATTERN 0x9e590000U
+#define AARCH64_FCVTZ_FIXED_GPR_MASK 0x7f3e0000U
+#define AARCH64_FCVTZ_FIXED_GPR_PATTERN 0x1e180000U
 #define AARCH64_FCVTZS_SIMD_SCALAR_MASK 0xffbffc00U
 #define AARCH64_FCVTZS_SIMD_SCALAR_PATTERN 0x5ea1b800U
 #define AARCH64_FCVTZU_SIMD_SCALAR_MASK 0xffbffc00U
@@ -2999,18 +2999,27 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_FCVTZU_X_D_FIXED_MASK) ==
-	    AARCH64_FCVTZU_X_D_FIXED_PATTERN) {
+	if ((instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
+	    AARCH64_FCVTZ_FIXED_GPR_PATTERN) {
 		u8 scale = (instruction >> 10) & 0x3fU;
+		u8 type = (instruction >> 22) & 0x3U;
+		bool is_64bit = instruction & BIT(31);
+
+		if (type > 1)
+			return decoded;
+		if (!is_64bit && !(scale & BIT(5)))
+			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
+		decoded.access_size = instruction & BIT(22) ? sizeof(u64) :
+							 sizeof(u32);
+		decoded.result_size = is_64bit ? sizeof(u64) : sizeof(u32);
 		decoded.shift_amount = 64 - scale;
 		decoded.simd_fp = true;
-		decoded.fp_int_op = TCTI_FP_INT_FCVTZU_FIXED;
+		decoded.fp_int_op = instruction & BIT(16) ?
+			TCTI_FP_INT_FCVTZU_FIXED : TCTI_FP_INT_FCVTZS_FIXED;
 		return decoded;
 	}
 

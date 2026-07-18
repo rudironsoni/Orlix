@@ -120,6 +120,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/engine.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/report.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/fixed_fp.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/decode_aarch64.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/gadget_program.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \

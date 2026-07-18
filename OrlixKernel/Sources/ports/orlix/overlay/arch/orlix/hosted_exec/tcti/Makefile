@@ -1,6 +1,7 @@
 obj-y += engine.o
 obj-y += report.o
 obj-y += switch_debug.o
+obj-y += fixed_fp.o
 obj-y += decode_aarch64.o
 obj-y += gadget_program.o
 obj-y += block_cache.o
