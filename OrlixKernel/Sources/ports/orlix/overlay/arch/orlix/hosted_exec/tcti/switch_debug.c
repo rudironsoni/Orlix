@@ -2660,6 +2660,42 @@ static int tcti_execute_simd_vector_element_move(
 		return 0;
 	}
 
+	if (decoded->simd_element_move_op ==
+	    TCTI_SIMD_ELEMENT_MOVE_INS_ELEMENT) {
+		u8 lane_count;
+		u8 source_byte;
+		u8 destination_byte;
+
+		if (decoded->access_size != sizeof(u8) &&
+		    decoded->access_size != sizeof(u16) &&
+		    decoded->access_size != sizeof(u32) &&
+		    decoded->access_size != sizeof(u64))
+			return -EOPNOTSUPP;
+		lane_count = 2 * sizeof(u64) / decoded->access_size;
+		if (decoded->simd_source_index >= lane_count ||
+		    decoded->simd_destination_index >= lane_count)
+			return -EOPNOTSUPP;
+
+		source_byte = decoded->simd_source_index * decoded->access_size;
+		destination_byte = decoded->simd_destination_index *
+				   decoded->access_size;
+		source_word = decoded->rn * 2 + source_byte / sizeof(u64);
+		destination_word = decoded->rd * 2 +
+				   destination_byte / sizeof(u64);
+		source_shift = (source_byte % sizeof(u64)) * 8;
+		destination_shift = (destination_byte % sizeof(u64)) * 8;
+		mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		value = (current->thread.user_simd[source_word] >> source_shift) &
+			mask;
+		word = current->thread.user_simd[destination_word];
+		word = (word & ~(mask << destination_shift)) |
+			(value << destination_shift);
+		current->thread.user_simd[destination_word] = word;
+		current->thread.user_simd_valid = 1;
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->access_size == sizeof(u64)) {
 		if (decoded->simd_source_index > 1 ||
 		    decoded->simd_destination_index > 1)
@@ -5543,7 +5579,8 @@ static int tcti_execute_simd_vector_reduction(
 		return 0;
 	}
 
-	if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV &&
+	if ((decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV ||
+	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_ADDV) &&
 	    (decoded->access_size == sizeof(u8) ||
 	     decoded->access_size == sizeof(u16) ||
 	     decoded->access_size == sizeof(u32)) &&
@@ -5551,10 +5588,6 @@ static int tcti_execute_simd_vector_reduction(
 		lane_bits = decoded->access_size * 8;
 		lane_count = (decoded->simd_q ? 2 * sizeof(u64) : sizeof(u64)) /
 			     decoded->access_size;
-	} else if (decoded->access_size == sizeof(u32) &&
-		   decoded->result_size == sizeof(u32)) {
-		lane_bits = 32;
-		lane_count = 4;
 	} else {
 		return -EOPNOTSUPP;
 	}
@@ -5572,7 +5605,7 @@ static int tcti_execute_simd_vector_reduction(
 				result = value;
 			break;
 		case TCTI_SIMD_REDUCTION_ADDV:
-			result += value;
+			result = (result + value) & GENMASK(lane_bits - 1, 0);
 			break;
 		default:
 			return -EOPNOTSUPP;

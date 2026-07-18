@@ -215,8 +215,8 @@
 #define AARCH64_SIMD_CMHI_2D_PATTERN 0x6e203400U
 #define AARCH64_SIMD_UMAXV_MASK 0xbf3ffc00U
 #define AARCH64_SIMD_UMAXV_PATTERN 0x2e30a800U
-#define AARCH64_SIMD_ADDV_4S_MASK 0xfffffc20U
-#define AARCH64_SIMD_ADDV_4S_PATTERN 0x4eb1b800U
+#define AARCH64_SIMD_ADDV_MASK 0xbf3ffc20U
+#define AARCH64_SIMD_ADDV_PATTERN 0x0e31b800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
 #define AARCH64_SIMD_ADDP_D_2D_PATTERN 0x5ef1b800U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_MASK 0xbf000000U
@@ -1698,25 +1698,23 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_SIMD_VECTOR_ELEMENT_MOVE_PATTERN) {
 		u8 imm5 = (instruction >> 16) & 0x1fU;
 		u8 imm4 = (instruction >> 11) & 0xfU;
+		u8 size;
 
-		if (!((imm5 == 8 && imm4 == 0) ||
-		      (imm5 == 20 && imm4 == 8) ||
-		      (imm5 == 24 && imm4 == 0)))
+		if (!imm5)
+			return decoded;
+		size = __ffs(imm5);
+		if (size > 3 || (imm4 & (BIT(size) - 1)))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = imm5 == 20 ? sizeof(u32) : sizeof(u64);
-		decoded.result_size = decoded.access_size;
-		if (imm5 == 24) {
-			decoded.simd_destination_index = 1;
-			decoded.simd_source_index = 0;
-		} else {
-			decoded.simd_destination_index = imm5 == 20 ? 2 : 0;
-			decoded.simd_source_index = imm4 == 8 ? 2 : 0;
-		}
+		decoded.access_size = BIT(size);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_destination_index = imm5 >> (size + 1);
+		decoded.simd_source_index = imm4 >> size;
 		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_INS_ELEMENT;
 		return decoded;
 	}
 
@@ -2676,13 +2674,20 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_ADDV_4S_MASK) ==
-	    AARCH64_SIMD_ADDV_4S_PATTERN) {
+	if ((instruction & AARCH64_SIMD_ADDV_MASK) ==
+	    AARCH64_SIMD_ADDV_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+
+		if (size == 3 || (size == 2 && !q))
+			return decoded;
+
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = sizeof(u32);
+		decoded.access_size = 1U << size;
+		decoded.result_size = decoded.access_size;
+		decoded.simd_q = q;
 		decoded.simd_fp = true;
 		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_ADDV;
 		return decoded;
