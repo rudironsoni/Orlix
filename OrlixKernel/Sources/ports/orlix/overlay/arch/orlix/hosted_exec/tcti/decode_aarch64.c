@@ -132,6 +132,11 @@
 #define AARCH64_SIMD_RSHRN_PATTERN 0x0f008c00U
 #define AARCH64_SIMD_SQSHRN_PATTERN 0x0f009400U
 #define AARCH64_SIMD_SQRSHRN_PATTERN 0x0f009c00U
+#define AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK 0xdf80fc00U
+#define AARCH64_SIMD_SCALAR_SHRN_PATTERN 0x5f008400U
+#define AARCH64_SIMD_SCALAR_RSHRN_PATTERN 0x5f008c00U
+#define AARCH64_SIMD_SCALAR_SQSHRN_PATTERN 0x5f009400U
+#define AARCH64_SIMD_SCALAR_SQRSHRN_PATTERN 0x5f009c00U
 #define AARCH64_SIMD_SHIFT_RIGHT_MASK 0x8f80fc00U
 #define AARCH64_SIMD_SSHR_PATTERN 0x0f000400U
 #define AARCH64_SIMD_SSRA_PATTERN 0x0f001400U
@@ -1873,15 +1878,35 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	}
 
 	if ((instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
-	    AARCH64_SIMD_SHRN_PATTERN ||
+		    AARCH64_SIMD_SHRN_PATTERN ||
 	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
 	    AARCH64_SIMD_RSHRN_PATTERN ||
 	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
 	    AARCH64_SIMD_SQSHRN_PATTERN ||
 	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
-	    AARCH64_SIMD_SQRSHRN_PATTERN) {
+		    AARCH64_SIMD_SQRSHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+		    AARCH64_SIMD_SCALAR_SHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+		    AARCH64_SIMD_SCALAR_RSHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+		    AARCH64_SIMD_SCALAR_SQSHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+		    AARCH64_SIMD_SCALAR_SQRSHRN_PATTERN) {
 		u8 immediate = (instruction >> 16) & 0x7fU;
 		u8 source_bits;
+		bool scalar = (instruction &
+			       AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+			      AARCH64_SIMD_SCALAR_SHRN_PATTERN ||
+			      (instruction &
+			       AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+			      AARCH64_SIMD_SCALAR_RSHRN_PATTERN ||
+			      (instruction &
+			       AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+			      AARCH64_SIMD_SCALAR_SQSHRN_PATTERN ||
+			      (instruction &
+			       AARCH64_SIMD_SCALAR_SHIFT_NARROW_MASK) ==
+			      AARCH64_SIMD_SCALAR_SQRSHRN_PATTERN;
 		u32 pattern = instruction & AARCH64_SIMD_SHIFT_NARROW_MASK;
 		bool u = instruction & BIT(29);
 		bool q = instruction & BIT(30);
@@ -1894,15 +1919,23 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			source_bits = 32;
 		else
 			source_bits = 64;
+		if (scalar)
+			pattern &= ~(BIT(28) | BIT(30));
+		if (scalar && !u &&
+		    (pattern == AARCH64_SIMD_SHRN_PATTERN ||
+		     pattern == AARCH64_SIMD_RSHRN_PATTERN))
+			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = source_bits / 8;
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
-		decoded.simd_destination_index = q;
+		decoded.result_size = scalar ? source_bits / 16 :
+					       (q ? 2 * sizeof(u64) : sizeof(u64));
+		decoded.simd_destination_index = scalar ? false : q;
 		decoded.shift_amount = source_bits - immediate;
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		if (pattern == AARCH64_SIMD_SHRN_PATTERN)
 			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_SQSHRUN :
 				TCTI_SIMD_ARITH_SHRN;

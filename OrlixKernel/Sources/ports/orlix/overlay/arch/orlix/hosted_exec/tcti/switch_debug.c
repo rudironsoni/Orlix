@@ -3243,17 +3243,22 @@ static int tcti_execute_simd_vector_arithmetic(
 		if ((decoded->access_size != sizeof(u16) &&
 		     decoded->access_size != sizeof(u32) &&
 		     decoded->access_size != sizeof(u64)) ||
-		    (decoded->result_size != sizeof(u64) &&
-		     decoded->result_size != 2 * sizeof(u64)) ||
-		    decoded->simd_destination_index !=
-			(decoded->result_size == 2 * sizeof(u64)) ||
+		    (decoded->simd_scalar &&
+		     (decoded->result_size != narrow_size ||
+		      decoded->simd_destination_index)) ||
+		    (!decoded->simd_scalar &&
+		     ((decoded->result_size != sizeof(u64) &&
+		       decoded->result_size != 2 * sizeof(u64)) ||
+		      decoded->simd_destination_index !=
+			(decoded->result_size == 2 * sizeof(u64)))) ||
 		    decoded->shift_amount == 0 ||
 		    decoded->shift_amount > decoded->access_size * 4)
 			return -EOPNOTSUPP;
 
 		source[0] = current->thread.user_simd[decoded->rn * 2];
 		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
-		lane_count = 2 * sizeof(u64) / decoded->access_size;
+		lane_count = decoded->simd_scalar ? 1 :
+					       2 * sizeof(u64) / decoded->access_size;
 		narrow_bits = narrow_size * 8;
 		source_mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
 		result_mask = GENMASK_ULL(narrow_bits - 1, 0);
@@ -3315,7 +3320,11 @@ static int tcti_execute_simd_vector_arithmetic(
 
 		if (saturated)
 			current->thread.user_fpsr |= AARCH64_FPSR_QC;
-		if (decoded->simd_destination_index)
+		if (decoded->simd_scalar)
+			tcti_write_simd_fp_register(decoded->rd,
+						    decoded->result_size,
+						    narrowed, 0);
+		else if (decoded->simd_destination_index)
 			tcti_write_simd_fp_register(
 				decoded->rd, 2 * sizeof(u64),
 				current->thread.user_simd[decoded->rd * 2], narrowed);
