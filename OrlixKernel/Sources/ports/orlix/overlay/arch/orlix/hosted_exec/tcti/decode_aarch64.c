@@ -211,10 +211,8 @@
 #define AARCH64_SIMD_CMEQ_4S_PATTERN 0x6ea08c00U
 #define AARCH64_SIMD_CMHI_2D_MASK 0xff20fc00U
 #define AARCH64_SIMD_CMHI_2D_PATTERN 0x6e203400U
-#define AARCH64_SIMD_UMAXV_4H_MASK 0xfffffc20U
-#define AARCH64_SIMD_UMAXV_4H_PATTERN 0x2e70a800U
-#define AARCH64_SIMD_UMAXV_4S_MASK 0xfffffc20U
-#define AARCH64_SIMD_UMAXV_4S_PATTERN 0x6eb0a800U
+#define AARCH64_SIMD_UMAXV_MASK 0xbf3ffc00U
+#define AARCH64_SIMD_UMAXV_PATTERN 0x2e30a800U
 #define AARCH64_SIMD_ADDV_4S_MASK 0xfffffc20U
 #define AARCH64_SIMD_ADDV_4S_PATTERN 0x4eb1b800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
@@ -243,6 +241,8 @@
 #define AARCH64_FNEG_S_PATTERN 0x1e214000U
 #define AARCH64_FNEG_D_MASK 0xfffffc00U
 #define AARCH64_FNEG_D_PATTERN 0x1e614000U
+#define AARCH64_FP_SCALAR_1SOURCE_MASK 0xff207c00U
+#define AARCH64_FP_SCALAR_1SOURCE_PATTERN 0x1e204000U
 #define AARCH64_FDIV_S_MASK 0xff20fc00U
 #define AARCH64_FDIV_S_PATTERN 0x1e201800U
 #define AARCH64_FDIV_D_MASK 0xff20fc00U
@@ -265,9 +265,11 @@
 #define AARCH64_FP_SCALAR_3SOURCE_PATTERN 0x1f000000U
 #define AARCH64_FCSEL_MASK 0xffa00c00U
 #define AARCH64_FCSEL_PATTERN 0x1e200c00U
-#define AARCH64_FCMP_S_MASK 0xffe0fc1fU
+#define AARCH64_FCCMP_MASK 0xff200c00U
+#define AARCH64_FCCMP_PATTERN 0x1e200400U
+#define AARCH64_FCMP_S_MASK 0xffe0fc0fU
 #define AARCH64_FCMP_S_PATTERN 0x1e202000U
-#define AARCH64_FCMP_D_MASK 0xffe0fc1fU
+#define AARCH64_FCMP_D_MASK 0xffe0fc0fU
 #define AARCH64_FCMP_D_PATTERN 0x1e602000U
 #define AARCH64_FCMP_S_ZERO_PATTERN 0x1e202008U
 #define AARCH64_FCMP_D_ZERO_PATTERN 0x1e602008U
@@ -275,6 +277,10 @@
 #define AARCH64_SCVTF_S_W_PATTERN 0x1e220000U
 #define AARCH64_SCVTF_D_W_MASK 0xfffffc00U
 #define AARCH64_SCVTF_D_W_PATTERN 0x1e620000U
+#define AARCH64_SCVTF_S_X_MASK 0xfffffc00U
+#define AARCH64_SCVTF_S_X_PATTERN 0x9e220000U
+#define AARCH64_SCVTF_D_X_MASK 0xfffffc00U
+#define AARCH64_SCVTF_D_X_PATTERN 0x9e620000U
 #define AARCH64_UCVTF_S_GPR_MASK 0x7ffffc00U
 #define AARCH64_UCVTF_S_GPR_PATTERN 0x1e230000U
 #define AARCH64_UCVTF_D_GPR_MASK 0x7ffffc00U
@@ -289,8 +295,10 @@
 #define AARCH64_FCVTZU_W_D_PATTERN 0x1e790000U
 #define AARCH64_FCVTZU_X_D_FIXED_MASK 0xffff0000U
 #define AARCH64_FCVTZU_X_D_FIXED_PATTERN 0x9e590000U
-#define AARCH64_FCVTZU_D_D_MASK 0xfffffc00U
-#define AARCH64_FCVTZU_D_D_PATTERN 0x7ee1b800U
+#define AARCH64_FCVTZS_SIMD_SCALAR_MASK 0xffbffc00U
+#define AARCH64_FCVTZS_SIMD_SCALAR_PATTERN 0x5ea1b800U
+#define AARCH64_FCVTZU_SIMD_SCALAR_MASK 0xffbffc00U
+#define AARCH64_FCVTZU_SIMD_SCALAR_PATTERN 0x7ea1b800U
 #define AARCH64_UCVTF_D_D_MASK 0xfffffc00U
 #define AARCH64_UCVTF_D_D_PATTERN 0x7e61d800U
 #define AARCH64_SCVTF_D_D_MASK 0xfffffc00U
@@ -2564,25 +2572,19 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_UMAXV_4S_MASK) ==
-	    AARCH64_SIMD_UMAXV_4S_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = sizeof(u32);
-		decoded.simd_fp = true;
-		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_UMAXV;
-		return decoded;
-	}
+	if ((instruction & AARCH64_SIMD_UMAXV_MASK) ==
+	    AARCH64_SIMD_UMAXV_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
 
-	if ((instruction & AARCH64_SIMD_UMAXV_4H_MASK) ==
-	    AARCH64_SIMD_UMAXV_4H_PATTERN) {
+		if (size == 3 || (size == 2 && !q))
+			return decoded;
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u16);
-		decoded.result_size = sizeof(u16);
+		decoded.access_size = 1U << size;
+		decoded.result_size = decoded.access_size;
+		decoded.simd_q = q;
 		decoded.simd_fp = true;
 		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_UMAXV;
 		return decoded;
@@ -2707,6 +2709,47 @@ not_simd_compare_register:
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_FP_SCALAR_1SOURCE_MASK) ==
+	    AARCH64_FP_SCALAR_1SOURCE_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+		u8 opcode = (instruction >> 15) & 0x3fU;
+
+		if (type > 1)
+			return decoded;
+		switch (opcode) {
+		case 8:
+			decoded.fp1_op = TCTI_FP1_FRINTN;
+			break;
+		case 9:
+			decoded.fp1_op = TCTI_FP1_FRINTP;
+			break;
+		case 10:
+			decoded.fp1_op = TCTI_FP1_FRINTM;
+			break;
+		case 11:
+			decoded.fp1_op = TCTI_FP1_FRINTZ;
+			break;
+		case 12:
+			decoded.fp1_op = TCTI_FP1_FRINTA;
+			break;
+		case 14:
+			decoded.fp1_op = TCTI_FP1_FRINTX;
+			break;
+		case 15:
+			decoded.fp1_op = TCTI_FP1_FRINTI;
+			break;
+		default:
+			return decoded;
+		}
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_FDIV_S_MASK) == AARCH64_FDIV_S_PATTERN ||
 	    (instruction & AARCH64_FDIV_D_MASK) == AARCH64_FDIV_D_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_2SOURCE;
@@ -2788,6 +2831,24 @@ not_simd_compare_register:
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_FCCMP_MASK) == AARCH64_FCCMP_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+
+		if (type > 1)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.condition = (instruction >> 12) & 0xfU;
+		decoded.nzcv = instruction & 0xfU;
+		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.fp_conditional = true;
+		decoded.fp_signal_all_nans = instruction & BIT(4);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_S_PATTERN ||
 	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_PATTERN ||
 	    (instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_S_ZERO_PATTERN ||
@@ -2803,16 +2864,20 @@ not_simd_compare_register:
 				AARCH64_FCMP_S_ZERO_PATTERN ||
 			(instruction & AARCH64_FCMP_D_MASK) ==
 				AARCH64_FCMP_D_ZERO_PATTERN;
+		decoded.fp_signal_all_nans = instruction & BIT(4);
 		decoded.simd_fp = true;
 		return decoded;
 	}
 
 	if ((instruction & AARCH64_SCVTF_S_W_MASK) == AARCH64_SCVTF_S_W_PATTERN ||
-	    (instruction & AARCH64_SCVTF_D_W_MASK) == AARCH64_SCVTF_D_W_PATTERN) {
+	    (instruction & AARCH64_SCVTF_D_W_MASK) == AARCH64_SCVTF_D_W_PATTERN ||
+	    (instruction & AARCH64_SCVTF_S_X_MASK) == AARCH64_SCVTF_S_X_PATTERN ||
+	    (instruction & AARCH64_SCVTF_D_X_MASK) == AARCH64_SCVTF_D_X_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
+		decoded.access_size =
+			(instruction & BIT(31)) ? sizeof(u64) : sizeof(u32);
 		decoded.result_size =
 			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
 		decoded.simd_fp = true;
@@ -2910,14 +2975,20 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_FCVTZU_D_D_MASK) == AARCH64_FCVTZU_D_D_PATTERN) {
+	if ((instruction & AARCH64_FCVTZS_SIMD_SCALAR_MASK) ==
+		    AARCH64_FCVTZS_SIMD_SCALAR_PATTERN ||
+	    (instruction & AARCH64_FCVTZU_SIMD_SCALAR_MASK) ==
+		    AARCH64_FCVTZU_SIMD_SCALAR_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
+		decoded.access_size =
+			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
-		decoded.fp_int_op = TCTI_FP_INT_FCVTZU_SIMD;
+		decoded.fp_int_op = (instruction & BIT(29)) ?
+					    TCTI_FP_INT_FCVTZU_SIMD :
+					    TCTI_FP_INT_FCVTZS_SIMD;
 		return decoded;
 	}
 

@@ -296,6 +296,13 @@ enum tcti_fp_scalar_1source_op {
 	TCTI_FP1_FABS = 0,
 	TCTI_FP1_FCVT,
 	TCTI_FP1_FNEG,
+	TCTI_FP1_FRINTN,
+	TCTI_FP1_FRINTP,
+	TCTI_FP1_FRINTM,
+	TCTI_FP1_FRINTZ,
+	TCTI_FP1_FRINTA,
+	TCTI_FP1_FRINTX,
+	TCTI_FP1_FRINTI,
 };
 
 enum tcti_fp_scalar_2source_op {
@@ -318,6 +325,7 @@ enum tcti_fp_int_convert_op {
 	TCTI_FP_INT_FCVTZS,
 	TCTI_FP_INT_FCVTZU,
 	TCTI_FP_INT_FCVTZU_FIXED,
+	TCTI_FP_INT_FCVTZS_SIMD,
 	TCTI_FP_INT_FCVTZU_SIMD,
 	TCTI_FP_INT_UCVTF_SIMD,
 	TCTI_FP_INT_SCVTF_SIMD,
@@ -354,6 +362,8 @@ struct tcti_decoded_instruction {
 	bool subtract;
 	bool set_flags;
 	bool immediate;
+	bool fp_conditional;
+	bool fp_signal_all_nans;
 	s64 pc_relative_imm;
 	bool page_relative;
 	s64 branch_imm;
@@ -366,6 +376,7 @@ struct tcti_decoded_instruction {
 	bool load;
 	bool simd_fp;
 	bool simd_scalar;
+	bool simd_q;
 	bool sign_extend_load;
 	u8 offset_extend;
 	bool offset_shift;
