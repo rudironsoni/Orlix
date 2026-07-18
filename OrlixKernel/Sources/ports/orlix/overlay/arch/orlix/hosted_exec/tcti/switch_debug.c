@@ -2852,6 +2852,26 @@ static void tcti_aes_mix_columns(u8 state[16], bool inverse)
 	}
 }
 
+static u32 tcti_sha256_sigma0(u32 value)
+{
+	return ror32(value, 2) ^ ror32(value, 13) ^ ror32(value, 22);
+}
+
+static u32 tcti_sha256_sigma1(u32 value)
+{
+	return ror32(value, 6) ^ ror32(value, 11) ^ ror32(value, 25);
+}
+
+static u32 tcti_sha256_schedule_sigma0(u32 value)
+{
+	return ror32(value, 7) ^ ror32(value, 18) ^ (value >> 3);
+}
+
+static u32 tcti_sha256_schedule_sigma1(u32 value)
+{
+	return ror32(value, 17) ^ ror32(value, 19) ^ (value >> 10);
+}
+
 static int tcti_execute_simd_vector_arithmetic(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -3019,6 +3039,125 @@ static int tcti_execute_simd_vector_arithmetic(
 				(u64)result[2] | (u64)result[3] << 32);
 		}
 
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SHA256H &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_SHA256SU0) {
+		u64 destination[2] = {
+			current->thread.user_simd[decoded->rd * 2],
+			current->thread.user_simd[decoded->rd * 2 + 1],
+		};
+		u64 source_n[2] = {
+			current->thread.user_simd[decoded->rn * 2],
+			current->thread.user_simd[decoded->rn * 2 + 1],
+		};
+		u32 d[4] = {
+			(u32)destination[0], destination[0] >> 32,
+			(u32)destination[1], destination[1] >> 32,
+		};
+		u32 n[4] = {
+			(u32)source_n[0], source_n[0] >> 32,
+			(u32)source_n[1], source_n[1] >> 32,
+		};
+		u32 result[4];
+
+		if (decoded->access_size != 2 * sizeof(u64) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    decoded->simd_scalar)
+			return -EOPNOTSUPP;
+
+		if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SHA256SU0) {
+			result[0] = d[0] + tcti_sha256_schedule_sigma0(d[1]);
+			result[1] = d[1] + tcti_sha256_schedule_sigma0(d[2]);
+			result[2] = d[2] + tcti_sha256_schedule_sigma0(d[3]);
+			result[3] = d[3] + tcti_sha256_schedule_sigma0(n[0]);
+		} else {
+			u64 source_m[2] = {
+				current->thread.user_simd[decoded->rm * 2],
+				current->thread.user_simd[decoded->rm * 2 + 1],
+			};
+			u32 m[4] = {
+				(u32)source_m[0], source_m[0] >> 32,
+				(u32)source_m[1], source_m[1] >> 32,
+			};
+
+			if (decoded->simd_arithmetic_op ==
+			    TCTI_SIMD_ARITH_SHA256SU1) {
+				result[0] = d[0] +
+					tcti_sha256_schedule_sigma1(m[2]) + n[1];
+				result[1] = d[1] +
+					tcti_sha256_schedule_sigma1(m[3]) + n[2];
+				result[2] = d[2] +
+					tcti_sha256_schedule_sigma1(result[0]) + n[3];
+				result[3] = d[3] +
+					tcti_sha256_schedule_sigma1(result[1]) + m[0];
+			} else {
+				u32 a;
+				u32 b;
+				u32 c;
+				u32 value_d;
+				u32 e;
+				u32 f;
+				u32 g;
+				u32 h;
+				u8 round;
+
+				if (decoded->simd_arithmetic_op ==
+				    TCTI_SIMD_ARITH_SHA256H) {
+					a = d[0];
+					b = d[1];
+					c = d[2];
+					value_d = d[3];
+					e = n[0];
+					f = n[1];
+					g = n[2];
+					h = n[3];
+				} else {
+					a = n[0];
+					b = n[1];
+					c = n[2];
+					value_d = n[3];
+					e = d[0];
+					f = d[1];
+					g = d[2];
+					h = d[3];
+				}
+				for (round = 0; round < 4; round++) {
+					u32 temporary1 = h + tcti_sha256_sigma1(e) +
+						((e & f) ^ (~e & g)) + m[round];
+					u32 temporary2 = tcti_sha256_sigma0(a) +
+						((a & b) ^ (a & c) ^ (b & c));
+
+					h = g;
+					g = f;
+					f = e;
+					e = value_d + temporary1;
+					value_d = c;
+					c = b;
+					b = a;
+					a = temporary1 + temporary2;
+				}
+				if (decoded->simd_arithmetic_op ==
+				    TCTI_SIMD_ARITH_SHA256H) {
+					result[0] = a;
+					result[1] = b;
+					result[2] = c;
+					result[3] = value_d;
+				} else {
+					result[0] = e;
+					result[1] = f;
+					result[2] = g;
+					result[3] = h;
+				}
+			}
+		}
+
+		tcti_write_simd_fp_register(
+			decoded->rd, 2 * sizeof(u64),
+			(u64)result[0] | (u64)result[1] << 32,
+			(u64)result[2] | (u64)result[3] << 32);
 		regs->pc += sizeof(u32);
 		return 0;
 	}

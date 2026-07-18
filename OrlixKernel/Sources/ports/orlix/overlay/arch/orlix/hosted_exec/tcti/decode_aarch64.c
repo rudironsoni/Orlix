@@ -123,6 +123,10 @@
 #define AARCH64_SIMD_SHA1_TWO_REGISTER_MASK 0xfffffc00U
 #define AARCH64_SIMD_SHA1H_PATTERN 0x5e280800U
 #define AARCH64_SIMD_SHA1SU1_PATTERN 0x5e281800U
+#define AARCH64_SIMD_SHA256_THREE_REGISTER_MASK 0xffe04c00U
+#define AARCH64_SIMD_SHA256_THREE_REGISTER_PATTERN 0x5e004000U
+#define AARCH64_SIMD_SHA256SU0_MASK 0xfffffc00U
+#define AARCH64_SIMD_SHA256SU0_PATTERN 0x5e282800U
 #define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_MIN_MAX_MASK 0x9f20f400U
@@ -1826,6 +1830,35 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_scalar = !schedule;
 		decoded.simd_arithmetic_op = schedule ? TCTI_SIMD_ARITH_SHA1SU1 :
 						       TCTI_SIMD_ARITH_SHA1H;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHA256_THREE_REGISTER_MASK) ==
+	    AARCH64_SIMD_SHA256_THREE_REGISTER_PATTERN) {
+		u8 operation = (instruction >> 12) & 0x3U;
+
+		if (operation == 3)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SHA256H + operation;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHA256SU0_MASK) ==
+	    AARCH64_SIMD_SHA256SU0_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SHA256SU0;
 		return decoded;
 	}
 
