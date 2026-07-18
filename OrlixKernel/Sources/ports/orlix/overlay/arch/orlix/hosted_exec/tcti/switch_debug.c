@@ -2953,6 +2953,121 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SHRN &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_SQRSHRUN) {
+		u64 source[2];
+		u64 narrowed = 0;
+		u8 narrow_size = decoded->access_size / 2;
+		u8 lane_count;
+		u8 narrow_bits;
+		u64 source_mask;
+		u64 result_mask;
+		bool signed_source =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQSHRUN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRSHRUN;
+		bool unsigned_result =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UQSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UQRSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQSHRUN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRSHRUN;
+		bool rounding =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_RSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UQRSHRN ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQRSHRUN;
+		bool saturating =
+			decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_SHRN &&
+			decoded->simd_arithmetic_op != TCTI_SIMD_ARITH_RSHRN;
+		bool saturated = false;
+
+		if ((decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->simd_destination_index !=
+			(decoded->result_size == 2 * sizeof(u64)) ||
+		    decoded->shift_amount == 0 ||
+		    decoded->shift_amount > decoded->access_size * 4)
+			return -EOPNOTSUPP;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		lane_count = 2 * sizeof(u64) / decoded->access_size;
+		narrow_bits = narrow_size * 8;
+		source_mask = GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		result_mask = GENMASK_ULL(narrow_bits - 1, 0);
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_byte = lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u64 value = (source[source_word] >> source_shift) & source_mask;
+			u64 result;
+
+			if (signed_source) {
+				s64 shifted = sign_extend64(
+					value, decoded->access_size * 8 - 1) >>
+					decoded->shift_amount;
+
+				if (rounding)
+					shifted += (value >>
+						    (decoded->shift_amount - 1)) & 1U;
+				if (unsigned_result) {
+					if (shifted < 0) {
+						result = 0;
+						saturated = true;
+					} else if ((u64)shifted > result_mask) {
+						result = result_mask;
+						saturated = true;
+					} else {
+						result = shifted;
+					}
+				} else {
+					s64 minimum = -(s64)BIT_ULL(narrow_bits - 1);
+					s64 maximum = BIT_ULL(narrow_bits - 1) - 1;
+
+					if (shifted < minimum) {
+						result = (u64)minimum & result_mask;
+						saturated = true;
+					} else if (shifted > maximum) {
+						result = maximum;
+						saturated = true;
+					} else {
+						result = (u64)shifted & result_mask;
+					}
+				}
+			} else {
+				u64 shifted = value >> decoded->shift_amount;
+
+				if (rounding)
+					shifted += (value >>
+						    (decoded->shift_amount - 1)) & 1U;
+				if (saturating && shifted > result_mask) {
+					result = result_mask;
+					saturated = true;
+				} else {
+					result = shifted & result_mask;
+				}
+			}
+
+			narrowed |= result << (lane * narrow_bits);
+		}
+
+		if (saturated)
+			current->thread.user_fpsr |= AARCH64_FPSR_QC;
+		if (decoded->simd_destination_index)
+			tcti_write_simd_fp_register(
+				decoded->rd, 2 * sizeof(u64),
+				current->thread.user_simd[decoded->rd * 2], narrowed);
+		else
+			tcti_write_simd_fp_register(decoded->rd, sizeof(u64),
+						    narrowed, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ABS &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RBIT) {
 		u64 source[2];

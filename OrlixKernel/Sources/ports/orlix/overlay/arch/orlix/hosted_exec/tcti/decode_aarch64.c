@@ -118,6 +118,11 @@
 #define AARCH64_SIMD_SATURATING_NARROW_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_SQXTN_UQXTN_PATTERN 0x0e214800U
 #define AARCH64_SIMD_SQXTUN_PATTERN 0x0e212800U
+#define AARCH64_SIMD_SHIFT_NARROW_MASK 0x9f80fc00U
+#define AARCH64_SIMD_SHRN_PATTERN 0x0f008400U
+#define AARCH64_SIMD_RSHRN_PATTERN 0x0f008c00U
+#define AARCH64_SIMD_SQSHRN_PATTERN 0x0f009400U
+#define AARCH64_SIMD_SQRSHRN_PATTERN 0x0f009c00U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
@@ -1725,6 +1730,52 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_destination_index = q;
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_ADDHN + operation;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
+	    AARCH64_SIMD_SHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
+	    AARCH64_SIMD_RSHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
+	    AARCH64_SIMD_SQSHRN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SHIFT_NARROW_MASK) ==
+	    AARCH64_SIMD_SQRSHRN_PATTERN) {
+		u8 immediate = (instruction >> 16) & 0x7fU;
+		u8 source_bits;
+		u32 pattern = instruction & AARCH64_SIMD_SHIFT_NARROW_MASK;
+		bool u = instruction & BIT(29);
+		bool q = instruction & BIT(30);
+
+		if (immediate < 8 || immediate >= 64)
+			return decoded;
+		if (immediate < 16)
+			source_bits = 16;
+		else if (immediate < 32)
+			source_bits = 32;
+		else
+			source_bits = 64;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = source_bits / 8;
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_destination_index = q;
+		decoded.shift_amount = source_bits - immediate;
+		decoded.simd_fp = true;
+		if (pattern == AARCH64_SIMD_SHRN_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_SQSHRUN :
+				TCTI_SIMD_ARITH_SHRN;
+		else if (pattern == AARCH64_SIMD_RSHRN_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_SQRSHRUN :
+				TCTI_SIMD_ARITH_RSHRN;
+		else if (pattern == AARCH64_SIMD_SQSHRN_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_UQSHRN :
+				TCTI_SIMD_ARITH_SQSHRN;
+		else
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_UQRSHRN :
+				TCTI_SIMD_ARITH_SQRSHRN;
 		return decoded;
 	}
 
