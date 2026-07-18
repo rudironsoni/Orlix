@@ -50,7 +50,7 @@ ORLIX_MKE2FS ?= $(shell if command -v mke2fs >/dev/null 2>&1; then command -v mk
 ORLIX_DEBUGFS ?= $(shell if command -v debugfs >/dev/null 2>&1; then command -v debugfs; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/debugfs; else printf '%s\n' debugfs; fi)
 ORLIX_E2FSCK ?= $(shell if command -v e2fsck >/dev/null 2>&1; then command -v e2fsck; elif [ -x /opt/homebrew/opt/e2fsprogs/sbin/e2fsck ]; then printf '%s\n' /opt/homebrew/opt/e2fsprogs/sbin/e2fsck; else printf '%s\n' e2fsck; fi)
 
-.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures test coreutils-test clean mrproper __coreutils-source FORCE
+.PHONY: all help build rootfs kernel-payload environment-root-image environment-runtime-test-fixtures coreutils-test-initramfs test coreutils-test clean mrproper __coreutils-source FORCE
 
 all: rootfs
 
@@ -67,6 +67,8 @@ help:
 build: $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_INIT_BINARY)
 
 rootfs: $(ORLIXOS_ROOTFS_STAMP)
+
+coreutils-test-initramfs: $(ORLIXOS_COREUTILS_TEST_INITRAMFS)
 
 kernel-payload: rootfs
 	@set -euo pipefail; \

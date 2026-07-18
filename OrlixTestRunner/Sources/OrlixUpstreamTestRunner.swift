@@ -414,7 +414,7 @@ enum OrlixUpstreamTestRunError: Error, Equatable, CustomStringConvertible {
     case bootAlreadyStarted
     case timeout(TimeInterval)
     case crashReport(String)
-    case kernelPanic(String)
+    case kernelPanic(String, outputTail: String)
     case oom(String)
     case upstreamFailure(String, outputTail: String)
     case missingCompletionMarker(String)
@@ -438,8 +438,8 @@ enum OrlixUpstreamTestRunError: Error, Equatable, CustomStringConvertible {
             return "timed out after \(Int(timeout)) seconds waiting for upstream test output"
         case let .crashReport(marker):
             return "host crash report marker found: \(marker)"
-        case let .kernelPanic(marker):
-            return "kernel panic marker found: \(marker)"
+        case let .kernelPanic(marker, outputTail):
+            return "kernel panic marker found: \(marker)\n\(outputTail)"
         case let .oom(marker):
             return "out-of-memory marker found: \(marker)"
         case let .upstreamFailure(line, outputTail):
@@ -478,7 +478,10 @@ final class OrlixUpstreamTestOutputParser {
             throw OrlixUpstreamTestRunError.crashReport(marker)
         }
         if let marker = Self.firstMarker(in: output, markers: Self.panicMarkers) {
-            throw OrlixUpstreamTestRunError.kernelPanic(marker)
+            throw OrlixUpstreamTestRunError.kernelPanic(
+                marker,
+                outputTail: Self.outputTail(output)
+            )
         }
         if let marker = Self.firstMarker(in: output, markers: Self.oomMarkers) {
             throw OrlixUpstreamTestRunError.oom(marker)

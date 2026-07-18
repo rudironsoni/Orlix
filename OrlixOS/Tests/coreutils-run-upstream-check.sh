@@ -97,7 +97,11 @@ while read -r mode test_name; do
   /init --run-as "$mode" "${runner[@]}" "${command[@]}" 9>&2
   result='FAIL'
   if [ -s "$trs_file" ]; then
-    result="$(sed -n 's/^:test-result: //p' "$trs_file" | tail -n 1)"
+    while IFS= read -r metadata; do
+      case "$metadata" in
+        ':test-result: '*) result="${metadata#':test-result: '}" ;;
+      esac
+    done < "$trs_file"
   fi
 
   case "$result" in
@@ -111,8 +115,8 @@ while read -r mode test_name; do
       ;;
     *)
       failures=$((failures + 1))
-      echo "not ok $total - $test_name"
       [ -s "$log_file" ] && sed 's/^/# /' "$log_file"
+      echo "not ok $total - $test_name"
       ;;
   esac
 done < /coreutils-test-list.txt

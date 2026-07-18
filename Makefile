@@ -294,6 +294,7 @@ mlibc-tests: xcodeproj
 		test
 
 coreutils-tests: xcodeproj
+	@$(ORLIXOS_MAKE) coreutils-test-initramfs PROFILE='$(PROFILE)' ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)'
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
 		-scheme "OrlixPackages Conformance" \

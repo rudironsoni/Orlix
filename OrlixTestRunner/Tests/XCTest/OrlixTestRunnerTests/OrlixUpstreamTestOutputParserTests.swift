@@ -84,7 +84,7 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertThrowsError(try parser.validate(output, for: .kernel)) { error in
             XCTAssertEqual(
                 error as? OrlixUpstreamTestRunError,
-                .kernelPanic("Kernel panic")
+                .kernelPanic("Kernel panic", outputTail: output)
             )
         }
     }

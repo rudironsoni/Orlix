@@ -34,7 +34,7 @@ $(ORLIXOS_COREUTILS_SOURCE_STAMP): $(PROJECT_DIR)/Sources/make/config.mk $(PROJE
 	done; \
 	export PATH="$(ORLIXOS_COREUTILS_BOOTSTRAP_PATH)"; \
 	command -v git >/dev/null 2>&1 || { echo "git is required to clone Coreutils source" >&2; exit 1; }; \
-	if [ -e "$(ORLIXOS_COREUTILS_SOURCE_STAMP)" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/.git" ] && [ -x "$(ORLIXOS_COREUTILS_SRC_DIR)/configure" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/gnulib" ] && [ -d "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)/objects" ]; then \
+	if [ -e "$(ORLIXOS_COREUTILS_SOURCE_STAMP)" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/.git" ] && [ -x "$(ORLIXOS_COREUTILS_SRC_DIR)/configure" ] && [ -e "$(ORLIXOS_COREUTILS_SRC_DIR)/build-aux/config.rpath" ] && [ -d "$(ORLIXOS_COREUTILS_SRC_DIR)/gnulib" ] && [ -d "$(ORLIXOS_COREUTILS_UPSTREAM_DIR)/objects" ]; then \
 		actual="$$(git -C "$(ORLIXOS_COREUTILS_SRC_DIR)" rev-parse HEAD)"; \
 		if [ "$$actual" = "$(COREUTILS_GIT_COMMIT)" ]; then \
 			touch "$(ORLIXOS_COREUTILS_SOURCE_STAMP)"; \
