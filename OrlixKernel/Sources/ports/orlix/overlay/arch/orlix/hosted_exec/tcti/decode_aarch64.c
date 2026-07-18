@@ -219,8 +219,8 @@
 #define AARCH64_SIMD_ADDV_4S_PATTERN 0x4eb1b800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
 #define AARCH64_SIMD_ADDP_D_2D_PATTERN 0x5ef1b800U
-#define AARCH64_SIMD_LD1R_4S_MASK 0xfffffc00U
-#define AARCH64_SIMD_LD1R_4S_PATTERN 0x4d40c800U
+#define AARCH64_SIMD_SINGLE_STRUCTURE_MASK 0xbf000000U
+#define AARCH64_SIMD_SINGLE_STRUCTURE_PATTERN 0x0d000000U
 #define AARCH64_FMOV_W_S_MASK 0xfffffc00U
 #define AARCH64_FMOV_W_S_PATTERN 0x1e260000U
 #define AARCH64_FMOV_S_W_PATTERN 0x1e270000U
@@ -865,15 +865,79 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_LD1R_4S_MASK) ==
-	    AARCH64_SIMD_LD1R_4S_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_SIMD_LOAD_REPLICATE;
+	if ((instruction & AARCH64_SIMD_SINGLE_STRUCTURE_MASK) ==
+	    AARCH64_SIMD_SINGLE_STRUCTURE_PATTERN) {
+		u8 opcode = (instruction >> 13) & 0x7U;
+		u8 size = (instruction >> 10) & 0x3U;
+		u8 rm = (instruction >> 16) & 0x1fU;
+		u8 base_opcode = opcode;
+		bool post_index = instruction & BIT(23);
+		bool replicate;
+
+		if (!post_index && rm)
+			return decoded;
+
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.load = true;
+		decoded.rm = rm;
+		decoded.load = instruction & BIT(22);
 		decoded.simd_fp = true;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_q = instruction & BIT(30);
+		decoded.memory_index_mode = post_index ?
+			TCTI_MEMORY_INDEX_POST : TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+		replicate = decoded.load && !(instruction & BIT(12)) &&
+			(opcode == 6 || opcode == 7);
+
+		if (replicate) {
+			bool r = instruction & BIT(21);
+
+			decoded.decode_class = TCTI_DECODE_SIMD_LOAD_REPLICATE;
+			decoded.simd_replicate = true;
+			decoded.simd_structure_count =
+				opcode == 6 ? (r ? 2 : 1) : (r ? 4 : 3);
+			decoded.access_size = BIT(size);
+			decoded.result_size = decoded.simd_q ?
+				2 * sizeof(u64) : sizeof(u64);
+			return decoded;
+		}
+
+		if (opcode & 1) {
+			decoded.simd_structure_count =
+				(instruction & BIT(21)) ? 4 : 3;
+			base_opcode--;
+		} else {
+			decoded.simd_structure_count =
+				(instruction & BIT(21)) ? 2 : 1;
+		}
+
+		if (base_opcode == 0) {
+			decoded.access_size = sizeof(u8);
+			decoded.simd_lane_index =
+				(decoded.simd_q << 3) |
+				(((instruction >> 12) & 1U) << 2) | size;
+		} else if (base_opcode == 2 && !(size & 1U)) {
+			decoded.access_size = sizeof(u16);
+			decoded.simd_lane_index =
+				(decoded.simd_q << 2) |
+				(((instruction >> 12) & 1U) << 1) |
+				(size >> 1);
+		} else if (base_opcode == 4 && size == 0) {
+			decoded.access_size = sizeof(u32);
+			decoded.simd_lane_index =
+				(decoded.simd_q << 1) |
+				((instruction >> 12) & 1U);
+		} else if (base_opcode == 4 && size == 1) {
+			decoded.access_size = sizeof(u64);
+			decoded.simd_lane_index = decoded.simd_q;
+		} else {
+			return (struct tcti_decoded_instruction) {
+				.decode_class = TCTI_DECODE_UNSUPPORTED,
+				.instruction = instruction,
+			};
+		}
+
+		decoded.decode_class =
+			TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE;
 		return decoded;
 	}
 

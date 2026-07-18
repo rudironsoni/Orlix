@@ -1860,33 +1860,109 @@ static int tcti_load_simd_fp(struct mm_struct *mm, unsigned long address,
 	return 0;
 }
 
-static int tcti_execute_simd_load_replicate(
+static u64 tcti_simd_lane_mask(u8 access_size)
+{
+	if (access_size == sizeof(u64))
+		return U64_MAX;
+	return GENMASK_ULL(access_size * 8 - 1, 0);
+}
+
+static u64 tcti_read_simd_lane(u8 reg, u8 lane, u8 access_size)
+{
+	u8 byte_offset = lane * access_size;
+	u8 word = byte_offset / sizeof(u64);
+	u8 shift = (byte_offset % sizeof(u64)) * 8;
+
+	return (current->thread.user_simd[reg * 2 + word] >> shift) &
+		tcti_simd_lane_mask(access_size);
+}
+
+static void tcti_write_simd_lane(u8 reg, u8 lane, u8 access_size,
+				 u64 value)
+{
+	u8 byte_offset = lane * access_size;
+	u8 word = byte_offset / sizeof(u64);
+	u8 shift = (byte_offset % sizeof(u64)) * 8;
+	u64 mask = tcti_simd_lane_mask(access_size) << shift;
+	unsigned long *destination =
+		&current->thread.user_simd[reg * 2 + word];
+
+	*destination = (*destination & ~mask) | ((value << shift) & mask);
+	current->thread.user_simd_valid = 1;
+}
+
+static u64 tcti_replicate_simd_element(u64 value, u8 access_size)
+{
+	u8 element_bits = access_size * 8;
+	u64 element = value & tcti_simd_lane_mask(access_size);
+	u64 packed = 0;
+	u8 shift;
+
+	for (shift = 0; shift < 64; shift += element_bits)
+		packed |= element << shift;
+	return packed;
+}
+
+static int tcti_execute_simd_single_structure(
 	struct mm_struct *mm, struct pt_regs *regs,
 	const struct tcti_decoded_instruction *decoded,
 	unsigned long *fault_address)
 {
 	unsigned long address = tcti_memory_base(regs, decoded->rn);
-	u64 value;
-	u64 packed;
+	u64 increment;
+	u8 index;
 	int ret;
 
 	if (!mm)
 		return -EINVAL;
-	if (!decoded->load || !decoded->simd_fp ||
-	    decoded->access_size != sizeof(u32) ||
-	    decoded->result_size != 2 * sizeof(u64))
+	if (!decoded->simd_fp || !decoded->simd_structure_count ||
+	    decoded->simd_structure_count > 4 ||
+	    (decoded->access_size != sizeof(u8) &&
+	     decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32) &&
+	     decoded->access_size != sizeof(u64)) ||
+	    (decoded->simd_replicate && !decoded->load))
 		return -EOPNOTSUPP;
-	if (fault_address)
-		*fault_address = address;
 
-	ret = tcti_load_integer(mm, address, decoded->access_size, &value);
-	if (ret)
-		return ret;
+	for (index = 0; index < decoded->simd_structure_count; index++) {
+		u8 reg = (decoded->rd + index) & 0x1fU;
+		u64 value;
 
-	value &= GENMASK_ULL(31, 0);
-	packed = value | (value << 32);
-	tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-				    packed, packed);
+		if (fault_address)
+			*fault_address = address + index * decoded->access_size;
+		if (decoded->load) {
+			ret = tcti_load_integer(mm,
+				address + index * decoded->access_size,
+				decoded->access_size, &value);
+			if (ret)
+				return ret;
+			if (decoded->simd_replicate) {
+				u64 packed = tcti_replicate_simd_element(
+					value, decoded->access_size);
+
+				tcti_write_simd_fp_register(reg,
+					decoded->result_size, packed, packed);
+			} else {
+				tcti_write_simd_lane(reg, decoded->simd_lane_index,
+					decoded->access_size, value);
+			}
+		} else {
+			value = tcti_read_simd_lane(reg,
+				decoded->simd_lane_index, decoded->access_size);
+			ret = tcti_store_integer(mm,
+				address + index * decoded->access_size,
+				decoded->access_size, value);
+			if (ret)
+				return ret;
+		}
+	}
+
+	if (decoded->memory_index_mode == TCTI_MEMORY_INDEX_POST) {
+		increment = decoded->rm == 31 ?
+			decoded->simd_structure_count * decoded->access_size :
+			tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
+		tcti_write_memory_base(regs, decoded->rn, address + increment);
+	}
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -6616,9 +6692,10 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return tcti_execute_simd_vector_compare(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_REDUCTION:
 		return tcti_execute_simd_vector_reduction(regs, decoded);
+	case TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
 	case TCTI_DECODE_SIMD_LOAD_REPLICATE:
-		return tcti_execute_simd_load_replicate(mm, regs, decoded,
-							fault_address);
+		return tcti_execute_simd_single_structure(mm, regs, decoded,
+						 fault_address);
 	case TCTI_DECODE_FP_SCALAR_MOVE:
 		return tcti_execute_fp_scalar_move(regs, decoded);
 	case TCTI_DECODE_FP_SCALAR_1SOURCE:
