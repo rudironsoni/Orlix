@@ -314,7 +314,7 @@ $(ORLIXOS_GETCONF_BINARY): $(ORLIXOS_GETCONF_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	file "$(ORLIXOS_GETCONF_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_GETCONF_BINARY)" >&2; exit 1; }; \
 	echo "built Orlix Linux getconf package input: $(ORLIXOS_GETCONF_BINARY)"
 
-$(ORLIXOS_GETENT_BINARY): $(ORLIXOS_GETENT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_GETENT_BINARY): $(ORLIXOS_GETENT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -323,7 +323,8 @@ $(ORLIXOS_GETENT_BINARY): $(ORLIXOS_GETENT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orl
 	[ -d "$$headers" ] || { echo "missing Orlix Linux UAPI headers: $$headers" >&2; exit 1; }; \
 	[ -s "$$rtlib" ] || { echo "missing Orlix compiler runtime archive: $$rtlib" >&2; exit 1; }; \
 	mkdir -p "$(dir $(ORLIXOS_GETENT_BINARY))"; \
-	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fno-pie -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_GETENT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_GETENT_BINARY)"; \
+	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_GETENT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_GETENT_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_GETENT_BINARY)"; \
-	file "$(ORLIXOS_GETENT_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_GETENT_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
+	"$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" | grep -Eq 'Type:[[:space:]]+DYN ' || { "$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
 	echo "built Orlix Linux getent package input: $(ORLIXOS_GETENT_BINARY)"
