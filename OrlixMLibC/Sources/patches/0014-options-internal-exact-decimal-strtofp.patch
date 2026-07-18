@@ -1,0 +1,329 @@
+diff --git a/options/internal/include/mlibc/strtofp.hpp b/options/internal/include/mlibc/strtofp.hpp
+--- a/options/internal/include/mlibc/strtofp.hpp
++++ b/options/internal/include/mlibc/strtofp.hpp
+@@ -80,6 +80,315 @@ struct StrToFpPolicy<wchar_t> {
+ 	static constexpr const wchar_t *nanUpper = L"NAN";
+ };
+ 
++// Decimal conversion is adapted from musl libc's src/internal/floatscan.c at
++// b306b16af15c89a04d8e0c55cac2dadbeb39c083. musl is distributed under the
++// MIT license. The cursor handling is mlibc-specific so char and wchar_t keep
++// using mlibc locale policy and end-pointer semantics.
++template<typename T, typename Char>
++T decimal_strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l,
++		frg::basic_string_view<Char> decimal, bool negative) {
++	using Type = StrToFpPolicy<Char>;
++	constexpr int kMax = 2048;
++	constexpr int mask = kMax - 1;
++	uint32_t x[kMax] = {};
++	static constexpr uint32_t threshold[] = {
++#if LDBL_MANT_DIG == 53 && LDBL_MAX_EXP == 1024
++		9007199, 254740991
++#elif LDBL_MANT_DIG == 64 && LDBL_MAX_EXP == 16384
++		18, 446744073, 709551615
++#elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384
++		10384593, 717069655, 257060992, 658440191
++#else
++#error Unsupported long double representation
++#endif
++	};
++	constexpr int base_digits = sizeof(threshold) / sizeof(threshold[0]);
++	static constexpr int powers_of_ten[] = {
++		10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000
++	};
++	const auto decimal_size = frg::generic_strnlen<Char>(decimal.data(), decimal.size());
++	auto at_decimal = [&](const Char *p) {
++		return decimal_size && !Type::string_compare_n(p, decimal.data(), decimal_size);
++	};
++	auto is_digit = [](Char c) {
++		return c >= static_cast<Char>('0') && c <= static_cast<Char>('9');
++	};
++	auto parse_exponent = [&](const Char *&p, long long &value) {
++		const Char *candidate = p;
++		bool exponent_negative = false;
++		if(*candidate == '+' || *candidate == '-') {
++			exponent_negative = *candidate == '-';
++			candidate++;
++		}
++		if(!is_digit(*candidate))
++			return false;
++		unsigned long long magnitude = 0;
++		while(is_digit(*candidate)) {
++			unsigned digit = static_cast<unsigned>(*candidate - '0');
++			if(magnitude > (static_cast<unsigned long long>(LLONG_MAX) - digit) / 10)
++				magnitude = LLONG_MAX;
++			else
++				magnitude = magnitude * 10 + digit;
++			candidate++;
++		}
++		value = exponent_negative ? -static_cast<long long>(magnitude)
++				: static_cast<long long>(magnitude);
++		p = candidate;
++		return true;
++	};
++
++	const Char *p = str;
++	long long radix_position = 0;
++	long long digit_count = 0;
++	long long exponent10 = 0;
++	int last_nonzero = 0;
++	int got_digit = 0;
++	int got_radix = 0;
++	int j = 0;
++	int k = 0;
++
++	while(*p == '0') {
++		got_digit = 1;
++		p++;
++	}
++	if(at_decimal(p)) {
++		got_radix = 1;
++		p += decimal_size;
++		while(*p == '0') {
++			got_digit = 1;
++			radix_position--;
++			p++;
++		}
++	}
++
++	while(is_digit(*p) || at_decimal(p)) {
++		if(at_decimal(p)) {
++			if(got_radix)
++				break;
++			got_radix = 1;
++			radix_position = digit_count;
++			p += decimal_size;
++			continue;
++		}
++		if(k < kMax - 3) {
++			digit_count++;
++			if(*p != '0')
++				last_nonzero = static_cast<int>(digit_count);
++			if(j)
++				x[k] = x[k] * 10 + static_cast<unsigned>(*p - '0');
++			else
++				x[k] = static_cast<unsigned>(*p - '0');
++			if(++j == 9) {
++				k++;
++				j = 0;
++			}
++			got_digit = 1;
++		}else{
++			digit_count++;
++			if(*p != '0') {
++				last_nonzero = (kMax - 4) * 9;
++				x[kMax - 4] |= 1;
++			}
++		}
++		p++;
++	}
++	if(!got_radix)
++		radix_position = digit_count;
++	if(got_digit && (*p == 'e' || *p == 'E')) {
++		const Char *exponent = p + 1;
++		if(parse_exponent(exponent, exponent10)) {
++			p = exponent;
++			if(exponent10 > 0 && radix_position > LLONG_MAX - exponent10)
++				radix_position = LLONG_MAX;
++			else if(exponent10 < 0 && radix_position < LLONG_MIN - exponent10)
++				radix_position = LLONG_MIN;
++			else
++				radix_position += exponent10;
++		}
++	}
++	if(endptr)
++		*endptr = const_cast<Char *>(got_digit ? p : str);
++	if(!got_digit)
++		return 0;
++	if(!x[0])
++		return negative ? -0.0L : 0.0L;
++
++	constexpr int bits = std::is_same_v<T, float> ? FLT_MANT_DIG
++			: (std::is_same_v<T, double> ? DBL_MANT_DIG : LDBL_MANT_DIG);
++	constexpr int minimum_exponent = std::is_same_v<T, float>
++			? FLT_MIN_EXP - FLT_MANT_DIG
++			: (std::is_same_v<T, double> ? DBL_MIN_EXP - DBL_MANT_DIG
++					: LDBL_MIN_EXP - LDBL_MANT_DIG);
++	constexpr int maximum_exponent = -minimum_exponent - bits + 3;
++	const int sign = negative ? -1 : 1;
++	if(radix_position == digit_count && digit_count < 10
++			&& (bits > 30 || x[0] >> bits == 0))
++		return static_cast<T>(sign * static_cast<long double>(x[0]));
++	if(radix_position > -minimum_exponent / 2) {
++		errno = ERANGE;
++		return static_cast<T>(sign * LDBL_MAX * LDBL_MAX);
++	}
++	if(radix_position < minimum_exponent - 2 * LDBL_MANT_DIG) {
++		errno = ERANGE;
++		return static_cast<T>(sign * LDBL_MIN * LDBL_MIN);
++	}
++
++	if(j) {
++		while(j++ < 9)
++			x[k] *= 10;
++		k++;
++	}
++	int a = 0;
++	int z = k;
++	int exponent2 = 0;
++	int rp = static_cast<int>(radix_position);
++	if(last_nonzero < 9 && last_nonzero <= rp && rp < 18) {
++		if(rp == 9)
++			return static_cast<T>(sign * static_cast<long double>(x[0]));
++		if(rp < 9)
++			return static_cast<T>(sign * static_cast<long double>(x[0])
++					/ powers_of_ten[8 - rp]);
++		int bit_limit = bits - 3 * (rp - 9);
++		if(bit_limit > 30 || x[0] >> bit_limit == 0)
++			return static_cast<T>(sign * static_cast<long double>(x[0])
++					* powers_of_ten[rp - 10]);
++	}
++	while(!x[z - 1])
++		z--;
++	if(rp % 9) {
++		int remainder = rp >= 0 ? rp % 9 : rp % 9 + 9;
++		int power = powers_of_ten[8 - remainder];
++		uint32_t carry = 0;
++		for(k = a; k != z; k++) {
++			uint32_t digit = x[k] % power;
++			x[k] = x[k] / power + carry;
++			carry = 1000000000 / power * digit;
++			if(k == a && !x[k]) {
++				a = (a + 1) & mask;
++				rp -= 9;
++			}
++		}
++		if(carry)
++			x[z++] = carry;
++		rp += 9 - remainder;
++	}
++	while(rp < 9 * base_digits
++			|| (rp == 9 * base_digits && x[a] < threshold[0])) {
++		uint32_t carry = 0;
++		exponent2 -= 29;
++		for(k = (z - 1) & mask; ; k = (k - 1) & mask) {
++			uint64_t value = (static_cast<uint64_t>(x[k]) << 29) + carry;
++			if(value > 1000000000) {
++				carry = value / 1000000000;
++				x[k] = value % 1000000000;
++			}else{
++				carry = 0;
++				x[k] = value;
++			}
++			if(k == ((z - 1) & mask) && k != a && !x[k])
++				z = k;
++			if(k == a)
++				break;
++		}
++		if(carry) {
++			rp += 9;
++			a = (a - 1) & mask;
++			if(a == z) {
++				z = (z - 1) & mask;
++				x[(z - 1) & mask] |= x[z];
++			}
++			x[a] = carry;
++		}
++	}
++	for(;;) {
++		uint32_t carry = 0;
++		int shift = 1;
++		int i;
++		for(i = 0; i < base_digits; i++) {
++			k = (a + i) & mask;
++			if(k == z || x[k] < threshold[i]) {
++				i = base_digits;
++				break;
++			}
++			if(x[k] > threshold[i])
++				break;
++		}
++		if(i == base_digits && rp == 9 * base_digits)
++			break;
++		if(rp > 9 + 9 * base_digits)
++			shift = 9;
++		exponent2 += shift;
++		for(k = a; k != z; k = (k + 1) & mask) {
++			uint32_t tail = x[k] & ((1U << shift) - 1);
++			x[k] = (x[k] >> shift) + carry;
++			carry = (1000000000U >> shift) * tail;
++			if(k == a && !x[k]) {
++				a = (a + 1) & mask;
++				rp -= 9;
++			}
++		}
++		if(carry) {
++			if(((z + 1) & mask) != a) {
++				x[z] = carry;
++				z = (z + 1) & mask;
++			}else{
++				x[(z - 1) & mask] |= 1;
++			}
++		}
++	}
++
++	long double value = 0;
++	int i;
++	for(i = 0; i < base_digits; i++) {
++		if(((a + i) & mask) == z) {
++			x[z] = 0;
++			z = (z + 1) & mask;
++		}
++		value = 1000000000.0L * value + x[(a + i) & mask];
++	}
++	value *= sign;
++	int rounded_bits = bits;
++	int denormal = 0;
++	if(rounded_bits > LDBL_MANT_DIG + exponent2 - minimum_exponent) {
++		rounded_bits = LDBL_MANT_DIG + exponent2 - minimum_exponent;
++		if(rounded_bits < 0)
++			rounded_bits = 0;
++		denormal = 1;
++	}
++	long double fraction = 0;
++	long double bias = 0;
++	if(rounded_bits < LDBL_MANT_DIG) {
++		bias = copysignl(scalbnl(1, 2 * LDBL_MANT_DIG - rounded_bits - 1), value);
++		fraction = fmodl(value, scalbnl(1, LDBL_MANT_DIG - rounded_bits));
++		value -= fraction;
++		value += bias;
++	}
++	if(((a + i) & mask) != z) {
++		uint32_t tail = x[(a + i) & mask];
++		if(tail < 500000000 && (tail || ((a + i + 1) & mask) != z))
++			fraction += 0.25L * sign;
++		else if(tail > 500000000)
++			fraction += 0.75L * sign;
++		else if(tail == 500000000)
++			fraction += (((a + i + 1) & mask) == z ? 0.5L : 0.75L) * sign;
++		if(LDBL_MANT_DIG - rounded_bits >= 2 && !fmodl(fraction, 1))
++			fraction++;
++	}
++	value += fraction;
++	value -= bias;
++	if(((exponent2 + LDBL_MANT_DIG) & INT_MAX) > maximum_exponent - 5) {
++		if(fabsl(value) >= 2 / LDBL_EPSILON) {
++			if(denormal && rounded_bits == LDBL_MANT_DIG + exponent2 - minimum_exponent)
++				denormal = 0;
++			value *= 0.5L;
++			exponent2++;
++		}
++		if(exponent2 + LDBL_MANT_DIG > maximum_exponent || (denormal && fraction))
++			errno = ERANGE;
++	}
++	return static_cast<T>(scalbnl(value, exponent2));
++}
++
+ template<typename T, typename Char>
+ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 	using Type = StrToFpPolicy<Char>;
+@@ -136,6 +423,9 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 		str += 2;
+ 		hex = true;
+ 	}
++	if(!hex)
++		return decimal_strtofp<T>(str, endptr, l, decimal, negative);
++
+ 
+ 	Intermediate result = 0.0L;
+ 	auto apply_exponent = [&result](Intermediate radix, unsigned exponent, bool inverse) {

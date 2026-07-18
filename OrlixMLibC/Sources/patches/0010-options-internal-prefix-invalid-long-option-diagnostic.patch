@@ -1,0 +1,13 @@
+diff --git a/options/internal/generic/getopt.cpp b/options/internal/generic/getopt.cpp
+--- a/options/internal/generic/getopt.cpp
++++ b/options/internal/generic/getopt.cpp
+@@ -188,7 +188,8 @@ int getopt_common_internal(int argc, char * const argv[], const char *optstring,
+ 			auto k = longopt_find(arg, n);
+ 			if(std::holds_alternative<std::monostate>(k)) {
+ 				if(opterr)
+-					fprintf(stderr, "--%s is not a valid option.\n", arg);
++					fprintf(stderr, "%s: unrecognized option '--%s'\n",
++							argv[0], arg);
+ 				optind++;
+ 				return '?';
+ 			} else if(std::holds_alternative<char>(k)) {

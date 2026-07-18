@@ -1,0 +1,31 @@
+diff --git a/options/ansi/generic/file-io.cpp b/options/ansi/generic/file-io.cpp
+--- a/options/ansi/generic/file-io.cpp
++++ b/options/ansi/generic/file-io.cpp
+@@ -374,9 +374,12 @@ int abstract_file::_write_back() {
+ 		if(__io_offset != __dirty_begin) {
+ 			__ensure(__dirty_begin - __io_offset > 0);
+ 			off_t new_offset;
+-			if(int e = io_seek(off_t(__dirty_begin) - off_t(__io_offset), SEEK_CUR, &new_offset); e)
+-				return e;
+-			__io_offset = __dirty_begin;
++			if(int e = io_seek(off_t(__dirty_begin) - off_t(__io_offset), SEEK_CUR, &new_offset); e) {
++				if (e != ESPIPE)
++					return e;
++				_type = stream_type::pipe_like;
++			}
++			__io_offset = __dirty_begin;
+ 		}
+ 	}else{
+ 		__ensure(_type == stream_type::pipe_like);
+@@ -407,7 +410,11 @@ int abstract_file::_save_pos() {
+ 	if (_type == stream_type::file_like && _bufmode != buffer_mode::no_buffer) {
+ 		off_t new_offset;
+ 		auto seek_offset = (off_t(__offset) - off_t(__io_offset));
+ 		if (int e = io_seek(seek_offset, SEEK_CUR, &new_offset); e) {
++			if (e == ESPIPE) {
++				_type = stream_type::pipe_like;
++				return 0;
++			}
+ 			__status_bits |= __MLIBC_ERROR_BIT;
+ 			if(!mlibc::processIsExiting.load(std::memory_order_relaxed))
+ 				mlibc::infoLogger() << "hit io_seek() error " << e << frg::endlog;

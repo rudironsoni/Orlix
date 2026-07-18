@@ -1,0 +1,115 @@
+diff --git a/subprojects/frigg.wrap b/subprojects/frigg.wrap
+--- a/subprojects/frigg.wrap
++++ b/subprojects/frigg.wrap
+@@ -1,3 +1,4 @@
+ [wrap-git]
+ url = https://github.com/managarm/frigg.git
+ revision = b0dbea66bc19f7c5546f0039a3be842feb02678c
++diff_files = frigg-long-double-format.patch
+diff --git a/subprojects/packagefiles/frigg-long-double-format.patch b/subprojects/packagefiles/frigg-long-double-format.patch
+new file mode 100644
+--- /dev/null
++++ b/subprojects/packagefiles/frigg-long-double-format.patch
+@@ -0,0 +1,102 @@
++diff --git a/include/frg/formatting.hpp b/include/frg/formatting.hpp
++--- a/include/frg/formatting.hpp
+++++ b/include/frg/formatting.hpp
++@@ -262,6 +262,7 @@ namespace _fmt_basics {
++ 			bool group_thousands = false, bool always_sign = false,
++ 			bool plus_becomes_space = false, bool use_capitals = false,
++ 			locale_options<Char> locale_opts = {}) {
+++	if constexpr (std::is_signed_v<T>) {
++ 		if(number < 0) {
++ 			// This is valid in C (N3220 6.2.6.2) and C++ ([N4950 basic.fundamental 6.8.2.3])
++ 			using UnsignedT = std::make_unsigned_t<T>;
++@@ -269,12 +270,13 @@ namespace _fmt_basics {
++ 			print_digits<S, UnsignedT, Char>(sink, absv, true, radix, width, precision, padding,
++ 					left_justify, group_thousands, always_sign, plus_becomes_space, use_capitals,
++ 					locale_opts);
++-		}else{
++-			print_digits<S, T, Char>(sink, number, false, radix, width, precision, padding,
++-					left_justify, group_thousands, always_sign, plus_becomes_space, use_capitals,
++-					locale_opts);
+++			return;
++ 		}
++ 	}
+++	print_digits<S, T, Char>(sink, number, false, radix, width, precision, padding,
+++			left_justify, group_thousands, always_sign, plus_becomes_space, use_capitals,
+++			locale_opts);
+++}
++ 
++ 	template<typename T, Sink S>
++ 	void format_integer(T object, format_options fo, S &sink) {
++@@ -486,7 +488,19 @@ namespace _fmt_basics {
++ 		// declare the variables here, but defer initialization to when (if) we need it.
++ 		bool exp_mantissa_init = false;
++ 		int exponent;
++-		double mantissa;
+++		T mantissa;
+++		auto decimal_power = [](unsigned exponent) -> T {
+++			T result = 1.0;
+++			T base = 10.0;
+++			while(exponent) {
+++				if(exponent & 1)
+++					result *= base;
+++				exponent >>= 1;
+++				if(exponent)
+++					base *= base;
+++			}
+++			return result;
+++		};
++ 
++ 		// defer floating-point calculations for as long as possible
++ 		auto deferredMantissaExpInit = [&] () {
++@@ -497,8 +511,17 @@ namespace _fmt_basics {
++ 				return;
++ 			}
++ 
++-			exponent = (int) floor(log10(number));
++-			mantissa = number / pow(10, exponent);
+++			if constexpr (std::is_same_v<T, long double>) {
+++				long scaled_exponent = static_cast<long>(ilogbl(number)) * 78913L;
+++				exponent = scaled_exponent >= 0
+++						? static_cast<int>(scaled_exponent / 262144L)
+++						: -static_cast<int>((-scaled_exponent + 262143L) / 262144L);
+++				auto scale = decimal_power(exponent < 0 ? -exponent : exponent);
+++				mantissa = exponent < 0 ? number * scale : number / scale;
+++			}else{
+++				exponent = (int) floor(log10(number));
+++				mantissa = number / pow(10.0, exponent);
+++			}
++ 
++ 			if (__builtin_isinf(mantissa)) {
++ 				mantissa = 0.0;
++@@ -540,13 +563,26 @@ namespace _fmt_basics {
++ 		}
++ 
++ 		// do rounding
++-		double intpart, fracpart;
++-		fracpart = modf(number, &intpart);
++-		uint64_t integralDigits = static_cast<uint64_t>(intpart);
+++		using DigitInt = std::conditional_t<(sizeof(T) > sizeof(double)),
+++				unsigned __int128, uint64_t>;
+++		T intpart, fracpart;
+++		if constexpr (std::is_same_v<T, long double>)
+++			fracpart = modfl(number, &intpart);
+++		else
+++			fracpart = modf(number, &intpart);
+++		DigitInt integralDigits = static_cast<DigitInt>(intpart);
++ 		// TODO: improve perf with a lookup table? precision would need clamping then
++-		double shift = pow(10, *precision);
+++		T shift;
+++		if constexpr (std::is_same_v<T, long double>)
+++			shift = decimal_power(static_cast<unsigned>(*precision));
+++		else
+++			shift = pow(10.0, *precision);
++ 		// safe because we ensure above that `number` (and therefore `fracpart`) are non-negative
++-		uint64_t fracDigits = static_cast<uint64_t>(rint(fracpart * shift));
+++		DigitInt fracDigits;
+++		if constexpr (std::is_same_v<T, long double>)
+++			fracDigits = static_cast<DigitInt>(rintl(fracpart * shift));
+++		else
+++			fracDigits = static_cast<DigitInt>(rint(fracpart * shift));
++ 
++ 		if (fracDigits == shift) {
++ 			integralDigits++;

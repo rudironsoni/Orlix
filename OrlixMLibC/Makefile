@@ -235,7 +235,11 @@ MLIBC_TEST_LINUX_CASES := \
 	linux/utmpx \
 	linux/xattr
 MLIBC_TEST_ORLIX_CASES := \
-	orlix/renameat2
+	orlix/float_roundtrip \
+	orlix/getopt_diagnostics \
+	orlix/locale_probe \
+	orlix/renameat2 \
+	orlix/stdio_dup2_pipe
 MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES) $(MLIBC_TEST_ORLIX_CASES)
 # Runtime-log polling uses 0.1s ticks. Scale with the selected upstream mlibc
 # tests so a full suite is not cut off by the focused-case timeout.
@@ -247,6 +251,7 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	addtf3.c \
 	aarch64/fp_mode.c \
 	comparetf2.c \
+	clzti2.c \
 	divtf3.c \
 	extenddftf2.c \
 	extendhftf2.c \
@@ -274,7 +279,9 @@ MLIBC_COMPILER_RT_BUILTINS := \
 	trunctfdf2.c \
 	trunctfhf2.c \
 	trunctfsf2.c \
-	trunctfxf2.c
+	trunctfxf2.c \
+	udivmodti4.c \
+	udivti3.c
 
 .PHONY: all help build headers_install test test-initramfs kselftest clean mrproper __build __headers-install __ensure-kernel-headers __prepare-test-locale-data __test-build __test-initramfs __test-run __clean __bootstrap-mlibc __apply-mlibc-patches __bootstrap-compiler-rt __build-compiler-rt __write-cross-file
 

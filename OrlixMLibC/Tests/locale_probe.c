@@ -6,9 +6,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <uchar.h>
 #include <unistd.h>
 
 struct locale_file {
@@ -195,6 +197,22 @@ int main(void) {
 	if (!setlocale(LC_ALL, "C")) {
 		printf("# locale_probe reset C failed before LC_ALL\n");
 		failures++;
+	}
+	if (MB_CUR_MAX != 1) {
+		printf("# locale_probe C locale MB_CUR_MAX=%zu expected=1\n",
+		       MB_CUR_MAX);
+		failures++;
+	}
+	{
+		mbstate_t state = { 0 };
+		char32_t codepoint = 0;
+
+		errno = 0;
+		if (mbrtoc32(&codepoint, "\xe2\x80\x98", 3, &state) !=
+				(size_t)-1 || errno != EILSEQ) {
+			printf("# locale_probe C locale accepted UTF-8 multibyte input\n");
+			failures++;
+		}
 	}
 
 	errno = 0;

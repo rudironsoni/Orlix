@@ -1,0 +1,164 @@
+diff --git a/options/internal/include/mlibc/strtofp.hpp b/options/internal/include/mlibc/strtofp.hpp
+--- a/options/internal/include/mlibc/strtofp.hpp
++++ b/options/internal/include/mlibc/strtofp.hpp
+@@ -3,6 +3,8 @@
+ 
+ #include <bits/ensure.h>
+ #include <bits/nl_item.h>
++#include <float.h>
++#include <limits.h>
+ #include <frg/string.hpp>
+ #include <mlibc/charcode.hpp>
+ #include <mlibc/charset.hpp>
+@@ -80,6 +82,7 @@ struct StrToFpPolicy<wchar_t> {
+ template<typename T, typename Char>
+ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 	using Type = StrToFpPolicy<Char>;
++	using Intermediate = long double;
+ 
+ 	while(Type::is_space(*str, l))
+ 		str++;
+@@ -134,7 +137,16 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 		hex = true;
+ 	}
+ 
+-	T result = static_cast<T>(0);
++	Intermediate result = 0.0L;
++	auto apply_exponent = [&result](Intermediate radix, unsigned exponent, bool inverse) {
++		constexpr unsigned max_steps = LDBL_MAX_EXP + LDBL_MANT_DIG;
++		if(exponent > max_steps) {
++			result = inverse ? 0.0L : __builtin_infl();
++			return;
++		}
++		for(unsigned i = 0; i < exponent; i++)
++			result = inverse ? result / radix : result * radix;
++	};
+ 
+ 	const Char *tmp = str;
+ 
+@@ -142,16 +154,17 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 		while (true) {
+ 			if (!Type::is_digit(*tmp, l))
+ 				break;
+-			result *= static_cast<T>(10);
+-			result += static_cast<T>(*tmp - '0');
++			result *= 10.0L;
++			result += static_cast<Intermediate>(*tmp - '0');
+ 			tmp++;
+ 		}
+ 	} else {
+ 		while (true) {
+ 			if (!isxdigit_l(*tmp, l))
+ 				break;
+-			result *= static_cast<T>(16);
+-			result += static_cast<T>(*tmp <= '9' ? (*tmp - '0') : (tolower_l(*tmp, l) - 'a' + 10));
++			result *= 16.0L;
++			result += static_cast<Intermediate>(*tmp <= '9'
++					? (*tmp - '0') : (tolower_l(*tmp, l) - 'a' + 10));
+ 			tmp++;
+ 		}
+ 	}
+@@ -160,23 +173,24 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 		tmp += frg::generic_strnlen<Char>(decimal.data(), decimal.size());
+ 
+ 		if (!hex) {
+-			T d = static_cast<T>(10);
++			Intermediate d = 10.0L;
+ 
+ 			while (true) {
+ 				if (!Type::is_digit(*tmp, l))
+ 					break;
+-				result += static_cast<T>(*tmp - '0') / d;
+-				d *= static_cast<T>(10);
++				result += static_cast<Intermediate>(*tmp - '0') / d;
++				d *= 10.0L;
+ 				tmp++;
+ 			}
+ 		} else {
+-			T d = static_cast<T>(16);
++			Intermediate d = 16.0L;
+ 
+ 			while (true) {
+ 				if (!isxdigit_l(*tmp, l))
+ 					break;
+-				result += static_cast<T>(*tmp <= '9' ? (*tmp - '0') : (tolower_l(*tmp, l) - 'a' + 10)) / d;
+-				d *= static_cast<T>(16);
++				result += static_cast<Intermediate>(*tmp <= '9'
++						? (*tmp - '0') : (tolower_l(*tmp, l) - 'a' + 10)) / d;
++				d *= 16.0L;
+ 				tmp++;
+ 			}
+ 		}
+@@ -194,24 +208,19 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 			if (Type::is_digit(tmp[expOff], l)) {
+ 				tmp += expOff;
+ 
+-				int exp = 0;
++				unsigned exp = 0;
+ 				while (true) {
+ 					if (!Type::is_digit(*tmp, l))
+ 						break;
+-					exp *= 10;
+-					exp += *tmp - '0';
++					unsigned digit = static_cast<unsigned>(*tmp - '0');
++					if (exp > (UINT_MAX - digit) / 10)
++						exp = UINT_MAX;
++					else
++						exp = exp * 10 + digit;
+ 					tmp++;
+ 				}
+ 
+-				if (!exp_negative) {
+-					for (int i = 0; i < exp; ++i) {
+-						result *= static_cast<T>(10);
+-					}
+-				} else {
+-					for (int i = 0; i < exp; ++i) {
+-						result /= static_cast<T>(10);
+-					}
+-				}
++				apply_exponent(10.0L, exp, exp_negative);
+ 			}
+ 		}
+ 	} else {
+@@ -226,24 +235,19 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 			if (Type::is_digit(tmp[expOff], l)) {
+ 				tmp += expOff;
+ 
+-				int exp = 0;
++				unsigned exp = 0;
+ 				while (true) {
+ 					if (!Type::is_digit(*tmp, l))
+ 						break;
+-					exp *= 10;
+-					exp += *tmp - '0';
++					unsigned digit = static_cast<unsigned>(*tmp - '0');
++					if (exp > (UINT_MAX - digit) / 10)
++						exp = UINT_MAX;
++					else
++						exp = exp * 10 + digit;
+ 					tmp++;
+ 				}
+ 
+-				if (!exp_negative) {
+-					for (int i = 0; i < exp; ++i) {
+-						result *= static_cast<T>(2);
+-					}
+-				} else {
+-					for (int i = 0; i < exp; ++i) {
+-						result /= static_cast<T>(2);
+-					}
+-				}
++				apply_exponent(2.0L, exp, exp_negative);
+ 			}
+ 		}
+ 	}
+@@ -253,7 +257,7 @@ T strtofp(const Char *str, Char **endptr, mlibc::localeinfo *l) {
+ 	if (negative)
+ 		result = -result;
+ 
+-	return result;
++	return static_cast<T>(result);
+ }
+ 
+ } // namespace mlibc

@@ -1,0 +1,133 @@
+diff --git a/options/internal/generic/charcode.cpp b/options/internal/generic/charcode.cpp
+--- a/options/internal/generic/charcode.cpp
++++ b/options/internal/generic/charcode.cpp
+@@ -2,6 +2,7 @@
+ #include <bits/ensure.h>
+ #include <frg/string.hpp>
+ #include <mlibc/charcode.hpp>
++#include <mlibc/locale.hpp>
+ #include <mlibc/debug.hpp>
+ 
+ namespace mlibc {
+@@ -142,4 +143,48 @@ struct utf8_charcode {
+ 	};
+ };
+ 
++struct ascii_charcode {
++	static constexpr bool preserves_7bit_units = true;
++	static constexpr bool has_shift_states = false;
++
++	struct decode_state {
++		decode_state()
++		: _progress{0}, _cpoint{0} { }
++
++		decode_state(int progress, codepoint cpoint)
++		: _progress{progress}, _cpoint{cpoint} { }
++
++		auto progress() { return _progress; }
++		auto cpoint() { return _cpoint; }
++
++		transcode_status operator() (code_seq<const char> &seq) {
++			auto uc = static_cast<unsigned char>(*seq.it);
++			if (uc > 0x7f)
++				return transcode_status::illegal_input;
++			_cpoint = uc;
++			_progress = 0;
++			++seq.it;
++			return transcode_status::input_exhausted;
++		}
++
++	private:
++		int _progress;
++		codepoint _cpoint;
++	};
++
++	struct encode_state {
++		transcode_status operator()(code_seq<char> &nseq, code_seq<const codepoint> &wseq) {
++			auto cp = *wseq.it;
++			if (cp > 0x7f)
++				return transcode_status::illegal_input;
++			if (!nseq)
++				return transcode_status::output_overflow;
++			*nseq.it = static_cast<char>(cp);
++			++nseq.it;
++			++wseq.it;
++			return transcode_status::input_exhausted;
++		}
++	};
++};
++
+ polymorphic_charcode::~polymorphic_charcode() = default;
+@@ -316,4 +361,8 @@ polymorphic_charcode *current_charcode() {
+ 	static polymorphic_charcode_adapter<utf8_charcode> global_charcode;
+-	return &global_charcode;
++	static polymorphic_charcode_adapter<ascii_charcode> global_ascii_charcode;
++	if (localeWasSelected()
++			&& getActiveLocale()->ctype.get(_NL_CTYPE_MB_CUR_MAX).asUint32() == 1)
++		return &global_ascii_charcode;
++	return &global_charcode;
+ }
+ 
+diff --git a/options/internal/generic/locale.cpp b/options/internal/generic/locale.cpp
+--- a/options/internal/generic/locale.cpp
++++ b/options/internal/generic/locale.cpp
+@@ -22,3 +22,4 @@ thread_local mlibc::localeinfo *current_locale = nullptr;
+ mlibc::localeinfo *current_global_locale = &startingLocale;
++bool global_locale_was_selected;
+ 
+ // handle to the opened locale-archive file, if any
+@@ -792,6 +793,11 @@ localeinfo *useGlobalLocale(localeinfo *loc) {
+ 	localeinfo *old = current_global_locale;
+ 	current_global_locale = reinterpret_cast<localeinfo *>(loc);
++	global_locale_was_selected = true;
+ 	return old;
+ }
+ 
++bool localeWasSelected() {
++	return current_locale || global_locale_was_selected;
++}
++
+ void freeLocale(localeinfo *loc) {
+diff --git a/options/internal/include/mlibc/locale.hpp b/options/internal/include/mlibc/locale.hpp
+--- a/options/internal/include/mlibc/locale.hpp
++++ b/options/internal/include/mlibc/locale.hpp
+@@ -253,5 +253,6 @@ void freeLocale(localeinfo *loc);
+ 
+ localeinfo *getActiveLocale();
+ localeinfo *getGlobalLocale();
++bool localeWasSelected();
+ 
+ char *nl_langinfo(nl_item item);
+diff --git a/options/ansi/generic/stdlib.cpp b/options/ansi/generic/stdlib.cpp
+--- a/options/ansi/generic/stdlib.cpp
++++ b/options/ansi/generic/stdlib.cpp
+@@ -18,6 +18,7 @@
+ #include <mlibc/all-sysdeps.hpp>
+ #include <mlibc/allocator.hpp>
+ #include <mlibc/charcode.hpp>
++#include <mlibc/locale.hpp>
+ #include <mlibc/strtofp.hpp>
+ #include <mlibc/strtol.hpp>
+ #include <mlibc/threads.hpp>
+@@ -32,3 +33,7 @@ extern "C" int __cxa_atexit(void (*function)(void *), void *argument, void *dso_tag);
+ void __mlibc_do_finalize();
+ 
++size_t __mlibc_mb_cur_max(void) {
++	return mlibc::getActiveLocale()->ctype.get(_NL_CTYPE_MB_CUR_MAX).asUint32();
++}
++
+ namespace {
+diff --git a/options/ansi/include/stdlib.h b/options/ansi/include/stdlib.h
+--- a/options/ansi/include/stdlib.h
++++ b/options/ansi/include/stdlib.h
+@@ -34,8 +34,8 @@ typedef struct {
+ 
+ #define RAND_MAX 0x7FFFFFFF
+ 
+-/* TODO: this should not be a compile-time constant */
+-#define MB_CUR_MAX ((size_t)4)
++size_t __mlibc_mb_cur_max(void);
++#define MB_CUR_MAX (__mlibc_mb_cur_max())
+ 
+ #ifndef __MLIBC_ABI_ONLY
+ 
