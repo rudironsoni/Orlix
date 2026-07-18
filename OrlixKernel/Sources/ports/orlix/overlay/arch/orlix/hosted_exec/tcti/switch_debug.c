@@ -3325,8 +3325,11 @@ static int tcti_execute_simd_vector_arithmetic(
 		u8 operation = decoded->simd_arithmetic_op - TCTI_SIMD_ARITH_ABS;
 		bool saturated = false;
 
-		if (decoded->result_size != sizeof(u64) &&
-		    decoded->result_size != 2 * sizeof(u64))
+		if ((decoded->simd_scalar &&
+		     decoded->result_size != decoded->access_size) ||
+		    (!decoded->simd_scalar &&
+		     decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)))
 			return -EOPNOTSUPP;
 
 		source[0] = current->thread.user_simd[decoded->rn * 2];
@@ -3393,7 +3396,8 @@ static int tcti_execute_simd_vector_arithmetic(
 
 			bits = decoded->access_size * 8;
 			mask = GENMASK_ULL(bits - 1, 0);
-			lane_count = decoded->result_size / decoded->access_size;
+			lane_count = decoded->simd_scalar ? 1 :
+				decoded->result_size / decoded->access_size;
 			for (lane = 0; lane < lane_count; lane++) {
 				u8 byte = lane * decoded->access_size;
 				u8 word = byte / sizeof(u64);

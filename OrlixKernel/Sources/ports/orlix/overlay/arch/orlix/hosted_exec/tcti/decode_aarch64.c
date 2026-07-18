@@ -135,6 +135,7 @@
 #define AARCH64_SIMD_SQSHL_UQSHL_IMMEDIATE_PATTERN 0x0f007400U
 #define AARCH64_SIMD_SQSHLU_IMMEDIATE_PATTERN 0x0f006400U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
+#define AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK 0x8f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
 #define AARCH64_SIMD_CLS_CLZ_PATTERN 0x0e204800U
@@ -1940,27 +1941,36 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SABD + operation;
 		return decoded;
 	}
-	if ((instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	if ((instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_ABS_NEG_PATTERN ||
-	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_SQABS_SQNEG_PATTERN ||
-	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_CLS_CLZ_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
 		bool u = instruction & BIT(29);
-		u32 pattern = instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK;
+		bool scalar = instruction & BIT(28);
+		u32 pattern = instruction &
+			AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK;
 
-		if ((!q && size == 3) ||
-		    (pattern == AARCH64_SIMD_CLS_CLZ_PATTERN && size == 3))
+		if (scalar) {
+			if (!q || pattern == AARCH64_SIMD_CLS_CLZ_PATTERN ||
+			    (pattern == AARCH64_SIMD_ABS_NEG_PATTERN && size != 3))
+				return decoded;
+		} else if ((!q && size == 3) ||
+			   (pattern == AARCH64_SIMD_CLS_CLZ_PATTERN && size == 3)) {
 			return decoded;
+		}
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = BIT(size);
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? decoded.access_size :
+			(q ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		if (pattern == AARCH64_SIMD_ABS_NEG_PATTERN)
 			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_NEG :
 				TCTI_SIMD_ARITH_ABS;
