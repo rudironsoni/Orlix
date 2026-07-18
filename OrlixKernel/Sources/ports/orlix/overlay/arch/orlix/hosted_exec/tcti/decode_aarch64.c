@@ -127,6 +127,12 @@
 #define AARCH64_SIMD_SHA256_THREE_REGISTER_PATTERN 0x5e004000U
 #define AARCH64_SIMD_SHA256SU0_MASK 0xfffffc00U
 #define AARCH64_SIMD_SHA256SU0_PATTERN 0x5e282800U
+#define AARCH64_SIMD_SHA512_THREE_REGISTER_MASK 0xffe0fc00U
+#define AARCH64_SIMD_SHA512H_PATTERN 0xce608000U
+#define AARCH64_SIMD_SHA512H2_PATTERN 0xce608400U
+#define AARCH64_SIMD_SHA512SU1_PATTERN 0xce608800U
+#define AARCH64_SIMD_SHA512SU0_MASK 0xfffffc00U
+#define AARCH64_SIMD_SHA512SU0_PATTERN 0xcec08000U
 #define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_MIN_MAX_MASK 0x9f20f400U
@@ -1859,6 +1865,40 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SHA256SU0;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHA512_THREE_REGISTER_MASK) ==
+		    AARCH64_SIMD_SHA512H_PATTERN ||
+	    (instruction & AARCH64_SIMD_SHA512_THREE_REGISTER_MASK) ==
+		    AARCH64_SIMD_SHA512H2_PATTERN ||
+	    (instruction & AARCH64_SIMD_SHA512_THREE_REGISTER_MASK) ==
+		    AARCH64_SIMD_SHA512SU1_PATTERN) {
+		u32 pattern = instruction &
+			      AARCH64_SIMD_SHA512_THREE_REGISTER_MASK;
+		u8 operation = pattern == AARCH64_SIMD_SHA512H_PATTERN ? 0 :
+			       pattern == AARCH64_SIMD_SHA512H2_PATTERN ? 1 : 2;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SHA512H + operation;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHA512SU0_MASK) ==
+	    AARCH64_SIMD_SHA512SU0_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SHA512SU0;
 		return decoded;
 	}
 

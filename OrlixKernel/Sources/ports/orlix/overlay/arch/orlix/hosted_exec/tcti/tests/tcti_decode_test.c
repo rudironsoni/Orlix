@@ -2888,6 +2888,39 @@ static void tcti_decode_recognizes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_decode_recognizes_complete_simd_sha512_family(struct kunit *test)
+{
+	struct {
+		u32 instruction;
+		enum tcti_simd_vector_arithmetic_op operation;
+		bool three_register;
+	} cases[] = {
+		{ 0xce628020U, TCTI_SIMD_ARITH_SHA512H, true },
+		{ 0xce628420U, TCTI_SIMD_ARITH_SHA512H2, true },
+		{ 0xce628820U, TCTI_SIMD_ARITH_SHA512SU1, true },
+		{ 0xcec08020U, TCTI_SIMD_ARITH_SHA512SU0, false },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[index].instruction);
+
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, cases[index].three_register ? 2U : 0U,
+				decoded.rm);
+		KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+		KUNIT_EXPECT_EQ(test, cases[index].operation,
+				decoded.simd_arithmetic_op);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		KUNIT_EXPECT_FALSE(test, decoded.simd_scalar);
+	}
+}
+
 static void tcti_decode_recognizes_complete_simd_sha256_family(struct kunit *test)
 {
 	struct {
@@ -9025,6 +9058,52 @@ static void tcti_switch_executes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_switch_executes_complete_simd_sha512_family(struct kunit *test)
+{
+	struct {
+		u32 instruction;
+		u64 expected_low;
+		u64 expected_high;
+	} cases[] = {
+		{ 0xce628020U, 0xf0f47a5b26e1bdb2ULL,
+		  0xb4206fda37564a94ULL },
+		{ 0xce628420U, 0xbfa4f12061b7ee1cULL,
+		  0x5adebc996c2bcde4ULL },
+		{ 0xce628820U, 0xa1a1d975587d114fULL,
+		  0x1cacc4a736af70aaULL },
+		{ 0xcec08020U, 0x6f907deb1d5cb34dULL,
+		  0xe87aefdc69ad2195ULL },
+	};
+	struct pt_regs regs = {};
+	size_t index;
+
+	regs.pc = 0x8780;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[index].instruction);
+		int ret;
+
+		current->thread.user_simd[0] = 0x0123456789abcdefULL;
+		current->thread.user_simd[1] = 0xfedcba9876543210ULL;
+		current->thread.user_simd[2] = 0x13579bdf2468ace0ULL;
+		current->thread.user_simd[3] = 0x0badf00ddeadbeefULL;
+		current->thread.user_simd[4] = 0x1111111122222222ULL;
+		current->thread.user_simd[5] = 0x3333333344444444ULL;
+		current->thread.user_simd_valid = 0;
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_low,
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, cases[index].expected_high,
+				current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test,
+				0x8780ULL + (index + 1) * sizeof(u32), regs.pc);
+	}
+}
+
 static void tcti_switch_executes_complete_simd_sha256_family(struct kunit *test)
 {
 	struct {
@@ -13063,6 +13142,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sha512_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sha256_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sha1_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_aes_family),
@@ -13196,6 +13276,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_sha512_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha256_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha1_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_aes_family),
