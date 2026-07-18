@@ -1,0 +1,30 @@
+diff --git a/sysdeps/linux/generic/sysdeps.cpp b/sysdeps/linux/generic/sysdeps.cpp
+index 77b8e1d1..f6247503 100644
+--- a/sysdeps/linux/generic/sysdeps.cpp
++++ b/sysdeps/linux/generic/sysdeps.cpp
+@@ -995,6 +995,13 @@ int Sysdeps<Chdir>::operator()(const char *path) {
+ 	return 0;
+ }
+ 
++int Sysdeps<Chroot>::operator()(const char *path) {
++	auto ret = do_syscall(SYS_chroot, path);
++	if (int e = sc_error(ret); e)
++		return e;
++	return 0;
++}
++
+ int Sysdeps<Fchdir>::operator()(int fd) {
+ 	auto ret = do_syscall(SYS_fchdir, fd);
+ 	if (int e = sc_error(ret); e)
+diff --git a/sysdeps/linux/include/mlibc/sysdeps.hpp b/sysdeps/linux/include/mlibc/sysdeps.hpp
+index c794f2b9..2a14b914 100644
+--- a/sysdeps/linux/include/mlibc/sysdeps.hpp
++++ b/sysdeps/linux/include/mlibc/sysdeps.hpp
+@@ -61,6 +61,7 @@ enum class [[clang::enum_extensibility(open)]] Sysdep {
+ 	GetMaxPriority,
+ 	GetMinPriority,
+ 	GetCwd,
++	Chroot,
+ 	Chdir,
+ 	Fchdir,
+ 	Mkdir,
