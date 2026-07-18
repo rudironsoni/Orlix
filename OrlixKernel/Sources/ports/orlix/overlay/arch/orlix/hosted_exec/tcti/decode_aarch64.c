@@ -86,6 +86,8 @@
 #define AARCH64_SIMD_VECTOR_LOGICAL_PATTERN 0x0e201c00U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
 #define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
+#define AARCH64_SIMD_SCALAR_ADD_SUB_MASK 0xdf20fc00U
+#define AARCH64_SIMD_SCALAR_ADD_SUB_PATTERN 0x5e208400U
 #define AARCH64_SIMD_HALVING_ADD_MASK 0x9f20ec00U
 #define AARCH64_SIMD_HALVING_ADD_PATTERN 0x0e200400U
 #define AARCH64_SIMD_HALVING_SUB_MASK 0x9f20fc00U
@@ -1569,11 +1571,14 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	}
 
 	if ((instruction & AARCH64_SIMD_ADD_SUB_MASK) ==
-	    AARCH64_SIMD_ADD_SUB_PATTERN) {
+	    AARCH64_SIMD_ADD_SUB_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_ADD_SUB_MASK) ==
+	    AARCH64_SIMD_SCALAR_ADD_SUB_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
+		bool scalar = instruction & BIT(28);
 
-		if (!q && size == 3)
+		if ((scalar && size != 3) || (!scalar && !q && size == 3))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
@@ -1581,8 +1586,10 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.access_size = BIT(size);
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? sizeof(u64) :
+			(q ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		decoded.simd_arithmetic_op = instruction & BIT(29) ?
 			TCTI_SIMD_ARITH_SUB : TCTI_SIMD_ARITH_ADD;
 		return decoded;

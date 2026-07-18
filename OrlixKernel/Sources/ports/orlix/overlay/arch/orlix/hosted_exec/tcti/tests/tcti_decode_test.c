@@ -3810,6 +3810,35 @@ tcti_decode_recognizes_complete_simd_register_compare_family(struct kunit *test)
 	}
 }
 
+static void
+tcti_decode_recognizes_complete_simd_scalar_add_sub_family(struct kunit *test)
+{
+	u8 subtract;
+
+	for (subtract = 0; subtract < 2; subtract++) {
+		u32 instruction = 0x0e208400U | BIT(28) | BIT(30) |
+			(subtract ? BIT(29) : 0) | (3U << 22) |
+			(2U << 16) | (1U << 5);
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+		KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+		KUNIT_EXPECT_EQ(test, subtract ? TCTI_SIMD_ARITH_SUB :
+				TCTI_SIMD_ARITH_ADD, decoded.simd_arithmetic_op);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x5ea28420U).decode_class);
+}
+
 static void tcti_decode_recognizes_complete_simd_add_sub_family(struct kunit *test)
 {
 	u8 subtract;
@@ -7451,6 +7480,76 @@ static void tcti_switch_executes_simd_umaxv_4h(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[11]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8e04ULL, regs.pc);
+}
+
+static void
+tcti_switch_executes_complete_simd_scalar_add_sub_family(struct kunit *test)
+{
+	struct {
+		u64 left;
+		u64 right;
+	} values[] = {
+		{ 20, 5 },
+		{ U64_MAX, 1 },
+		{ 0, 1 },
+		{ BIT_ULL(63), BIT_ULL(63) },
+	};
+	struct pt_regs regs = {};
+	u32 execution_count = 0;
+	u8 subtract;
+	size_t index;
+
+	regs.pc = 0x8500;
+	for (subtract = 0; subtract < 2; subtract++) {
+		for (index = 0; index < ARRAY_SIZE(values); index++) {
+			u32 instruction = 0x0e208400U | BIT(28) | BIT(30) |
+				(subtract ? BIT(29) : 0) | (3U << 22) |
+				(2U << 16) | (1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+			u64 expected = subtract ?
+				values[index].left - values[index].right :
+				values[index].left + values[index].right;
+			int ret;
+
+			current->thread.user_simd[0] = U64_MAX;
+			current->thread.user_simd[1] = U64_MAX;
+			current->thread.user_simd[2] = values[index].left;
+			current->thread.user_simd[3] = U64_MAX;
+			current->thread.user_simd[4] = values[index].right;
+			current->thread.user_simd[5] = U64_MAX;
+			current->thread.user_simd_valid = 0;
+			ret = tcti_switch_debug_execute_decoded(
+				NULL, &regs, &decoded, NULL);
+
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, expected,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, 0ULL,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 1,
+					current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test,
+					0x8500ULL + execution_count * sizeof(u32),
+					regs.pc);
+		}
+	}
+
+	current->thread.user_simd[2] = 11;
+	current->thread.user_simd[3] = U64_MAX;
+	current->thread.user_simd[4] = 7;
+	current->thread.user_simd[5] = U64_MAX;
+	{
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(0x5ee28421U);
+		int ret = tcti_switch_debug_execute_decoded(
+			NULL, &regs, &decoded, NULL);
+
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, 18ULL, current->thread.user_simd[2]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+	}
 }
 
 static void
@@ -12144,6 +12243,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_umaxv_4h),
 	KUNIT_CASE(tcti_decode_recognizes_simd_addv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_simd_addp_d_2d),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_add_sub_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_add_sub_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_halving_add_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_add_sub_wide_family),
@@ -12269,6 +12369,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_ins_gpr_s0),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_umaxv_4h),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_add_sub_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_add_sub_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_halving_add_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_add_sub_wide_family),
