@@ -123,6 +123,11 @@
 #define AARCH64_SIMD_RSHRN_PATTERN 0x0f008c00U
 #define AARCH64_SIMD_SQSHRN_PATTERN 0x0f009400U
 #define AARCH64_SIMD_SQRSHRN_PATTERN 0x0f009c00U
+#define AARCH64_SIMD_SHIFT_RIGHT_MASK 0x9f80fc00U
+#define AARCH64_SIMD_SSHR_PATTERN 0x0f000400U
+#define AARCH64_SIMD_SSRA_PATTERN 0x0f001400U
+#define AARCH64_SIMD_SRSHR_PATTERN 0x0f002400U
+#define AARCH64_SIMD_SRSRA_PATTERN 0x0f003400U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
@@ -135,10 +140,6 @@
 #define AARCH64_SIMD_CMLT_ZERO_PATTERN 0x0e20a800U
 #define AARCH64_SIMD_FNEG_2D_MASK 0xfffffc00U
 #define AARCH64_SIMD_FNEG_2D_PATTERN 0x6ee0f800U
-#define AARCH64_SIMD_USHR_4S_MASK 0xff80fc00U
-#define AARCH64_SIMD_USHR_4S_PATTERN 0x6f000400U
-#define AARCH64_SIMD_USRA_4S_MASK 0xffe0fc00U
-#define AARCH64_SIMD_USRA_4S_PATTERN 0x6f201400U
 #define AARCH64_SIMD_SHIFT_BY_REGISTER_MASK 0x9f20e400U
 #define AARCH64_SIMD_SHIFT_BY_REGISTER_PATTERN 0x0e204400U
 #define AARCH64_SIMD_CMEQ_MASK 0xbf20fc00U
@@ -1153,41 +1154,51 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_USHR_4S_MASK) ==
-	    AARCH64_SIMD_USHR_4S_PATTERN) {
-		u8 imm = (((instruction >> 19) & 0xfU) << 3) |
-			 ((instruction >> 16) & 0x7U);
+	if (((instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK) ==
+	     AARCH64_SIMD_SSHR_PATTERN ||
+	     (instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK) ==
+	     AARCH64_SIMD_SSRA_PATTERN ||
+	     (instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK) ==
+	     AARCH64_SIMD_SRSHR_PATTERN ||
+	     (instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK) ==
+	     AARCH64_SIMD_SRSRA_PATTERN) &&
+	    ((instruction >> 16) & 0x7fU) >= 8) {
+		u8 immediate = (instruction >> 16) & 0x7fU;
+		u8 access_size;
+		u32 pattern = instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK;
+		bool u = instruction & BIT(29);
 
-		if (imm < 32 || imm > 63)
+		if (immediate < 16)
+			access_size = sizeof(u8);
+		else if (immediate < 32)
+			access_size = sizeof(u16);
+		else if (immediate < 64)
+			access_size = sizeof(u32);
+		else
+			access_size = sizeof(u64);
+		if (!(instruction & BIT(30)) && access_size == sizeof(u64))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.shift_amount = 64 - imm;
+		decoded.access_size = access_size;
+		decoded.result_size = instruction & BIT(30) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded.shift_amount = access_size * 16 - immediate;
 		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USHR;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_USRA_4S_MASK) ==
-	    AARCH64_SIMD_USRA_4S_PATTERN) {
-		u8 imm = (((instruction >> 19) & 0xfU) << 3) |
-			 ((instruction >> 16) & 0x7U);
-
-		if (imm < 32 || imm > 63)
-			return decoded;
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.shift_amount = 64 - imm;
-		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USRA;
+		if (pattern == AARCH64_SIMD_SSHR_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_USHR :
+				TCTI_SIMD_ARITH_SSHR;
+		else if (pattern == AARCH64_SIMD_SSRA_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_USRA :
+				TCTI_SIMD_ARITH_SSRA;
+		else if (pattern == AARCH64_SIMD_SRSHR_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_URSHR :
+				TCTI_SIMD_ARITH_SRSHR;
+		else
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_URSRA :
+				TCTI_SIMD_ARITH_SRSRA;
 		return decoded;
 	}
 
@@ -1922,41 +1933,6 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FNEG;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_USHR_4S_MASK) ==
-	    AARCH64_SIMD_USHR_4S_PATTERN) {
-		u8 imm = (((instruction >> 19) & 0xfU) << 3) |
-			 ((instruction >> 16) & 0x7U);
-
-		if (imm < 32 || imm > 63)
-			return decoded;
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.shift_amount = 64 - imm;
-		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USHR;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_SIMD_USRA_4S_MASK) ==
-	    AARCH64_SIMD_USRA_4S_PATTERN) {
-		u8 imm = (((instruction >> 19) & 0xfU) << 3) |
-			 ((instruction >> 16) & 0x7U);
-
-		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = sizeof(u32);
-		decoded.result_size = 2 * sizeof(u64);
-		decoded.shift_amount = 64 - imm;
-		decoded.simd_fp = true;
-		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_USRA;
 		return decoded;
 	}
 

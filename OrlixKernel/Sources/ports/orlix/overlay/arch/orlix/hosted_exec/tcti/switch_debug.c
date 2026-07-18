@@ -2742,6 +2742,91 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_high;
 	u8 lane;
 
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSHR ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USHR ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSRA ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USRA ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSHR ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_URSHR ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSRA ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_URSRA) {
+		u64 source[2];
+		u64 accumulator[2];
+		u64 result[2] = {};
+		u8 lane_count;
+		u8 lane_bits;
+		u64 mask;
+		bool signed_shift =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSHR ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSRA ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSHR ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSRA;
+		bool rounding =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSHR ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_URSHR ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSRA ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_URSRA;
+		bool accumulate =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSRA ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USRA ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRSRA ||
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_URSRA;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->shift_amount == 0 ||
+		    decoded->shift_amount > decoded->access_size * 8 ||
+		    (decoded->access_size == sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)))
+			return -EOPNOTSUPP;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
+		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
+		lane_bits = decoded->access_size * 8;
+		lane_count = decoded->result_size / decoded->access_size;
+		mask = GENMASK_ULL(lane_bits - 1, 0);
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 shift = (byte % sizeof(u64)) * 8;
+			u64 value = (source[word] >> shift) & mask;
+			u64 shifted;
+
+			if (signed_shift) {
+				s64 signed_value = sign_extend64(value, lane_bits - 1);
+				s64 signed_result = decoded->shift_amount == lane_bits ?
+					(signed_value < 0 ? -1 : 0) :
+					signed_value >> decoded->shift_amount;
+
+				if (rounding)
+					signed_result +=
+						(value >> (decoded->shift_amount - 1)) & 1U;
+				shifted = (u64)signed_result & mask;
+			} else {
+				shifted = decoded->shift_amount == lane_bits ? 0 :
+					value >> decoded->shift_amount;
+				if (rounding)
+					shifted +=
+						(value >> (decoded->shift_amount - 1)) & 1U;
+			}
+
+			if (accumulate)
+				shifted += (accumulator[word] >> shift) & mask;
+			result[word] |= (shifted & mask) << shift;
+		}
+
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SABDL &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_UABAL) {
 		u64 accumulator[2];
@@ -3207,77 +3292,6 @@ static int tcti_execute_simd_vector_arithmetic(
 			current->thread.user_fpsr |= AARCH64_FPSR_QC;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 					    result[0], result[1]);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USRA) {
-		u64 source_low;
-		u64 source_high;
-		u64 accumulator_low;
-		u64 accumulator_high;
-		u64 result_low = 0;
-		u64 result_high = 0;
-
-		if (decoded->access_size != sizeof(u32) ||
-		    decoded->result_size != 2 * sizeof(u64) ||
-		    decoded->shift_amount > 32)
-			return -EOPNOTSUPP;
-
-		source_low = current->thread.user_simd[decoded->rn * 2];
-		source_high = current->thread.user_simd[decoded->rn * 2 + 1];
-		accumulator_low = current->thread.user_simd[decoded->rd * 2];
-		accumulator_high = current->thread.user_simd[decoded->rd * 2 + 1];
-		for (lane = 0; lane < 4; lane++) {
-			u64 source_word = lane < 2 ? source_low : source_high;
-			u64 accumulator_word = lane < 2 ? accumulator_low :
-					       accumulator_high;
-			u64 source = (source_word >> ((lane % 2) * 32)) &
-				     GENMASK_ULL(31, 0);
-			u64 accumulator = (accumulator_word >> ((lane % 2) * 32)) &
-					  GENMASK_ULL(31, 0);
-			u64 shifted = decoded->shift_amount == 32 ?
-				      0 : source >> decoded->shift_amount;
-			u64 result = (accumulator + shifted) & GENMASK_ULL(31, 0);
-
-			if (lane < 2)
-				result_low |= result << (lane * 32);
-			else
-				result_high |= result << ((lane - 2) * 32);
-		}
-		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    result_low, result_high);
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USHR) {
-		u64 source_low;
-		u64 source_high;
-		u64 result_low = 0;
-		u64 result_high = 0;
-
-		if (decoded->access_size != sizeof(u32) ||
-		    decoded->result_size != 2 * sizeof(u64) ||
-		    decoded->shift_amount > 32)
-			return -EOPNOTSUPP;
-
-		source_low = current->thread.user_simd[decoded->rn * 2];
-		source_high = current->thread.user_simd[decoded->rn * 2 + 1];
-		for (lane = 0; lane < 4; lane++) {
-			u64 source_word = lane < 2 ? source_low : source_high;
-			u64 source = (source_word >> ((lane % 2) * 32)) &
-				     GENMASK_ULL(31, 0);
-			u64 result = decoded->shift_amount == 32 ?
-				     0 : source >> decoded->shift_amount;
-
-			if (lane < 2)
-				result_low |= result << (lane * 32);
-			else
-				result_high |= result << ((lane - 2) * 32);
-		}
-		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
-					    result_low, result_high);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
