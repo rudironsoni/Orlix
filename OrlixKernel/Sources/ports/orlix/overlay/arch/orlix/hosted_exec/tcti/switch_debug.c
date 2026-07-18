@@ -2760,7 +2760,10 @@ static int tcti_execute_simd_vector_arithmetic(
 		     decoded->access_size != sizeof(u64)) ||
 		    (decoded->result_size != sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)) ||
-		    (decoded->access_size == sizeof(u64) &&
+		    (decoded->simd_scalar &&
+		     (decoded->access_size != sizeof(u64) ||
+		      decoded->result_size != sizeof(u64))) ||
+		    (!decoded->simd_scalar && decoded->access_size == sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)))
 			return -EOPNOTSUPP;
 
@@ -2848,7 +2851,10 @@ static int tcti_execute_simd_vector_arithmetic(
 		     decoded->result_size != 2 * sizeof(u64)) ||
 		    decoded->shift_amount == 0 ||
 		    decoded->shift_amount > decoded->access_size * 8 ||
-		    (decoded->access_size == sizeof(u64) &&
+		    (decoded->simd_scalar &&
+		     (decoded->access_size != sizeof(u64) ||
+		      decoded->result_size != sizeof(u64))) ||
+		    (!decoded->simd_scalar && decoded->access_size == sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)))
 			return -EOPNOTSUPP;
 

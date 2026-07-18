@@ -2908,6 +2908,62 @@ static void tcti_decode_recognizes_complete_simd_min_max_family(struct kunit *te
 }
 
 static void
+tcti_decode_recognizes_complete_simd_scalar_shift_immediate_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		bool left_shift;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0f005400U, false, true, TCTI_SIMD_ARITH_SHL },
+		{ 0x0f005400U, true, true, TCTI_SIMD_ARITH_SLI },
+		{ 0x0f004400U, true, false, TCTI_SIMD_ARITH_SRI },
+		{ 0x0f000400U, false, false, TCTI_SIMD_ARITH_SSHR },
+		{ 0x0f000400U, true, false, TCTI_SIMD_ARITH_USHR },
+		{ 0x0f001400U, false, false, TCTI_SIMD_ARITH_SSRA },
+		{ 0x0f001400U, true, false, TCTI_SIMD_ARITH_USRA },
+		{ 0x0f002400U, false, false, TCTI_SIMD_ARITH_SRSHR },
+		{ 0x0f002400U, true, false, TCTI_SIMD_ARITH_URSHR },
+		{ 0x0f003400U, false, false, TCTI_SIMD_ARITH_SRSRA },
+		{ 0x0f003400U, true, false, TCTI_SIMD_ARITH_URSRA },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 minimum = cases[index].left_shift ? 0 : 1;
+		u8 maximum = cases[index].left_shift ? 63 : 64;
+		u8 shift;
+
+		for (shift = minimum; shift <= maximum; shift++) {
+			u8 immediate = cases[index].left_shift ?
+				64 + shift : 128 - shift;
+			u32 instruction = cases[index].pattern |
+				(cases[index].u ? BIT(29) : 0) |
+				BIT(30) | BIT(28) | ((u32)immediate << 16) |
+				(1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+			KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+			KUNIT_EXPECT_EQ(test, shift, decoded.shift_amount);
+			KUNIT_EXPECT_EQ(test, cases[index].operation,
+					decoded.simd_arithmetic_op);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x1f7f5420U).decode_class);
+}
+
+static void
 tcti_decode_recognizes_complete_simd_shift_left_insert_immediate_family(
 	struct kunit *test)
 {
@@ -8220,6 +8276,124 @@ static void tcti_switch_executes_complete_simd_min_max_family(struct kunit *test
 }
 
 static void
+tcti_switch_executes_complete_simd_scalar_shift_immediate_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		bool left_shift;
+		bool insert;
+		bool signed_shift;
+		bool rounding;
+		bool accumulate;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0f005400U, false, true, false, false, false, false,
+		  TCTI_SIMD_ARITH_SHL },
+		{ 0x0f005400U, true, true, true, false, false, false,
+		  TCTI_SIMD_ARITH_SLI },
+		{ 0x0f004400U, true, false, true, false, false, false,
+		  TCTI_SIMD_ARITH_SRI },
+		{ 0x0f000400U, false, false, false, true, false, false,
+		  TCTI_SIMD_ARITH_SSHR },
+		{ 0x0f000400U, true, false, false, false, false, false,
+		  TCTI_SIMD_ARITH_USHR },
+		{ 0x0f001400U, false, false, false, true, false, true,
+		  TCTI_SIMD_ARITH_SSRA },
+		{ 0x0f001400U, true, false, false, false, false, true,
+		  TCTI_SIMD_ARITH_USRA },
+		{ 0x0f002400U, false, false, false, true, true, false,
+		  TCTI_SIMD_ARITH_SRSHR },
+		{ 0x0f002400U, true, false, false, false, true, false,
+		  TCTI_SIMD_ARITH_URSHR },
+		{ 0x0f003400U, false, false, false, true, true, true,
+		  TCTI_SIMD_ARITH_SRSRA },
+		{ 0x0f003400U, true, false, false, false, true, true,
+		  TCTI_SIMD_ARITH_URSRA },
+	};
+	struct pt_regs regs = {};
+	u32 execution_count = 0;
+	size_t index;
+
+	regs.pc = 0x8880;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 minimum = cases[index].left_shift ? 0 : 1;
+		u8 maximum = cases[index].left_shift ? 63 : 64;
+		u8 shift_amount;
+
+		for (shift_amount = minimum; shift_amount <= maximum;
+		     shift_amount++) {
+			u64 source = 0xa5a5a5a5a5a5a5a5ULL;
+			u64 destination = 0x5a5a5a5a5a5a5a5aULL;
+			u64 expected;
+			u8 immediate = cases[index].left_shift ?
+				64 + shift_amount : 128 - shift_amount;
+			u32 instruction = cases[index].pattern |
+				(cases[index].u ? BIT(29) : 0) |
+				BIT(30) | BIT(28) | ((u32)immediate << 16) |
+				(1U << 5);
+			struct tcti_decoded_instruction decoded;
+			int ret;
+
+			if (cases[index].left_shift) {
+				u64 preserved = shift_amount == 0 ? 0 :
+					GENMASK_ULL(shift_amount - 1, 0);
+
+				expected = source << shift_amount;
+				if (cases[index].insert)
+					expected |= destination & preserved;
+			} else if (cases[index].operation == TCTI_SIMD_ARITH_SRI) {
+				u64 preserved = shift_amount == 64 ? ~0ULL :
+					~GENMASK_ULL(64 - shift_amount - 1, 0);
+				u64 shifted = shift_amount == 64 ? 0 :
+					source >> shift_amount;
+
+				expected = (destination & preserved) | shifted;
+			} else if (cases[index].signed_shift) {
+				s64 signed_source = (s64)source;
+				s64 signed_result = shift_amount == 64 ? -1 :
+					signed_source >> shift_amount;
+
+				if (cases[index].rounding)
+					signed_result +=
+						(source >> (shift_amount - 1)) & 1U;
+				expected = (u64)signed_result;
+			} else {
+				expected = shift_amount == 64 ? 0 :
+					source >> shift_amount;
+				if (cases[index].rounding)
+					expected +=
+						(source >> (shift_amount - 1)) & 1U;
+			}
+			if (cases[index].accumulate)
+				expected += destination;
+
+			current->thread.user_simd[0] = destination;
+			current->thread.user_simd[1] = ~0ULL;
+			current->thread.user_simd[2] = source;
+			current->thread.user_simd[3] = ~0ULL;
+			current->thread.user_simd_valid = 0;
+			decoded = tcti_decode_aarch64(instruction);
+			ret = tcti_switch_debug_execute_decoded(
+				NULL, &regs, &decoded, NULL);
+
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, expected,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, 0ULL,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 1,
+					current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test,
+					0x8880ULL + execution_count * sizeof(u32),
+					regs.pc);
+		}
+	}
+}
+
+static void
 tcti_switch_executes_complete_simd_shift_left_insert_immediate_family(
 	struct kunit *test)
 {
@@ -10916,6 +11090,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_min_max_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_shift_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_left_insert_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_right_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_narrow_family),
@@ -11033,6 +11208,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_min_max_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_shift_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_left_insert_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_right_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_narrow_family),

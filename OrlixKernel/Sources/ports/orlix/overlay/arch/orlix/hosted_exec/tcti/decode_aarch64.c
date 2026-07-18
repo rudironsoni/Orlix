@@ -123,12 +123,12 @@
 #define AARCH64_SIMD_RSHRN_PATTERN 0x0f008c00U
 #define AARCH64_SIMD_SQSHRN_PATTERN 0x0f009400U
 #define AARCH64_SIMD_SQRSHRN_PATTERN 0x0f009c00U
-#define AARCH64_SIMD_SHIFT_RIGHT_MASK 0x9f80fc00U
+#define AARCH64_SIMD_SHIFT_RIGHT_MASK 0x8f80fc00U
 #define AARCH64_SIMD_SSHR_PATTERN 0x0f000400U
 #define AARCH64_SIMD_SSRA_PATTERN 0x0f001400U
 #define AARCH64_SIMD_SRSHR_PATTERN 0x0f002400U
 #define AARCH64_SIMD_SRSRA_PATTERN 0x0f003400U
-#define AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK 0x9f80fc00U
+#define AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK 0x8f80fc00U
 #define AARCH64_SIMD_SHL_SLI_PATTERN 0x0f005400U
 #define AARCH64_SIMD_SRI_PATTERN 0x0f004400U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
@@ -1165,6 +1165,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 immediate = (instruction >> 16) & 0x7fU;
 		u8 access_size;
 		u32 pattern = instruction & AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK;
+		bool scalar = instruction & BIT(28);
 
 		if (immediate < 16)
 			access_size = sizeof(u8);
@@ -1174,16 +1175,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			access_size = sizeof(u32);
 		else
 			access_size = sizeof(u64);
-		if (!(instruction & BIT(30)) && access_size == sizeof(u64))
+		if ((scalar && (!(instruction & BIT(30)) ||
+			       access_size != sizeof(u64))) ||
+		    (!scalar && !(instruction & BIT(30)) &&
+		     access_size == sizeof(u64)))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = access_size;
-		decoded.result_size = instruction & BIT(30) ?
-			2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? sizeof(u64) :
+			(instruction & BIT(30) ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		if (pattern == AARCH64_SIMD_SRI_PATTERN) {
 			decoded.shift_amount = access_size * 16 - immediate;
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SRI;
@@ -1208,6 +1213,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 access_size;
 		u32 pattern = instruction & AARCH64_SIMD_SHIFT_RIGHT_MASK;
 		bool u = instruction & BIT(29);
+		bool scalar = instruction & BIT(28);
 
 		if (immediate < 16)
 			access_size = sizeof(u8);
@@ -1217,17 +1223,21 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			access_size = sizeof(u32);
 		else
 			access_size = sizeof(u64);
-		if (!(instruction & BIT(30)) && access_size == sizeof(u64))
+		if ((scalar && (!(instruction & BIT(30)) ||
+			       access_size != sizeof(u64))) ||
+		    (!scalar && !(instruction & BIT(30)) &&
+		     access_size == sizeof(u64)))
 			return decoded;
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = access_size;
-		decoded.result_size = instruction & BIT(30) ?
-			2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? sizeof(u64) :
+			(instruction & BIT(30) ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.shift_amount = access_size * 16 - immediate;
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		if (pattern == AARCH64_SIMD_SSHR_PATTERN)
 			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_USHR :
 				TCTI_SIMD_ARITH_SSHR;

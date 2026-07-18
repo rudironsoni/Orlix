@@ -321,6 +321,7 @@ struct tcti_decoded_instruction {
 	s64 memory_offset;
 	bool load;
 	bool simd_fp;
+	bool simd_scalar;
 	bool sign_extend_load;
 	u8 offset_extend;
 	bool offset_shift;
