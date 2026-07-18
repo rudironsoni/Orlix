@@ -2888,6 +2888,62 @@ static void tcti_decode_recognizes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void
+tcti_decode_recognizes_complete_simd_multiply_long_family(struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0e20c000U, TCTI_SIMD_ARITH_SMULL },
+		{ 0x2e20c000U, TCTI_SIMD_ARITH_UMULL },
+		{ 0x0e208000U, TCTI_SIMD_ARITH_SMLAL },
+		{ 0x2e208000U, TCTI_SIMD_ARITH_UMLAL },
+		{ 0x0e20a000U, TCTI_SIMD_ARITH_SMLSL },
+		{ 0x2e20a000U, TCTI_SIMD_ARITH_UMLSL },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 q;
+		u8 size;
+
+		for (q = 0; q < 2; q++) {
+			for (size = 0; size < 4; size++) {
+				u32 instruction = cases[index].pattern |
+						  (q ? BIT(30) : 0) |
+						  ((u32)size << 22) |
+						  (2U << 16) | (1U << 5);
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(instruction);
+
+				if (size == 3) {
+					KUNIT_EXPECT_EQ(
+						test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+					continue;
+				}
+
+				KUNIT_EXPECT_EQ(
+					test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+				KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+				KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+				KUNIT_EXPECT_EQ(test, 1U << size,
+						decoded.access_size);
+				KUNIT_EXPECT_EQ(test, 16U,
+						decoded.result_size);
+				KUNIT_EXPECT_EQ(test, q,
+						decoded.simd_source_index);
+				KUNIT_EXPECT_EQ(test, cases[index].operation,
+						decoded.simd_arithmetic_op);
+				KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+			}
+		}
+	}
+}
+
 static void tcti_decode_recognizes_complete_simd_pmull_family(struct kunit *test)
 {
 	u8 q;
@@ -8864,6 +8920,129 @@ static void tcti_switch_executes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void
+tcti_switch_executes_complete_simd_multiply_long_family(struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0e20c000U, TCTI_SIMD_ARITH_SMULL },
+		{ 0x2e20c000U, TCTI_SIMD_ARITH_UMULL },
+		{ 0x0e208000U, TCTI_SIMD_ARITH_SMLAL },
+		{ 0x2e208000U, TCTI_SIMD_ARITH_UMLAL },
+		{ 0x0e20a000U, TCTI_SIMD_ARITH_SMLSL },
+		{ 0x2e20a000U, TCTI_SIMD_ARITH_UMLSL },
+	};
+	struct pt_regs regs = {};
+	u32 execution_count = 0;
+	size_t index;
+
+	regs.pc = 0x87c0;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 q;
+		u8 size;
+
+		for (q = 0; q < 2; q++) {
+			for (size = 0; size < 3; size++) {
+				u8 source_size = BIT(size);
+				u8 result_size = source_size * 2;
+				u8 source_lane_count = sizeof(u64) /
+						       source_size;
+				u8 result_lane_count = 2 * sizeof(u64) /
+						       result_size;
+				u64 source_mask =
+					GENMASK_ULL(source_size * 8 - 1, 0);
+				u64 result_mask =
+					GENMASK_ULL(result_size * 8 - 1, 0);
+				bool signed_multiply =
+					cases[index].operation ==
+						TCTI_SIMD_ARITH_SMULL ||
+					cases[index].operation ==
+						TCTI_SIMD_ARITH_SMLAL ||
+					cases[index].operation ==
+						TCTI_SIMD_ARITH_SMLSL;
+				bool accumulate =
+					cases[index].operation !=
+						TCTI_SIMD_ARITH_SMULL &&
+					cases[index].operation !=
+						TCTI_SIMD_ARITH_UMULL;
+				bool subtract =
+					cases[index].operation ==
+						TCTI_SIMD_ARITH_SMLSL ||
+					cases[index].operation ==
+						TCTI_SIMD_ARITH_UMLSL;
+				u64 left_value = signed_multiply ?
+						 source_mask - 2 : 3;
+				u64 right_value = 5;
+				u64 product = signed_multiply ?
+						 result_mask - 14 : 15;
+				u64 expected_value = accumulate ?
+						 (subtract ? 100 - product :
+							     100 + product) :
+						 product;
+				u64 left = 0;
+				u64 right = 0;
+				u64 accumulator[2] = {};
+				u64 expected[2] = {};
+				u8 lane;
+				u32 instruction;
+				struct tcti_decoded_instruction decoded;
+				int ret;
+
+				if (signed_multiply && accumulate)
+					expected_value = subtract ? 115 : 85;
+				else if (!signed_multiply && accumulate)
+					expected_value = subtract ? 85 : 115;
+
+				for (lane = 0; lane < source_lane_count; lane++) {
+					u8 shift = lane * source_size * 8;
+
+					left |= left_value << shift;
+					right |= right_value << shift;
+				}
+				for (lane = 0; lane < result_lane_count; lane++) {
+					u8 byte = lane * result_size;
+					u8 word = byte / sizeof(u64);
+					u8 shift = (byte % sizeof(u64)) * 8;
+
+					accumulator[word] |= 100ULL << shift;
+					expected[word] |=
+						(expected_value & result_mask) << shift;
+				}
+
+				instruction = cases[index].pattern |
+					      (q ? BIT(30) : 0) |
+					      ((u32)size << 22) |
+					      (2U << 16) | (1U << 5);
+				decoded = tcti_decode_aarch64(instruction);
+				current->thread.user_simd[0] = accumulator[0];
+				current->thread.user_simd[1] = accumulator[1];
+				current->thread.user_simd[2] = q ? U64_MAX : left;
+				current->thread.user_simd[3] = q ? left : U64_MAX;
+				current->thread.user_simd[4] = q ? U64_MAX : right;
+				current->thread.user_simd[5] = q ? right : U64_MAX;
+				current->thread.user_simd_valid = 0;
+
+				ret = tcti_switch_debug_execute_decoded(
+					NULL, &regs, &decoded, NULL);
+				execution_count++;
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				KUNIT_EXPECT_EQ(test, expected[0],
+						current->thread.user_simd[0]);
+				KUNIT_EXPECT_EQ(test, expected[1],
+						current->thread.user_simd[1]);
+				KUNIT_EXPECT_EQ(test, 1,
+						current->thread.user_simd_valid);
+				KUNIT_EXPECT_EQ(
+					test,
+					0x87c0ULL + execution_count * sizeof(u32),
+					regs.pc);
+			}
+		}
+	}
+}
+
 static void tcti_switch_executes_complete_simd_pmull_family(struct kunit *test)
 {
 	struct pt_regs regs = {};
@@ -12630,6 +12809,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_multiply_long_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_min_max_family),
@@ -12759,6 +12939,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_multiply_long_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_pmull_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_min_max_family),
