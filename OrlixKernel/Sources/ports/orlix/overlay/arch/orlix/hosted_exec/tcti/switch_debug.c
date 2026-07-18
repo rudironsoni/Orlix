@@ -6183,6 +6183,91 @@ static int tcti_execute_fp_int_convert(
 {
 	u64 value;
 	u64 result;
+	u64 host_fpcr;
+	u64 host_fpsr;
+	u64 guest_fpsr;
+
+	if ((decoded->fp_int_op == TCTI_FP_INT_FCVTZS ||
+	     decoded->fp_int_op == TCTI_FP_INT_FCVTZU) &&
+	    (decoded->access_size == sizeof(u32) ||
+	     decoded->access_size == sizeof(u64)) &&
+	    (decoded->result_size == sizeof(u32) ||
+	     decoded->result_size == sizeof(u64))) {
+		value = current->thread.user_simd[decoded->rn * 2];
+		preempt_disable();
+		asm volatile(
+			"mrs %0, fpcr\n"
+			"mrs %1, fpsr\n"
+			"msr fpcr, %2\n"
+			"msr fpsr, %3\n"
+			"isb\n"
+			: "=&r" (host_fpcr), "=&r" (host_fpsr)
+			: "r" (current->thread.user_fpcr),
+			  "r" (current->thread.user_fpsr)
+			: "memory");
+		if (decoded->result_size == sizeof(u32)) {
+			u32 result32;
+
+#define TCTI_EXECUTE_FCVT_W(instruction, source, input) \
+			({ \
+				asm volatile( \
+					"fmov " source "0, " input "\n" \
+					instruction " %w0, " source "0\n" \
+					: "=r" (result32) \
+					: "r" (value) \
+					: "v0", "memory"); \
+			})
+
+			if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS) {
+				if (decoded->access_size == sizeof(u32))
+					TCTI_EXECUTE_FCVT_W("fcvtzs", "s", "%w1");
+				else
+					TCTI_EXECUTE_FCVT_W("fcvtzs", "d", "%1");
+			} else if (decoded->access_size == sizeof(u32)) {
+				TCTI_EXECUTE_FCVT_W("fcvtzu", "s", "%w1");
+			} else {
+				TCTI_EXECUTE_FCVT_W("fcvtzu", "d", "%1");
+			}
+#undef TCTI_EXECUTE_FCVT_W
+			result = result32;
+		} else {
+#define TCTI_EXECUTE_FCVT_X(instruction, source, input) \
+			({ \
+				asm volatile( \
+					"fmov " source "0, " input "\n" \
+					instruction " %0, " source "0\n" \
+					: "=r" (result) \
+					: "r" (value) \
+					: "v0", "memory"); \
+			})
+
+			if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS) {
+				if (decoded->access_size == sizeof(u32))
+					TCTI_EXECUTE_FCVT_X("fcvtzs", "s", "%w1");
+				else
+					TCTI_EXECUTE_FCVT_X("fcvtzs", "d", "%1");
+			} else if (decoded->access_size == sizeof(u32)) {
+				TCTI_EXECUTE_FCVT_X("fcvtzu", "s", "%w1");
+			} else {
+				TCTI_EXECUTE_FCVT_X("fcvtzu", "d", "%1");
+			}
+#undef TCTI_EXECUTE_FCVT_X
+		}
+		asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+		current->thread.user_fpsr = guest_fpsr;
+		asm volatile(
+			"msr fpcr, %0\n"
+			"msr fpsr, %1\n"
+			"isb\n"
+			:
+			: "r" (host_fpcr), "r" (host_fpsr)
+			: "memory");
+		preempt_enable();
+		tcti_write_gpr_or_zero(regs, decoded->rd,
+					decoded->result_size, result);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->fp_int_op == TCTI_FP_INT_SCVTF &&
 	    decoded->access_size == sizeof(u32)) {

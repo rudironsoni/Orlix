@@ -289,6 +289,10 @@
 #define AARCH64_UCVTF_D_GPR_PATTERN 0x1e630000U
 #define AARCH64_FCVTZS_D_GPR_MASK 0x7ffffc00U
 #define AARCH64_FCVTZS_D_GPR_PATTERN 0x1e780000U
+#define AARCH64_FCVTZS_GPR_MASK 0x7fbffc00U
+#define AARCH64_FCVTZS_GPR_PATTERN 0x1e380000U
+#define AARCH64_FCVTZU_GPR_MASK 0x7fbffc00U
+#define AARCH64_FCVTZU_GPR_PATTERN 0x1e390000U
 #define AARCH64_FCVTZU_GPR_S_MASK 0x7ffffc00U
 #define AARCH64_FCVTZU_GPR_S_PATTERN 0x1e390000U
 #define AARCH64_FCVTZU_X_D_MASK 0xfffffc00U
@@ -2926,6 +2930,23 @@ not_simd_compare_register:
 		decoded.result_size = sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.fp_int_op = TCTI_FP_INT_UCVTF;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_FCVTZS_GPR_MASK) ==
+	    AARCH64_FCVTZS_GPR_PATTERN ||
+	    (instruction & AARCH64_FCVTZU_GPR_MASK) ==
+	    AARCH64_FCVTZU_GPR_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = instruction & BIT(22) ? sizeof(u64) :
+							 sizeof(u32);
+		decoded.result_size = instruction & BIT(31) ? sizeof(u64) :
+							 sizeof(u32);
+		decoded.simd_fp = true;
+		decoded.fp_int_op = instruction & BIT(16) ?
+			TCTI_FP_INT_FCVTZU : TCTI_FP_INT_FCVTZS;
 		return decoded;
 	}
 
