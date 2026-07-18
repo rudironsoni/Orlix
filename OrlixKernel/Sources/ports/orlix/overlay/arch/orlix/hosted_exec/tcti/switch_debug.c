@@ -5755,6 +5755,103 @@ static int tcti_execute_fp_scalar_2source(
 	u64 left = current->thread.user_simd[decoded->rn * 2];
 	u64 right = current->thread.user_simd[decoded->rm * 2];
 	u64 result;
+	u64 host_fpcr;
+	u64 host_fpsr;
+	u64 guest_fpsr;
+
+	if (decoded->result_size == decoded->access_size &&
+	    (decoded->access_size == sizeof(u32) ||
+	     decoded->access_size == sizeof(u64))) {
+		preempt_disable();
+		asm volatile(
+			"mrs %0, fpcr\n"
+			"mrs %1, fpsr\n"
+			"msr fpcr, %2\n"
+			"msr fpsr, %3\n"
+			"isb\n"
+			: "=&r" (host_fpcr), "=&r" (host_fpsr)
+			: "r" (current->thread.user_fpcr),
+			  "r" (current->thread.user_fpsr)
+			: "memory");
+		if (decoded->access_size == sizeof(u32)) {
+			u32 result32;
+
+#define TCTI_EXECUTE_FP2_S(instruction) \
+			({ \
+				asm volatile( \
+					"fmov s0, %w1\n" \
+					"fmov s1, %w2\n" \
+					instruction " s0, s0, s1\n" \
+					"fmov %w0, s0\n" \
+					: "=r" (result32) \
+					: "r" ((u32)left), "r" ((u32)right) \
+					: "v0", "v1", "memory"); \
+			})
+
+			switch (decoded->fp2_op) {
+			case TCTI_FP2_FDIV:
+				TCTI_EXECUTE_FP2_S("fdiv");
+				break;
+			case TCTI_FP2_FADD:
+				TCTI_EXECUTE_FP2_S("fadd");
+				break;
+			case TCTI_FP2_FSUB:
+				TCTI_EXECUTE_FP2_S("fsub");
+				break;
+			case TCTI_FP2_FMUL:
+				TCTI_EXECUTE_FP2_S("fmul");
+				break;
+			default:
+				goto restore_host_fp_state;
+			}
+#undef TCTI_EXECUTE_FP2_S
+			result = result32;
+		} else {
+#define TCTI_EXECUTE_FP2_D(instruction) \
+			({ \
+				asm volatile( \
+					"fmov d0, %1\n" \
+					"fmov d1, %2\n" \
+					instruction " d0, d0, d1\n" \
+					"fmov %0, d0\n" \
+					: "=r" (result) \
+					: "r" (left), "r" (right) \
+					: "v0", "v1", "memory"); \
+			})
+
+			switch (decoded->fp2_op) {
+			case TCTI_FP2_FDIV:
+				TCTI_EXECUTE_FP2_D("fdiv");
+				break;
+			case TCTI_FP2_FADD:
+				TCTI_EXECUTE_FP2_D("fadd");
+				break;
+			case TCTI_FP2_FSUB:
+				TCTI_EXECUTE_FP2_D("fsub");
+				break;
+			case TCTI_FP2_FMUL:
+				TCTI_EXECUTE_FP2_D("fmul");
+				break;
+			default:
+				goto restore_host_fp_state;
+			}
+#undef TCTI_EXECUTE_FP2_D
+		}
+		asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+		current->thread.user_fpsr = guest_fpsr;
+		asm volatile(
+			"msr fpcr, %0\n"
+			"msr fpsr, %1\n"
+			"isb\n"
+			:
+			: "r" (host_fpcr), "r" (host_fpsr)
+			: "memory");
+		preempt_enable();
+		tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
+					    result, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->fp2_op == TCTI_FP2_FADD) {
 		if (decoded->access_size == sizeof(u32)) {
@@ -5900,6 +5997,17 @@ static int tcti_execute_fp_scalar_2source(
 	tcti_write_simd_fp_register(decoded->rd, decoded->access_size, result, 0);
 	regs->pc += sizeof(u32);
 	return 0;
+
+restore_host_fp_state:
+	asm volatile(
+		"msr fpcr, %0\n"
+		"msr fpsr, %1\n"
+		"isb\n"
+		:
+		: "r" (host_fpcr), "r" (host_fpsr)
+		: "memory");
+	preempt_enable();
+	return -EINVAL;
 }
 
 static int tcti_execute_fp_scalar_3source(

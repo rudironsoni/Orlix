@@ -14021,6 +14021,50 @@ static void tcti_decode_test_exit(struct kunit *test)
 	mmput(mm);
 }
 
+static void tcti_switch_executes_scalar_fp2_ieee754_cases(struct kunit *test)
+{
+	struct pt_regs regs = { .pc = 0x9000 };
+	struct tcti_decoded_instruction decoded;
+	int ret;
+
+	current->thread.user_fpcr = 0;
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[16] = 0x3f800000ULL;
+	current->thread.user_simd[0] = 0;
+	decoded = tcti_decode_aarch64(0x1e201908U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7f800000ULL, current->thread.user_simd[16]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(1));
+
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[16] = 0;
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7fc00000ULL, current->thread.user_simd[16]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(0));
+
+	current->thread.user_fpcr = BIT(25);
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[0] = 0x7fc12345ULL;
+	current->thread.user_simd[2] = 0x3f800000ULL;
+	decoded = tcti_decode_aarch64(0x1e212800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7fc00000ULL, current->thread.user_simd[0]);
+
+	current->thread.user_fpcr = 0;
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[0] = 0x0010000000000000ULL;
+	current->thread.user_simd[2] = 0x3fe0000000000000ULL;
+	decoded = tcti_decode_aarch64(0x1e610800U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x0008000000000000ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_fpsr);
+}
+
 static u32 tcti_test_encode_simd_table_lookup(bool q, u8 table_count,
 					      bool extension, u8 rd, u8 rn,
 					      u8 rm)
@@ -14153,6 +14197,7 @@ static void tcti_switch_executes_simd_table_lookup_with_index_alias(
 }
 
 static struct kunit_case tcti_decode_test_cases[] = {
+	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_with_index_alias),
