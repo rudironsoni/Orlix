@@ -4238,13 +4238,17 @@ static int tcti_execute_simd_vector_compare(
 		     decoded->access_size != sizeof(u16) &&
 		     decoded->access_size != sizeof(u32) &&
 		     decoded->access_size != sizeof(u64)) ||
-		    (decoded->result_size != sizeof(u64) &&
+		    (decoded->simd_scalar &&
+		     (decoded->access_size != sizeof(u64) ||
+		      decoded->result_size != sizeof(u64))) ||
+		    (!decoded->simd_scalar &&
+		     decoded->result_size != sizeof(u64) &&
 		     decoded->result_size != 2 * sizeof(u64)) ||
 		    decoded->access_size > decoded->result_size)
 			return -EOPNOTSUPP;
 
-		for (lane = 0;
-		     lane < decoded->result_size / decoded->access_size; lane++) {
+		for (lane = 0; lane < (decoded->simd_scalar ? 1 :
+		     decoded->result_size / decoded->access_size); lane++) {
 			u8 lane_bits = decoded->access_size * 8;
 			u8 byte_offset = lane * decoded->access_size;
 			u8 word = byte_offset / sizeof(u64);

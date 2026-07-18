@@ -3551,6 +3551,51 @@ tcti_decode_recognizes_complete_simd_integer_unary_family(struct kunit *test)
 }
 
 static void
+tcti_decode_recognizes_complete_simd_scalar_compare_zero_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		enum tcti_simd_vector_compare_op operation;
+	} cases[] = {
+		{ 0x0e208800U, false, TCTI_SIMD_COMPARE_CMGT },
+		{ 0x0e208800U, true, TCTI_SIMD_COMPARE_CMGE },
+		{ 0x0e209800U, false, TCTI_SIMD_COMPARE_CMEQ },
+		{ 0x0e209800U, true, TCTI_SIMD_COMPARE_CMLE },
+		{ 0x0e20a800U, false, TCTI_SIMD_COMPARE_CMLT },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u32 instruction = cases[index].pattern | BIT(28) | BIT(30) |
+			(cases[index].u ? BIT(29) : 0) | (3U << 22) |
+			(1U << 5);
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_COMPARE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 8U, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+		KUNIT_EXPECT_EQ(test, cases[index].operation,
+				decoded.simd_compare_op);
+		KUNIT_EXPECT_TRUE(test, decoded.immediate);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x1ee08820U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x5ea08820U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x7ee0a820U).decode_class);
+}
+
+static void
 tcti_decode_recognizes_complete_simd_compare_zero_family(struct kunit *test)
 {
 	struct {
@@ -9759,6 +9804,87 @@ tcti_switch_executes_complete_simd_integer_unary_family(struct kunit *test)
 }
 
 static void
+tcti_switch_executes_complete_simd_scalar_compare_zero_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		enum tcti_simd_vector_compare_op operation;
+	} cases[] = {
+		{ 0x0e208800U, false, TCTI_SIMD_COMPARE_CMGT },
+		{ 0x0e208800U, true, TCTI_SIMD_COMPARE_CMGE },
+		{ 0x0e209800U, false, TCTI_SIMD_COMPARE_CMEQ },
+		{ 0x0e209800U, true, TCTI_SIMD_COMPARE_CMLE },
+		{ 0x0e20a800U, false, TCTI_SIMD_COMPARE_CMLT },
+	};
+	const u64 values[] = {
+		0, 1, U64_MAX, BIT_ULL(63), BIT_ULL(63) + 1, S64_MAX,
+	};
+	struct pt_regs regs = {};
+	u32 execution_count = 0;
+	size_t index;
+
+	regs.pc = 0x8b00;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		size_t value_index;
+
+		for (value_index = 0; value_index < ARRAY_SIZE(values);
+		     value_index++) {
+			s64 value = (s64)values[value_index];
+			bool matches;
+			u32 instruction = cases[index].pattern | BIT(28) | BIT(30) |
+				(cases[index].u ? BIT(29) : 0) | (3U << 22) |
+				(1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+			int ret;
+
+			switch (cases[index].operation) {
+			case TCTI_SIMD_COMPARE_CMGT:
+				matches = value > 0;
+				break;
+			case TCTI_SIMD_COMPARE_CMGE:
+				matches = value >= 0;
+				break;
+			case TCTI_SIMD_COMPARE_CMEQ:
+				matches = value == 0;
+				break;
+			case TCTI_SIMD_COMPARE_CMLE:
+				matches = value <= 0;
+				break;
+			case TCTI_SIMD_COMPARE_CMLT:
+				matches = value < 0;
+				break;
+			default:
+				KUNIT_FAIL(test, "unexpected scalar compare operation");
+				return;
+			}
+
+			current->thread.user_simd[0] = 0x1111111111111111ULL;
+			current->thread.user_simd[1] = 0x2222222222222222ULL;
+			current->thread.user_simd[2] = values[value_index];
+			current->thread.user_simd[3] = U64_MAX;
+			current->thread.user_simd_valid = 0;
+			ret = tcti_switch_debug_execute_decoded(
+				NULL, &regs, &decoded, NULL);
+
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, matches ? U64_MAX : 0ULL,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, 0ULL,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 1,
+					current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test,
+					0x8b00ULL + execution_count * sizeof(u32),
+					regs.pc);
+		}
+	}
+}
+
+static void
 tcti_switch_executes_complete_simd_compare_zero_family(struct kunit *test)
 {
 	struct {
@@ -11643,6 +11769,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_absolute_difference_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_integer_unary_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_integer_unary_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_compare_zero_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_compare_zero_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_register_compare_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_add_2d),
@@ -11764,6 +11891,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_absolute_difference_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_integer_unary_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_integer_unary_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_compare_zero_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_compare_zero_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_register_compare_family),
 	KUNIT_CASE(tcti_switch_executes_simd_sub_2d),

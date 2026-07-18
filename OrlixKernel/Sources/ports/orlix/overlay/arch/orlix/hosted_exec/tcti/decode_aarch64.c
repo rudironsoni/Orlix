@@ -2114,18 +2114,21 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	if ((instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_CMGT_ZERO_PATTERN ||
-	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_CMEQ_ZERO_PATTERN ||
-	    (instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
+	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_CMLT_ZERO_PATTERN) {
-		u32 pattern = instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK;
+		u32 pattern = instruction &
+			AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK;
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
 		bool u = instruction & BIT(29);
+		bool scalar = instruction & BIT(28);
 
-		if ((!q && size == 3) ||
+		if ((scalar && (!q || size != 3)) ||
+		    (!scalar && !q && size == 3) ||
 		    (pattern == AARCH64_SIMD_CMLT_ZERO_PATTERN && u))
 			return decoded;
 
@@ -2133,8 +2136,10 @@ not_simd_compare_register:
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = BIT(size);
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.result_size = scalar ? sizeof(u64) :
+			(q ? 2 * sizeof(u64) : sizeof(u64));
 		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
 		decoded.immediate = true;
 		if (pattern == AARCH64_SIMD_CMGT_ZERO_PATTERN)
 			decoded.simd_compare_op = u ? TCTI_SIMD_COMPARE_CMGE :
