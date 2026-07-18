@@ -3296,6 +3296,49 @@ tcti_decode_recognizes_complete_simd_shift_narrow_family(struct kunit *test)
 }
 
 static void
+tcti_decode_recognizes_complete_simd_scalar_saturating_narrow_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0e214800U, false, TCTI_SIMD_ARITH_SQXTN },
+		{ 0x0e214800U, true, TCTI_SIMD_ARITH_UQXTN },
+		{ 0x0e212800U, true, TCTI_SIMD_ARITH_SQXTUN },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 size;
+
+		for (size = 0; size < 3; size++) {
+			u32 instruction = cases[index].pattern | BIT(28) | BIT(30) |
+				(cases[index].u ? BIT(29) : 0) |
+				((u32)size << 22) | (1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+			KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+			KUNIT_EXPECT_EQ(test, 2U << size, decoded.access_size);
+			KUNIT_EXPECT_EQ(test, 1U << size, decoded.result_size);
+			KUNIT_EXPECT_EQ(test, cases[index].operation,
+					decoded.simd_arithmetic_op);
+			KUNIT_EXPECT_EQ(test, 0U, decoded.simd_destination_index);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			 tcti_decode_aarch64(0x5ee14820U).decode_class);
+}
+
+static void
 tcti_decode_recognizes_complete_simd_saturating_narrow_family(
 	struct kunit *test)
 {
@@ -9535,6 +9578,94 @@ tcti_switch_executes_complete_simd_shift_narrow_family(struct kunit *test)
 }
 
 static void
+tcti_switch_executes_complete_simd_scalar_saturating_narrow_family(
+	struct kunit *test)
+{
+	struct {
+		u32 pattern;
+		bool u;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x0e214800U, false, TCTI_SIMD_ARITH_SQXTN },
+		{ 0x0e214800U, true, TCTI_SIMD_ARITH_UQXTN },
+		{ 0x0e212800U, true, TCTI_SIMD_ARITH_SQXTUN },
+	};
+	struct pt_regs regs = {};
+	u32 execution_count = 0;
+	size_t index;
+
+	regs.pc = 0x89c0;
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		u8 size;
+
+		for (size = 0; size < 3; size++) {
+			u8 narrow_bits = 8U << size;
+			u8 source_bits = narrow_bits * 2;
+			u64 source_mask = GENMASK_ULL(source_bits - 1, 0);
+			u64 result_mask = GENMASK_ULL(narrow_bits - 1, 0);
+			u64 value;
+			u64 expected;
+			u32 instruction = cases[index].pattern | BIT(28) | BIT(30) |
+				(cases[index].u ? BIT(29) : 0) |
+				((u32)size << 22) | (1U << 5);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+			int ret;
+
+			current->thread.user_simd[0] = U64_MAX;
+			current->thread.user_simd[1] = U64_MAX;
+			current->thread.user_simd[2] = 42;
+			current->thread.user_simd[3] = U64_MAX;
+			current->thread.user_fpsr = 0x20;
+			current->thread.user_simd_valid = 0;
+			ret = tcti_switch_debug_execute_decoded(
+				NULL, &regs, &decoded, NULL);
+
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, 42ULL,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, 0ULL,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 0x20U, current->thread.user_fpsr);
+
+			if (cases[index].operation == TCTI_SIMD_ARITH_SQXTN) {
+				value = BIT_ULL(narrow_bits - 1);
+				expected = value - 1;
+			} else if (cases[index].operation == TCTI_SIMD_ARITH_UQXTN) {
+				value = result_mask + 1;
+				expected = result_mask;
+			} else {
+				value = source_mask;
+				expected = 0;
+			}
+			current->thread.user_simd[0] = U64_MAX;
+			current->thread.user_simd[1] = U64_MAX;
+			current->thread.user_simd[2] = value;
+			current->thread.user_simd[3] = U64_MAX;
+			current->thread.user_fpsr = 0x20;
+			current->thread.user_simd_valid = 0;
+			ret = tcti_switch_debug_execute_decoded(
+				NULL, &regs, &decoded, NULL);
+
+			execution_count++;
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, expected,
+					current->thread.user_simd[0]);
+			KUNIT_EXPECT_EQ(test, 0ULL,
+					current->thread.user_simd[1]);
+			KUNIT_EXPECT_EQ(test, 0x20U | BIT(27),
+					current->thread.user_fpsr);
+			KUNIT_EXPECT_EQ(test, 1,
+					current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test,
+					0x89c0ULL + execution_count * sizeof(u32),
+					regs.pc);
+		}
+	}
+}
+
+static void
 tcti_switch_executes_complete_simd_saturating_narrow_family(
 	struct kunit *test)
 {
@@ -12263,6 +12394,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_left_insert_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_right_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_shift_narrow_family),
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_narrow_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_narrow_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_add_sub_narrow_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_absolute_difference_long_family),
@@ -12389,6 +12521,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_left_insert_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_right_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_narrow_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_narrow_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_narrow_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_add_sub_narrow_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_absolute_difference_long_family),

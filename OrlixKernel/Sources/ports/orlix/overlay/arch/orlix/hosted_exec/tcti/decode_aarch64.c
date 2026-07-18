@@ -124,6 +124,9 @@
 #define AARCH64_SIMD_SATURATING_NARROW_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_SQXTN_UQXTN_PATTERN 0x0e214800U
 #define AARCH64_SIMD_SQXTUN_PATTERN 0x0e212800U
+#define AARCH64_SIMD_SCALAR_SATURATING_NARROW_MASK 0xdf3ffc00U
+#define AARCH64_SIMD_SCALAR_SQXTN_UQXTN_PATTERN 0x5e214800U
+#define AARCH64_SIMD_SCALAR_SQXTUN_PATTERN 0x5e212800U
 #define AARCH64_SIMD_SHIFT_NARROW_MASK 0x9f80fc00U
 #define AARCH64_SIMD_SHRN_PATTERN 0x0f008400U
 #define AARCH64_SIMD_RSHRN_PATTERN 0x0f008c00U
@@ -1918,13 +1921,22 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	if ((instruction & AARCH64_SIMD_SATURATING_NARROW_MASK) ==
 	    AARCH64_SIMD_SQXTN_UQXTN_PATTERN ||
 	    (instruction & AARCH64_SIMD_SATURATING_NARROW_MASK) ==
-	    AARCH64_SIMD_SQXTUN_PATTERN) {
+	    AARCH64_SIMD_SQXTUN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SATURATING_NARROW_MASK) ==
+	    AARCH64_SIMD_SCALAR_SQXTN_UQXTN_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_SATURATING_NARROW_MASK) ==
+	    AARCH64_SIMD_SCALAR_SQXTUN_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
-		u32 pattern = instruction & AARCH64_SIMD_SATURATING_NARROW_MASK;
+		bool scalar = instruction & BIT(28);
+		u32 pattern = instruction & (scalar ?
+			AARCH64_SIMD_SCALAR_SATURATING_NARROW_MASK :
+			AARCH64_SIMD_SATURATING_NARROW_MASK);
+		u32 sqxtun_pattern = scalar ? AARCH64_SIMD_SCALAR_SQXTUN_PATTERN :
+			AARCH64_SIMD_SQXTUN_PATTERN;
 
 		if (size == 3 ||
-		    (pattern == AARCH64_SIMD_SQXTUN_PATTERN &&
+		    (pattern == sqxtun_pattern &&
 		     !(instruction & BIT(29))))
 			return decoded;
 
@@ -1932,10 +1944,12 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.access_size = 2U << size;
-		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
-		decoded.simd_destination_index = q;
+		decoded.result_size = scalar ? decoded.access_size / 2 :
+			(q ? 2 * sizeof(u64) : sizeof(u64));
+		decoded.simd_destination_index = scalar ? 0 : q;
 		decoded.simd_fp = true;
-		if (pattern == AARCH64_SIMD_SQXTUN_PATTERN)
+		decoded.simd_scalar = scalar;
+		if (pattern == sqxtun_pattern)
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQXTUN;
 		else
 			decoded.simd_arithmetic_op = instruction & BIT(29) ?
