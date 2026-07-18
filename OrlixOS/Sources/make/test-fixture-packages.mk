@@ -31,7 +31,7 @@ $(ORLIXOS_GREP_BINARY): $(ORLIXOS_GREP_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	rm -rf "$(ORLIXOS_GREP_BUILD_DIR)"; \
 	echo "built Orlix Linux grep package input: $(ORLIXOS_GREP_BINARY)"
 
-$(ORLIXOS_SED_BINARY): $(ORLIXOS_SED_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_SED_BINARY): $(ORLIXOS_SED_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -46,9 +46,9 @@ $(ORLIXOS_SED_BINARY): $(ORLIXOS_SED_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orl
 	rm -rf "$(ORLIXOS_SED_BUILD_DIR)" "$(ORLIXOS_SED_BINARY)"; \
 	mkdir -p "$(ORLIXOS_SED_BUILD_DIR)" "$(dir $(ORLIXOS_SED_BINARY))"; \
 	cd "$(ORLIXOS_SED_BUILD_DIR)"; \
-	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fno-pie"; \
+	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE"; \
 	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS)"; \
-	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
+	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
 	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	export AR="$(ORLIXOS_AR)"; \
 	export RANLIB="$(ORLIXOS_RANLIB)"; \
@@ -65,12 +65,12 @@ $(ORLIXOS_SED_BINARY): $(ORLIXOS_SED_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orl
 	$(MAKE) -j1 all; \
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_SED_BINARY)"; \
-	file "$(ORLIXOS_SED_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_SED_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_SED_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_SED_BINARY)" >&2; exit 1; }; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=sed\nversion=%s\nsha256=%s\nregex=bundled-gnulib\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(SED_VERSION)" "$(SED_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/sed.stamp"; \
 	if [ "$(ORLIXOS_KEEP_SED_BUILD)" != "1" ]; then rm -rf "$(ORLIXOS_SED_BUILD_DIR)"; fi; \
 	echo "built Orlix Linux sed package input: $(ORLIXOS_SED_BINARY)"
 
-$(ORLIXOS_DIFF_BINARY): $(ORLIXOS_DIFFUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_DIFF_BINARY): $(ORLIXOS_DIFFUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -86,9 +86,9 @@ $(ORLIXOS_DIFF_BINARY): $(ORLIXOS_DIFFUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROO
 	for program in $(ORLIXOS_DIFFUTILS_PROGRAMS); do rm -f "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; done; \
 	mkdir -p "$(ORLIXOS_DIFFUTILS_BUILD_DIR)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin"; \
 	cd "$(ORLIXOS_DIFFUTILS_BUILD_DIR)"; \
-	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fno-pie"; \
+	export CC="$(ORLIXOS_CC) --target=aarch64-linux-gnu --sysroot=$$sysroot -isystem $$headers -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE"; \
 	export CFLAGS="$(ORLIXOS_PACKAGE_CFLAGS)"; \
-	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
+	export LDFLAGS="--target=aarch64-linux-gnu --sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o -Wl,--start-group"; \
 	export LIBS="$$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libm.a $$sysroot/usr/lib/libpthread.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $$rtlib -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	export AR="$(ORLIXOS_AR)"; \
 	export RANLIB="$(ORLIXOS_RANLIB)"; \
@@ -100,7 +100,7 @@ $(ORLIXOS_DIFF_BINARY): $(ORLIXOS_DIFFUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROO
 	$(MAKE) -j1 install DESTDIR="$(ORLIXOS_PACKAGE_INSTALL_DIR)"; \
 	for program in $(ORLIXOS_DIFFUTILS_PROGRAMS); do \
 		"$(ORLIXOS_STRIP)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; \
-		file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" >&2; exit 1; }; \
+		file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" >&2; exit 1; }; \
 	done; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=diffutils\nversion=%s\nsha256=%s\nprograms=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(DIFFUTILS_VERSION)" "$(DIFFUTILS_SHA256)" "$(ORLIXOS_DIFFUTILS_PROGRAMS)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/diffutils.stamp"; \
 	rm -rf "$(ORLIXOS_DIFFUTILS_BUILD_DIR)"; \
@@ -137,7 +137,7 @@ $(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	export ORLIXOS_MLIBC_RTLIB="$$rtlib"; \
 	export ORLIXOS_HOSTED_USER_BASE_ADDRESS="$(ORLIXOS_HOSTED_USER_BASE_ADDRESS)"; \
 	export ORLIXOS_PACKAGE_TOOLCHAIN_DIR="$(ORLIXOS_GAWK_TOOLCHAIN_DIR)"; \
-	export ORLIXOS_PACKAGE_CODE_MODEL_FLAG="-fno-pie"; \
+	export ORLIXOS_PACKAGE_CODE_MODEL_FLAG="-fPIE"; \
 	"$(ORLIXOS_PACKAGE_TOOLCHAIN_SCRIPT)" "$(ORLIXOS_GAWK_TOOLCHAIN_DIR)"; \
 	cd "$(ORLIXOS_GAWK_BUILD_DIR)"; \
 	export PATH="$(ORLIXOS_GAWK_TOOLCHAIN_DIR):$$PATH"; \
@@ -154,12 +154,12 @@ $(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	$(MAKE) -j1 all; \
 	cp "$(ORLIXOS_GAWK_BUILD_DIR)/gawk" "$(ORLIXOS_GAWK_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_GAWK_BINARY)"; \
-	file "$(ORLIXOS_GAWK_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_GAWK_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_GAWK_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_GAWK_BINARY)" >&2; exit 1; }; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=gawk\nversion=%s\nsha256=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(GAWK_VERSION)" "$(GAWK_SHA256)" > "$(ORLIXOS_PACKAGE_INSTALL_DIR)/gawk.stamp"; \
 	rm -rf "$(ORLIXOS_GAWK_BUILD_DIR)" "$(ORLIXOS_GAWK_TOOLCHAIN_DIR)"; \
 	echo "built Orlix Linux gawk package input: $(ORLIXOS_GAWK_BINARY)"
 
-$(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -188,9 +188,9 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 		printf '%s\n' 'for arg in "$$@"; do'; \
 		printf '%s\n' '  case "$$arg" in -c|-E|-S) link=0 ;; esac'; \
 		printf '%s\n' 'done'; \
-		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fno-pie)'; \
+		printf '%s\n' 'common=(--target=aarch64-linux-gnu "--sysroot=$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -fhosted -fno-builtin -ffixed-x18 -fPIE)'; \
 		printf '%s\n' 'if [ "$$link" -eq 1 ]; then'; \
-		printf '%s\n' '  exec "$$cc" "$${common[@]}" "$$@" -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o"'; \
+		printf '%s\n' '  exec "$$cc" "$${common[@]}" "$$@" -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o"'; \
 		printf '%s\n' 'fi'; \
 		printf '%s\n' 'exec "$$cc" "$${common[@]}" "$$@"'; \
 	} > "$(ORLIXOS_PERL_TOOLCHAIN_DIR)/aarch64-linux-gnu-gcc"; \
@@ -202,7 +202,7 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	ln -sf "$(ORLIXOS_READELF)" "$(ORLIXOS_PERL_TOOLCHAIN_DIR)/readelf"; \
 	ln -sf "$$(command -v gsed)" "$(ORLIXOS_PERL_TOOLCHAIN_DIR)/sed"; \
 	cd "$(ORLIXOS_PERL_SRC_DIR)"; \
-	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf ./configure --target=aarch64-linux-gnu --prefix=/usr --sysroot="$$sysroot" --target-tools-prefix=aarch64-linux-gnu- --no-dynaloader --only-mod=Errno,Fcntl,File-Glob,IO --host-cc="$(ORLIXOS_CC)" --host-set=d_nanosleep=define -Ud_syscall -Ud_syscallproto -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Ddoublesize=8 -Dptrsize=8 -Dlongdblsize=16 -Dlonglongsize=8; \
+	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf ./configure --target=aarch64-linux-gnu --prefix=/usr --sysroot="$$sysroot" --target-tools-prefix=aarch64-linux-gnu- --no-dynaloader --only-mod=Errno,Fcntl,File-Glob,IO --host-cc="$(ORLIXOS_CC)" --host-set-d_nanosleep=define --host-set-charsize=1 --host-set-shortsize=2 --host-set-intsize=4 --host-set-longsize=8 --host-set-doublesize=8 --host-set-ptrsize=8 --host-set-longdblsize=8 --host-set-longlongsize=8 --host-set-sizesize=8 --host-set-fpossize=8 --host-set-lseeksize=8 --host-set-uidsize=4 --host-set-gidsize=4 --host-set-timesize=8 --host-set-byteorder=12345678 -Ud_syscall -Ud_syscallproto -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Ddoublesize=8 -Dptrsize=8 -Dlongdblsize=16 -Dlonglongsize=8; \
 	perl -0pi -e 's/^# HAS_NANOSLEEP/#define HAS_NANOSLEEP/m' xconfig.h; \
 	PATH="$(ORLIXOS_PERL_TOOLCHAIN_DIR):$$PATH" READELF=readelf $(MAKE) -j1 perl; \
 	cp "$(ORLIXOS_PERL_SRC_DIR)/perl" "$(ORLIXOS_PERL_BINARY)"; \
@@ -225,7 +225,7 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	if [ -f "$(ORLIXOS_PERL_SRC_DIR)/dist/IO/IO.pm" ]; then rm -f "$(ORLIXOS_PERL_LIB_DIR)/IO.pm"; cp "$(ORLIXOS_PERL_SRC_DIR)/dist/IO/IO.pm" "$(ORLIXOS_PERL_LIB_DIR)/IO.pm"; fi; \
 	cd "$(ORLIXOS_PERL_SRC_DIR)/dist/XSLoader"; ../../miniperl_top -I../../lib XSLoader_pm.PL; rm -f "$(ORLIXOS_PERL_LIB_DIR)/XSLoader.pm"; cp XSLoader.pm "$(ORLIXOS_PERL_LIB_DIR)/XSLoader.pm"; \
 	cd "$(ORLIXOS_PERL_SRC_DIR)/ext/DynaLoader"; ../../miniperl_top -I../../lib DynaLoader_pm.PL; rm -f "$(ORLIXOS_PERL_LIB_DIR)/DynaLoader.pm"; cp DynaLoader.pm "$(ORLIXOS_PERL_LIB_DIR)/DynaLoader.pm"; \
-	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"; \
 	rm -rf "$(ORLIXOS_PERL_TOOLCHAIN_DIR)"; \
 	echo "built Orlix Linux perl package input: $(ORLIXOS_PERL_BINARY)"
@@ -233,7 +233,7 @@ $(ORLIXOS_PERL_BINARY): $(ORLIXOS_PERL_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 $(ORLIXOS_PERL_STAMP): $(ORLIXOS_PERL_BINARY)
 	@set -euo pipefail; \
 	[ -x "$(ORLIXOS_PERL_BINARY)" ] || { echo "missing perl package input: $(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
-	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_PERL_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_PERL_BINARY)" >&2; exit 1; }; \
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=perl\nversion=%s\nsha256=%s\nperl_cross_version=%s\nperl_cross_sha256=%s\nstatic_modules=Errno,Fcntl,File-Glob,IO\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(PERL_VERSION)" "$(PERL_SHA256)" "$(PERL_CROSS_VERSION)" "$(PERL_CROSS_SHA256)" > "$(ORLIXOS_PERL_STAMP)"
 
 $(ORLIXOS_JQ_BINARY): $(ORLIXOS_JQ_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)

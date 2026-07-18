@@ -75,9 +75,8 @@ common=(
 
 if [ "$link" -eq 1 ] && [ "$program_link" -eq 1 ] && [ "${output##*.}" != la ]; then
 	exec "$ORLIXOS_CC" "${common[@]}" "$@" \
-		-static -fuse-ld=lld -nostdlib \
-		-Wl,--gc-sections \
-		-Wl,--image-base="$ORLIXOS_HOSTED_USER_BASE_ADDRESS" \
+		-static-pie -fuse-ld=lld -nostdlib \
+		-Wl,--gc-sections -Wl,-z,max-page-size=0x4000 \
 		"$ORLIXOS_MLIBC_SYSROOT/usr/lib/crt1.o" \
 		"$ORLIXOS_MLIBC_SYSROOT/usr/lib/crti.o" \
 		-Wl,--start-group \

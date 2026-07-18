@@ -25,8 +25,8 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	export bash_cv_getcwd_malloc=yes; \
 	export bash_cv_func_strchrnul_works=yes; \
 	configure_signature="$(ORLIXOS_BASH_BUILD_DIR)/.orlix-configure.signature"; \
-	current_signature="profile=$(PROFILE)|version=$(BASH_VERSION)|sha256=$(BASH_SHA256)|cc=$$CC|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS|configure=--without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses"; \
-	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" != 1 ] && [ -x "$(ORLIXOS_BASH_BINARY)" ] && [ -s "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp" ] && [ -s "$(ORLIXOS_BASH_BUILD_DIR)/Makefile" ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_BASH_SOURCE_STAMP)" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_RTLIB)" ]; then \
+	current_signature="profile=$(PROFILE)|version=$(BASH_VERSION)|sha256=$(BASH_SHA256)|source=$(ORLIXOS_BASH_SRC_DIR)|cc=$$CC|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS|configure=--without-bash-malloc --enable-static-link --disable-nls --disable-readline --without-installed-readline --without-curses"; \
+	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" != 1 ] && [ -x "$(ORLIXOS_BASH_BINARY)" ] && [ -s "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp" ] && [ -s "$(ORLIXOS_BASH_BUILD_DIR)/Makefile" ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_BASH_SOURCE_STAMP)" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(ORLIXOS_MLIBC_RTLIB)" ] && [ "$(ORLIXOS_BASH_BINARY)" -nt "$(PROJECT_DIR)/Sources/make/packages.mk" ]; then \
 		touch "$(ORLIXOS_BASH_BINARY)" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/bash.stamp"; \
 		echo "reusing Orlix Linux Bash package input: $(ORLIXOS_BASH_BINARY)"; \
 		exit 0; \
@@ -40,6 +40,7 @@ $(ORLIXOS_BASH_BINARY): $(ORLIXOS_BASH_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 		printf '%s\n' "$$current_signature" > "$$configure_signature"; \
 	else \
 		cd "$(ORLIXOS_BASH_BUILD_DIR)"; \
+		rm -f bash; \
 	fi; \
 	$(MAKE) -j1 bash; \
 	cp "$(ORLIXOS_BASH_BUILD_DIR)/bash" "$(ORLIXOS_BASH_BINARY)"; \
@@ -78,7 +79,7 @@ $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAM
 	export gl_cv_func_getopt_long_gnu=yes; \
 	export gl_cv_func_strtod_works=yes; \
 	configure_signature="$(ORLIXOS_COREUTILS_BUILD_DIR)/.orlix-configure.signature"; \
-	current_signature="profile=$(PROFILE)|version=$(COREUTILS_VERSION)|commit=$(COREUTILS_GIT_COMMIT)|cc=$$CC|cppflags=$$CPPFLAGS|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS"; \
+	current_signature="profile=$(PROFILE)|version=$(COREUTILS_VERSION)|commit=$(COREUTILS_GIT_COMMIT)|source=$(ORLIXOS_COREUTILS_SRC_DIR)|cc=$$CC|cppflags=$$CPPFLAGS|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS"; \
 	outputs_ready=1; \
 	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do \
 		if [ ! -x "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" ]; then outputs_ready=0; fi; \
@@ -90,6 +91,10 @@ $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAM
 	fi; \
 	rm -f "$(ORLIXOS_COREUTILS_STAMP)"; \
 	if [ "$(ORLIXOS_FORCE_PACKAGE_RECONFIGURE)" = 1 ] || [ ! -s Makefile ] || [ ! -s "$$configure_signature" ] || [ "$$(cat "$$configure_signature")" != "$$current_signature" ]; then \
+		cd "$(ORLIXOS_PACKAGE_BUILD_DIR)"; \
+		rm -rf "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
+		mkdir -p "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
+		cd "$(ORLIXOS_COREUTILS_BUILD_DIR)"; \
 		"$(ORLIXOS_COREUTILS_SRC_DIR)/configure" --host=aarch64-linux-gnu --build=aarch64-apple-darwin --prefix=/usr --disable-nls --with-selinux --enable-libcap --disable-gcc-warnings; \
 		printf '%s\n' "$$current_signature" > "$$configure_signature"; \
 	fi; \
@@ -296,7 +301,7 @@ $(ORLIXOS_MKFS_BINARY): $(ORLIXOS_UTIL_LINUX_STAMP)
 	file "$(ORLIXOS_MKFS_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_MKFS_BINARY)" >&2; exit 1; }; \
 	file "$(ORLIXOS_MKFS_BINARY)" | grep -F -q 'statically linked' || { file "$(ORLIXOS_MKFS_BINARY)" >&2; exit 1; }
 
-$(ORLIXOS_GETCONF_BINARY): $(ORLIXOS_GETCONF_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
+$(ORLIXOS_GETCONF_BINARY): $(ORLIXOS_GETCONF_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -304,9 +309,9 @@ $(ORLIXOS_GETCONF_BINARY): $(ORLIXOS_GETCONF_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	command -v "$(ORLIXOS_CC)" >/dev/null 2>&1 || { echo "clang is required to build getconf; set ORLIXOS_CC=/path/to/clang" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package getconf; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
 	mkdir -p "$(dir $(ORLIXOS_GETCONF_BINARY))"; \
-	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fno-pie -static -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,--image-base=$(ORLIXOS_HOSTED_USER_BASE_ADDRESS) "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_GETCONF_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_GETCONF_BINARY)"; \
+	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_GETCONF_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_GETCONF_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_GETCONF_BINARY)"; \
-	file "$(ORLIXOS_GETCONF_BINARY)" | grep -F -q 'ELF 64-bit LSB executable, ARM aarch64' || { file "$(ORLIXOS_GETCONF_BINARY)" >&2; exit 1; }; \
+	file "$(ORLIXOS_GETCONF_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_GETCONF_BINARY)" >&2; exit 1; }; \
 	echo "built Orlix Linux getconf package input: $(ORLIXOS_GETCONF_BINARY)"
 
 $(ORLIXOS_GETENT_BINARY): $(ORLIXOS_GETENT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB)
