@@ -2742,6 +2742,74 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_high;
 	u8 lane;
 
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SHL ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SLI ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRI) {
+		u64 source[2];
+		u64 destination[2];
+		u64 result[2] = {};
+		u8 lane_count;
+		u8 lane_bits;
+		u64 mask;
+		bool right_insert =
+			decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SRI;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    (decoded->access_size == sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)))
+			return -EOPNOTSUPP;
+
+		lane_bits = decoded->access_size * 8;
+		if ((!right_insert && decoded->shift_amount >= lane_bits) ||
+		    (right_insert && (decoded->shift_amount == 0 ||
+				     decoded->shift_amount > lane_bits)))
+			return -EOPNOTSUPP;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		destination[0] = current->thread.user_simd[decoded->rd * 2];
+		destination[1] = current->thread.user_simd[decoded->rd * 2 + 1];
+		lane_count = decoded->result_size / decoded->access_size;
+		mask = GENMASK_ULL(lane_bits - 1, 0);
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte = lane * decoded->access_size;
+			u8 word = byte / sizeof(u64);
+			u8 shift = (byte % sizeof(u64)) * 8;
+			u64 value = (source[word] >> shift) & mask;
+			u64 original = (destination[word] >> shift) & mask;
+			u64 lane_result;
+
+			if (right_insert) {
+				u64 preserved = decoded->shift_amount == lane_bits ?
+					mask : mask & ~GENMASK_ULL(
+						lane_bits - decoded->shift_amount - 1, 0);
+				u64 shifted = decoded->shift_amount == lane_bits ? 0 :
+					value >> decoded->shift_amount;
+
+				lane_result = (original & preserved) | shifted;
+			} else {
+				u64 preserved = decoded->shift_amount == 0 ? 0 :
+					GENMASK_ULL(decoded->shift_amount - 1, 0);
+				u64 shifted = value << decoded->shift_amount;
+
+				lane_result = shifted;
+				if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SLI)
+					lane_result |= original & preserved;
+			}
+			result[word] |= (lane_result & mask) << shift;
+		}
+
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSHR ||
 	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_USHR ||
 	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SSRA ||

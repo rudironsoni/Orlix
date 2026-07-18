@@ -128,6 +128,9 @@
 #define AARCH64_SIMD_SSRA_PATTERN 0x0f001400U
 #define AARCH64_SIMD_SRSHR_PATTERN 0x0f002400U
 #define AARCH64_SIMD_SRSRA_PATTERN 0x0f003400U
+#define AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK 0x9f80fc00U
+#define AARCH64_SIMD_SHL_SLI_PATTERN 0x0f005400U
+#define AARCH64_SIMD_SRI_PATTERN 0x0f004400U
 #define AARCH64_SIMD_TWO_REGISTER_MISC_MASK 0x9f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
@@ -1151,6 +1154,44 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.exclusive = !ordered_nonexclusive;
 		decoded.acquire = load && (instruction & BIT(15));
 		decoded.release = !load && (instruction & BIT(15));
+		return decoded;
+	}
+
+	if ((((instruction & AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK) ==
+	      AARCH64_SIMD_SHL_SLI_PATTERN) ||
+	     ((instruction & AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK) ==
+	      AARCH64_SIMD_SRI_PATTERN && (instruction & BIT(29)))) &&
+	    ((instruction >> 16) & 0x7fU) >= 8) {
+		u8 immediate = (instruction >> 16) & 0x7fU;
+		u8 access_size;
+		u32 pattern = instruction & AARCH64_SIMD_SHIFT_LEFT_INSERT_MASK;
+
+		if (immediate < 16)
+			access_size = sizeof(u8);
+		else if (immediate < 32)
+			access_size = sizeof(u16);
+		else if (immediate < 64)
+			access_size = sizeof(u32);
+		else
+			access_size = sizeof(u64);
+		if (!(instruction & BIT(30)) && access_size == sizeof(u64))
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = access_size;
+		decoded.result_size = instruction & BIT(30) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		if (pattern == AARCH64_SIMD_SRI_PATTERN) {
+			decoded.shift_amount = access_size * 16 - immediate;
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SRI;
+		} else {
+			decoded.shift_amount = immediate - access_size * 8;
+			decoded.simd_arithmetic_op = instruction & BIT(29) ?
+				TCTI_SIMD_ARITH_SLI : TCTI_SIMD_ARITH_SHL;
+		}
 		return decoded;
 	}
 
