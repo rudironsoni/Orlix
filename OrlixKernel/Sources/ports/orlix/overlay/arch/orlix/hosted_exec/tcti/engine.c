@@ -31,7 +31,7 @@
 #define TCTI_ELF_IMAGE_SCAN_GRANULE (64UL * 1024UL)
 #define TCTI_ELF_IMAGE_SCAN_LIMIT (16UL * 1024UL * 1024UL)
 #define TCTI_MAX_DYNAMIC_ENTRIES 256
-#define TCTI_MAX_RELA_ENTRIES 4096
+#define TCTI_MAX_RELA_ENTRIES 16384
 #define TCTI_STATIC_PIE_TLS_TCB_OFFSET 0x78UL
 #define TCTI_PROGRESS_REPORT_INTERVAL 100000UL
 #define TCTI_MAX_BLOCK_INSTRUCTIONS 32U
@@ -272,6 +272,11 @@ static bool tcti_elf_base_is_main_executable(struct mm_struct *mm,
 	return at_phdr == base + ehdr->e_phoff;
 }
 
+bool tcti_static_pie_relocation_count_valid(size_t count)
+{
+	return count <= TCTI_MAX_RELA_ENTRIES;
+}
+
 static int tcti_apply_relative_relocations(struct mm_struct *mm,
 					   struct pt_regs *regs,
 					   unsigned long base,
@@ -305,7 +310,7 @@ static int tcti_apply_relative_relocations(struct mm_struct *mm,
 		return -ENOEXEC;
 
 	count = rela_size / sizeof(Elf64_Rela);
-	if (count > TCTI_MAX_RELA_ENTRIES)
+	if (!tcti_static_pie_relocation_count_valid(count))
 		return -E2BIG;
 
 	for (index = 0; index < count; index++) {
