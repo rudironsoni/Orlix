@@ -1270,16 +1270,53 @@ static int tcti_execute_extract(struct pt_regs *regs,
 	return 0;
 }
 
+static u32 tcti_crc32_update(u32 accumulator, u64 value, u8 byte_count,
+			     u32 polynomial)
+{
+	u8 byte;
+	u8 bit;
+
+	for (byte = 0; byte < byte_count; byte++) {
+		accumulator ^= (u8)(value >> (byte * 8));
+		for (bit = 0; bit < 8; bit++)
+			accumulator = (accumulator >> 1) ^
+				(accumulator & 1 ? polynomial : 0);
+	}
+
+	return accumulator;
+}
+
 static int tcti_execute_data_processing_2source(struct pt_regs *regs,
-						const struct tcti_decoded_instruction *decoded)
+						 const struct tcti_decoded_instruction *decoded)
 {
 	u8 data_size = decoded->is_64bit ? 64 : 32;
 	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 left = tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
-	u64 right = tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
-	u8 amount = right & (data_size - 1);
-	u64 mask = tcti_ones_mask(data_size);
+	u64 left;
+	u64 right;
+	u8 amount;
+	u64 mask;
 	u64 result;
+
+	if (decoded->dp2_op == TCTI_DP2_CRC32 ||
+	    decoded->dp2_op == TCTI_DP2_CRC32C) {
+		u32 accumulator = tcti_read_gpr_or_zero(
+			regs, decoded->rn, sizeof(u32));
+		u64 value = tcti_read_gpr_or_zero(
+			regs, decoded->rm, decoded->access_size);
+		u32 polynomial = decoded->dp2_op == TCTI_DP2_CRC32C ?
+			0x82f63b78U : 0xedb88320U;
+		u32 result = tcti_crc32_update(accumulator, value,
+			decoded->access_size, polynomial);
+
+		tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u32), result);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	left = tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
+	right = tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
+	amount = right & (data_size - 1);
+	mask = tcti_ones_mask(data_size);
 
 	switch (decoded->dp2_op) {
 	case TCTI_DP2_UDIV:

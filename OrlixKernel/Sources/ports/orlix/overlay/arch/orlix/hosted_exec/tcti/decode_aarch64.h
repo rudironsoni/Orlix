@@ -136,6 +136,8 @@ enum tcti_data_processing_2source_op {
 	TCTI_DP2_LSRV,
 	TCTI_DP2_ASRV,
 	TCTI_DP2_RORV,
+	TCTI_DP2_CRC32,
+	TCTI_DP2_CRC32C,
 };
 
 enum tcti_data_processing_1source_op {

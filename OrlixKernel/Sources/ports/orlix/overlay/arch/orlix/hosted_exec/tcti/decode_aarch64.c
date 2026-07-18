@@ -1102,6 +1102,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		case 0x0b:
 			decoded.dp2_op = TCTI_DP2_RORV;
 			break;
+		case 0x10 ... 0x17: {
+			u8 size = opcode & 0x3U;
+
+			if ((size == 3) != !!(instruction & BIT(31)))
+				return decoded;
+			decoded.dp2_op = opcode & BIT(2) ?
+				TCTI_DP2_CRC32C : TCTI_DP2_CRC32;
+			decoded.access_size = BIT(size);
+			decoded.result_size = sizeof(u32);
+			break;
+		}
 		default:
 			return decoded;
 		}

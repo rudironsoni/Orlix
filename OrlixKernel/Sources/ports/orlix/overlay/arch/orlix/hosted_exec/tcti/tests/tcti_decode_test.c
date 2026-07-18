@@ -1048,6 +1048,44 @@ static void tcti_decode_recognizes_data_processing_2source_class(struct kunit *t
 	KUNIT_EXPECT_EQ(test, 9U, decoded.rm);
 }
 
+static void tcti_decode_recognizes_complete_crc32_family(struct kunit *test)
+{
+	static const struct {
+		u32 instruction;
+		enum tcti_data_processing_2source_op operation;
+		u8 access_size;
+	} cases[] = {
+		{ 0x1ac24020U, TCTI_DP2_CRC32, sizeof(u8) },
+		{ 0x1ac24420U, TCTI_DP2_CRC32, sizeof(u16) },
+		{ 0x1ac24820U, TCTI_DP2_CRC32, sizeof(u32) },
+		{ 0x9ac24c20U, TCTI_DP2_CRC32, sizeof(u64) },
+		{ 0x1ac25020U, TCTI_DP2_CRC32C, sizeof(u8) },
+		{ 0x1ac25420U, TCTI_DP2_CRC32C, sizeof(u16) },
+		{ 0x1ac25820U, TCTI_DP2_CRC32C, sizeof(u32) },
+		{ 0x9ac25c20U, TCTI_DP2_CRC32C, sizeof(u64) },
+	};
+	size_t i;
+
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[i].instruction);
+
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_DATA_PROCESSING_2SOURCE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, cases[i].operation, decoded.dp2_op);
+		KUNIT_EXPECT_EQ(test, cases[i].access_size, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.result_size);
+		KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x9ac24020U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x1ac24c20U).decode_class);
+}
+
 static void tcti_decode_recognizes_multiply_add_sub_class(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -6580,6 +6618,42 @@ static void tcti_switch_executes_data_processing_2source(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[13]);
 	KUNIT_EXPECT_EQ(test, 0x701cULL, regs.pc);
+}
+
+static void tcti_switch_executes_complete_crc32_family(struct kunit *test)
+{
+	static const struct {
+		u32 instruction;
+		u32 expected;
+	} cases[] = {
+		{ 0x1ac24020U, 0x347cedaaU },
+		{ 0x1ac24420U, 0xe35777ffU },
+		{ 0x1ac24820U, 0xd89f1a03U },
+		{ 0x9ac24c20U, 0x4e41e95aU },
+		{ 0x1ac25020U, 0x19667cf8U },
+		{ 0x1ac25420U, 0xb828afefU },
+		{ 0x1ac25820U, 0x9236d411U },
+		{ 0x9ac25c20U, 0x12237ce0U },
+	};
+	struct pt_regs regs = {};
+	size_t i;
+
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cases[i].instruction);
+		int ret;
+
+		regs.regs[0] = ~0ULL;
+		regs.regs[1] = 0x12345678U;
+		regs.regs[2] = 0x8877665544332211ULL;
+		regs.pc = 0x7000;
+		ret = tcti_switch_debug_execute_decoded(
+			NULL, &regs, &decoded, NULL);
+
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, (u64)cases[i].expected, regs.regs[0]);
+		KUNIT_EXPECT_EQ(test, 0x7004ULL, regs.pc);
+	}
 }
 
 static void tcti_switch_executes_multiply_add_sub(struct kunit *test)
@@ -13266,6 +13340,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_extract_class),
 	KUNIT_CASE(tcti_decode_recognizes_data_processing_1source_class),
 	KUNIT_CASE(tcti_decode_recognizes_data_processing_2source_class),
+	KUNIT_CASE(tcti_decode_recognizes_complete_crc32_family),
 	KUNIT_CASE(tcti_decode_recognizes_multiply_add_sub_class),
 	KUNIT_CASE(tcti_decode_recognizes_move_wide_immediate_class),
 	KUNIT_CASE(tcti_decode_recognizes_system_register_class),
@@ -13408,6 +13483,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_extract),
 	KUNIT_CASE(tcti_switch_executes_data_processing_1source),
 	KUNIT_CASE(tcti_switch_executes_data_processing_2source),
+	KUNIT_CASE(tcti_switch_executes_complete_crc32_family),
 	KUNIT_CASE(tcti_switch_executes_multiply_add_sub),
 	KUNIT_CASE(tcti_switch_executes_move_wide_immediate),
 	KUNIT_CASE(tcti_switch_executes_system_registers),
