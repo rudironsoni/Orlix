@@ -137,6 +137,16 @@
 #define AARCH64_SIMD_SM4E_PATTERN 0xcec08400U
 #define AARCH64_SIMD_SM4EKEY_MASK 0xffe0fc00U
 #define AARCH64_SIMD_SM4EKEY_PATTERN 0xce60c800U
+#define AARCH64_SIMD_SM3SS1_MASK 0xffe08000U
+#define AARCH64_SIMD_SM3SS1_PATTERN 0xce400000U
+#define AARCH64_SIMD_SM3TT_MASK 0xffe0cc00U
+#define AARCH64_SIMD_SM3TT1A_PATTERN 0xce408000U
+#define AARCH64_SIMD_SM3TT1B_PATTERN 0xce408400U
+#define AARCH64_SIMD_SM3TT2A_PATTERN 0xce408800U
+#define AARCH64_SIMD_SM3TT2B_PATTERN 0xce408c00U
+#define AARCH64_SIMD_SM3PARTW_MASK 0xffe0fc00U
+#define AARCH64_SIMD_SM3PARTW1_PATTERN 0xce60c000U
+#define AARCH64_SIMD_SM3PARTW2_PATTERN 0xce60c400U
 #define AARCH64_SIMD_MLA_MLS_MASK 0x9f20fc00U
 #define AARCH64_SIMD_MLA_MLS_PATTERN 0x0e209400U
 #define AARCH64_SIMD_MIN_MAX_MASK 0x9f20f400U
@@ -1923,6 +1933,65 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = key ? TCTI_SIMD_ARITH_SM4EKEY :
 						   TCTI_SIMD_ARITH_SM4E;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SM3SS1_MASK) ==
+	    AARCH64_SIMD_SM3SS1_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.ra = (instruction >> 10) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SM3SS1;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SM3TT_MASK) ==
+		    AARCH64_SIMD_SM3TT1A_PATTERN ||
+	    (instruction & AARCH64_SIMD_SM3TT_MASK) ==
+		    AARCH64_SIMD_SM3TT1B_PATTERN ||
+	    (instruction & AARCH64_SIMD_SM3TT_MASK) ==
+		    AARCH64_SIMD_SM3TT2A_PATTERN ||
+	    (instruction & AARCH64_SIMD_SM3TT_MASK) ==
+		    AARCH64_SIMD_SM3TT2B_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_SM3TT_MASK;
+		u8 operation = pattern == AARCH64_SIMD_SM3TT1A_PATTERN ? 0 :
+			       pattern == AARCH64_SIMD_SM3TT1B_PATTERN ? 1 :
+			       pattern == AARCH64_SIMD_SM3TT2A_PATTERN ? 2 : 3;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.shift_amount = (instruction >> 12) & 0x3U;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SM3TT1A +
+					     operation;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SM3PARTW_MASK) ==
+		    AARCH64_SIMD_SM3PARTW1_PATTERN ||
+	    (instruction & AARCH64_SIMD_SM3PARTW_MASK) ==
+		    AARCH64_SIMD_SM3PARTW2_PATTERN) {
+		bool second = (instruction & AARCH64_SIMD_SM3PARTW_MASK) ==
+			      AARCH64_SIMD_SM3PARTW2_PATTERN;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = 2 * sizeof(u64);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = second ? TCTI_SIMD_ARITH_SM3PARTW2 :
+						      TCTI_SIMD_ARITH_SM3PARTW1;
 		return decoded;
 	}
 

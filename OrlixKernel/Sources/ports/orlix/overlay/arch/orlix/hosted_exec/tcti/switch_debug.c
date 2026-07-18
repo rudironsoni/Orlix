@@ -3358,6 +3358,115 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SM3SS1 &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_SM3PARTW2) {
+		u64 source_n[2] = {
+			current->thread.user_simd[decoded->rn * 2],
+			current->thread.user_simd[decoded->rn * 2 + 1],
+		};
+		u64 source_m[2] = {
+			current->thread.user_simd[decoded->rm * 2],
+			current->thread.user_simd[decoded->rm * 2 + 1],
+		};
+		u32 n[4] = {
+			(u32)source_n[0], source_n[0] >> 32,
+			(u32)source_n[1], source_n[1] >> 32,
+		};
+		u32 m[4] = {
+			(u32)source_m[0], source_m[0] >> 32,
+			(u32)source_m[1], source_m[1] >> 32,
+		};
+		u32 result[4] = {};
+
+		if (decoded->access_size != 2 * sizeof(u64) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    decoded->simd_scalar)
+			return -EOPNOTSUPP;
+
+		if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SM3SS1) {
+			u64 source_a[2] = {
+				current->thread.user_simd[decoded->ra * 2],
+				current->thread.user_simd[decoded->ra * 2 + 1],
+			};
+
+			result[3] = rol32(rol32(n[3], 12) + m[3] +
+					  (u32)(source_a[1] >> 32), 7);
+		} else {
+			u64 destination[2] = {
+				current->thread.user_simd[decoded->rd * 2],
+				current->thread.user_simd[decoded->rd * 2 + 1],
+			};
+			u32 d[4] = {
+				(u32)destination[0], destination[0] >> 32,
+				(u32)destination[1], destination[1] >> 32,
+			};
+
+			if (decoded->simd_arithmetic_op >=
+				    TCTI_SIMD_ARITH_SM3TT1A &&
+			    decoded->simd_arithmetic_op <=
+				    TCTI_SIMD_ARITH_SM3TT2B) {
+				u8 operation = decoded->simd_arithmetic_op -
+					       TCTI_SIMD_ARITH_SM3TT1A;
+				u32 temporary;
+
+				if (decoded->shift_amount > 3)
+					return -EOPNOTSUPP;
+				if (operation == 0 || operation == 2)
+					temporary = d[3] ^ d[2] ^ d[1];
+				else if (operation == 1)
+					temporary = (d[3] & d[2]) ^
+						    (d[3] & d[1]) ^ (d[2] & d[1]);
+				else
+					temporary = (d[3] & d[2]) ^ (~d[3] & d[1]);
+				temporary += d[0] + m[decoded->shift_amount];
+				result[0] = d[1];
+				if (operation < 2) {
+					temporary += n[3] ^ rol32(d[3], 12);
+					result[1] = rol32(d[2], 9);
+				} else {
+					temporary += n[3];
+					temporary ^= rol32(temporary, 9) ^
+						     rol32(temporary, 17);
+					result[1] = rol32(d[2], 19);
+				}
+				result[2] = d[3];
+				result[3] = temporary;
+			} else if (decoded->simd_arithmetic_op ==
+				   TCTI_SIMD_ARITH_SM3PARTW1) {
+				u32 temporary = d[0] ^ n[0] ^ rol32(m[1], 15);
+
+				result[0] = temporary ^ rol32(temporary, 15) ^
+					    rol32(temporary, 23);
+				temporary = d[1] ^ n[1] ^ rol32(m[2], 15);
+				result[1] = temporary ^ rol32(temporary, 15) ^
+					    rol32(temporary, 23);
+				temporary = d[2] ^ n[2] ^ rol32(m[3], 15);
+				result[2] = temporary ^ rol32(temporary, 15) ^
+					    rol32(temporary, 23);
+				temporary = d[3] ^ n[3] ^ rol32(result[0], 15);
+				result[3] = temporary ^ rol32(temporary, 15) ^
+					    rol32(temporary, 23);
+			} else {
+				u32 temporary = n[0] ^ rol32(m[0], 7);
+
+				result[0] = d[0] ^ temporary;
+				result[1] = d[1] ^ n[1] ^ rol32(m[1], 7);
+				result[2] = d[2] ^ n[2] ^ rol32(m[2], 7);
+				result[3] = d[3] ^ n[3] ^ rol32(m[3], 7) ^
+					    rol32(temporary, 15) ^
+					    rol32(temporary, 30) ^
+					    rol32(temporary, 6);
+			}
+		}
+
+		tcti_write_simd_fp_register(
+			decoded->rd, 2 * sizeof(u64),
+			(u64)result[0] | (u64)result[1] << 32,
+			(u64)result[2] | (u64)result[3] << 32);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->immediate &&
 	    (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SQSHL ||
 	     decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UQSHL ||
