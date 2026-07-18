@@ -125,7 +125,7 @@ $(ORLIXOS_COREUTILS_STAMP): $(ORLIXOS_COREUTILS_SOURCE_STAMP) $(ORLIXOS_ACL_STAM
 	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\ngit_url=%s\ngit_ref=%s\ngit_commit=%s\ngnulib_git_url=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIXOS_COREUTILS_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_GIT_URL)" "$(COREUTILS_GIT_REF)" "$(COREUTILS_GIT_COMMIT)" "$(COREUTILS_GNULIB_GIT_URL)" > "$(ORLIXOS_COREUTILS_STAMP)"; \
 	echo "built Orlix Linux coreutils package inputs: $(ORLIXOS_COREUTILS_PROGRAMS)"
 
-$(ORLIXOS_COREUTILS_TEST_LIST): $(ORLIXOS_COREUTILS_STAMP) $(PROJECT_DIR)/Makefile
+$(ORLIXOS_COREUTILS_TEST_LIST): $(ORLIXOS_COREUTILS_STAMP) $(PROJECT_DIR)/Makefile FORCE
 	@set -euo pipefail; \
 	makefile="$(ORLIXOS_COREUTILS_BUILD_DIR)/Makefile"; \
 	[ -s "$$makefile" ] || { echo "missing configured Coreutils Makefile: $$makefile" >&2; exit 1; }; \
