@@ -3,6 +3,7 @@
 #include <linux/errno.h>
 #include <linux/limits.h>
 #include <linux/log2.h>
+#include <linux/preempt.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
@@ -1752,12 +1753,18 @@ static int tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
 {
 	u8 buffer[2 * sizeof(u64)];
 
-	if (access_size != sizeof(u32) &&
+	if (access_size != sizeof(u8) &&
+	    access_size != sizeof(u16) &&
+	    access_size != sizeof(u32) &&
 	    access_size != sizeof(u64) &&
 	    access_size != 2 * sizeof(u64))
 		return -EOPNOTSUPP;
 
-	if (access_size == sizeof(u32))
+	if (access_size == sizeof(u8))
+		buffer[0] = current->thread.user_simd[reg * 2];
+	else if (access_size == sizeof(u16))
+		put_unaligned_le16(current->thread.user_simd[reg * 2], buffer);
+	else if (access_size == sizeof(u32))
 		put_unaligned_le32(current->thread.user_simd[reg * 2], buffer);
 	else
 		put_unaligned_le64(current->thread.user_simd[reg * 2], buffer);
@@ -1782,7 +1789,9 @@ static int tcti_read_simd_fp(struct mm_struct *mm, unsigned long address,
 	u8 buffer[2 * sizeof(u64)] = {};
 	int ret;
 
-	if (access_size != sizeof(u32) &&
+	if (access_size != sizeof(u8) &&
+	    access_size != sizeof(u16) &&
+	    access_size != sizeof(u32) &&
 	    access_size != sizeof(u64) &&
 	    access_size != 2 * sizeof(u64))
 		return -EOPNOTSUPP;
@@ -1791,8 +1800,14 @@ static int tcti_read_simd_fp(struct mm_struct *mm, unsigned long address,
 	if (ret)
 		return ret;
 
-	*low = access_size == sizeof(u32) ?
-		get_unaligned_le32(buffer) : get_unaligned_le64(buffer);
+	if (access_size == sizeof(u8))
+		*low = buffer[0];
+	else if (access_size == sizeof(u16))
+		*low = get_unaligned_le16(buffer);
+	else if (access_size == sizeof(u32))
+		*low = get_unaligned_le32(buffer);
+	else
+		*low = get_unaligned_le64(buffer);
 	*high = access_size == 2 * sizeof(u64) ?
 			get_unaligned_le64(buffer + sizeof(u64)) : 0;
 	return 0;
@@ -2312,6 +2327,28 @@ static int tcti_execute_simd_vector_element_move(
 			GENMASK_ULL(decoded->access_size * 8 - 1, 0);
 		tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size,
 				       value);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_DUP &&
+	    decoded->simd_scalar && !decoded->immediate) {
+		u8 byte_offset;
+
+		if (decoded->access_size != decoded->result_size ||
+		    (decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)))
+			return -EOPNOTSUPP;
+		byte_offset = decoded->simd_source_index * decoded->access_size;
+		if (byte_offset + decoded->access_size > 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+		source_word = decoded->rn * 2 + byte_offset / sizeof(u64);
+		source_shift = (byte_offset % sizeof(u64)) * 8;
+		value = (current->thread.user_simd[source_word] >> source_shift) &
+			GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			value, 0);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
@@ -5623,21 +5660,99 @@ static int tcti_execute_fp_scalar_3source(
 	u64 left = current->thread.user_simd[decoded->rn * 2];
 	u64 right = current->thread.user_simd[decoded->rm * 2];
 	u64 addend = current->thread.user_simd[decoded->ra * 2];
-	u64 product;
-	u64 result;
+	u64 host_fpcr;
+	u64 host_fpsr;
+	u64 guest_fpsr;
+	u64 result = 0;
 
-	if (decoded->access_size != sizeof(u64) ||
-	    decoded->result_size != sizeof(u64))
+	if (decoded->result_size != decoded->access_size ||
+	    (decoded->access_size != sizeof(u32) &&
+	     decoded->access_size != sizeof(u64)) ||
+	    decoded->fp3_op > TCTI_FP3_FNMSUB)
 		return -EOPNOTSUPP;
-	if (tcti_multiply_fp64_bits(left, right, &product))
-		return -EOPNOTSUPP;
-	if (decoded->subtract) {
-		if (tcti_add_fp64_bits(addend, product ^ BIT_ULL(63),
-				       &result))
-			return -EOPNOTSUPP;
-	} else if (tcti_add_fp64_bits(product, addend, &result)) {
-		return -EOPNOTSUPP;
+
+	preempt_disable();
+	asm volatile(
+		"mrs %0, fpcr\n"
+		"mrs %1, fpsr\n"
+		"msr fpcr, %2\n"
+		"msr fpsr, %3\n"
+		"isb\n"
+		: "=&r" (host_fpcr), "=&r" (host_fpsr)
+		: "r" (current->thread.user_fpcr),
+		  "r" (current->thread.user_fpsr)
+		: "memory");
+
+	if (decoded->access_size == sizeof(u32)) {
+		u32 result32;
+
+#define TCTI_EXECUTE_FP3_S(instruction) \
+		asm volatile( \
+			"fmov s0, %w1\n" \
+			"fmov s1, %w2\n" \
+			"fmov s2, %w3\n" \
+			instruction " s0, s0, s1, s2\n" \
+			"fmov %w0, s0\n" \
+			: "=r" (result32) \
+			: "r" ((u32)left), "r" ((u32)right), \
+			  "r" ((u32)addend) \
+			: "v0", "v1", "v2", "memory")
+
+		switch (decoded->fp3_op) {
+		case TCTI_FP3_FMADD:
+			TCTI_EXECUTE_FP3_S("fmadd");
+			break;
+		case TCTI_FP3_FMSUB:
+			TCTI_EXECUTE_FP3_S("fmsub");
+			break;
+		case TCTI_FP3_FNMADD:
+			TCTI_EXECUTE_FP3_S("fnmadd");
+			break;
+		case TCTI_FP3_FNMSUB:
+			TCTI_EXECUTE_FP3_S("fnmsub");
+			break;
+		}
+#undef TCTI_EXECUTE_FP3_S
+		result = result32;
+	} else {
+#define TCTI_EXECUTE_FP3_D(instruction) \
+		asm volatile( \
+			"fmov d0, %1\n" \
+			"fmov d1, %2\n" \
+			"fmov d2, %3\n" \
+			instruction " d0, d0, d1, d2\n" \
+			"fmov %0, d0\n" \
+			: "=r" (result) \
+			: "r" (left), "r" (right), "r" (addend) \
+			: "v0", "v1", "v2", "memory")
+
+		switch (decoded->fp3_op) {
+		case TCTI_FP3_FMADD:
+			TCTI_EXECUTE_FP3_D("fmadd");
+			break;
+		case TCTI_FP3_FMSUB:
+			TCTI_EXECUTE_FP3_D("fmsub");
+			break;
+		case TCTI_FP3_FNMADD:
+			TCTI_EXECUTE_FP3_D("fnmadd");
+			break;
+		case TCTI_FP3_FNMSUB:
+			TCTI_EXECUTE_FP3_D("fnmsub");
+			break;
+		}
+#undef TCTI_EXECUTE_FP3_D
 	}
+
+	asm volatile(
+		"mrs %0, fpsr\n"
+		"msr fpcr, %1\n"
+		"msr fpsr, %2\n"
+		"isb\n"
+		: "=&r" (guest_fpsr)
+		: "r" (host_fpcr), "r" (host_fpsr)
+		: "memory");
+	current->thread.user_fpsr = guest_fpsr;
+	preempt_enable();
 
 	tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
 				    result, 0);

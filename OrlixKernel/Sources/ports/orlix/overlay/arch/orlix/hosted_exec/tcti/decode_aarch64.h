@@ -305,6 +305,13 @@ enum tcti_fp_scalar_2source_op {
 	TCTI_FP2_FMUL,
 };
 
+enum tcti_fp_scalar_3source_op {
+	TCTI_FP3_FMADD = 0,
+	TCTI_FP3_FMSUB,
+	TCTI_FP3_FNMADD,
+	TCTI_FP3_FNMSUB,
+};
+
 enum tcti_fp_int_convert_op {
 	TCTI_FP_INT_SCVTF = 0,
 	TCTI_FP_INT_UCVTF,
@@ -379,6 +386,7 @@ struct tcti_decoded_instruction {
 	enum tcti_fp_scalar_move_op fp_move_op;
 	enum tcti_fp_scalar_1source_op fp1_op;
 	enum tcti_fp_scalar_2source_op fp2_op;
+	enum tcti_fp_scalar_3source_op fp3_op;
 	enum tcti_fp_int_convert_op fp_int_op;
 	enum tcti_multiply_add_sub_op mul_op;
 	enum tcti_simd_reduction_op simd_reduction_op;

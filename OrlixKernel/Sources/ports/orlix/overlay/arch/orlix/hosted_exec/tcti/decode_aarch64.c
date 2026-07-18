@@ -82,6 +82,8 @@
 #define AARCH64_SIMD_EXT_PATTERN 0x2e000000U
 #define AARCH64_SIMD_DUP_GPR_MASK 0xbfe0fc00U
 #define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
+#define AARCH64_SIMD_DUP_SCALAR_ELEMENT_MASK 0xffe0fc00U
+#define AARCH64_SIMD_DUP_SCALAR_ELEMENT_PATTERN 0x5e000400U
 #define AARCH64_SIMD_VECTOR_LOGICAL_MASK 0x9f20fc00U
 #define AARCH64_SIMD_VECTOR_LOGICAL_PATTERN 0x0e201c00U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
@@ -259,9 +261,8 @@
 #define AARCH64_FMUL_D_PATTERN 0x1e600800U
 #define AARCH64_FMUL_2D_MASK 0xff20fc00U
 #define AARCH64_FMUL_2D_PATTERN 0x6e20dc00U
-#define AARCH64_FMADD_D_MASK 0xffe08000U
-#define AARCH64_FMADD_D_PATTERN 0x1f400000U
-#define AARCH64_FMSUB_D_PATTERN 0x1f408000U
+#define AARCH64_FP_SCALAR_3SOURCE_MASK 0xff000000U
+#define AARCH64_FP_SCALAR_3SOURCE_PATTERN 0x1f000000U
 #define AARCH64_FCSEL_MASK 0xffa00c00U
 #define AARCH64_FCSEL_PATTERN 0x1e200c00U
 #define AARCH64_FCMP_S_MASK 0xffe0fc1fU
@@ -465,6 +466,18 @@ static bool tcti_decode_simd_fp_load_store_variant(u8 size, u8 opc,
 						   u8 *access_size,
 						   u8 *result_size)
 {
+	if (size == 0 && opc <= 1) {
+		*load = opc == 1;
+		*access_size = sizeof(u8);
+		*result_size = sizeof(u8);
+		return true;
+	}
+	if (size == 1 && opc <= 1) {
+		*load = opc == 1;
+		*access_size = sizeof(u16);
+		*result_size = sizeof(u16);
+		return true;
+	}
 	if (size == 2 && opc <= 1) {
 		*load = opc == 1;
 		*access_size = sizeof(u32);
@@ -577,6 +590,41 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_HINT_MASK) == AARCH64_HINT_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_HINT;
+		return decoded;
+	}
+	if ((instruction & AARCH64_FP_SCALAR_3SOURCE_MASK) ==
+	    AARCH64_FP_SCALAR_3SOURCE_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_3SOURCE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.ra = (instruction >> 10) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = instruction & BIT(22) ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_fp = true;
+		decoded.fp3_op = (enum tcti_fp_scalar_3source_op)(
+			((instruction & BIT(21)) ? 2 : 0) |
+			((instruction & BIT(15)) ? 1 : 0));
+		return decoded;
+	}
+	if ((instruction & AARCH64_SIMD_DUP_SCALAR_ELEMENT_MASK) ==
+	    AARCH64_SIMD_DUP_SCALAR_ELEMENT_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+		u8 size;
+
+		if (!imm5)
+			return decoded;
+		size = __ffs(imm5);
+		if (size > 3)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_scalar = true;
+		decoded.simd_source_index = imm5 >> (size + 1);
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_DUP;
 		return decoded;
 	}
 
@@ -880,21 +928,10 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			return decoded;
 
 		if (simd_fp) {
-			if (size == 2 && opc <= 1) {
-				decoded.load = opc == 1;
-				decoded.access_size = sizeof(u32);
-				decoded.result_size = sizeof(u32);
-			} else if (size == 3 && opc <= 1) {
-				decoded.load = opc == 1;
-				decoded.access_size = sizeof(u64);
-				decoded.result_size = sizeof(u64);
-			} else if (size == 0 && opc >= 2) {
-				decoded.load = opc == 3;
-				decoded.access_size = 2 * sizeof(u64);
-				decoded.result_size = 2 * sizeof(u64);
-			} else {
+			if (!tcti_decode_simd_fp_load_store_variant(
+					size, opc, &decoded.load,
+					&decoded.access_size, &decoded.result_size))
 				return decoded;
-			}
 
 			decoded.decode_class =
 				TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE;
@@ -2735,22 +2772,6 @@ not_simd_compare_register:
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.fp2_op = TCTI_FP2_FMUL;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_FMADD_D_MASK) == AARCH64_FMADD_D_PATTERN ||
-	    (instruction & AARCH64_FMADD_D_MASK) == AARCH64_FMSUB_D_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_FP_SCALAR_3SOURCE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.ra = (instruction >> 10) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = sizeof(u64);
-		decoded.result_size = sizeof(u64);
-		decoded.simd_fp = true;
-		decoded.subtract =
-			(instruction & AARCH64_FMADD_D_MASK) ==
-			AARCH64_FMSUB_D_PATTERN;
 		return decoded;
 	}
 
