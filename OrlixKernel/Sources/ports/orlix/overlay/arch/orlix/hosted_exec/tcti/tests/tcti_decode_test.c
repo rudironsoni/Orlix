@@ -14021,7 +14021,141 @@ static void tcti_decode_test_exit(struct kunit *test)
 	mmput(mm);
 }
 
+static u32 tcti_test_encode_simd_table_lookup(bool q, u8 table_count,
+					      bool extension, u8 rd, u8 rn,
+					      u8 rm)
+{
+	return 0x0e000000U | (q ? BIT(30) : 0) | ((u32)rm << 16) |
+	       ((u32)(table_count - 1) << 13) | (extension ? BIT(12) : 0) |
+	       ((u32)rn << 5) | rd;
+}
+
+static void tcti_decode_recognizes_complete_simd_table_lookup_family(
+	struct kunit *test)
+{
+	u8 q;
+	u8 table_count;
+	u8 extension;
+
+	for (q = 0; q < 2; q++) {
+		for (table_count = 1; table_count <= 4; table_count++) {
+			for (extension = 0; extension < 2; extension++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(
+						tcti_test_encode_simd_table_lookup(
+							q, table_count, extension,
+							7, 31, 9));
+
+				KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_TABLE_LOOKUP,
+						decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, 7, decoded.rd);
+				KUNIT_EXPECT_EQ(test, 31, decoded.rn);
+				KUNIT_EXPECT_EQ(test, 9, decoded.rm);
+				KUNIT_EXPECT_EQ(test, q != 0, decoded.simd_q);
+				KUNIT_EXPECT_EQ(test, table_count,
+						decoded.simd_table_count);
+				KUNIT_EXPECT_EQ(test,
+						extension ? TCTI_SIMD_TABLE_LOOKUP_TBX :
+							    TCTI_SIMD_TABLE_LOOKUP_TBL,
+						decoded.simd_table_lookup_op);
+				KUNIT_EXPECT_EQ(test,
+						q ? 2 * sizeof(u64) : sizeof(u64),
+						decoded.result_size);
+			}
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_TABLE_LOOKUP,
+			tcti_decode_aarch64(0x4e012301U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_TABLE_LOOKUP,
+			tcti_decode_aarch64(0x4e002250U).decode_class);
+}
+
+static void tcti_switch_executes_complete_simd_table_lookup_family(
+	struct kunit *test)
+{
+	struct pt_regs regs = { .pc = 0x9200 };
+	u8 table_count;
+	u8 q;
+	u8 extension;
+
+	for (q = 0; q < 2; q++) {
+		for (table_count = 1; table_count <= 4; table_count++) {
+			for (extension = 0; extension < 2; extension++) {
+				struct tcti_decoded_instruction decoded;
+				u8 table[4 * 16];
+				u8 indexes[16];
+				u8 original[16];
+				u8 expected[16] = {};
+				u8 actual[16];
+				u8 result_size = q ? 16 : 8;
+				u8 i;
+				int ret;
+
+				for (i = 0; i < ARRAY_SIZE(table); i++)
+					table[i] = 0x40 + i;
+				for (i = 0; i < ARRAY_SIZE(indexes); i++) {
+					indexes[i] = i < result_size - 2 ? i :
+						     table_count * 16 + i;
+					original[i] = 0xa0 + i;
+					if (indexes[i] < table_count * 16)
+						expected[i] = table[indexes[i]];
+					else if (extension)
+						expected[i] = original[i];
+				}
+
+				memcpy(&current->thread.user_simd[30 * 2], table, 16);
+				memcpy(&current->thread.user_simd[31 * 2],
+				       table + 16, 16);
+				memcpy(&current->thread.user_simd[0], table + 32, 16);
+				memcpy(&current->thread.user_simd[2], table + 48, 16);
+				memcpy(&current->thread.user_simd[4], original, 16);
+				memcpy(&current->thread.user_simd[6], indexes, 16);
+				decoded = tcti_decode_aarch64(
+					tcti_test_encode_simd_table_lookup(
+						q, table_count, extension, 2, 30, 3));
+				ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+								&decoded, NULL);
+				memcpy(actual, &current->thread.user_simd[4], 16);
+
+				KUNIT_EXPECT_EQ(test, 0, ret);
+				KUNIT_EXPECT_MEMEQ(test, expected, actual, result_size);
+				if (!q)
+					KUNIT_EXPECT_EQ(test, 0ULL,
+							current->thread.user_simd[5]);
+			}
+		}
+	}
+}
+
+static void tcti_switch_executes_simd_table_lookup_with_index_alias(
+	struct kunit *test)
+{
+	struct pt_regs regs = { .pc = 0x9400 };
+	struct tcti_decoded_instruction decoded;
+	int ret;
+
+	current->thread.user_simd[48] = 0x8786858483828180ULL;
+	current->thread.user_simd[49] = 0x8f8e8d8c8b8a8988ULL;
+	current->thread.user_simd[50] = 0x9796959493929190ULL;
+	current->thread.user_simd[51] = 0x9f9e9d9c9b9a9998ULL;
+	current->thread.user_simd[2] = 0x1101ff201f100f00ULL;
+	current->thread.user_simd[3] = 0x1505140413031202ULL;
+	decoded = tcti_decode_aarch64(0x4e012301U);
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x918100009f908f80ULL,
+			current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0x9585948493839282ULL,
+			current->thread.user_simd[3]);
+	KUNIT_EXPECT_EQ(test, 0x9404ULL, regs.pc);
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
+	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_table_lookup_family),
+	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_with_index_alias),
 	KUNIT_CASE(tcti_decode_recognizes_svc_zero),
 	KUNIT_CASE(tcti_decode_rejects_unknown_instruction),
 	KUNIT_CASE(tcti_decode_rejects_brk_one),

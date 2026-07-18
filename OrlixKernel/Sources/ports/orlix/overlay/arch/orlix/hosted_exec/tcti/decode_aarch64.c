@@ -80,6 +80,8 @@
 #define AARCH64_SIMD_INS_GPR_PATTERN 0x4e001c00U
 #define AARCH64_SIMD_EXT_MASK 0xbfe08400U
 #define AARCH64_SIMD_EXT_PATTERN 0x2e000000U
+#define AARCH64_SIMD_TABLE_LOOKUP_MASK 0xbfe08c00U
+#define AARCH64_SIMD_TABLE_LOOKUP_PATTERN 0x0e000000U
 #define AARCH64_SIMD_DUP_GPR_MASK 0xbfe0fc00U
 #define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
 #define AARCH64_SIMD_DUP_SCALAR_ELEMENT_MASK 0xffe0fc00U
@@ -1605,6 +1607,22 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_EXT;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_TABLE_LOOKUP_MASK) ==
+	    AARCH64_SIMD_TABLE_LOOKUP_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_TABLE_LOOKUP;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.simd_q = !!(instruction & BIT(30));
+		decoded.result_size = decoded.simd_q ? 2 * sizeof(u64) :
+						       sizeof(u64);
+		decoded.simd_table_count = ((instruction >> 13) & 0x3U) + 1;
+		decoded.simd_table_lookup_op = instruction & BIT(12) ?
+			TCTI_SIMD_TABLE_LOOKUP_TBX : TCTI_SIMD_TABLE_LOOKUP_TBL;
+		decoded.simd_fp = true;
 		return decoded;
 	}
 

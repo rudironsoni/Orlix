@@ -2640,6 +2640,54 @@ static int tcti_execute_simd_vector_element_move(
 	return 0;
 }
 
+static int tcti_execute_simd_table_lookup(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	u8 table[4 * 2 * sizeof(u64)];
+	u8 indexes[2 * sizeof(u64)];
+	u8 original[2 * sizeof(u64)];
+	u8 result[2 * sizeof(u64)] = {};
+	u8 result_size = decoded->simd_q ? 2 * sizeof(u64) : sizeof(u64);
+	u8 table_size;
+	u8 i;
+
+	if (decoded->simd_table_count < 1 || decoded->simd_table_count > 4 ||
+	    decoded->simd_table_lookup_op > TCTI_SIMD_TABLE_LOOKUP_TBX ||
+	    decoded->result_size != result_size)
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < decoded->simd_table_count; i++) {
+		u8 reg = (decoded->rn + i) & 0x1fU;
+
+		put_unaligned_le64(current->thread.user_simd[reg * 2],
+				   table + i * 2 * sizeof(u64));
+		put_unaligned_le64(current->thread.user_simd[reg * 2 + 1],
+				   table + i * 2 * sizeof(u64) + sizeof(u64));
+	}
+	put_unaligned_le64(current->thread.user_simd[decoded->rm * 2], indexes);
+	put_unaligned_le64(current->thread.user_simd[decoded->rm * 2 + 1],
+			   indexes + sizeof(u64));
+	put_unaligned_le64(current->thread.user_simd[decoded->rd * 2], original);
+	put_unaligned_le64(current->thread.user_simd[decoded->rd * 2 + 1],
+			   original + sizeof(u64));
+	table_size = decoded->simd_table_count * 2 * sizeof(u64);
+
+	for (i = 0; i < result_size; i++) {
+		if (indexes[i] < table_size)
+			result[i] = table[indexes[i]];
+		else if (decoded->simd_table_lookup_op ==
+			 TCTI_SIMD_TABLE_LOOKUP_TBX)
+			result[i] = original[i];
+	}
+
+	tcti_write_simd_fp_register(decoded->rd, result_size,
+				    get_unaligned_le64(result),
+				    result_size == 2 * sizeof(u64) ?
+					get_unaligned_le64(result + sizeof(u64)) : 0);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int tcti_execute_simd_vector_logical(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -6331,6 +6379,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return tcti_execute_simd_modified_immediate(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE:
 		return tcti_execute_simd_vector_element_move(regs, decoded);
+	case TCTI_DECODE_SIMD_TABLE_LOOKUP:
+		return tcti_execute_simd_table_lookup(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_LOGICAL:
 		return tcti_execute_simd_vector_logical(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_ARITHMETIC:

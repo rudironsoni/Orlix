@@ -37,6 +37,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
 	TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+	TCTI_DECODE_SIMD_TABLE_LOOKUP,
 	TCTI_DECODE_SIMD_VECTOR_LOGICAL,
 	TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 	TCTI_DECODE_SIMD_VECTOR_COMPARE,
@@ -95,6 +96,11 @@ enum tcti_simd_element_move_op {
 	TCTI_SIMD_ELEMENT_MOVE_SSHLL,
 	TCTI_SIMD_ELEMENT_MOVE_USHLL,
 	TCTI_SIMD_ELEMENT_MOVE_EXT,
+};
+
+enum tcti_simd_table_lookup_op {
+	TCTI_SIMD_TABLE_LOOKUP_TBL = 0,
+	TCTI_SIMD_TABLE_LOOKUP_TBX,
 };
 
 enum tcti_move_wide_op {
@@ -402,12 +408,14 @@ struct tcti_decoded_instruction {
 	enum tcti_multiply_add_sub_op mul_op;
 	enum tcti_simd_reduction_op simd_reduction_op;
 	enum tcti_simd_element_move_op simd_element_move_op;
+	enum tcti_simd_table_lookup_op simd_table_lookup_op;
 	bool system_register_write;
 	u8 bitfield_immr;
 	u8 bitfield_imms;
 	u8 rs;
 	u8 simd_destination_index;
 	u8 simd_source_index;
+	u8 simd_table_count;
 	bool acquire;
 	bool release;
 	bool exclusive;
