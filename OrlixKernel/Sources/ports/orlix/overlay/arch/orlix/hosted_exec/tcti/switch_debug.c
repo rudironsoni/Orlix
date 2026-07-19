@@ -2461,6 +2461,15 @@ static int tcti_execute_simd_modified_immediate(
 	return 0;
 }
 
+static int tcti_execute_fp_scalar_immediate(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+				    decoded->logical_immediate, 0);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int tcti_execute_simd_vector_element_move(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
@@ -6984,6 +6993,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 							 fault_address);
 	case TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
 		return tcti_execute_simd_modified_immediate(regs, decoded);
+	case TCTI_DECODE_FP_SCALAR_IMMEDIATE:
+		return tcti_execute_fp_scalar_immediate(regs, decoded);
 	case TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE:
 		return tcti_execute_simd_vector_element_move(regs, decoded);
 	case TCTI_DECODE_SIMD_TABLE_LOOKUP:

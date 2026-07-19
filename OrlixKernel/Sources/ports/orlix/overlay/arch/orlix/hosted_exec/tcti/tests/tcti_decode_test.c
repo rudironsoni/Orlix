@@ -5444,7 +5444,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e201001U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0x40000000ULL, decoded.logical_immediate);
@@ -5452,7 +5452,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e2e1001U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 1U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0x3f800000ULL, decoded.logical_immediate);
@@ -5460,7 +5460,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e649000U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0x4024000000000000ULL,
@@ -5469,7 +5469,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e611006U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 6U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0x4008000000000000ULL,
@@ -5478,7 +5478,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e711004U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0xc008000000000000ULL,
@@ -5487,7 +5487,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e701004U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 4U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0xc000000000000000ULL,
@@ -5496,7 +5496,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e7e1000U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0xbff0000000000000ULL,
@@ -5505,7 +5505,7 @@ static void tcti_decode_recognizes_fp_scalar_runtime_operations(struct kunit *te
 
 	decoded = tcti_decode_aarch64(0x1e7a1002U);
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 2U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 0xbfd0000000000000ULL,
@@ -15624,6 +15624,90 @@ static void tcti_decode_test_exit(struct kunit *test)
 	mmput(mm);
 }
 
+static u64 tcti_test_expand_fp_immediate(u8 imm8, u8 exponent_bits,
+					 u8 fraction_bits)
+{
+	u64 sign = (u64)(imm8 >> 7) << (exponent_bits + fraction_bits);
+	u64 exponent = (imm8 & BIT(6)) ?
+		(BIT_ULL(exponent_bits - 3) - 1) << 2 :
+		BIT_ULL(exponent_bits - 1);
+	u64 fraction = (u64)(imm8 & 0xfU) << (fraction_bits - 4);
+
+	exponent |= (imm8 >> 4) & 0x3U;
+	return sign | (exponent << fraction_bits) | fraction;
+}
+
+static void tcti_gadget_executes_complete_fp_immediate_family(
+	struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs;
+	unsigned long fault_address;
+	size_t word_count;
+	u64 expected;
+	u32 instruction;
+	unsigned int imm8;
+	int ret;
+
+	for (imm8 = 0; imm8 <= 0xffU; imm8++) {
+		instruction = 0x1e201000U | (imm8 << 13) | 7U;
+		expected = tcti_test_expand_fp_immediate(imm8, 8, 23);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 7, decoded.rd);
+		KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.access_size);
+		KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.result_size);
+		KUNIT_EXPECT_EQ(test, expected, decoded.logical_immediate);
+
+		memset(&regs, 0, sizeof(regs));
+		regs.pc = 0xa000;
+		current->thread.user_simd[14] = ~0ULL;
+		current->thread.user_simd[15] = ~0ULL;
+		ret = tcti_lower_decoded_instruction(&decoded, program,
+						     ARRAY_SIZE(program), &word_count);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		fault_address = 0;
+		ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+						  &fault_address);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, expected, current->thread.user_simd[14]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[15]);
+		KUNIT_EXPECT_EQ(test, 0xa004ULL, regs.pc);
+
+		instruction = 0x1e601000U | (imm8 << 13) | 7U;
+		expected = tcti_test_expand_fp_immediate(imm8, 11, 52);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_FP_SCALAR_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, 7, decoded.rd);
+		KUNIT_EXPECT_EQ(test, sizeof(u64), decoded.access_size);
+		KUNIT_EXPECT_EQ(test, sizeof(u64), decoded.result_size);
+		KUNIT_EXPECT_EQ(test, expected, decoded.logical_immediate);
+
+		memset(&regs, 0, sizeof(regs));
+		regs.pc = 0xa100;
+		current->thread.user_simd[14] = 0;
+		current->thread.user_simd[15] = ~0ULL;
+		ret = tcti_lower_decoded_instruction(&decoded, program,
+						     ARRAY_SIZE(program), &word_count);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		fault_address = 0;
+		ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+						  &fault_address);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, expected, current->thread.user_simd[14]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[15]);
+		KUNIT_EXPECT_EQ(test, 0xa104ULL, regs.pc);
+	}
+
+	decoded = tcti_decode_aarch64(0x1ea01000U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(0x1ee01000U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+}
+
 static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
 	struct kunit *test)
 {
@@ -16075,6 +16159,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
+	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_scalar_2source_family),
 	KUNIT_CASE(tcti_switch_executes_fp_scalar_2source_minmax_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),

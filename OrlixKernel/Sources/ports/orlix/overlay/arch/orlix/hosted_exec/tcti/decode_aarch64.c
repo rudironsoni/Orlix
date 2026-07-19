@@ -2931,7 +2931,7 @@ not_simd_compare_register:
 				 AARCH64_FMOV_D_IMMEDIATE_PATTERN;
 		u8 imm8 = (instruction >> 13) & 0xffU;
 
-		decoded.decode_class = TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE;
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_IMMEDIATE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.logical_immediate = is_double ?
 			tcti_expand_fp_immediate(imm8, 11, 52) :
