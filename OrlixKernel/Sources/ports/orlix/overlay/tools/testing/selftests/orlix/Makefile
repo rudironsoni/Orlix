@@ -21,6 +21,7 @@ TEST_GEN_PROGS += oci_rootfs_controls_probe
 TEST_GEN_PROGS += oci_time_namespace_probe
 TEST_GEN_PROGS += readonly_root_probe
 TEST_GEN_PROGS += time_namespace_probe
+TEST_GEN_PROGS += time_surface_probe
 TEST_GEN_PROGS += user_namespace_probe
 TEST_GEN_PROGS += pty_terminal_probe
 

@@ -1,0 +1,188 @@
+diff --git a/options/ansi/generic/time.cpp b/options/ansi/generic/time.cpp
+--- a/options/ansi/generic/time.cpp
++++ b/options/ansi/generic/time.cpp
+@@ -51,6 +51,12 @@ char *tzname[2];
+ 
+ static FutexLock __time_lock;
+ 
++namespace {
++
++time_t mktime_impl(struct tm *tm);
++
++} // namespace
++
+ // Function taken from musl
+ clock_t clock(void) {
+ 	struct timespec ts;
+@@ -69,7 +75,7 @@ double difftime(time_t a, time_t b) {
+ }
+ 
+ time_t mktime(struct tm *tm) {
+-	return timegm(tm);
++	return mktime_impl(tm);
+ }
+ 
+ /* There is no other implemented value than TIME_UTC; all other values
+@@ -704,10 +710,11 @@ void weekday_from_days(time_t days_since_epoch, unsigned int *weekday) {
+ }
+ 
+ void yearday_from_date(unsigned int year, unsigned int month, unsigned int day, unsigned int *yday) {
+-	unsigned int n1 = 275 * month / 9;
+-	unsigned int n2 = (month + 9) / 12;
+-	unsigned int n3 = (1 + (year - 4 * year / 4 + 2) / 3);
+-	*yday = n1 - (n2 * n3) + day - 30;
++	constexpr unsigned int days_before_month[] = {
++		0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
++	};
++	bool leap = !(year % 4) && ((year % 100) || !(year % 400));
++	*yday = days_before_month[month - 1] + (month > 2 && leap) + day;
+ }
+ 
+ static bool is_leap_year(int year) {
+@@ -726,13 +732,13 @@ time_t time_from_rule(const Rule &rule, int year) {
+ 		struct tm t = {};
+ 		t.tm_year = year - 1900;
+ 		t.tm_yday = day;
+-		return mktime(&t);
++		return timegm(&t);
+ 	} else if (rule.type == DAY_OF_YEAR) {
+ 		// n: zero-based day of year, including Feb 29 in leap years
+ 		struct tm t = {};
+ 		t.tm_year = year - 1900;
+ 		t.tm_yday = rule.day;
+-		return mktime(&t);
++		return timegm(&t);
+ 	} else if (rule.type == MONTH_NTH_DAY_OF_WEEK) {
+ 		// Mm.n.d: Month, week, weekday (month 1-12, week 1-5, weekday 0=Sun)
+ 
+@@ -741,13 +747,13 @@ time_t time_from_rule(const Rule &rule, int year) {
+ 		t.tm_year = year - 1900;
+ 		t.tm_mon = rule.month - 1;
+ 		t.tm_mday = 1;
+-		mktime(&t);
++		timegm(&t);
+ 
+ 		int first_wday = t.tm_wday;
+ 		int day = 1 + ((7 + rule.day - first_wday) % 7) + (rule.week - 1) * 7;
+ 		// If week==5, but that day is past the end of the month, go back by 7 days
+ 		t.tm_mday = day;
+-		mktime(&t);
++		timegm(&t);
+ 		if (rule.week == 5 && t.tm_mon != rule.month - 1)
+ 			day -= 7;
+ 
+@@ -757,7 +763,7 @@ time_t time_from_rule(const Rule &rule, int year) {
+ 		t.tm_hour = 0;
+ 		t.tm_min = 0;
+ 		t.tm_sec = 0;
+-		return mktime(&t);
++		return timegm(&t);
+ 	} else {
+ 		__ensure(!"Invalid rule type");
+ 		__builtin_unreachable();
+@@ -901,6 +907,44 @@ int unix_local_from_gmt(time_t unix_gmt, time_t *offset, bool *dst, char **tm_zo
+ 	return 0;
+ }
+ 
++time_t floor_div(time_t numerator, time_t denominator) {
++	time_t quotient = numerator / denominator;
++	time_t remainder = numerator % denominator;
++	if (remainder < 0)
++		quotient--;
++	return quotient;
++}
++
++time_t floor_mod(time_t numerator, time_t denominator) {
++	time_t remainder = numerator % denominator;
++	return remainder < 0 ? remainder + denominator : remainder;
++}
++
++time_t mktime_impl(struct tm *tm) {
++	struct tm normalized = *tm;
++	time_t local_seconds = timegm(&normalized);
++	time_t candidate = local_seconds;
++
++	{
++		frg::unique_lock<FutexLock> lock(__time_lock);
++		for (int i = 0; i < 4; i++) {
++			time_t offset;
++			bool dst;
++			char *zone;
++			if (unix_local_from_gmt(candidate, &offset, &dst, &zone))
++				return static_cast<time_t>(-1);
++			time_t next = local_seconds - offset;
++			if (next == candidate)
++				break;
++			candidate = next;
++		}
++	}
++
++	if (!localtime_r(&candidate, tm))
++		return static_cast<time_t>(-1);
++	return candidate;
++}
++
+ } //anonymous namespace
+ 
+ struct tm *gmtime_r(const time_t *unix_gmt, struct tm *res) {
+@@ -912,14 +956,15 @@ struct tm *gmtime_r(const time_t *unix_gmt, struct tm *res) {
+ 
+ 	time_t unix_local = *unix_gmt;
+ 
+-	int days_since_epoch = unix_local / (60*60*24);
++	time_t days_since_epoch = floor_div(unix_local, 60 * 60 * 24);
++	time_t seconds_of_day = unix_local - days_since_epoch * (60 * 60 * 24);
+ 	civil_from_days(days_since_epoch, &year, &month, &day);
+ 	weekday_from_days(days_since_epoch, &weekday);
+ 	yearday_from_date(year, month, day, &yday);
+ 
+-	res->tm_sec = unix_local % 60;
+-	res->tm_min = (unix_local / 60) % 60;
+-	res->tm_hour = (unix_local / (60*60)) % 24;
++	res->tm_sec = seconds_of_day % 60;
++	res->tm_min = (seconds_of_day / 60) % 60;
++	res->tm_hour = seconds_of_day / (60 * 60);
+ 	res->tm_mday = day;
+ 	res->tm_mon = month - 1;
+ 	res->tm_year = year - 1900;
+@@ -950,14 +995,15 @@ struct tm *localtime_r(const time_t *unix_gmt, struct tm *res) {
+ 	}
+ 	time_t unix_local = *unix_gmt + offset;
+ 
+-	int days_since_epoch = unix_local / (60*60*24);
++	time_t days_since_epoch = floor_div(unix_local, 60 * 60 * 24);
++	time_t seconds_of_day = unix_local - days_since_epoch * (60 * 60 * 24);
+ 	civil_from_days(days_since_epoch, &year, &month, &day);
+ 	weekday_from_days(days_since_epoch, &weekday);
+ 	yearday_from_date(year, month, day, &yday);
+ 
+-	res->tm_sec = unix_local % 60;
+-	res->tm_min = (unix_local / 60) % 60;
+-	res->tm_hour = (unix_local / (60*60)) % 24;
++	res->tm_sec = seconds_of_day % 60;
++	res->tm_min = (seconds_of_day / 60) % 60;
++	res->tm_hour = seconds_of_day / (60 * 60);
+ 	res->tm_mday = day;
+ 	res->tm_mon = month - 1;
+ 	res->tm_year = year - 1900;
+@@ -1007,9 +1053,17 @@ constexpr static int days_from_civil(int y, unsigned m, unsigned d) noexcept {
+ }
+ 
+ time_t timegm(struct tm *tm) {
+-	time_t year = tm->tm_year + 1900;
+-	time_t month = tm->tm_mon + 1;
+-	time_t days = days_from_civil(year, month, tm->tm_mday);
++	time_t year = static_cast<time_t>(tm->tm_year) + 1900;
++	time_t month = tm->tm_mon;
++	year += floor_div(month, 12);
++	month = floor_mod(month, 12);
++	time_t days = static_cast<time_t>(days_from_civil(
++		static_cast<int>(year), static_cast<unsigned>(month) + 1, 1))
++		+ tm->tm_mday - 1;
+ 	time_t secs = (days * 86400) + (tm->tm_hour * 60 * 60) + (tm->tm_min * 60) + tm->tm_sec;
++	struct tm normalized;
++	if (!gmtime_r(&secs, &normalized))
++		return static_cast<time_t>(-1);
++	*tm = normalized;
+ 	return secs;
+ }

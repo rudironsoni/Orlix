@@ -330,6 +330,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
         XCTAssertFalse(output.contains("/orlix/mount_namespace_probe"))
     }
 
+    func testTimeSurfaceProbeCompletesThroughOrlixOSTerminalSession() throws {
+        _ = try OrlixUpstreamXCTest.run(.kernelTimeSurface)
+    }
+
     func testIPCNamespaceProbeCompletesThroughOrlixOSTerminalSession() throws {
         let output = try OrlixUpstreamXCTest.run(.kernelIPCNamespace)
         XCTAssertTrue(output.contains("ipc_namespace_probe"))

@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-19] test | Return time behavior to owning suites
+
+Added a Linux kselftest for kernel time surfaces and focused OrlixMLibC tests for calendar conversion and composite formatting. The app-hosted XCTest now launches the kernel probe without duplicating its TAP assertions.
+
 ## [2026-07-19] clarify | Keep TCTI inside the Linux runtime boundary
 
 Made the short component pages explicit that OrlixKernel remains the Linux runtime and owns kernel semantics, while TCTI is the complete AArch64 EL0 guest instruction-execution backend under `arch/orlix` required by iOS executable-memory restrictions. Linked the boundary directly to ADR 0022 without creating a duplicate policy source.

@@ -1,0 +1,40 @@
+diff --git a/options/internal/include/mlibc/time.hpp b/options/internal/include/mlibc/time.hpp
+--- a/options/internal/include/mlibc/time.hpp
++++ b/options/internal/include/mlibc/time.hpp
+@@ -284,7 +284,12 @@ size_t strftime(
+ 				break;
+ 			}
+ 			case 'c': {
+-				return mlibc::strftime(dest, max_size, P::dtFmt(l), tm, l);
++				chunk = mlibc::strftime(p, space, P::dtFmt(l), tm, l);
++				if (!chunk)
++					return 0;
++				p += chunk;
++				c++;
++				break;
+ 			}
+ 			case 'e': {
+ 				chunk = nprintf(p, space, P::TwoD, tm->tm_mday);
+@@ -431,10 +436,20 @@ size_t strftime(
+ 				break;
+ 			}
+ 			case 'x': {
+-				return mlibc::strftime(dest, max_size, P::dFmt(l), tm, l);
++				chunk = mlibc::strftime(p, space, P::dFmt(l), tm, l);
++				if (!chunk)
++					return 0;
++				p += chunk;
++				c++;
++				break;
+ 			}
+ 			case 'X': {
+-				return mlibc::strftime(dest, max_size, P::tFmt(l), tm, l);
++				chunk = mlibc::strftime(p, space, P::tFmt(l), tm, l);
++				if (!chunk)
++					return 0;
++				p += chunk;
++				c++;
++				break;
+ 			}
+ 			case 'U': {
+ 				chunk = nprintf(p, space, P::UFormat, (tm->tm_yday + 7 - tm->tm_wday) / 7);

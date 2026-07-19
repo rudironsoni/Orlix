@@ -241,7 +241,9 @@ MLIBC_TEST_ORLIX_CASES := \
 	orlix/getopt_diagnostics \
 	orlix/locale_probe \
 	orlix/renameat2 \
-	orlix/stdio_dup2_pipe
+	orlix/stdio_dup2_pipe \
+	orlix/time_format \
+	orlix/time_relative
 MLIBC_TEST_CASES ?= $(MLIBC_TEST_ANSI_CASES) $(MLIBC_TEST_POSIX_CASES) $(MLIBC_TEST_BSD_CASES) $(MLIBC_TEST_GLIBC_CASES) $(MLIBC_TEST_LINUX_CASES) $(MLIBC_TEST_ORLIX_CASES)
 # Runtime-log polling uses 0.1s ticks. Scale with the selected upstream mlibc
 # tests so a full suite is not cut off by the focused-case timeout.
