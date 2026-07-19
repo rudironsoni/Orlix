@@ -3,12 +3,16 @@ type: concept
 tags:
   - architecture
   - guidance
-updated: 2026-07-15
-summary: "OrlixKernel owns the Linux port, OrlixMLibC owns libc sysdeps, OrlixHostAdapter owns private Apple host mechanics, OrlixOS owns distribution and the app-facing session surface, and the native app owns presentation."
+updated: 2026-07-19
+summary: "OrlixKernel owns Linux and TCTI guest instruction execution, OrlixMLibC owns libc sysdeps, OrlixHostAdapter owns private Apple host mechanics, OrlixOS owns distribution and the app-facing session surface, and the native app owns presentation."
 applies:
   - "[Orlix](../objects/product/orlix.md)"
 ---
 
 # Component ownership
 
-OrlixKernel owns the Linux port, OrlixMLibC owns libc sysdeps, OrlixHostAdapter owns private Apple host mechanics, OrlixOS owns distribution and the app-facing session surface, and the native app owns presentation.
+OrlixKernel is upstream Linux plus the `arch/orlix` port. Linux remains the runtime and owns VMAs, page tables, tasks, scheduling, syscalls, VFS, file descriptors, signals, wait and reaping, PTYs, and process semantics.
+
+TCTI is an `arch/orlix` guest instruction-execution backend inside OrlixKernel. It must implement the complete guest-exposed AArch64 EL0 ISA profile, but it does not replace Linux or reimplement Linux behavior. It executes guest instructions while iOS prevents guest ELF text from becoming host executable, then returns structured exits to the existing Linux-owned syscall, fault, signal, and scheduling paths. This hybrid boundary is defined by [ADR 0022](../objects/architecture-decision/0022-use-hosted-linux-elf-execution.md).
+
+OrlixMLibC owns libc sysdeps and consumes the Linux UAPI. OrlixHostAdapter owns private Apple host mechanics only and cannot decode guest instructions or Linux syscall policy. OrlixOS owns curated distribution policy, payload assembly and metadata, and the app-facing Linux session surface. The native app owns presentation, Ghostty, UIKit and SwiftUI lifecycle, windows, tabs, panes, and app-level composition.

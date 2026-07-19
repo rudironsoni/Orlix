@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-17
+updated: 2026-07-19
 ---
 # Orlix Knowledge Log
+
+## [2026-07-19] clarify | Keep TCTI inside the Linux runtime boundary
+
+Made the short component pages explicit that OrlixKernel remains the Linux runtime and owns kernel semantics, while TCTI is the complete AArch64 EL0 guest instruction-execution backend under `arch/orlix` required by iOS executable-memory restrictions. Linked the boundary directly to ADR 0022 without creating a duplicate policy source.
 
 ## [2026-07-17] constrain | Require complete AArch64 ISA-on-ISA coverage
 
