@@ -585,6 +585,10 @@ forKey: .cgroupCPUWeight
             defaultSupplementaryGroups,
             forKey: .defaultSupplementaryGroups
         )
+        try container.encodeIfPresent(
+            defaultCapabilities,
+            forKey: .defaultCapabilities
+        )
         if defaultNoNewPrivileges {
             try container.encode(defaultNoNewPrivileges, forKey: .defaultNoNewPrivileges)
         }
@@ -1587,20 +1591,12 @@ throw OrlixEnvironmentRootImageError.invalidCgroupIOWeight(weight)
 return String(weight)
 }
 
-private static func validateCgroupUnified(
-_ entry: OrlixEnvironmentCgroupUnifiedEntry
-) throws -> String {
-let supportedFiles = Set([
-"pids.max",
-"cpu.max",
-"cpu.weight",
-"memory.max",
-"io.weight",
-"io.max"
-])
-guard supportedFiles.contains(entry.file),
-!entry.value.isEmpty,
-!entry.file.contains("\u{0}"),
+    private static func validateCgroupUnified(
+        _ entry: OrlixEnvironmentCgroupUnifiedEntry
+    ) throws -> String {
+        guard !entry.file.isEmpty,
+              !entry.value.isEmpty,
+              !entry.file.contains("\u{0}"),
 !entry.file.contains("/"),
 !entry.value.contains("\u{0}"),
 !entry.value.contains("\n"),

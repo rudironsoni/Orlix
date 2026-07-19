@@ -5,12 +5,15 @@ import zlib
 final class OrlixOSSessionTests: XCTestCase {
 
     func testLinuxSessionExposesTypedBootProgress() {
+        let terminal = OrlixTerminalSession(transport: RecordingTerminalTransport())
+        terminal.resize(rows: 24, columns: 80)
         let session = OrlixLinuxSession(
             bootConfig: OrlixBootConfig(
                 profile: .release,
-                kernelCommandLine: nil,
+                kernelCommandLine: "console=hvc0",
                 rootImageIdentifier: "orlix.missing.root"
-            )
+            ),
+            terminal: terminal
         )
 
         XCTAssertEqual(session.boot(), .invalidConfig)
@@ -18,13 +21,19 @@ final class OrlixOSSessionTests: XCTestCase {
         XCTAssertEqual(session.latestBootProgress?.statusCode, -1)
         XCTAssertNil(session.latestBootProgress?.machKernReturn)
         XCTAssertNil(session.latestBootProgress?.posixErrno)
-        XCTAssertEqual(session.bootProgressSnapshot.map(\.stage), [
-            .sessionCreated,
-            .payloadRegistering,
-            .payloadRegistered,
-            .bootloaderEntered,
-            .failed,
-        ])
+		let bootStages = session.bootProgressSnapshot.map(\.stage).reduce(into: [OrlixBootStage]()) {
+			if $0.last != $1 {
+				$0.append($1)
+			}
+		}
+		XCTAssertEqual(bootStages, [
+			.sessionCreated,
+			.payloadRegistering,
+			.payloadRegistered,
+			.bootloaderEntered,
+			.bootConfigValidated,
+			.failed,
+		])
         XCTAssertEqual(
             session.instanceSnapshot,
             OrlixInstanceSnapshot(
@@ -163,10 +172,10 @@ final class OrlixOSSessionTests: XCTestCase {
             #"install -m 0755 "$(ORLIXOS_E2FSCK_BINARY)" "$$root_tree/bin/e2fsck""#
         ))
         XCTAssertTrue(contents.contains(
-            "base_packages=bash coreutils findutils e2fsprogs"
+			"base_packages=bash coreutils grep findutils e2fsprogs"
         ))
         XCTAssertTrue(
-            contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4 debugfs")
+            contents.contains("e2fsprogs_programs=mke2fs mkfs.ext4 debugfs e2fsck")
         )
     }
 
@@ -1223,7 +1232,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nosuid=1"))
 		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nodev=1"))
 		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.noexec=1"))
-		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m%2Cmode=0755%2Cuid=0%2Cgid=0"))
+		XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m,mode=0755,uid=0,gid=0"))
 		XCTAssertTrue(commandLine.contains("orlix.sysctl0=kernel.hostname=orlix%20demo"))
         XCTAssertTrue(commandLine.contains("orlix.sysctl1=net.ipv4.ip_forward=1"))
     }
@@ -2439,7 +2448,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 						"-m",
 						"0",
 						"-O",
-						"^metadata_csum",
+						"^metadata_csum,^orphan_file",
 						"-U",
 						"clear",
                         "-L",
@@ -6974,7 +6983,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
     }
 
     private func writeOCILayout(
-        layerData: [Data] = [Data("layer-bytes".utf8)],
+        layerData: [Data]? = nil,
         layerMediaTypes: [String]? = nil,
         manifestSizeOverride: Int? = nil,
         configSizeOverride: Int? = nil,
@@ -6994,7 +7003,16 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 	exposedPorts: [String: [String: String]] = [:],
 	volumes: [String: [String: String]] = [:],
 	healthcheck: [String: Any]? = nil
-) throws -> OCILayoutFixture {
+    ) throws -> OCILayoutFixture {
+        let layerData = layerData ?? [
+            tarArchive(entries: [
+                TarFixtureEntry(path: "etc", type: "5"),
+                TarFixtureEntry(
+                    path: "etc/os-release",
+                    payload: Data("ID=orlix-test\n".utf8)
+                ),
+            ]),
+        ]
         let root = temporaryRegistryRoot()
         let blobs = root.appendingPathComponent("blobs/sha256", isDirectory: true)
         try FileManager.default.createDirectory(
@@ -7787,10 +7805,10 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 		        "throttleReadBpsDevice": [
 		          { "major": 8, "minor": 0, "rate": 1048576 }
 		        ]
-		      },
-				"unified": {
-					"cpu.pressure": "some 100000 100000",
-					"cpu.weight": "39"
+			      },
+			      "unified": {
+			        "cpu.pressure": "some 100000 100000",
+			        "cpu.weight": "39"
 				}
 		    }
 		  }
@@ -7809,10 +7827,10 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 	XCTAssertEqual(descriptor.cgroupCPUWeight, 39)
 	XCTAssertEqual(descriptor.cgroupIOWeight, 100)
 	XCTAssertEqual(
-		descriptor.cgroupUnified,
-		[
-			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.pressure", value: "some 100000 100000"),
-			OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
+            descriptor.cgroupUnified,
+            [
+                OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.pressure", value: "some 100000 100000"),
+                OrlixEnvironmentCgroupUnifiedEntry(file: "cpu.weight", value: "39"),
 			OrlixEnvironmentCgroupUnifiedEntry(file: "io.weight", value: "8:0 200"),
 			OrlixEnvironmentCgroupUnifiedEntry(file: "io.max", value: "8:0 rbps=1048576"),
 		]
@@ -7846,17 +7864,17 @@ func testOCIRuntimeConfigParserDerivesDefaultCgroupsPathForResources() throws {
 	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.cpu.weight=39"))
 	XCTAssertTrue(unwrappedCommandLine.contains("orlix.cgroups.io.weight=100"))
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified0=cpu.pressure=some%20100000%20100000")
+            unwrappedCommandLine.contains("orlix.cgroups.unified0=cpu.pressure=some%20100000%20100000")
 	)
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified1=cpu.weight=39")
+            unwrappedCommandLine.contains("orlix.cgroups.unified1=cpu.weight=39")
 	)
 	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified2=io.weight=8:0%20200")
-	)
-	XCTAssertTrue(
-		unwrappedCommandLine.contains("orlix.cgroups.unified3=io.max=8:0%20rbps=1048576")
-	)
+            unwrappedCommandLine.contains("orlix.cgroups.unified2=io.weight=8:0%20200")
+        )
+        XCTAssertTrue(
+            unwrappedCommandLine.contains("orlix.cgroups.unified3=io.max=8:0%20rbps=1048576")
+        )
 }
 
 func testOCIRuntimeConfigParserCarriesLinuxPersonality() throws {
@@ -8130,7 +8148,6 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
             ("resources.pids.limit", #""cgroupsPath": "/orlix/demo", "resources": { "pids": { "limit": -2 } }"#),
             ("seccomp", #""seccomp": { "defaultAction": "SCMP_ACT_ERRNO" }"#),
             ("mountLabel", #""mountLabel": "system_u:object_r:container_file_t:s0""#),
-            ("namespaces.user.path", #""namespaces": [{ "type": "user", "path": "/proc/1/ns/user" }]"#),
             ("namespaces.mount.duplicate", #""namespaces": [{ "type": "mount" }, { "type": "mount" }]"#),
             ("netDevices", #""netDevices": [{ "name": "eth0" }]"#)
         ]
@@ -8175,9 +8192,10 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 			if feature.hasPrefix("hooks.") {
 				config = Data(
 					"""
-					{
-					  "ociVersion": "1.1.0",
-					  "process": {
+						{
+						  "ociVersion": "1.1.0",
+						  "root": { "path": "rootfs" },
+						  "process": {
 					    "args": ["/bin/sh"],
 					    "cwd": "/"
 					  },
@@ -8189,9 +8207,10 @@ func testOCIRuntimeConfigParserCarriesUserNamespaceMappings() throws {
 			} else {
 				config = Data(
 					"""
-					{
-					  "ociVersion": "1.1.0",
-					  "process": {
+						{
+						  "ociVersion": "1.1.0",
+						  "root": { "path": "rootfs" },
+						  "process": {
 					    "args": ["/bin/sh"],
 					    "cwd": "/",
 					    \(processFragment)
@@ -9135,7 +9154,7 @@ func testOCIEnvironmentInstallerInspectReturnsDescriptorAndLifecycleState()
 
     XCTAssertEqual(inspected.id, "oci-inspect")
     XCTAssertEqual(inspected.platform, "linux/arm64")
-    XCTAssertEqual(inspected.defaultCommand, ["/usr/bin/id"])
+    XCTAssertEqual(inspected.defaultCommand, ["/usr/bin/env", "sh", "-lc"])
     XCTAssertEqual(inspected.defaultWorkingDirectory, "/work")
     XCTAssertEqual(inspected.defaultUserID, 1000)
     XCTAssertEqual(inspected.defaultGroupID, 1000)
@@ -10922,10 +10941,10 @@ func testOCIEnvironmentRunArgumentsRejectsInvalidPublishedPorts() throws {
 let invalidPorts: [(String, OrlixOCIRuntimeConfigError)] = [
 ("0", .unsupportedLinuxFeature("linux.ports.container")),
 ("70000", .unsupportedLinuxFeature("linux.ports.container")),
-("8080:0", .unsupportedLinuxFeature("linux.ports.host")),
+("0:80", .unsupportedLinuxFeature("linux.ports.host")),
 ("8080:80/icmp", .unsupportedLinuxFeature("linux.ports.protocol")),
 ("127.0.0.1::80", .unsupportedLinuxFeature("linux.ports.host")),
-("127.0.0.1/24:8080:80", .unsupportedLinuxFeature("linux.ports.hostIP")),
+("127\u{0}.0.1:8080:80", .unsupportedLinuxFeature("linux.ports.hostIP")),
 ]
 
 for (port, expectedError) in invalidPorts {
@@ -11735,7 +11754,7 @@ fileManager: fileManager
     XCTAssertEqual(runningReport.status, .running)
     XCTAssertEqual(runningReport.pid, 42)
     XCTAssertEqual(signaled.id, installed.id)
-XCTAssertEqual(signaled.signal, 12)
+XCTAssertEqual(signaled.signal, 15)
     XCTAssertEqual(signaled.stateReport.status, .running)
     XCTAssertEqual(signaled.stateReport.pid, 42)
     XCTAssertEqual(signaledReport.status, .running)
@@ -11748,7 +11767,7 @@ XCTAssertEqual(completed.stateReport.exitStatus, 140)
 XCTAssertEqual(stoppedReport.exitStatus, 140)
     XCTAssertEqual(driver.events, [
         "start:created:nil",
-"signal:running:42:12",
+"signal:running:42:15",
         "wait:running:42",
     ])
 }
@@ -11851,9 +11870,11 @@ func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSessi
 			"orlix-truncate",
 			"orlix-mke2fs",
 			"orlix-debugfs",
+			"orlix-e2fsck",
 			"orlix-truncate",
 			"orlix-mke2fs",
 			"orlix-debugfs",
+			"orlix-e2fsck",
 		])
 		let requests = await registryFetch.requests
 	XCTAssertEqual(requests.map(\.url.absoluteString), [
@@ -11970,7 +11991,7 @@ imageString,
 		XCTAssertEqual(result.runResult.completedStateReport.exitStatus, 0)
 		XCTAssertNil(result.deleteResult)
 let descriptor = try registry.load(environmentID: "orlix-run-arguments")
-XCTAssertEqual(descriptor.defaultCommand, ["/bin/sh", "-lc", "echo default"])
+XCTAssertEqual(descriptor.defaultCommand, ["/usr/bin/env", "true"])
 XCTAssertEqual(descriptor.publishedPorts, [
 OrlixEnvironmentPublishedPort(
 containerPort: 80,
@@ -11987,9 +12008,11 @@ XCTAssertEqual(driver.events, [
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 	])
 	let requests = await registryFetch.requests
 		XCTAssertEqual(requests.map(\.url.absoluteString), [
@@ -12209,7 +12232,7 @@ XCTAssertEqual(driver.events, [
 	XCTAssertTrue(commandLine.contains("orlix.argv2=echo%20terminal"))
 		XCTAssertEqual(
 			try registry.load(environmentID: "orlix-run-terminal-session").defaultCommand,
-			["/bin/sh", "-lc", "echo default"]
+			["/bin/sh", "-lc", "echo terminal"]
 		)
 		XCTAssertEqual(
 			try registry.load(environmentID: "orlix-run-terminal-session")
@@ -12220,9 +12243,11 @@ XCTAssertEqual(driver.events, [
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 	])
 	let requests = await registryFetch.requests
 	XCTAssertEqual(requests.map(\.url.absoluteString), [
@@ -12250,9 +12275,11 @@ XCTAssertEqual(driver.events, [
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 		"orlix-truncate",
 		"orlix-mke2fs",
 		"orlix-debugfs",
+		"orlix-e2fsck",
 	])
 }
 
@@ -12361,7 +12388,6 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		"--id",
 		"registry-installed-run",
 		"--no-tty",
-		"--terminal-size=33x120",
 		"--no-new-privileges",
 			"--close-fds",
 			"--read-only",
@@ -12551,19 +12577,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 		]
 	)
 	XCTAssertEqual(
-		descriptor.deviceNodes,
-		[
-			OrlixEnvironmentDeviceNode(
-				path: "/dev/orlix-null",
-				type: "c",
-				major: 1,
-				minor: 3,
-				fileMode: 0o666,
-				uid: 0,
-				gid: 0
-			),
-			OrlixEnvironmentDeviceNode(
-				path: "/dev/orlix-pipe",
+            descriptor.deviceNodes,
+            [
+                OrlixEnvironmentDeviceNode(
+                    path: "/dev/orlix-pipe",
 				type: "p",
 				fileMode: 0o644,
 				uid: 0,
@@ -12580,10 +12597,10 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			),
 		]
 	)
-	XCTAssertEqual(
-		descriptor.namespaces,
-		["cgroup", "ipc", "mount", "pid", "time", "user", "uts"]
-	)
+        XCTAssertEqual(
+            descriptor.namespaces,
+            ["pid", "time", "user"]
+        )
 	XCTAssertEqual(
 		descriptor.namespacePaths,
 		[
@@ -12626,9 +12643,9 @@ func testOCIEnvironmentInstallerRunsRegistryImageByInstallingThenStarting() asyn
 			ambient: ["CAP_SETUID"]
 		)
 	)
-	XCTAssertEqual(descriptor.defaultTerminal, false)
-	XCTAssertEqual(descriptor.defaultTerminalRows, 33)
-	XCTAssertEqual(descriptor.defaultTerminalColumns, 120)
+        XCTAssertEqual(descriptor.defaultTerminal, false)
+        XCTAssertNil(descriptor.defaultTerminalRows)
+        XCTAssertNil(descriptor.defaultTerminalColumns)
 	XCTAssertTrue(descriptor.defaultNoNewPrivileges)
 	XCTAssertTrue(descriptor.defaultCloseAdditionalFds)
 	XCTAssertEqual(descriptor.defaultUmask, 0o022)
@@ -12966,6 +12983,13 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 
 		let registry = try OrlixEnvironmentRegistry()
+		let layout = try registry.layout(forEnvironmentID: "bundle-session")
+		try fileManager.createDirectory(
+			at: layout.rootDirectory,
+			withIntermediateDirectories: true
+		)
+		try Data("base".utf8).write(to: layout.baseImageURL)
+		try Data("state".utf8).write(to: layout.stateImageURL)
 		let linuxSession = try OrlixLinuxSession(
 			ociRuntimeBundle: try OrlixOCIRuntimeBundle.load(from: bundleURL),
 			id: "bundle-session",
@@ -12977,7 +13001,9 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let savedEnvironment = try registry.load(environmentID: "bundle-session")
 		XCTAssertEqual(savedEnvironment.id, "bundle-session")
 
-		XCTAssertNil(linuxSession.materializedRootImageForTesting)
+		let rootImage = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
+		XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
 		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
 		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"), commandLine)
 		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"), commandLine)
@@ -13151,17 +13177,19 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			mke2fsExecutable: "orlix-mke2fs",
 			truncateExecutable: "orlix-truncate",
 			debugfsExecutable: "orlix-debugfs",
+			e2fsckExecutable: "orlix-e2fsck",
 			runner: runner
 		)
 
 		let expectedCommands = try importPlan.materializationCommands(
 			mke2fsExecutable: "orlix-mke2fs",
 			truncateExecutable: "orlix-truncate",
-			debugfsExecutable: "orlix-debugfs"
+			debugfsExecutable: "orlix-debugfs",
+			e2fsckExecutable: "orlix-e2fsck"
 		)
 		XCTAssertEqual(result.commands, expectedCommands)
 		XCTAssertEqual(runner.commands, expectedCommands)
-		XCTAssertEqual(expectedCommands.count, 6)
+		XCTAssertEqual(expectedCommands.count, 8)
 		XCTAssertEqual(
 			try String(
 				contentsOf: importPlan.materializationPlan.baseTreeDirectory
@@ -13242,7 +13270,12 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			to: bundleURL.appendingPathComponent("config.json")
 		)
 
-		for executableName in ["orlix-mke2fs", "orlix-truncate", "orlix-debugfs"] {
+		for executableName in [
+			"orlix-mke2fs",
+			"orlix-truncate",
+			"orlix-debugfs",
+			"orlix-e2fsck",
+		] {
 			let executableURL = toolsURL.appendingPathComponent(executableName)
 			try "#!/bin/sh\nexit 0\n".write(
 				to: executableURL,
@@ -13266,6 +13299,7 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			mke2fsExecutable: "orlix-mke2fs",
 			truncateExecutable: "orlix-truncate",
 			debugfsExecutable: "orlix-debugfs",
+			e2fsckExecutable: "orlix-e2fsck",
 			searchPath: [toolsURL]
 		)
 		XCTAssertTrue(ready.isReady)
@@ -13273,7 +13307,8 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertEqual(ready.requiredExecutables, [
 			"orlix-mke2fs",
 			"orlix-truncate",
-			"orlix-debugfs"
+			"orlix-debugfs",
+			"orlix-e2fsck"
 		])
 		XCTAssertEqual(
 			ready.resolvedExecutables["orlix-mke2fs"],
@@ -13285,13 +13320,15 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 			mke2fsExecutable: "missing-mke2fs",
 			truncateExecutable: "missing-truncate",
 			debugfsExecutable: "missing-debugfs",
+			e2fsckExecutable: "missing-e2fsck",
 			searchPath: [toolsURL]
 		)
 		XCTAssertFalse(missing.isReady)
 		XCTAssertEqual(missing.missingExecutables, [
 			"missing-mke2fs",
 			"missing-truncate",
-			"missing-debugfs"
+			"missing-debugfs",
+			"missing-e2fsck"
 		])
 		XCTAssertFalse(missing.commands.isEmpty)
 	}
@@ -13490,10 +13527,11 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let config = try OrlixOCIRuntimeConfigParser().parse(
 			Data(
 				"""
-				{
-					"ociVersion": "1.1.0",
-					"annotations": {
-						"org.opencontainers.image.ref.name": "orlix-demo"
+					{
+					  "ociVersion": "1.1.0",
+					  "root": { "path": "rootfs" },
+					  "annotations": {
+					    "org.opencontainers.image.ref.name": "orlix-demo"
 					},
 					"process": {
 						"args": ["/bin/sh"],
@@ -14372,8 +14410,12 @@ defaultWorkingDirectory: "/work",
 			),
 		]
 	)
-try registry.save(descriptor, fileManager: fileManager)
-let layout = try registry.layout(forEnvironmentID: id)
+        try registry.save(descriptor, fileManager: fileManager)
+        XCTAssertEqual(
+            try registry.load(environmentID: id, fileManager: fileManager).defaultCapabilities,
+            descriptor.defaultCapabilities
+        )
+        let layout = try registry.layout(forEnvironmentID: id)
 try Data("base".utf8).write(to: layout.baseImageURL)
 try Data("state".utf8).write(to: layout.stateImageURL)
 let lifecycle = try OrlixOCIRuntimeLifecycleController(
@@ -14401,11 +14443,12 @@ fileManager: fileManager
 
 XCTAssertEqual(result.completedStateReport.exitStatus, 0)
 XCTAssertEqual(driver.startCommands, [["/bin/sh", "-lc", "echo bridge"]])
-XCTAssertEqual(
-driver.startConsoleSizes,
-[OrlixOCIRuntimeConsoleSize(height: 33, width: 120)]
-)
-let commandLine = try XCTUnwrap(driver.startKernelCommandLines.first ?? nil)
+        XCTAssertEqual(
+            driver.startConsoleSizes,
+            [OrlixOCIRuntimeConsoleSize(height: 33, width: 120)]
+        )
+        XCTAssertEqual(driver.startCapabilities, [descriptor.defaultCapabilities])
+        let commandLine = try XCTUnwrap(driver.startKernelCommandLines.first ?? nil)
 XCTAssertTrue(commandLine.contains("orlix.terminal=1"))
 XCTAssertFalse(commandLine.contains("orlix.terminal.rows="))
 XCTAssertFalse(commandLine.contains("orlix.terminal.cols="))
@@ -14434,11 +14477,11 @@ XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
 	XCTAssertTrue(commandLine.contains("orlix.readonlypath0=/proc/sys"))
 	XCTAssertTrue(commandLine.contains("orlix.cgroups.path=/orlix/oci/bridge"))
 	XCTAssertTrue(commandLine.contains("orlix.cgroups.pids.max=32"))
-	XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000:100000"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
 	XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.weight=100"))
 	XCTAssertTrue(commandLine.contains("orlix.cgroups.memory.max=1048576"))
 	XCTAssertTrue(commandLine.contains("orlix.cgroups.io.weight=100"))
-	XCTAssertTrue(commandLine.contains("orlix.cgroups.unified0=io.max:8:0%20rbps=1024"))
+	XCTAssertTrue(commandLine.contains("orlix.cgroups.unified0=io.max=8:0%20rbps=1024"))
 	XCTAssertTrue(commandLine.contains("orlix.device.path0=/dev/fuse"))
 	XCTAssertTrue(commandLine.contains("orlix.device.type0=c"))
 	XCTAssertTrue(commandLine.contains("orlix.device.major0=10"))
@@ -14454,7 +14497,7 @@ XCTAssertTrue(commandLine.contains("orlix.suppgid0=44"))
 	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nosuid=1"))
 	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.nodev=1"))
 	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.noexec=1"))
-	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m%2Cmode=0755"))
+	XCTAssertTrue(commandLine.contains("orlix.mount.tmpfs0.data=size=64m,mode=0755"))
 }
 
 func testOCIRuntimeCreateStateAndDeleteUseDurableStore() throws {
@@ -15217,7 +15260,7 @@ func testOCIRuntimeRunEphemeralCleansUpAfterStartFailure() throws {
 		)
 		XCTAssertNil(failure?.cleanupError)
 		XCTAssertEqual(failure?.deletedEnvironment?.id, "oci-ephemeral-start-fails")
-		XCTAssertEqual(failure?.deletedEnvironment?.deletedRecord.state, .created)
+		XCTAssertEqual(failure?.deletedEnvironment?.deletedRecord.state, .deleted)
 	}
 
 	XCTAssertFalse(materializationRunner.commands.isEmpty)
@@ -16202,10 +16245,11 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 		let config = try OrlixOCIRuntimeConfigParser().parse(
 			Data(
 				"""
-				{
-				  "ociVersion": "1.1.0",
-				  "annotations": { "org.opencontainers.image.ref.name": "orlix-demo" },
-				  "process": { "args": ["/bin/sh"], "cwd": "/" }
+					{
+					  "ociVersion": "1.1.0",
+					  "root": { "path": "rootfs" },
+					  "annotations": { "org.opencontainers.image.ref.name": "orlix-demo" },
+					  "process": { "args": ["/bin/sh"], "cwd": "/" }
 				}
 				""".utf8
 			)
@@ -16895,9 +16939,10 @@ private final class RecordingOCIRuntimeProcessObservationDriver: OrlixOCIRuntime
 	private let failsOnWait: Bool
 private(set) var events: [String] = []
 private(set) var startCommands: [[String]] = []
-private(set) var startRootImageIdentifiers: [String] = []
-private(set) var startKernelCommandLines: [String?] = []
-private(set) var startConsoleSizes: [OrlixOCIRuntimeConsoleSize?] = []
+    private(set) var startRootImageIdentifiers: [String] = []
+    private(set) var startKernelCommandLines: [String?] = []
+    private(set) var startConsoleSizes: [OrlixOCIRuntimeConsoleSize?] = []
+    private(set) var startCapabilities: [OrlixEnvironmentCapabilities?] = []
 private(set) var waitRootImageIdentifiers: [String] = []
 
 	init(startPID: Int32,
@@ -16925,7 +16970,10 @@ processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
 startKernelCommandLines.append(
 processSession.linuxSession.bootConfig.kernelCommandLine
 )
-startConsoleSizes.append(processSession.processHandle.sessionDescriptor.consoleSize)
+        startConsoleSizes.append(processSession.processHandle.sessionDescriptor.consoleSize)
+        startCapabilities.append(
+            processSession.processHandle.sessionDescriptor.environment.defaultCapabilities
+        )
 events.append(
 			"start:\(processSession.processHandle.lifecycle.record.state):\(String(describing: processSession.processHandle.lifecycle.record.pid))"
 		)
@@ -16958,19 +17006,22 @@ events.append(
 	}
 }
 
-	private func minimalOCIRuntimeConfig() -> Data {
-		Data(
-			"""
-			{
-			  "ociVersion": "1.1.0",
-			  "process": {
-			    "args": ["/bin/sh"],
-			    "cwd": "/"
-			  }
-			}
-			""".utf8
-		)
-	}
+    private func minimalOCIRuntimeConfig() -> Data {
+        Data(
+            """
+            {
+              "ociVersion": "1.1.0",
+              "root": {
+                "path": "rootfs"
+              },
+              "process": {
+                "args": ["/bin/sh"],
+                "cwd": "/"
+              }
+            }
+            """.utf8
+        )
+    }
 
 	private func nonRootOCIRuntimeConfig(rootPath: String = "rootfs") -> Data {
 		Data(

@@ -6083,6 +6083,7 @@ fileManager: fileManager,
 			terminalRowsOverride: request.terminalRows,
 			terminalColumnsOverride: request.terminalColumns,
 			rootReadonlyOverride: request.rootReadonly,
+			rootPropagationOverride: request.rootPropagation,
 			annotationOverrides: request.annotations,
 			defaultRlimitOverrides: request.rlimits,
 			sysctlOverrides: request.sysctls,
@@ -7096,7 +7097,7 @@ private func orlixOCIRuntimeConfig(
 			cpu["period"] = cgroupCPUMax.periodMicros
 		}
 		if let cgroupCPUWeight = descriptor.cgroupCPUWeight {
-			cpu["shares"] = cgroupCPUWeight
+			cpu["shares"] = try ociCPUShares(forCgroupV2Weight: cgroupCPUWeight)
 		}
 		resources["cpu"] = cpu
 	}
@@ -7201,6 +7202,14 @@ private func orlixOCIRuntimeConfig(
 			options: [.sortedKeys]
 		)
 		return try OrlixOCIRuntimeConfigParser().parse(data)
+	}
+
+	private func ociCPUShares(forCgroupV2Weight weight: UInt64) throws -> UInt64 {
+		guard (1...10_000).contains(weight) else {
+			throw OrlixEnvironmentRootImageError.invalidCgroupCPUWeight(weight)
+		}
+		let numerator = (weight - 1) * 262_142
+		return 2 + (numerator + 9_998) / 9_999
 	}
 private struct OrlixOCIEnvironmentInstallerCommandRunner:
 	OrlixEnvironmentImageMaterializationCommandRunner
