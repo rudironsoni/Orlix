@@ -503,6 +503,7 @@ static bool tcti_decode_class_ends_block(enum tcti_decode_class decode_class)
 {
 	switch (decode_class) {
 	case TCTI_DECODE_SVC:
+	case TCTI_DECODE_BRK:
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER:
 	case TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE:
@@ -543,7 +544,7 @@ static int tcti_build_straight_line_block(struct mm_struct *mm,
 					  size_t *word_count,
 					  u32 *instruction_count,
 					  u32 *first_instruction,
-					  bool *first_is_svc)
+					  enum tcti_decode_class *first_exit_class)
 {
 	u32 count;
 	int ret;
@@ -555,8 +556,8 @@ static int tcti_build_straight_line_block(struct mm_struct *mm,
 	*instruction_count = 0;
 	if (first_instruction)
 		*first_instruction = 0;
-	if (first_is_svc)
-		*first_is_svc = false;
+	if (first_exit_class)
+		*first_exit_class = TCTI_DECODE_UNSUPPORTED;
 
 	for (count = 0; count < TCTI_MAX_BLOCK_INSTRUCTIONS; count++) {
 		struct tcti_decoded_instruction decoded;
@@ -571,9 +572,10 @@ static int tcti_build_straight_line_block(struct mm_struct *mm,
 			*first_instruction = instruction;
 
 		decoded = tcti_decode_aarch64(instruction);
-		if (decoded.decode_class == TCTI_DECODE_SVC) {
-			if (!count && first_is_svc)
-				*first_is_svc = true;
+		if (decoded.decode_class == TCTI_DECODE_SVC ||
+		    decoded.decode_class == TCTI_DECODE_BRK) {
+			if (!count && first_exit_class)
+				*first_exit_class = decoded.decode_class;
 			return count ? 0 : -EINTR;
 		}
 		if (decoded.decode_class == TCTI_DECODE_UNSUPPORTED)
@@ -673,7 +675,8 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		size_t word_count = 0;
 		u32 block_instruction_count = 0;
 		u32 instruction;
-		bool first_is_svc = false;
+		enum tcti_decode_class first_exit_class =
+			TCTI_DECODE_UNSUPPORTED;
 		bool global_cache_ref = false;
 		int ret;
 
@@ -774,10 +777,18 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 						     &word_count,
 						     &block_instruction_count,
 						     &instruction,
-						     &first_is_svc);
-		if (ret == -EINTR && first_is_svc) {
-			result.reason = TCTI_EXIT_SYSCALL;
-			result.status = 0;
+						     &first_exit_class);
+		if (ret == -EINTR) {
+			if (first_exit_class == TCTI_DECODE_SVC) {
+				result.reason = TCTI_EXIT_SYSCALL;
+				result.status = 0;
+			} else if (first_exit_class == TCTI_DECODE_BRK) {
+				result.reason = TCTI_EXIT_BREAKPOINT;
+				result.status = (instruction >> 5) & 0xffffU;
+			} else {
+				result.reason = TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
+				result.status = -EOPNOTSUPP;
+			}
 			result.pc = regs->pc;
 			result.instruction = instruction;
 			tcti_hot_blocks_release(hot_blocks);
@@ -1106,6 +1117,11 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 					regs, &applied_static_pie_base);
 			break;
 		}
+		case TCTI_EXIT_BREAKPOINT:
+			force_sig_fault(SIGTRAP, TRAP_BRKPT,
+					(void __user *)result.pc);
+			orlix_exit_to_user_mode_work(regs);
+			break;
 		case TCTI_EXIT_USER_FAULT:
 			if (orlix_tcti_handle_user_fault(regs, &result)) {
 				regs = task_pt_regs(current);

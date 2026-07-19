@@ -38,14 +38,15 @@ static void tcti_decode_rejects_unknown_instruction(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0xffffffffU, decoded.instruction);
 }
 
-static void tcti_decode_rejects_brk_one(struct kunit *test)
+static void tcti_decode_recognizes_brk_immediate(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
 
-	decoded = tcti_decode_aarch64(0xd4200020U);
+	decoded = tcti_decode_aarch64(0xd42acf00U); /* brk #0x5678 */
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, 0xd4200020U, decoded.instruction);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_BRK, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0x5678, decoded.imm16);
+	KUNIT_EXPECT_EQ(test, 0xd42acf00U, decoded.instruction);
 }
 
 static void tcti_decode_recognizes_hint_class(struct kunit *test)
@@ -5757,6 +5758,38 @@ static void tcti_resume_user_reports_syscall_and_register_state(struct kunit *te
 	KUNIT_EXPECT_EQ(test, 42ULL, regs.orig_x0);
 	KUNIT_EXPECT_EQ(test, __NR_getpid, regs.syscallno);
 	KUNIT_EXPECT_EQ(test, mapped + 2 * sizeof(u32), regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_resume_user_reports_breakpoint_and_register_state(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0xd2800540U, /* mov x0, #42 */
+		0xd42acf00U, /* brk #0x5678 */
+	};
+	struct tcti_result result;
+	struct pt_regs regs = { 0 };
+	unsigned long mapped;
+	int ret;
+
+	mapped = tcti_test_map_instructions(test, instructions,
+					    ARRAY_SIZE(instructions));
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	regs.pc = mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+
+	result = tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_BREAKPOINT, result.reason);
+	KUNIT_EXPECT_EQ(test, 0x5678L, result.status);
+	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, instructions[1], result.instruction);
+	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), regs.pc);
 
 	ret = vm_munmap(mapped, PAGE_SIZE);
 	KUNIT_EXPECT_EQ(test, 0, ret);
@@ -14966,7 +14999,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_with_index_alias),
 	KUNIT_CASE(tcti_decode_recognizes_svc_zero),
 	KUNIT_CASE(tcti_decode_rejects_unknown_instruction),
-	KUNIT_CASE(tcti_decode_rejects_brk_one),
+	KUNIT_CASE(tcti_decode_recognizes_brk_immediate),
 	KUNIT_CASE(tcti_decode_recognizes_hint_class),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_immediate_class),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_shifted_register_class),
@@ -15099,6 +15132,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_matches_switch_debug_init001_movz_prefix),
 	KUNIT_CASE(tcti_syscall_handoff_uses_guest_x8_and_advances_pc),
 	KUNIT_CASE(tcti_resume_user_reports_syscall_and_register_state),
+	KUNIT_CASE(tcti_resume_user_reports_breakpoint_and_register_state),
 	KUNIT_CASE(tcti_resume_user_reports_fetch_fault),
 	KUNIT_CASE(tcti_resume_user_reports_read_fault),
 	KUNIT_CASE(tcti_resume_user_reports_write_fault),

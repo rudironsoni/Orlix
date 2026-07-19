@@ -6787,6 +6787,13 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 		}
 
 		decoded = tcti_decode_aarch64(instruction);
+		if (decoded.decode_class == TCTI_DECODE_BRK) {
+			result.reason = TCTI_EXIT_BREAKPOINT;
+			result.status = decoded.imm16;
+			result.pc = regs->pc;
+			result.instruction = instruction;
+			return result;
+		}
 		if (decoded.decode_class == TCTI_DECODE_SVC) {
 			result.reason = TCTI_EXIT_SYSCALL;
 			result.status = 0;

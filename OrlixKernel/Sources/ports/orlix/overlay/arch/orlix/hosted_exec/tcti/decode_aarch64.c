@@ -6,6 +6,8 @@
 
 #define AARCH64_SVC_MASK 0xffe0001fU
 #define AARCH64_SVC_PATTERN 0xd4000001U
+#define AARCH64_BRK_MASK 0xffe0001fU
+#define AARCH64_BRK_PATTERN 0xd4200000U
 #define AARCH64_HINT_MASK 0xfffff01fU
 #define AARCH64_HINT_PATTERN 0xd503201fU
 #define AARCH64_PC_RELATIVE_ADDRESS_MASK 0x1f000000U
@@ -602,6 +604,13 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_SVC_MASK) == AARCH64_SVC_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_SVC;
+		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_BRK_MASK) == AARCH64_BRK_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_BRK;
+		decoded.imm16 = (instruction >> 5) & 0xffffU;
 		return decoded;
 	}
 

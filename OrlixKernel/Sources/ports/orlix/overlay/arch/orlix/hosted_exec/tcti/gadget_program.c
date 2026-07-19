@@ -44,7 +44,8 @@ int tcti_lower_decoded_instruction(
 	if (!decoded || !program || !word_count)
 		return -EINVAL;
 	if (decoded->decode_class == TCTI_DECODE_UNSUPPORTED ||
-	    decoded->decode_class == TCTI_DECODE_SVC)
+	    decoded->decode_class == TCTI_DECODE_SVC ||
+	    decoded->decode_class == TCTI_DECODE_BRK)
 		return -EOPNOTSUPP;
 
 	*word_count = 0;
@@ -68,7 +69,8 @@ int tcti_append_decoded_instruction(
 	if (!decoded || !program || !word_count)
 		return -EINVAL;
 	if (decoded->decode_class == TCTI_DECODE_UNSUPPORTED ||
-	    decoded->decode_class == TCTI_DECODE_SVC)
+	    decoded->decode_class == TCTI_DECODE_SVC ||
+	    decoded->decode_class == TCTI_DECODE_BRK)
 		return -EOPNOTSUPP;
 
 	start = *word_count ? *word_count - 1 : 0;
