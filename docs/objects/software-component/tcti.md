@@ -16,6 +16,8 @@ derived_from:
 
 The authoritative current guest profile is declared by `arch/orlix/include/asm/isa.h`: Armv8.0-A with floating point and AdvSIMD, exposed to Linux userspace as `HWCAP_FP | HWCAP_ASIMD` and no `HWCAP2` features. The declaration must match the userspace compiler target. An optional extension may be advertised only after its complete EL0 instruction families, legal encoding boundaries, architectural semantics, and deterministic exception behavior are covered by TCTI KUnit.
 
+`arch/orlix/hosted_exec/tcti/isa_coverage.h` owns the machine-readable instruction-family inventory. Its status is independent of decoder presence: a row remains partial until production-path boundary, state-transition, and exception evidence exists, and KUnit ratchets the remaining gap count to zero without treating planned test names as evidence.
+
 Hosted translated code transfer interpreter used for safe Linux ELF execution.
 
 TCTI owns complete ISA-on-ISA execution for every architecturally valid AArch64 EL0 instruction in the guest-exposed ISA profile. Its production path uses Orlix-owned fetch, decode, lowering, data-only gadget dispatch, register state, memory access, and structured exits under `arch/orlix`. Instruction subsets trimmed to a package workload, exact-opcode production special cases, host-native guest execution, and silent semantic approximations are not valid completion strategies.

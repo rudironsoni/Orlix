@@ -4,6 +4,7 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched/mm.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/hosted_exec.h>
 #include <asm/elf.h>
@@ -16,6 +17,7 @@
 #include "../decode_aarch64.h"
 #include "../engine.h"
 #include "../gadget_program.h"
+#include "../isa_coverage.h"
 #include "../switch_debug.h"
 #include "../tlb.h"
 
@@ -26,6 +28,42 @@ static void tcti_guest_profile_matches_elf_auxv(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, (unsigned long)(HWCAP_FP | HWCAP_ASIMD),
 			(unsigned long)ELF_HWCAP);
 	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP2);
+}
+
+static void tcti_isa_coverage_inventory_is_machine_auditable(struct kunit *test)
+{
+	size_t gaps = 0;
+	size_t i;
+	size_t j;
+
+	KUNIT_ASSERT_EQ(test, (size_t)TCTI_ISA_FAMILY_COUNT,
+			ARRAY_SIZE(tcti_isa_coverage));
+
+	for (i = 0; i < ARRAY_SIZE(tcti_isa_coverage); i++) {
+		const struct tcti_isa_family_coverage *family =
+			&tcti_isa_coverage[i];
+
+		KUNIT_EXPECT_EQ(test, (int)i, (int)family->id);
+		KUNIT_EXPECT_NOT_NULL(test, family->name);
+		KUNIT_EXPECT_NOT_NULL(test, family->decoder);
+		KUNIT_EXPECT_NOT_NULL(test, family->kunit);
+		KUNIT_EXPECT_NE(test, '\0', family->name[0]);
+		KUNIT_EXPECT_NE(test, '\0', family->decoder[0]);
+		if (family->status == TCTI_ISA_COVERAGE_COMPLETE) {
+			KUNIT_EXPECT_NE(test, '\0', family->kunit[0]);
+		} else {
+			gaps++;
+		}
+
+		for (j = i + 1; j < ARRAY_SIZE(tcti_isa_coverage); j++)
+			KUNIT_EXPECT_NE(test, 0, strcmp(family->name,
+						       tcti_isa_coverage[j].name));
+	}
+
+	kunit_info(test, "TCTI ISA coverage: %zu/%zu complete, %zu gaps",
+		   ARRAY_SIZE(tcti_isa_coverage) - gaps,
+		   ARRAY_SIZE(tcti_isa_coverage), gaps);
+	KUNIT_EXPECT_EQ(test, (size_t)ORLIX_TCTI_ISA_EXPECTED_GAPS, gaps);
 }
 
 static void tcti_decode_recognizes_svc_zero(struct kunit *test)
@@ -15926,6 +15964,7 @@ static void tcti_switch_preserves_compiler_rt_pair_frame(struct kunit *test)
 
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
+	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_fp_to_gpr_architectural_limits),
