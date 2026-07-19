@@ -1,0 +1,141 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Rudimar Ronsoni <rudironsoni@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 04:20:00 +0200
+Subject: [PATCH] options: return all nl_langinfo category items
+
+Locale categories already retain string, wide-string, byte-array, and integer
+items from the locale files. nl_langinfo_l() only exposed a small set of
+string items, making values such as _DATE_FMT unreachable even though they
+were loaded and present in the C locale defaults.
+
+Return the stored representation for every supported locale category. This
+matches the nl_langinfo interface, whose return value is interpreted according
+to the requested nl_item.
+---
+ options/internal/generic/locale.cpp       | 81 ++++++++++++++++++++----------
+ options/internal/include/mlibc/locale.hpp | 19 +++++++
+ 2 files changed, 73 insertions(+), 27 deletions(-)
+
+diff --git a/options/internal/include/mlibc/locale.hpp b/options/internal/include/mlibc/locale.hpp
+--- a/options/internal/include/mlibc/locale.hpp
++++ b/options/internal/include/mlibc/locale.hpp
+@@ -52,6 +52,25 @@ struct category_item {
+ 		return std::get<frg::basic_string_view<wchar_t>>(value);
+ 	}
+ 
++	const char *data() const {
++		if (std::holds_alternative<std::monostate>(value))
++			return "";
++		if (auto integer = std::get_if<uint32_t>(&value))
++			return reinterpret_cast<const char *>(integer);
++		if (auto bytes = std::get_if<frg::span<const uint8_t>>(&value))
++			return bytes->data()
++				? reinterpret_cast<const char *>(bytes->data())
++				: "";
++		if (auto string = std::get_if<frg::string_view>(&value))
++			return string->data() ? string->data() : "";
++		if (auto wide = std::get_if<frg::basic_string_view<wchar_t>>(&value))
++			return wide->data()
++				? reinterpret_cast<const char *>(wide->data())
++				: "";
++
++		__builtin_unreachable();
++	}
++
+ 	uint32_t asUint32() const {
+ 		return std::get<uint32_t>(value);
+ 	}
+diff --git a/options/internal/generic/locale.cpp b/options/internal/generic/locale.cpp
+--- a/options/internal/generic/locale.cpp
++++ b/options/internal/generic/locale.cpp
+@@ -831,34 +831,61 @@ char *nl_langinfo_l(nl_item item, localeinfo * loc) {
+ 	if (item_num == 0xFFFF && category != LC_ALL)
+ 		return l->getCategoryLocaleName(category).data();
+ 
+-	switch(item) {
+-		case CODESET:
+-			return const_cast<char *>(l->ctype.get(CODESET).asString().data());
+-
+-		case ABDAY_1 ... ALT_DIGITS:
+-			return const_cast<char *>(l->time.get(item).asString().data());
+-
+-		case DECIMAL_POINT:
+-			return const_cast<char *>(l->numeric.get(DECIMAL_POINT).asString().data());
+-		case THOUSEP:
+-			return const_cast<char *>(l->numeric.get(THOUSANDS_SEP).asString().data());
+-		case GROUPING:
+-			return const_cast<char *>(reinterpret_cast<const char *>(l->numeric.get(GROUPING).asByteSpan().data()));
+-
+-		case YESEXPR ... NOSTR:
+-			return const_cast<char *>(l->messages.get(item).asString().data());
+-
+-		case CRNCYSTR:
+-			return const_cast<char *>(l->monetary.get(CRNCYSTR).asString().data());
+-		case CURRENCY_SYMBOL:
+-			return const_cast<char *>(l->monetary.get(CURRENCY_SYMBOL).asString().data());
+-
+-		default: {
+-			mlibc::infoLogger() << "mlibc: nl_langinfo item " << frg::hex_fmt{item & 0xFFFF}
+-				<< " of category " << lcNames[category] << " is missing" << frg::endlog;
+-			return const_cast<char *>("");
+-		}
++	const category_item *value = nullptr;
++	auto get_value = [item, item_num](const auto &category_value) {
++		if (item_num >= category_value.members.size())
++			return static_cast<const category_item *>(nullptr);
++		return &category_value.get(item);
++	};
++	switch(category) {
++		case LC_CTYPE:
++			value = get_value(l->ctype);
++			break;
++		case LC_NUMERIC:
++			value = get_value(l->numeric);
++			break;
++		case LC_TIME:
++			value = get_value(l->time);
++			break;
++		case LC_COLLATE:
++			value = get_value(l->collate);
++			break;
++		case LC_MONETARY:
++			value = get_value(l->monetary);
++			break;
++		case LC_MESSAGES:
++			value = get_value(l->messages);
++			break;
++		case LC_PAPER:
++			value = get_value(l->paper);
++			break;
++		case LC_NAME:
++			value = get_value(l->name);
++			break;
++		case LC_ADDRESS:
++			value = get_value(l->address);
++			break;
++		case LC_TELEPHONE:
++			value = get_value(l->telephone);
++			break;
++		case LC_MEASUREMENT:
++			value = get_value(l->measurement);
++			break;
++		case LC_IDENTIFICATION:
++			value = get_value(l->identification);
++			break;
++		default:
++			mlibc::infoLogger() << "mlibc: nl_langinfo category " << category
++				<< " is invalid" << frg::endlog;
++			return const_cast<char *>("");
+ 	}
++	if (!value) {
++		mlibc::infoLogger() << "mlibc: nl_langinfo item " << frg::hex_fmt{item_num}
++			<< " of category " << category << " is invalid" << frg::endlog;
++		return const_cast<char *>("");
++	}
++
++	return const_cast<char *>(value->data());
+ }
+ 
+ } // namespace mlibc
+-- 
+2.50.1

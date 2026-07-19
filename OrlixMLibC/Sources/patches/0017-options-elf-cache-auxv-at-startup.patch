@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Rudimar Ronsoni <rudironsoni@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 04:52:00 +0200
+Subject: [PATCH] options: cache auxv at process startup
+
+peekauxval() rediscovered the auxiliary vector from the original entry stack
+on every call. Applications may modify their argv array after startup, so a
+later lookup could no longer find the argv terminator and abort.
+
+Capture the auxiliary-vector pointer while parsing the pristine entry stack
+and use that stable pointer for all later lookups.
+---
+ options/elf/generic/startup.cpp            | 4 ++++
+ options/elf/include/mlibc/elf/startup.h    | 3 +++
+ options/lsb/generic/auxv.cpp               | 14 ++------------
+ 3 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/options/elf/include/mlibc/elf/startup.h b/options/elf/include/mlibc/elf/startup.h
+--- a/options/elf/include/mlibc/elf/startup.h
++++ b/options/elf/include/mlibc/elf/startup.h
+@@ -1,12 +1,15 @@
+ #ifndef _MLIBC_ELF_STARTUP_H
+ #define _MLIBC_ELF_STARTUP_H
+ 
++#include <stdint.h>
++
+ namespace mlibc {
+ 
+ struct exec_stack_data {
+ 	int argc;
+ 	char **argv;
+ 	char **envp;
++	uintptr_t *auxv;
+ };
+ 
+ extern exec_stack_data entry_stack;
+diff --git a/options/elf/generic/startup.cpp b/options/elf/generic/startup.cpp
+--- a/options/elf/generic/startup.cpp
++++ b/options/elf/generic/startup.cpp
+@@ -45,6 +45,10 @@ void parse_exec_stack(void *opaque_sp, exec_stack_data *data) {
+ 	__ensure(!*sp); // Skip the terminating null element.
+ 	sp++;
+ 	data->envp = reinterpret_cast<char **>(sp);
++	while(*sp) // Skip the environment.
++		sp++;
++	sp++;
++	data->auxv = sp;
+ }
+ 
+ // TODO: This does not have to be here; we could also move it to options/internal.
+diff --git a/options/lsb/generic/auxv.cpp b/options/lsb/generic/auxv.cpp
+--- a/options/lsb/generic/auxv.cpp
++++ b/options/lsb/generic/auxv.cpp
+@@ -3,21 +3,11 @@
+ #include <stdint.h>
+ #include <sys/auxv.h>
+ 
+-#include <bits/ensure.h>
+-
+-extern "C" uintptr_t *__dlapi_entrystack();
++#include <mlibc/elf/startup.h>
+ 
+ int peekauxval(unsigned long type, unsigned long *out) {
+-	// Find the auxiliary vector by skipping args and environment.
+-	auto aux = __dlapi_entrystack();
+-	aux += *aux + 1; // Skip argc and all arguments
+-	__ensure(!*aux);
+-	aux++;
+-	while(*aux) // Now, we skip the environment.
+-		aux++;
+-	aux++;
+-
+ 	// Parse the auxiliary vector.
++	auto aux = mlibc::entry_stack.auxv;
+ 	while(true) {
+ 		auto value = aux + 1;
+ 		if(*aux == AT_NULL) {
+-- 
+2.50.1

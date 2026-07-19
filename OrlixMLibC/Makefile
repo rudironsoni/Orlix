@@ -235,6 +235,7 @@ MLIBC_TEST_LINUX_CASES := \
 	linux/utmpx \
 	linux/xattr
 MLIBC_TEST_ORLIX_CASES := \
+	orlix/auxv \
 	orlix/chroot \
 	orlix/float_roundtrip \
 	orlix/getopt_diagnostics \

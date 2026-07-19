@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <langinfo.h>
 #include <locale.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -12,6 +13,7 @@
 #include <sys/stat.h>
 #include <uchar.h>
 #include <unistd.h>
+#include <wchar.h>
 
 struct locale_file {
 	const char *category;
@@ -185,6 +187,57 @@ static int check_category(const struct locale_category *entry) {
 	return 0;
 }
 
+static int check_c_locale_langinfo(void) {
+	const char *raw;
+	const wchar_t *wide_date_fmt;
+	const unsigned char *week_ndays;
+	uint32_t first_day;
+	int failures = 0;
+
+	if (!setlocale(LC_ALL, "C")) {
+		printf("# locale_probe reset C failed before nl_langinfo\n");
+		return 1;
+	}
+
+	if (strcmp(nl_langinfo(_DATE_FMT), "%a %b %e %H:%M:%S %Z %Y")) {
+		printf("# locale_probe _DATE_FMT mismatch: '%s'\n",
+		       nl_langinfo(_DATE_FMT));
+		failures++;
+	}
+	if (strcmp(nl_langinfo(_NL_TIME_CODESET), "ANSI_X3.4-1968")) {
+		printf("# locale_probe _NL_TIME_CODESET mismatch: '%s'\n",
+		       nl_langinfo(_NL_TIME_CODESET));
+		failures++;
+	}
+
+	raw = nl_langinfo(_NL_W_DATE_FMT);
+	wide_date_fmt = (const wchar_t *)raw;
+	if (!raw[0] ||
+	    wcscmp(wide_date_fmt, L"%a %b %e %H:%M:%S %Z %Y")) {
+		printf("# locale_probe _NL_W_DATE_FMT mismatch\n");
+		failures++;
+	}
+
+	week_ndays = (const unsigned char *)nl_langinfo(_NL_TIME_WEEK_NDAYS);
+	if (week_ndays[0] != 7) {
+		printf("# locale_probe _NL_TIME_WEEK_NDAYS=%u expected=7\n",
+		       week_ndays[0]);
+		failures++;
+	}
+
+	raw = nl_langinfo(_NL_TIME_WEEK_1STDAY);
+	first_day = 0;
+	if (raw[0])
+		memcpy(&first_day, raw, sizeof(first_day));
+	if (!raw[0] || first_day != 19971130U) {
+		printf("# locale_probe _NL_TIME_WEEK_1STDAY=%u expected=19971130\n",
+		       first_day);
+		failures++;
+	}
+
+	return failures;
+}
+
 int main(void) {
 	int failures = 0;
 
@@ -193,6 +246,7 @@ int main(void) {
 
 	for (size_t i = 0; i < sizeof(locale_categories) / sizeof(locale_categories[0]); i++)
 		failures += check_category(&locale_categories[i]);
+	failures += check_c_locale_langinfo();
 
 	if (!setlocale(LC_ALL, "C")) {
 		printf("# locale_probe reset C failed before LC_ALL\n");
