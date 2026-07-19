@@ -776,18 +776,18 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             )
         }
 
-        let manifest = contents.split(separator: "\n").map(String.init)
-        guard !manifest.isEmpty,
-              manifest.allSatisfy({ line in
-                  let fields = line.split(separator: " ")
-                  return fields.count == 2 && Int(fields[0]) != nil
-              })
+        let entries = contents.split(separator: "\n")
+        guard !entries.isEmpty,
+              entries.allSatisfy({ $0.split(separator: " ").count == 2 })
         else {
             throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
                 "malformed packaged Coreutils test manifest"
             )
         }
-        return manifest
+        return entries.enumerated().map { index, line in
+            let test = line.split(separator: " ")[1]
+            return "\(index + 1) \(test)"
+        }
     }
 
     private static func combinedUpstreamOutput(

@@ -12,7 +12,7 @@ test coreutils-test: $(ORLIXOS_COREUTILS_TEST_INITRAMFS)
 	expected_tests="$$run_log.expected-tests"; \
 	observed_tests="$$run_log.observed-tests"; \
 	trap 'rm -f "$$expected_tests" "$$observed_tests"' EXIT; \
-	cp "$(ORLIXOS_COREUTILS_TEST_LIST)" "$$expected_tests"; \
+	awk '{ print NR " " $$2 }' "$(ORLIXOS_COREUTILS_TEST_LIST)" > "$$expected_tests"; \
 	LC_ALL=C tr -d '\r' < "$$runtime_log" | awk '/^ORLIX-COREUTILS-TEST-RUNNING [1-9][0-9]* / { print $$2 " " $$3 }' > "$$observed_tests"; \
 	cmp -s "$$expected_tests" "$$observed_tests" || { echo "Coreutils execution does not match the generated upstream manifest: $$runtime_log" >&2; diff -u "$$expected_tests" "$$observed_tests" >&2 || true; exit 1; }; \
 	LC_ALL=C tr -d '\r' < "$$runtime_log" | grep -E -q 'ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=[1-9][0-9]*$$' || { echo "Coreutils upstream tests did not complete with zero failures and zero skips: $$runtime_log" >&2; exit 1; }; \
