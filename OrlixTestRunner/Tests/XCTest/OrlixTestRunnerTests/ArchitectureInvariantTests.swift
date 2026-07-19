@@ -279,6 +279,26 @@ final class ArchitectureInvariantTests: XCTestCase {
         }
     }
 
+    func testKernelConformanceXCTestDoesNotDuplicateNativeTAPAssertions() throws {
+        let relativePath = "OrlixTestRunner/Tests/XCTest/OrlixKernelConformanceTests/OrlixKernelConformanceTests.swift"
+        let source = try String(contentsOf: root.appendingPathComponent(relativePath))
+        let supportPath = "OrlixTestRunner/Tests/XCTest/Support/OrlixUpstreamXCTest.swift"
+        let support = try String(contentsOf: root.appendingPathComponent(supportPath))
+
+        XCTAssertFalse(
+            source.contains("output.contains"),
+            "\(relativePath) must launch native KUnit and kselftest proof without parsing Linux assertion text"
+        )
+        XCTAssertFalse(
+            source.contains("let output = try OrlixUpstreamXCTest.run"),
+            "\(relativePath) must leave native TAP assertions in their owning kernel suites"
+        )
+        XCTAssertFalse(
+            support.contains("throws -> String"),
+            "\(supportPath) must not expose native suite output for XCTest assertion parsing"
+        )
+    }
+
     private func sourceFiles(under relativePaths: [String]) throws -> [URL] {
         let manager = FileManager.default
         var urls: [URL] = []

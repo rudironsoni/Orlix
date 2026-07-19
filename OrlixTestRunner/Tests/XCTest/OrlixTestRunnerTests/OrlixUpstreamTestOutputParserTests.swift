@@ -38,6 +38,37 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.validate(output, for: .kernel))
     }
 
+    func testAcceptsSelectedKernelTestOnlyWhenItsPassingTAPResultIsPresent() throws {
+        let output = """
+        ORLIX-KSELFTEST-INIT
+        TAP version 13
+        1..1
+        ok 1 - time_surface_probe
+        ORLIX-KSELFTEST-END
+        """
+
+        XCTAssertNoThrow(try parser.validate(output, for: .kernelTimeSurface))
+    }
+
+    func testRejectsSelectedKernelTestWhenAnotherProbePassed() {
+        let output = """
+        ORLIX-KSELFTEST-INIT
+        TAP version 13
+        1..1
+        ok 1 - mount_namespace_probe
+        ORLIX-KSELFTEST-END
+        """
+
+        XCTAssertThrowsError(try parser.validate(output, for: .kernelTimeSurface)) { error in
+            XCTAssertEqual(
+                error as? OrlixUpstreamTestRunError,
+                .malformedUpstreamOutput(
+                    "missing passing TAP result for selected kernel test time_surface_probe"
+                )
+            )
+        }
+    }
+
     func testAcceptsMLibCCompletionWithPassingTAP() throws {
         let output = """
         ORLIX-MLIBC-TEST-INIT

@@ -14,6 +14,17 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     let kernelCommandLineSuffix: String?
     let hostDirectoryFixture: Bool
 
+    var selectedKernelTest: String? {
+        guard suite == .kernel, let kernelCommandLineSuffix else {
+            return nil
+        }
+
+        return kernelCommandLineSuffix
+            .split(whereSeparator: \.isWhitespace)
+            .first { $0.hasPrefix("orlix.kselftest=") }
+            .map { String($0.dropFirst("orlix.kselftest=".count)) }
+    }
+
     init(
         suite: OrlixUpstreamTestSuite,
         completionMarker: String,
@@ -463,7 +474,24 @@ final class OrlixUpstreamTestOutputParser {
         }
 
         switch spec.suite {
-        case .kernel, .mlibc:
+        case .kernel:
+            guard output.contains("TAP version 13") else {
+                throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                    "missing TAP version 13"
+                )
+            }
+            guard Self.containsTAPPlan(in: output) else {
+                throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                    "missing TAP plan"
+                )
+            }
+            if let selectedKernelTest = spec.selectedKernelTest,
+               !Self.containsPassingTAPResult(named: selectedKernelTest, in: output) {
+                throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                    "missing passing TAP result for selected kernel test \(selectedKernelTest)"
+                )
+            }
+        case .mlibc:
             guard output.contains("TAP version 13") else {
                 throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
                     "missing TAP version 13"
@@ -608,6 +636,24 @@ final class OrlixUpstreamTestOutputParser {
             .contains { line in
                 line.hasPrefix("1..") &&
                     line.dropFirst(3).allSatisfy(\.isNumber)
+            }
+    }
+
+    private static func containsPassingTAPResult(
+        named expectedName: String,
+        in output: String
+    ) -> Bool {
+        output
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .contains { line in
+                let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+                guard fields.count >= 3,
+                      fields[0] == "ok",
+                      Int(fields[1]) != nil else {
+                    return false
+                }
+                return fields.last == Substring(expectedName)
             }
     }
 
