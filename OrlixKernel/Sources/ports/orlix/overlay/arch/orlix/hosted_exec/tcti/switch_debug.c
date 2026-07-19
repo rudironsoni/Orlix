@@ -5729,6 +5729,9 @@ static int tcti_execute_simd_vector_reduction(
 	}
 
 	if ((decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV ||
+	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMINV ||
+	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_SMAXV ||
+	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_SMINV ||
 	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_ADDV) &&
 	    (decoded->access_size == sizeof(u8) ||
 	     decoded->access_size == sizeof(u16) ||
@@ -5751,6 +5754,22 @@ static int tcti_execute_simd_vector_reduction(
 		switch (decoded->simd_reduction_op) {
 		case TCTI_SIMD_REDUCTION_UMAXV:
 			if (lane == 0 || value > result)
+				result = value;
+			break;
+		case TCTI_SIMD_REDUCTION_UMINV:
+			if (lane == 0 || value < result)
+				result = value;
+			break;
+		case TCTI_SIMD_REDUCTION_SMAXV:
+			if (lane == 0 ||
+			    sign_extend32(value, lane_bits - 1) >
+			    sign_extend32(result, lane_bits - 1))
+				result = value;
+			break;
+		case TCTI_SIMD_REDUCTION_SMINV:
+			if (lane == 0 ||
+			    sign_extend32(value, lane_bits - 1) <
+			    sign_extend32(result, lane_bits - 1))
 				result = value;
 			break;
 		case TCTI_SIMD_REDUCTION_ADDV:

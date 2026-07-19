@@ -226,8 +226,8 @@
 #define AARCH64_SIMD_CMEQ_4S_PATTERN 0x6ea08c00U
 #define AARCH64_SIMD_CMHI_2D_MASK 0xff20fc00U
 #define AARCH64_SIMD_CMHI_2D_PATTERN 0x6e203400U
-#define AARCH64_SIMD_UMAXV_MASK 0xbf3ffc00U
-#define AARCH64_SIMD_UMAXV_PATTERN 0x2e30a800U
+#define AARCH64_SIMD_MIN_MAXV_MASK 0x9f3efc00U
+#define AARCH64_SIMD_MIN_MAXV_PATTERN 0x0e30a800U
 #define AARCH64_SIMD_ADDV_MASK 0xbf3ffc20U
 #define AARCH64_SIMD_ADDV_PATTERN 0x0e31b800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
@@ -2784,10 +2784,12 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_UMAXV_MASK) ==
-	    AARCH64_SIMD_UMAXV_PATTERN) {
+	if ((instruction & AARCH64_SIMD_MIN_MAXV_MASK) ==
+	    AARCH64_SIMD_MIN_MAXV_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
+		bool unsigned_compare = instruction & BIT(29);
+		bool minimum = instruction & BIT(16);
 
 		if (size == 3 || (size == 2 && !q))
 			return decoded;
@@ -2798,7 +2800,14 @@ not_simd_compare_register:
 		decoded.result_size = decoded.access_size;
 		decoded.simd_q = q;
 		decoded.simd_fp = true;
-		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_UMAXV;
+		if (unsigned_compare)
+			decoded.simd_reduction_op = minimum ?
+				TCTI_SIMD_REDUCTION_UMINV :
+				TCTI_SIMD_REDUCTION_UMAXV;
+		else
+			decoded.simd_reduction_op = minimum ?
+				TCTI_SIMD_REDUCTION_SMINV :
+				TCTI_SIMD_REDUCTION_SMAXV;
 		return decoded;
 	}
 
