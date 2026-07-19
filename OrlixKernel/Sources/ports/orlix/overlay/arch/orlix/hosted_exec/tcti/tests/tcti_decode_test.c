@@ -5816,6 +5816,47 @@ static void tcti_resume_user_reports_fetch_fault(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0U, result.instruction);
 }
 
+static void tcti_resume_user_observes_mprotect_fetch_transition(struct kunit *test)
+{
+	static const u32 instruction = 0xd4000001U; /* svc #0 */
+	struct tcti_result result;
+	struct pt_regs regs = { 0 };
+	unsigned long mapped;
+	int ret;
+
+	mapped = tcti_test_map_instructions(test, &instruction, 1);
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	regs.pc = mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	result = tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, -EACCES, result.status);
+	KUNIT_EXPECT_EQ(test, mapped, result.fault_address);
+	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, result.pc);
+	KUNIT_EXPECT_EQ(test, 0U, result.instruction);
+
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.pc = mapped;
+	regs.syscallno = NO_SYSCALL;
+	result = tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, mapped, result.pc);
+	KUNIT_EXPECT_EQ(test, instruction, result.instruction);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_resume_user_reports_read_fault(struct kunit *test)
 {
 	static const u32 instruction = 0xf9400020U; /* ldr x0, [x1] */
@@ -15370,6 +15411,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_resume_user_reports_syscall_and_register_state),
 	KUNIT_CASE(tcti_resume_user_reports_breakpoint_and_register_state),
 	KUNIT_CASE(tcti_resume_user_reports_fetch_fault),
+	KUNIT_CASE(tcti_resume_user_observes_mprotect_fetch_transition),
 	KUNIT_CASE(tcti_resume_user_reports_read_fault),
 	KUNIT_CASE(tcti_resume_user_reports_write_fault),
 	KUNIT_CASE(tcti_resume_user_observes_mprotect_write_transition),
