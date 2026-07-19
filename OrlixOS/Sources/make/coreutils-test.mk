@@ -9,11 +9,13 @@ test coreutils-test: $(ORLIXOS_COREUTILS_TEST_INITRAMFS)
 		grep -F -q 'ORLIX-COREUTILS-TEST-END' "$$runtime_log" && break; \
 		sleep 1; \
 	done; \
-	if [ -n "$(ORLIXOS_COREUTILS_TESTS)" ]; then \
-		LC_ALL=C tr -d '\r' < "$$runtime_log" | grep -E -q 'ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=[1-9][0-9]*$$' || { echo "Coreutils upstream test subset did not complete successfully: $$runtime_log" >&2; exit 1; }; \
-	else \
-		LC_ALL=C tr -d '\r' < "$$runtime_log" | grep -F -q 'ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=733' || { echo "Coreutils full upstream test suite did not complete successfully with failures=0 skips=0 total=733: $$runtime_log" >&2; exit 1; }; \
-	fi; \
+	expected_tests="$$run_log.expected-tests"; \
+	observed_tests="$$run_log.observed-tests"; \
+	trap 'rm -f "$$expected_tests" "$$observed_tests"' EXIT; \
+	cp "$(ORLIXOS_COREUTILS_TEST_LIST)" "$$expected_tests"; \
+	LC_ALL=C tr -d '\r' < "$$runtime_log" | awk '/^ORLIX-COREUTILS-TEST-RUNNING [1-9][0-9]* / { print $$2 " " $$3 }' > "$$observed_tests"; \
+	cmp -s "$$expected_tests" "$$observed_tests" || { echo "Coreutils execution does not match the generated upstream manifest: $$runtime_log" >&2; diff -u "$$expected_tests" "$$observed_tests" >&2 || true; exit 1; }; \
+	LC_ALL=C tr -d '\r' < "$$runtime_log" | grep -E -q 'ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=[1-9][0-9]*$$' || { echo "Coreutils upstream tests did not complete with zero failures and zero skips: $$runtime_log" >&2; exit 1; }; \
 	echo "verified upstream Coreutils tests in simulator log: $$runtime_log"
 $(ORLIXOS_COREUTILS_TEST_INIT_BINARY): $(ORLIXOS_COREUTILS_TEST_INIT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/coreutils-test.mk
 	@set -euo pipefail; \
@@ -183,6 +185,7 @@ $(ORLIXOS_COREUTILS_TEST_INITRAMFS): $(ORLIXOS_COREUTILS_TEST_INIT_BINARY) $(ORL
 	"$$gen_init_cpio" "$$cpio_list" > "$$output/rootfs/initramfs.cpio"; \
 	gzip -n -f "$$output/rootfs/initramfs.cpio"; \
 	[ -s "$$output/rootfs/initramfs.cpio.gz" ] || { echo "missing packaged Coreutils test initramfs: $$output/rootfs/initramfs.cpio.gz" >&2; exit 1; }; \
+	cp "$(ORLIXOS_COREUTILS_TEST_LIST)" "$$output/coreutils-test-manifest.txt"; \
 	{ \
 		printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'; \
 		printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'; \

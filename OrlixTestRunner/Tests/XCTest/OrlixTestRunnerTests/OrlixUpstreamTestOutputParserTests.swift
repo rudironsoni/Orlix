@@ -33,13 +33,47 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.validate(output, for: .mlibc))
     }
 
-    func testAcceptsCoreutilsFullSuiteOnlyWithZeroFailuresZeroSkipsAndExpectedTotal() throws {
+    func testAcceptsCoreutilsSuiteOnlyWhenExecutionMatchesPackagedManifest() throws {
         let output = """
         ORLIX-COREUTILS-TEST-INIT
-        ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=733
+        ORLIX-COREUTILS-TEST-RUNNING 1 tests/example.sh
+        ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=1
         """
 
-        XCTAssertNoThrow(try parser.validate(output, for: .coreutils))
+        XCTAssertNoThrow(
+            try parser.validate(
+                output,
+                for: .coreutils,
+                expectedCoreutilsManifest: ["1 tests/example.sh"]
+            )
+        )
+    }
+
+    func testRejectsCoreutilsSequenceThatDoesNotMatchPackagedManifest() {
+        let output = """
+        ORLIX-COREUTILS-TEST-INIT
+        ORLIX-COREUTILS-TEST-RUNNING 1 tests/second.sh
+        ORLIX-COREUTILS-TEST-RUNNING 2 tests/first.sh
+        ORLIX-COREUTILS-TEST-END failures=0 skips=0 total=2
+        """
+
+        XCTAssertThrowsError(
+            try parser.validate(
+                output,
+                for: .coreutils,
+                expectedCoreutilsManifest: [
+                    "1 tests/first.sh",
+                    "2 tests/second.sh",
+                ]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? OrlixUpstreamTestRunError,
+                .malformedUpstreamOutput(
+                    "Coreutils execution does not match the packaged upstream manifest"
+                )
+            )
+        }
     }
 
     func testRejectsUpstreamFailureMarkerBeforeCompletion() {
@@ -145,32 +179,39 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
 
     func testRejectsMalformedCoreutilsCompletion() {
         let output = """
-        ORLIX-COREUTILS-TEST-END failures=0 total=733
+        ORLIX-COREUTILS-TEST-END failures=0 total=1
         """
 
         XCTAssertThrowsError(try parser.validate(output, for: .coreutils)) { error in
             XCTAssertEqual(
                 error as? OrlixUpstreamTestRunError,
                 .malformedCoreutilsCompletion(
-                    "ORLIX-COREUTILS-TEST-END failures=0 total=733"
+                    "ORLIX-COREUTILS-TEST-END failures=0 total=1"
                 )
             )
         }
     }
 
-    func testRejectsCoreutilsFailuresSkipsOrWrongTotal() {
+    func testRejectsCoreutilsFailuresOrSkips() {
         let output = """
-        ORLIX-COREUTILS-TEST-END failures=0 skips=1 total=733
+        ORLIX-COREUTILS-TEST-RUNNING 1 tests/example.sh
+        ORLIX-COREUTILS-TEST-END failures=0 skips=1 total=1
         """
 
-        XCTAssertThrowsError(try parser.validate(output, for: .coreutils)) { error in
+        XCTAssertThrowsError(
+            try parser.validate(
+                output,
+                for: .coreutils,
+                expectedCoreutilsManifest: ["1 tests/example.sh"]
+            )
+        ) { error in
             XCTAssertEqual(
                 error as? OrlixUpstreamTestRunError,
                 .coreutilsSummaryFailed(
                     failures: 0,
                     skips: 1,
-                    total: 733,
-                    expectedTotal: 733
+                    total: 1,
+                    expectedTotal: 1
                 )
             )
         }

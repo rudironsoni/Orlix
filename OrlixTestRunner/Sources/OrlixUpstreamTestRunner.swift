@@ -10,7 +10,6 @@ enum OrlixUpstreamTestSuite: String, Sendable {
 struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     let suite: OrlixUpstreamTestSuite
     let completionMarker: String
-    let expectedCoreutilsTotal: Int?
     let timeout: TimeInterval
     let kernelCommandLineSuffix: String?
     let hostDirectoryFixture: Bool
@@ -18,14 +17,12 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     init(
         suite: OrlixUpstreamTestSuite,
         completionMarker: String,
-        expectedCoreutilsTotal: Int?,
         timeout: TimeInterval,
         kernelCommandLineSuffix: String?,
         hostDirectoryFixture: Bool = false
     ) {
         self.suite = suite
         self.completionMarker = completionMarker
-        self.expectedCoreutilsTotal = expectedCoreutilsTotal
         self.timeout = timeout
         self.kernelCommandLineSuffix = kernelCommandLineSuffix
         self.hostDirectoryFixture = hostDirectoryFixture
@@ -76,7 +73,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernel = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: nil,
         hostDirectoryFixture: true
@@ -85,7 +81,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=mount_namespace_probe"
     )
@@ -93,7 +88,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=namespace_probe"
     )
@@ -101,7 +95,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelEnvironmentEntry = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=environment_entry_probe"
     )
@@ -109,7 +102,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelInitExec = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=init_exec_probe"
     )
@@ -117,7 +109,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelFDExec = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=fd_exec_probe"
     )
@@ -125,7 +116,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelFDAlias = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=fd_alias_probe"
     )
@@ -133,7 +123,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPTYTerminal = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=pty_terminal_probe"
     )
@@ -141,7 +130,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelSignalWait = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=signal_wait_probe"
     )
@@ -149,7 +137,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPipePoll = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=pipe_poll_probe"
     )
@@ -157,7 +144,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPipeSelect = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=pipe_select_probe"
     )
@@ -165,7 +151,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPipeEpoll = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=pipe_epoll_probe"
     )
@@ -173,7 +158,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPseudoFS = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=pseudo_fs_probe"
     )
@@ -181,7 +165,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelCgroupV2 = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=cgroup_v2_probe"
     )
@@ -189,7 +172,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelCgroupIO = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=cgroup_io_probe"
     )
@@ -197,7 +179,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelCgroupPids = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=cgroup_pids_probe"
     )
@@ -205,7 +186,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelCgroupNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=cgroup_namespace_probe"
     )
@@ -213,7 +193,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelUserNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=user_namespace_probe"
     )
@@ -221,7 +200,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelOverlayFS = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=overlayfs_probe"
     )
@@ -229,7 +207,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelTimeNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=time_namespace_probe"
     )
@@ -237,7 +214,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelIPCNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=ipc_namespace_probe"
     )
@@ -245,7 +221,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelPathErrno = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=path_errno_probe"
     )
@@ -253,7 +228,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelCloneThread = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=clone_thread_probe"
     )
@@ -261,7 +235,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelBootProfile = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=boot_profile_contract"
     )
@@ -269,7 +242,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelRandomDevice = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=random_device_probe"
     )
@@ -277,7 +249,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelVirtioBlockEnvironment = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=virtio_blk_environment_probe"
     )
@@ -285,7 +256,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelVirtioMMIOContract = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=virtio_mmio_probe_contract"
     )
@@ -293,7 +263,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelVirtioNetDevice = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=virtio_net_device_probe"
     )
@@ -301,7 +270,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelVirtioFSMount = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=virtio_fs_mount_probe",
         hostDirectoryFixture: true
@@ -310,7 +278,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelNetworkNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=network_namespace_probe"
     )
@@ -318,7 +285,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelRlimit = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=rlimit_probe"
     )
@@ -326,7 +292,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelProcessCapability = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=process_capability_probe"
     )
@@ -334,7 +299,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelProcessLifecycle = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=process_lifecycle_probe"
     )
@@ -342,7 +306,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelUmask = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=umask_probe"
     )
@@ -350,7 +313,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelReadonlyRoot = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=readonly_root_probe orlix.root.readonly=1"
     )
@@ -358,7 +320,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelHostnameDomainname = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=hostname_domainname_probe orlix.hostname=oci-host orlix.domainname=oci.example"
     )
@@ -366,7 +327,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelEnvironmentStateWriteback = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=environment_state_writeback_probe"
     )
@@ -374,7 +334,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelEnvironmentStateCrossbootWrite = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix:
             "orlix.kselftest=environment_state_crossboot_write_probe"
@@ -383,7 +342,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let kernelEnvironmentStateCrossbootVerify = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 300,
         kernelCommandLineSuffix:
             "orlix.kselftest=environment_state_crossboot_verify_probe"
@@ -392,7 +350,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let mlibc = OrlixUpstreamTestRunSpec(
         suite: .mlibc,
         completionMarker: "ORLIX-MLIBC-TEST-END",
-        expectedCoreutilsTotal: nil,
         timeout: 1_200,
         kernelCommandLineSuffix: nil
     )
@@ -400,7 +357,6 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     static let coreutils = OrlixUpstreamTestRunSpec(
         suite: .coreutils,
         completionMarker: "ORLIX-COREUTILS-TEST-END",
-        expectedCoreutilsTotal: 733,
         timeout: 14_400,
         kernelCommandLineSuffix: nil
     )
@@ -470,7 +426,8 @@ final class OrlixUpstreamTestOutputParser {
 
     func validate(
         _ rawOutput: String,
-        for spec: OrlixUpstreamTestRunSpec
+        for spec: OrlixUpstreamTestRunSpec,
+        expectedCoreutilsManifest: [String]? = nil
     ) throws {
         let output = Self.normalized(rawOutput)
 
@@ -511,13 +468,18 @@ final class OrlixUpstreamTestOutputParser {
                 )
             }
         case .coreutils:
-            try validateCoreutilsCompletion(output, for: spec)
+            try validateCoreutilsCompletion(
+                output,
+                for: spec,
+                expectedManifest: expectedCoreutilsManifest
+            )
         }
     }
 
     private func validateCoreutilsCompletion(
         _ output: String,
-        for spec: OrlixUpstreamTestRunSpec
+        for spec: OrlixUpstreamTestRunSpec,
+        expectedManifest: [String]?
     ) throws {
         guard let line = output
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -536,17 +498,37 @@ final class OrlixUpstreamTestOutputParser {
             let failures = Self.value(after: "failures=", in: fields[1]),
             let skips = Self.value(after: "skips=", in: fields[2]),
             let total = Self.value(after: "total=", in: fields[3]),
-            let expectedTotal = spec.expectedCoreutilsTotal
+            let expectedManifest,
+            !expectedManifest.isEmpty
         else {
             throw OrlixUpstreamTestRunError.malformedCoreutilsCompletion(line)
         }
 
-        guard failures == 0, skips == 0, total == expectedTotal else {
+        let observedManifest = output
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .compactMap { line -> String? in
+                let fields = line.split(separator: " ")
+                guard fields.count == 3,
+                      fields[0] == "ORLIX-COREUTILS-TEST-RUNNING",
+                      Int(fields[1]) != nil
+                else {
+                    return nil
+                }
+                return "\(fields[1]) \(fields[2])"
+            }
+
+        guard observedManifest == expectedManifest else {
+            throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                "Coreutils execution does not match the packaged upstream manifest"
+            )
+        }
+
+        guard failures == 0, skips == 0, total == observedManifest.count else {
             throw OrlixUpstreamTestRunError.coreutilsSummaryFailed(
                 failures: failures,
                 skips: skips,
                 total: total,
-                expectedTotal: expectedTotal
+                expectedTotal: observedManifest.count
             )
         }
     }
@@ -676,14 +658,18 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
                 "metadata:\(rootBundleResourceName)"
             )
         }
-        guard Bundle.main.url(
+        guard let rootBundleURL = Bundle.main.url(
             forResource: rootBundleResourceName,
             withExtension: rootBundleExtension
-        ) != nil else {
+        ) else {
             throw OrlixUpstreamTestRunError.missingRootfsBundle(
-            "\(rootBundleResourceName).\(rootBundleExtension)"
+                "\(rootBundleResourceName).\(rootBundleExtension)"
             )
         }
+        let expectedCoreutilsManifest = try Self.coreutilsManifest(
+            for: spec,
+            in: rootBundleURL
+        )
 
         let hostDirectoryFixture = try Self.prepareHostDirectoryFixture(
             ifNeededFor: spec
@@ -744,7 +730,11 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
                 session: session
             )
             if parser.containsTerminalCondition(text, for: spec) {
-                try parser.validate(text, for: spec)
+                try parser.validate(
+                    text,
+                    for: spec,
+                    expectedCoreutilsManifest: expectedCoreutilsManifest
+                )
                 return text
             }
             throw OrlixUpstreamTestRunError.timeout(spec.timeout)
@@ -761,8 +751,43 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             terminal: recorder.text,
             session: session
         )
-        try parser.validate(text, for: spec)
+        try parser.validate(
+            text,
+            for: spec,
+            expectedCoreutilsManifest: expectedCoreutilsManifest
+        )
         return text
+    }
+
+    private static func coreutilsManifest(
+        for spec: OrlixUpstreamTestRunSpec,
+        in rootBundleURL: URL
+    ) throws -> [String]? {
+        guard spec.suite == .coreutils else {
+            return nil
+        }
+
+        let manifestURL = rootBundleURL
+            .appendingPathComponent("coreutils-test-manifest")
+            .appendingPathExtension("txt")
+        guard let contents = try? String(contentsOf: manifestURL, encoding: .utf8) else {
+            throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                "missing packaged Coreutils test manifest: \(manifestURL.lastPathComponent)"
+            )
+        }
+
+        let manifest = contents.split(separator: "\n").map(String.init)
+        guard !manifest.isEmpty,
+              manifest.allSatisfy({ line in
+                  let fields = line.split(separator: " ")
+                  return fields.count == 2 && Int(fields[0]) != nil
+              })
+        else {
+            throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                "malformed packaged Coreutils test manifest"
+            )
+        }
+        return manifest
     }
 
     private static func combinedUpstreamOutput(
