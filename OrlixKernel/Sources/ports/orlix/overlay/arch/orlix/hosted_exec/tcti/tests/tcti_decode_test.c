@@ -6025,6 +6025,56 @@ static void tcti_resume_user_updates_guest_memory(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static void tcti_resume_user_reads_and_writes_across_linux_pages(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0xf9000020U, /* str x0, [x1] */
+		0xf9400022U, /* ldr x2, [x1] */
+		0xd4000001U, /* svc #0 */
+	};
+	struct tcti_result result;
+	struct pt_regs regs = { 0 };
+	unsigned long instructions_mapped;
+	unsigned long data_mapped;
+	unsigned long access_address;
+	u64 expected = 0x1122334455667788ULL;
+	u64 observed = 0;
+	int ret;
+
+	instructions_mapped = tcti_test_map_instructions(
+		test, instructions, ARRAY_SIZE(instructions));
+	KUNIT_ASSERT_NE(test, 0UL, instructions_mapped);
+	data_mapped = ksys_mmap_pgoff(0, 2 * PAGE_SIZE,
+				       PROT_READ | PROT_WRITE,
+				       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(data_mapped));
+	access_address = data_mapped + PAGE_SIZE - sizeof(u32);
+
+	regs.pc = instructions_mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = expected;
+	regs.regs[1] = access_address;
+
+	result = tcti_resume_user(current, &regs, current->mm);
+	ret = tcti_read_user_data(current->mm, access_address, &observed,
+				  sizeof(observed));
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, instructions_mapped + 2 * sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, instructions[2], result.instruction);
+	KUNIT_EXPECT_EQ(test, expected, regs.regs[2]);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, expected, observed);
+
+	ret = vm_munmap(data_mapped, 2 * PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	ret = vm_munmap(instructions_mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_successful_execve_return_restores_el0_pstate(struct kunit *test)
 {
 	struct pt_regs regs = { 0 };
@@ -15200,6 +15250,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_resume_user_updates_tls_register_state),
 #endif
 	KUNIT_CASE(tcti_resume_user_updates_guest_memory),
+	KUNIT_CASE(tcti_resume_user_reads_and_writes_across_linux_pages),
 	KUNIT_CASE(tcti_successful_execve_return_restores_el0_pstate),
 	KUNIT_CASE(tcti_static_pie_initial_tls_uses_pt_tls),
 	KUNIT_CASE(tcti_static_pie_relocation_count_is_bounded),
