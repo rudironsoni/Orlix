@@ -8,6 +8,23 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(OrlixUpstreamTestRunSpec.coreutils.timeout, 14_400)
     }
 
+    func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
+        XCTAssertEqual(
+            OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
+                terminal: "live terminal",
+                console: "live terminal"
+            ),
+            "live terminal"
+        )
+        XCTAssertEqual(
+            OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
+                terminal: "",
+                console: "early console"
+            ),
+            "early console"
+        )
+    }
+
     func testAcceptsKselftestCompletionWithPassingTAP() throws {
         let output = """
         ORLIX-KSELFTEST-INIT
