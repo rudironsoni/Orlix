@@ -264,22 +264,8 @@
 #define AARCH64_FNEG_D_PATTERN 0x1e614000U
 #define AARCH64_FP_SCALAR_1SOURCE_MASK 0xff207c00U
 #define AARCH64_FP_SCALAR_1SOURCE_PATTERN 0x1e204000U
-#define AARCH64_FDIV_S_MASK 0xff20fc00U
-#define AARCH64_FDIV_S_PATTERN 0x1e201800U
-#define AARCH64_FDIV_D_MASK 0xff20fc00U
-#define AARCH64_FDIV_D_PATTERN 0x1e601800U
-#define AARCH64_FADD_S_MASK 0xff20fc00U
-#define AARCH64_FADD_S_PATTERN 0x1e202800U
-#define AARCH64_FADD_D_MASK 0xff20fc00U
-#define AARCH64_FADD_D_PATTERN 0x1e602800U
-#define AARCH64_FSUB_S_MASK 0xff20fc00U
-#define AARCH64_FSUB_S_PATTERN 0x1e203800U
-#define AARCH64_FSUB_D_MASK 0xff20fc00U
-#define AARCH64_FSUB_D_PATTERN 0x1e603800U
-#define AARCH64_FMUL_S_MASK 0xff60fc00U
-#define AARCH64_FMUL_S_PATTERN 0x1e200800U
-#define AARCH64_FMUL_D_MASK 0xff60fc00U
-#define AARCH64_FMUL_D_PATTERN 0x1e600800U
+#define AARCH64_FP_SCALAR_2SOURCE_MASK 0xff200c00U
+#define AARCH64_FP_SCALAR_2SOURCE_PATTERN 0x1e200800U
 #define AARCH64_FMUL_2D_MASK 0xff20fc00U
 #define AARCH64_FMUL_2D_PATTERN 0x6e20dc00U
 #define AARCH64_FP_SCALAR_3SOURCE_MASK 0xff000000U
@@ -3047,59 +3033,53 @@ not_simd_compare_register:
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_FDIV_S_MASK) == AARCH64_FDIV_S_PATTERN ||
-	    (instruction & AARCH64_FDIV_D_MASK) == AARCH64_FDIV_D_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_FP_SCALAR_2SOURCE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
-		decoded.result_size = decoded.access_size;
-		decoded.simd_fp = true;
-		decoded.fp2_op = TCTI_FP2_FDIV;
-		return decoded;
-	}
+	if ((instruction & AARCH64_FP_SCALAR_2SOURCE_MASK) ==
+	    AARCH64_FP_SCALAR_2SOURCE_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+		u8 opcode = (instruction >> 12) & 0xfU;
 
-	if ((instruction & AARCH64_FADD_S_MASK) == AARCH64_FADD_S_PATTERN ||
-	    (instruction & AARCH64_FADD_D_MASK) == AARCH64_FADD_D_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_FP_SCALAR_2SOURCE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
-		decoded.result_size = decoded.access_size;
-		decoded.simd_fp = true;
-		decoded.fp2_op = TCTI_FP2_FADD;
-		return decoded;
-	}
+		if (type > 1)
+			return decoded;
 
-	if ((instruction & AARCH64_FSUB_S_MASK) == AARCH64_FSUB_S_PATTERN ||
-	    (instruction & AARCH64_FSUB_D_MASK) == AARCH64_FSUB_D_PATTERN) {
-		decoded.decode_class = TCTI_DECODE_FP_SCALAR_2SOURCE;
-		decoded.rd = instruction & 0x1fU;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
-		decoded.result_size = decoded.access_size;
-		decoded.simd_fp = true;
-		decoded.fp2_op = TCTI_FP2_FSUB;
-		return decoded;
-	}
+		switch (opcode) {
+		case 0:
+			decoded.fp2_op = TCTI_FP2_FMUL;
+			break;
+		case 1:
+			decoded.fp2_op = TCTI_FP2_FDIV;
+			break;
+		case 2:
+			decoded.fp2_op = TCTI_FP2_FADD;
+			break;
+		case 3:
+			decoded.fp2_op = TCTI_FP2_FSUB;
+			break;
+		case 4:
+			decoded.fp2_op = TCTI_FP2_FMAX;
+			break;
+		case 5:
+			decoded.fp2_op = TCTI_FP2_FMIN;
+			break;
+		case 6:
+			decoded.fp2_op = TCTI_FP2_FMAXNM;
+			break;
+		case 7:
+			decoded.fp2_op = TCTI_FP2_FMINNM;
+			break;
+		case 8:
+			decoded.fp2_op = TCTI_FP2_FNMUL;
+			break;
+		default:
+			return decoded;
+		}
 
-	if ((instruction & AARCH64_FMUL_S_MASK) == AARCH64_FMUL_S_PATTERN ||
-	    (instruction & AARCH64_FMUL_D_MASK) == AARCH64_FMUL_D_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_2SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
-		decoded.fp2_op = TCTI_FP2_FMUL;
 		return decoded;
 	}
 

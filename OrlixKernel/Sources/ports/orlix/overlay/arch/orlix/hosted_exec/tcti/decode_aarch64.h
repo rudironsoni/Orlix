@@ -332,6 +332,11 @@ enum tcti_fp_scalar_2source_op {
 	TCTI_FP2_FADD,
 	TCTI_FP2_FSUB,
 	TCTI_FP2_FMUL,
+	TCTI_FP2_FMAX,
+	TCTI_FP2_FMIN,
+	TCTI_FP2_FMAXNM,
+	TCTI_FP2_FMINNM,
+	TCTI_FP2_FNMUL,
 };
 
 enum tcti_fp_scalar_3source_op {

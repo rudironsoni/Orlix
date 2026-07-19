@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete scalar FP two-source execution
+
+Replaced scalar floating-point two-source opcode special cases with one architectural family decoder, added all Armv8.0-A operations for single and double precision, rejected reserved type and opcode encodings, and proved minimum, maximum, numeric-NaN, signed-zero, and negated-multiply state transitions in KUnit. The kernel-owned coverage inventory now closes that family while retaining every other open gap.
+
 ## [2026-07-20] audit | Add the kernel-owned TCTI ISA inventory
 
 Added a repo-owned A64 instruction-family inventory under `arch/orlix`, tied it to production decoder classes and existing KUnit evidence, and made KUnit report a ratcheted nonzero gap count until every required family is closed. Partial rows remain explicit and do not cite tests that do not exist.

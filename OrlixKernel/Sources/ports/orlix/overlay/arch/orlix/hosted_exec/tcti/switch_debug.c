@@ -6126,6 +6126,21 @@ static int tcti_execute_fp_scalar_2source(
 			case TCTI_FP2_FMUL:
 				TCTI_EXECUTE_FP2_S("fmul");
 				break;
+			case TCTI_FP2_FMAX:
+				TCTI_EXECUTE_FP2_S("fmax");
+				break;
+			case TCTI_FP2_FMIN:
+				TCTI_EXECUTE_FP2_S("fmin");
+				break;
+			case TCTI_FP2_FMAXNM:
+				TCTI_EXECUTE_FP2_S("fmaxnm");
+				break;
+			case TCTI_FP2_FMINNM:
+				TCTI_EXECUTE_FP2_S("fminnm");
+				break;
+			case TCTI_FP2_FNMUL:
+				TCTI_EXECUTE_FP2_S("fnmul");
+				break;
 			default:
 				goto restore_host_fp_state;
 			}
@@ -6156,6 +6171,21 @@ static int tcti_execute_fp_scalar_2source(
 				break;
 			case TCTI_FP2_FMUL:
 				TCTI_EXECUTE_FP2_D("fmul");
+				break;
+			case TCTI_FP2_FMAX:
+				TCTI_EXECUTE_FP2_D("fmax");
+				break;
+			case TCTI_FP2_FMIN:
+				TCTI_EXECUTE_FP2_D("fmin");
+				break;
+			case TCTI_FP2_FMAXNM:
+				TCTI_EXECUTE_FP2_D("fmaxnm");
+				break;
+			case TCTI_FP2_FMINNM:
+				TCTI_EXECUTE_FP2_D("fminnm");
+				break;
+			case TCTI_FP2_FNMUL:
+				TCTI_EXECUTE_FP2_D("fnmul");
 				break;
 			default:
 				goto restore_host_fp_state;

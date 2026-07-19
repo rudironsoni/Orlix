@@ -15624,6 +15624,115 @@ static void tcti_decode_test_exit(struct kunit *test)
 	mmput(mm);
 }
 
+static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
+	struct kunit *test)
+{
+	static const struct {
+		u32 instruction;
+		enum tcti_fp_scalar_2source_op op;
+		u8 access_size;
+	} cases[] = {
+		{ 0x1e220820U, TCTI_FP2_FMUL, sizeof(u32) },
+		{ 0x1e221820U, TCTI_FP2_FDIV, sizeof(u32) },
+		{ 0x1e222820U, TCTI_FP2_FADD, sizeof(u32) },
+		{ 0x1e223820U, TCTI_FP2_FSUB, sizeof(u32) },
+		{ 0x1e224820U, TCTI_FP2_FMAX, sizeof(u32) },
+		{ 0x1e225820U, TCTI_FP2_FMIN, sizeof(u32) },
+		{ 0x1e226820U, TCTI_FP2_FMAXNM, sizeof(u32) },
+		{ 0x1e227820U, TCTI_FP2_FMINNM, sizeof(u32) },
+		{ 0x1e228820U, TCTI_FP2_FNMUL, sizeof(u32) },
+		{ 0x1e620820U, TCTI_FP2_FMUL, sizeof(u64) },
+		{ 0x1e621820U, TCTI_FP2_FDIV, sizeof(u64) },
+		{ 0x1e622820U, TCTI_FP2_FADD, sizeof(u64) },
+		{ 0x1e623820U, TCTI_FP2_FSUB, sizeof(u64) },
+		{ 0x1e624820U, TCTI_FP2_FMAX, sizeof(u64) },
+		{ 0x1e625820U, TCTI_FP2_FMIN, sizeof(u64) },
+		{ 0x1e626820U, TCTI_FP2_FMAXNM, sizeof(u64) },
+		{ 0x1e627820U, TCTI_FP2_FMINNM, sizeof(u64) },
+		{ 0x1e628820U, TCTI_FP2_FNMUL, sizeof(u64) },
+	};
+	struct tcti_decoded_instruction decoded;
+	size_t i;
+
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		decoded = tcti_decode_aarch64(cases[i].instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, cases[i].op, decoded.fp2_op);
+		KUNIT_EXPECT_EQ(test, 0, decoded.rd);
+		KUNIT_EXPECT_EQ(test, 1, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 2, decoded.rm);
+		KUNIT_EXPECT_EQ(test, cases[i].access_size,
+				decoded.access_size);
+		KUNIT_EXPECT_EQ(test, cases[i].access_size,
+				decoded.result_size);
+	}
+
+	decoded = tcti_decode_aarch64(0x1ea24820U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(0x1ee24820U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(0x1e229820U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+}
+
+static void tcti_switch_executes_fp_scalar_2source_minmax_family(
+	struct kunit *test)
+{
+	static const struct {
+		u32 instruction;
+		u64 left;
+		u64 right;
+		u64 expected;
+	} cases[] = {
+		{ 0x1e224820U, 0x80000000ULL, 0x00000000ULL,
+		  0x00000000ULL },
+		{ 0x1e225820U, 0x80000000ULL, 0x00000000ULL,
+		  0x80000000ULL },
+		{ 0x1e226820U, 0x7fc12345ULL, 0x3f800000ULL,
+		  0x3f800000ULL },
+		{ 0x1e227820U, 0x7fc12345ULL, 0xc0000000ULL,
+		  0xc0000000ULL },
+		{ 0x1e228820U, 0x40000000ULL, 0x40400000ULL,
+		  0xc0c00000ULL },
+		{ 0x1e624820U, 0x3ff0000000000000ULL,
+		  0x4000000000000000ULL, 0x4000000000000000ULL },
+		{ 0x1e625820U, 0x3ff0000000000000ULL,
+		  0x4000000000000000ULL, 0x3ff0000000000000ULL },
+		{ 0x1e626820U, 0x7ff8123456789abcULL,
+		  0xbff0000000000000ULL, 0xbff0000000000000ULL },
+		{ 0x1e627820U, 0x7ff8123456789abcULL,
+		  0xbff0000000000000ULL, 0xbff0000000000000ULL },
+		{ 0x1e628820U, 0x4000000000000000ULL,
+		  0x4008000000000000ULL, 0xc018000000000000ULL },
+	};
+	struct pt_regs regs;
+	struct tcti_decoded_instruction decoded;
+	size_t i;
+	int ret;
+
+	current->thread.user_fpcr = 0;
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		memset(&regs, 0, sizeof(regs));
+		regs.pc = 0x8f00 + i * sizeof(u32);
+		current->thread.user_fpsr = 0;
+		current->thread.user_simd[0] = 0;
+		current->thread.user_simd[1] = ~0ULL;
+		current->thread.user_simd[2] = cases[i].left;
+		current->thread.user_simd[4] = cases[i].right;
+		decoded = tcti_decode_aarch64(cases[i].instruction);
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, cases[i].expected,
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, 0x8f04ULL + i * sizeof(u32), regs.pc);
+	}
+}
+
 static void tcti_switch_executes_scalar_fp2_ieee754_cases(struct kunit *test)
 {
 	struct pt_regs regs = { .pc = 0x9000 };
@@ -15966,6 +16075,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
+	KUNIT_CASE(tcti_decode_recognizes_complete_fp_scalar_2source_family),
+	KUNIT_CASE(tcti_switch_executes_fp_scalar_2source_minmax_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_fp_to_gpr_architectural_limits),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
