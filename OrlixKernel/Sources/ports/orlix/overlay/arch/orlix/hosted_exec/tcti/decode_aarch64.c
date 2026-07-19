@@ -230,6 +230,8 @@
 #define AARCH64_SIMD_MIN_MAXV_PATTERN 0x0e30a800U
 #define AARCH64_SIMD_ADDV_MASK 0xbf3ffc20U
 #define AARCH64_SIMD_ADDV_PATTERN 0x0e31b800U
+#define AARCH64_SIMD_ADD_LONGV_MASK 0x9f3ffc00U
+#define AARCH64_SIMD_ADD_LONGV_PATTERN 0x0e303800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
 #define AARCH64_SIMD_ADDP_D_2D_PATTERN 0x5ef1b800U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_MASK 0xbf000000U
@@ -2827,6 +2829,26 @@ not_simd_compare_register:
 		decoded.simd_q = q;
 		decoded.simd_fp = true;
 		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_ADDV;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_ADD_LONGV_MASK) ==
+	    AARCH64_SIMD_ADD_LONGV_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+
+		if (size == 3 || (size == 2 && !q))
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = 1U << size;
+		decoded.result_size = 2 * decoded.access_size;
+		decoded.simd_q = q;
+		decoded.simd_fp = true;
+		decoded.simd_reduction_op = instruction & BIT(29) ?
+			TCTI_SIMD_REDUCTION_UADDLV :
+			TCTI_SIMD_REDUCTION_SADDLV;
 		return decoded;
 	}
 

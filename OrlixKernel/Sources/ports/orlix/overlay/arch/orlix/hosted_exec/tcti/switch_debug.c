@@ -5728,6 +5728,38 @@ static int tcti_execute_simd_vector_reduction(
 		return 0;
 	}
 
+	if ((decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_SADDLV ||
+	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UADDLV) &&
+	    (decoded->access_size == sizeof(u8) ||
+	     decoded->access_size == sizeof(u16) ||
+	     decoded->access_size == sizeof(u32)) &&
+	    decoded->result_size == 2 * decoded->access_size) {
+		u64 sum = 0;
+		u64 result_mask = decoded->result_size == sizeof(u64) ? U64_MAX :
+			GENMASK_ULL(decoded->result_size * 8 - 1, 0);
+
+		lane_bits = decoded->access_size * 8;
+		lane_count = (decoded->simd_q ? 2 * sizeof(u64) : sizeof(u64)) /
+			     decoded->access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 byte_offset = lane * decoded->access_size;
+			u8 word = byte_offset / sizeof(u64);
+			u8 shift = (byte_offset % sizeof(u64)) * 8;
+			u32 value =
+				(current->thread.user_simd[decoded->rn * 2 + word] >>
+				 shift) & GENMASK(lane_bits - 1, 0);
+
+			if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_SADDLV)
+				sum += (s64)sign_extend32(value, lane_bits - 1);
+			else
+				sum += value;
+		}
+		tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64),
+					    sum & result_mask, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if ((decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMAXV ||
 	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_UMINV ||
 	     decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_SMAXV ||
