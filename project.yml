@@ -624,25 +624,6 @@ targets:
           - ORLIX_APP_HOSTED_BOOT=1
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixKernelLogParserTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: OrlixKernel/Tests/XCTest/OrlixKernelLogParserTests
-      - path: OrlixKernel/Tests/Fixtures/KUnit
-        type: folder
-        buildPhase: resources
-      - path: OrlixKernel/Tests/Fixtures/Kselftest
-        type: folder
-        buildPhase: resources
-    dependencies:
-      - target: Orlix
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelLogParserTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
-        BUNDLE_LOADER: $(TEST_HOST)
   OrlixHostAdapterTests:
     type: bundle.unit-test
     platform: iOS
@@ -804,16 +785,6 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixUITests
-  "OrlixKernel Log Parser Tests":
-    build:
-      targets:
-        Orlix: all
-        OrlixKernelLogParserTests: test
-    test:
-      config: Debug
-      gatherCoverageData: false
-      targets:
-        - name: OrlixKernelLogParserTests
   "OrlixHostAdapter Tests":
     build:
       targets:

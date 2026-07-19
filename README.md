@@ -93,7 +93,7 @@ Do not run kselftest or KUnit on Darwin and do not use a VM as product proof. Do
 
 Both `iphoneos` and `iphonesimulator` are iOS proof destinations. Milestones must validate the same scope on both.
 
-XCTest suites are organized under project-local test trees. `OrlixKernel/Tests/XCTest/OrlixKernelHostedTests` launches the lower-level bootloader path, `OrlixKernel/Tests/XCTest/OrlixKernelLogParserTests` parses Linux-native KUnit and kselftest output fixtures under `OrlixKernel/Tests/Fixtures`, `OrlixOS/Tests/XCTest` covers OrlixOS payload/session wiring, and `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests` covers narrow host mechanics. They do not own Linux subsystem assertions.
+XCTest suites are organized under project-local test trees. `OrlixKernel/Tests/XCTest/OrlixKernelHostedTests` launches the lower-level bootloader path, `OrlixOS/Tests/XCTest` covers OrlixOS payload/session wiring, and `OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests` covers narrow host mechanics. Linux KUnit and kselftest results remain authoritative and are consumed through the app-hosted kernel conformance path rather than reinterpreted by a separate XCTest fixture parser.
 
 Milestone 5 boot-to-virtio-probe proof keeps the dependency chain honest. Static DTS, defconfig, and kselftest source inputs are preparatory only. The milestone is proved only when iOS-hosted Orlix Linux consumes the profile device tree and reaches the point where upstream virtio-mmio probing can be attempted.
 
