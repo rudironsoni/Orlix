@@ -6315,6 +6315,64 @@ static void tcti_block_cache_invalidation_bumps_generation(struct kunit *test)
 	tcti_block_cache_reset_for_tests();
 }
 
+static void tcti_write_to_executable_page_invalidates_translated_blocks(struct kunit *test)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	struct tcti_block *block;
+	unsigned long mapped;
+	size_t word_count = 0;
+	u32 old_generation;
+	u32 new_generation;
+	u32 initial = 0xd2800020U;
+	u32 replacement = 0xd503201fU;
+	u32 observed = 0;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = tcti_test_map_instructions(test, &initial, 1);
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	ret = sys_mprotect(mapped, PAGE_SIZE,
+			 PROT_READ | PROT_WRITE | PROT_EXEC);
+	if (ret) {
+		vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_FAIL(test, "could not make TCTI test page executable: %d",
+			   ret);
+		return;
+	}
+
+	tcti_block_cache_reset_for_tests();
+	decoded = tcti_decode_aarch64(initial);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	old_generation = tcti_code_generation(current->mm);
+	ret = tcti_block_cache_insert(current->mm, mapped, mapped + sizeof(u32),
+				      old_generation, 1, program, word_count,
+				      NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+
+	ret = tcti_write_user_data(current->mm, mapped, &replacement,
+				   sizeof(replacement));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	ret = tcti_read_user_data(current->mm, mapped, &observed,
+				  sizeof(observed));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, replacement, observed);
+	new_generation = tcti_code_generation(current->mm);
+	KUNIT_EXPECT_NE(test, old_generation, new_generation);
+
+	block = tcti_block_cache_lookup(current->mm, mapped, old_generation);
+	KUNIT_EXPECT_NULL(test, block);
+	if (block)
+		tcti_block_put(block);
+
+	tcti_block_cache_reset_for_tests();
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_syscall_mapping_changes_include_brk(struct kunit *test)
 {
 	KUNIT_EXPECT_TRUE(test,
@@ -15154,6 +15212,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_program_preserves_flags_between_subs_and_branch),
 	KUNIT_CASE(tcti_block_cache_is_bounded),
 	KUNIT_CASE(tcti_block_cache_invalidation_bumps_generation),
+	KUNIT_CASE(tcti_write_to_executable_page_invalidates_translated_blocks),
 	KUNIT_CASE(tcti_syscall_mapping_changes_include_brk),
 	KUNIT_CASE(tcti_tlb_separates_access_classes),
 	KUNIT_CASE(tcti_tlb_flushes_on_generation_change),

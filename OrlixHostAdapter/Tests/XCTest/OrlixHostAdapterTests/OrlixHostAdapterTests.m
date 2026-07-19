@@ -198,7 +198,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     free(second);
 }
 
-- (void)testUserWindowRefreshRejectsNativeExecutableLinuxPage
+- (void)testUserWindowRefreshAcceptsWritableExecutableLinuxPageWithoutHostExecute
 {
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
     vm_address_t reserved = 0;
@@ -228,7 +228,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
             .target_address = (unsigned long)reserved,
             .source_page = source,
             .length = linuxPageSize,
-            .writable = 0,
+            .writable = 1,
             .executable = 1,
         },
     };
@@ -237,8 +237,41 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
                                              linuxPageSize,
                                              segments,
                                              sizeof(segments) / sizeof(segments[0]));
-    XCTAssertEqual(ret, -1);
+    XCTAssertEqual(ret, 0);
+    XCTAssertEqual(((volatile unsigned char *)reserved)[0], 0xd5);
 
+    source[0] = 0xa5;
+    ret = orlix_host_user_refresh_page((unsigned long)reserved,
+                                       source,
+                                       linuxPageSize,
+                                       1,
+                                       1);
+    XCTAssertEqual(ret, 0);
+    XCTAssertEqual(((volatile unsigned char *)reserved)[0], 0xa5);
+
+    vm_address_t regionAddress = reserved;
+    vm_size_t regionSize = 0;
+    vm_region_basic_info_data_64_t regionInfo = {0};
+    mach_msg_type_number_t regionInfoCount = VM_REGION_BASIC_INFO_COUNT_64;
+    mach_port_t objectName = MACH_PORT_NULL;
+    status = vm_region_64(mach_task_self(),
+                          &regionAddress,
+                          &regionSize,
+                          VM_REGION_BASIC_INFO_64,
+                          (vm_region_info_t)&regionInfo,
+                          &regionInfoCount,
+                          &objectName);
+    XCTAssertEqual(status, KERN_SUCCESS);
+    XCTAssertEqual(regionAddress, reserved);
+    XCTAssertGreaterThanOrEqual(regionSize, (vm_size_t)linuxPageSize);
+    XCTAssertTrue((regionInfo.protection & VM_PROT_READ) != 0);
+    XCTAssertTrue((regionInfo.protection & VM_PROT_WRITE) != 0);
+    XCTAssertEqual(regionInfo.protection & VM_PROT_EXECUTE, 0);
+    if (objectName != MACH_PORT_NULL) {
+        mach_port_deallocate(mach_task_self(), objectName);
+    }
+
+    orlix_host_user_unmap_pages((unsigned long)reserved, linuxPageSize);
     free(source);
 }
 

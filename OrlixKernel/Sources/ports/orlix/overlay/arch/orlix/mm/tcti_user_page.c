@@ -375,13 +375,14 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		size_t chunk = min(size - copied,
 				   (size_t)(PAGE_SIZE -
 					    offset_in_page(current_va)));
+		unsigned long linux_perms = 0;
 		void *host_page = NULL;
 		void *host_data = NULL;
 		int ret;
 
 		mmap_read_lock(mm);
 		ret = tcti_resolve_user_data_locked(mm, current_va, access,
-						    &host_data, NULL, NULL);
+						    &host_data, &linux_perms, NULL);
 		if (!ret) {
 			if (access == TCTI_ACCESS_READ)
 				memcpy((char *)buffer + copied, host_data, chunk);
@@ -404,6 +405,8 @@ static int tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 		}
 		if (ret)
 			return ret;
+		if (access == TCTI_ACCESS_WRITE && (linux_perms & VM_EXEC))
+			tcti_block_cache_invalidate_mm(mm);
 #if defined(ORLIX_APP_HOSTED_BOOT)
 		if (access == TCTI_ACCESS_WRITE) {
 			ret = orlix_refresh_current_user_mapping_page_from_kernel(

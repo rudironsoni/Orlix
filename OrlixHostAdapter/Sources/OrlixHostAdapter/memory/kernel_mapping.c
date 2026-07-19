@@ -1555,17 +1555,14 @@ __attribute__((visibility("hidden"))) int orlix_host_user_map_page(
 {
     vm_prot_t protection = VM_PROT_READ;
 
-    if (executable) {
-        return -1;
-    }
+    (void)executable;
     if (writable) {
         protection |= VM_PROT_WRITE;
     }
     unsigned long active_tls = OrlixHostEnterHostTls();
     int result;
 
-    if (!executable &&
-        OrlixHostUserMappingMatches(target_address,
+    if (OrlixHostUserMappingMatches(target_address,
                                     source_page,
                                     length,
                                     protection,
@@ -1613,9 +1610,7 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_page(
     unsigned long active_tls;
     int result;
 
-    if (executable) {
-        return -1;
-    }
+    (void)executable;
     if (writable) {
         protection |= VM_PROT_WRITE;
     }
@@ -1644,7 +1639,6 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
     struct OrlixHostUserMapping *mapping;
     kern_return_t status;
     bool writable = false;
-    bool executable = false;
 
     if (target_address == 0 || length == 0 || !segments ||
         segment_count == 0 || target_address > (unsigned long)-1 - length) {
@@ -1667,9 +1661,6 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
         }
         if (segment->writable) {
             writable = true;
-        }
-        if (segment->executable) {
-            executable = true;
         }
     }
 
@@ -1741,13 +1732,6 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
         memcpy((void *)(mapping->target_address + offset),
                input->source_page,
                (size_t)input->length);
-        if (input->executable) {
-            OrlixHostUserUnmapMappedRange(mapping->target_address,
-                                          mapping->length);
-            OrlixHostLeaveHostTls(active_tls);
-            return -1;
-        }
-
         segment = malloc(sizeof(*segment));
         if (!segment) {
             OrlixHostUserUnmapMappedRange(mapping->target_address,
