@@ -6,6 +6,7 @@
 #include <linux/sched/mm.h>
 #include <linux/syscalls.h>
 #include <asm/hosted_exec.h>
+#include <asm/elf.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/unistd.h>
@@ -17,6 +18,15 @@
 #include "../gadget_program.h"
 #include "../switch_debug.h"
 #include "../tlb.h"
+
+static void tcti_guest_profile_matches_elf_auxv(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, 8, ORLIX_EL0_ARCH_MAJOR);
+	KUNIT_EXPECT_EQ(test, 0, ORLIX_EL0_ARCH_MINOR);
+	KUNIT_EXPECT_EQ(test, (unsigned long)(HWCAP_FP | HWCAP_ASIMD),
+			(unsigned long)ELF_HWCAP);
+	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP2);
+}
 
 static void tcti_decode_recognizes_svc_zero(struct kunit *test)
 {
@@ -15915,6 +15925,7 @@ static void tcti_switch_preserves_compiler_rt_pair_frame(struct kunit *test)
 }
 
 static struct kunit_case tcti_decode_test_cases[] = {
+	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_fp_to_gpr_architectural_limits),

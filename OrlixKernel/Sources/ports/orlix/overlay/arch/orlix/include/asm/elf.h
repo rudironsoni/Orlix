@@ -5,6 +5,7 @@
 #include <linux/elf-em.h>
 #include <linux/types.h>
 #include <uapi/asm/ptrace.h>
+#include <asm/isa.h>
 #include <asm/processor.h>
 
 #define ELF_CLASS	ELFCLASS64
@@ -21,7 +22,8 @@
 #define ELF_ET_DYN_BASE		((TASK_SIZE / 3) * 2)
 #endif
 
-#define ELF_HWCAP	(0)
+#define ELF_HWCAP	ORLIX_EL0_HWCAP
+#define ELF_HWCAP2	ORLIX_EL0_HWCAP2
 #define ELF_PLATFORM	(NULL)
 
 #define ELF_PLAT_INIT(_r, load_addr)	((_r)->regs[0] = 0)

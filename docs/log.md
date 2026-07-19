@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-19] define | Bind TCTI coverage to the guest ISA profile
+
+Declared `arch/orlix/include/asm/isa.h` as the current Orlix EL0 contract for Armv8.0-A with floating point and AdvSIMD, made the Linux ELF HWCAP surface consume that declaration, and required the same guest ISA contract across development, release, simulator, and device destinations. Optional extensions remain unadvertised until their complete instruction families and exception boundaries have owning KUnit proof.
+
 ## [2026-07-19] advance | Start complete AArch64 ISA-on-ISA coverage
 
 Moved the complete AArch64 ISA-on-ISA coverage task into active work and closed the baseline A64 load-literal family across integer, sign-extending, SIMD/FP, prefetch, and unallocated encodings. Completed non-temporal integer and SIMD pair decoding, including 32-bit SIMD pairs and the unallocated non-temporal LDPSW boundary. The app-hosted kernel gate remains the owning proof surface through KUnit and Linux kselftest. Full ISA coverage remains open until the guest profile inventory and every required family have zero decode, lowering, semantic, and exception gaps.
