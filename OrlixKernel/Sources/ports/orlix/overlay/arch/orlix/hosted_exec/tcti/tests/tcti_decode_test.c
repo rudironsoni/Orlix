@@ -5936,6 +5936,75 @@ static void tcti_resume_user_observes_mprotect_write_transition(struct kunit *te
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static void tcti_resume_user_observes_fresh_backing_after_remap(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0xf9000020U, /* str x0, [x1] */
+		0xf9400022U, /* ldr x2, [x1] */
+		0xd4000001U, /* svc #0 */
+	};
+	struct tcti_result result;
+	struct pt_regs regs = { 0 };
+	unsigned long instructions_mapped;
+	unsigned long data_mapped;
+	unsigned long remapped;
+	u64 first = 0x1111222233334444ULL;
+	u64 second = 0xaaaabbbbccccddddULL;
+	u64 observed = 0;
+	int ret;
+
+	instructions_mapped = tcti_test_map_instructions(
+		test, instructions, ARRAY_SIZE(instructions));
+	KUNIT_ASSERT_NE(test, 0UL, instructions_mapped);
+	data_mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(data_mapped));
+
+	regs.pc = instructions_mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = first;
+	regs.regs[1] = data_mapped;
+	result = tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_ASSERT_EQ(test, first, regs.regs[2]);
+
+	ret = vm_munmap(data_mapped, PAGE_SIZE);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	remapped = ksys_mmap_pgoff(data_mapped, PAGE_SIZE,
+				    PROT_READ | PROT_WRITE,
+				    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+				    -1, 0);
+	KUNIT_ASSERT_EQ(test, data_mapped, remapped);
+	ret = tcti_read_user_data(current->mm, remapped, &observed,
+				  sizeof(observed));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, observed);
+
+	regs.pc = instructions_mapped;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = second;
+	regs.regs[1] = remapped;
+	result = tcti_resume_user(current, &regs, current->mm);
+	observed = 0;
+	ret = tcti_read_user_data(current->mm, remapped, &observed,
+				  sizeof(observed));
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, instructions_mapped + 2 * sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, instructions[2], result.instruction);
+	KUNIT_EXPECT_EQ(test, second, regs.regs[2]);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, second, observed);
+
+	ret = vm_munmap(remapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	ret = vm_munmap(instructions_mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_resume_user_reports_unsupported_instruction(struct kunit *test)
 {
 	static const u32 instruction = 0xffffffffU;
@@ -15304,6 +15373,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_resume_user_reports_read_fault),
 	KUNIT_CASE(tcti_resume_user_reports_write_fault),
 	KUNIT_CASE(tcti_resume_user_observes_mprotect_write_transition),
+	KUNIT_CASE(tcti_resume_user_observes_fresh_backing_after_remap),
 	KUNIT_CASE(tcti_resume_user_reports_unsupported_instruction),
 	KUNIT_CASE(tcti_resume_user_executes_branch_sequence),
 #if defined(ORLIX_APP_HOSTED_BOOT)
