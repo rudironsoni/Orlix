@@ -75,7 +75,7 @@ enum tcti_isa_coverage_status {
 	X(FP_COMPARE, FP, PARTIAL, "floating-point compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "") \
 	X(FP_IMMEDIATE, FP, COMPLETE, "floating-point immediate", "TCTI_DECODE_FP_SCALAR_IMMEDIATE", "tcti_gadget_executes_complete_fp_immediate_family") \
 	X(FP_CONDITIONAL_COMPARE, FP, PARTIAL, "floating-point conditional compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "") \
-	X(FP_CONDITIONAL_SELECT, FP, PARTIAL, "floating-point conditional select", "TCTI_DECODE_FP_CONDITIONAL_SELECT", "") \
+	X(FP_CONDITIONAL_SELECT, FP, COMPLETE, "floating-point conditional select", "TCTI_DECODE_FP_CONDITIONAL_SELECT", "tcti_gadget_executes_complete_fp_conditional_select_family") \
 	X(FP_2SOURCE, FP, COMPLETE, "floating-point two source", "TCTI_DECODE_FP_SCALAR_2SOURCE", "tcti_decode_recognizes_complete_fp_scalar_2source_family") \
 	X(FP_3SOURCE, FP, PARTIAL, "floating-point three source", "TCTI_DECODE_FP_SCALAR_3SOURCE", "") \
 	X(AES, AES, PARTIAL, "AES instructions", "TCTI_SIMD_ARITH_AES*", "") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	48
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	47
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

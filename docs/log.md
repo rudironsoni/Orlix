@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete scalar FP conditional select
+
+Moved `FCSEL` recognition ahead of overlapping broad AdvSIMD decoder groups, then exhaustively proved all 16 condition codes against all 16 NZCV states for single and double precision through production lowering and gadget execution. KUnit also proves destination-source aliasing, reserved type rejection, upper-lane clearing, and exact PC progression.
+
 ## [2026-07-20] implement | Complete scalar FP immediate execution
 
 Separated scalar `FMOV` immediate from the AdvSIMD modified-immediate class, implemented a dedicated production semantic path, and exhaustively proved all 256 immediate encodings for single and double precision through TCTI lowering and gadget execution. Reserved type encodings remain unsupported and the coverage inventory closes only the scalar FP immediate family.
