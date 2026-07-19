@@ -898,18 +898,15 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		bool simd_fp = instruction & BIT(26);
 		u8 scale;
 
-		if (mode == 0)
-			return decoded;
-
 		if (simd_fp) {
-			if (opc != 1 && opc != 2)
+			if (opc == 3)
 				return decoded;
-			scale = opc == 2 ? 4 : 3;
+			scale = opc + 2;
 		} else {
 			if (opc == 0) {
 				scale = 2;
 			} else if (opc == 1) {
-				if (!(instruction & BIT(22)))
+				if (!(instruction & BIT(22)) || mode == 0)
 					return decoded;
 				scale = 2;
 				decoded.sign_extend_load = true;
@@ -933,7 +930,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			sign_extend64((instruction >> 15) & 0x7fU, 6) << scale;
 		decoded.memory_index_mode =
 			mode == 1 ? TCTI_MEMORY_INDEX_POST :
-			mode == 2 ? TCTI_MEMORY_INDEX_SIGNED_OFFSET :
+			(mode == 0 || mode == 2) ?
+				TCTI_MEMORY_INDEX_SIGNED_OFFSET :
 				    TCTI_MEMORY_INDEX_PRE;
 		return decoded;
 	}
