@@ -45,6 +45,8 @@ tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
 		return TCTI_ACCESS_FETCH;
 
 	switch (decoded->decode_class) {
+	case TCTI_DECODE_LOAD_LITERAL:
+		return TCTI_ACCESS_READ;
 	case TCTI_DECODE_LOAD_STORE_PAIR:
 	case TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
 	case TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
@@ -2095,6 +2097,42 @@ static void tcti_apply_memory_writeback(struct pt_regs *regs,
 
 	base = tcti_memory_base(regs, decoded->rn);
 	tcti_write_memory_base(regs, decoded->rn, base + decoded->memory_offset);
+}
+
+static int tcti_execute_load_literal(struct mm_struct *mm,
+				     struct pt_regs *regs,
+				     const struct tcti_decoded_instruction *decoded,
+				     unsigned long *fault_address)
+{
+	unsigned long address = regs->pc + decoded->memory_offset;
+	u64 value;
+	int ret;
+
+	if (decoded->prefetch) {
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+	if (!mm)
+		return -EINVAL;
+	if (fault_address)
+		*fault_address = address;
+
+	if (decoded->simd_fp) {
+		ret = tcti_load_simd_fp(mm, address, decoded->rt,
+					decoded->access_size);
+		if (ret)
+			return ret;
+	} else {
+		ret = tcti_load_integer(mm, address, decoded->access_size, &value);
+		if (ret)
+			return ret;
+		value = tcti_extend_loaded_integer(value, decoded);
+		tcti_write_gpr_or_zero(regs, decoded->rt,
+				       decoded->result_size, value);
+	}
+
+	regs->pc += sizeof(u32);
+	return 0;
 }
 
 static int tcti_execute_load_store_pair(struct mm_struct *mm,
@@ -6876,6 +6914,9 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return tcti_execute_conditional_compare(regs, decoded);
 	case TCTI_DECODE_CONDITIONAL_SELECT:
 		return tcti_execute_conditional_select(regs, decoded);
+	case TCTI_DECODE_LOAD_LITERAL:
+		return tcti_execute_load_literal(mm, regs, decoded,
+						 fault_address);
 	case TCTI_DECODE_LOAD_STORE_PAIR:
 		return tcti_execute_load_store_pair(mm, regs, decoded,
 						    fault_address);

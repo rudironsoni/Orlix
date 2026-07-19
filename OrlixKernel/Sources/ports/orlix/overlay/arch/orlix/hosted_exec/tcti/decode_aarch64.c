@@ -36,6 +36,8 @@
 #define AARCH64_CONDITIONAL_COMPARE_PATTERN 0x1a400000U
 #define AARCH64_CONDITIONAL_SELECT_MASK 0x1fe00000U
 #define AARCH64_CONDITIONAL_SELECT_PATTERN 0x1a800000U
+#define AARCH64_LOAD_LITERAL_MASK 0x3b000000U
+#define AARCH64_LOAD_LITERAL_PATTERN 0x18000000U
 #define AARCH64_LOAD_STORE_PAIR_MASK 0x3a000000U
 #define AARCH64_LOAD_STORE_PAIR_PATTERN 0x28000000U
 #define AARCH64_LOAD_STORE_UNSIGNED_IMM_MASK 0x3b000000U
@@ -839,6 +841,53 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			!op && op2 ? TCTI_CONDITIONAL_SELECT_CSINC :
 			op && !op2 ? TCTI_CONDITIONAL_SELECT_CSINV :
 				     TCTI_CONDITIONAL_SELECT_CSNEG;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_LOAD_LITERAL_MASK) ==
+	    AARCH64_LOAD_LITERAL_PATTERN) {
+		u8 opc = (instruction >> 30) & 0x3U;
+
+		decoded.decode_class = TCTI_DECODE_LOAD_LITERAL;
+		decoded.rt = instruction & 0x1fU;
+		decoded.memory_offset =
+			sign_extend64((instruction >> 5) & 0x7ffffU, 18) << 2;
+		decoded.load = true;
+		decoded.memory_index_mode = TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+
+		if (instruction & BIT(26)) {
+			if (opc == 3)
+				return (struct tcti_decoded_instruction) {
+					.decode_class = TCTI_DECODE_UNSUPPORTED,
+					.instruction = instruction,
+				};
+
+			decoded.simd_fp = true;
+			decoded.access_size = 1U << (opc + 2);
+			decoded.result_size = decoded.access_size;
+			return decoded;
+		}
+
+		switch (opc) {
+		case 0:
+			decoded.access_size = sizeof(u32);
+			decoded.result_size = sizeof(u32);
+			break;
+		case 1:
+			decoded.access_size = sizeof(u64);
+			decoded.result_size = sizeof(u64);
+			break;
+		case 2:
+			decoded.access_size = sizeof(u32);
+			decoded.result_size = sizeof(u64);
+			decoded.sign_extend_load = true;
+			break;
+		case 3:
+			decoded.load = false;
+			decoded.prefetch = true;
+			break;
+		}
+
 		return decoded;
 	}
 

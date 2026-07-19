@@ -9,7 +9,7 @@ summary: "Promote TCTI only after every owning suite proves the real app-hosted 
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 depends_on:
-  - "[Complete AArch64 ISA-on-ISA coverage](complete-aarch64-isa-on-isa-coverage.md)"
+  - "[Complete AArch64 ISA-on-ISA coverage](../doing/complete-aarch64-isa-on-isa-coverage.md)"
   - "[Run authorized TCTI device validation](run-authorized-tcti-device-validation.md)"
 blocks:
   - "[Validate the mobile terminal simulator product](../doing/validate-mobile-terminal-simulator-product.md)"

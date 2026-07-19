@@ -10,7 +10,7 @@ story_of:
   - "[Orlix TCTI](../../epic/doing/orlix-tcti.md)"
 has_task:
   - "[Complete the pinned simulator TCTI ladder](../../task/doing/complete-pinned-simulator-tcti-ladder.md)"
-  - "[Complete AArch64 ISA-on-ISA coverage](../../task/todo/complete-aarch64-isa-on-isa-coverage.md)"
+  - "[Complete AArch64 ISA-on-ISA coverage](../../task/doing/complete-aarch64-isa-on-isa-coverage.md)"
   - "[Run authorized TCTI device validation](../../task/todo/run-authorized-tcti-device-validation.md)"
   - "[Promote TCTI as the product default](../../task/todo/promote-tcti-as-product-default.md)"
 blocks:

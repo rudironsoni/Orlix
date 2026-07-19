@@ -21,6 +21,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE,
 	TCTI_DECODE_CONDITIONAL_COMPARE,
 	TCTI_DECODE_CONDITIONAL_SELECT,
+	TCTI_DECODE_LOAD_LITERAL,
 	TCTI_DECODE_LOAD_STORE_PAIR,
 	TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
 	TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
@@ -400,6 +401,7 @@ struct tcti_decoded_instruction {
 	bool simd_scalar;
 	bool simd_q;
 	bool sign_extend_load;
+	bool prefetch;
 	u8 offset_extend;
 	bool offset_shift;
 	bool invert_second_operand;

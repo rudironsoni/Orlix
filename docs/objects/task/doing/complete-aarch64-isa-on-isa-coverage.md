@@ -3,13 +3,13 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-17
-status: todo
+updated: 2026-07-19
+status: doing
 summary: "Complete architectural AArch64 EL0 ISA-on-ISA coverage in Orlix TCTI."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 blocks:
-  - "[Promote TCTI as the product default](promote-tcti-as-product-default.md)"
+  - "[Promote TCTI as the product default](../todo/promote-tcti-as-product-default.md)"
 targets:
   - "[TCTI](../../software-component/tcti.md)"
 derived_from:

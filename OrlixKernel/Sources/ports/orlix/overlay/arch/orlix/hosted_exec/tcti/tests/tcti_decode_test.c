@@ -395,6 +395,109 @@ static void tcti_decode_recognizes_conditional_select_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 12U, decoded.condition);
 }
 
+static void tcti_decode_recognizes_load_literal_class(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x18000000U); /* ldr w0, . */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 4, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 4, decoded.result_size);
+
+	decoded = tcti_decode_aarch64(0x58000021U); /* ldr x1, .+4 */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 1, decoded.rt);
+	KUNIT_EXPECT_EQ(test, 4LL, decoded.memory_offset);
+	KUNIT_EXPECT_EQ(test, 8, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x98ffffe2U); /* ldrsw x2, .-4 */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, -4LL, decoded.memory_offset);
+	KUNIT_EXPECT_TRUE(test, decoded.sign_extend_load);
+
+	decoded = tcti_decode_aarch64(0xd8000000U); /* prfm pldl1keep, . */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.prefetch);
+	KUNIT_EXPECT_FALSE(test, decoded.load);
+
+	decoded = tcti_decode_aarch64(0x1c000003U); /* ldr s3, . */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_EQ(test, 4, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x5c000004U); /* ldr d4, . */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 8, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0x9c000005U); /* ldr q5, . */
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_LITERAL, decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 16, decoded.access_size);
+
+	decoded = tcti_decode_aarch64(0xdc000000U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+}
+
+static void tcti_gadget_executes_load_literal_state_transitions(struct kunit *test)
+{
+	struct tcti_gadget_word
+		program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = { 0 };
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	u64 value = 0x8877665544332211ULL;
+	s32 signed_value = -12345;
+	size_t word_count;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	ret = tcti_write_user_data(current->mm, mapped + 128, &value,
+				   sizeof(value));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.pc = mapped + 64;
+	decoded = tcti_decode_aarch64(0x58000200U); /* ldr x0, .+64 */
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_execute_gadget_program(current->mm, &regs, program,
+					  word_count, &fault_address);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, value, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, mapped + 68, regs.pc);
+	KUNIT_EXPECT_EQ(test, mapped + 128, fault_address);
+
+	ret = tcti_write_user_data(current->mm, mapped + 132, &signed_value,
+				   sizeof(signed_value));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.pc = mapped + 68;
+	decoded = tcti_decode_aarch64(0x98000201U); /* ldrsw x1, .+64 */
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_execute_gadget_program(current->mm, &regs, program,
+					  word_count, &fault_address);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, (u64)(s64)signed_value, regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, mapped + 72, regs.pc);
+
+	regs.pc = mapped + 72;
+	decoded = tcti_decode_aarch64(0xd8000000U);
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_execute_gadget_program(NULL, &regs, program, word_count,
+					  &fault_address);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, mapped + 76, regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_decode_recognizes_load_store_pair_class(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -15742,6 +15845,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_conditional_branch_classes),
 	KUNIT_CASE(tcti_decode_recognizes_conditional_compare_class),
 	KUNIT_CASE(tcti_decode_recognizes_conditional_select_class),
+	KUNIT_CASE(tcti_decode_recognizes_load_literal_class),
+	KUNIT_CASE(tcti_gadget_executes_load_literal_state_transitions),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_pair_class),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_unsigned_class),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_signed_immediate_class),

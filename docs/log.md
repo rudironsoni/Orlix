@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-19] advance | Start complete AArch64 ISA-on-ISA coverage
+
+Moved the complete AArch64 ISA-on-ISA coverage task into active work and closed the baseline A64 load-literal family across integer, sign-extending, SIMD/FP, prefetch, and unallocated encodings. The app-hosted kernel gate remains the owning proof surface through KUnit and Linux kselftest. Full ISA coverage remains open until the guest profile inventory and every required family have zero decode, lowering, semantic, and exception gaps.
+
 ## [2026-07-19] test | Keep Linux assertions in native TAP suites
 
 Reduced app-hosted kernel conformance XCTest cases to session launchers. Focused launchers now validate the selected kselftest through structured TAP identity, while Linux behavior assertions remain in KUnit and kselftest.
