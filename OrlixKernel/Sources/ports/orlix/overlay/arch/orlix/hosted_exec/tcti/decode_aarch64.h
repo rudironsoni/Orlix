@@ -153,6 +153,8 @@ enum tcti_data_processing_1source_op {
 	TCTI_DP1_RBIT,
 	TCTI_DP1_REV,
 	TCTI_DP1_REV16,
+	TCTI_DP1_REV32,
+	TCTI_DP1_CLS,
 };
 
 enum tcti_simd_vector_arithmetic_op {

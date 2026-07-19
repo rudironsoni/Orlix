@@ -1415,6 +1415,12 @@ static int tcti_execute_data_processing_1source(struct pt_regs *regs,
 		value &= mask;
 		result = value ? data_size - fls64(value) : data_size;
 		break;
+	case TCTI_DP1_CLS:
+		value &= mask;
+		if (value & BIT_ULL(data_size - 1))
+			value = ~value & mask;
+		result = value ? data_size - fls64(value) - 1 : data_size - 1;
+		break;
 	case TCTI_DP1_RBIT:
 		value &= mask;
 		result = 0;
@@ -1422,22 +1428,16 @@ static int tcti_execute_data_processing_1source(struct pt_regs *regs,
 			result = (result << 1) | ((value >> bit) & 1);
 		break;
 	case TCTI_DP1_REV:
-		if (decoded->is_64bit)
-			return -EOPNOTSUPP;
-		value &= GENMASK(31, 0);
-		result = ((value & GENMASK(7, 0)) << 24) |
-			 ((value & GENMASK(15, 8)) << 8) |
-			 ((value >> 8) & GENMASK(15, 8)) |
-			 ((value >> 24) & GENMASK(7, 0));
+		result = decoded->is_64bit ? __builtin_bswap64(value) :
+						 __builtin_bswap32((u32)value);
+		break;
+	case TCTI_DP1_REV32:
+		result = ((u64)__builtin_bswap32((u32)(value >> 32)) << 32) |
+			 __builtin_bswap32((u32)value);
 		break;
 	case TCTI_DP1_REV16:
-		if (decoded->is_64bit)
-			return -EOPNOTSUPP;
-		value &= GENMASK(31, 0);
-		result = ((value & GENMASK(7, 0)) << 8) |
-			 ((value & GENMASK(15, 8)) >> 8) |
-			 ((value & GENMASK(23, 16)) << 8) |
-			 ((value & GENMASK(31, 24)) >> 8);
+		result = (((value & 0x00ff00ff00ff00ffULL) << 8) |
+			  ((value & 0xff00ff00ff00ff00ULL) >> 8)) & mask;
 		break;
 	default:
 		return -EINVAL;

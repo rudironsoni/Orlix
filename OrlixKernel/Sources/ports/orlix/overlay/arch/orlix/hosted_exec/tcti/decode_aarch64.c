@@ -52,9 +52,12 @@
 #define AARCH64_EXTRACT_PATTERN 0x13800000U
 #define AARCH64_DATA_PROCESSING_1SOURCE_MASK 0x5fe00000U
 #define AARCH64_DATA_PROCESSING_1SOURCE_PATTERN 0x5ac00000U
-#define AARCH64_DP1_REV16_32_OPCODE 0x01U
+#define AARCH64_DP1_RBIT_OPCODE 0x00U
+#define AARCH64_DP1_REV16_OPCODE 0x01U
 #define AARCH64_DP1_REV32_OPCODE 0x02U
+#define AARCH64_DP1_REV64_OPCODE 0x03U
 #define AARCH64_DP1_CLZ_OPCODE 0x04U
+#define AARCH64_DP1_CLS_OPCODE 0x05U
 #define AARCH64_DATA_PROCESSING_2SOURCE_MASK 0x7fe00000U
 #define AARCH64_DATA_PROCESSING_2SOURCE_PATTERN 0x1ac00000U
 #define AARCH64_MULTIPLY_ADD_SUB_MASK 0x7f000000U
@@ -1173,16 +1176,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_DATA_PROCESSING_1SOURCE_PATTERN) {
 		u8 opcode = (instruction >> 10) & 0x3fU;
 
-		if (opcode == 0x00U) {
+		if (opcode == AARCH64_DP1_RBIT_OPCODE) {
 			decoded.dp1_op = TCTI_DP1_RBIT;
-		} else if (opcode == AARCH64_DP1_REV16_32_OPCODE &&
-			   !(instruction & BIT(31))) {
+		} else if (opcode == AARCH64_DP1_REV16_OPCODE) {
 			decoded.dp1_op = TCTI_DP1_REV16;
-		} else if (opcode == AARCH64_DP1_REV32_OPCODE &&
-			   !(instruction & BIT(31))) {
+		} else if (opcode == AARCH64_DP1_REV32_OPCODE) {
+			decoded.dp1_op = instruction & BIT(31) ? TCTI_DP1_REV32 :
+									 TCTI_DP1_REV;
+		} else if (opcode == AARCH64_DP1_REV64_OPCODE &&
+			   instruction & BIT(31)) {
 			decoded.dp1_op = TCTI_DP1_REV;
 		} else if (opcode == AARCH64_DP1_CLZ_OPCODE) {
 			decoded.dp1_op = TCTI_DP1_CLZ;
+		} else if (opcode == AARCH64_DP1_CLS_OPCODE) {
+			decoded.dp1_op = TCTI_DP1_CLS;
 		} else {
 			return decoded;
 		}
