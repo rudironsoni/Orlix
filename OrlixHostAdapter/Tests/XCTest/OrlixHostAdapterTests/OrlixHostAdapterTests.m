@@ -198,7 +198,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     free(second);
 }
 
-- (void)testUserWindowRefreshCopiesExecutableLinuxPage
+- (void)testUserWindowRefreshRejectsNativeExecutableLinuxPage
 {
     const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
     vm_address_t reserved = 0;
@@ -237,13 +237,7 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
                                              linuxPageSize,
                                              segments,
                                              sizeof(segments) / sizeof(segments[0]));
-    XCTAssertEqual(ret, 0);
-
-    if (ret == 0) {
-        unsigned char mappedByte = ((volatile unsigned char *)reserved)[0];
-        XCTAssertEqual(mappedByte, 0xd5);
-        orlix_host_user_unmap_pages((unsigned long)reserved, linuxPageSize);
-    }
+    XCTAssertEqual(ret, -1);
 
     free(source);
 }

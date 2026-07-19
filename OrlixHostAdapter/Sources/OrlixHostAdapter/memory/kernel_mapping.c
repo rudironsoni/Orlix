@@ -64,6 +64,7 @@ static unsigned long OrlixHostHostedStackTop =
     ORLIX_HOST_HOSTED_STACK_TOP_DEFAULT;
 static unsigned long OrlixHostHostedKernelMax =
     ORLIX_HOST_HOSTED_KERNEL_MAX_DEFAULT;
+static bool OrlixHostHostedUserWindowReserved;
 
 static unsigned long OrlixHostPageStart(unsigned long address);
 static unsigned long OrlixHostPageEnd(unsigned long address,
@@ -179,9 +180,10 @@ static bool OrlixHostRangeIntersects(unsigned long start,
 }
 
 static bool OrlixHostRangeInsideHostedUserWindow(unsigned long start,
-                                                 unsigned long end)
+                                                  unsigned long end)
 {
-    return start >= OrlixHostHostedUserBase && end <= OrlixHostHostedStackTop;
+    return OrlixHostHostedUserWindowReserved &&
+           start >= OrlixHostHostedUserBase && end <= OrlixHostHostedStackTop;
 }
 
 static void OrlixHostReleaseUserRange(unsigned long target_address,
@@ -1033,6 +1035,7 @@ __attribute__((visibility("hidden"))) int orlix_host_user_reserve_window(
     OrlixHostHostedUserBase = base;
     OrlixHostHostedStackTop = base + length;
     OrlixHostHostedKernelMax = OrlixHostHostedStackTop + length;
+    OrlixHostHostedUserWindowReserved = true;
     *base_address = OrlixHostHostedUserBase;
     *limit_address = OrlixHostHostedStackTop;
 
