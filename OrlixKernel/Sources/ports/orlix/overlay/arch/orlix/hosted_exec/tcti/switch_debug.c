@@ -1967,6 +1967,95 @@ static int tcti_execute_simd_single_structure(
 	return 0;
 }
 
+static int tcti_execute_simd_multiple_structure(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct tcti_decoded_instruction *decoded,
+	unsigned long *fault_address)
+{
+	unsigned long address = tcti_memory_base(regs, decoded->rn);
+	u8 lanes;
+	u8 index;
+	u8 lane;
+	int ret;
+
+	if (!mm || !decoded->simd_fp || !decoded->simd_structure_count ||
+	    decoded->simd_structure_count > 4 ||
+	    (decoded->result_size != sizeof(u64) &&
+	     decoded->result_size != 2 * sizeof(u64)) ||
+	    (decoded->access_size != sizeof(u8) &&
+	     decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32) &&
+	     decoded->access_size != sizeof(u64)) ||
+	    decoded->result_size % decoded->access_size)
+		return -EOPNOTSUPP;
+
+	if (!decoded->simd_interleaved) {
+		for (index = 0; index < decoded->simd_structure_count; index++) {
+			u8 reg = (decoded->rd + index) & 0x1fU;
+			unsigned long element_address =
+				address + index * decoded->result_size;
+
+			if (fault_address)
+				*fault_address = element_address;
+			if (decoded->load)
+				ret = tcti_load_simd_fp(mm, element_address, reg,
+							decoded->result_size);
+			else
+				ret = tcti_store_simd_fp(mm, element_address, reg,
+							 decoded->result_size);
+			if (ret)
+				return ret;
+		}
+	} else {
+		lanes = decoded->result_size / decoded->access_size;
+		if (decoded->load && !decoded->simd_q) {
+			for (index = 0; index < decoded->simd_structure_count;
+			     index++)
+				current->thread.user_simd[
+					((decoded->rd + index) & 0x1fU) * 2 + 1] = 0;
+		}
+
+		for (lane = 0; lane < lanes; lane++) {
+			for (index = 0; index < decoded->simd_structure_count;
+			     index++) {
+				u8 reg = (decoded->rd + index) & 0x1fU;
+				u64 value;
+				unsigned long element_address = address +
+					(lane * decoded->simd_structure_count + index) *
+					decoded->access_size;
+
+				if (fault_address)
+					*fault_address = element_address;
+				if (decoded->load) {
+					ret = tcti_load_integer(mm, element_address,
+							decoded->access_size, &value);
+					if (!ret)
+						tcti_write_simd_lane(reg, lane,
+								     decoded->access_size,
+								     value);
+				} else {
+					value = tcti_read_simd_lane(reg, lane,
+								    decoded->access_size);
+					ret = tcti_store_integer(mm, element_address,
+							 decoded->access_size, value);
+				}
+				if (ret)
+					return ret;
+			}
+		}
+	}
+
+	if (decoded->memory_index_mode == TCTI_MEMORY_INDEX_POST) {
+		u64 increment = decoded->rm == 31 ?
+			decoded->simd_structure_count * decoded->result_size :
+			tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
+
+		tcti_write_memory_base(regs, decoded->rn, address + increment);
+	}
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static u64 tcti_extend_loaded_integer(u64 value,
 				      const struct tcti_decoded_instruction *decoded)
 {
@@ -6789,6 +6878,9 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case TCTI_DECODE_SIMD_LOAD_REPLICATE:
 		return tcti_execute_simd_single_structure(mm, regs, decoded,
 						 fault_address);
+	case TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
+		return tcti_execute_simd_multiple_structure(mm, regs, decoded,
+							   fault_address);
 	case TCTI_DECODE_FP_SCALAR_MOVE:
 		return tcti_execute_fp_scalar_move(regs, decoded);
 	case TCTI_DECODE_FP_SCALAR_1SOURCE:

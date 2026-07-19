@@ -234,6 +234,8 @@
 #define AARCH64_SIMD_ADDP_D_2D_PATTERN 0x5ef1b800U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_MASK 0xbf000000U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_PATTERN 0x0d000000U
+#define AARCH64_SIMD_MULTIPLE_STRUCTURE_MASK 0xbf200000U
+#define AARCH64_SIMD_MULTIPLE_STRUCTURE_PATTERN 0x0c000000U
 #define AARCH64_FMOV_W_S_MASK 0xfffffc00U
 #define AARCH64_FMOV_W_S_PATTERN 0x1e260000U
 #define AARCH64_FMOV_S_W_PATTERN 0x1e270000U
@@ -882,6 +884,53 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			mode == 1 ? TCTI_MEMORY_INDEX_POST :
 			mode == 2 ? TCTI_MEMORY_INDEX_SIGNED_OFFSET :
 				    TCTI_MEMORY_INDEX_PRE;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_MULTIPLE_STRUCTURE_MASK) ==
+	    AARCH64_SIMD_MULTIPLE_STRUCTURE_PATTERN) {
+		u8 opcode = (instruction >> 12) & 0xfU;
+		u8 rm = (instruction >> 16) & 0x1fU;
+		bool post_index = instruction & BIT(23);
+
+		if (!post_index && rm)
+			return decoded;
+
+		decoded.simd_interleaved = opcode == 0 || opcode == 4 ||
+					   opcode == 8;
+		switch (opcode) {
+		case 7:
+			decoded.simd_structure_count = 1;
+			break;
+		case 8:
+		case 10:
+			decoded.simd_structure_count = 2;
+			break;
+		case 4:
+		case 6:
+			decoded.simd_structure_count = 3;
+			break;
+		case 0:
+		case 2:
+			decoded.simd_structure_count = 4;
+			break;
+		default:
+			return decoded;
+		}
+
+		decoded.decode_class =
+			TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = rm;
+		decoded.load = instruction & BIT(22);
+		decoded.simd_fp = true;
+		decoded.simd_q = instruction & BIT(30);
+		decoded.access_size = BIT((instruction >> 10) & 0x3U);
+		decoded.result_size = decoded.simd_q ? 2 * sizeof(u64) :
+						       sizeof(u64);
+		decoded.memory_index_mode = post_index ? TCTI_MEMORY_INDEX_POST :
+							 TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 		return decoded;
 	}
 

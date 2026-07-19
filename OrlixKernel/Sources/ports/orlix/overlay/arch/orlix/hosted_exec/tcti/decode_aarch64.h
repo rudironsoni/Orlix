@@ -45,6 +45,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_SIMD_VECTOR_REDUCTION,
 	TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
 	TCTI_DECODE_SIMD_LOAD_REPLICATE,
+	TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE,
 	TCTI_DECODE_FP_SCALAR_MOVE,
 	TCTI_DECODE_FP_SCALAR_1SOURCE,
 	TCTI_DECODE_FP_SCALAR_2SOURCE,
@@ -429,6 +430,7 @@ struct tcti_decoded_instruction {
 	u8 simd_structure_count;
 	u8 simd_lane_index;
 	bool simd_replicate;
+	bool simd_interleaved;
 	bool acquire;
 	bool release;
 	bool exclusive;
