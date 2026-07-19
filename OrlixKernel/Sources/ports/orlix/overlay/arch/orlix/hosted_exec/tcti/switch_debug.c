@@ -3211,6 +3211,26 @@ static int tcti_execute_simd_vector_arithmetic(
 	u64 right_high;
 	u8 lane;
 
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_EOR3) {
+		u64 result_low;
+		u64 result_high;
+
+		if (decoded->access_size != 2 * sizeof(u64) ||
+		    decoded->result_size != 2 * sizeof(u64) ||
+		    decoded->simd_scalar)
+			return -EOPNOTSUPP;
+		result_low = current->thread.user_simd[decoded->rn * 2] ^
+			current->thread.user_simd[decoded->rm * 2] ^
+			current->thread.user_simd[decoded->ra * 2];
+		result_high = current->thread.user_simd[decoded->rn * 2 + 1] ^
+			current->thread.user_simd[decoded->rm * 2 + 1] ^
+			current->thread.user_simd[decoded->ra * 2 + 1];
+		tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64),
+					    result_low, result_high);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_AESE &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_AESIMC) {
 		u8 state[16];

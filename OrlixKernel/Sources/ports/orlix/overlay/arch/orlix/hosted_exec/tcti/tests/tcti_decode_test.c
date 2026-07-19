@@ -3262,6 +3262,25 @@ static void tcti_decode_recognizes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_decode_recognizes_simd_eor3(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(0xce020c20U);
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 2U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.ra);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_EOR3,
+			decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	KUNIT_EXPECT_FALSE(test, decoded.simd_scalar);
+}
+
 static void tcti_decode_recognizes_complete_simd_sm3_family(struct kunit *test)
 {
 	struct {
@@ -10272,6 +10291,33 @@ static void tcti_switch_executes_complete_simd_mul_family(struct kunit *test)
 	}
 }
 
+static void tcti_switch_executes_simd_eor3(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(0xce020c20U);
+	struct pt_regs regs = {};
+	int ret;
+
+	current->thread.user_simd[2] = 0x13579bdf2468ace0ULL;
+	current->thread.user_simd[3] = 0x0badf00ddeadbeefULL;
+	current->thread.user_simd[4] = 0x1111111122222222ULL;
+	current->thread.user_simd[5] = 0x3333333344444444ULL;
+	current->thread.user_simd[6] = 0x5555555566666666ULL;
+	current->thread.user_simd[7] = 0x7777777788888888ULL;
+	current->thread.user_simd_valid = 0;
+	regs.pc = 0x8750;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x5713df9b602ce8a4ULL,
+			current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x4fe9b44912617223ULL,
+			current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x8754ULL, regs.pc);
+}
+
 static void tcti_switch_executes_complete_simd_sm3_family(struct kunit *test)
 {
 	struct {
@@ -15425,6 +15471,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_decode_recognizes_simd_eor3),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sm3_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sm4_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sha512_family),
@@ -15579,6 +15626,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
+	KUNIT_CASE(tcti_switch_executes_simd_eor3),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sm3_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sm4_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha512_family),
