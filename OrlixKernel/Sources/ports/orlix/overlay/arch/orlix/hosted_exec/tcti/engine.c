@@ -309,6 +309,8 @@ static int tcti_apply_relative_relocations(struct mm_struct *mm,
 	    rela_size % sizeof(Elf64_Rela))
 		return -ENOEXEC;
 
+	if (rela_size % sizeof(Elf64_Rela))
+		return -ENOEXEC;
 	count = rela_size / sizeof(Elf64_Rela);
 	if (!tcti_static_pie_relocation_count_valid(count))
 		return -E2BIG;
@@ -415,7 +417,7 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 			*applied_base = base;
 		return 0;
 	}
-	pr_info("Orlix TCTI: static PIE image task=%s pid=%d pc=%#llx base=%#lx entry=%#llx phoff=%#llx phnum=%u phentsize=%u\n",
+	pr_debug("Orlix TCTI: static PIE image task=%s pid=%d pc=%#llx base=%#lx entry=%#llx phoff=%#llx phnum=%u phentsize=%u\n",
 		task->comm, task_pid_nr(task), regs->pc, base,
 		(unsigned long long)ehdr.e_entry,
 		(unsigned long long)ehdr.e_phoff, ehdr.e_phnum,
@@ -443,7 +445,7 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 		unsigned long prepared_tls;
 
 		prepared_tls = orlix_hosted_prepare_user_entry(initial_tls);
-		pr_info("Orlix TCTI: static PIE initial TLS task=%s pid=%d base=%#lx tls=%#lx prepared=%#lx\n",
+	pr_debug("Orlix TCTI: static PIE initial TLS task=%s pid=%d base=%#lx tls=%#lx prepared=%#lx\n",
 			task->comm, task_pid_nr(task), base, initial_tls,
 			prepared_tls);
 #endif
@@ -452,7 +454,7 @@ static int tcti_apply_static_pie_relative_relocations(struct task_struct *task,
 	if (!found_dynamic)
 		return 0;
 
-	pr_info("Orlix TCTI: static PIE dynamic task=%s pid=%d base=%#lx vaddr=%#llx memsz=%#llx filesz=%#llx flags=%#x\n",
+	pr_debug("Orlix TCTI: static PIE dynamic task=%s pid=%d base=%#lx vaddr=%#llx memsz=%#llx filesz=%#llx flags=%#x\n",
 		task->comm, task_pid_nr(task), base,
 		(unsigned long long)dynamic_phdr.p_vaddr,
 		(unsigned long long)dynamic_phdr.p_memsz,
@@ -731,7 +733,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 							 block->program_words,
 							 &fault_address);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
-				pr_info("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=1\n",
+		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=1\n",
 					task->comm, task_pid_nr(task),
 					before_pc, regs->pc, before_lr,
 					regs->regs[30], before_sp, regs->sp,
@@ -832,7 +834,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 							  block->program_words,
 							  &fault_address);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
-				pr_info("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=0\n",
+		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
 					before_pc, regs->pc, before_lr,
 					regs->regs[30], before_sp, regs->sp,
@@ -848,7 +850,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 							  word_count,
 							  &fault_address);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
-				pr_info("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%zu count=%u cached=0\n",
+		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%zu count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
 					before_pc, regs->pc, before_lr,
 					regs->regs[30], before_sp, regs->sp,
@@ -993,7 +995,7 @@ static void tcti_trace_execve_user_argv(const struct pt_regs *regs)
 	else
 		filename_buf[sizeof(filename_buf) - 1] = '\0';
 
-	pr_info("Orlix TCTI: execve argv task=%s pid=%d filename_ptr=%#llx filename=\"%s\" argv_ptr=%#llx envp_ptr=%#llx\n",
+	pr_debug("Orlix TCTI: execve argv task=%s pid=%d filename_ptr=%#llx filename=\"%s\" argv_ptr=%#llx envp_ptr=%#llx\n",
 		current->comm, task_pid_nr(current), regs->regs[0],
 		filename_buf, regs->regs[1], regs->regs[2]);
 
@@ -1007,7 +1009,7 @@ static void tcti_trace_execve_user_argv(const struct pt_regs *regs)
 			break;
 		}
 		if (!argp) {
-			pr_info("Orlix TCTI: execve argv task=%s pid=%d argv%d_ptr=NULL\n",
+			pr_debug("Orlix TCTI: execve argv task=%s pid=%d argv%d_ptr=NULL\n",
 				current->comm, task_pid_nr(current), i);
 			break;
 		}
@@ -1018,7 +1020,7 @@ static void tcti_trace_execve_user_argv(const struct pt_regs *regs)
 			strscpy(arg_buf, "<fault>", sizeof(arg_buf));
 		else
 			arg_buf[sizeof(arg_buf) - 1] = '\0';
-		pr_info("Orlix TCTI: execve argv task=%s pid=%d argv%d_ptr=%px argv%d=\"%s\"\n",
+		pr_debug("Orlix TCTI: execve argv task=%s pid=%d argv%d_ptr=%px argv%d=\"%s\"\n",
 			current->comm, task_pid_nr(current), i, argp, i,
 			arg_buf);
 	}
@@ -1037,7 +1039,7 @@ static void orlix_tcti_handle_syscall(struct pt_regs *regs)
 	orlix_syscall_dispatch(regs);
 	task_regs = task_pt_regs(current);
 	if (atomic_dec_if_positive(&post_dispatch_report_budget) >= 0)
-		pr_info("Orlix TCTI: syscall post-dispatch task=%s pid=%d syscall=%lu entry_pc=%#lx regs_pc=%#llx task_regs_pc=%#llx ret=%#llx syscallno=%d task_regs_syscallno=%d sp=%#llx task_regs_sp=%#llx x30=%#llx task_regs_x30=%#llx\n",
+		pr_debug("Orlix TCTI: syscall post-dispatch task=%s pid=%d syscall=%lu entry_pc=%#lx regs_pc=%#llx task_regs_pc=%#llx ret=%#llx syscallno=%d task_regs_syscallno=%d sp=%#llx task_regs_sp=%#llx x30=%#llx task_regs_x30=%#llx\n",
 			current->comm, task_pid_nr(current), nr, pc,
 			regs->pc, task_regs ? task_regs->pc : 0,
 			regs->regs[0], regs->syscallno,

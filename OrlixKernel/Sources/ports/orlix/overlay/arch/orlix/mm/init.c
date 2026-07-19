@@ -887,7 +887,15 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 		struct orlix_host_user_mapping_failure failure;
 		int failure_ret = orlix_host_user_mapping_last_failure(&failure);
 
-		if (!failure_ret)
+		if (!failure_ret) {
+			pr_info("Orlix: hosted user range base=%#lx limit=%#lx target=%#lx\n",
+				ORLIX_HOSTED_USER_BASE, ORLIX_HOSTED_STACK_TOP,
+				page);
+			pr_info("Orlix: hosted user page refresh detail op=%lu status=%ld mapping=%#lx length=%#lx requested=%#lx attempted=%#lx\n",
+				failure.operation, failure.host_status,
+				failure.mapping_address, failure.mapping_length,
+				failure.requested_protection,
+				failure.attempted_protection);
 			pr_info("Orlix: hosted user page from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d op=%lu host_status=%ld target=%#lx length=%#lx mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
 				current->comm, task_pid_nr(current), page,
 				source_page, ret, failure.operation,
@@ -895,10 +903,11 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 				failure.length, failure.mapping_address,
 				failure.mapping_length, failure.requested_protection,
 				failure.attempted_protection);
-		else
+		} else {
 			pr_info("Orlix: hosted user page from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d\n",
 				current->comm, task_pid_nr(current), page,
 				source_page, ret);
+		}
 	}
 
 	ret = orlix_refresh_user_host_window_from_kernel(mm, page, source_page);
@@ -906,7 +915,12 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 		struct orlix_host_user_mapping_failure failure;
 		int failure_ret = orlix_host_user_mapping_last_failure(&failure);
 
-		if (!failure_ret)
+		if (!failure_ret) {
+			pr_info("Orlix: hosted user window refresh detail op=%lu status=%ld mapping=%#lx length=%#lx requested=%#lx attempted=%#lx\n",
+				failure.operation, failure.host_status,
+				failure.mapping_address, failure.mapping_length,
+				failure.requested_protection,
+				failure.attempted_protection);
 			pr_info("Orlix: hosted user window from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d op=%lu host_status=%ld target=%#lx length=%#lx mapping=%#lx mapping_length=%#lx requested_prot=%#lx attempted_prot=%#lx\n",
 				current->comm, task_pid_nr(current), page,
 				source_page, ret, failure.operation,
@@ -914,10 +928,11 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 				failure.length, failure.mapping_address,
 				failure.mapping_length, failure.requested_protection,
 				failure.attempted_protection);
-		else
+		} else {
 			pr_info("Orlix: hosted user window from-kernel refresh failed task=%s pid=%d page=%#lx source=%px ret=%d\n",
 				current->comm, task_pid_nr(current), page,
 				source_page, ret);
+		}
 	}
 
 	return ret;

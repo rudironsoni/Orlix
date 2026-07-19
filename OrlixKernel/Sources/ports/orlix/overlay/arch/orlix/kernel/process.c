@@ -86,7 +86,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	flush_tlb_mm(current->mm);
 #if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
 	tcti_invalidate_mm(current->mm);
-	pr_info("Orlix TCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
+	pr_debug("Orlix TCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
 		current->comm, task_pid_nr(current), regs->pc, regs->sp,
 		regs->pstate, regs->syscallno);
 #endif

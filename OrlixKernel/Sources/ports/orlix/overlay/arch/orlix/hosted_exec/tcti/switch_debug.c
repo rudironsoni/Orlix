@@ -6851,8 +6851,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return 0;
 	case TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE:
 		source = tcti_read_gpr_or_zero(regs, decoded->rt,
-					       decoded->is_64bit ?
-					       sizeof(u64) : sizeof(u32));
+				decoded->is_64bit ?
+				sizeof(u64) : sizeof(u32));
 		if ((!source) != decoded->nonzero)
 			regs->pc += decoded->branch_imm;
 		else
@@ -6928,7 +6928,7 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
 	case TCTI_DECODE_SIMD_LOAD_REPLICATE:
 		return tcti_execute_simd_single_structure(mm, regs, decoded,
-						 fault_address);
+							 fault_address);
 	case TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
 		return tcti_execute_simd_multiple_structure(mm, regs, decoded,
 							   fault_address);
