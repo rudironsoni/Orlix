@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete AdvSIMD table lookup coverage
+
+Closed A64 AdvSIMD `TBL` and `TBX` through production decode and execution. KUnit now proves both result widths, one through four consecutive table registers including `V31` wraparound, every table-base, index, and destination register field, valid and out-of-range indexes, index-table, destination-table, and destination-index aliases, `TBL` zero fill, `TBX` destination retention, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, and exact PC progression. The kernel-owned inventory reports 34 of 52 families complete with 18 explicit gaps.
+
 ## [2026-07-21] test | Complete AdvSIMD extract coverage
 
 Closed A64 AdvSIMD `EXT` through production decode and execution. KUnit now proves every legal byte offset for 64-bit and 128-bit vectors, every SIMD source and destination register field, source-source and destination-source aliases, exact concatenation ordering, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, exact PC progression, and rejection of the reserved 64-bit offset range. The kernel-owned inventory reports 33 of 52 families complete with 19 explicit gaps.

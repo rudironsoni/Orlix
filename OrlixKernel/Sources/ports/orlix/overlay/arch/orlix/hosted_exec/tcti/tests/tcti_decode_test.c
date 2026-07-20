@@ -16655,8 +16655,7 @@ static void tcti_switch_executes_simd_ext_known_vector(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8d38ULL, regs.pc);
 }
 
-static u8 tcti_test_simd_register_byte(const u64 simd[64], u8 reg,
-				       u8 byte)
+static u8 tcti_test_simd_byte(const u64 simd[64], u8 reg, u8 byte)
 {
 	u8 word = byte / sizeof(u64);
 	u8 shift = (byte % sizeof(u64)) * 8;
@@ -16740,7 +16739,7 @@ static void tcti_gadget_executes_complete_simd_ext_family(struct kunit *test)
 						(lane % sizeof(u64)) * 8;
 
 					expected_simd[rd * 2 + destination_word] |=
-						(u64)tcti_test_simd_register_byte(before_simd,
+						(u64)tcti_test_simd_byte(before_simd,
 							source_reg,
 							source_byte) <<
 							destination_shift;
@@ -20534,8 +20533,8 @@ static void tcti_decode_recognizes_complete_simd_table_lookup_family(
 			tcti_decode_aarch64(0x4e002250U).decode_class);
 }
 
-static void tcti_switch_executes_complete_simd_table_lookup_family(
-	struct kunit *test)
+static void
+tcti_switch_executes_simd_table_lookup_matrix(struct kunit *test)
 {
 	struct pt_regs regs = { .pc = 0x9200 };
 	u8 table_count;
@@ -20589,6 +20588,148 @@ static void tcti_switch_executes_complete_simd_table_lookup_family(
 			}
 		}
 	}
+}
+
+static void
+tcti_test_tbl_case(struct kunit *test, bool q, u8 table_count,
+		   bool extension,
+	u8 register_case, bool seen_rn[32], bool seen_rm[32], bool seen_rd[32],
+	bool *saw_index_table_alias, bool *saw_destination_table_alias,
+	bool *saw_destination_index_alias)
+{
+	u8 rn = register_case;
+	u8 rm = (register_case * 7 + table_count + extension + q) & 0x1fU;
+	u8 rd = (register_case * 13 + table_count * 3 + extension + q) &
+		0x1fU;
+	u32 instruction = tcti_test_encode_simd_table_lookup(q, table_count,
+						       extension, rd, rn, rm);
+	struct tcti_decoded_instruction d = tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	struct pt_regs before_regs;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u8 result_size = q ? 16 : 8;
+	u8 lane;
+	unsigned int gpr;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_TABLE_LOOKUP,
+			d.decode_class);
+	KUNIT_EXPECT_EQ(test, extension ? TCTI_SIMD_TABLE_LOOKUP_TBX :
+					  TCTI_SIMD_TABLE_LOOKUP_TBL,
+			d.simd_table_lookup_op);
+	KUNIT_EXPECT_EQ(test, q, d.simd_q);
+	KUNIT_EXPECT_EQ(test, table_count, d.simd_table_count);
+	KUNIT_EXPECT_EQ(test, result_size, d.result_size);
+	KUNIT_EXPECT_EQ(test, rn, d.rn);
+	KUNIT_EXPECT_EQ(test, rm, d.rm);
+	KUNIT_EXPECT_EQ(test, rd, d.rd);
+
+	seen_rn[rn] = true;
+	seen_rm[rm] = true;
+	seen_rd[rd] = true;
+	*saw_destination_index_alias |= rd == rm;
+	for (lane = 0; lane < table_count; lane++) {
+		u8 table_reg = (rn + lane) & 0x1fU;
+
+		*saw_index_table_alias |= rm == table_reg;
+		*saw_destination_table_alias |= rd == table_reg;
+	}
+
+	tcti_test_initialize_simd_registers(instruction);
+	for (lane = 0; lane < 16; lane++) {
+		u8 word = lane / sizeof(u64);
+		u8 shift = (lane % sizeof(u64)) * 8;
+		u8 index = lane & 1 ? table_count * 16 + lane :
+				       (lane * 7) % (table_count * 16);
+		u64 mask = 0xffULL << shift;
+
+		current->thread.user_simd[rm * 2 + word] =
+			(current->thread.user_simd[rm * 2 + word] & ~mask) |
+			((u64)index << shift);
+	}
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[rd * 2] = 0;
+	expected_simd[rd * 2 + 1] = 0;
+	for (lane = 0; lane < result_size; lane++) {
+		u8 index = tcti_test_simd_byte(before_simd, rm, lane);
+		u8 value = 0;
+		u8 word = lane / sizeof(u64);
+		u8 shift = (lane % sizeof(u64)) * 8;
+
+		if (index < table_count * 16) {
+			u8 table_reg = (rn + index / 16) & 0x1fU;
+
+			value = tcti_test_simd_byte(before_simd, table_reg,
+						    index % 16);
+		} else if (extension) {
+			value = tcti_test_simd_byte(before_simd, rd, lane);
+		}
+		expected_simd[rd * 2 + word] |= (u64)value << shift;
+	}
+
+	for (gpr = 0; gpr < ARRAY_SIZE(regs.regs); gpr++)
+		regs.regs[gpr] = 0x9876000000000000ULL | gpr;
+	regs.pc = 0x2468ace000ULL;
+	regs.sp = 0x13579bdf000ULL;
+	regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+	before_regs = regs;
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &d, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, current->thread.user_simd, expected_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_MEMEQ(test, before_regs.regs, regs.regs,
+			   sizeof(regs.regs));
+	KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+	KUNIT_EXPECT_EQ(test, before_regs.pstate, regs.pstate);
+	KUNIT_EXPECT_EQ(test, before_regs.pc + sizeof(u32), regs.pc);
+}
+
+static void
+tcti_gadget_executes_complete_simd_table_lookup_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_index_table_alias = false;
+	bool saw_destination_table_alias = false;
+	bool saw_destination_index_alias = false;
+	u8 q;
+
+	for (q = 0; q < 2; q++) {
+		u8 table_count;
+
+		for (table_count = 1; table_count <= 4; table_count++) {
+			u8 extension;
+
+			for (extension = 0; extension < 2; extension++) {
+				u8 register_case;
+
+				for (register_case = 0; register_case < 32;
+				     register_case++)
+					tcti_test_tbl_case(test, q, table_count,
+							   extension,
+						register_case, seen_rn, seen_rm,
+						seen_rd, &saw_index_table_alias,
+						&saw_destination_table_alias,
+						&saw_destination_index_alias);
+			}
+		}
+	}
+
+	for (q = 0; q < 32; q++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[q]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_index_table_alias);
+	KUNIT_EXPECT_TRUE(test, saw_destination_table_alias);
+	KUNIT_EXPECT_TRUE(test, saw_destination_index_alias);
 }
 
 static void tcti_switch_executes_simd_table_lookup_with_index_alias(
@@ -20728,7 +20869,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_fp_to_gpr_architectural_limits),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
-	KUNIT_CASE(tcti_switch_executes_complete_simd_table_lookup_family),
+	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_matrix),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_with_index_alias),
 	KUNIT_CASE(tcti_decode_covers_complete_exception_generation_family),
 	KUNIT_CASE(tcti_decode_rejects_unknown_instruction),

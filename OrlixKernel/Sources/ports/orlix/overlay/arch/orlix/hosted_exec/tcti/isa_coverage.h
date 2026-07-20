@@ -58,7 +58,7 @@ enum tcti_isa_coverage_status {
 	X(LOAD_STORE_EXCLUSIVE, BASE, PARTIAL, "load/store exclusive", "TCTI_DECODE_LOAD_STORE_EXCLUSIVE", "tcti_decode_recognizes_load_store_exclusive_class") \
 	X(ASIMD_STRUCTURE_LOAD_STORE, ASIMD, PARTIAL, "AdvSIMD structure load/store", "TCTI_DECODE_SIMD_LOAD_STORE_*", "") \
 	X(ASIMD_COPY, ASIMD, PARTIAL, "AdvSIMD copy", "TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE", "") \
-	X(ASIMD_TABLE_LOOKUP, ASIMD, PARTIAL, "AdvSIMD table lookup", "TCTI_DECODE_SIMD_TABLE_LOOKUP", "") \
+	X(ASIMD_TABLE_LOOKUP, ASIMD, COMPLETE, "AdvSIMD table lookup", "TCTI_DECODE_SIMD_TABLE_LOOKUP", "tcti_gadget_executes_complete_simd_table_lookup_family") \
 	X(ASIMD_PERMUTE, ASIMD, PARTIAL, "AdvSIMD permute", "TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE", "") \
 	X(ASIMD_EXTRACT, ASIMD, COMPLETE, "AdvSIMD extract", "TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE", "tcti_gadget_executes_complete_simd_ext_family") \
 	X(ASIMD_MODIFIED_IMMEDIATE, ASIMD, PARTIAL, "AdvSIMD modified immediate", "TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE", "tcti_decode_recognizes_simd_modified_immediates") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	19
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	18
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
