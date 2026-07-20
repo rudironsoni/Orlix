@@ -16581,6 +16581,174 @@ static void tcti_gadget_executes_complete_conditional_select_family(
 		tcti_decode_aarch64(0x1a800800U).decode_class);
 }
 
+static u32 tcti_test_encode_conditional_compare(bool is_64bit, bool subtract,
+		bool immediate, u8 right, u8 condition, u8 rn, u8 nzcv)
+{
+	return 0x3a400000U | (is_64bit ? BIT(31) : 0) |
+	       (subtract ? BIT(30) : 0) | ((u32)right << 16) |
+	       ((u32)condition << 12) | (immediate ? BIT(11) : 0) |
+	       ((u32)rn << 5) | nzcv;
+}
+
+static u8 tcti_test_add_sub_nzcv(bool is_64bit, bool subtract,
+		u64 left, u64 right)
+{
+	u64 mask = is_64bit ? ~0ULL : 0xffffffffULL;
+	u64 sign = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+	u64 result;
+	u8 nzcv = 0;
+	bool overflow;
+	bool carry;
+
+	left &= mask;
+	right &= mask;
+	result = subtract ? left - right : left + right;
+	result &= mask;
+	carry = subtract ? left >= right : result < left;
+	overflow = subtract ?
+		!!((left ^ right) & (left ^ result) & sign) :
+		!!(~(left ^ right) & (left ^ result) & sign);
+	if (result & sign)
+		nzcv |= BIT(3);
+	if (!result)
+		nzcv |= BIT(2);
+	if (carry)
+		nzcv |= BIT(1);
+	if (overflow)
+		nzcv |= BIT(0);
+	return nzcv;
+}
+
+static void tcti_gadget_executes_complete_conditional_compare_family(
+	struct kunit *test)
+{
+	static const u64 operand_values[] = {
+		0,
+		1,
+		0xffffffffULL,
+		0x7fffffffULL,
+		0x80000000ULL,
+		0xffffffffffffffffULL,
+		0x7fffffffffffffffULL,
+		0x8000000000000000ULL,
+	};
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+					PSR_C_BIT | PSR_V_BIT;
+	unsigned int is_64bit;
+	unsigned int subtract;
+	unsigned int immediate;
+	unsigned int condition;
+	unsigned int current_nzcv;
+	unsigned int fallback_nzcv;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		for (subtract = 0; subtract < 2; subtract++) {
+			for (immediate = 0; immediate < 2; immediate++) {
+				for (condition = 0; condition < 16; condition++) {
+					for (current_nzcv = 0; current_nzcv < 16;
+					     current_nzcv++) {
+						for (fallback_nzcv = 0;
+						     fallback_nzcv < 16;
+						     fallback_nzcv++) {
+							struct tcti_decoded_instruction decoded;
+							struct pt_regs before;
+							struct pt_regs regs = {};
+							u8 rn = (condition + current_nzcv +
+								 fallback_nzcv) & 0x1fU;
+							u8 right = (condition + 2 * current_nzcv +
+								    fallback_nzcv) & 0x1fU;
+							bool condition_holds;
+							u64 left_value;
+							u64 right_value;
+							u8 expected_nzcv;
+							u32 instruction;
+							unsigned int reg;
+							int ret;
+
+							instruction = tcti_test_encode_conditional_compare(
+								is_64bit, subtract, immediate,
+								right, condition, rn,
+								fallback_nzcv);
+							decoded = tcti_decode_aarch64(instruction);
+							KUNIT_ASSERT_EQ_MSG(
+								test, TCTI_DECODE_CONDITIONAL_COMPARE,
+								decoded.decode_class,
+								"sf=%u subtract=%u immediate=%u condition=%u current=%u fallback=%u rn=%u right=%u instruction=%08x",
+								is_64bit, subtract, immediate,
+								condition, current_nzcv,
+								fallback_nzcv, rn, right,
+								instruction);
+							KUNIT_EXPECT_EQ(test, !!is_64bit,
+									decoded.is_64bit);
+							KUNIT_EXPECT_EQ(test, !!subtract,
+									decoded.subtract);
+							KUNIT_EXPECT_EQ(test, !!immediate,
+									decoded.immediate);
+							KUNIT_EXPECT_EQ(test, condition,
+									decoded.condition);
+							KUNIT_EXPECT_EQ(test, fallback_nzcv,
+									decoded.nzcv);
+							KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+							KUNIT_EXPECT_EQ(test, right,
+									immediate ? decoded.imm12 :
+										    decoded.rm);
+
+							for (reg = 0; reg < 31; reg++)
+								regs.regs[reg] =
+									0xeeee000000000000ULL + reg;
+							if (rn < 31)
+								regs.regs[rn] = operand_values[
+									(condition + current_nzcv) %
+									ARRAY_SIZE(operand_values)];
+							if (!immediate && right < 31)
+								regs.regs[right] = operand_values[
+									(fallback_nzcv + subtract + 3) %
+									ARRAY_SIZE(operand_values)];
+							regs.sp = 0xffff000000000000ULL;
+							regs.pc = 0x706a865abcULL;
+							regs.pstate = (0x155UL & ~nzcv_mask) |
+								tcti_test_nzcv_bits(current_nzcv);
+							before = regs;
+							condition_holds = tcti_test_condition_holds(
+								condition, current_nzcv);
+							left_value = rn == 31 ? 0 : before.regs[rn];
+							right_value = immediate ? right :
+								(right == 31 ? 0 : before.regs[right]);
+							expected_nzcv = condition_holds ?
+								tcti_test_add_sub_nzcv(is_64bit,
+									subtract, left_value,
+									right_value) :
+								fallback_nzcv;
+
+							ret = tcti_test_execute_decoded_gadget(
+								&regs, &decoded);
+							KUNIT_ASSERT_EQ(test, 0, ret);
+							for (reg = 0; reg < 31; reg++)
+								KUNIT_EXPECT_EQ(test,
+									before.regs[reg], regs.regs[reg]);
+							KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+							KUNIT_EXPECT_EQ(
+								test,
+								(before.pstate & ~nzcv_mask) |
+									tcti_test_nzcv_bits(expected_nzcv),
+								regs.pstate);
+							KUNIT_EXPECT_EQ(test,
+								before.pc + sizeof(u32), regs.pc);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x1a400000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x3a400400U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x3a400010U).decode_class);
+}
+
 static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
@@ -17564,6 +17732,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_test_branch_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_unconditional_branch_register_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_conditional_select_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_conditional_compare_family),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_select_family),

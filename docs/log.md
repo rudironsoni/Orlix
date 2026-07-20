@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] fix | Complete integer conditional compare
+
+Closed the A64 `CCMP` and `CCMN` family through production decode, lowering, and gadget execution. KUnit proves both widths, register and immediate forms, every condition across every current and fallback NZCV value, all register and immediate fields, zero-register semantics, independent addition and subtraction flag results, false-condition fallback, preserved registers and stack pointer, and exact PC progression. The decoder now requires the architectural `S` bit and rejects the reserved bit 10 and bit 4 encodings. The kernel-owned inventory reports 16 of 52 families complete with 36 explicit gaps.
+
 ## [2026-07-20] fix | Complete integer conditional select
 
 Closed the A64 `CSEL`, `CSINC`, `CSINV`, and `CSNEG` family through production decode, lowering, and gadget execution. KUnit proves both widths, every condition and NZCV combination, every register field, zero-register behavior, destination-source aliasing, false-path transforms, 32-bit zero extension, preserved flags and stack pointer, and exact PC progression. The decoder now rejects the reserved `S` and fixed `op2` bits instead of treating them as legal selects. The kernel-owned inventory reports 15 of 52 families complete with 37 explicit gaps.
