@@ -15859,6 +15859,22 @@ static unsigned long tcti_test_nzcv_bits(u8 nzcv)
 	return bits;
 }
 
+static int tcti_test_execute_decoded_gadget(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	unsigned long fault_address = 0;
+	size_t word_count;
+	int ret;
+
+	ret = tcti_lower_decoded_instruction(decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	if (ret)
+		return ret;
+	return tcti_execute_gadget_program(NULL, regs, program, word_count,
+					   &fault_address);
+}
+
 static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
@@ -15916,7 +15932,7 @@ static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	}
 }
 
-static void tcti_switch_executes_complete_fp_conditional_compare_family(
+static void tcti_gadget_executes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
 	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
@@ -15962,8 +15978,8 @@ static void tcti_switch_executes_complete_fp_conditional_compare_family(
 						current->thread.user_simd[2] = left;
 						current->thread.user_simd[4] = right;
 						current->thread.user_fpsr = BIT(7);
-						ret = tcti_switch_debug_execute_decoded(
-							NULL, &regs, &decoded, NULL);
+						ret = tcti_test_execute_decoded_gadget(
+							&regs, &decoded);
 						KUNIT_ASSERT_EQ(test, 0, ret);
 						expected_nzcv = tcti_test_nzcv_bits(
 							tcti_test_condition_holds(condition,
@@ -16000,8 +16016,7 @@ static void tcti_switch_executes_complete_fp_conditional_compare_family(
 			current->thread.user_simd[62] = type ?
 				0x3ff0000000000000ULL : 0x3f800000ULL;
 			current->thread.user_fpsr = BIT(7);
-			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
-							 &decoded, NULL);
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
 			KUNIT_ASSERT_EQ(test, 0, ret);
 			KUNIT_EXPECT_EQ(test, tcti_test_nzcv_bits(3),
 					regs.pstate & nzcv_mask);
@@ -16013,8 +16028,7 @@ static void tcti_switch_executes_complete_fp_conditional_compare_family(
 				0x7ff0000000000001ULL : 0x7f800001ULL;
 			current->thread.user_fpsr = BIT(7);
 			regs.pc = 0xa600;
-			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
-							 &decoded, NULL);
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
 			KUNIT_ASSERT_EQ(test, 0, ret);
 			KUNIT_EXPECT_EQ(test, BIT(7) | BIT(0),
 					current->thread.user_fpsr);
@@ -16026,8 +16040,7 @@ static void tcti_switch_executes_complete_fp_conditional_compare_family(
 			current->thread.user_fpsr = BIT(7);
 			regs.pc = 0xa700;
 			regs.pstate = 0;
-			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
-							 &decoded, NULL);
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
 			KUNIT_ASSERT_EQ(test, 0, ret);
 			KUNIT_EXPECT_EQ(test, tcti_test_nzcv_bits(0xa),
 					regs.pstate & nzcv_mask);
@@ -16101,7 +16114,7 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 	}
 }
 
-static void tcti_switch_executes_exhaustive_fp_compare_family(
+static void tcti_gadget_executes_exhaustive_fp_compare_family(
 	struct kunit *test)
 {
 	static const struct {
@@ -16175,8 +16188,7 @@ static void tcti_switch_executes_exhaustive_fp_compare_family(
 				current->thread.user_simd[2] = left;
 				current->thread.user_simd[4] = right;
 				current->thread.user_fpsr = BIT(7);
-				ret = tcti_switch_debug_execute_decoded(NULL, &regs,
-								 &decoded, NULL);
+				ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
 				KUNIT_ASSERT_EQ(test, 0, ret);
 				KUNIT_EXPECT_EQ(test,
 						tcti_test_nzcv_bits(
@@ -16208,8 +16220,7 @@ static void tcti_switch_executes_exhaustive_fp_compare_family(
 						zero_cases[index].single;
 				current->thread.user_simd[2] = left;
 				current->thread.user_fpsr = BIT(7);
-				ret = tcti_switch_debug_execute_decoded(NULL, &regs,
-								 &decoded, NULL);
+				ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
 				KUNIT_ASSERT_EQ(test, 0, ret);
 				KUNIT_EXPECT_EQ(test,
 						tcti_test_nzcv_bits(zero_cases[index].nzcv),
@@ -16224,6 +16235,168 @@ static void tcti_switch_executes_exhaustive_fp_compare_family(
 				KUNIT_EXPECT_EQ(test, left, current->thread.user_simd[2]);
 				KUNIT_EXPECT_EQ(test, 0xa904ULL, regs.pc);
 			}
+		}
+	}
+}
+
+static u32 tcti_test_fp3_instruction(unsigned int type, unsigned int operation,
+				     unsigned int rd, unsigned int rn,
+				     unsigned int rm, unsigned int ra)
+{
+	return 0x1f000000U | (type << 22) |
+		((operation & 2U) ? BIT(21) : 0) |
+		((operation & 1U) ? BIT(15) : 0) |
+		(rm << 16) | (ra << 10) | (rn << 5) | rd;
+}
+
+static void tcti_decode_recognizes_exhaustive_fp_3source_family(
+	struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	unsigned int operation;
+	unsigned int type;
+	unsigned int reg;
+	u32 instruction;
+
+	for (type = 0; type < 4; type++) {
+		for (operation = 0; operation < 4; operation++) {
+			for (reg = 0; reg < 32; reg++) {
+				instruction = tcti_test_fp3_instruction(
+					type, operation, reg, reg, reg, reg);
+				decoded = tcti_decode_aarch64(instruction);
+				if (type > 1) {
+					KUNIT_ASSERT_EQ_MSG(
+						test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class,
+						"reserved type=%u operation=%u reg=%u instruction=%08x",
+						type, operation, reg, instruction);
+					continue;
+				}
+				KUNIT_ASSERT_EQ_MSG(
+					test, TCTI_DECODE_FP_SCALAR_3SOURCE,
+					decoded.decode_class,
+					"type=%u operation=%u reg=%u instruction=%08x",
+					type, operation, reg, instruction);
+				KUNIT_EXPECT_EQ(test, reg, decoded.rd);
+				KUNIT_EXPECT_EQ(test, reg, decoded.rn);
+				KUNIT_EXPECT_EQ(test, reg, decoded.rm);
+				KUNIT_EXPECT_EQ(test, reg, decoded.ra);
+				KUNIT_EXPECT_EQ(test, operation, decoded.fp3_op);
+				KUNIT_EXPECT_EQ(test,
+						type ? sizeof(u64) : sizeof(u32),
+						decoded.access_size);
+				KUNIT_EXPECT_EQ(test, decoded.access_size,
+						decoded.result_size);
+			}
+		}
+	}
+}
+
+static void tcti_gadget_executes_exhaustive_fp_3source_family(
+	struct kunit *test)
+{
+	static const u64 basic_expected[2][4] = {
+		{ 0x0000000040500000ULL, 0x00000000c0300000ULL,
+		  0x00000000c0500000ULL, 0x0000000040300000ULL },
+		{ 0x400a000000000000ULL, 0xc006000000000000ULL,
+		  0xc00a000000000000ULL, 0x4006000000000000ULL },
+	};
+	static const u64 fused_left[2] = {
+		0x000000003f800001ULL, 0x3ff0000000000001ULL,
+	};
+	static const u64 fused_right[2] = {
+		0x000000003f7ffffeULL, 0x3feffffffffffffeULL,
+	};
+	static const u64 fused_addend[2] = {
+		0x00000000bf800000ULL, 0xbff0000000000000ULL,
+	};
+	static const u64 fused_expected[2] = {
+		0x00000000a8800000ULL, 0xb970000000000000ULL,
+	};
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs;
+	unsigned int operation;
+	unsigned int type;
+	u64 left;
+	u64 right;
+	u64 addend;
+	u64 result;
+	u32 instruction;
+	int ret;
+
+	for (type = 0; type < 2; type++) {
+		for (operation = 0; operation < 4; operation++) {
+			instruction = tcti_test_fp3_instruction(type, operation,
+							1, 1, 2, 3);
+			decoded = tcti_decode_aarch64(instruction);
+			memset(&regs, 0, sizeof(regs));
+			regs.pc = 0xaa00;
+			left = type ? 0x3ff8000000000000ULL : 0x3fc00000ULL;
+			right = type ? 0x4000000000000000ULL : 0x40000000ULL;
+			addend = type ? 0x3fd0000000000000ULL : 0x3e800000ULL;
+			current->thread.user_simd[2] = left;
+			current->thread.user_simd[3] = ~0ULL;
+			current->thread.user_simd[4] = right;
+			current->thread.user_simd[6] = addend;
+			current->thread.user_fpcr = 0;
+			current->thread.user_fpsr = BIT(7);
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, basic_expected[type][operation],
+					current->thread.user_simd[2]);
+			KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+			KUNIT_EXPECT_EQ(test, right, current->thread.user_simd[4]);
+			KUNIT_EXPECT_EQ(test, addend, current->thread.user_simd[6]);
+			KUNIT_EXPECT_EQ(test, BIT(7), current->thread.user_fpsr);
+			KUNIT_EXPECT_EQ(test, 0xaa04ULL, regs.pc);
+		}
+
+		instruction = tcti_test_fp3_instruction(type, TCTI_FP3_FMADD,
+							0, 1, 2, 3);
+		decoded = tcti_decode_aarch64(instruction);
+		memset(&regs, 0, sizeof(regs));
+		regs.pc = 0xab00;
+		current->thread.user_simd[2] = fused_left[type];
+		current->thread.user_simd[4] = fused_right[type];
+		current->thread.user_simd[6] = fused_addend[type];
+		current->thread.user_fpcr = 0;
+		current->thread.user_fpsr = BIT(7);
+		ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, fused_expected[type],
+				current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, BIT(7), current->thread.user_fpsr);
+		KUNIT_EXPECT_EQ(test, 0xab04ULL, regs.pc);
+
+		for (operation = 0; operation < 4; operation++) {
+			instruction = tcti_test_fp3_instruction(type, operation,
+							0, 1, 2, 3);
+			decoded = tcti_decode_aarch64(instruction);
+			memset(&regs, 0, sizeof(regs));
+			regs.pc = 0xac00;
+			current->thread.user_simd[2] = type ?
+				0x7ff0000000000000ULL : 0x7f800000ULL;
+			current->thread.user_simd[4] = 0;
+			current->thread.user_simd[6] = type ?
+				0x3ff0000000000000ULL : 0x3f800000ULL;
+			current->thread.user_fpcr = 0;
+			current->thread.user_fpsr = BIT(7);
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			result = current->thread.user_simd[0];
+			if (type) {
+				KUNIT_EXPECT_EQ(test, 0x7ff0000000000000ULL,
+						result & 0x7ff0000000000000ULL);
+				KUNIT_EXPECT_NE(test, 0ULL,
+						result & 0x000fffffffffffffULL);
+			} else {
+				KUNIT_EXPECT_EQ(test, 0x7f800000ULL,
+						result & 0x7f800000ULL);
+				KUNIT_EXPECT_NE(test, 0ULL, result & 0x007fffffULL);
+			}
+			KUNIT_EXPECT_EQ(test, BIT(7) | BIT(0),
+					current->thread.user_fpsr);
+			KUNIT_EXPECT_EQ(test, 0xac04ULL, regs.pc);
 		}
 	}
 }
@@ -16682,9 +16855,11 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_select_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_conditional_compare_family),
-	KUNIT_CASE(tcti_switch_executes_complete_fp_conditional_compare_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_compare_family),
 	KUNIT_CASE(tcti_decode_recognizes_exhaustive_fp_compare_family),
-	KUNIT_CASE(tcti_switch_executes_exhaustive_fp_compare_family),
+	KUNIT_CASE(tcti_gadget_executes_exhaustive_fp_compare_family),
+	KUNIT_CASE(tcti_decode_recognizes_exhaustive_fp_3source_family),
+	KUNIT_CASE(tcti_gadget_executes_exhaustive_fp_3source_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_scalar_2source_family),
 	KUNIT_CASE(tcti_switch_executes_fp_scalar_2source_minmax_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),

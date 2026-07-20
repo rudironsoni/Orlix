@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete scalar fused three-source FP
+
+Rejected reserved scalar FP three-source type values and proved `FMADD`, `FMSUB`, `FNMADD`, and `FNMSUB` for both precisions across every SIMD register field. KUnit covers destination-source aliasing, fused-only results that differ from separate multiply and add, invalid-operation NaN and FPSR state, upper-lane clearing, source preservation, and exact PC progression through production lowering and gadget execution. The scalar compare and conditional-compare family proofs now use that same production path instead of calling decoded semantics directly.
+
 ## [2026-07-20] verify | Complete scalar FP compare coverage
 
 Exhaustively proved `FCMP` and `FCMPE` register and zero forms across both precisions, all SIMD source-register fields, quiet and signaling NaNs, signed zero, infinities, NZCV results, accumulated FPSR IOC state, operand preservation, and PC progression. LLVM disassembly independently confirmed that every encoded `Rm` value in the zero form is valid and canonicalizes to comparison with `#0.0`, so TCTI preserves those encodings rather than narrowing the ISA.

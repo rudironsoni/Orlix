@@ -652,12 +652,16 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_FP_SCALAR_3SOURCE_MASK) ==
 	    AARCH64_FP_SCALAR_3SOURCE_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+
+		if (type > 1)
+			return decoded;
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_3SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.ra = (instruction >> 10) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = instruction & BIT(22) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.fp3_op = (enum tcti_fp_scalar_3source_op)(
