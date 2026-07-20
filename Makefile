@@ -274,6 +274,7 @@ tcti-kernel-tests: xcodeproj
 		ORLIX_KERNEL_KUNIT=1 \
 		ORLIX_BUILD_ROOT='$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)' \
 		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+		DEVELOPMENT_TEAM='$(ORLIX_DEVELOPMENT_TEAM)' \
 		build-for-testing
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
 		-project Orlix.xcodeproj \
@@ -281,6 +282,7 @@ tcti-kernel-tests: xcodeproj
 		-configuration Debug \
 		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
 		-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession \
+		DEVELOPMENT_TEAM='$(ORLIX_DEVELOPMENT_TEAM)' \
 		test-without-building
 
 mlibc-tests: xcodeproj

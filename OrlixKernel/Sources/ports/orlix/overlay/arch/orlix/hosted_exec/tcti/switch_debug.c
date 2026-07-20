@@ -1080,9 +1080,7 @@ static int tcti_execute_add_sub_extended_register(struct pt_regs *regs,
 						 const struct tcti_decoded_instruction *decoded)
 {
 	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 left = decoded->set_flags ?
-		   tcti_read_gpr_or_zero(regs, decoded->rn, access_size) :
-		   tcti_read_gpr_or_sp(regs, decoded->rn, access_size);
+	u64 left = tcti_read_gpr_or_sp(regs, decoded->rn, access_size);
 	u64 right = tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
 
 	right = tcti_extend_register_source(right, decoded->offset_extend);

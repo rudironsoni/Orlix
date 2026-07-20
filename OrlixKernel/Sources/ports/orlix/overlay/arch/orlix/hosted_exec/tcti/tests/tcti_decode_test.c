@@ -7612,6 +7612,191 @@ static void tcti_switch_executes_neg_with_xzr_source(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x41361127bd98ULL, regs.pc);
 }
 
+static u32 tcti_test_encode_add_sub_extended_register(bool is_64bit,
+						       bool subtract,
+						       bool set_flags, u8 rm,
+						       u8 option, u8 amount,
+						       u8 rn, u8 rd)
+{
+	return 0x0b200000U | (is_64bit ? BIT(31) : 0) |
+		(subtract ? BIT(30) : 0) | (set_flags ? BIT(29) : 0) |
+		((u32)rm << 16) | ((u32)option << 13) |
+		((u32)amount << 10) | ((u32)rn << 5) | rd;
+}
+
+static u64 tcti_test_extend_register_source(u64 value, u8 option)
+{
+	switch (option) {
+	case 0:
+		return (u8)value;
+	case 1:
+		return (u16)value;
+	case 2:
+		return (u32)value;
+	case 3:
+		return value;
+	case 4:
+		return (s64)(s8)value;
+	case 5:
+		return (s64)(s16)value;
+	case 6:
+		return (s64)(s32)value;
+	case 7:
+		return (s64)value;
+	default:
+		return value;
+	}
+}
+
+static void tcti_gadget_executes_complete_add_sub_extended_register_family(
+	struct kunit *test)
+{
+	static const u64 source_values[] = {
+		0,
+		1,
+		0x7fffffffULL,
+		0x80000000ULL,
+		0xffffffffULL,
+		0x7fffffffffffffffULL,
+		0x8000000000000000ULL,
+		0xffffffffffffffffULL,
+	};
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int encoding_case;
+
+	for (encoding_case = 0; encoding_case < BIT(14); encoding_case++) {
+		struct tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 expected_registers[31];
+		unsigned int selector = encoding_case;
+		u8 rn = selector & 0x1fU;
+		u8 amount;
+		u8 option;
+		bool set_flags;
+		bool subtract;
+		bool is_64bit;
+		u8 rm;
+		u8 rd;
+		u64 mask;
+		u64 sign_bit;
+		u64 left;
+		u64 right;
+		u64 expected;
+		u64 expected_sp;
+		unsigned long expected_pstate;
+		u32 instruction;
+		unsigned int reg;
+		int ret;
+
+		selector >>= 5;
+		amount = selector & 0x7U;
+		selector >>= 3;
+		option = selector & 0x7U;
+		selector >>= 3;
+		set_flags = selector & 0x1U;
+		selector >>= 1;
+		subtract = selector & 0x1U;
+		selector >>= 1;
+		is_64bit = selector & 0x1U;
+		rm = (31 - rn + option) & 0x1fU;
+		rd = (rn + amount + set_flags) & 0x1fU;
+		mask = is_64bit ? U64_MAX : U32_MAX;
+		sign_bit = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+		instruction = tcti_test_encode_add_sub_extended_register(
+			is_64bit, subtract, set_flags, rm, option, amount, rn, rd);
+		decoded = tcti_decode_aarch64(instruction);
+		if (amount > 4) {
+			KUNIT_EXPECT_EQ_MSG(
+				test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class,
+				"accepted invalid add/sub extended instruction %08x",
+				instruction);
+			continue;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(
+			test, TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER,
+			decoded.decode_class,
+			"rejected add/sub extended instruction %08x", instruction);
+		KUNIT_EXPECT_EQ(test, is_64bit, decoded.is_64bit);
+		KUNIT_EXPECT_EQ(test, subtract, decoded.subtract);
+		KUNIT_EXPECT_EQ(test, set_flags, decoded.set_flags);
+		KUNIT_EXPECT_EQ(test, option, decoded.offset_extend);
+		KUNIT_EXPECT_EQ(test, amount, decoded.shift_amount);
+		KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+		KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+		seen_rn[rn] = true;
+		seen_rm[rm] = true;
+		seen_rd[rd] = true;
+
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x13579bdf2468ace0ULL ^
+				((u64)instruction << (reg & 7)) ^ reg;
+		regs.sp = source_values[(rn + 3) & 7];
+		if (rn < 31)
+			regs.regs[rn] = source_values[rn & 7];
+		if (rm < 31)
+			regs.regs[rm] = source_values[(rn + option + 1) & 7];
+		regs.pc = 0x62548a56a1e8ULL;
+		regs.pstate = nzcv_mask | 0x155UL;
+		before = regs;
+		memcpy(expected_registers, before.regs,
+		       sizeof(expected_registers));
+
+		left = (rn == 31 ? before.sp : before.regs[rn]) & mask;
+		right = rm == 31 ? 0 : before.regs[rm];
+		right = tcti_test_extend_register_source(right, option);
+		right = (right << amount) & mask;
+		expected = subtract ? left - right : left + right;
+		expected &= mask;
+		if (rd < 31)
+			expected_registers[rd] = expected;
+		expected_sp = !set_flags && rd == 31 ? expected : before.sp;
+		expected_pstate = before.pstate;
+		if (set_flags) {
+			bool left_negative = !!(left & sign_bit);
+			bool right_negative = !!(right & sign_bit);
+			bool result_negative = !!(expected & sign_bit);
+			unsigned long flags = 0;
+
+			if (result_negative)
+				flags |= PSR_N_BIT;
+			if (!expected)
+				flags |= PSR_Z_BIT;
+			if (subtract ? left >= right :
+			    ((__uint128_t)left + right) > mask)
+				flags |= PSR_C_BIT;
+			if (subtract ?
+			    (left_negative != right_negative &&
+			     left_negative != result_negative) :
+			    (left_negative == right_negative &&
+			     left_negative != result_negative))
+				flags |= PSR_V_BIT;
+			expected_pstate = (before.pstate & ~nzcv_mask) | flags;
+		}
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+				     sizeof(expected_registers));
+		KUNIT_EXPECT_EQ(test, expected_sp, regs.sp);
+		KUNIT_EXPECT_EQ(test, expected_pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+	}
+
+	for (encoding_case = 0; encoding_case < 32; encoding_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[encoding_case]);
+	}
+}
+
 static void tcti_switch_executes_add_sub_extended_register(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -7958,6 +8143,188 @@ static void tcti_switch_executes_conditional_select(struct kunit *test)
 			current->thread.user_simd[0]);
 	KUNIT_EXPECT_EQ(test, 0x1ad1cULL, regs.pc);
 #endif
+}
+
+static u32 tcti_test_encode_logical_shifted_register(bool is_64bit, u8 opc,
+						       bool invert, u8 shift,
+						       u8 rm, u8 amount,
+						       u8 rn, u8 rd)
+{
+	return 0x0a000000U | (is_64bit ? BIT(31) : 0) |
+		((u32)opc << 29) | ((u32)shift << 22) |
+		(invert ? BIT(21) : 0) | ((u32)rm << 16) |
+		((u32)amount << 10) | ((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_logical_shifted_register_family(
+	struct kunit *test)
+{
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int is_64bit;
+	unsigned int opc;
+	unsigned int invert;
+	unsigned int shift;
+	unsigned int amount;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		u8 width = is_64bit ? 64 : 32;
+		u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+		u64 sign_bit = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+
+		for (opc = 0; opc < 4; opc++) {
+			for (invert = 0; invert < 2; invert++) {
+				for (shift = 0; shift < 4; shift++) {
+					for (amount = 0; amount < 64; amount++) {
+						struct tcti_decoded_instruction decoded;
+						struct pt_regs regs = {};
+						struct pt_regs before;
+						bool valid = amount < width;
+						u8 rn = (amount + opc) & 0x1fU;
+						u8 rm = (31 - amount + shift) & 0x1fU;
+						u8 rd = (amount + 3 * opc + invert) & 0x1fU;
+						u64 left;
+						u64 right;
+						u64 shifted;
+						u64 expected;
+						u64 expected_registers[31];
+						unsigned long expected_pstate;
+						u32 instruction;
+						unsigned int reg;
+						int ret;
+
+						instruction =
+							tcti_test_encode_logical_shifted_register(
+								is_64bit, opc, invert, shift,
+								rm, amount, rn, rd);
+						decoded = tcti_decode_aarch64(instruction);
+						if (!valid) {
+							KUNIT_EXPECT_EQ_MSG(
+								test, TCTI_DECODE_UNSUPPORTED,
+								decoded.decode_class,
+								"accepted invalid sf=%u opc=%u N=%u shift=%u amount=%u instruction=%08x",
+								is_64bit, opc, invert, shift,
+								amount, instruction);
+							continue;
+						}
+
+						KUNIT_ASSERT_EQ_MSG(
+							test, TCTI_DECODE_LOGICAL_SHIFTED_REGISTER,
+							decoded.decode_class,
+							"rejected sf=%u opc=%u N=%u shift=%u amount=%u instruction=%08x",
+							is_64bit, opc, invert, shift,
+							amount, instruction);
+						KUNIT_EXPECT_EQ(test, !!is_64bit,
+							decoded.is_64bit);
+						KUNIT_EXPECT_EQ(test, !!invert,
+							decoded.invert_second_operand);
+						KUNIT_EXPECT_EQ(test, opc == 3, decoded.set_flags);
+						KUNIT_EXPECT_EQ(test,
+							opc == 0 || opc == 3 ? TCTI_LOGICAL_AND :
+							opc == 1 ? TCTI_LOGICAL_ORR : TCTI_LOGICAL_EOR,
+							decoded.logical_op);
+						KUNIT_EXPECT_EQ(test, shift, decoded.shift);
+						KUNIT_EXPECT_EQ(test, amount,
+							decoded.shift_amount);
+						KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+						KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+						KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+						seen_rn[rn] = true;
+						seen_rm[rm] = true;
+						seen_rd[rd] = true;
+
+						for (reg = 0; reg < 31; reg++)
+							regs.regs[reg] =
+								0xfedcba9876543210ULL ^
+								((u64)instruction << (reg & 7)) ^ reg;
+						regs.sp = 0x706a865abcULL;
+						regs.pc = 0x2468ace000ULL;
+						regs.pstate = nzcv_mask | 0x155UL;
+						before = regs;
+						memcpy(expected_registers, before.regs,
+						       sizeof(expected_registers));
+						left = rn == 31 ? 0 : before.regs[rn];
+						right = rm == 31 ? 0 : before.regs[rm];
+						left &= width_mask;
+						right &= width_mask;
+						switch (shift) {
+						case 0:
+							shifted = right << amount;
+							break;
+						case 1:
+							shifted = right >> amount;
+							break;
+						case 2:
+							shifted = right >> amount;
+							if (amount && (right & sign_bit))
+								shifted |= width_mask <<
+									(width - amount);
+							break;
+						case 3:
+							shifted = amount ?
+								(right >> amount) |
+								(right << (width - amount)) : right;
+							break;
+						default:
+							KUNIT_FAIL(test, "invalid logical shift operation");
+							return;
+						}
+						shifted &= width_mask;
+						if (invert)
+							shifted = ~shifted & width_mask;
+						switch (opc) {
+						case 0:
+						case 3:
+							expected = left & shifted;
+							break;
+						case 1:
+							expected = left | shifted;
+							break;
+						case 2:
+							expected = left ^ shifted;
+							break;
+						default:
+							KUNIT_FAIL(test, "invalid logical operation");
+							return;
+						}
+						expected &= width_mask;
+						if (rd < 31)
+							expected_registers[rd] = expected;
+						expected_pstate = before.pstate;
+						if (opc == 3) {
+							unsigned long flags = 0;
+
+							if (expected & sign_bit)
+								flags |= PSR_N_BIT;
+							if (!expected)
+								flags |= PSR_Z_BIT;
+							expected_pstate =
+								(before.pstate & ~nzcv_mask) | flags;
+						}
+
+						ret = tcti_switch_debug_execute_decoded(
+							NULL, &regs, &decoded, NULL);
+						KUNIT_ASSERT_EQ(test, 0, ret);
+						KUNIT_EXPECT_MEMEQ(test, expected_registers,
+							regs.regs, sizeof(expected_registers));
+						KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+						KUNIT_EXPECT_EQ(test, expected_pstate, regs.pstate);
+						KUNIT_EXPECT_EQ(test,
+							before.pc + sizeof(u32), regs.pc);
+					}
+				}
+			}
+		}
+	}
+
+	for (amount = 0; amount < 32; amount++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[amount]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[amount]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[amount]);
+	}
 }
 
 static void tcti_switch_executes_logical_shifted_register(struct kunit *test)
@@ -8696,6 +9063,219 @@ static void tcti_switch_executes_complete_data_processing_1source_family(struct 
 	KUNIT_EXPECT_EQ(test, 7ULL, regs.regs[10]);
 }
 
+static u32 tcti_test_encode_data_processing_1source(bool is_64bit, u8 opcode,
+						     u8 rn, u8 rd)
+{
+	return 0x5ac00000U | (is_64bit ? BIT(31) : 0) |
+		((u32)opcode << 10) | ((u32)rn << 5) | rd;
+}
+
+static u64 tcti_test_reverse_bits(u64 value, u8 width)
+{
+	u64 result = 0;
+	u8 bit;
+
+	for (bit = 0; bit < width; bit++)
+		result |= ((value >> bit) & 1) << (width - 1 - bit);
+	return result;
+}
+
+static u64 tcti_test_reverse_bytes_in_lanes(u64 value, u8 width,
+						     u8 lane_width)
+{
+	u64 result = 0;
+	u8 lane;
+	u8 byte;
+
+	for (lane = 0; lane < width; lane += lane_width) {
+		for (byte = 0; byte < lane_width / 8; byte++) {
+			u8 source = lane + byte * 8;
+			u8 destination = lane + lane_width - 8 - byte * 8;
+
+			result |= ((value >> source) & 0xff) << destination;
+		}
+	}
+	return result;
+}
+
+static u64 tcti_test_count_leading_zeros(u64 value, u8 width)
+{
+	u64 count = 0;
+	int bit;
+
+	for (bit = width - 1; bit >= 0; bit--) {
+		if (value & BIT_ULL(bit))
+			break;
+		count++;
+	}
+	return count;
+}
+
+static u64 tcti_test_count_leading_sign_bits(u64 value, u8 width)
+{
+	bool sign = !!(value & BIT_ULL(width - 1));
+	u64 count = 0;
+	int bit;
+
+	for (bit = width - 2; bit >= 0; bit--) {
+		if (!!(value & BIT_ULL(bit)) != sign)
+			break;
+		count++;
+	}
+	return count;
+}
+
+static void tcti_gadget_executes_complete_data_processing_1source_family(
+	struct kunit *test)
+{
+	static const u64 source_values[] = {
+		0,
+		1,
+		2,
+		0x80000000ULL,
+		0xffffffffULL,
+		0x0123456789abcdefULL,
+		0x8000000000000000ULL,
+		0xffffffffffffffffULL,
+	};
+	bool seen_rn[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int encoding_case;
+
+	for (encoding_case = 0; encoding_case < BIT(12); encoding_case++) {
+		struct tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 expected_registers[31];
+		unsigned int selector = encoding_case;
+		u8 rn = selector & 0x1fU;
+		u8 opcode;
+		bool is_64bit;
+		u8 rd;
+		bool valid;
+		enum tcti_data_processing_1source_op expected_op = TCTI_DP1_RBIT;
+		u8 width;
+		u64 mask;
+		u64 value;
+		u64 expected;
+		u32 instruction;
+		unsigned int reg;
+		int ret;
+
+		selector >>= 5;
+		opcode = selector & 0x3fU;
+		selector >>= 6;
+		is_64bit = selector & 0x1U;
+		rd = (rn + opcode + is_64bit) & 0x1fU;
+		valid = opcode <= 5 && (is_64bit || opcode != 3);
+		if (valid) {
+			switch (opcode) {
+			case 0:
+				expected_op = TCTI_DP1_RBIT;
+				break;
+			case 1:
+				expected_op = TCTI_DP1_REV16;
+				break;
+			case 2:
+				expected_op = is_64bit ? TCTI_DP1_REV32 :
+					TCTI_DP1_REV;
+				break;
+			case 3:
+				expected_op = TCTI_DP1_REV;
+				break;
+			case 4:
+				expected_op = TCTI_DP1_CLZ;
+				break;
+			case 5:
+				expected_op = TCTI_DP1_CLS;
+				break;
+			}
+		}
+
+		instruction = tcti_test_encode_data_processing_1source(
+			is_64bit, opcode, rn, rd);
+		decoded = tcti_decode_aarch64(instruction);
+		if (!valid) {
+			KUNIT_EXPECT_EQ_MSG(
+				test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class,
+				"accepted reserved data-processing one-source instruction %08x",
+				instruction);
+			continue;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(
+			test, TCTI_DECODE_DATA_PROCESSING_1SOURCE,
+			decoded.decode_class,
+			"rejected data-processing one-source instruction %08x",
+			instruction);
+		KUNIT_EXPECT_EQ(test, expected_op, decoded.dp1_op);
+		KUNIT_EXPECT_EQ(test, is_64bit, decoded.is_64bit);
+		KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+		KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+		seen_rn[rn] = true;
+		seen_rd[rd] = true;
+
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0xfedcba9876543210ULL ^
+				((u64)instruction << (reg & 7)) ^ reg;
+		if (rn < 31)
+			regs.regs[rn] = source_values[(rn + opcode) & 7];
+		regs.sp = 0x706a865abcULL;
+		regs.pc = 0x2468ace000ULL;
+		regs.pstate = PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT |
+			PSR_V_BIT | 0x155UL;
+		before = regs;
+		memcpy(expected_registers, before.regs,
+		       sizeof(expected_registers));
+		width = is_64bit ? 64 : 32;
+		mask = is_64bit ? U64_MAX : U32_MAX;
+		value = (rn == 31 ? 0 : before.regs[rn]) & mask;
+		switch (expected_op) {
+		case TCTI_DP1_RBIT:
+			expected = tcti_test_reverse_bits(value, width);
+			break;
+		case TCTI_DP1_REV16:
+			expected = tcti_test_reverse_bytes_in_lanes(
+				value, width, 16);
+			break;
+		case TCTI_DP1_REV32:
+			expected = tcti_test_reverse_bytes_in_lanes(
+				value, width, 32);
+			break;
+		case TCTI_DP1_REV:
+			expected = tcti_test_reverse_bytes_in_lanes(
+				value, width, width);
+			break;
+		case TCTI_DP1_CLZ:
+			expected = tcti_test_count_leading_zeros(value, width);
+			break;
+		case TCTI_DP1_CLS:
+			expected = tcti_test_count_leading_sign_bits(value, width);
+			break;
+		default:
+			KUNIT_FAIL(test, "invalid data-processing one-source operation");
+			return;
+		}
+		expected &= mask;
+		if (rd < 31)
+			expected_registers[rd] = expected;
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+				     sizeof(expected_registers));
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+	}
+
+	for (encoding_case = 0; encoding_case < 32; encoding_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[encoding_case]);
+	}
+}
+
 static void tcti_switch_executes_data_processing_2source(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -8803,6 +9383,214 @@ static void tcti_switch_executes_complete_crc32_family(struct kunit *test)
 	}
 }
 
+static u32 tcti_test_encode_data_processing_2source(bool is_64bit, u8 opcode,
+						     u8 rm, u8 rn, u8 rd)
+{
+	return 0x1ac00000U | (is_64bit ? BIT(31) : 0) |
+		((u32)rm << 16) | ((u32)opcode << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_data_processing_2source_family(
+	struct kunit *test)
+{
+	static const u64 left_values[] = {
+		0, 1, 0x7fffffffULL, 0x80000000ULL,
+		0x7fffffffffffffffULL, 0x8000000000000000ULL,
+		0xffffffffffffffffULL, 0x0123456789abcdefULL,
+	};
+	static const u64 right_values[] = {
+		0, 0, 1, 0xffffffffULL, 2, 0xffffffffffffffffULL, 63, 64,
+	};
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int encoding_case;
+
+	for (encoding_case = 0; encoding_case < BIT(12); encoding_case++) {
+		struct tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 expected_registers[31];
+		unsigned int selector = encoding_case;
+		u8 rn = selector & 0x1fU;
+		u8 opcode;
+		bool is_64bit;
+		u8 rm;
+		u8 rd;
+		bool crc_encoding;
+		bool crc_valid;
+		bool base_valid;
+		enum tcti_data_processing_2source_op expected_op = TCTI_DP2_UDIV;
+		u8 width;
+		u64 mask;
+		u64 left;
+		u64 right;
+		u8 amount;
+		u64 expected;
+		u32 instruction;
+		unsigned int reg;
+		int ret;
+
+		selector >>= 5;
+		opcode = selector & 0x3fU;
+		selector >>= 6;
+		is_64bit = selector & 0x1U;
+		rm = (31 - rn + opcode) & 0x1fU;
+		rd = (rn + opcode + is_64bit) & 0x1fU;
+		crc_encoding = opcode >= 0x10 && opcode <= 0x17;
+		crc_valid = crc_encoding &&
+			(((opcode & 0x3U) == 3) == is_64bit);
+		base_valid = opcode == 0x02 || opcode == 0x03 ||
+			opcode == 0x08 || opcode == 0x09 || opcode == 0x0a ||
+			opcode == 0x0b;
+		instruction = tcti_test_encode_data_processing_2source(
+			is_64bit, opcode, rm, rn, rd);
+		decoded = tcti_decode_aarch64(instruction);
+
+		if (crc_encoding) {
+			if (!crc_valid) {
+				KUNIT_EXPECT_EQ_MSG(
+					test, TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class,
+					"accepted invalid CRC instruction %08x",
+					instruction);
+				continue;
+			}
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_DATA_PROCESSING_2SOURCE,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test,
+				opcode & BIT(2) ? TCTI_DP2_CRC32C :
+					TCTI_DP2_CRC32,
+				decoded.dp2_op);
+			KUNIT_EXPECT_EQ(test, BIT(opcode & 0x3U),
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.result_size);
+			continue;
+		}
+
+		if (!base_valid) {
+			KUNIT_EXPECT_EQ_MSG(
+				test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class,
+				"accepted reserved two-source instruction %08x",
+				instruction);
+			continue;
+		}
+
+		switch (opcode) {
+		case 0x02:
+			expected_op = TCTI_DP2_UDIV;
+			break;
+		case 0x03:
+			expected_op = TCTI_DP2_SDIV;
+			break;
+		case 0x08:
+			expected_op = TCTI_DP2_LSLV;
+			break;
+		case 0x09:
+			expected_op = TCTI_DP2_LSRV;
+			break;
+		case 0x0a:
+			expected_op = TCTI_DP2_ASRV;
+			break;
+		case 0x0b:
+			expected_op = TCTI_DP2_RORV;
+			break;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(
+			test, TCTI_DECODE_DATA_PROCESSING_2SOURCE,
+			decoded.decode_class,
+			"rejected data-processing two-source instruction %08x",
+			instruction);
+		KUNIT_EXPECT_EQ(test, expected_op, decoded.dp2_op);
+		KUNIT_EXPECT_EQ(test, is_64bit, decoded.is_64bit);
+		KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+		KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+		seen_rn[rn] = true;
+		seen_rm[rm] = true;
+		seen_rd[rd] = true;
+
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x1020304050607080ULL ^
+				((u64)instruction << (reg & 7)) ^ reg;
+		if (rn < 31)
+			regs.regs[rn] = left_values[rn & 7];
+		if (rm < 31)
+			regs.regs[rm] = right_values[rn & 7];
+		regs.sp = 0x706a865abcULL;
+		regs.pc = 0x2468ace000ULL;
+		regs.pstate = PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT |
+			PSR_V_BIT | 0x155UL;
+		before = regs;
+		memcpy(expected_registers, before.regs,
+		       sizeof(expected_registers));
+		width = is_64bit ? 64 : 32;
+		mask = is_64bit ? U64_MAX : U32_MAX;
+		left = (rn == 31 ? 0 : before.regs[rn]) & mask;
+		right = (rm == 31 ? 0 : before.regs[rm]) & mask;
+		amount = right & (width - 1);
+		switch (expected_op) {
+		case TCTI_DP2_UDIV:
+			expected = right ? left / right : 0;
+			break;
+		case TCTI_DP2_SDIV:
+			if (!right) {
+				expected = 0;
+			} else if (is_64bit) {
+				s64 dividend = (s64)left;
+				s64 divisor = (s64)right;
+
+				expected = dividend == S64_MIN && divisor == -1 ?
+					(u64)dividend : (u64)(dividend / divisor);
+			} else {
+				s32 dividend = (s32)(u32)left;
+				s32 divisor = (s32)(u32)right;
+
+				expected = dividend == S32_MIN && divisor == -1 ?
+					(u32)dividend : (u32)(dividend / divisor);
+			}
+			break;
+		case TCTI_DP2_LSLV:
+			expected = left << amount;
+			break;
+		case TCTI_DP2_LSRV:
+			expected = left >> amount;
+			break;
+		case TCTI_DP2_ASRV:
+			expected = left >> amount;
+			if (amount && (left & BIT_ULL(width - 1)))
+				expected |= mask << (width - amount);
+			break;
+		case TCTI_DP2_RORV:
+			expected = tcti_test_ror_element(left, amount, width);
+			break;
+		default:
+			KUNIT_FAIL(test, "invalid data-processing two-source operation");
+			return;
+		}
+		expected &= mask;
+		if (rd < 31)
+			expected_registers[rd] = expected;
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+				     sizeof(expected_registers));
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+	}
+
+	for (encoding_case = 0; encoding_case < 32; encoding_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[encoding_case]);
+	}
+}
+
 static void tcti_switch_executes_multiply_add_sub(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -8887,6 +9675,195 @@ static void tcti_switch_executes_multiply_add_sub(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[17]);
 	KUNIT_EXPECT_EQ(test, 0x8020ULL, regs.pc);
+}
+
+static u32 tcti_test_encode_data_processing_3source(bool is_64bit, u8 family,
+						     u8 rm, bool subtract,
+						     u8 ra, u8 rn, u8 rd)
+{
+	return 0x1b000000U | (is_64bit ? BIT(31) : 0) |
+		((u32)family << 21) | ((u32)rm << 16) |
+		(subtract ? BIT(15) : 0) | ((u32)ra << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_data_processing_3source_family(
+	struct kunit *test)
+{
+	static const u64 source_values[] = {
+		0, 1, 2, 0x7fffffffULL, 0x80000000ULL,
+		0xffffffffULL, 0x8000000000000000ULL,
+		0xffffffffffffffffULL,
+	};
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_ra[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int encoding_case;
+
+	for (encoding_case = 0; encoding_case < BIT(15); encoding_case++) {
+		struct tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 expected_registers[31];
+		unsigned int selector = encoding_case;
+		u8 rn = selector & 0x1fU;
+		u8 ra;
+		bool subtract;
+		u8 family;
+		bool is_64bit;
+		u8 rm;
+		u8 rd;
+		bool valid;
+		enum tcti_multiply_add_sub_op expected_op = TCTI_MUL_MADD;
+		u8 access_size;
+		u64 mask;
+		u64 left;
+		u64 right;
+		u64 accumulator;
+		u64 product;
+		u64 expected;
+		u32 instruction;
+		unsigned int reg;
+		int ret;
+
+		selector >>= 5;
+		ra = selector & 0x1fU;
+		selector >>= 5;
+		subtract = selector & 0x1U;
+		selector >>= 1;
+		family = selector & 0x7U;
+		selector >>= 3;
+		is_64bit = selector & 0x1U;
+		rm = (31 - rn + family + ra) & 0x1fU;
+		rd = (rn + ra + subtract) & 0x1fU;
+		valid = family == 0 ||
+			(is_64bit && (family == 1 || family == 5)) ||
+			(is_64bit && !subtract && ra == 31 &&
+			 (family == 2 || family == 6));
+		instruction = tcti_test_encode_data_processing_3source(
+			is_64bit, family, rm, subtract, ra, rn, rd);
+		decoded = tcti_decode_aarch64(instruction);
+		if (!valid) {
+			KUNIT_EXPECT_EQ_MSG(
+				test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class,
+				"accepted invalid data-processing three-source instruction %08x",
+				instruction);
+			continue;
+		}
+
+		switch (family) {
+		case 0:
+			expected_op = subtract ? TCTI_MUL_MSUB : TCTI_MUL_MADD;
+			break;
+		case 1:
+			expected_op = subtract ? TCTI_MUL_SMSUBL :
+				TCTI_MUL_SMADDL;
+			break;
+		case 2:
+			expected_op = TCTI_MUL_SMULH;
+			break;
+		case 5:
+			expected_op = subtract ? TCTI_MUL_UMSUBL :
+				TCTI_MUL_UMADDL;
+			break;
+		case 6:
+			expected_op = TCTI_MUL_UMULH;
+			break;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(
+			test, TCTI_DECODE_MULTIPLY_ADD_SUB,
+			decoded.decode_class,
+			"rejected data-processing three-source instruction %08x",
+			instruction);
+		KUNIT_EXPECT_EQ(test, expected_op, decoded.mul_op);
+		KUNIT_EXPECT_EQ(test, is_64bit, decoded.is_64bit);
+		KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+		KUNIT_EXPECT_EQ(test, ra, decoded.ra);
+		KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+		seen_rn[rn] = true;
+		seen_rm[rm] = true;
+		seen_ra[ra] = true;
+		seen_rd[rd] = true;
+
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x89abcdef01234567ULL ^
+				((u64)instruction << (reg & 7)) ^ reg;
+		if (rn < 31)
+			regs.regs[rn] = source_values[rn & 7];
+		if (rm < 31)
+			regs.regs[rm] = source_values[(rn + family + 1) & 7];
+		if (ra < 31)
+			regs.regs[ra] = source_values[(ra + 2) & 7];
+		regs.sp = 0x706a865abcULL;
+		regs.pc = 0x2468ace000ULL;
+		regs.pstate = PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT |
+			PSR_V_BIT | 0x155UL;
+		before = regs;
+		memcpy(expected_registers, before.regs,
+		       sizeof(expected_registers));
+
+		access_size = family == 0 && !is_64bit ? sizeof(u32) :
+			sizeof(u64);
+		mask = access_size == sizeof(u64) ? U64_MAX : U32_MAX;
+		left = (rn == 31 ? 0 : before.regs[rn]) & mask;
+		right = (rm == 31 ? 0 : before.regs[rm]) & mask;
+		accumulator = (ra == 31 ? 0 : before.regs[ra]) & mask;
+		switch (expected_op) {
+		case TCTI_MUL_MADD:
+		case TCTI_MUL_MSUB:
+			product = left * right;
+			expected = expected_op == TCTI_MUL_MSUB ?
+				accumulator - product : accumulator + product;
+			break;
+		case TCTI_MUL_SMADDL:
+		case TCTI_MUL_SMSUBL:
+			product = (s64)(s32)(u32)left *
+				(s64)(s32)(u32)right;
+			expected = expected_op == TCTI_MUL_SMSUBL ?
+				accumulator - product : accumulator + product;
+			break;
+		case TCTI_MUL_SMULH: {
+			__int128 wide_product = (__int128)(s64)left * (s64)right;
+
+			expected = (u64)(((__uint128_t)wide_product) >> 64);
+			break;
+		}
+		case TCTI_MUL_UMADDL:
+		case TCTI_MUL_UMSUBL:
+			product = (u64)(u32)left * (u32)right;
+			expected = expected_op == TCTI_MUL_UMSUBL ?
+				accumulator - product : accumulator + product;
+			break;
+		case TCTI_MUL_UMULH:
+			expected = (u64)(((__uint128_t)left * right) >> 64);
+			break;
+		default:
+			KUNIT_FAIL(test, "invalid data-processing three-source operation");
+			return;
+		}
+		expected &= mask;
+		if (rd < 31)
+			expected_registers[rd] = expected;
+
+		ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
+							 NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+				     sizeof(expected_registers));
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+	}
+
+	for (encoding_case = 0; encoding_case < 32; encoding_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_ra[encoding_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[encoding_case]);
+	}
 }
 
 static u32 tcti_test_encode_move_wide_immediate(bool is_64bit, u8 opc,
@@ -19024,6 +20001,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_add_sub_shifted_register_family),
 	KUNIT_CASE(tcti_switch_executes_add_sub_shifted_register),
 	KUNIT_CASE(tcti_switch_executes_neg_with_xzr_source),
+	KUNIT_CASE(tcti_gadget_executes_complete_add_sub_extended_register_family),
 	KUNIT_CASE(tcti_switch_executes_add_sub_extended_register),
 	KUNIT_CASE(tcti_switch_executes_pc_relative_address_variants),
 	KUNIT_CASE(tcti_switch_executes_unconditional_branch_immediate),
@@ -19033,6 +20011,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_conditional_compare),
 	KUNIT_CASE(tcti_switch_executes_mlibc_float_helper_conditional_compares),
 	KUNIT_CASE(tcti_switch_executes_conditional_select),
+	KUNIT_CASE(tcti_gadget_executes_complete_logical_shifted_register_family),
 	KUNIT_CASE(tcti_switch_executes_logical_shifted_register),
 	KUNIT_CASE(tcti_gadget_executes_complete_logical_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_logical_immediate),
@@ -19042,9 +20021,12 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_extract),
 	KUNIT_CASE(tcti_switch_executes_data_processing_1source),
 	KUNIT_CASE(tcti_switch_executes_complete_data_processing_1source_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_1source_family),
 	KUNIT_CASE(tcti_switch_executes_data_processing_2source),
 	KUNIT_CASE(tcti_switch_executes_complete_crc32_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_2source_family),
 	KUNIT_CASE(tcti_switch_executes_multiply_add_sub),
+	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_3source_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_move_wide_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_move_wide_immediate),
 	KUNIT_CASE(tcti_switch_executes_system_registers),
