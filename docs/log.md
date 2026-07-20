@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete add/subtract immediate
+
+Closed the A64 `ADD`, `ADDS`, `SUB`, and `SUBS` immediate family through production decode and execution. KUnit proves both widths, both immediate shifts, all immediate and register fields including SP and compare aliases, independent result and NZCV calculation across boundary operands, 32-bit zero extension, preserved architectural state, exact PC progression, and rejection of reserved shift encodings. The kernel-owned inventory reports 18 of 52 families complete with 34 explicit gaps.
+
 ## [2026-07-20] fix | Complete add/subtract with carry
 
 Closed the A64 `ADC`, `ADCS`, `SBC`, and `SBCS` family through production decode, lowering, and gadget execution. KUnit proves both widths, both carry inputs, every register field including zero-register and alias cases, independent result and NZCV calculation across boundary operands, preserved architectural state, exact PC progression, and rejection of reserved encoding bits. The kernel-owned inventory reports 17 of 52 families complete with 35 explicit gaps.

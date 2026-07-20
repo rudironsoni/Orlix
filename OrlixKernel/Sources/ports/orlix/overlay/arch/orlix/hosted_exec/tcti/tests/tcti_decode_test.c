@@ -7152,6 +7152,164 @@ static void tcti_switch_executes_add_immediate_with_sp_source(struct kunit *test
 	KUNIT_EXPECT_EQ(test, 0x71274454acULL, regs.pc);
 }
 
+static u32 tcti_test_encode_add_sub_immediate(bool is_64bit, bool subtract,
+					       bool set_flags, bool shift,
+					       u16 imm12, u8 rn, u8 rd)
+{
+	return 0x11000000U | (is_64bit ? BIT(31) : 0) |
+		(subtract ? BIT(30) : 0) | (set_flags ? BIT(29) : 0) |
+		(shift ? BIT(22) : 0) | ((u32)imm12 << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_add_sub_immediate_family(
+	struct kunit *test)
+{
+	static const u64 source_values[] = {
+		0,
+		1,
+		0xffffffffULL,
+		0x7fffffffULL,
+		0x80000000ULL,
+		0xffffffffffffffffULL,
+		0x7fffffffffffffffULL,
+		0x8000000000000000ULL,
+	};
+	static const u16 immediate_values[] = {
+		0x000,
+		0x001,
+		0x555,
+		0x7ff,
+		0x800,
+		0xaaa,
+		0xffe,
+		0xfff,
+	};
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	unsigned int is_64bit;
+	unsigned int subtract;
+	unsigned int set_flags;
+	unsigned int shift;
+	unsigned int register_case;
+	unsigned int operand_case;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		for (subtract = 0; subtract < 2; subtract++) {
+			for (set_flags = 0; set_flags < 2; set_flags++) {
+				for (shift = 0; shift < 2; shift++) {
+					for (register_case = 0; register_case < 32;
+					     register_case++) {
+						for (operand_case = 0;
+						     operand_case < ARRAY_SIZE(source_values);
+						     operand_case++) {
+							struct tcti_decoded_instruction decoded;
+							struct pt_regs regs = {};
+							struct pt_regs before;
+							u8 rd = register_case;
+							u8 rn = (31 - register_case +
+								 operand_case) & 0x1fU;
+							u16 imm12 = immediate_values[operand_case];
+							u64 mask = is_64bit ? U64_MAX : U32_MAX;
+							u64 sign_bit = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+							u64 immediate = (u64)imm12 << (shift ? 12 : 0);
+							u64 left;
+							u64 expected;
+							unsigned long expected_pstate;
+							u32 instruction;
+							unsigned int reg;
+							int ret;
+
+							instruction = tcti_test_encode_add_sub_immediate(
+								is_64bit, subtract, set_flags, shift,
+								imm12, rn, rd);
+							decoded = tcti_decode_aarch64(instruction);
+							KUNIT_ASSERT_EQ_MSG(
+								test, TCTI_DECODE_ADD_SUB_IMMEDIATE,
+								decoded.decode_class,
+								"sf=%u sub=%u flags=%u shift=%u imm=%03x rn=%u rd=%u instruction=%08x",
+								is_64bit, subtract, set_flags, shift,
+								imm12, rn, rd, instruction);
+							KUNIT_EXPECT_EQ(test, !!is_64bit,
+								decoded.is_64bit);
+							KUNIT_EXPECT_EQ(test, !!subtract,
+								decoded.subtract);
+							KUNIT_EXPECT_EQ(test, !!set_flags,
+								decoded.set_flags);
+							KUNIT_EXPECT_EQ(test, !!shift, decoded.shift);
+							KUNIT_EXPECT_EQ(test, imm12, decoded.imm12);
+							KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+							KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+							for (reg = 0; reg < 31; reg++)
+								regs.regs[reg] =
+									0x1357000000000000ULL + reg;
+							if (rn < 31)
+								regs.regs[rn] = source_values[operand_case];
+							regs.sp = source_values[(operand_case + 3) %
+								ARRAY_SIZE(source_values)];
+							regs.pc = 0x706a865abcULL;
+							regs.pstate = 0x155UL | nzcv_mask;
+							before = regs;
+							left = (rn == 31 ? before.sp : before.regs[rn]) & mask;
+							expected = subtract ? left - immediate :
+								left + immediate;
+							expected &= mask;
+							expected_pstate = before.pstate;
+							if (set_flags) {
+								bool left_negative = !!(left & sign_bit);
+								bool right_negative = !!(immediate & sign_bit);
+								bool result_negative = !!(expected & sign_bit);
+								unsigned long flags = 0;
+
+								if (result_negative)
+									flags |= PSR_N_BIT;
+								if (!expected)
+									flags |= PSR_Z_BIT;
+								if (subtract ? left >= immediate :
+								    ((__uint128_t)left + immediate) > mask)
+									flags |= PSR_C_BIT;
+								if (subtract ?
+								    (left_negative != right_negative &&
+								     left_negative != result_negative) :
+								    (left_negative == right_negative &&
+								     left_negative != result_negative))
+									flags |= PSR_V_BIT;
+								expected_pstate =
+									(before.pstate & ~nzcv_mask) | flags;
+							}
+
+							ret = tcti_switch_debug_execute_decoded(
+								NULL, &regs, &decoded, NULL);
+							KUNIT_ASSERT_EQ(test, 0, ret);
+							for (reg = 0; reg < 31; reg++) {
+								u64 expected_reg = before.regs[reg];
+
+								if (rd == reg)
+									expected_reg = expected;
+								KUNIT_EXPECT_EQ_MSG(
+									test, expected_reg, regs.regs[reg],
+									"register x%u changed for instruction %08x",
+									reg, instruction);
+							}
+							KUNIT_EXPECT_EQ(test,
+								(!set_flags && rd == 31) ? expected : before.sp,
+								regs.sp);
+							KUNIT_EXPECT_EQ(test, expected_pstate, regs.pstate);
+							KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x11800000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x11c00000U).decode_class);
+}
+
 static void tcti_switch_executes_add_sub_immediate_variants(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -17898,6 +18056,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_brk_immediate),
 	KUNIT_CASE(tcti_decode_recognizes_hint_class),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_immediate_class),
+	KUNIT_CASE(tcti_gadget_executes_complete_add_sub_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_shifted_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_extended_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_pc_relative_address_class),
