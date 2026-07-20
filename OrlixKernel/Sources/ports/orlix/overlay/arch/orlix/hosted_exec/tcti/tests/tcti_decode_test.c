@@ -13139,7 +13139,186 @@ static void tcti_switch_executes_complete_simd_sha1_family(struct kunit *test)
 	}
 }
 
-static void tcti_switch_executes_complete_simd_aes_family(struct kunit *test)
+static const u8 tcti_test_aes_sbox[256] = {
+	0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
+	0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+	0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
+	0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+	0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc,
+	0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+	0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a,
+	0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+	0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0,
+	0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+	0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b,
+	0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+	0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85,
+	0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+	0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5,
+	0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+	0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17,
+	0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+	0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88,
+	0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+	0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c,
+	0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+	0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9,
+	0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+	0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6,
+	0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+	0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e,
+	0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+	0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94,
+	0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+	0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
+	0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+};
+
+static u8 tcti_test_aes_inverse_substitute(u8 value)
+{
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_test_aes_sbox); index++) {
+		if (tcti_test_aes_sbox[index] == value)
+			return index;
+	}
+
+	return 0;
+}
+
+static void tcti_test_aes_shift_rows(u8 state[16], bool inverse)
+{
+	u8 source[16];
+	u8 column;
+	u8 row;
+
+	memcpy(source, state, sizeof(source));
+	for (column = 0; column < 4; column++) {
+		for (row = 0; row < 4; row++) {
+			u8 source_column = inverse ?
+				(column - row) & 3U : (column + row) & 3U;
+
+			state[column * 4 + row] =
+				source[source_column * 4 + row];
+		}
+	}
+}
+
+static u8 tcti_test_aes_gf_multiply(u8 left, u8 right)
+{
+	u8 result = 0;
+	u8 bit;
+
+	for (bit = 0; bit < 8; bit++) {
+		if (right & BIT(bit))
+			result ^= left;
+		left = (left << 1) ^ ((left & BIT(7)) ? 0x1bU : 0);
+	}
+
+	return result;
+}
+
+static void tcti_test_aes_mix_columns(u8 state[16], bool inverse)
+{
+	u8 source[16];
+	u8 column;
+
+	memcpy(source, state, sizeof(source));
+	for (column = 0; column < 4; column++) {
+		u8 *result = state + column * 4;
+		u8 *input = source + column * 4;
+
+		if (inverse) {
+			result[0] = tcti_test_aes_gf_multiply(input[0], 0x0e) ^
+				tcti_test_aes_gf_multiply(input[1], 0x0b) ^
+				tcti_test_aes_gf_multiply(input[2], 0x0d) ^
+				tcti_test_aes_gf_multiply(input[3], 0x09);
+			result[1] = tcti_test_aes_gf_multiply(input[0], 0x09) ^
+				tcti_test_aes_gf_multiply(input[1], 0x0e) ^
+				tcti_test_aes_gf_multiply(input[2], 0x0b) ^
+				tcti_test_aes_gf_multiply(input[3], 0x0d);
+			result[2] = tcti_test_aes_gf_multiply(input[0], 0x0d) ^
+				tcti_test_aes_gf_multiply(input[1], 0x09) ^
+				tcti_test_aes_gf_multiply(input[2], 0x0e) ^
+				tcti_test_aes_gf_multiply(input[3], 0x0b);
+			result[3] = tcti_test_aes_gf_multiply(input[0], 0x0b) ^
+				tcti_test_aes_gf_multiply(input[1], 0x0d) ^
+				tcti_test_aes_gf_multiply(input[2], 0x09) ^
+				tcti_test_aes_gf_multiply(input[3], 0x0e);
+		} else {
+			result[0] = tcti_test_aes_gf_multiply(input[0], 2) ^
+				tcti_test_aes_gf_multiply(input[1], 3) ^
+				input[2] ^ input[3];
+			result[1] = input[0] ^
+				tcti_test_aes_gf_multiply(input[1], 2) ^
+				tcti_test_aes_gf_multiply(input[2], 3) ^ input[3];
+			result[2] = input[0] ^ input[1] ^
+				tcti_test_aes_gf_multiply(input[2], 2) ^
+				tcti_test_aes_gf_multiply(input[3], 3);
+			result[3] = tcti_test_aes_gf_multiply(input[0], 3) ^
+				input[1] ^ input[2] ^
+				tcti_test_aes_gf_multiply(input[3], 2);
+		}
+	}
+}
+
+static void
+tcti_test_aes_result(enum tcti_simd_vector_arithmetic_op operation,
+		     const u8 destination[16], const u8 source[16],
+		     u8 result[16])
+{
+	u8 index;
+
+	memcpy(result, operation >= TCTI_SIMD_ARITH_AESMC ? source : destination,
+	       16);
+	switch (operation) {
+	case TCTI_SIMD_ARITH_AESE:
+		for (index = 0; index < 16; index++)
+			result[index] = tcti_test_aes_sbox[result[index] ^
+								     source[index]];
+		tcti_test_aes_shift_rows(result, false);
+		break;
+	case TCTI_SIMD_ARITH_AESD:
+		for (index = 0; index < 16; index++)
+			result[index] =
+				tcti_test_aes_inverse_substitute(result[index] ^
+								 source[index]);
+		tcti_test_aes_shift_rows(result, true);
+		break;
+	case TCTI_SIMD_ARITH_AESMC:
+		tcti_test_aes_mix_columns(result, false);
+		break;
+	case TCTI_SIMD_ARITH_AESIMC:
+		tcti_test_aes_mix_columns(result, true);
+		break;
+	default:
+		break;
+	}
+}
+
+static void tcti_test_aes_unpack(u64 low, u64 high, u8 bytes[16])
+{
+	u8 index;
+
+	for (index = 0; index < sizeof(u64); index++) {
+		bytes[index] = low >> (index * 8);
+		bytes[index + sizeof(u64)] = high >> (index * 8);
+	}
+}
+
+static void tcti_test_aes_pack(const u8 bytes[16], u64 *low, u64 *high)
+{
+	u8 index;
+
+	*low = 0;
+	*high = 0;
+	for (index = 0; index < sizeof(u64); index++) {
+		*low |= (u64)bytes[index] << (index * 8);
+		*high |= (u64)bytes[index + sizeof(u64)] << (index * 8);
+	}
+}
+
+static void tcti_switch_executes_simd_aes_known_vectors(struct kunit *test)
 {
 	struct {
 		u32 instruction;
@@ -13186,6 +13365,159 @@ static void tcti_switch_executes_complete_simd_aes_family(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 		KUNIT_EXPECT_EQ(test,
 				0x87b0ULL + (index + 1) * sizeof(u32), regs.pc);
+	}
+}
+
+static void tcti_test_initialize_aes_registers(u32 instruction)
+{
+	unsigned int word;
+
+	for (word = 0; word < ARRAY_SIZE(current->thread.user_simd); word++)
+		current->thread.user_simd[word] =
+			0xfedcba9876543210ULL ^
+			ror64((u64)instruction << (word & 7), word & 63) ^
+			0x0101010101010101ULL * word;
+}
+
+static void tcti_gadget_executes_complete_aes_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_alias = false;
+	u8 operation_index;
+
+	for (operation_index = 0; operation_index < 4; operation_index++) {
+		enum tcti_simd_vector_arithmetic_op operation =
+			TCTI_SIMD_ARITH_AESE + operation_index;
+		u8 register_case;
+
+		for (register_case = 0; register_case < 32; register_case++) {
+			u8 rn = (register_case * 7 + operation_index) & 0x1fU;
+			u8 rd = (register_case * 13 + operation_index * 3) &
+				0x1fU;
+			u32 instruction = 0x4e284800U |
+				((u32)operation_index << 12) |
+				((u32)rn << 5) | rd;
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+			struct pt_regs regs = {};
+			struct pt_regs before_regs;
+			u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+			u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+			u8 destination[16];
+			u8 source[16];
+			u8 result[16];
+			unsigned int gpr;
+			int ret;
+
+			KUNIT_ASSERT_EQ(test,
+					TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, operation,
+					decoded.simd_arithmetic_op);
+			KUNIT_EXPECT_EQ(test, 2 * sizeof(u64),
+					decoded.access_size);
+			KUNIT_EXPECT_EQ(test, 2 * sizeof(u64),
+					decoded.result_size);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+			KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+
+			seen_rn[rn] = true;
+			seen_rd[rd] = true;
+			saw_alias |= rn == rd;
+			tcti_test_initialize_aes_registers(instruction);
+			memcpy(before_simd, current->thread.user_simd,
+			       sizeof(before_simd));
+			memcpy(expected_simd, before_simd, sizeof(expected_simd));
+			tcti_test_aes_unpack(before_simd[rd * 2],
+					     before_simd[rd * 2 + 1], destination);
+			tcti_test_aes_unpack(before_simd[rn * 2],
+					     before_simd[rn * 2 + 1], source);
+			tcti_test_aes_result(operation, destination, source, result);
+			tcti_test_aes_pack(result, &expected_simd[rd * 2],
+					   &expected_simd[rd * 2 + 1]);
+
+			for (gpr = 0; gpr < ARRAY_SIZE(regs.regs); gpr++)
+				regs.regs[gpr] = 0xabcdef0000000000ULL |
+						 gpr;
+			regs.pc = 0x12345678000ULL;
+			regs.sp = 0x98765432100ULL;
+			regs.pstate = PSR_N_BIT | PSR_Z_BIT | 0x155UL;
+			before_regs = regs;
+			current->thread.user_simd_valid = 0;
+
+			ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_MEMEQ(test, current->thread.user_simd,
+					   expected_simd, sizeof(expected_simd));
+			KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+			KUNIT_EXPECT_MEMEQ(test, before_regs.regs, regs.regs,
+					   sizeof(regs.regs));
+			KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+			KUNIT_EXPECT_EQ(test, before_regs.pstate, regs.pstate);
+			KUNIT_EXPECT_EQ(test, before_regs.pc + sizeof(u32),
+					regs.pc);
+		}
+	}
+
+	for (operation_index = 0; operation_index < 32; operation_index++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[operation_index]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[operation_index]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_alias);
+
+	for (operation_index = 0; operation_index < 2; operation_index++) {
+		enum tcti_simd_vector_arithmetic_op operation =
+			TCTI_SIMD_ARITH_AESE + operation_index;
+		u8 chunk;
+
+		for (chunk = 0; chunk < 16; chunk++) {
+			u32 instruction = 0x4e284820U |
+				((u32)operation_index << 12);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+			struct pt_regs regs = { .pc = 0x12345678000ULL };
+			u8 destination[16];
+			u8 source[16] = {};
+			u8 expected[16];
+			u64 destination_low;
+			u64 destination_high;
+			u8 lane;
+			int ret;
+
+			for (lane = 0; lane < 16; lane++) {
+				u8 value = chunk * 16 + lane;
+
+				destination[lane] = operation_index ?
+					tcti_test_aes_sbox[value] : value;
+			}
+			tcti_test_aes_result(operation, destination, source,
+					     expected);
+			tcti_test_aes_pack(destination, &destination_low,
+					   &destination_high);
+			current->thread.user_simd[0] = destination_low;
+			current->thread.user_simd[1] = destination_high;
+			current->thread.user_simd[2] = 0;
+			current->thread.user_simd[3] = 0;
+			current->thread.user_simd_valid = 0;
+
+			ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			{
+				u64 expected_low;
+				u64 expected_high;
+
+				tcti_test_aes_pack(expected, &expected_low,
+						   &expected_high);
+				KUNIT_EXPECT_EQ(test, expected_low,
+						current->thread.user_simd[0]);
+				KUNIT_EXPECT_EQ(test, expected_high,
+						current->thread.user_simd[1]);
+			}
+		}
 	}
 }
 
@@ -20528,7 +20860,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha512_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha256_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha1_family),
-	KUNIT_CASE(tcti_switch_executes_complete_simd_aes_family),
+	KUNIT_CASE(tcti_switch_executes_simd_aes_known_vectors),
+	KUNIT_CASE(tcti_gadget_executes_complete_aes_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_multiply_long_family),
 	KUNIT_CASE(tcti_switch_executes_simd_pmull_known_vectors),
 	KUNIT_CASE(tcti_gadget_executes_complete_polynomial_multiply_family),

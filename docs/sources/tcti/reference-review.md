@@ -144,3 +144,13 @@ Any future copied source requires recording:
   - `asbestos/guest-arm64/gadgets-aarch64/crypto.S`
 - Use: independently confirm the `PMUL`, `PMULL`, and `PMULL2` encoding families, legal element sizes, `Q` source-half selection, and carryless-multiply decomposition before completing the Orlix-owned KUnit proof.
 - No OpenMinis source was copied into Orlix.
+
+### OpenMinis AES cross-check
+
+- Repository: `https://github.com/OpenMinis/ish-arm64`
+- Commit reviewed: `89269e6fef7ab7aa61b133deae90d78e34a09ed1`
+- Files reviewed:
+  - `asbestos/guest-arm64/crypto_helpers.c`
+  - `asbestos/guest-arm64/gadgets-aarch64/crypto.S`
+- Use: independently cross-check the `AESE`, `AESD`, `AESMC`, and `AESIMC` instruction decomposition, standard S-box values, ShiftRows direction, and MixColumns coefficients before completing the Orlix-owned KUnit proof.
+- The Orlix test uses standard AES lookup constants as an oracle independent of the production algebra. No OpenMinis production code, control flow, or runtime ownership was copied into Orlix.

@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete AES instruction coverage
+
+Closed A64 `AESE`, `AESD`, `AESMC`, and `AESIMC` through production decode and execution. KUnit now proves every SIMD source and destination register field, source-destination aliases, all 256 byte-substitution inputs against a table-based oracle independent of the production algebra, forward and inverse row and column transforms, unrelated SIMD and integer state preservation, and exact PC progression while retaining the earlier known vectors. The kernel-owned inventory reports 32 of 52 families complete with 20 explicit gaps. OpenMinis ish-arm64 commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` was used only to cross-check instruction decomposition and standard AES transformations. No OpenMinis production implementation was copied.
+
 ## [2026-07-21] test | Complete polynomial multiply
 
 Closed A64 `PMUL`, `PMULL`, and `PMULL2` through production decode and execution. KUnit proves byte-lane low polynomial products, byte-to-halfword widening, 64-bit-to-128-bit carryless products, both `Q` source halves, every SIMD source and destination register field, source and destination aliases, unrelated SIMD and integer state preservation, exact PC progression, and rejection of reserved element sizes. The kernel-owned inventory reports 31 of 52 families complete with 21 explicit gaps. OpenMinis ish-arm64 commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` was used only as an independent encoding and decomposition cross-check; no source was copied.
