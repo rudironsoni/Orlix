@@ -632,6 +632,24 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_FCCMP_MASK) == AARCH64_FCCMP_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+
+		if (type > 1)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.condition = (instruction >> 12) & 0xfU;
+		decoded.nzcv = instruction & 0xfU;
+		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.fp_conditional = true;
+		decoded.fp_signal_all_nans = instruction & BIT(4);
+		decoded.simd_fp = true;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_FP_SCALAR_3SOURCE_MASK) ==
 	    AARCH64_FP_SCALAR_3SOURCE_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_3SOURCE;
@@ -3106,24 +3124,6 @@ not_simd_compare_register:
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.fp2_op = TCTI_FP2_FMUL;
-		return decoded;
-	}
-
-	if ((instruction & AARCH64_FCCMP_MASK) == AARCH64_FCCMP_PATTERN) {
-		u8 type = (instruction >> 22) & 0x3U;
-
-		if (type > 1)
-			return decoded;
-		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
-		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.condition = (instruction >> 12) & 0xfU;
-		decoded.nzcv = instruction & 0xfU;
-		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
-		decoded.result_size = decoded.access_size;
-		decoded.fp_conditional = true;
-		decoded.fp_signal_all_nans = instruction & BIT(4);
-		decoded.simd_fp = true;
 		return decoded;
 	}
 

@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete scalar FP conditional compare
+
+Moved `FCCMP` and `FCCMPE` recognition ahead of overlapping broad AdvSIMD decoder groups, then proved both precisions and signaling forms across every condition, current NZCV state, fallback NZCV value, and SIMD source register. KUnit also proves quiet-NaN and signaling-NaN IOC behavior, false-condition suppression, reserved type rejection, unrelated-state preservation, and exact PC progression.
+
 ## [2026-07-20] implement | Complete scalar FP conditional select
 
 Moved `FCSEL` recognition ahead of overlapping broad AdvSIMD decoder groups, then exhaustively proved all 16 condition codes against all 16 NZCV states for single and double precision through production lowering and gadget execution. KUnit also proves destination-source aliasing, reserved type rejection, upper-lane clearing, and exact PC progression.
