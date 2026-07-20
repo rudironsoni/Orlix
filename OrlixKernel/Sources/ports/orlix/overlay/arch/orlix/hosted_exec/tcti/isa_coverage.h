@@ -46,7 +46,7 @@ enum tcti_isa_coverage_status {
 	X(CONDITIONAL_COMPARE, BASE, COMPLETE, "conditional compare", "TCTI_DECODE_CONDITIONAL_COMPARE", "tcti_gadget_executes_complete_conditional_compare_family") \
 	X(CONDITIONAL_SELECT, BASE, COMPLETE, "conditional select", "TCTI_DECODE_CONDITIONAL_SELECT", "tcti_gadget_executes_complete_conditional_select_family") \
 	X(LOGICAL_SHIFTED_REGISTER, BASE, PARTIAL, "logical shifted register", "TCTI_DECODE_LOGICAL_SHIFTED_REGISTER", "tcti_decode_recognizes_logical_shifted_register_class") \
-	X(ADD_SUB_SHIFTED_REGISTER, BASE, PARTIAL, "add/subtract shifted register", "TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER", "tcti_decode_recognizes_add_sub_shifted_register_class") \
+	X(ADD_SUB_SHIFTED_REGISTER, BASE, COMPLETE, "add/subtract shifted register", "TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER", "tcti_gadget_executes_complete_add_sub_shifted_register_family") \
 	X(ADD_SUB_EXTENDED_REGISTER, BASE, PARTIAL, "add/subtract extended register", "TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER", "tcti_decode_recognizes_add_sub_extended_register_class") \
 	X(ADD_SUB_WITH_CARRY, BASE, COMPLETE, "add/subtract with carry", "TCTI_DECODE_ADD_SUB_WITH_CARRY", "tcti_gadget_executes_complete_add_sub_with_carry_family") \
 	X(DATA_PROCESSING_1SOURCE, BASE, PARTIAL, "data processing one source", "TCTI_DECODE_DATA_PROCESSING_1SOURCE", "tcti_decode_recognizes_data_processing_1source_class") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	30
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	29
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

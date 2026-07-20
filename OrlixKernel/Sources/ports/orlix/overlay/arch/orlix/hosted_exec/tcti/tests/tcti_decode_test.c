@@ -7387,6 +7387,186 @@ static void tcti_switch_executes_add_sub_with_carry_flags(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x4028ULL, regs.pc);
 }
 
+static u32 tcti_test_encode_add_sub_shifted_register(bool is_64bit,
+						      bool subtract,
+						      bool set_flags, u8 shift,
+						      u8 rm, u8 amount,
+						      u8 rn, u8 rd)
+{
+	return 0x0b000000U | (is_64bit ? BIT(31) : 0) |
+		(subtract ? BIT(30) : 0) | (set_flags ? BIT(29) : 0) |
+		((u32)shift << 22) | ((u32)rm << 16) |
+		((u32)amount << 10) | ((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_add_sub_shifted_register_family(
+	struct kunit *test)
+{
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int is_64bit;
+	unsigned int subtract;
+	unsigned int set_flags;
+	unsigned int shift;
+	unsigned int amount;
+	unsigned int register_case;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		u8 width = is_64bit ? 64 : 32;
+		u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+		u64 sign_bit = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+
+		for (subtract = 0; subtract < 2; subtract++) {
+			for (set_flags = 0; set_flags < 2; set_flags++) {
+				for (shift = 0; shift < 4; shift++) {
+					for (amount = 0; amount < 64; amount++) {
+						for (register_case = 0;
+						     register_case < 32;
+						     register_case++) {
+							struct tcti_decoded_instruction decoded;
+							struct pt_regs regs = {};
+							struct pt_regs before;
+							bool valid = shift < 3 && amount < width;
+							u8 rn = register_case;
+							u8 rm = (31 - register_case + amount) & 0x1fU;
+							u8 rd = (register_case + shift + amount) & 0x1fU;
+							u64 left;
+							u64 right;
+							u64 shifted;
+							u64 expected;
+							u64 expected_registers[31];
+							unsigned long expected_pstate;
+							u32 instruction;
+							unsigned int reg;
+							int ret;
+
+							instruction =
+								tcti_test_encode_add_sub_shifted_register(
+									is_64bit, subtract, set_flags,
+									shift, rm, amount, rn, rd);
+							decoded = tcti_decode_aarch64(instruction);
+							if (!valid) {
+								KUNIT_EXPECT_EQ_MSG(
+									test, TCTI_DECODE_UNSUPPORTED,
+									decoded.decode_class,
+									"accepted invalid sf=%u sub=%u flags=%u shift=%u amount=%u instruction=%08x",
+									is_64bit, subtract, set_flags,
+									shift, amount, instruction);
+								continue;
+							}
+
+							KUNIT_ASSERT_EQ_MSG(
+								test,
+								TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
+								decoded.decode_class,
+								"rejected sf=%u sub=%u flags=%u shift=%u amount=%u instruction=%08x",
+								is_64bit, subtract, set_flags,
+								shift, amount, instruction);
+							KUNIT_EXPECT_EQ(test, !!is_64bit,
+								decoded.is_64bit);
+							KUNIT_EXPECT_EQ(test, !!subtract,
+								decoded.subtract);
+							KUNIT_EXPECT_EQ(test, !!set_flags,
+								decoded.set_flags);
+							KUNIT_EXPECT_EQ(test, shift, decoded.shift);
+							KUNIT_EXPECT_EQ(test, amount,
+								decoded.shift_amount);
+							KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+							KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+							KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+							seen_rn[rn] = true;
+							seen_rm[rm] = true;
+							seen_rd[rd] = true;
+
+							for (reg = 0; reg < 31; reg++)
+								regs.regs[reg] =
+									0xfedcba9876543210ULL ^
+									((u64)instruction << (reg & 7)) ^ reg;
+							regs.sp = 0x706a865abcULL;
+							regs.pc = 0x2468ace000ULL;
+							regs.pstate = nzcv_mask | 0x155UL;
+							before = regs;
+							memcpy(expected_registers, before.regs,
+							       sizeof(expected_registers));
+							left = rn == 31 ? 0 : before.regs[rn];
+							right = rm == 31 ? 0 : before.regs[rm];
+							left &= width_mask;
+							right &= width_mask;
+							switch (shift) {
+							case 0:
+								shifted = right << amount;
+								break;
+							case 1:
+								shifted = right >> amount;
+								break;
+							case 2:
+								shifted = right >> amount;
+								if (amount && (right & sign_bit))
+									shifted |= width_mask <<
+										(width - amount);
+								break;
+							default:
+								KUNIT_FAIL(test, "invalid shifted-add test operation");
+								return;
+							}
+							shifted &= width_mask;
+							expected = subtract ? left - shifted :
+								left + shifted;
+							expected &= width_mask;
+							if (rd < 31)
+								expected_registers[rd] = expected;
+							expected_pstate = before.pstate;
+							if (set_flags) {
+								bool left_negative = !!(left & sign_bit);
+								bool right_negative = !!(shifted & sign_bit);
+								bool result_negative = !!(expected & sign_bit);
+								unsigned long flags = 0;
+
+								if (result_negative)
+									flags |= PSR_N_BIT;
+								if (!expected)
+									flags |= PSR_Z_BIT;
+								if (subtract ? left >= shifted :
+								    ((__uint128_t)left + shifted) >
+									width_mask)
+									flags |= PSR_C_BIT;
+								if (subtract ?
+								    (left_negative != right_negative &&
+								     left_negative != result_negative) :
+								    (left_negative == right_negative &&
+								     left_negative != result_negative))
+									flags |= PSR_V_BIT;
+								expected_pstate =
+									(before.pstate & ~nzcv_mask) | flags;
+							}
+
+							ret = tcti_switch_debug_execute_decoded(
+								NULL, &regs, &decoded, NULL);
+							KUNIT_ASSERT_EQ(test, 0, ret);
+							KUNIT_EXPECT_MEMEQ(test, expected_registers,
+								regs.regs, sizeof(expected_registers));
+							KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+							KUNIT_EXPECT_EQ(test, expected_pstate,
+								regs.pstate);
+							KUNIT_EXPECT_EQ(test,
+								before.pc + sizeof(u32), regs.pc);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (register_case = 0; register_case < 32; register_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[register_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[register_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[register_case]);
+	}
+}
+
 static void tcti_switch_executes_add_sub_shifted_register(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -18841,6 +19021,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_add_immediate_with_sp_source),
 	KUNIT_CASE(tcti_switch_executes_add_sub_immediate_variants),
 	KUNIT_CASE(tcti_switch_executes_add_sub_with_carry_flags),
+	KUNIT_CASE(tcti_gadget_executes_complete_add_sub_shifted_register_family),
 	KUNIT_CASE(tcti_switch_executes_add_sub_shifted_register),
 	KUNIT_CASE(tcti_switch_executes_neg_with_xzr_source),
 	KUNIT_CASE(tcti_switch_executes_add_sub_extended_register),

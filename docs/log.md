@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete add/subtract shifted register
+
+Closed the A64 `ADD`, `ADDS`, `SUB`, and `SUBS` shifted-register family and its `CMP`, `CMN`, and `NEG` aliases through production decode and execution. KUnit proves both widths, LSL, LSR, and ASR at every legal shift, the complete operation and flag matrix, every register field including zero-register and alias cases, independent arithmetic and NZCV results, and rejection of ROR and oversized 32-bit shifts. The kernel-owned inventory reports 23 of 52 families complete with 29 explicit gaps.
+
 ## [2026-07-20] test | Complete bitfield
 
 Closed the A64 `SBFM`, `BFM`, and `UBFM` family and their shift, extend, insert, and extract aliases through production decode and execution. KUnit executes every legal W/X `immr:imms` pair for all three operations against an independent architectural `wmask` and `tmask` oracle, proves every source and destination field including zero-register and alias cases, verifies sign extension, destination preservation, and 32-bit zero extension, and rejects reserved opcode, width, and immediate encodings. The kernel-owned inventory reports 22 of 52 families complete with 30 explicit gaps.
