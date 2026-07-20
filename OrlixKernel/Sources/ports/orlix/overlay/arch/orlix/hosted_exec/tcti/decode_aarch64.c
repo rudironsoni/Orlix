@@ -828,7 +828,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 		decoded.decode_class = TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE;
 		decoded.condition = instruction & 0xfU;
-		decoded.branch_imm = sign_extend64(imm, 18) << 2;
+		decoded.branch_imm = sign_extend64(imm << 2, 20);
 		return decoded;
 	}
 

@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete conditional immediate branches
+
+Closed the A64 `B.cond` family through production decode, lowering, and gadget execution. KUnit proves all 16 condition codes across all 16 NZCV states, taken and fallthrough behavior, signed 19-bit immediate boundaries and individual immediate bits, the reserved encoding bit, preserved general registers, stack pointer and flags, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 11 of 52 families complete with 41 explicit gaps.
+
 ## [2026-07-20] implement | Complete unconditional immediate branches
 
 Closed the A64 `B` and `BL` immediate family through production decode, lowering, and gadget execution. KUnit proves both link modes, signed 26-bit immediate boundaries and individual immediate bits, exact branch targets, `X30` link updates, preserved general registers, stack pointer and flags, and no fallthrough PC increment. The decoder now sign-extends the already-scaled branch displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 10 of 52 families complete with 42 explicit gaps.
