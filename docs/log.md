@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete test-and-branch immediate
+
+Closed the A64 `TBZ` and `TBNZ` family through production decode, lowering, and gadget execution. KUnit proves all 64 selectable bit positions, every source register including `XZR`, both branch polarities, set and clear source states, signed 14-bit displacement boundaries and individual immediate bits, taken and fallthrough behavior, preserved architectural state, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 13 of 52 families complete with 39 explicit gaps.
+
 ## [2026-07-20] implement | Complete compare-and-branch immediate
 
 Closed the A64 `CBZ` and `CBNZ` family through production decode, lowering, and gadget execution. KUnit proves 32-bit and 64-bit forms, every source register including `WZR` and `XZR`, low-word versus full-register zero semantics, both branch polarities, signed 19-bit displacement boundaries and individual immediate bits, taken and fallthrough behavior, preserved architectural state, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 12 of 52 families complete with 40 explicit gaps.

@@ -16279,6 +16279,112 @@ static void tcti_gadget_executes_complete_compare_branch_immediate_family(
 	}
 }
 
+static u32 tcti_test_encode_test_branch_immediate(bool nonzero, u8 test_bit,
+		s32 immediate, u8 rt)
+{
+	return 0x36000000U | ((u32)(test_bit & BIT(5)) << 26) |
+	       (nonzero ? BIT(24) : 0) | ((u32)(test_bit & 0x1fU) << 19) |
+	       (((u32)immediate & (BIT(14) - 1)) << 5) | rt;
+}
+
+static void tcti_gadget_executes_complete_test_branch_immediate_family(
+	struct kunit *test)
+{
+	static const s32 edge_immediates[] = {
+		-BIT(13), -BIT(13) + 1, -1, 0, 1,
+		BIT(13) - 2, BIT(13) - 1,
+	};
+	unsigned int nonzero;
+	unsigned int rt;
+	unsigned int test_bit;
+	unsigned int bit_set;
+	unsigned int i;
+
+	for (nonzero = 0; nonzero < 2; nonzero++) {
+		for (rt = 0; rt < 32; rt++) {
+			for (test_bit = 0; test_bit < 64; test_bit++) {
+				for (bit_set = 0; bit_set < 2; bit_set++) {
+					struct tcti_decoded_instruction decoded;
+					struct pt_regs before;
+					struct pt_regs regs = {};
+					s32 immediate = edge_immediates[
+						(nonzero + rt + test_bit + bit_set) %
+						ARRAY_SIZE(edge_immediates)];
+					s64 byte_offset = (s64)immediate * 4;
+					u32 instruction;
+					unsigned int reg;
+					bool taken;
+					int ret;
+
+					instruction = tcti_test_encode_test_branch_immediate(
+						nonzero, test_bit, immediate, rt);
+					decoded = tcti_decode_aarch64(instruction);
+					KUNIT_ASSERT_EQ_MSG(
+						test, TCTI_DECODE_TEST_BRANCH_IMMEDIATE,
+						decoded.decode_class,
+						"nonzero=%u rt=%u bit=%u immediate=%d instruction=%08x",
+						nonzero, rt, test_bit, immediate,
+						instruction);
+					KUNIT_EXPECT_EQ(test, !!nonzero, decoded.nonzero);
+					KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+					KUNIT_EXPECT_EQ(test, test_bit, decoded.test_bit);
+					KUNIT_EXPECT_EQ(test, byte_offset,
+							decoded.branch_imm);
+
+					for (reg = 0; reg < 31; reg++)
+						regs.regs[reg] =
+							0x9999000000000000ULL + reg;
+					if (rt < 31)
+						regs.regs[rt] = bit_set ?
+							BIT_ULL(test_bit) : ~BIT_ULL(test_bit);
+					regs.sp = 0xaaaa000000000000ULL;
+					regs.pc = 0x706a865abcULL;
+					regs.pstate = PSR_Z_BIT | PSR_C_BIT;
+					before = regs;
+					taken = (rt == 31 ? false : !!bit_set) ==
+						!!nonzero;
+
+					ret = tcti_test_execute_decoded_gadget(&regs,
+									       &decoded);
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					for (reg = 0; reg < 31; reg++)
+						KUNIT_EXPECT_EQ(test, before.regs[reg],
+								regs.regs[reg]);
+					KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+					KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+					KUNIT_EXPECT_EQ(
+						test,
+						before.pc + (taken ? byte_offset :
+								     sizeof(u32)),
+						regs.pc);
+				}
+			}
+		}
+	}
+
+	for (i = 0; i < 13; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = BIT(i);
+
+		decoded = tcti_decode_aarch64(tcti_test_encode_test_branch_immediate(
+			false, i, immediate, i));
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_TEST_BRANCH_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate * 4, decoded.branch_imm);
+	}
+
+	for (i = 0; i <= 13; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = -BIT(i);
+
+		decoded = tcti_decode_aarch64(tcti_test_encode_test_branch_immediate(
+			true, 63 - i, immediate, i));
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_TEST_BRANCH_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate * 4, decoded.branch_imm);
+	}
+}
+
 static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
@@ -17259,6 +17365,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_unconditional_branch_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_conditional_branch_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_compare_branch_immediate_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_test_branch_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_select_family),
