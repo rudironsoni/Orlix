@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete bitfield
+
+Closed the A64 `SBFM`, `BFM`, and `UBFM` family and their shift, extend, insert, and extract aliases through production decode and execution. KUnit executes every legal W/X `immr:imms` pair for all three operations against an independent architectural `wmask` and `tmask` oracle, proves every source and destination field including zero-register and alias cases, verifies sign extension, destination preservation, and 32-bit zero extension, and rejects reserved opcode, width, and immediate encodings. The kernel-owned inventory reports 22 of 52 families complete with 30 explicit gaps.
+
 ## [2026-07-20] test | Complete extract
 
 Closed the A64 `EXTR` family and its `ROR` aliases through production decode and execution. KUnit enumerates every `sf:N:shift` combination, rejects width mismatches and illegal 32-bit shifts, executes every legal shift in both widths, proves every source and destination field including zero-register and alias cases, verifies 32-bit zero extension, and preserves flags, stack pointer, and exact PC progression. The kernel-owned inventory reports 21 of 52 families complete with 31 explicit gaps.

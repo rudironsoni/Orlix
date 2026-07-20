@@ -8063,6 +8063,178 @@ static void tcti_switch_executes_logical_immediate(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x1ae20ULL, regs.pc);
 }
 
+static u64 tcti_test_replicate_element(u64 element, u8 element_width,
+				       u8 data_size)
+{
+	u64 result = 0;
+	u8 offset;
+
+	for (offset = 0; offset < data_size; offset += element_width)
+		result |= element << offset;
+	return result;
+}
+
+static void tcti_test_decode_bitfield_masks(bool is_64bit, u8 immr, u8 imms,
+					     u64 *wmask, u64 *tmask)
+{
+	u8 data_size = is_64bit ? 64 : 32;
+	u8 length = is_64bit ? 6 : 5;
+	u8 levels = BIT(length) - 1;
+	u8 element_width = BIT(length);
+	u8 s = imms & levels;
+	u8 r = immr & levels;
+	u8 diff = (s - r) & levels;
+	u64 welem = s == 63 ? U64_MAX : BIT_ULL(s + 1) - 1;
+	u64 telem = diff == 63 ? U64_MAX : BIT_ULL(diff + 1) - 1;
+
+	welem = tcti_test_ror_element(welem, r, element_width);
+	*wmask = tcti_test_replicate_element(welem, element_width, data_size);
+	*tmask = tcti_test_replicate_element(telem, element_width, data_size);
+}
+
+static u32 tcti_test_encode_bitfield(bool is_64bit, u8 opc, bool n,
+				     u8 immr, u8 imms, u8 rn, u8 rd)
+{
+	return 0x13000000U | (is_64bit ? BIT(31) : 0) |
+		((u32)opc << 29) | (n ? BIT(22) : 0) |
+		((u32)immr << 16) | ((u32)imms << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_bitfield_family(struct kunit *test)
+{
+	static const enum tcti_bitfield_op expected_ops[] = {
+		TCTI_BITFIELD_SBFM,
+		TCTI_BITFIELD_BFM,
+		TCTI_BITFIELD_UBFM,
+	};
+	bool seen_rn[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int is_64bit;
+	unsigned int opc;
+	unsigned int immr;
+	unsigned int imms;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		u8 data_size = is_64bit ? 64 : 32;
+		u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+
+		for (opc = 0; opc < ARRAY_SIZE(expected_ops); opc++) {
+			for (immr = 0; immr < data_size; immr++) {
+				for (imms = 0; imms < data_size; imms++) {
+					struct tcti_decoded_instruction decoded;
+					struct pt_regs regs = {};
+					struct pt_regs before;
+					u8 rn = (immr + opc) & 0x1fU;
+					u8 rd = (imms + 3 * opc) & 0x1fU;
+					u64 wmask;
+					u64 tmask;
+					u64 source;
+					u64 destination;
+					u64 rotated;
+					u64 bottom;
+					u64 expected;
+					u64 expected_registers[31];
+					u32 instruction;
+					unsigned int reg;
+					int ret;
+
+					instruction = tcti_test_encode_bitfield(
+						is_64bit, opc, is_64bit, immr, imms,
+						rn, rd);
+					decoded = tcti_decode_aarch64(instruction);
+					KUNIT_ASSERT_EQ_MSG(
+						test, TCTI_DECODE_BITFIELD,
+						decoded.decode_class,
+						"rejected sf=%u opc=%u immr=%u imms=%u rn=%u rd=%u instruction=%08x",
+						is_64bit, opc, immr, imms, rn, rd,
+						instruction);
+					KUNIT_EXPECT_EQ(test, !!is_64bit,
+						decoded.is_64bit);
+					KUNIT_EXPECT_EQ(test, expected_ops[opc],
+						decoded.bitfield_op);
+					KUNIT_EXPECT_EQ(test, immr,
+						decoded.bitfield_immr);
+					KUNIT_EXPECT_EQ(test, imms,
+						decoded.bitfield_imms);
+					KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+					KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+					seen_rn[rn] = true;
+					seen_rd[rd] = true;
+
+					for (reg = 0; reg < 31; reg++)
+						regs.regs[reg] =
+							0xfedcba9876543210ULL ^
+							((u64)instruction << (reg & 7)) ^ reg;
+					regs.sp = 0x706a865abcULL;
+					regs.pc = 0x2468ace000ULL;
+					regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+					before = regs;
+					memcpy(expected_registers, before.regs,
+					       sizeof(expected_registers));
+					source = rn == 31 ? 0 : before.regs[rn];
+					destination = rd == 31 ? 0 : before.regs[rd];
+					source &= width_mask;
+					destination &= width_mask;
+					tcti_test_decode_bitfield_masks(
+						is_64bit, immr, imms, &wmask, &tmask);
+					rotated = tcti_test_ror_element(
+						source, immr, data_size);
+					bottom = rotated & wmask;
+					switch (expected_ops[opc]) {
+					case TCTI_BITFIELD_SBFM: {
+						u64 top = source & BIT_ULL(imms) ?
+							width_mask : 0;
+
+						expected = (top & ~tmask) |
+							(bottom & tmask);
+						break;
+					}
+					case TCTI_BITFIELD_BFM:
+						bottom = (destination & ~wmask) | bottom;
+						expected = (destination & ~tmask) |
+							(bottom & tmask);
+						break;
+					case TCTI_BITFIELD_UBFM:
+						expected = bottom & tmask;
+						break;
+					default:
+						KUNIT_FAIL(test, "invalid bitfield test operation");
+						return;
+					}
+					expected &= width_mask;
+					if (rd < 31)
+						expected_registers[rd] = expected;
+
+					ret = tcti_switch_debug_execute_decoded(
+						NULL, &regs, &decoded, NULL);
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					KUNIT_EXPECT_MEMEQ(test, expected_registers,
+						regs.regs, sizeof(expected_registers));
+					KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+					KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+					KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+				}
+			}
+		}
+	}
+
+	for (opc = 0; opc < 32; opc++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[opc]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[opc]);
+	}
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x73000000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x13400000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x93000000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x13200000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x13008000U).decode_class);
+}
+
 static void tcti_switch_executes_bitfield(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -18683,6 +18855,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_logical_shifted_register),
 	KUNIT_CASE(tcti_gadget_executes_complete_logical_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_logical_immediate),
+	KUNIT_CASE(tcti_gadget_executes_complete_bitfield_family),
 	KUNIT_CASE(tcti_switch_executes_bitfield),
 	KUNIT_CASE(tcti_gadget_executes_complete_extract_family),
 	KUNIT_CASE(tcti_switch_executes_extract),
