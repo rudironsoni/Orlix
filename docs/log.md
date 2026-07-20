@@ -3,9 +3,17 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-19
+updated: 2026-07-20
 ---
 # Orlix Knowledge Log
+
+## [2026-07-20] test | Complete scalar register data processing families
+
+Closed logical shifted register, add/subtract extended register, data-processing one-source, two-source, and three-source families through production decode and execution. Corrected flag-setting extended-register forms to read register 31 as SP, and added exhaustive KUnit coverage for architectural operations, widths, register fields, aliases, reserved encodings, state preservation, PC progression, and NZCV where applicable. The kernel-owned inventory reports 28 of 52 families complete with 24 explicit gaps.
+
+## [2026-07-20] guide | Record external Xcode mount recovery
+
+Added durable agent guidance for simulator and Xcode recovery on the externally backed development environment. The procedure keeps Apple paths standard, uses `xcode-offload` for simulator lifecycle and mount restoration, distinguishes stale DerivedData reads from stale DeviceSet installation, remounts only the owning sparsebundle after stopping its holders, and requires strict doctor plus owning read or device verification before rebuilding.
 
 ## [2026-07-20] test | Complete add/subtract shifted register
 
