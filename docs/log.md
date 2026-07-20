@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete compare-and-branch immediate
+
+Closed the A64 `CBZ` and `CBNZ` family through production decode, lowering, and gadget execution. KUnit proves 32-bit and 64-bit forms, every source register including `WZR` and `XZR`, low-word versus full-register zero semantics, both branch polarities, signed 19-bit displacement boundaries and individual immediate bits, taken and fallthrough behavior, preserved architectural state, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 12 of 52 families complete with 40 explicit gaps.
+
 ## [2026-07-20] implement | Complete conditional immediate branches
 
 Closed the A64 `B.cond` family through production decode, lowering, and gadget execution. KUnit proves all 16 condition codes across all 16 NZCV states, taken and fallthrough behavior, signed 19-bit immediate boundaries and individual immediate bits, the reserved encoding bit, preserved general registers, stack pointer and flags, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 11 of 52 families complete with 41 explicit gaps.

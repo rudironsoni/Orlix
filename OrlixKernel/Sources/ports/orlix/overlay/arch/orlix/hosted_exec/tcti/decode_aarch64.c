@@ -805,7 +805,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.rt = instruction & 0x1fU;
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.nonzero = instruction & BIT(24);
-		decoded.branch_imm = sign_extend64(imm, 18) << 2;
+		decoded.branch_imm = sign_extend64(imm << 2, 20);
 		return decoded;
 	}
 

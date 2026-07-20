@@ -38,7 +38,7 @@ enum tcti_isa_coverage_status {
 	X(EXTRACT, BASE, PARTIAL, "extract", "TCTI_DECODE_EXTRACT", "tcti_gadget_program_executes_extract") \
 	X(UNCONDITIONAL_BRANCH_IMMEDIATE, BASE, COMPLETE, "unconditional branch immediate", "TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_unconditional_branch_immediate_family") \
 	X(CONDITIONAL_BRANCH_IMMEDIATE, BASE, COMPLETE, "conditional branch immediate", "TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_conditional_branch_immediate_family") \
-	X(COMPARE_BRANCH_IMMEDIATE, BASE, PARTIAL, "compare and branch immediate", "TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE", "tcti_decode_recognizes_conditional_branch_classes") \
+	X(COMPARE_BRANCH_IMMEDIATE, BASE, COMPLETE, "compare and branch immediate", "TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_compare_branch_immediate_family") \
 	X(TEST_BRANCH_IMMEDIATE, BASE, PARTIAL, "test and branch immediate", "TCTI_DECODE_TEST_BRANCH_IMMEDIATE", "tcti_decode_recognizes_conditional_branch_classes") \
 	X(EXCEPTION_GENERATION, BASE, PARTIAL, "exception generation", "TCTI_DECODE_SVC/TCTI_DECODE_BRK", "tcti_decode_recognizes_svc_zero") \
 	X(SYSTEM_AND_HINT, BASE, PARTIAL, "system, hint, and barrier", "TCTI_DECODE_HINT/TCTI_DECODE_SYSTEM_REGISTER", "tcti_decode_recognizes_system_register_class") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	41
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	40
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
