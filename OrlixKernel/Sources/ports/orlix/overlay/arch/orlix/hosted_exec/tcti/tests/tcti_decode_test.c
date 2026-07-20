@@ -15875,6 +15875,109 @@ static int tcti_test_execute_decoded_gadget(
 					   &fault_address);
 }
 
+static u32 tcti_test_encode_pc_relative_address(bool page_relative,
+						s32 immediate, u8 rd)
+{
+	u32 imm21 = (u32)immediate & (BIT(21) - 1);
+
+	return 0x10000000U | (page_relative ? BIT(31) : 0) |
+	       ((imm21 & 0x3U) << 29) | ((imm21 >> 2) << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_pc_relative_address_family(
+	struct kunit *test)
+{
+	static const s32 edge_immediates[] = {
+		-BIT(20), -BIT(20) + 1, -5, -4, -3, -2, -1,
+		0, 1, 2, 3, 4, 5, BIT(20) - 2, BIT(20) - 1,
+	};
+	unsigned int page_relative;
+	unsigned int rd;
+	unsigned int i;
+
+	for (page_relative = 0; page_relative < 2; page_relative++) {
+		for (rd = 0; rd < 32; rd++) {
+			for (i = 0; i < ARRAY_SIZE(edge_immediates); i++) {
+				struct tcti_decoded_instruction decoded;
+				struct pt_regs before;
+				struct pt_regs regs = {};
+				s64 byte_offset;
+				u64 base;
+				u64 expected;
+				u32 instruction;
+				unsigned int reg;
+				int ret;
+
+				instruction = tcti_test_encode_pc_relative_address(
+					page_relative, edge_immediates[i], rd);
+				decoded = tcti_decode_aarch64(instruction);
+				byte_offset = page_relative ?
+					(s64)edge_immediates[i] * 4096 :
+					edge_immediates[i];
+
+				KUNIT_ASSERT_EQ_MSG(test,
+					TCTI_DECODE_PC_RELATIVE_ADDRESS,
+					decoded.decode_class,
+					"page=%u rd=%u immediate=%d instruction=%08x",
+					page_relative, rd, edge_immediates[i],
+					instruction);
+				KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+				KUNIT_EXPECT_EQ(test, !!page_relative,
+						decoded.page_relative);
+				KUNIT_EXPECT_EQ(test, byte_offset,
+						decoded.pc_relative_imm);
+
+				for (reg = 0; reg < 31; reg++)
+					regs.regs[reg] = 0x1111000000000000ULL + reg;
+				regs.sp = 0x2222000000000000ULL;
+				regs.pc = 0x706a865abcULL + rd * sizeof(u32);
+				regs.pstate = PSR_N_BIT | PSR_C_BIT;
+				before = regs;
+				base = page_relative ? regs.pc & ~0xfffULL : regs.pc;
+				expected = base + byte_offset;
+
+				ret = tcti_test_execute_decoded_gadget(&regs,
+								       &decoded);
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				for (reg = 0; reg < 31; reg++)
+					KUNIT_EXPECT_EQ_MSG(
+						test, reg == rd ? expected : before.regs[reg],
+						regs.regs[reg],
+						"page=%u rd=%u immediate=%d register=%u",
+						page_relative, rd, edge_immediates[i], reg);
+				KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+				KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+				KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+			}
+		}
+	}
+
+	for (i = 0; i < 20; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = BIT(i);
+		u32 instruction = tcti_test_encode_pc_relative_address(
+			false, immediate, i);
+
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_PC_RELATIVE_ADDRESS,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate, decoded.pc_relative_imm);
+	}
+
+	for (i = 0; i <= 20; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = -BIT(i);
+		u32 instruction = tcti_test_encode_pc_relative_address(
+			true, immediate, i);
+
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_PC_RELATIVE_ADDRESS,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate * 4096,
+				decoded.pc_relative_imm);
+	}
+}
+
 static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
@@ -16851,6 +16954,7 @@ static void tcti_switch_preserves_compiler_rt_pair_frame(struct kunit *test)
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
+	KUNIT_CASE(tcti_gadget_executes_complete_pc_relative_address_family),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_select_family),

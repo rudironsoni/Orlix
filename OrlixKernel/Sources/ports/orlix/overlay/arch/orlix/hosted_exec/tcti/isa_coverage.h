@@ -30,7 +30,7 @@ enum tcti_isa_coverage_status {
 };
 
 #define ORLIX_TCTI_ISA_FAMILIES(X) \
-	X(PC_RELATIVE_ADDRESSING, BASE, PARTIAL, "pc-relative addressing", "TCTI_DECODE_PC_RELATIVE_ADDRESS", "tcti_decode_recognizes_pc_relative_address_class") \
+	X(PC_RELATIVE_ADDRESSING, BASE, COMPLETE, "pc-relative addressing", "TCTI_DECODE_PC_RELATIVE_ADDRESS", "tcti_gadget_executes_complete_pc_relative_address_family") \
 	X(ADD_SUB_IMMEDIATE, BASE, PARTIAL, "add/subtract immediate", "TCTI_DECODE_ADD_SUB_IMMEDIATE", "tcti_decode_recognizes_add_sub_immediate_class") \
 	X(LOGICAL_IMMEDIATE, BASE, PARTIAL, "logical immediate", "TCTI_DECODE_LOGICAL_IMMEDIATE", "tcti_decode_recognizes_logical_immediate_class") \
 	X(MOVE_WIDE_IMMEDIATE, BASE, PARTIAL, "move wide immediate", "TCTI_DECODE_MOVE_WIDE_IMMEDIATE", "tcti_decode_recognizes_move_wide_immediate_class") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	44
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	43
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

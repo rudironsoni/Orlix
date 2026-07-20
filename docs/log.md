@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete PC-relative addressing
+
+Closed the A64 `ADR` and `ADRP` family through production decode, lowering, and gadget execution. KUnit now proves every destination register, including discarded writes to `XZR`, signed 21-bit immediate boundaries and individual immediate bits, ADRP page alignment, preserved general registers, stack pointer and flags, and exact PC progression. The decoder now sign-extends the already-scaled ADRP immediate, avoiding a signed negative left shift in C. The kernel-owned inventory reports 9 of 52 families complete with 43 explicit gaps.
+
 ## [2026-07-20] implement | Complete scalar fused three-source FP
 
 Rejected reserved scalar FP three-source type values and proved `FMADD`, `FMSUB`, `FNMADD`, and `FNMSUB` for both precisions across every SIMD register field. KUnit covers destination-source aliasing, fused-only results that differ from separate multiply and add, invalid-operation NaN and FPSR state, upper-lane clearing, source preservation, and exact PC progression through production lowering and gadget execution. The scalar compare and conditional-compare family proofs now use that same production path instead of calling decoded semantics directly.

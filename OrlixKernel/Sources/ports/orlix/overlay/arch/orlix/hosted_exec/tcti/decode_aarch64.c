@@ -698,9 +698,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.decode_class = TCTI_DECODE_PC_RELATIVE_ADDRESS;
 		decoded.rd = instruction & 0x1fU;
 		decoded.page_relative = instruction & BIT(31);
-		decoded.pc_relative_imm = sign_extend64(imm, 20);
-		if (decoded.page_relative)
-			decoded.pc_relative_imm <<= 12;
+		decoded.pc_relative_imm = decoded.page_relative ?
+			sign_extend64(imm << 12, 32) : sign_extend64(imm, 20);
 		return decoded;
 	}
 
