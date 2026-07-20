@@ -9411,6 +9411,9 @@ static void tcti_switch_executes_data_processing_2source(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x701cULL, regs.pc);
 }
 
+static u32 tcti_test_encode_data_processing_2source(bool is_64bit, u8 opcode,
+						     u8 rm, u8 rn, u8 rd);
+
 static void tcti_switch_executes_complete_crc32_family(struct kunit *test)
 {
 	static const struct {
@@ -9444,6 +9447,117 @@ static void tcti_switch_executes_complete_crc32_family(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, 0, ret);
 		KUNIT_EXPECT_EQ(test, (u64)cases[i].expected, regs.regs[0]);
 		KUNIT_EXPECT_EQ(test, 0x7004ULL, regs.pc);
+	}
+}
+
+static u32 tcti_test_crc32_update(u32 accumulator, u64 value,
+				  u8 byte_count, bool castagnoli)
+{
+	u32 polynomial = castagnoli ? 0x82f63b78U : 0xedb88320U;
+	u32 crc = accumulator;
+	u8 byte;
+
+	for (byte = 0; byte < byte_count; byte++) {
+		u8 bit;
+
+		crc ^= (u8)(value >> (byte * 8));
+		for (bit = 0; bit < 8; bit++)
+			crc = (crc >> 1) ^ (-(crc & 1U) & polynomial);
+	}
+
+	return crc;
+}
+
+static void tcti_gadget_executes_complete_crc32_family(struct kunit *test)
+{
+	static const u32 accumulators[] = {
+		0, 1, 0x12345678U, U32_MAX,
+	};
+	static const u64 values[] = {
+		0, 1, 0xff, 0x1122334455667788ULL, U64_MAX,
+	};
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	u8 opcode;
+
+	for (opcode = 0x10; opcode <= 0x17; opcode++) {
+		u8 register_case;
+
+		for (register_case = 0; register_case < 32; register_case++) {
+			struct tcti_decoded_instruction decoded;
+			struct pt_regs regs = {};
+			struct pt_regs before;
+			u64 expected_registers[31];
+			bool is_64bit = (opcode & 0x3U) == 3;
+			bool castagnoli = opcode & BIT(2);
+			u8 byte_count = BIT(opcode & 0x3U);
+			u8 rn = register_case;
+			u8 rm = (register_case * 7 + opcode) & 0x1fU;
+			u8 rd = (register_case * 13 + (opcode >> 2)) & 0x1fU;
+			u64 accumulator;
+			u64 value;
+			u32 expected;
+			u32 instruction;
+			unsigned int reg;
+			int ret;
+
+			instruction = tcti_test_encode_data_processing_2source(
+				is_64bit, opcode, rm, rn, rd);
+			decoded = tcti_decode_aarch64(instruction);
+			KUNIT_ASSERT_EQ(test,
+					TCTI_DECODE_DATA_PROCESSING_2SOURCE,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test,
+					opcode & BIT(2) ? TCTI_DP2_CRC32C :
+					TCTI_DP2_CRC32,
+					decoded.dp2_op);
+			KUNIT_EXPECT_EQ(test, byte_count, decoded.access_size);
+			KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.result_size);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+			KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+			seen_rn[rn] = true;
+			seen_rm[rm] = true;
+			seen_rd[rd] = true;
+			for (reg = 0; reg < 31; reg++)
+				regs.regs[reg] = 0x1020304050607080ULL ^
+					((u64)instruction << (reg & 7)) ^ reg;
+			if (rn < 31)
+				regs.regs[rn] = accumulators[register_case & 3];
+			if (rm < 31)
+				regs.regs[rm] = values[(register_case + opcode) %
+					ARRAY_SIZE(values)];
+			regs.sp = 0x706a865abcULL;
+			regs.pc = 0x2468ace000ULL;
+			regs.pstate = PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT |
+				PSR_V_BIT | 0x155UL;
+			before = regs;
+			memcpy(expected_registers, before.regs,
+			       sizeof(expected_registers));
+			accumulator = rn == 31 ? 0 : before.regs[rn];
+			value = rm == 31 ? 0 : before.regs[rm];
+			expected = tcti_test_crc32_update(accumulator, value,
+							 byte_count, castagnoli);
+			if (rd < 31)
+				expected_registers[rd] = expected;
+
+			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+							 &decoded, NULL);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+					   sizeof(expected_registers));
+			KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+			KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+			KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+		}
+	}
+
+	for (opcode = 0; opcode < 32; opcode++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[opcode]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[opcode]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[opcode]);
 	}
 }
 
@@ -20087,6 +20201,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_1source_family),
 	KUNIT_CASE(tcti_switch_executes_data_processing_2source),
 	KUNIT_CASE(tcti_switch_executes_complete_crc32_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_crc32_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_2source_family),
 	KUNIT_CASE(tcti_switch_executes_multiply_add_sub),
 	KUNIT_CASE(tcti_gadget_executes_complete_data_processing_3source_family),

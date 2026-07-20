@@ -81,7 +81,7 @@ enum tcti_isa_coverage_status {
 	X(AES, AES, PARTIAL, "AES instructions", "TCTI_SIMD_ARITH_AES*", "") \
 	X(SHA1_SHA256, SHA, PARTIAL, "SHA1 and SHA256 instructions", "TCTI_SIMD_ARITH_SHA1*/SHA256*", "") \
 	X(POLYNOMIAL_MULTIPLY, PMULL, PARTIAL, "polynomial multiply", "TCTI_SIMD_ARITH_PMUL/TCTI_SIMD_ARITH_PMULL", "") \
-	X(CRC32, CRC32, PARTIAL, "CRC32 and CRC32C", "TCTI_DP2_CRC32/TCTI_DP2_CRC32C", "tcti_switch_executes_crc32_family")
+	X(CRC32, CRC32, COMPLETE, "CRC32 and CRC32C", "TCTI_DP2_CRC32/TCTI_DP2_CRC32C", "tcti_gadget_executes_complete_crc32_family")
 
 enum tcti_isa_family_id {
 #define TCTI_ISA_FAMILY_ENUM(id, extension, status, name, decoder, kunit) \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	23
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	22
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

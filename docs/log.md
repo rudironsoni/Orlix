@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-20
+updated: 2026-07-21
 ---
 # Orlix Knowledge Log
+
+## [2026-07-21] test | Complete CRC32 and CRC32C
+
+Closed all eight A64 `CRC32` and `CRC32C` variants through production decode and execution. KUnit proves every byte, halfword, word, and doubleword source form against an independent reflected-polynomial oracle, covers every source, accumulator, and destination register field including zero-register and alias behavior, verifies 32-bit result extension, and preserves unrelated registers, SP, NZCV, and exact PC progression. The kernel-owned inventory reports 30 of 52 families complete with 22 explicit gaps.
 
 ## [2026-07-20] test | Complete A64 exception generation
 
