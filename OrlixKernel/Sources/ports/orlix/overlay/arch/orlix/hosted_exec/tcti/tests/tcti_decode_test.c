@@ -13312,7 +13312,7 @@ tcti_switch_executes_complete_simd_multiply_long_family(struct kunit *test)
 	}
 }
 
-static void tcti_switch_executes_complete_simd_pmull_family(struct kunit *test)
+static void tcti_switch_executes_simd_pmull_known_vectors(struct kunit *test)
 {
 	struct pt_regs regs = {};
 	u8 execution_count = 0;
@@ -13370,6 +13370,277 @@ static void tcti_switch_executes_complete_simd_pmull_family(struct kunit *test)
 					regs.pc);
 		}
 	}
+}
+
+static u16 tcti_test_polynomial_multiply_u8(u8 left, u8 right)
+{
+	u16 result = 0;
+	u8 bit;
+
+	for (bit = 0; bit < 8; bit++) {
+		if (right & BIT(bit))
+			result ^= (u16)left << bit;
+	}
+
+	return result;
+}
+
+static void tcti_test_polynomial_multiply_u64(u64 left, u64 right,
+					      u64 *low, u64 *high)
+{
+	u64 result_low = 0;
+	u64 result_high = 0;
+	u8 bit;
+
+	for (bit = 0; bit < 64; bit++) {
+		if (!(right & BIT_ULL(bit)))
+			continue;
+		result_low ^= left << bit;
+		if (bit)
+			result_high ^= left >> (64 - bit);
+	}
+
+	*low = result_low;
+	*high = result_high;
+}
+
+static void tcti_test_initialize_simd_registers(u32 instruction)
+{
+	unsigned int word;
+
+	for (word = 0; word < ARRAY_SIZE(current->thread.user_simd); word++)
+		current->thread.user_simd[word] =
+			0x1020304050607080ULL ^
+			rol64((u64)instruction << (word & 7), word & 63) ^ word;
+}
+
+static void
+tcti_gadget_executes_complete_polynomial_multiply_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_source_alias = false;
+	bool saw_destination_alias = false;
+	u8 q;
+
+	for (q = 0; q < 2; q++) {
+		u8 size;
+
+		for (size = 0; size < 4; size++) {
+			u8 register_case;
+
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				struct tcti_decoded_instruction decoded;
+				struct pt_regs regs = {};
+				struct pt_regs before_regs;
+				u64 before_simd[
+					ARRAY_SIZE(current->thread.user_simd)];
+				u64 expected_simd[
+					ARRAY_SIZE(current->thread.user_simd)];
+				u8 rn = register_case;
+				u8 rm = (register_case * 7 + q) & 0x1fU;
+				u8 rd = (register_case * 13 + q) & 0x1fU;
+				u32 instruction = 0x0e209c00U | BIT(29) |
+					(q ? BIT(30) : 0) |
+					((u32)size << 22) | ((u32)rm << 16) |
+					((u32)rn << 5) | rd;
+				int ret;
+
+				decoded = tcti_decode_aarch64(instruction);
+				if (size) {
+					KUNIT_EXPECT_EQ_MSG(
+						test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class,
+						"accepted reserved PMUL size=%u q=%u instruction=%#x",
+						size, q, instruction);
+					continue;
+				}
+
+				KUNIT_ASSERT_EQ(test,
+						TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+						decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_PMUL,
+						decoded.simd_arithmetic_op);
+				KUNIT_EXPECT_EQ(test, sizeof(u8),
+						decoded.access_size);
+				KUNIT_EXPECT_EQ(test,
+						q ? 2 * sizeof(u64) : sizeof(u64),
+						decoded.result_size);
+				KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+				KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+				KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+				seen_rn[rn] = true;
+				seen_rm[rm] = true;
+				seen_rd[rd] = true;
+				saw_source_alias |= rn == rm;
+				saw_destination_alias |= rd == rn || rd == rm;
+				tcti_test_initialize_simd_registers(instruction);
+				memcpy(before_simd, current->thread.user_simd,
+				       sizeof(before_simd));
+				memcpy(expected_simd, before_simd,
+				       sizeof(expected_simd));
+				{
+					u64 result[2] = {};
+					u8 lane_count = q ? 16 : 8;
+					u8 lane;
+
+					for (lane = 0; lane < lane_count; lane++) {
+						u8 word = lane / 8;
+						u8 shift = (lane % 8) * 8;
+						u8 left = before_simd[rn * 2 + word] >>
+							shift;
+						u8 right = before_simd[rm * 2 + word] >>
+							 shift;
+						u8 product =
+							tcti_test_polynomial_multiply_u8(
+								left, right);
+
+						result[word] |= (u64)product << shift;
+					}
+					expected_simd[rd * 2] = result[0];
+					expected_simd[rd * 2 + 1] =
+						q ? result[1] : 0;
+				}
+
+				regs.pc = 0x2468ace000ULL;
+				regs.sp = 0x706a865abcULL;
+				regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+				before_regs = regs;
+				current->thread.user_simd_valid = 0;
+				ret = tcti_switch_debug_execute_decoded(
+					NULL, &regs, &decoded, NULL);
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				KUNIT_EXPECT_MEMEQ(test, expected_simd,
+						   current->thread.user_simd,
+						   sizeof(expected_simd));
+				KUNIT_EXPECT_EQ(test, 1,
+						current->thread.user_simd_valid);
+				KUNIT_EXPECT_MEMEQ(test, before_regs.regs, regs.regs,
+						   sizeof(regs.regs));
+				KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+				KUNIT_EXPECT_EQ(test, before_regs.pstate, regs.pstate);
+				KUNIT_EXPECT_EQ(test, before_regs.pc + sizeof(u32),
+						regs.pc);
+			}
+		}
+	}
+
+	for (q = 0; q < 2; q++) {
+		u8 size;
+
+		for (size = 0; size < 4; size++) {
+			u8 register_case;
+
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				struct tcti_decoded_instruction decoded;
+				struct pt_regs regs = {};
+				struct pt_regs before_regs;
+				u64 before_simd[
+					ARRAY_SIZE(current->thread.user_simd)];
+				u64 expected_simd[
+					ARRAY_SIZE(current->thread.user_simd)];
+				u64 result[2] = {};
+				u8 rn = register_case;
+				u8 rm = (register_case * 7 + q + size) & 0x1fU;
+				u8 rd = (register_case * 13 + q + size) & 0x1fU;
+				u32 instruction = 0x0e20e000U |
+					(q ? BIT(30) : 0) |
+					((u32)size << 22) | ((u32)rm << 16) |
+					((u32)rn << 5) | rd;
+				int ret;
+
+				decoded = tcti_decode_aarch64(instruction);
+				if (size != 0 && size != 3) {
+					KUNIT_EXPECT_EQ_MSG(
+						test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class,
+						"accepted reserved PMULL size=%u q=%u instruction=%#x",
+						size, q, instruction);
+					continue;
+				}
+
+				KUNIT_ASSERT_EQ(test,
+						TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+						decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_PMULL,
+						decoded.simd_arithmetic_op);
+				KUNIT_EXPECT_EQ(test, BIT(size),
+						decoded.access_size);
+				KUNIT_EXPECT_EQ(test, 2 * sizeof(u64),
+						decoded.result_size);
+				KUNIT_EXPECT_EQ(test, q,
+						decoded.simd_source_index);
+				KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+				KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+				KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+				seen_rn[rn] = true;
+				seen_rm[rm] = true;
+				seen_rd[rd] = true;
+				saw_source_alias |= rn == rm;
+				saw_destination_alias |= rd == rn || rd == rm;
+				tcti_test_initialize_simd_registers(instruction);
+				memcpy(before_simd, current->thread.user_simd,
+				       sizeof(before_simd));
+				memcpy(expected_simd, before_simd,
+				       sizeof(expected_simd));
+				if (size == 0) {
+					u64 left = before_simd[rn * 2 + q];
+					u64 right = before_simd[rm * 2 + q];
+					u8 lane;
+
+					for (lane = 0; lane < 8; lane++) {
+						u16 product =
+							tcti_test_polynomial_multiply_u8(
+								left >> (lane * 8),
+								right >> (lane * 8));
+
+						result[lane / 4] |= (u64)product <<
+							((lane % 4) * 16);
+					}
+				} else {
+					tcti_test_polynomial_multiply_u64(
+						before_simd[rn * 2 + q],
+						before_simd[rm * 2 + q],
+						&result[0], &result[1]);
+				}
+				expected_simd[rd * 2] = result[0];
+				expected_simd[rd * 2 + 1] = result[1];
+
+				regs.pc = 0x13579bdf000ULL;
+				regs.sp = 0x706a865abcULL;
+				regs.pstate = PSR_Z_BIT | PSR_V_BIT | 0x155UL;
+				before_regs = regs;
+				current->thread.user_simd_valid = 0;
+				ret = tcti_switch_debug_execute_decoded(
+					NULL, &regs, &decoded, NULL);
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				KUNIT_EXPECT_MEMEQ(test, expected_simd,
+						   current->thread.user_simd,
+						   sizeof(expected_simd));
+				KUNIT_EXPECT_EQ(test, 1,
+						current->thread.user_simd_valid);
+				KUNIT_EXPECT_MEMEQ(test, before_regs.regs, regs.regs,
+						   sizeof(regs.regs));
+				KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+				KUNIT_EXPECT_EQ(test, before_regs.pstate, regs.pstate);
+				KUNIT_EXPECT_EQ(test, before_regs.pc + sizeof(u32),
+						regs.pc);
+			}
+		}
+	}
+
+	for (q = 0; q < 32; q++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[q]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_source_alias);
+	KUNIT_EXPECT_TRUE(test, saw_destination_alias);
 }
 
 static void tcti_switch_executes_complete_simd_mla_mls_family(struct kunit *test)
@@ -20259,7 +20530,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha1_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_aes_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_multiply_long_family),
-	KUNIT_CASE(tcti_switch_executes_complete_simd_pmull_family),
+	KUNIT_CASE(tcti_switch_executes_simd_pmull_known_vectors),
+	KUNIT_CASE(tcti_gadget_executes_complete_polynomial_multiply_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mla_mls_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_min_max_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_shift_left_immediate_family),

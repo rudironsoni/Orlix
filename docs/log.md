@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete polynomial multiply
+
+Closed A64 `PMUL`, `PMULL`, and `PMULL2` through production decode and execution. KUnit proves byte-lane low polynomial products, byte-to-halfword widening, 64-bit-to-128-bit carryless products, both `Q` source halves, every SIMD source and destination register field, source and destination aliases, unrelated SIMD and integer state preservation, exact PC progression, and rejection of reserved element sizes. The kernel-owned inventory reports 31 of 52 families complete with 21 explicit gaps. OpenMinis ish-arm64 commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` was used only as an independent encoding and decomposition cross-check; no source was copied.
+
 ## [2026-07-21] test | Complete CRC32 and CRC32C
 
 Closed all eight A64 `CRC32` and `CRC32C` variants through production decode and execution. KUnit proves every byte, halfword, word, and doubleword source form against an independent reflected-polynomial oracle, covers every source, accumulator, and destination register field including zero-register and alias behavior, verifies 32-bit result extension, and preserves unrelated registers, SP, NZCV, and exact PC progression. The kernel-owned inventory reports 30 of 52 families complete with 22 explicit gaps.

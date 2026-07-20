@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-20
+updated: 2026-07-21
 status: current
 summary: "Canonical repository source for tcti reference review."
 ---
@@ -134,3 +134,13 @@ Any future copied source requires recording:
   - `llvm/lib/Target/AArch64/AArch64InstrFormats.td`
 - Use: confirm the A64 exception-generation field layout and the `op1` and `LL` assignments for `SVC`, `HVC`, `SMC`, `BRK`, `HLT`, and `DCPS1` through `DCPS3` before writing the independent Orlix KUnit boundary audit.
 - No LLVM source was copied into Orlix.
+
+### OpenMinis polynomial multiply cross-check
+
+- Repository: `https://github.com/OpenMinis/ish-arm64`
+- Commit reviewed: `89269e6fef7ab7aa61b133deae90d78e34a09ed1`
+- Files reviewed:
+  - `asbestos/guest-arm64/gen.c`
+  - `asbestos/guest-arm64/gadgets-aarch64/crypto.S`
+- Use: independently confirm the `PMUL`, `PMULL`, and `PMULL2` encoding families, legal element sizes, `Q` source-half selection, and carryless-multiply decomposition before completing the Orlix-owned KUnit proof.
+- No OpenMinis source was copied into Orlix.
