@@ -16631,7 +16631,7 @@ tcti_switch_executes_complete_simd_shift_left_long_family(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8d34ULL, regs.pc);
 }
 
-static void tcti_switch_executes_complete_simd_ext_family(struct kunit *test)
+static void tcti_switch_executes_simd_ext_known_vector(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
 	struct pt_regs regs = {};
@@ -16653,6 +16653,134 @@ static void tcti_switch_executes_complete_simd_ext_family(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
 	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 	KUNIT_EXPECT_EQ(test, 0x8d38ULL, regs.pc);
+}
+
+static u8 tcti_test_simd_register_byte(const u64 simd[64], u8 reg,
+				       u8 byte)
+{
+	u8 word = byte / sizeof(u64);
+	u8 shift = (byte % sizeof(u64)) * 8;
+
+	return simd[reg * 2 + word] >> shift;
+}
+
+static void tcti_gadget_executes_complete_simd_ext_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_source_alias = false;
+	bool saw_destination_alias = false;
+	u8 q;
+
+	for (q = 0; q < 2; q++) {
+		u8 vector_bytes = q ? 16 : 8;
+		u8 index;
+
+		for (index = 0; index < vector_bytes; index++) {
+			u8 register_case;
+
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				u8 rn = register_case;
+				u8 rm = (register_case * 7 + index + q) &
+					0x1fU;
+				u8 rd = (register_case * 13 + index * 3 + q) &
+					0x1fU;
+				u32 instruction = 0x2e000000U |
+					(q ? BIT(30) : 0) | ((u32)rm << 16) |
+					((u32)index << 11) | ((u32)rn << 5) |
+					rd;
+				struct tcti_decoded_instruction d =
+					tcti_decode_aarch64(instruction);
+				struct pt_regs regs = {};
+				struct pt_regs before_regs;
+				u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+				u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+				unsigned int gpr;
+				u8 lane;
+				int ret;
+
+				KUNIT_ASSERT_EQ(test,
+						TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+						d.decode_class);
+				KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_EXT,
+						d.simd_element_move_op);
+				KUNIT_EXPECT_EQ(test, vector_bytes,
+						d.access_size);
+				KUNIT_EXPECT_EQ(test, vector_bytes,
+						d.result_size);
+				KUNIT_EXPECT_EQ(test, index,
+						d.shift_amount);
+				KUNIT_EXPECT_EQ(test, rn, d.rn);
+				KUNIT_EXPECT_EQ(test, rm, d.rm);
+				KUNIT_EXPECT_EQ(test, rd, d.rd);
+
+				seen_rn[rn] = true;
+				seen_rm[rm] = true;
+				seen_rd[rd] = true;
+				saw_source_alias |= rn == rm;
+				saw_destination_alias |= rd == rn || rd == rm;
+				tcti_test_initialize_simd_registers(instruction);
+				memcpy(before_simd, current->thread.user_simd,
+				       sizeof(before_simd));
+				memcpy(expected_simd, before_simd,
+				       sizeof(expected_simd));
+				expected_simd[rd * 2] = 0;
+				expected_simd[rd * 2 + 1] = 0;
+				for (lane = 0; lane < vector_bytes; lane++) {
+					u8 source_offset = index + lane;
+					u8 source_reg = source_offset <
+						vector_bytes ? rn : rm;
+					u8 source_byte = source_offset <
+						vector_bytes ? source_offset :
+						source_offset - vector_bytes;
+					u8 destination_word = lane / sizeof(u64);
+					u8 destination_shift =
+						(lane % sizeof(u64)) * 8;
+
+					expected_simd[rd * 2 + destination_word] |=
+						(u64)tcti_test_simd_register_byte(before_simd,
+							source_reg,
+							source_byte) <<
+							destination_shift;
+				}
+
+				for (gpr = 0; gpr < ARRAY_SIZE(regs.regs); gpr++)
+					regs.regs[gpr] =
+						0x1234000000000000ULL | gpr;
+				regs.pc = 0x87654321000ULL;
+				regs.sp = 0xabcdef12000ULL;
+				regs.pstate = PSR_C_BIT | PSR_V_BIT | 0x155UL;
+				before_regs = regs;
+				current->thread.user_simd_valid = 0;
+
+				ret = tcti_switch_debug_execute_decoded(NULL, &regs, &d, NULL);
+
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				KUNIT_EXPECT_MEMEQ(test, current->thread.user_simd,
+						   expected_simd,
+						   sizeof(expected_simd));
+				KUNIT_EXPECT_EQ(test, 1,
+						current->thread.user_simd_valid);
+				KUNIT_EXPECT_MEMEQ(test, before_regs.regs,
+						   regs.regs, sizeof(regs.regs));
+				KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+				KUNIT_EXPECT_EQ(test, before_regs.pstate,
+						regs.pstate);
+				KUNIT_EXPECT_EQ(test,
+						before_regs.pc + sizeof(u32), regs.pc);
+			}
+		}
+	}
+
+	for (q = 0; q < 32; q++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[q]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[q]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_source_alias);
+	KUNIT_EXPECT_TRUE(test, saw_destination_alias);
 }
 
 static void tcti_switch_executes_simd_ext_16b(struct kunit *test)
@@ -20895,7 +21023,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_xtn_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_ushll_8h),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_shift_left_long_family),
-	KUNIT_CASE(tcti_switch_executes_complete_simd_ext_family),
+	KUNIT_CASE(tcti_switch_executes_simd_ext_known_vector),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_ext_family),
 	KUNIT_CASE(tcti_switch_executes_simd_ext_16b),
 	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_popcount_sequence),
 	KUNIT_CASE(tcti_switch_executes_mlibc_cpuset_count_from_mapped_mm),

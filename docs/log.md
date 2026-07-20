@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete AdvSIMD extract coverage
+
+Closed A64 AdvSIMD `EXT` through production decode and execution. KUnit now proves every legal byte offset for 64-bit and 128-bit vectors, every SIMD source and destination register field, source-source and destination-source aliases, exact concatenation ordering, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, exact PC progression, and rejection of the reserved 64-bit offset range. The kernel-owned inventory reports 33 of 52 families complete with 19 explicit gaps.
+
 ## [2026-07-21] test | Complete AES instruction coverage
 
 Closed A64 `AESE`, `AESD`, `AESMC`, and `AESIMC` through production decode and execution. KUnit now proves every SIMD source and destination register field, source-destination aliases, all 256 byte-substitution inputs against a table-based oracle independent of the production algebra, forward and inverse row and column transforms, unrelated SIMD and integer state preservation, and exact PC progression while retaining the earlier known vectors. The kernel-owned inventory reports 32 of 52 families complete with 20 explicit gaps. OpenMinis ish-arm64 commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` was used only to cross-check instruction decomposition and standard AES transformations. No OpenMinis production implementation was copied.
