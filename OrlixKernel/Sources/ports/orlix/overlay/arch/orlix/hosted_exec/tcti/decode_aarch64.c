@@ -3131,17 +3131,19 @@ not_simd_compare_register:
 	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_PATTERN ||
 	    (instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_S_ZERO_PATTERN ||
 	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_ZERO_PATTERN) {
+		bool compare_zero =
+			(instruction & AARCH64_FCMP_S_MASK) ==
+				AARCH64_FCMP_S_ZERO_PATTERN ||
+			(instruction & AARCH64_FCMP_D_MASK) ==
+				AARCH64_FCMP_D_ZERO_PATTERN;
+
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.access_size =
 			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
-		decoded.immediate =
-			(instruction & AARCH64_FCMP_S_MASK) ==
-				AARCH64_FCMP_S_ZERO_PATTERN ||
-			(instruction & AARCH64_FCMP_D_MASK) ==
-				AARCH64_FCMP_D_ZERO_PATTERN;
+		decoded.immediate = compare_zero;
 		decoded.fp_signal_all_nans = instruction & BIT(4);
 		decoded.simd_fp = true;
 		return decoded;

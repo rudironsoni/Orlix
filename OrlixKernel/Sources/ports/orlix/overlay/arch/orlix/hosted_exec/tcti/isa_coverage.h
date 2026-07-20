@@ -72,7 +72,7 @@ enum tcti_isa_coverage_status {
 	X(FP_FIXED_POINT_CONVERT, FP, PARTIAL, "floating-point fixed-point conversion", "TCTI_DECODE_FP_INT_CONVERT", "") \
 	X(FP_INTEGER_CONVERT, FP, PARTIAL, "floating-point integer conversion", "TCTI_DECODE_FP_INT_CONVERT", "tcti_decode_recognizes_complete_fp_to_gpr_family") \
 	X(FP_1SOURCE, FP, PARTIAL, "floating-point one source", "TCTI_DECODE_FP_SCALAR_1SOURCE", "") \
-	X(FP_COMPARE, FP, PARTIAL, "floating-point compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "") \
+	X(FP_COMPARE, FP, COMPLETE, "floating-point compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "tcti_switch_executes_exhaustive_fp_compare_family") \
 	X(FP_IMMEDIATE, FP, COMPLETE, "floating-point immediate", "TCTI_DECODE_FP_SCALAR_IMMEDIATE", "tcti_gadget_executes_complete_fp_immediate_family") \
 	X(FP_CONDITIONAL_COMPARE, FP, COMPLETE, "floating-point conditional compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "tcti_switch_executes_complete_fp_conditional_compare_family") \
 	X(FP_CONDITIONAL_SELECT, FP, COMPLETE, "floating-point conditional select", "TCTI_DECODE_FP_CONDITIONAL_SELECT", "tcti_gadget_executes_complete_fp_conditional_select_family") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	46
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	45
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
