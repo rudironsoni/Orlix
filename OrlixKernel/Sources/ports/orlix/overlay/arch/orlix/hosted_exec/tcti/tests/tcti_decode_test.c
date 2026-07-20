@@ -15978,6 +15978,92 @@ static void tcti_gadget_executes_complete_pc_relative_address_family(
 	}
 }
 
+static u32 tcti_test_encode_unconditional_branch_immediate(bool link,
+						   s32 immediate)
+{
+	return 0x14000000U | (link ? BIT(31) : 0) |
+	       ((u32)immediate & (BIT(26) - 1));
+}
+
+static void tcti_gadget_executes_complete_unconditional_branch_immediate_family(
+	struct kunit *test)
+{
+	static const s32 edge_immediates[] = {
+		-BIT(25), -BIT(25) + 1, -5, -4, -3, -2, -1,
+		0, 1, 2, 3, 4, 5, BIT(25) - 2, BIT(25) - 1,
+	};
+	unsigned int link;
+	unsigned int i;
+
+	for (link = 0; link < 2; link++) {
+		for (i = 0; i < ARRAY_SIZE(edge_immediates); i++) {
+			struct tcti_decoded_instruction decoded;
+			struct pt_regs before;
+			struct pt_regs regs = {};
+			s64 byte_offset = (s64)edge_immediates[i] * 4;
+			u32 instruction;
+			unsigned int reg;
+			int ret;
+
+			instruction = tcti_test_encode_unconditional_branch_immediate(
+				link, edge_immediates[i]);
+			decoded = tcti_decode_aarch64(instruction);
+			KUNIT_ASSERT_EQ_MSG(
+				test, TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE,
+				decoded.decode_class,
+				"link=%u immediate=%d instruction=%08x",
+				link, edge_immediates[i], instruction);
+			KUNIT_EXPECT_EQ(test, !!link, decoded.link);
+			KUNIT_EXPECT_EQ(test, byte_offset, decoded.branch_imm);
+
+			for (reg = 0; reg < 31; reg++)
+				regs.regs[reg] = 0x3333000000000000ULL + reg;
+			regs.sp = 0x4444000000000000ULL;
+			regs.pc = 0x706a865abcULL;
+			regs.pstate = PSR_Z_BIT | PSR_V_BIT;
+			before = regs;
+
+			ret = tcti_test_execute_decoded_gadget(&regs, &decoded);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			for (reg = 0; reg < 31; reg++)
+				KUNIT_EXPECT_EQ_MSG(
+					test,
+					link && reg == 30 ? before.pc + sizeof(u32) :
+							   before.regs[reg],
+					regs.regs[reg],
+					"link=%u immediate=%d register=%u",
+					link, edge_immediates[i], reg);
+			KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+			KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+			KUNIT_EXPECT_EQ(test, before.pc + byte_offset, regs.pc);
+		}
+	}
+
+	for (i = 0; i < 25; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = BIT(i);
+
+		decoded = tcti_decode_aarch64(
+			tcti_test_encode_unconditional_branch_immediate(false,
+									 immediate));
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate * 4, decoded.branch_imm);
+	}
+
+	for (i = 0; i <= 25; i++) {
+		struct tcti_decoded_instruction decoded;
+		s32 immediate = -BIT(i);
+
+		decoded = tcti_decode_aarch64(
+			tcti_test_encode_unconditional_branch_immediate(true,
+									 immediate));
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, (s64)immediate * 4, decoded.branch_imm);
+	}
+}
+
 static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 	struct kunit *test)
 {
@@ -16955,6 +17041,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_gadget_executes_complete_pc_relative_address_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_unconditional_branch_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_scalar_fp2_ieee754_cases),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_immediate_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_fp_conditional_select_family),

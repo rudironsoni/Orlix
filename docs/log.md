@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] implement | Complete unconditional immediate branches
+
+Closed the A64 `B` and `BL` immediate family through production decode, lowering, and gadget execution. KUnit proves both link modes, signed 26-bit immediate boundaries and individual immediate bits, exact branch targets, `X30` link updates, preserved general registers, stack pointer and flags, and no fallthrough PC increment. The decoder now sign-extends the already-scaled branch displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 10 of 52 families complete with 42 explicit gaps.
+
 ## [2026-07-20] implement | Complete PC-relative addressing
 
 Closed the A64 `ADR` and `ADRP` family through production decode, lowering, and gadget execution. KUnit now proves every destination register, including discarded writes to `XZR`, signed 21-bit immediate boundaries and individual immediate bits, ADRP page alignment, preserved general registers, stack pointer and flags, and exact PC progression. The decoder now sign-extends the already-scaled ADRP immediate, avoiding a signed negative left shift in C. The kernel-owned inventory reports 9 of 52 families complete with 43 explicit gaps.

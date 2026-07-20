@@ -776,8 +776,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	if ((instruction & AARCH64_UNCONDITIONAL_BRANCH_IMM_MASK) ==
 	    AARCH64_UNCONDITIONAL_BRANCH_IMM_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE;
-		decoded.branch_imm =
-			sign_extend64(instruction & 0x03ffffffU, 25) << 2;
+		decoded.branch_imm = sign_extend64(
+			(u64)(instruction & 0x03ffffffU) << 2, 27);
 		decoded.link = instruction & BIT(31);
 		return decoded;
 	}
