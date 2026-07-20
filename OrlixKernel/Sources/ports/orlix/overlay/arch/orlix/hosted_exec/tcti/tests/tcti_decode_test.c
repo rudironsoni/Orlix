@@ -8105,6 +8105,117 @@ static void tcti_switch_executes_bitfield(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x6010ULL, regs.pc);
 }
 
+static u32 tcti_test_encode_extract(bool is_64bit, bool n, u8 rm,
+				    u8 shift, u8 rn, u8 rd)
+{
+	return 0x13800000U | (is_64bit ? BIT(31) : 0) |
+		(n ? BIT(22) : 0) | ((u32)rm << 16) |
+		((u32)shift << 10) | ((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_extract_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	unsigned int is_64bit;
+	unsigned int n;
+	unsigned int shift;
+	unsigned int register_case;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		for (n = 0; n < 2; n++) {
+			for (shift = 0; shift < 64; shift++) {
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					struct tcti_decoded_instruction decoded;
+					struct pt_regs regs = {};
+					struct pt_regs before;
+					bool valid = is_64bit == n &&
+						(is_64bit || shift < 32);
+					u8 rn = register_case;
+					u8 rm = (31 - register_case + shift) & 0x1fU;
+					u8 rd = (register_case + 3 * shift) & 0x1fU;
+					u8 width = is_64bit ? 64 : 32;
+					u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+					u64 high;
+					u64 low;
+					u64 expected;
+					u64 expected_registers[31];
+					u32 instruction;
+					unsigned int reg;
+					int ret;
+
+					instruction = tcti_test_encode_extract(
+						is_64bit, n, rm, shift, rn, rd);
+					decoded = tcti_decode_aarch64(instruction);
+					if (!valid) {
+						KUNIT_EXPECT_EQ_MSG(
+							test, TCTI_DECODE_UNSUPPORTED,
+							decoded.decode_class,
+							"accepted invalid sf=%u N=%u shift=%u rn=%u rm=%u rd=%u instruction=%08x",
+							is_64bit, n, shift, rn, rm, rd,
+							instruction);
+						continue;
+					}
+
+					seen_rn[rn] = true;
+					seen_rm[rm] = true;
+					seen_rd[rd] = true;
+					KUNIT_ASSERT_EQ_MSG(
+						test, TCTI_DECODE_EXTRACT,
+						decoded.decode_class,
+						"rejected sf=%u N=%u shift=%u rn=%u rm=%u rd=%u instruction=%08x",
+						is_64bit, n, shift, rn, rm, rd,
+						instruction);
+					KUNIT_EXPECT_EQ(test, !!is_64bit,
+						decoded.is_64bit);
+					KUNIT_EXPECT_EQ(test, shift, decoded.shift_amount);
+					KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+					KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+					KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+					for (reg = 0; reg < 31; reg++)
+						regs.regs[reg] =
+							0xfedcba9876543210ULL ^
+							((u64)instruction << (reg & 7)) ^ reg;
+					regs.sp = 0x706a865abcULL;
+					regs.pc = 0x2468ace000ULL;
+					regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+					before = regs;
+					memcpy(expected_registers, before.regs,
+					       sizeof(expected_registers));
+					high = rn == 31 ? 0 : before.regs[rn];
+					low = rm == 31 ? 0 : before.regs[rm];
+					high &= width_mask;
+					low &= width_mask;
+					expected = shift ?
+						(low >> shift) | (high << (width - shift)) :
+						low;
+					expected &= width_mask;
+					if (rd < 31)
+						expected_registers[rd] = expected;
+
+					ret = tcti_switch_debug_execute_decoded(
+						NULL, &regs, &decoded, NULL);
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					KUNIT_EXPECT_MEMEQ(test, expected_registers,
+						regs.regs, sizeof(expected_registers));
+					KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+					KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+					KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+				}
+			}
+		}
+	}
+
+	for (register_case = 0; register_case < 32; register_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[register_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[register_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[register_case]);
+	}
+}
+
 static void tcti_switch_executes_extract(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -18573,6 +18684,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_logical_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_logical_immediate),
 	KUNIT_CASE(tcti_switch_executes_bitfield),
+	KUNIT_CASE(tcti_gadget_executes_complete_extract_family),
 	KUNIT_CASE(tcti_switch_executes_extract),
 	KUNIT_CASE(tcti_switch_executes_data_processing_1source),
 	KUNIT_CASE(tcti_switch_executes_complete_data_processing_1source_family),

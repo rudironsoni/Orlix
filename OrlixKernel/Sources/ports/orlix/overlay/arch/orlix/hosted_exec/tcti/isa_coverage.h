@@ -35,7 +35,7 @@ enum tcti_isa_coverage_status {
 	X(LOGICAL_IMMEDIATE, BASE, COMPLETE, "logical immediate", "TCTI_DECODE_LOGICAL_IMMEDIATE", "tcti_gadget_executes_complete_logical_immediate_family") \
 	X(MOVE_WIDE_IMMEDIATE, BASE, COMPLETE, "move wide immediate", "TCTI_DECODE_MOVE_WIDE_IMMEDIATE", "tcti_gadget_executes_complete_move_wide_immediate_family") \
 	X(BITFIELD, BASE, PARTIAL, "bitfield", "TCTI_DECODE_BITFIELD", "tcti_decode_recognizes_bitfield_class") \
-	X(EXTRACT, BASE, PARTIAL, "extract", "TCTI_DECODE_EXTRACT", "tcti_gadget_program_executes_extract") \
+	X(EXTRACT, BASE, COMPLETE, "extract", "TCTI_DECODE_EXTRACT", "tcti_gadget_executes_complete_extract_family") \
 	X(UNCONDITIONAL_BRANCH_IMMEDIATE, BASE, COMPLETE, "unconditional branch immediate", "TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_unconditional_branch_immediate_family") \
 	X(CONDITIONAL_BRANCH_IMMEDIATE, BASE, COMPLETE, "conditional branch immediate", "TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_conditional_branch_immediate_family") \
 	X(COMPARE_BRANCH_IMMEDIATE, BASE, COMPLETE, "compare and branch immediate", "TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_compare_branch_immediate_family") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	32
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	31
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

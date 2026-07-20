@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete extract
+
+Closed the A64 `EXTR` family and its `ROR` aliases through production decode and execution. KUnit enumerates every `sf:N:shift` combination, rejects width mismatches and illegal 32-bit shifts, executes every legal shift in both widths, proves every source and destination field including zero-register and alias cases, verifies 32-bit zero extension, and preserves flags, stack pointer, and exact PC progression. The kernel-owned inventory reports 21 of 52 families complete with 31 explicit gaps.
+
 ## [2026-07-20] test | Complete logical immediate
 
 Closed the A64 `AND`, `ORR`, `EOR`, and `ANDS` immediate family through production decode and execution. KUnit exhaustively enumerates the full `sf:N:immr:imms` encoding space for every operation, compares valid masks with an independent bitmask oracle, rejects every invalid encoding, proves every source and destination field including zero-register aliases, verifies 32-bit zero extension and ANDS flags, and preserves stack pointer and exact PC progression. The kernel-owned inventory reports 20 of 52 families complete with 32 explicit gaps.
