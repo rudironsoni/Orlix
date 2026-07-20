@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] fix | Complete integer conditional select
+
+Closed the A64 `CSEL`, `CSINC`, `CSINV`, and `CSNEG` family through production decode, lowering, and gadget execution. KUnit proves both widths, every condition and NZCV combination, every register field, zero-register behavior, destination-source aliasing, false-path transforms, 32-bit zero extension, preserved flags and stack pointer, and exact PC progression. The decoder now rejects the reserved `S` and fixed `op2` bits instead of treating them as legal selects. The kernel-owned inventory reports 15 of 52 families complete with 37 explicit gaps.
+
 ## [2026-07-20] fix | Complete unconditional register branches
 
 Closed the A64 `BR`, `BLR`, and `RET` family through production decode, lowering, and gadget execution. KUnit proves every source register including `X30` and `XZR`, exact targets, `BLR` link updates, preserved general registers, stack pointer and flags, and rejection of malformed fixed fields. The implementation now snapshots the branch target before writing `X30`, fixing `BLR X30` aliasing. The kernel-owned inventory reports 14 of 52 families complete with 38 explicit gaps.

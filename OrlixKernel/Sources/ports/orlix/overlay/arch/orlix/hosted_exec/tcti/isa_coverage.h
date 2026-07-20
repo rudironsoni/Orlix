@@ -44,7 +44,7 @@ enum tcti_isa_coverage_status {
 	X(SYSTEM_AND_HINT, BASE, PARTIAL, "system, hint, and barrier", "TCTI_DECODE_HINT/TCTI_DECODE_SYSTEM_REGISTER", "tcti_decode_recognizes_system_register_class") \
 	X(UNCONDITIONAL_BRANCH_REGISTER, BASE, COMPLETE, "unconditional branch register", "TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER", "tcti_gadget_executes_complete_unconditional_branch_register_family") \
 	X(CONDITIONAL_COMPARE, BASE, PARTIAL, "conditional compare", "TCTI_DECODE_CONDITIONAL_COMPARE", "tcti_decode_recognizes_conditional_compare_class") \
-	X(CONDITIONAL_SELECT, BASE, PARTIAL, "conditional select", "TCTI_DECODE_CONDITIONAL_SELECT", "tcti_decode_recognizes_conditional_select_class") \
+	X(CONDITIONAL_SELECT, BASE, COMPLETE, "conditional select", "TCTI_DECODE_CONDITIONAL_SELECT", "tcti_gadget_executes_complete_conditional_select_family") \
 	X(LOGICAL_SHIFTED_REGISTER, BASE, PARTIAL, "logical shifted register", "TCTI_DECODE_LOGICAL_SHIFTED_REGISTER", "tcti_decode_recognizes_logical_shifted_register_class") \
 	X(ADD_SUB_SHIFTED_REGISTER, BASE, PARTIAL, "add/subtract shifted register", "TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER", "tcti_decode_recognizes_add_sub_shifted_register_class") \
 	X(ADD_SUB_EXTENDED_REGISTER, BASE, PARTIAL, "add/subtract extended register", "TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER", "tcti_decode_recognizes_add_sub_extended_register_class") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	38
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	37
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
