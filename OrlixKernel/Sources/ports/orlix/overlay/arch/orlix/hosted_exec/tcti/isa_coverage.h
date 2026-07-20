@@ -42,7 +42,7 @@ enum tcti_isa_coverage_status {
 	X(TEST_BRANCH_IMMEDIATE, BASE, COMPLETE, "test and branch immediate", "TCTI_DECODE_TEST_BRANCH_IMMEDIATE", "tcti_gadget_executes_complete_test_branch_immediate_family") \
 	X(EXCEPTION_GENERATION, BASE, PARTIAL, "exception generation", "TCTI_DECODE_SVC/TCTI_DECODE_BRK", "tcti_decode_recognizes_svc_zero") \
 	X(SYSTEM_AND_HINT, BASE, PARTIAL, "system, hint, and barrier", "TCTI_DECODE_HINT/TCTI_DECODE_SYSTEM_REGISTER", "tcti_decode_recognizes_system_register_class") \
-	X(UNCONDITIONAL_BRANCH_REGISTER, BASE, PARTIAL, "unconditional branch register", "TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER", "tcti_gadget_program_executes_branch_register") \
+	X(UNCONDITIONAL_BRANCH_REGISTER, BASE, COMPLETE, "unconditional branch register", "TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER", "tcti_gadget_executes_complete_unconditional_branch_register_family") \
 	X(CONDITIONAL_COMPARE, BASE, PARTIAL, "conditional compare", "TCTI_DECODE_CONDITIONAL_COMPARE", "tcti_decode_recognizes_conditional_compare_class") \
 	X(CONDITIONAL_SELECT, BASE, PARTIAL, "conditional select", "TCTI_DECODE_CONDITIONAL_SELECT", "tcti_decode_recognizes_conditional_select_class") \
 	X(LOGICAL_SHIFTED_REGISTER, BASE, PARTIAL, "logical shifted register", "TCTI_DECODE_LOGICAL_SHIFTED_REGISTER", "tcti_decode_recognizes_logical_shifted_register_class") \
@@ -109,6 +109,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	39
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	38
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

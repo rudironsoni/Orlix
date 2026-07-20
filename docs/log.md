@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] fix | Complete unconditional register branches
+
+Closed the A64 `BR`, `BLR`, and `RET` family through production decode, lowering, and gadget execution. KUnit proves every source register including `X30` and `XZR`, exact targets, `BLR` link updates, preserved general registers, stack pointer and flags, and rejection of malformed fixed fields. The implementation now snapshots the branch target before writing `X30`, fixing `BLR X30` aliasing. The kernel-owned inventory reports 14 of 52 families complete with 38 explicit gaps.
+
 ## [2026-07-20] implement | Complete test-and-branch immediate
 
 Closed the A64 `TBZ` and `TBNZ` family through production decode, lowering, and gadget execution. KUnit proves all 64 selectable bit positions, every source register including `XZR`, both branch polarities, set and clear source states, signed 14-bit displacement boundaries and individual immediate bits, taken and fallthrough behavior, preserved architectural state, and exact PC results. The decoder now sign-extends the already-scaled displacement, avoiding a signed negative left shift in C. The kernel-owned inventory reports 13 of 52 families complete with 39 explicit gaps.

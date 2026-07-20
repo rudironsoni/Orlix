@@ -6921,10 +6921,10 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		regs->pc += decoded->branch_imm;
 		return 0;
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER:
+		source = tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u64));
 		if (decoded->branch_register_op == TCTI_BRANCH_REGISTER_BLR)
 			regs->regs[30] = regs->pc + sizeof(u32);
-		regs->pc = tcti_read_gpr_or_zero(regs, decoded->rn,
-						 sizeof(u64));
+		regs->pc = source;
 		return 0;
 	case TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE:
 		source = tcti_read_gpr_or_zero(regs, decoded->rt,
