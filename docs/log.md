@@ -7,6 +7,10 @@ updated: 2026-07-19
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete move-wide immediate
+
+Closed the A64 `MOVN`, `MOVZ`, and `MOVK` family through production decode and execution. KUnit proves both widths, every legal halfword position, immediate and destination fields including zero-register behavior, MOVK field preservation, 32-bit zero extension, preserved stack pointer and flags, exact PC progression, and rejection of the reserved opcode and illegal 32-bit halfword positions. The kernel-owned inventory reports 19 of 52 families complete with 33 explicit gaps.
+
 ## [2026-07-20] test | Complete add/subtract immediate
 
 Closed the A64 `ADD`, `ADDS`, `SUB`, and `SUBS` immediate family through production decode and execution. KUnit proves both widths, both immediate shifts, all immediate and register fields including SP and compare aliases, independent result and NZCV calculation across boundary operands, 32-bit zero extension, preserved architectural state, exact PC progression, and rejection of reserved shift encodings. The kernel-owned inventory reports 18 of 52 families complete with 34 explicit gaps.

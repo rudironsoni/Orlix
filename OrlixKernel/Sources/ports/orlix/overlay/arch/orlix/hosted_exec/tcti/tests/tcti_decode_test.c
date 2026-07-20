@@ -8226,6 +8226,136 @@ static void tcti_switch_executes_multiply_add_sub(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x8020ULL, regs.pc);
 }
 
+static u32 tcti_test_encode_move_wide_immediate(bool is_64bit, u8 opc,
+						 u8 halfword, u16 imm16, u8 rd)
+{
+	return 0x12800000U | (is_64bit ? BIT(31) : 0) |
+		((u32)opc << 29) | ((u32)halfword << 21) |
+		((u32)imm16 << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_move_wide_immediate_family(
+	struct kunit *test)
+{
+	static const u16 immediate_values[] = {
+		0x0000,
+		0x0001,
+		0x5555,
+		0x7fff,
+		0x8000,
+		0xaaaa,
+		0xfffe,
+		0xffff,
+	};
+	static const enum tcti_move_wide_op expected_ops[] = {
+		TCTI_MOVE_WIDE_MOVN,
+		TCTI_MOVE_WIDE_MOVZ,
+		TCTI_MOVE_WIDE_MOVK,
+	};
+	static const u8 opcodes[] = { 0, 2, 3 };
+	unsigned int is_64bit;
+	unsigned int op_case;
+	unsigned int halfword;
+	unsigned int register_case;
+	unsigned int immediate_case;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		for (op_case = 0; op_case < ARRAY_SIZE(opcodes); op_case++) {
+			for (halfword = 0; halfword < (is_64bit ? 4 : 2);
+			     halfword++) {
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					for (immediate_case = 0;
+					     immediate_case < ARRAY_SIZE(immediate_values);
+					     immediate_case++) {
+						struct tcti_decoded_instruction decoded;
+						struct pt_regs regs = {};
+						struct pt_regs before;
+						u8 rd = register_case;
+						u16 imm16 = immediate_values[immediate_case];
+						u8 shift = halfword * 16;
+						u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+						u64 field_mask = 0xffffULL << shift;
+						u64 immediate = (u64)imm16 << shift;
+						u64 expected;
+						u32 instruction;
+						unsigned int reg;
+						int ret;
+
+						instruction = tcti_test_encode_move_wide_immediate(
+							is_64bit, opcodes[op_case], halfword,
+							imm16, rd);
+						decoded = tcti_decode_aarch64(instruction);
+						KUNIT_ASSERT_EQ_MSG(
+							test, TCTI_DECODE_MOVE_WIDE_IMMEDIATE,
+							decoded.decode_class,
+							"sf=%u opc=%u hw=%u imm=%04x rd=%u instruction=%08x",
+							is_64bit, opcodes[op_case], halfword,
+							imm16, rd, instruction);
+						KUNIT_EXPECT_EQ(test, !!is_64bit,
+							decoded.is_64bit);
+						KUNIT_EXPECT_EQ(test, expected_ops[op_case],
+							decoded.move_wide_op);
+						KUNIT_EXPECT_EQ(test, shift,
+							decoded.halfword_shift);
+						KUNIT_EXPECT_EQ(test, imm16, decoded.imm16);
+						KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+						for (reg = 0; reg < 31; reg++)
+							regs.regs[reg] =
+								0x13579bdf24680000ULL + reg;
+						regs.sp = 0x706a865abcULL;
+						regs.pc = 0x2468ace000ULL;
+						regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+						before = regs;
+						switch (expected_ops[op_case]) {
+						case TCTI_MOVE_WIDE_MOVN:
+							expected = ~immediate & width_mask;
+							break;
+						case TCTI_MOVE_WIDE_MOVZ:
+							expected = immediate & width_mask;
+							break;
+						case TCTI_MOVE_WIDE_MOVK:
+							expected = rd == 31 ? 0 :
+								before.regs[rd] & width_mask;
+							expected = (expected & ~field_mask) | immediate;
+							expected &= width_mask;
+							break;
+						default:
+							KUNIT_FAIL(test, "invalid move-wide test operation");
+							return;
+						}
+
+						ret = tcti_switch_debug_execute_decoded(
+							NULL, &regs, &decoded, NULL);
+						KUNIT_ASSERT_EQ(test, 0, ret);
+						for (reg = 0; reg < 31; reg++) {
+							u64 expected_reg = before.regs[reg];
+
+							if (rd == reg)
+								expected_reg = expected;
+							KUNIT_EXPECT_EQ_MSG(
+								test, expected_reg, regs.regs[reg],
+								"register x%u changed for instruction %08x",
+								reg, instruction);
+						}
+						KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+						KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+						KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+					}
+				}
+			}
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x32800000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x12c00000U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x12e00000U).decode_class);
+}
+
 static void tcti_switch_executes_move_wide_immediate(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -18248,6 +18378,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_data_processing_2source),
 	KUNIT_CASE(tcti_switch_executes_complete_crc32_family),
 	KUNIT_CASE(tcti_switch_executes_multiply_add_sub),
+	KUNIT_CASE(tcti_gadget_executes_complete_move_wide_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_move_wide_immediate),
 	KUNIT_CASE(tcti_switch_executes_system_registers),
 	KUNIT_CASE(tcti_switch_executes_exclusive_monitor_clear),
