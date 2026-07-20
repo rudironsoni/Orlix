@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-17
+updated: 2026-07-20
 status: current
 summary: "Canonical repository source for tcti reference review."
 ---
@@ -124,3 +124,13 @@ Any future copied source requires recording:
 - GPL compatibility with the OrlixKernel/Linux distribution path
 - App Store distribution implications
 - reason clean-room implementation is insufficient
+
+## Architecture encoding cross-checks
+
+- Repository: `https://github.com/llvm/llvm-project`
+- Commit reviewed: `f1073034a030a09bf0a29607aa0bee4430b31b97`
+- Files reviewed:
+  - `llvm/lib/Target/AArch64/AArch64InstrInfo.td`
+  - `llvm/lib/Target/AArch64/AArch64InstrFormats.td`
+- Use: confirm the A64 exception-generation field layout and the `op1` and `LL` assignments for `SVC`, `HVC`, `SMC`, `BRK`, `HLT`, and `DCPS1` through `DCPS3` before writing the independent Orlix KUnit boundary audit.
+- No LLVM source was copied into Orlix.

@@ -7,6 +7,10 @@ updated: 2026-07-20
 ---
 # Orlix Knowledge Log
 
+## [2026-07-20] test | Complete A64 exception generation
+
+Closed the A64 exception-generation family for the guest EL0 profile. KUnit covers every `SVC` and `BRK` immediate encoding, verifies immediate extraction and structured syscall and breakpoint exits, and rejects all other `op1` and `LL` classes including `HVC`, `SMC`, `HLT`, `DCPS1`, `DCPS2`, `DCPS3`, and unallocated combinations. The kernel-owned inventory reports 29 of 52 families complete with 23 explicit gaps. LLVM AArch64 TableGen at commit `f1073034a030a09bf0a29607aa0bee4430b31b97` was used only as an independent encoding cross-check; no source was copied.
+
 ## [2026-07-20] test | Complete scalar register data processing families
 
 Closed logical shifted register, add/subtract extended register, data-processing one-source, two-source, and three-source families through production decode and execution. Corrected flag-setting extended-register forms to read register 31 as SP, and added exhaustive KUnit coverage for architectural operations, widths, register fields, aliases, reserved encodings, state preservation, PC progression, and NZCV where applicable. The kernel-owned inventory reports 28 of 52 families complete with 24 explicit gaps.

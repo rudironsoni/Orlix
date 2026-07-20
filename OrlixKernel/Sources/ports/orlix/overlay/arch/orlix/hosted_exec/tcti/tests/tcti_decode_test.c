@@ -66,14 +66,89 @@ static void tcti_isa_coverage_inventory_is_machine_auditable(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, (size_t)ORLIX_TCTI_ISA_EXPECTED_GAPS, gaps);
 }
 
-static void tcti_decode_recognizes_svc_zero(struct kunit *test)
+static u32 tcti_test_encode_exception_generation(u8 op1, u16 imm16, u8 ll)
 {
-	struct tcti_decoded_instruction decoded;
+	return 0xd4000000U | ((u32)op1 << 21) | ((u32)imm16 << 5) | ll;
+}
 
-	decoded = tcti_decode_aarch64(0xd4000001U);
+static void tcti_decode_covers_complete_exception_generation_family(
+	struct kunit *test)
+{
+	static const u16 boundary_immediates[] = {
+		0, 1, 0x7fff, 0x8000, U16_MAX,
+	};
+	static const struct {
+		u8 op1;
+		u8 ll;
+		enum tcti_decode_class decode_class;
+	} el0_exits[] = {
+		{ 0, 1, TCTI_DECODE_SVC },
+		{ 1, 0, TCTI_DECODE_BRK },
+	};
+	u32 imm;
+	u8 op1;
+	u8 ll;
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SVC, decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, 0xd4000001U, decoded.instruction);
+	for (imm = 0; imm <= U16_MAX; imm++) {
+		unsigned int exit;
+
+		for (exit = 0; exit < ARRAY_SIZE(el0_exits); exit++) {
+			u32 instruction = tcti_test_encode_exception_generation(
+				el0_exits[exit].op1, imm, el0_exits[exit].ll);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			if (decoded.decode_class != el0_exits[exit].decode_class ||
+			    decoded.instruction != instruction ||
+			    decoded.imm16 != imm) {
+				KUNIT_FAIL(test,
+					   "EL0 exception mismatch op1=%u ll=%u imm=%#x instruction=%#x class=%u decoded_instruction=%#x decoded_imm=%#x",
+					   el0_exits[exit].op1,
+					   el0_exits[exit].ll, imm, instruction,
+					   decoded.decode_class,
+					   decoded.instruction, decoded.imm16);
+				return;
+			}
+		}
+	}
+
+	for (op1 = 0; op1 < 8; op1++) {
+		for (ll = 0; ll < 4; ll++) {
+			unsigned int boundary;
+
+			if ((op1 == 0 && ll == 1) || (op1 == 1 && ll == 0))
+				continue;
+
+			for (boundary = 0;
+			     boundary < ARRAY_SIZE(boundary_immediates);
+			     boundary++) {
+				u32 instruction =
+					tcti_test_encode_exception_generation(
+						op1,
+						boundary_immediates[boundary], ll);
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(instruction);
+
+				if (decoded.decode_class != TCTI_DECODE_UNSUPPORTED) {
+					KUNIT_FAIL(test,
+						   "accepted non-EL0 exception op1=%u ll=%u imm=%#x instruction=%#x class=%u",
+						   op1, ll,
+						   boundary_immediates[boundary],
+						   instruction, decoded.decode_class);
+					return;
+				}
+				if (decoded.instruction != instruction) {
+					KUNIT_FAIL(test,
+						   "exception instruction mismatch op1=%u ll=%u imm=%#x expected=%#x actual=%#x",
+						   op1, ll,
+						   boundary_immediates[boundary],
+						   instruction,
+						   decoded.instruction);
+					return;
+				}
+			}
+		}
+	}
 }
 
 static void tcti_decode_rejects_unknown_instruction(struct kunit *test)
@@ -84,17 +159,6 @@ static void tcti_decode_rejects_unknown_instruction(struct kunit *test)
 
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 0xffffffffU, decoded.instruction);
-}
-
-static void tcti_decode_recognizes_brk_immediate(struct kunit *test)
-{
-	struct tcti_decoded_instruction decoded;
-
-	decoded = tcti_decode_aarch64(0xd42acf00U); /* brk #0x5678 */
-
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_BRK, decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, 0x5678, decoded.imm16);
-	KUNIT_EXPECT_EQ(test, 0xd42acf00U, decoded.instruction);
 }
 
 static void tcti_decode_recognizes_hint_class(struct kunit *test)
@@ -19821,9 +19885,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_with_index_alias),
-	KUNIT_CASE(tcti_decode_recognizes_svc_zero),
+	KUNIT_CASE(tcti_decode_covers_complete_exception_generation_family),
 	KUNIT_CASE(tcti_decode_rejects_unknown_instruction),
-	KUNIT_CASE(tcti_decode_recognizes_brk_immediate),
 	KUNIT_CASE(tcti_decode_recognizes_hint_class),
 	KUNIT_CASE(tcti_decode_recognizes_add_sub_immediate_class),
 	KUNIT_CASE(tcti_gadget_executes_complete_add_sub_immediate_family),

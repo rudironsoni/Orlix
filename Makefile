@@ -270,6 +270,7 @@ tcti-kernel-tests: xcodeproj
 		-scheme "OrlixKernel Conformance" \
 		-configuration Debug \
 		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
+		$(if $(filter YES,$(ORLIX_ALLOW_PROVISIONING_UPDATES)),-allowProvisioningUpdates,) \
 		ORLIX_PROFILE=development \
 		ORLIX_KERNEL_KUNIT=1 \
 		ORLIX_BUILD_ROOT='$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)' \
@@ -281,6 +282,7 @@ tcti-kernel-tests: xcodeproj
 		-scheme "OrlixKernel Conformance" \
 		-configuration Debug \
 		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
+		$(if $(filter YES,$(ORLIX_ALLOW_PROVISIONING_UPDATES)),-allowProvisioningUpdates,) \
 		-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession \
 		DEVELOPMENT_TEAM='$(ORLIX_DEVELOPMENT_TEAM)' \
 		test-without-building
