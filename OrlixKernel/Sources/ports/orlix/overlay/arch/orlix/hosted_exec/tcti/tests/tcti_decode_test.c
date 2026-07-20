@@ -7827,6 +7827,206 @@ static void tcti_switch_executes_logical_shifted_register(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x31064ULL, regs.pc);
 }
 
+static u64 tcti_test_ror_element(u64 value, u8 rotate, u8 width)
+{
+	u64 mask = width == 64 ? U64_MAX : BIT_ULL(width) - 1;
+
+	rotate %= width;
+	value &= mask;
+	if (!rotate)
+		return value;
+	return ((value >> rotate) | (value << (width - rotate))) & mask;
+}
+
+static bool tcti_test_decode_logical_immediate(bool is_64bit, bool n,
+						u8 immr, u8 imms, u64 *result)
+{
+	u8 concatenated = (n ? BIT(6) : 0) | ((~imms) & 0x3fU);
+	u8 register_width = is_64bit ? 64 : 32;
+	int length = -1;
+	u8 bit;
+	u8 levels;
+	u8 element_width;
+	u8 ones;
+	u64 element;
+	u64 expanded = 0;
+	u8 offset;
+
+	for (bit = 0; bit <= 6; bit++) {
+		if (concatenated & BIT(bit))
+			length = bit;
+	}
+	if (length < 1 || (!is_64bit && length == 6))
+		return false;
+
+	levels = BIT(length) - 1;
+	if ((imms & levels) == levels)
+		return false;
+	element_width = BIT(length);
+	ones = (imms & levels) + 1;
+	element = BIT_ULL(ones) - 1;
+	element = tcti_test_ror_element(element, immr & levels,
+						element_width);
+	for (offset = 0; offset < register_width; offset += element_width)
+		expanded |= element << offset;
+	*result = expanded;
+	return true;
+}
+
+static u32 tcti_test_encode_logical_immediate(bool is_64bit, u8 opc, bool n,
+					       u8 immr, u8 imms, u8 rn, u8 rd)
+{
+	return 0x12000000U | (is_64bit ? BIT(31) : 0) |
+		((u32)opc << 29) | (n ? BIT(22) : 0) |
+		((u32)immr << 16) | ((u32)imms << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_gadget_executes_complete_logical_immediate_family(
+	struct kunit *test)
+{
+	const unsigned long nzcv_mask = PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	bool seen_rn[32] = {};
+	bool seen_rd[32] = {};
+	bool seen_op[4] = {};
+	unsigned int valid_encodings = 0;
+	unsigned int invalid_encodings = 0;
+	unsigned int is_64bit;
+	unsigned int n;
+	unsigned int immr;
+	unsigned int imms;
+	unsigned int opc;
+
+	for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+		for (n = 0; n < 2; n++) {
+			for (immr = 0; immr < 64; immr++) {
+				for (imms = 0; imms < 64; imms++) {
+					u64 logical_immediate = 0;
+					bool valid = tcti_test_decode_logical_immediate(
+						is_64bit, n, immr, imms,
+						&logical_immediate);
+
+					for (opc = 0; opc < 4; opc++) {
+						struct tcti_decoded_instruction decoded;
+						struct pt_regs regs = {};
+						struct pt_regs before;
+						u8 rn = (immr + opc) & 0x1fU;
+						u8 rd = (imms + 3 * opc) & 0x1fU;
+						u8 access_size = is_64bit ? sizeof(u64) : sizeof(u32);
+						u64 width_mask = is_64bit ? U64_MAX : U32_MAX;
+						u64 sign_bit = is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+						u64 left;
+						u64 expected;
+						u64 expected_registers[31];
+						unsigned long expected_pstate;
+						u32 instruction;
+						unsigned int reg;
+						int ret;
+
+						instruction = tcti_test_encode_logical_immediate(
+							is_64bit, opc, n, immr, imms, rn, rd);
+						decoded = tcti_decode_aarch64(instruction);
+						if (!valid) {
+							KUNIT_EXPECT_EQ_MSG(
+								test, TCTI_DECODE_UNSUPPORTED,
+								decoded.decode_class,
+								"accepted invalid sf=%u N=%u immr=%u imms=%u opc=%u instruction=%08x",
+								is_64bit, n, immr, imms, opc,
+								instruction);
+							invalid_encodings++;
+							continue;
+						}
+
+						valid_encodings++;
+						seen_rn[rn] = true;
+						seen_rd[rd] = true;
+						seen_op[opc] = true;
+						KUNIT_ASSERT_EQ_MSG(
+							test, TCTI_DECODE_LOGICAL_IMMEDIATE,
+							decoded.decode_class,
+							"rejected sf=%u N=%u immr=%u imms=%u opc=%u instruction=%08x",
+							is_64bit, n, immr, imms, opc,
+							instruction);
+						KUNIT_EXPECT_EQ(test, !!is_64bit,
+							decoded.is_64bit);
+						KUNIT_EXPECT_EQ(test, opc == 3, decoded.set_flags);
+						KUNIT_EXPECT_EQ(test,
+							opc == 0 || opc == 3 ? TCTI_LOGICAL_AND :
+							opc == 1 ? TCTI_LOGICAL_ORR : TCTI_LOGICAL_EOR,
+							decoded.logical_op);
+						KUNIT_EXPECT_EQ(test, logical_immediate,
+							decoded.logical_immediate);
+						KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+						KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+						for (reg = 0; reg < 31; reg++)
+							regs.regs[reg] =
+								0xfedcba9876543210ULL ^
+								((u64)instruction << (reg & 7)) ^ reg;
+						regs.sp = 0x706a865abcULL;
+						regs.pc = 0x2468ace000ULL;
+						regs.pstate = nzcv_mask | 0x155UL;
+						before = regs;
+						memcpy(expected_registers, before.regs,
+						       sizeof(expected_registers));
+						left = rn == 31 ? 0 : before.regs[rn];
+						if (access_size == sizeof(u32))
+							left = (u32)left;
+						switch (opc) {
+						case 0:
+						case 3:
+							expected = left & logical_immediate;
+							break;
+						case 1:
+							expected = left | logical_immediate;
+							break;
+						case 2:
+							expected = left ^ logical_immediate;
+							break;
+						default:
+							KUNIT_FAIL(test, "invalid logical test operation");
+							return;
+						}
+						expected &= width_mask;
+						if (rd < 31)
+							expected_registers[rd] = expected;
+						expected_pstate = before.pstate;
+						if (opc == 3) {
+							unsigned long flags = 0;
+
+							if (expected & sign_bit)
+								flags |= PSR_N_BIT;
+							if (!expected)
+								flags |= PSR_Z_BIT;
+							expected_pstate =
+								(before.pstate & ~nzcv_mask) | flags;
+						}
+
+						ret = tcti_switch_debug_execute_decoded(
+							NULL, &regs, &decoded, NULL);
+						KUNIT_ASSERT_EQ(test, 0, ret);
+						KUNIT_EXPECT_MEMEQ(test, expected_registers,
+							regs.regs, sizeof(expected_registers));
+						KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+						KUNIT_EXPECT_EQ(test, expected_pstate, regs.pstate);
+						KUNIT_EXPECT_EQ(test, before.pc + sizeof(u32), regs.pc);
+					}
+				}
+			}
+		}
+	}
+
+	KUNIT_EXPECT_GT(test, valid_encodings, 0U);
+	KUNIT_EXPECT_GT(test, invalid_encodings, 0U);
+	for (opc = 0; opc < 4; opc++)
+		KUNIT_EXPECT_TRUE(test, seen_op[opc]);
+	for (opc = 0; opc < 32; opc++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[opc]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[opc]);
+	}
+}
+
 static void tcti_switch_executes_logical_immediate(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -18370,6 +18570,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_mlibc_float_helper_conditional_compares),
 	KUNIT_CASE(tcti_switch_executes_conditional_select),
 	KUNIT_CASE(tcti_switch_executes_logical_shifted_register),
+	KUNIT_CASE(tcti_gadget_executes_complete_logical_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_logical_immediate),
 	KUNIT_CASE(tcti_switch_executes_bitfield),
 	KUNIT_CASE(tcti_switch_executes_extract),
