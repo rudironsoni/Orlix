@@ -7,6 +7,32 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete EL0 system, hint, and barrier coverage
+
+Closed the configured Armv8.0-A EL0 system-and-hint inventory row. The
+production decoder and executor now cover all 128 `HINT` immediates, all
+`CLREX` immediates, legal `DMB`, `DSB`, and `ISB` options, `IC IVAU`, `DC CVAC`,
+`DC CVAU`, `DC CIVAC`, and the guest-exposed thread, flag, cache-description,
+and virtual-counter registers. Read-only registers reject writes, FPCR and FPSR
+mask reserved bits, cache maintenance invalidates translated instruction state
+where required, and `YIELD`, `WFE`, and `WFI` produce structured exits that the
+Linux execution loop turns into a scheduling point before resuming at the
+following instruction. KUnit
+exhaustively proves decoder boundaries, register fields, direct state
+transitions, counter behavior, and structured yield results, reporting 402 of
+402 tests passing. The OrlixMLibC-built `tcti_system_probe` independently proves
+the system registers, FP status masks, barriers, cache operations, `CLREX`, and
+all three yielding hints through real Linux EL0 execution, with all nine
+assertions passing and the complete kselftest run reaching
+`ORLIX-KSELFTEST-END`. The owning XCTest passed its single test and
+`xcodebuild` exited zero. LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding source.
+OpenMinis ish-arm64 `gen.c` and the AArch64 gadget inventory at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an independent system
+instruction and barrier decomposition cross-check. No external implementation
+source was copied. The kernel-owned inventory now reports 46 of 52 families
+complete with 6 explicit gaps.
+
 ## [2026-07-21] implement | Complete AdvSIMD structure load and store coverage
 
 Closed the configured Armv8.0-A AdvSIMD structure load/store inventory row.

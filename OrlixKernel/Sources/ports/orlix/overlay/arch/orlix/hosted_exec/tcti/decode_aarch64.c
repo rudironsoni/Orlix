@@ -11,6 +11,16 @@
 #define AARCH64_BRK_PATTERN 0xd4200000U
 #define AARCH64_HINT_MASK 0xfffff01fU
 #define AARCH64_HINT_PATTERN 0xd503201fU
+#define AARCH64_BARRIER_MASK 0xfffff0ffU
+#define AARCH64_DSB_PATTERN 0xd503309fU
+#define AARCH64_DMB_PATTERN 0xd50330bfU
+#define AARCH64_ISB_PATTERN 0xd50330dfU
+#define AARCH64_CLREX_PATTERN 0xd503305fU
+#define AARCH64_CACHE_MAINTENANCE_MASK 0xffffffe0U
+#define AARCH64_IC_IVAU_PATTERN 0xd50b7520U
+#define AARCH64_DC_CVAC_PATTERN 0xd50b7a20U
+#define AARCH64_DC_CVAU_PATTERN 0xd50b7b20U
+#define AARCH64_DC_CIVAC_PATTERN 0xd50b7e20U
 #define AARCH64_PC_RELATIVE_ADDRESS_MASK 0x1f000000U
 #define AARCH64_PC_RELATIVE_ADDRESS_PATTERN 0x10000000U
 #define AARCH64_ADD_SUB_IMM_MASK 0x1f000000U
@@ -69,7 +79,6 @@
 #define AARCH64_MULTIPLY_ADD_SUB_PATTERN 0x1b000000U
 #define AARCH64_MOVE_WIDE_IMM_MASK 0x1f800000U
 #define AARCH64_MOVE_WIDE_IMM_PATTERN 0x12800000U
-#define AARCH64_CLREX 0xd5033f5fU
 #define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f000000U
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08000000U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK 0x9ff80c00U
@@ -380,6 +389,11 @@
 #define AARCH64_SYSREG_NZCV 0xda10U
 #define AARCH64_SYSREG_FPCR 0xda20U
 #define AARCH64_SYSREG_FPSR 0xda21U
+#define AARCH64_SYSREG_TPIDRRO_EL0 0xde83U
+#define AARCH64_SYSREG_CTR_EL0 0xd801U
+#define AARCH64_SYSREG_DCZID_EL0 0xd807U
+#define AARCH64_SYSREG_CNTFRQ_EL0 0xdf00U
+#define AARCH64_SYSREG_CNTVCT_EL0 0xdf02U
 
 static u32 tcti_bits(u32 value, u8 shift, u8 width)
 {
@@ -673,6 +687,62 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_HINT_MASK) == AARCH64_HINT_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_HINT;
+		decoded.hint_imm = (instruction >> 5) & 0x7fU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_BARRIER_MASK) == AARCH64_DSB_PATTERN ||
+	    (instruction & AARCH64_BARRIER_MASK) == AARCH64_DMB_PATTERN ||
+	    (instruction & AARCH64_BARRIER_MASK) == AARCH64_ISB_PATTERN) {
+		u32 pattern = instruction & AARCH64_BARRIER_MASK;
+
+		decoded.barrier_option = (instruction >> 8) & 0xfU;
+		if (pattern == AARCH64_ISB_PATTERN) {
+			if (decoded.barrier_option != 0xfU)
+				return decoded;
+			decoded.barrier_op = TCTI_BARRIER_ISB;
+		} else {
+			if (!(decoded.barrier_option & 0x3U))
+				return decoded;
+			decoded.barrier_op = pattern == AARCH64_DSB_PATTERN ?
+				TCTI_BARRIER_DSB : TCTI_BARRIER_DMB;
+		}
+		decoded.decode_class = TCTI_DECODE_BARRIER;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_BARRIER_MASK) == AARCH64_CLREX_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR;
+		decoded.barrier_option = (instruction >> 8) & 0xfU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_CACHE_MAINTENANCE_MASK) ==
+			AARCH64_IC_IVAU_PATTERN ||
+	    (instruction & AARCH64_CACHE_MAINTENANCE_MASK) ==
+			AARCH64_DC_CVAC_PATTERN ||
+	    (instruction & AARCH64_CACHE_MAINTENANCE_MASK) ==
+			AARCH64_DC_CVAU_PATTERN ||
+	    (instruction & AARCH64_CACHE_MAINTENANCE_MASK) ==
+			AARCH64_DC_CIVAC_PATTERN) {
+		u32 pattern = instruction & AARCH64_CACHE_MAINTENANCE_MASK;
+
+		decoded.decode_class = TCTI_DECODE_CACHE_MAINTENANCE;
+		decoded.rt = instruction & 0x1fU;
+		switch (pattern) {
+		case AARCH64_IC_IVAU_PATTERN:
+			decoded.cache_maintenance_op = TCTI_CACHE_IC_IVAU;
+			break;
+		case AARCH64_DC_CVAC_PATTERN:
+			decoded.cache_maintenance_op = TCTI_CACHE_DC_CVAC;
+			break;
+		case AARCH64_DC_CVAU_PATTERN:
+			decoded.cache_maintenance_op = TCTI_CACHE_DC_CVAU;
+			break;
+		case AARCH64_DC_CIVAC_PATTERN:
+			decoded.cache_maintenance_op = TCTI_CACHE_DC_CIVAC;
+			break;
+		}
 		return decoded;
 	}
 
@@ -1510,11 +1580,6 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.move_wide_op =
 			opc == 0 ? TCTI_MOVE_WIDE_MOVN :
 			opc == 2 ? TCTI_MOVE_WIDE_MOVZ : TCTI_MOVE_WIDE_MOVK;
-		return decoded;
-	}
-
-	if (instruction == AARCH64_CLREX) {
-		decoded.decode_class = TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR;
 		return decoded;
 	}
 
@@ -3871,6 +3936,20 @@ fp_int_gpr_unclaimed:
 		if (sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
 		    sysreg != AARCH64_SYSREG_NZCV &&
 		    sysreg != AARCH64_SYSREG_FPCR &&
+		    sysreg != AARCH64_SYSREG_FPSR &&
+		    sysreg != AARCH64_SYSREG_TPIDRRO_EL0 &&
+		    sysreg != AARCH64_SYSREG_CTR_EL0 &&
+		    sysreg != AARCH64_SYSREG_DCZID_EL0 &&
+		    sysreg != AARCH64_SYSREG_CNTFRQ_EL0 &&
+		    sysreg != AARCH64_SYSREG_CNTVCT_EL0)
+			return decoded;
+		decoded.system_register_write =
+			(instruction & AARCH64_SYSTEM_REGISTER_MASK) ==
+			AARCH64_MSR_PATTERN;
+		if (decoded.system_register_write &&
+		    sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
+		    sysreg != AARCH64_SYSREG_NZCV &&
+		    sysreg != AARCH64_SYSREG_FPCR &&
 		    sysreg != AARCH64_SYSREG_FPSR)
 			return decoded;
 
@@ -3889,10 +3968,22 @@ fp_int_gpr_unclaimed:
 		case AARCH64_SYSREG_FPSR:
 			decoded.system_register = TCTI_SYSTEM_REGISTER_FPSR;
 			break;
+		case AARCH64_SYSREG_TPIDRRO_EL0:
+			decoded.system_register = TCTI_SYSTEM_REGISTER_TPIDRRO_EL0;
+			break;
+		case AARCH64_SYSREG_CTR_EL0:
+			decoded.system_register = TCTI_SYSTEM_REGISTER_CTR_EL0;
+			break;
+		case AARCH64_SYSREG_DCZID_EL0:
+			decoded.system_register = TCTI_SYSTEM_REGISTER_DCZID_EL0;
+			break;
+		case AARCH64_SYSREG_CNTFRQ_EL0:
+			decoded.system_register = TCTI_SYSTEM_REGISTER_CNTFRQ_EL0;
+			break;
+		case AARCH64_SYSREG_CNTVCT_EL0:
+			decoded.system_register = TCTI_SYSTEM_REGISTER_CNTVCT_EL0;
+			break;
 		}
-		decoded.system_register_write =
-			(instruction & AARCH64_SYSTEM_REGISTER_MASK) ==
-			AARCH64_MSR_PATTERN;
 		return decoded;
 	}
 

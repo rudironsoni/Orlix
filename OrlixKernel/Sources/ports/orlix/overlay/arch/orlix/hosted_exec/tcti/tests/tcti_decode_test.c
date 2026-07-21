@@ -12,6 +12,7 @@
 #include <asm/ptrace.h>
 #include <asm/unistd.h>
 #include <asm/tcti.h>
+#include <internal/asm/host_time.h>
 
 #include "../block_cache.h"
 #include "../decode_aarch64.h"
@@ -1995,6 +1996,168 @@ static void tcti_decode_recognizes_system_register_class(struct kunit *test)
 			decoded.system_register);
 	KUNIT_EXPECT_TRUE(test, decoded.system_register_write);
 	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
+}
+
+static u32 tcti_test_encode_system_register(bool write, u16 sysreg, u8 rt)
+{
+	return (write ? 0xd5100000U : 0xd5300000U) |
+		((u32)sysreg << 5) | rt;
+}
+
+static int tcti_test_system_register_index(u16 sysreg)
+{
+	static const u16 system_registers[] = {
+		0xde82U, 0xda10U, 0xda20U, 0xda21U, 0xde83U,
+		0xd801U, 0xd807U, 0xdf00U, 0xdf02U,
+	};
+	u8 index;
+
+	for (index = 0; index < ARRAY_SIZE(system_registers); index++) {
+		if (system_registers[index] == sysreg)
+			return index;
+	}
+	return -1;
+}
+
+static void tcti_decode_exhaustive_system_register_family(struct kunit *test)
+{
+	static const bool writable[] = {
+		true, true, true, true, false, false, false, false, false,
+	};
+	u32 sysreg;
+
+	for (sysreg = 0xc000U; sysreg <= 0xffffU; sysreg++) {
+		u8 direction;
+
+		for (direction = 0; direction < 2; direction++) {
+			bool write = direction;
+			int index = tcti_test_system_register_index(sysreg);
+			bool legal = index >= 0 && (!write || writable[index]);
+			u32 instruction = tcti_test_encode_system_register(
+				write, sysreg, 9);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ_MSG(test,
+				legal ? TCTI_DECODE_SYSTEM_REGISTER :
+					TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class, "instruction=%08x", instruction);
+			if (legal) {
+				KUNIT_EXPECT_EQ(test, write,
+					decoded.system_register_write);
+				KUNIT_EXPECT_EQ(test, 9U, decoded.rt);
+			}
+		}
+	}
+}
+
+static void tcti_decode_system_register_all_rt_fields(struct kunit *test)
+{
+	static const u16 system_registers[] = {
+		0xde82U, 0xda10U, 0xda20U, 0xda21U, 0xde83U,
+		0xd801U, 0xd807U, 0xdf00U, 0xdf02U,
+	};
+	u8 index;
+
+	for (index = 0; index < ARRAY_SIZE(system_registers); index++) {
+		u8 rt;
+
+		for (rt = 0; rt < 32; rt++) {
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(tcti_test_encode_system_register(
+					false, system_registers[index], rt));
+
+			KUNIT_ASSERT_EQ(test, TCTI_DECODE_SYSTEM_REGISTER,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+		}
+	}
+}
+
+static void tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit *test)
+{
+	static const struct {
+		u32 pattern;
+		enum tcti_barrier_op operation;
+	} barriers[] = {
+		{ 0xd503309fU, TCTI_BARRIER_DSB },
+		{ 0xd50330bfU, TCTI_BARRIER_DMB },
+		{ 0xd50330dfU, TCTI_BARRIER_ISB },
+	};
+	static const struct {
+		u32 pattern;
+		enum tcti_cache_maintenance_op operation;
+	} cache_operations[] = {
+		{ 0xd50b7520U, TCTI_CACHE_IC_IVAU },
+		{ 0xd50b7a20U, TCTI_CACHE_DC_CVAC },
+		{ 0xd50b7b20U, TCTI_CACHE_DC_CVAU },
+		{ 0xd50b7e20U, TCTI_CACHE_DC_CIVAC },
+	};
+	u8 immediate;
+
+	for (immediate = 0; immediate < 128; immediate++) {
+		struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+			0xd503201fU | ((u32)immediate << 5));
+
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_HINT, decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, immediate, decoded.hint_imm);
+	}
+
+	for (immediate = 0; immediate < 16; immediate++) {
+		u8 index;
+
+		for (index = 0; index < ARRAY_SIZE(barriers); index++) {
+			u32 instruction = barriers[index].pattern |
+				((u32)immediate << 8);
+			bool legal = index == 2 ? immediate == 15 :
+				(immediate & 0x3U);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_EXPECT_EQ_MSG(test,
+				legal ? TCTI_DECODE_BARRIER :
+					TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class, "instruction=%08x", instruction);
+			if (legal) {
+				KUNIT_EXPECT_EQ(test, barriers[index].operation,
+					decoded.barrier_op);
+				KUNIT_EXPECT_EQ(test, immediate,
+					decoded.barrier_option);
+			}
+		}
+
+		{
+			u32 instruction = 0xd503305fU |
+				((u32)immediate << 8);
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_ASSERT_EQ(test,
+				TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, immediate, decoded.barrier_option);
+		}
+	}
+
+	for (immediate = 0; immediate < ARRAY_SIZE(cache_operations);
+	     immediate++) {
+		u8 rt;
+
+		for (rt = 0; rt < 32; rt++) {
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(
+					cache_operations[immediate].pattern | rt);
+
+			KUNIT_ASSERT_EQ(test, TCTI_DECODE_CACHE_MAINTENANCE,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, cache_operations[immediate].operation,
+				decoded.cache_maintenance_op);
+			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0xd50b7820U).decode_class);
 }
 
 static void tcti_decode_recognizes_exclusive_monitor_clear(struct kunit *test)
@@ -11611,6 +11774,177 @@ static void tcti_switch_executes_system_registers(struct kunit *test)
 	current->thread.user_fpsr = old_fpsr;
 	current->thread.user_fpcr = old_fpcr;
 #endif
+}
+
+static void tcti_switch_executes_complete_hint_barrier_cache_family(
+	struct kunit *test)
+{
+	static const u32 barriers[] = {
+		0xd5033f9fU, 0xd5033bbfU, 0xd5033fdfU,
+	};
+	static const u32 cache_operations[] = {
+		0xd50b7520U, 0xd50b7a20U, 0xd50b7b20U, 0xd50b7e20U,
+	};
+	u8 immediate;
+
+	for (immediate = 0; immediate < 128; immediate++) {
+		struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+			0xd503201fU | ((u32)immediate << 5));
+		struct pt_regs regs = {
+			.pc = 0x7000,
+			.sp = 0x7100,
+		};
+		int ret;
+
+		regs.regs[9] = 0x9999999999999999ULL;
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+		KUNIT_EXPECT_EQ(test,
+			immediate >= 1 && immediate <= 3 ? -EAGAIN : 0, ret);
+		KUNIT_EXPECT_EQ(test, 0x7004ULL, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0x7100ULL, regs.sp);
+		KUNIT_EXPECT_EQ(test, 0x9999999999999999ULL, regs.regs[9]);
+	}
+
+	for (immediate = 0; immediate < ARRAY_SIZE(barriers); immediate++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(barriers[immediate]);
+		struct pt_regs regs = { .pc = 0x7200 };
+		int ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, 0x7204ULL, regs.pc);
+	}
+
+	for (immediate = 0; immediate < ARRAY_SIZE(cache_operations);
+	     immediate++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(cache_operations[immediate] | 9U);
+		struct pt_regs regs = { .pc = 0x7300 };
+		int ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, 0x7304ULL, regs.pc);
+	}
+}
+
+static void tcti_switch_executes_complete_el0_system_registers(
+	struct kunit *test)
+{
+	static const struct {
+		u16 sysreg;
+		u64 expected;
+	} read_only[] = {
+		{ 0xde83U, 0 },
+		{ 0xd801U, BIT_ULL(29) | BIT_ULL(28) |
+			(4ULL << 16) | (3ULL << 14) | 4ULL },
+		{ 0xd807U, BIT_ULL(4) },
+		{ 0xdf00U, 1000000000ULL },
+	};
+	const u64 fpcr_mask = GENMASK_ULL(26, 22) | BIT_ULL(15) |
+		GENMASK_ULL(12, 8);
+	const u64 fpsr_mask = BIT_ULL(27) | BIT_ULL(7) | GENMASK_ULL(4, 0);
+	unsigned long old_fpcr = current->thread.user_fpcr;
+	unsigned long old_fpsr = current->thread.user_fpsr;
+	struct pt_regs regs = {};
+	u8 index;
+	int ret;
+
+	for (index = 0; index < ARRAY_SIZE(read_only); index++) {
+		struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+			tcti_test_encode_system_register(
+				false, read_only[index].sysreg, 9));
+
+		regs.regs[9] = U64_MAX;
+		regs.pc = 0x7400;
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, read_only[index].expected, regs.regs[9]);
+		KUNIT_EXPECT_EQ(test, 0x7404ULL, regs.pc);
+	}
+
+	{
+		u64 before = orlix_host_time_monotonic_ns();
+		struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+			tcti_test_encode_system_register(false, 0xdf02U, 9));
+		u64 after;
+
+		regs.pc = 0x7500;
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+		after = orlix_host_time_monotonic_ns();
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_GE(test, regs.regs[9], before);
+		KUNIT_EXPECT_LE(test, regs.regs[9], after);
+		KUNIT_EXPECT_EQ(test, 0x7504ULL, regs.pc);
+	}
+
+	regs.regs[1] = U64_MAX;
+	regs.pc = 0x7600;
+	{
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(0xd51b4401U);
+
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, fpcr_mask, current->thread.user_fpcr);
+	}
+	regs.regs[1] = U64_MAX;
+	{
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(0xd51b4421U);
+
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, fpsr_mask, current->thread.user_fpsr);
+	}
+
+	current->thread.user_fpcr = old_fpcr;
+	current->thread.user_fpsr = old_fpsr;
+}
+
+static void tcti_engine_reports_structured_hint_yields(struct kunit *test)
+{
+	const u32 svc = 0xd4000001U;
+	unsigned long mapped;
+	u8 immediate;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE,
+		PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	for (immediate = 1; immediate <= 3; immediate++) {
+		u32 program[] = {
+			0xd503201fU | ((u32)immediate << 5), svc,
+		};
+		struct pt_regs regs = { .pc = mapped };
+		struct tcti_result result;
+
+		ret = tcti_write_user_data(current->mm, mapped,
+			program, sizeof(program));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_YIELD, result.reason);
+		KUNIT_EXPECT_EQ(test, (long)immediate, result.status);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+		KUNIT_EXPECT_EQ(test, program[0], result.instruction);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), regs.pc);
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+		KUNIT_EXPECT_EQ(test, svc, result.instruction);
+	}
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
 static void tcti_switch_executes_exclusive_monitor_clear(struct kunit *test)
@@ -25848,6 +26182,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_multiply_add_sub_class),
 	KUNIT_CASE(tcti_decode_recognizes_move_wide_immediate_class),
 	KUNIT_CASE(tcti_decode_recognizes_system_register_class),
+	KUNIT_CASE(tcti_decode_exhaustive_system_register_family),
+	KUNIT_CASE(tcti_decode_system_register_all_rt_fields),
+	KUNIT_CASE(tcti_decode_exhaustive_hint_barrier_cache_family),
 	KUNIT_CASE(tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_exclusive_class),
 	KUNIT_CASE(tcti_decode_exhaustive_load_store_exclusive_family),
@@ -26039,6 +26376,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_move_wide_immediate_family),
 	KUNIT_CASE(tcti_switch_executes_move_wide_immediate),
 	KUNIT_CASE(tcti_switch_executes_system_registers),
+	KUNIT_CASE(tcti_switch_executes_complete_hint_barrier_cache_family),
+	KUNIT_CASE(tcti_switch_executes_complete_el0_system_registers),
+	KUNIT_CASE(tcti_engine_reports_structured_hint_yields),
 	KUNIT_CASE(tcti_switch_executes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_switch_fails_store_exclusive_without_reservation),
 	KUNIT_CASE(tcti_gadget_executes_complete_load_store_exclusive_family),

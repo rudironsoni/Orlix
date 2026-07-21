@@ -504,11 +504,19 @@ tcti_fault_access_for_program(const struct tcti_gadget_word *program,
 	return tcti_fault_access_for_decoded(&decoded);
 }
 
-static bool tcti_decode_class_ends_block(enum tcti_decode_class decode_class)
+static bool
+tcti_decoded_ends_block(const struct tcti_decoded_instruction *decoded)
 {
-	switch (decode_class) {
+	if (!decoded)
+		return true;
+	if (decoded->decode_class == TCTI_DECODE_HINT)
+		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3;
+
+	switch (decoded->decode_class) {
 	case TCTI_DECODE_SVC:
 	case TCTI_DECODE_BRK:
+	case TCTI_DECODE_BARRIER:
+	case TCTI_DECODE_CACHE_MAINTENANCE:
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER:
 	case TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE:
@@ -518,6 +526,20 @@ static bool tcti_decode_class_ends_block(enum tcti_decode_class decode_class)
 	default:
 		return false;
 	}
+}
+
+static void tcti_set_yield_result(struct mm_struct *mm,
+				  const struct pt_regs *regs,
+				  struct tcti_result *result)
+{
+	unsigned long instruction_pc = regs->pc - sizeof(u32);
+	u32 instruction = 0;
+
+	(void)tcti_fetch_instruction(mm, instruction_pc, &instruction);
+	result->reason = TCTI_EXIT_YIELD;
+	result->status = (instruction >> 5) & 0x7fU;
+	result->pc = regs->pc;
+	result->instruction = instruction;
 }
 
 static enum tcti_access
@@ -592,7 +614,7 @@ static int tcti_build_straight_line_block(struct mm_struct *mm,
 			return count ? 0 : ret;
 		(*instruction_count)++;
 
-		if (tcti_decode_class_ends_block(decoded.decode_class))
+		if (tcti_decoded_ends_block(&decoded))
 			break;
 		if (((pc + sizeof(u32)) & PAGE_MASK) != (pc & PAGE_MASK))
 			break;
@@ -753,6 +775,11 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 				tcti_block_put(block);
 			if (!ret)
 				continue;
+			if (ret == -EAGAIN) {
+				tcti_set_yield_result(mm, regs, &result);
+				tcti_hot_blocks_release(hot_blocks);
+				return result;
+			}
 
 			if (ret == -EFAULT || ret == -EACCES) {
 				pr_info("Orlix TCTI: cached block fault task=%s pid=%d pc=%#llx ret=%d fault=%#lx insn=%#x code_generation=%u words=%u\n",
@@ -859,6 +886,11 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		}
 		if (!ret)
 			continue;
+		if (ret == -EAGAIN) {
+			tcti_set_yield_result(mm, regs, &result);
+			tcti_hot_blocks_release(hot_blocks);
+			return result;
+		}
 
 		if (ret == -EFAULT || ret == -EACCES) {
 			result.reason = TCTI_EXIT_USER_FAULT;
@@ -1125,6 +1157,10 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 		case TCTI_EXIT_BREAKPOINT:
 			force_sig_fault(SIGTRAP, TRAP_BRKPT,
 					(void __user *)result.pc);
+			orlix_exit_to_user_mode_work(regs);
+			break;
+		case TCTI_EXIT_YIELD:
+			cond_resched();
 			orlix_exit_to_user_mode_work(regs);
 			break;
 		case TCTI_EXIT_USER_FAULT:

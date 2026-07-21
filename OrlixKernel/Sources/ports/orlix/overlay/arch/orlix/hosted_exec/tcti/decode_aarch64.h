@@ -9,6 +9,8 @@ enum tcti_decode_class {
 	TCTI_DECODE_SVC,
 	TCTI_DECODE_BRK,
 	TCTI_DECODE_HINT,
+	TCTI_DECODE_BARRIER,
+	TCTI_DECODE_CACHE_MAINTENANCE,
 	TCTI_DECODE_ADD_SUB_IMMEDIATE,
 	TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
 	TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER,
@@ -137,6 +139,24 @@ enum tcti_system_register {
 	TCTI_SYSTEM_REGISTER_NZCV,
 	TCTI_SYSTEM_REGISTER_FPCR,
 	TCTI_SYSTEM_REGISTER_FPSR,
+	TCTI_SYSTEM_REGISTER_TPIDRRO_EL0,
+	TCTI_SYSTEM_REGISTER_CTR_EL0,
+	TCTI_SYSTEM_REGISTER_DCZID_EL0,
+	TCTI_SYSTEM_REGISTER_CNTFRQ_EL0,
+	TCTI_SYSTEM_REGISTER_CNTVCT_EL0,
+};
+
+enum tcti_barrier_op {
+	TCTI_BARRIER_DSB = 0,
+	TCTI_BARRIER_DMB,
+	TCTI_BARRIER_ISB,
+};
+
+enum tcti_cache_maintenance_op {
+	TCTI_CACHE_IC_IVAU = 0,
+	TCTI_CACHE_DC_CVAC,
+	TCTI_CACHE_DC_CVAU,
+	TCTI_CACHE_DC_CIVAC,
 };
 
 enum tcti_conditional_select_op {
@@ -444,6 +464,8 @@ struct tcti_decoded_instruction {
 	u8 rt2;
 	u16 imm12;
 	u16 imm16;
+	u8 hint_imm;
+	u8 barrier_option;
 	u8 shift;
 	u8 shift_amount;
 	u8 halfword_shift;
@@ -482,6 +504,8 @@ struct tcti_decoded_instruction {
 	enum tcti_move_wide_op move_wide_op;
 	enum tcti_branch_register_op branch_register_op;
 	enum tcti_system_register system_register;
+	enum tcti_barrier_op barrier_op;
+	enum tcti_cache_maintenance_op cache_maintenance_op;
 	enum tcti_conditional_select_op conditional_select_op;
 	enum tcti_bitfield_op bitfield_op;
 	enum tcti_data_processing_1source_op dp1_op;

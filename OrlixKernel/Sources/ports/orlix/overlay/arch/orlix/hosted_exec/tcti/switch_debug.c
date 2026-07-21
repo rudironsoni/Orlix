@@ -12,6 +12,7 @@
 #include <asm/hosted_exec.h>
 #include <asm/ptrace.h>
 #include <asm/tcti.h>
+#include <internal/asm/host_time.h>
 
 #include "decode_aarch64.h"
 #include "fixed_fp.h"
@@ -27,6 +28,14 @@
 #define AARCH64_FPSR_DZC BIT(1)
 #define AARCH64_FPSR_IXC BIT(4)
 #define AARCH64_FPSR_QC BIT(27)
+#define AARCH64_FPCR_WRITABLE_MASK \
+	(GENMASK(26, 22) | BIT(15) | GENMASK(12, 8))
+#define AARCH64_FPSR_WRITABLE_MASK \
+	(BIT(27) | BIT(7) | GENMASK(4, 0))
+#define AARCH64_CTR_EL0_VALUE \
+	(BIT_ULL(29) | BIT_ULL(28) | (4ULL << 16) | (3ULL << 14) | 4ULL)
+#define AARCH64_DCZID_EL0_VALUE BIT_ULL(4)
+#define AARCH64_CNTFRQ_EL0_VALUE 1000000000ULL
 
 extern u64 tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
 extern u64 tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
@@ -1667,15 +1676,38 @@ static int tcti_execute_system_register(struct pt_regs *regs,
 		break;
 	case TCTI_SYSTEM_REGISTER_FPCR:
 		if (decoded->system_register_write)
-			current->thread.user_fpcr = value & GENMASK(31, 0);
+			current->thread.user_fpcr =
+				value & AARCH64_FPCR_WRITABLE_MASK;
 		else if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_fpcr;
 		break;
 	case TCTI_SYSTEM_REGISTER_FPSR:
 		if (decoded->system_register_write)
-			current->thread.user_fpsr = value & GENMASK(31, 0);
+			current->thread.user_fpsr =
+				value & AARCH64_FPSR_WRITABLE_MASK;
 		else if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_fpsr;
+		break;
+	case TCTI_SYSTEM_REGISTER_TPIDRRO_EL0:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] = 0;
+		break;
+	case TCTI_SYSTEM_REGISTER_CTR_EL0:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] = AARCH64_CTR_EL0_VALUE;
+		break;
+	case TCTI_SYSTEM_REGISTER_DCZID_EL0:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] = AARCH64_DCZID_EL0_VALUE;
+		break;
+	case TCTI_SYSTEM_REGISTER_CNTFRQ_EL0:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] = AARCH64_CNTFRQ_EL0_VALUE;
+		break;
+	case TCTI_SYSTEM_REGISTER_CNTVCT_EL0:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] =
+				orlix_host_time_monotonic_ns();
 		break;
 	default:
 		return -EINVAL;
@@ -7330,6 +7362,16 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 
 	switch (decoded->decode_class) {
 	case TCTI_DECODE_HINT:
+		regs->pc += sizeof(u32);
+		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3 ?
+			-EAGAIN : 0;
+	case TCTI_DECODE_BARRIER:
+		__atomic_thread_fence(__ATOMIC_SEQ_CST);
+		regs->pc += sizeof(u32);
+		return 0;
+	case TCTI_DECODE_CACHE_MAINTENANCE:
+		if (decoded->cache_maintenance_op == TCTI_CACHE_IC_IVAU && mm)
+			tcti_invalidate_mm(mm);
 		regs->pc += sizeof(u32);
 		return 0;
 	case TCTI_DECODE_PC_RELATIVE_ADDRESS:
