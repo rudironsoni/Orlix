@@ -2860,6 +2860,7 @@ static int tcti_execute_simd_vector_element_move(
 
 	if (decoded->access_size == sizeof(u64) && decoded->rd == decoded->rn &&
 	    decoded->simd_destination_index == decoded->simd_source_index) {
+		current->thread.user_simd_valid = 1;
 		regs->pc += sizeof(u32);
 		return 0;
 	}

@@ -17052,8 +17052,425 @@ static u64 tcti_test_simd_lane(const u64 simd[64], u8 reg, u8 access_size,
 	return (simd[reg * 2 + word] >> shift) & mask;
 }
 
-static bool tcti_test_permute_operation(u8 encoding,
-					enum tcti_simd_element_move_op *operation)
+static void tcti_test_set_simd_lane(u64 simd[64], u8 reg, u8 access_size,
+				    u8 lane, u64 value)
+{
+	u8 byte = lane * access_size;
+	u8 word = byte / sizeof(u64);
+	u8 shift = (byte % sizeof(u64)) * 8;
+	u64 mask = GENMASK_ULL(access_size * 8 - 1, 0);
+	u64 shifted_mask = mask << shift;
+
+	simd[reg * 2 + word] = (simd[reg * 2 + word] & ~shifted_mask) |
+			       ((value & mask) << shift);
+}
+
+enum tcti_test_simd_copy_kind {
+	TCTI_TEST_SIMD_COPY_SCALAR_DUP,
+	TCTI_TEST_SIMD_COPY_VECTOR_DUP,
+	TCTI_TEST_SIMD_COPY_GPR_DUP,
+	TCTI_TEST_SIMD_COPY_INS_GPR,
+	TCTI_TEST_SIMD_COPY_INS_ELEMENT,
+	TCTI_TEST_SIMD_COPY_UMOV,
+	TCTI_TEST_SIMD_COPY_SMOV,
+};
+
+static void tcti_test_simd_copy_case(struct kunit *test, u32 instruction,
+				     enum tcti_test_simd_copy_kind kind,
+				     u8 access_size, u8 result_size,
+				     u8 source_lane, u8 destination_lane,
+				     bool seen_rn[32], bool seen_rd[32],
+				     bool *saw_alias)
+{
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	struct pt_regs expected_regs;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u8 rn = (instruction >> 5) & 0x1fU;
+	u8 rd = instruction & 0x1fU;
+	u64 value;
+	unsigned int index;
+	bool writes_simd;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, access_size, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, result_size, decoded.result_size);
+	KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+	KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+
+	seen_rn[rn] = true;
+	seen_rd[rd] = true;
+	*saw_alias |= rn == rd;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
+		current->thread.user_simd[index] =
+			0x1020304050607080ULL ^ ((u64)instruction << 17) ^
+			(0x0101010101010101ULL * index);
+	for (index = 0; index < ARRAY_SIZE(regs.regs); index++)
+		regs.regs[index] = 0x8877665544332200ULL ^
+				   ((u64)instruction << 11) ^ index;
+	regs.pc = 0x12345678000ULL;
+	regs.sp = 0x23456789000ULL;
+	regs.pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_regs = regs;
+	writes_simd = kind != TCTI_TEST_SIMD_COPY_UMOV &&
+		      kind != TCTI_TEST_SIMD_COPY_SMOV;
+	current->thread.user_simd_valid = writes_simd ? 0 : 1;
+
+	switch (kind) {
+	case TCTI_TEST_SIMD_COPY_SCALAR_DUP:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_DUP,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
+		KUNIT_EXPECT_EQ(test, source_lane, decoded.simd_source_index);
+		value = tcti_test_simd_lane(before_simd, rn, access_size,
+					    source_lane);
+		expected_simd[rd * 2] = 0;
+		expected_simd[rd * 2 + 1] = 0;
+		tcti_test_set_simd_lane(expected_simd, rd, access_size, 0,
+					value);
+		break;
+	case TCTI_TEST_SIMD_COPY_VECTOR_DUP:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_DUP,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_FALSE(test, decoded.immediate);
+		KUNIT_EXPECT_EQ(test, source_lane, decoded.simd_source_index);
+		value = tcti_test_simd_lane(before_simd, rn, access_size,
+					    source_lane);
+		expected_simd[rd * 2] = 0;
+		expected_simd[rd * 2 + 1] = 0;
+		for (index = 0; index < result_size / access_size; index++)
+			tcti_test_set_simd_lane(expected_simd, rd, access_size,
+						index, value);
+		break;
+	case TCTI_TEST_SIMD_COPY_GPR_DUP:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_DUP,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_TRUE(test, decoded.immediate);
+		value = rn == 31 ? 0 : regs.regs[rn];
+		expected_simd[rd * 2] = 0;
+		expected_simd[rd * 2 + 1] = 0;
+		for (index = 0; index < result_size / access_size; index++)
+			tcti_test_set_simd_lane(expected_simd, rd, access_size,
+						index, value);
+		break;
+	case TCTI_TEST_SIMD_COPY_INS_GPR:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_INS_GPR,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_EQ(test, destination_lane,
+				decoded.simd_destination_index);
+		value = rn == 31 ? 0 : regs.regs[rn];
+		tcti_test_set_simd_lane(expected_simd, rd, access_size,
+					destination_lane, value);
+		break;
+	case TCTI_TEST_SIMD_COPY_INS_ELEMENT:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_INS_ELEMENT,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_EQ(test, source_lane, decoded.simd_source_index);
+		KUNIT_EXPECT_EQ(test, destination_lane,
+				decoded.simd_destination_index);
+		value = tcti_test_simd_lane(before_simd, rn, access_size,
+					    source_lane);
+		tcti_test_set_simd_lane(expected_simd, rd, access_size,
+					destination_lane, value);
+		break;
+	case TCTI_TEST_SIMD_COPY_UMOV:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_UMOV,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_EQ(test, source_lane, decoded.simd_source_index);
+		value = tcti_test_simd_lane(before_simd, rn, access_size,
+					    source_lane);
+		if (rd != 31)
+			expected_regs.regs[rd] = value;
+		break;
+	case TCTI_TEST_SIMD_COPY_SMOV:
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ELEMENT_MOVE_SMOV,
+				decoded.simd_element_move_op);
+		KUNIT_EXPECT_EQ(test, source_lane, decoded.simd_source_index);
+		value = tcti_test_simd_lane(before_simd, rn, access_size,
+					    source_lane);
+		value = sign_extend64(value, access_size * 8 - 1);
+		if (result_size == sizeof(u32))
+			value = (u32)value;
+		if (rd != 31)
+			expected_regs.regs[rd] = value;
+		break;
+	}
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, current->thread.user_simd, expected_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_MEMEQ(test, regs.regs, expected_regs.regs,
+			   sizeof(regs.regs));
+	KUNIT_EXPECT_EQ(test, expected_regs.sp, regs.sp);
+	KUNIT_EXPECT_EQ(test, expected_regs.pstate, regs.pstate);
+	KUNIT_EXPECT_EQ(test, expected_regs.pc + sizeof(u32), regs.pc);
+}
+
+static void tcti_gadget_executes_complete_simd_copy_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_alias = false;
+	u8 size;
+	u8 q;
+	u8 register_case;
+
+	for (size = 0; size < 4; size++) {
+		u8 access_size = BIT(size);
+		u8 lane_count = 16 / access_size;
+		u8 source_lane;
+
+		for (source_lane = 0; source_lane < lane_count; source_lane++) {
+			u8 imm5 = BIT(size) | (source_lane << (size + 1));
+
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				u8 rn = register_case;
+				u8 rd = (register_case * 13) & 0x1fU;
+				u32 instruction = 0x5e000400U |
+						  ((u32)imm5 << 16) |
+						  ((u32)rn << 5) | rd;
+
+				tcti_test_simd_copy_case(test, instruction,
+							 TCTI_TEST_SIMD_COPY_SCALAR_DUP,
+							 access_size, access_size,
+							 source_lane, 0, seen_rn,
+							 seen_rd, &saw_alias);
+			}
+		}
+	}
+
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 4; size++) {
+			u8 access_size = BIT(size);
+			u8 lane_count = 16 / access_size;
+			u8 source_lane;
+
+			if (!q && size == 3)
+				continue;
+			for (source_lane = 0; source_lane < lane_count;
+			     source_lane++) {
+				u8 imm5 = BIT(size) |
+					  (source_lane << (size + 1));
+
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					u8 rn = register_case;
+					u8 rd = (register_case * 13) & 0x1fU;
+					u32 instruction = 0x0e000400U |
+							  (q ? BIT(30) : 0) |
+							  ((u32)imm5 << 16) |
+							  ((u32)rn << 5) | rd;
+
+					tcti_test_simd_copy_case(test, instruction,
+								 TCTI_TEST_SIMD_COPY_VECTOR_DUP,
+								 access_size, q ? 16 : 8,
+								 source_lane, 0, seen_rn,
+								 seen_rd, &saw_alias);
+				}
+			}
+		}
+	}
+
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 4; size++) {
+			u8 access_size = BIT(size);
+
+			if (!q && size == 3)
+				continue;
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				u8 rn = register_case;
+				u8 rd = (register_case * 13) & 0x1fU;
+				u32 instruction = 0x0e000c00U |
+						  (q ? BIT(30) : 0) |
+						  ((u32)BIT(size) << 16) |
+						  ((u32)rn << 5) | rd;
+
+				tcti_test_simd_copy_case(test, instruction,
+							 TCTI_TEST_SIMD_COPY_GPR_DUP,
+							 access_size, q ? 16 : 8, 0, 0,
+							 seen_rn, seen_rd, &saw_alias);
+			}
+		}
+	}
+
+	for (size = 0; size < 4; size++) {
+		u8 access_size = BIT(size);
+		u8 lane_count = 16 / access_size;
+		u8 destination_lane;
+
+		for (destination_lane = 0; destination_lane < lane_count;
+		     destination_lane++) {
+			u8 imm5 = BIT(size) | (destination_lane << (size + 1));
+
+			for (register_case = 0; register_case < 32;
+			     register_case++) {
+				u8 rn = register_case;
+				u8 rd = (register_case * 13) & 0x1fU;
+				u32 instruction = 0x4e001c00U |
+						  ((u32)imm5 << 16) |
+						  ((u32)rn << 5) | rd;
+
+				tcti_test_simd_copy_case(test, instruction,
+							 TCTI_TEST_SIMD_COPY_INS_GPR,
+							 access_size, access_size, 0,
+							 destination_lane, seen_rn,
+							 seen_rd, &saw_alias);
+			}
+		}
+	}
+
+	for (size = 0; size < 4; size++) {
+		u8 access_size = BIT(size);
+		u8 lane_count = 16 / access_size;
+		u8 destination_lane;
+
+		for (destination_lane = 0; destination_lane < lane_count;
+		     destination_lane++) {
+			u8 source_lane;
+			u8 imm5 = BIT(size) | (destination_lane << (size + 1));
+
+			for (source_lane = 0; source_lane < lane_count;
+			     source_lane++) {
+				u8 imm4 = source_lane << size;
+
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					u8 rn = register_case;
+					u8 rd = (register_case * 13) & 0x1fU;
+					u32 instruction = 0x6e000400U |
+							  ((u32)imm5 << 16) |
+							  ((u32)imm4 << 11) |
+							  ((u32)rn << 5) | rd;
+
+					tcti_test_simd_copy_case(test, instruction,
+								 TCTI_TEST_SIMD_COPY_INS_ELEMENT,
+								 access_size, 16,
+								 source_lane, destination_lane,
+								 seen_rn, seen_rd, &saw_alias);
+				}
+			}
+		}
+	}
+
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 4; size++) {
+			u8 access_size = BIT(size);
+			u8 lane_count = 16 / access_size;
+			u8 source_lane;
+
+			if ((!q && size == 3) || (q && size != 3))
+				continue;
+			for (source_lane = 0; source_lane < lane_count;
+			     source_lane++) {
+				u8 imm5 = BIT(size) |
+					  (source_lane << (size + 1));
+
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					u8 rn = register_case;
+					u8 rd = (register_case * 13) & 0x1fU;
+					u32 instruction = 0x0e003c00U |
+							  (q ? BIT(30) : 0) |
+							  ((u32)imm5 << 16) |
+							  ((u32)rn << 5) | rd;
+
+					tcti_test_simd_copy_case(test, instruction,
+								 TCTI_TEST_SIMD_COPY_UMOV,
+								 access_size, q ? 8 : 4,
+								 source_lane, 0, seen_rn,
+								 seen_rd, &saw_alias);
+				}
+			}
+		}
+	}
+
+	for (q = 0; q < 2; q++) {
+		for (size = 0; size < 3; size++) {
+			u8 access_size = BIT(size);
+			u8 lane_count = 16 / access_size;
+			u8 source_lane;
+
+			if (!q && size > 1)
+				continue;
+			for (source_lane = 0; source_lane < lane_count;
+			     source_lane++) {
+				u8 imm5 = BIT(size) |
+					  (source_lane << (size + 1));
+
+				for (register_case = 0; register_case < 32;
+				     register_case++) {
+					u8 rn = register_case;
+					u8 rd = (register_case * 13) & 0x1fU;
+					u32 instruction = 0x0e002c00U |
+							  (q ? BIT(30) : 0) |
+							  ((u32)imm5 << 16) |
+							  ((u32)rn << 5) | rd;
+
+					tcti_test_simd_copy_case(test, instruction,
+								 TCTI_TEST_SIMD_COPY_SMOV,
+								 access_size, q ? 8 : 4,
+								 source_lane, 0, seen_rn,
+								 seen_rd, &saw_alias);
+				}
+			}
+		}
+	}
+
+	for (register_case = 0; register_case < 32; register_case++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[register_case]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[register_case]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_alias);
+}
+
+static void tcti_decode_rejects_reserved_simd_copy_encodings(struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0x5e000400U, /* dup scalar with zero imm5 */
+		0x5e100400U, /* dup scalar with unsupported 128-bit element */
+		0x0e000400U, /* dup element with zero imm5 */
+		0x0e080400U, /* dup 64-bit element into a 64-bit vector */
+		0x0e000c00U, /* dup gpr with zero imm5 */
+		0x0e030c00U, /* dup gpr with non-power-of-two imm5 */
+		0x0e080c00U, /* dup 64-bit gpr into a 64-bit vector */
+		0x4e001c00U, /* ins gpr with zero imm5 */
+		0x4e101c00U, /* ins gpr with unsupported 128-bit element */
+		0x6e000400U, /* ins element with zero imm5 */
+		0x6e040c00U, /* ins element with misaligned source lane */
+		0x0e083c00U, /* umov 64-bit element to a 32-bit result */
+		0x4e043c00U, /* umov 32-bit element to a 64-bit result */
+		0x0e042c00U, /* smov 32-bit element to a 32-bit result */
+		0x4e082c00U, /* smov with unsupported 64-bit element */
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(instructions); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instructions[index]);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				    decoded.decode_class,
+				    "reserved copy encoding %#x decoded",
+				    instructions[index]);
+	}
+}
+
+static bool
+tcti_test_permute_operation(u8 encoding,
+			    enum tcti_simd_element_move_op *operation)
 {
 	switch (encoding) {
 	case 1:
@@ -21558,6 +21975,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_cmeq_4s),
 	KUNIT_CASE(tcti_switch_executes_simd_permute_known_vectors),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_permute_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_copy_family),
+	KUNIT_CASE(tcti_decode_rejects_reserved_simd_copy_encodings),
 	KUNIT_CASE(tcti_switch_executes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),

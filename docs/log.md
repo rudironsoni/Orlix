@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete AdvSIMD copy coverage
+
+Closed A64 AdvSIMD scalar and vector element `DUP`, general-register `DUP`, general-register and element `INS`, `UMOV`, and `SMOV` through production decode and execution. KUnit now enumerates every legal element size, lane, vector width, source and destination register field, same-register and same-lane aliases, GPR 31 zero and discard behavior, exact signed and unsigned transfer results, unrelated SIMD and integer state preservation, SP and PSTATE preservation, exact PC progression, and reserved encodings. The exhaustive proof exposed and fixed the 64-bit same-register same-lane `INS` fast path leaving guest SIMD state invalid. App-hosted KUnit cases 254 and 255 passed, Linux kselftest emitted `ORLIX-KSELFTEST-END`, and XCTest passed in 8.345 seconds. The kernel-owned inventory reports 36 of 52 families complete with 16 explicit gaps.
+
 ## [2026-07-21] test | Complete AdvSIMD permute coverage
 
 Closed A64 AdvSIMD `UZP1`, `UZP2`, `TRN1`, `TRN2`, `ZIP1`, and `ZIP2` through production decode and execution. KUnit now enumerates every three-bit opcode slot, both vector widths, every element-size encoding, and every source and destination register field. It proves exact lane selection, source-source and destination-source aliases, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, exact PC progression, rejection of both reserved opcode slots, and rejection of the illegal 64-bit `size=3` form. The kernel-owned inventory reports 35 of 52 families complete with 17 explicit gaps.
