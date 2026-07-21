@@ -4702,6 +4702,68 @@ static int tcti_execute_simd_vector_arithmetic(
 		regs->pc += sizeof(u32);
 		return 0;
 	}
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SADDLP ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UADDLP ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_SADALP ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_UADALP) {
+		u64 source[2];
+		u64 accumulator[2];
+		u64 result[2] = {};
+		u8 result_access_size = 2 * decoded->access_size;
+		u8 lane_count;
+		bool is_unsigned = decoded->simd_arithmetic_op ==
+				   TCTI_SIMD_ARITH_UADDLP ||
+				   decoded->simd_arithmetic_op ==
+				   TCTI_SIMD_ARITH_UADALP;
+		bool accumulate = decoded->simd_arithmetic_op ==
+				  TCTI_SIMD_ARITH_SADALP ||
+				  decoded->simd_arithmetic_op ==
+				  TCTI_SIMD_ARITH_UADALP;
+
+		if (decoded->access_size > sizeof(u32) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)))
+			return -EOPNOTSUPP;
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
+		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
+		lane_count = decoded->result_size / result_access_size;
+		for (lane = 0; lane < lane_count; lane++) {
+			u8 source_byte = 2 * lane * decoded->access_size;
+			u8 source_word = source_byte / sizeof(u64);
+			u8 source_shift = (source_byte % sizeof(u64)) * 8;
+			u8 destination_byte = lane * result_access_size;
+			u8 destination_word = destination_byte / sizeof(u64);
+			u8 destination_shift =
+				(destination_byte % sizeof(u64)) * 8;
+			u64 source_mask = tcti_simd_lane_mask(decoded->access_size);
+			u64 result_mask = tcti_simd_lane_mask(result_access_size);
+			u64 left = (source[source_word] >> source_shift) & source_mask;
+			u64 right = (source[source_word] >>
+				     (source_shift + decoded->access_size * 8)) &
+				source_mask;
+			u64 lane_result;
+
+			if (is_unsigned)
+				lane_result = left + right;
+			else
+				lane_result =
+					(s64)sign_extend64(left,
+							  decoded->access_size * 8 - 1) +
+					(s64)sign_extend64(right,
+							  decoded->access_size * 8 - 1);
+			if (accumulate)
+				lane_result += (accumulator[destination_word] >>
+						destination_shift) & result_mask;
+			result[destination_word] |=
+				(lane_result & result_mask) << destination_shift;
+		}
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_ABS &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_RBIT) {

@@ -109,6 +109,9 @@
 #define AARCH64_SIMD_HALVING_SUB_PATTERN 0x0e202400U
 #define AARCH64_SIMD_PAIRWISE_ADD_MASK 0xbf20fc00U
 #define AARCH64_SIMD_PAIRWISE_ADD_PATTERN 0x0e20bc00U
+#define AARCH64_SIMD_PAIRWISE_LONG_MASK 0x9f3ffc00U
+#define AARCH64_SIMD_PAIRWISE_LONG_PATTERN 0x0e202800U
+#define AARCH64_SIMD_PAIRWISE_LONG_ACCUMULATE_PATTERN 0x0e206800U
 #define AARCH64_SIMD_ADD_SUB_WIDE_MASK 0x9f20dc00U
 #define AARCH64_SIMD_ADD_SUB_WIDE_PATTERN 0x0e201000U
 #define AARCH64_SIMD_ADD_SUB_LONG_MASK 0x9f20dc00U
@@ -2025,6 +2028,33 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_ADDP;
+		return decoded;
+	}
+	if ((instruction & AARCH64_SIMD_PAIRWISE_LONG_MASK) ==
+	    AARCH64_SIMD_PAIRWISE_LONG_PATTERN ||
+	    (instruction & AARCH64_SIMD_PAIRWISE_LONG_MASK) ==
+	    AARCH64_SIMD_PAIRWISE_LONG_ACCUMULATE_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		bool q = instruction & BIT(30);
+		bool u = instruction & BIT(29);
+		bool accumulate =
+			(instruction & AARCH64_SIMD_PAIRWISE_LONG_MASK) ==
+			AARCH64_SIMD_PAIRWISE_LONG_ACCUMULATE_PATTERN;
+
+		if (size == 3)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		if (accumulate)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_UADALP :
+				TCTI_SIMD_ARITH_SADALP;
+		else
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_UADDLP :
+				TCTI_SIMD_ARITH_SADDLP;
 		return decoded;
 	}
 	if ((instruction & AARCH64_SIMD_ADD_SUB_WIDE_MASK) ==
