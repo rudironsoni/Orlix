@@ -17744,6 +17744,110 @@ static void tcti_test_set_simd_lane(u64 simd[64], u8 reg, u8 access_size,
 			       ((value & mask) << shift);
 }
 
+static void tcti_test_execute_vector_mixed_saturating_add(
+	struct kunit *test, bool unsigned_destination, bool q, u8 size,
+	u8 rd, u8 rn)
+{
+	u8 access_size = BIT(size);
+	u8 result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+	u8 lane_count = result_size / access_size;
+	u8 bits = access_size * 8;
+	u64 mask = GENMASK_ULL(bits - 1, 0);
+	u64 signed_maximum = mask >> 1;
+	u32 instruction = 0x0e203800U |
+		(unsigned_destination ? BIT(29) : 0) |
+		(q ? BIT(30) : 0) | ((u32)size << 22) |
+		((u32)rn << 5) | rd;
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned int word;
+	u8 lane;
+	bool saturated = false;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	for (word = 0; word < ARRAY_SIZE(before_simd); word++)
+		before_simd[word] =
+			0x5a5a000000000000ULL ^ ((u64)instruction << 7) ^ word;
+	for (lane = 0; lane < lane_count; lane++) {
+		u64 destination = lane == 0 ?
+			(unsigned_destination ? mask : signed_maximum) : lane;
+		u64 source = lane == 0 ? 1 : mask - lane;
+
+		tcti_test_set_simd_lane(before_simd, rd,
+					access_size, lane, destination);
+		if (rd != rn)
+			tcti_test_set_simd_lane(before_simd, rn,
+						access_size, lane, source);
+	}
+	memcpy(current->thread.user_simd, before_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[rd * 2] = 0;
+	expected_simd[rd * 2 + 1] = 0;
+	for (lane = 0; lane < lane_count; lane++) {
+		u64 destination = tcti_test_simd_lane(before_simd, rd,
+						      access_size, lane);
+		u64 source = tcti_test_simd_lane(before_simd, rn,
+						 access_size, lane);
+		u64 result = tcti_test_mixed_saturating_add_result(
+			destination, source, bits, unsigned_destination,
+			&saturated);
+
+		tcti_test_set_simd_lane(expected_simd, rd, access_size, lane,
+					result);
+	}
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		regs.regs[word] = 0x7654321000000000ULL ^ word;
+	regs.pc = 0x41b92000ULL;
+	regs.sp = 0x41ca3000ULL;
+	regs.pstate = PSR_N_BIT | PSR_C_BIT;
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, saturated ? BIT(27) : 0,
+			current->thread.user_fpsr & BIT(27));
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x41b92004ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x41ca3000ULL, regs.sp);
+	KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT, regs.pstate);
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		KUNIT_EXPECT_EQ(test, 0x7654321000000000ULL ^ word,
+				regs.regs[word]);
+}
+
+static void tcti_gadget_executes_simd_vector_mixed_saturating_add(
+	struct kunit *test)
+{
+	u8 unsigned_destination;
+	u8 q;
+	u8 size;
+	u8 alias;
+
+	for (unsigned_destination = 0; unsigned_destination < 2;
+	     unsigned_destination++) {
+		for (q = 0; q < 2; q++) {
+			for (size = 0; size < 4; size++) {
+				if (!q && size == 3)
+					continue;
+				for (alias = 0; alias < 2; alias++)
+					tcti_test_execute_vector_mixed_saturating_add(
+						test, unsigned_destination, q, size,
+						alias ? 31 : 0,
+						alias ? 31 : 1);
+			}
+		}
+	}
+}
+
 enum tcti_test_simd_copy_kind {
 	TCTI_TEST_SIMD_COPY_SCALAR_DUP,
 	TCTI_TEST_SIMD_COPY_VECTOR_DUP,
@@ -22686,6 +22790,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_scalar_saturating_mul_high_family),
 	KUNIT_CASE(tcti_gadget_executes_simd_scalar_sqdm_long),
 	KUNIT_CASE(tcti_gadget_executes_simd_scalar_mixed_saturating_add),
+	KUNIT_CASE(tcti_gadget_executes_simd_vector_mixed_saturating_add),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha3_family),

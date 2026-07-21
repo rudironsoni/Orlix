@@ -9,7 +9,7 @@ updated: 2026-07-21
 
 ## [2026-07-21] implement | Add mixed-sign saturating add
 
-Added baseline A64 AdvSIMD scalar and vector `SUQADD` and `USQADD` decode and execution without removing existing instruction families or prematurely promoting the broader `ASIMD_SCALAR` and `ASIMD_VECTOR_2REG_MISC` inventory rows. The production path handles every architectural lane width and vector shape, tied destination semantics, signed-to-unsigned and unsigned-to-signed saturation boundaries, sticky FPSR QC, scalar upper-bit clearing, unrelated register preservation, and exact PC progression. App-hosted KUnit passed 357 of 357 cases, Linux kselftest emitted `ORLIX-KSELFTEST-END`, and XCTest passed in 7.752 seconds. LLVM AArch64 encoding output independently confirmed the supported instruction encodings. No external implementation source was copied.
+Added baseline A64 AdvSIMD scalar and vector `SUQADD` and `USQADD` decode and execution without removing existing instruction families or prematurely promoting the broader `ASIMD_SCALAR` and `ASIMD_VECTOR_2REG_MISC` inventory rows. The production path handles every architectural lane width and vector shape, tied destination semantics, signed-to-unsigned and unsigned-to-signed saturation boundaries, sticky FPSR QC, scalar upper-bit clearing, 64-bit vector upper-half clearing, unrelated register preservation, and exact PC progression. App-hosted KUnit passed 358 of 358 cases, Linux kselftest emitted `ORLIX-KSELFTEST-END`, XCTest passed in 8.841 seconds, and the owning gate exited 0. LLVM AArch64 encoding output independently confirmed the supported instruction encodings. No external implementation source was copied.
 
 ## [2026-07-21] implement | Add scalar saturating doubling multiply-long
 
