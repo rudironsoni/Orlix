@@ -24208,6 +24208,110 @@ static void tcti_switch_executes_complete_simd_fp_int_convert_family(
 	}
 }
 
+static void tcti_expect_sha_three_register_encodings(struct kunit *test,
+	u32 pattern, enum tcti_simd_vector_arithmetic_op operation)
+{
+	u8 rd;
+	u8 rn;
+	u8 rm;
+
+	for (rd = 0; rd < 32; rd++) {
+		for (rn = 0; rn < 32; rn++) {
+			for (rm = 0; rm < 32; rm++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(pattern |
+						((u32)rm << 16) |
+						((u32)rn << 5) | rd);
+
+				KUNIT_EXPECT_EQ(test,
+					TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, operation,
+					decoded.simd_arithmetic_op);
+				KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+				KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+				KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+				KUNIT_EXPECT_EQ(test, 16U, decoded.access_size);
+				KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
+			}
+		}
+	}
+}
+
+static void tcti_expect_sha_two_register_encodings(struct kunit *test,
+	u32 pattern, enum tcti_simd_vector_arithmetic_op operation,
+	u8 result_size)
+{
+	u8 rd;
+	u8 rn;
+
+	for (rd = 0; rd < 32; rd++) {
+		for (rn = 0; rn < 32; rn++) {
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(pattern |
+					((u32)rn << 5) | rd);
+
+			KUNIT_EXPECT_EQ(test,
+				TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, operation,
+				decoded.simd_arithmetic_op);
+			KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, result_size, decoded.result_size);
+		}
+	}
+}
+
+static void tcti_decode_exhaustive_sha1_sha256_family(struct kunit *test)
+{
+	static const enum tcti_simd_vector_arithmetic_op sha1_three[] = {
+		TCTI_SIMD_ARITH_SHA1C,
+		TCTI_SIMD_ARITH_SHA1P,
+		TCTI_SIMD_ARITH_SHA1M,
+		TCTI_SIMD_ARITH_SHA1SU0,
+	};
+	static const enum tcti_simd_vector_arithmetic_op sha256_three[] = {
+		TCTI_SIMD_ARITH_SHA256H,
+		TCTI_SIMD_ARITH_SHA256H2,
+		TCTI_SIMD_ARITH_SHA256SU1,
+	};
+	size_t index;
+	u8 rd;
+	u8 rn;
+	u8 rm;
+
+	for (index = 0; index < ARRAY_SIZE(sha1_three); index++)
+		tcti_expect_sha_three_register_encodings(test,
+			0x5e000000U | ((u32)index << 12),
+			sha1_three[index]);
+	tcti_expect_sha_two_register_encodings(test, 0x5e280800U,
+		TCTI_SIMD_ARITH_SHA1H, sizeof(u32));
+	tcti_expect_sha_two_register_encodings(test, 0x5e281800U,
+		TCTI_SIMD_ARITH_SHA1SU1, 2 * sizeof(u64));
+
+	for (index = 0; index < ARRAY_SIZE(sha256_three); index++)
+		tcti_expect_sha_three_register_encodings(test,
+			0x5e004000U | ((u32)index << 12),
+			sha256_three[index]);
+	tcti_expect_sha_two_register_encodings(test, 0x5e282800U,
+		TCTI_SIMD_ARITH_SHA256SU0, 2 * sizeof(u64));
+
+	for (rd = 0; rd < 32; rd++) {
+		for (rn = 0; rn < 32; rn++) {
+			for (rm = 0; rm < 32; rm++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(0x5e007000U |
+						((u32)rm << 16) |
+						((u32)rn << 5) | rd);
+
+				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class);
+			}
+		}
+	}
+}
+
 struct tcti_test_fixed_convert_operation {
 	u32 gpr_pattern;
 	u32 simd_pattern;
@@ -24648,6 +24752,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_rejects_reserved_simd_fp_int_convert_shapes),
 	KUNIT_CASE(tcti_decode_rejects_disabled_fp16_simd_int_conversions),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_fp_int_convert_family),
+	KUNIT_CASE(tcti_decode_exhaustive_sha1_sha256_family),
 	KUNIT_CASE(tcti_decode_exhaustive_fixed_point_convert_family),
 	KUNIT_CASE(tcti_decode_rejects_reserved_fixed_point_convert_shapes),
 	KUNIT_CASE(tcti_switch_executes_complete_fixed_point_convert_family),

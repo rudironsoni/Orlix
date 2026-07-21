@@ -112,7 +112,13 @@ enum tcti_isa_coverage_status {
 	X(FP_2SOURCE, FP, COMPLETE, "floating-point two source", "TCTI_DECODE_FP_SCALAR_2SOURCE", "tcti_decode_recognizes_complete_fp_scalar_2source_family") \
 	X(FP_3SOURCE, FP, COMPLETE, "floating-point three source", "TCTI_DECODE_FP_SCALAR_3SOURCE", "tcti_gadget_executes_exhaustive_fp_3source_family") \
 	X(AES, AES, COMPLETE, "AES instructions", "TCTI_SIMD_ARITH_AES*", "tcti_gadget_executes_complete_aes_family") \
-	X(SHA1_SHA256, SHA, PARTIAL, "SHA1 and SHA256 instructions", "TCTI_SIMD_ARITH_SHA1*/SHA256*", "") \
+	X(SHA1_SHA256, SHA, COMPLETE, "SHA1 and SHA256 instructions", \
+	  "TCTI_SIMD_ARITH_SHA1*/SHA256*", \
+	  "tcti_decode_recognizes_complete_simd_sha1_family;" \
+	  "tcti_decode_recognizes_complete_simd_sha256_family;" \
+	  "tcti_decode_exhaustive_sha1_sha256_family;" \
+	  "tcti_switch_executes_complete_simd_sha1_family;" \
+	  "tcti_switch_executes_complete_simd_sha256_family") \
 	X(POLYNOMIAL_MULTIPLY, PMULL, COMPLETE, "polynomial multiply", "TCTI_SIMD_ARITH_PMUL/TCTI_SIMD_ARITH_PMULL", "tcti_gadget_executes_complete_polynomial_multiply_family") \
 	X(CRC32, CRC32, COMPLETE, "CRC32 and CRC32C", "TCTI_DP2_CRC32/TCTI_DP2_CRC32C", "tcti_gadget_executes_complete_crc32_family")
 
@@ -142,6 +148,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	11
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	10
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

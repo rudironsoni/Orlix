@@ -7,6 +7,20 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] verify | Close SHA1 and SHA256 ISA coverage
+
+Closed the configured Armv8.0-A SHA1 and SHA256 inventory row without replacing
+the existing Orlix decoder or execution algorithms. New KUnit coverage enumerates
+all 232,448 legal register encodings for SHA1C/P/M/H/SU0/SU1 and
+SHA256H/H2/SU0/SU1, including register aliases, and rejects all 32,768 reserved
+three-register SHA256 operation-3 encodings. Existing structured execution tests
+continue to prove every operation's state transition. LLVM AArch64 TableGen at
+commit `de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding
+source. OpenMinis ish-arm64 `crypto_helpers.c`, `crypto.S`, and `gadgets.h` at
+commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied independent operation,
+lane-layout, and native-gadget cross-checks. No external implementation source
+was copied. The kernel-owned coverage inventory now marks `SHA1_SHA256` complete.
+
 ## [2026-07-21] implement | Complete floating-point fixed-point conversions
 
 Completed the configured Armv8.0-A floating-point fixed-point conversion family
