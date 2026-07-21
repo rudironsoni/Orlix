@@ -2572,6 +2572,40 @@ static int tcti_execute_simd_vector_element_move(
 		regs->pc += sizeof(u32);
 		return 0;
 	}
+	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_SMOV) {
+		u8 byte_offset;
+		u8 sign_bit;
+
+		if (decoded->result_size == sizeof(u32) &&
+		    decoded->access_size != sizeof(u8) &&
+		    decoded->access_size != sizeof(u16))
+			return -EOPNOTSUPP;
+		if (decoded->result_size == sizeof(u64) &&
+		    decoded->access_size != sizeof(u8) &&
+		    decoded->access_size != sizeof(u16) &&
+		    decoded->access_size != sizeof(u32))
+			return -EOPNOTSUPP;
+		if (decoded->result_size != sizeof(u32) &&
+		    decoded->result_size != sizeof(u64))
+			return -EOPNOTSUPP;
+
+		byte_offset = decoded->simd_source_index *
+			      decoded->access_size;
+		if (byte_offset + decoded->access_size > 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+
+		source_word = decoded->rn * 2 + byte_offset / sizeof(u64);
+		source_shift = (byte_offset % sizeof(u64)) * 8;
+		value = (current->thread.user_simd[source_word] >> source_shift) &
+			GENMASK_ULL(decoded->access_size * 8 - 1, 0);
+		sign_bit = decoded->access_size * 8 - 1;
+		value = sign_extend64(value, sign_bit);
+		tcti_write_gpr_or_zero(regs, decoded->rd,
+				       decoded->result_size, value);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_DUP &&
 	    decoded->simd_scalar && !decoded->immediate) {
 		u8 byte_offset;
@@ -2757,6 +2791,42 @@ static int tcti_execute_simd_vector_element_move(
 		else
 			tcti_write_simd_fp_register(decoded->rd, sizeof(u64),
 						    narrowed, 0);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (decoded->simd_element_move_op == TCTI_SIMD_ELEMENT_MOVE_DUP &&
+	    !decoded->simd_scalar && !decoded->immediate) {
+		u8 byte_offset;
+		u8 lane_bits;
+		u64 high_word;
+
+		if ((decoded->access_size != sizeof(u8) &&
+		     decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32) &&
+		     decoded->access_size != sizeof(u64)) ||
+		    (decoded->result_size != sizeof(u64) &&
+		     decoded->result_size != 2 * sizeof(u64)) ||
+		    decoded->access_size > decoded->result_size)
+			return -EOPNOTSUPP;
+
+		byte_offset = decoded->simd_source_index *
+			      decoded->access_size;
+		if (byte_offset + decoded->access_size > 2 * sizeof(u64))
+			return -EOPNOTSUPP;
+
+		source_word = decoded->rn * 2 + byte_offset / sizeof(u64);
+		source_shift = (byte_offset % sizeof(u64)) * 8;
+		lane_bits = decoded->access_size * 8;
+		word = (current->thread.user_simd[source_word] >> source_shift) &
+		       GENMASK_ULL(lane_bits - 1, 0);
+		while (lane_bits < 64) {
+			word |= word << lane_bits;
+			lane_bits *= 2;
+		}
+		high_word = decoded->result_size > sizeof(u64) ? word : 0;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    word, high_word);
 		regs->pc += sizeof(u32);
 		return 0;
 	}

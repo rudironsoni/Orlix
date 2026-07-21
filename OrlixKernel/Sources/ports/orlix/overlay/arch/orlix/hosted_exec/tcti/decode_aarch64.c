@@ -83,6 +83,8 @@
 #define AARCH64_SIMD_PERMUTE_PATTERN 0x0e000800U
 #define AARCH64_SIMD_UMOV_MASK 0xbfe0fc00U
 #define AARCH64_SIMD_UMOV_PATTERN 0x0e003c00U
+#define AARCH64_SIMD_SMOV_MASK 0xbfe0fc00U
+#define AARCH64_SIMD_SMOV_PATTERN 0x0e002c00U
 #define AARCH64_SIMD_INS_GPR_MASK 0xffe0fc00U
 #define AARCH64_SIMD_INS_GPR_PATTERN 0x4e001c00U
 #define AARCH64_SIMD_EXT_MASK 0xbfe08400U
@@ -91,6 +93,8 @@
 #define AARCH64_SIMD_TABLE_LOOKUP_PATTERN 0x0e000000U
 #define AARCH64_SIMD_DUP_GPR_MASK 0xbfe0fc00U
 #define AARCH64_SIMD_DUP_GPR_PATTERN 0x0e000c00U
+#define AARCH64_SIMD_DUP_ELEMENT_MASK 0xbfe0fc00U
+#define AARCH64_SIMD_DUP_ELEMENT_PATTERN 0x0e000400U
 #define AARCH64_SIMD_DUP_SCALAR_ELEMENT_MASK 0xffe0fc00U
 #define AARCH64_SIMD_DUP_SCALAR_ELEMENT_PATTERN 0x5e000400U
 #define AARCH64_SIMD_VECTOR_LOGICAL_MASK 0x9f20fc00U
@@ -1780,6 +1784,30 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_SMOV_MASK) ==
+	    AARCH64_SIMD_SMOV_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+		u8 lane_shift;
+		bool q = instruction & BIT(30);
+
+		if (!imm5)
+			return decoded;
+
+		lane_shift = __builtin_ctz((unsigned int)imm5);
+		if (lane_shift > 2 || (!q && lane_shift > 1))
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = BIT(lane_shift);
+		decoded.result_size = q ? sizeof(u64) : sizeof(u32);
+		decoded.simd_source_index = imm5 >> (lane_shift + 1);
+		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_SMOV;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_INS_GPR_MASK) ==
 	    AARCH64_SIMD_INS_GPR_PATTERN) {
 		u8 imm5 = (instruction >> 16) & 0x1fU;
@@ -1834,6 +1862,30 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_table_lookup_op = instruction & BIT(12) ?
 			TCTI_SIMD_TABLE_LOOKUP_TBX : TCTI_SIMD_TABLE_LOOKUP_TBL;
 		decoded.simd_fp = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_DUP_ELEMENT_MASK) ==
+	    AARCH64_SIMD_DUP_ELEMENT_PATTERN) {
+		u8 imm5 = (instruction >> 16) & 0x1fU;
+		u8 size;
+		bool q = instruction & BIT(30);
+
+		if (!imm5)
+			return decoded;
+
+		size = __ffs(imm5);
+		if (size > 3 || (size == 3 && !q))
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_source_index = imm5 >> (size + 1);
+		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_DUP;
 		return decoded;
 	}
 
