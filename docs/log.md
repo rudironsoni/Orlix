@@ -7,6 +7,31 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] audit | Complete AdvSIMD vector three-same coverage
+
+Closed the configured Armv8.0-A AdvSIMD vector three-same inventory row after
+auditing the production decoder, executor, and direct KUnit evidence against
+the 77 required integer, floating-point, compare, logical, saturating, shift,
+multiply, polynomial, pairwise, and accumulator operations in LLVM AArch64
+TableGen commit `de44ed3488693686dd1f65baad5d7bd3797eddca`. Every required
+operation was already implemented through the Orlix-owned production path; the
+coverage row had remained partial pending the whole-family audit, so no
+duplicate production operation or alternate decoder was added. Existing KUnit
+evidence covers legal vector shapes, every register field, source and
+destination aliases, 64-bit upper-half clearing, saturation and sticky QC,
+FPCR and FPSR behavior, NaNs and signed zero, exact PC progression, unrelated
+state preservation, and reserved shape rejection. RDM-only `SQRDMLAH` and
+`SQRDMLSH` remain outside the advertised guest profile because `ELF_HWCAP2` is
+zero. The app-hosted gate reports 405 of 405 KUnit cases passing, reaches
+`ORLIX-KSELFTEST-END`, and passes its single XCTest in 7.984 seconds with zero
+failures; the owning command exits zero after terminating only the separately
+tracked `simctl diagnose` cleanup child. OpenMinis ish-arm64 `math.S` and
+`gen.c` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an independent family and
+gadget-decomposition cross-check; no external implementation source was
+copied. The kernel-owned inventory now reports 48 of 52 families complete with
+four explicit gaps.
+
 ## [2026-07-21] implement | Complete baseline AdvSIMD scalar coverage
 
 Closed the configured Armv8.0-A AdvSIMD scalar data-processing inventory row.

@@ -118,7 +118,27 @@ enum tcti_isa_coverage_status {
 	  "tcti_gadget_executes_complete_simd_fp_scalar_unary_family;" \
 	  "tcti_gadget_executes_complete_simd_fp_three_same_family;" \
 	  "tcti_gadget_executes_complete_simd_fp_pairwise_family") \
-	X(ASIMD_VECTOR_3SAME, ASIMD, PARTIAL, "AdvSIMD vector three same", "TCTI_DECODE_SIMD_VECTOR_*", "") \
+	X(ASIMD_VECTOR_3SAME, ASIMD, COMPLETE, "AdvSIMD vector three same", \
+	  "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC/" \
+	  "TCTI_DECODE_SIMD_VECTOR_COMPARE/" \
+	  "TCTI_DECODE_SIMD_VECTOR_LOGICAL", \
+	  "tcti_decode_recognizes_complete_simd_vector_logical_family;" \
+	  "tcti_decode_recognizes_complete_simd_add_sub_family;" \
+	  "tcti_decode_recognizes_complete_simd_halving_add_family;" \
+	  "tcti_decode_recognizes_complete_simd_halving_sub_family;" \
+	  "tcti_decode_recognizes_complete_simd_pairwise_add_family;" \
+	  "tcti_decode_recognizes_complete_simd_pairwise_min_max_family;" \
+	  "tcti_decode_recognizes_complete_simd_saturating_add_sub_family;" \
+	  "tcti_decode_recognizes_complete_simd_saturating_mul_high_family;" \
+	  "tcti_decode_recognizes_complete_simd_mul_family;" \
+	  "tcti_decode_recognizes_complete_simd_mla_mls_family;" \
+	  "tcti_decode_recognizes_complete_simd_min_max_family;" \
+	  "tcti_decode_recognizes_complete_simd_absolute_difference_family;" \
+	  "tcti_decode_recognizes_complete_simd_register_compare_family;" \
+	  "tcti_decode_recognizes_complete_simd_shift_by_register_family;" \
+	  "tcti_decode_exhaustive_simd_fp_three_same;" \
+	  "tcti_gadget_executes_complete_simd_fp_vector_three_same_family;" \
+	  "tcti_gadget_executes_complete_polynomial_multiply_family") \
 	X(ASIMD_VECTOR_3DIFFERENT, ASIMD, PARTIAL, "AdvSIMD vector three different", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(ASIMD_VECTOR_2REG_MISC, ASIMD, PARTIAL, "AdvSIMD vector two-register miscellaneous", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(ASIMD_VECTOR_ACROSS_LANES, ASIMD, PARTIAL, "AdvSIMD vector across lanes", "TCTI_DECODE_SIMD_VECTOR_REDUCTION", "") \
@@ -187,6 +207,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	5
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	4
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
