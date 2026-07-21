@@ -67,7 +67,17 @@ enum tcti_isa_coverage_status {
 	  "AdvSIMD modified immediate", \
 	  "TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE", \
 	  "tcti_gadget_executes_exhaustive_simd_modimm") \
-	X(ASIMD_SHIFT_IMMEDIATE, ASIMD, PARTIAL, "AdvSIMD shift by immediate", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
+	X(ASIMD_SHIFT_IMMEDIATE, ASIMD, COMPLETE, \
+	  "AdvSIMD shift by immediate", \
+	  "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", \
+	  "tcti_switch_executes_complete_simd_saturating_shift_left_immediate_family;" \
+	  "tcti_switch_executes_complete_simd_scalar_shift_immediate_family;" \
+	  "tcti_switch_executes_complete_simd_shift_left_insert_immediate_family;" \
+	  "tcti_switch_executes_complete_simd_shift_right_immediate_family;" \
+	  "tcti_switch_executes_complete_simd_shift_narrow_family;" \
+	  "tcti_switch_executes_complete_simd_scalar_shift_narrow_family;" \
+	  "tcti_switch_executes_complete_simd_scalar_saturating_narrow_family;" \
+	  "tcti_switch_executes_complete_simd_shift_left_long_family") \
 	X(ASIMD_SCALAR, ASIMD, PARTIAL, "AdvSIMD scalar data processing", "TCTI_DECODE_SIMD_VECTOR_*", "") \
 	X(ASIMD_VECTOR_3SAME, ASIMD, PARTIAL, "AdvSIMD vector three same", "TCTI_DECODE_SIMD_VECTOR_*", "") \
 	X(ASIMD_VECTOR_3DIFFERENT, ASIMD, PARTIAL, "AdvSIMD vector three different", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
@@ -114,6 +124,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	15
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	14
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
