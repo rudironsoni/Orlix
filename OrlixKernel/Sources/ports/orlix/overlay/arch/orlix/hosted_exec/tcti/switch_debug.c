@@ -4704,9 +4704,10 @@ static int tcti_execute_simd_vector_arithmetic(
 		return 0;
 	}
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_FABD &&
-	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_FRSQRTS) {
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_FSUB) {
 		u64 left[2];
 		u64 right[2];
+		u64 accumulator[2];
 		u64 result[2] = {};
 		int ret;
 
@@ -4714,10 +4715,12 @@ static int tcti_execute_simd_vector_arithmetic(
 		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
 		right[0] = current->thread.user_simd[decoded->rm * 2];
 		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
+		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
 		ret = tcti_native_simd_fp_three_same(
 			decoded->simd_arithmetic_op, decoded->simd_scalar,
 			decoded->access_size, decoded->result_size, result, left,
-			right, current->thread.user_fpcr,
+			right, accumulator, current->thread.user_fpcr,
 			&current->thread.user_fpsr);
 		if (ret)
 			return ret;

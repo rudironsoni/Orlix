@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete baseline AdvSIMD vector floating-point three-same execution
+
+Added baseline A64 vector `FADDP`, `FADD`, `FDIV`, `FMAXNMP`, `FMAXNM`, `FMAXP`, `FMAX`, `FMINNMP`, `FMINNM`, `FMINP`, `FMIN`, `FMLA`, `FMLS`, `FMUL`, and `FSUB` decode and exact native execution without removing existing instruction families or replacing the established `FMUL` 2D path. Production execution preserves guest and host FPCR/FPSR state, uses the original destination as the architectural accumulator for fused multiply-add and multiply-subtract, and commits results through the normal TCTI SIMD register path. KUnit covers every operation across legal 2S, 4S, and 2D shapes, destination and source aliases, upper-half clearing, unrelated SIMD and integer state, exact PC progression, numeric versus propagating NaNs, signaling NaNs with default-NaN mode, signed zero, divide-by-zero and invalid flags, pairwise lane ordering, and a fused-only `FMLA` result. The app-hosted KUnit and Linux kselftest gate reached `ORLIX-KSELFTEST-END`; XCTest passed one test with zero failures and zero skips, and `xcodebuild` exited zero after its separately tracked `simctl diagnose` cleanup child was released. Patch-only Linux `checkpatch.pl` reported zero errors and zero warnings. LLVM AArch64 encodings and OpenMinis ish-arm64 `math.S` at commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent encoding and family-decomposition cross-checks. No external implementation source was copied.
+
 ## [2026-07-21] implement | Add scalar AdvSIMD floating-point pairwise execution
 
 Added baseline A64 scalar `FADDP`, `FMAXNMP`, `FMAXP`, `FMINNMP`, and

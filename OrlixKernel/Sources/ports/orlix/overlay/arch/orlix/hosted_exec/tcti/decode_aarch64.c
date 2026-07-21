@@ -109,6 +109,21 @@
 #define AARCH64_SIMD_FMULX_PATTERN 0x0e20dc00U
 #define AARCH64_SIMD_FRECPS_PATTERN 0x0e20fc00U
 #define AARCH64_SIMD_FRSQRTS_PATTERN 0x0ea0fc00U
+#define AARCH64_SIMD_FADDP_PATTERN 0x2e20d400U
+#define AARCH64_SIMD_FADD_PATTERN 0x0e20d400U
+#define AARCH64_SIMD_FDIV_PATTERN 0x2e20fc00U
+#define AARCH64_SIMD_FMAXNMP_PATTERN 0x2e20c400U
+#define AARCH64_SIMD_FMAXNM_PATTERN 0x0e20c400U
+#define AARCH64_SIMD_FMAXP_PATTERN 0x2e20f400U
+#define AARCH64_SIMD_FMAX_PATTERN 0x0e20f400U
+#define AARCH64_SIMD_FMINNMP_PATTERN 0x2ea0c400U
+#define AARCH64_SIMD_FMINNM_PATTERN 0x0ea0c400U
+#define AARCH64_SIMD_FMINP_PATTERN 0x2ea0f400U
+#define AARCH64_SIMD_FMIN_PATTERN 0x0ea0f400U
+#define AARCH64_SIMD_FMLA_PATTERN 0x0e20cc00U
+#define AARCH64_SIMD_FMLS_PATTERN 0x0ea0cc00U
+#define AARCH64_SIMD_FMUL_PATTERN 0x2e20dc00U
+#define AARCH64_SIMD_FSUB_PATTERN 0x0ea0d400U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
 #define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
 #define AARCH64_SIMD_SCALAR_ADD_SUB_MASK 0xdf20fc00U
@@ -1982,7 +1997,40 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
 	    AARCH64_SIMD_FRECPS_PATTERN ||
 	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
-	    AARCH64_SIMD_FRSQRTS_PATTERN) {
+	    AARCH64_SIMD_FRSQRTS_PATTERN ||
+	    (!(instruction & BIT(28)) &&
+	     ((instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FADDP_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FADD_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FDIV_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMAXNMP_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMAXNM_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMAXP_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMAX_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMINNMP_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMINNM_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMINP_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMIN_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMLA_PATTERN ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FMLS_PATTERN ||
+	      ((instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	       AARCH64_SIMD_FMUL_PATTERN &&
+	       (instruction & (BIT(30) | BIT(22))) !=
+	       (BIT(30) | BIT(22))) ||
+	      (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	      AARCH64_SIMD_FSUB_PATTERN))) {
 		u32 pattern = instruction & AARCH64_SIMD_FP_THREE_SAME_MASK;
 		bool scalar = instruction & BIT(28);
 		bool q = instruction & BIT(30);
@@ -2024,8 +2072,53 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		case AARCH64_SIMD_FRECPS_PATTERN:
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPS;
 			break;
-		default:
+		case AARCH64_SIMD_FRSQRTS_PATTERN:
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTS;
+			break;
+		case AARCH64_SIMD_FADDP_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FADDP;
+			break;
+		case AARCH64_SIMD_FADD_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FADD;
+			break;
+		case AARCH64_SIMD_FDIV_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FDIV;
+			break;
+		case AARCH64_SIMD_FMAXNMP_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXNMP;
+			break;
+		case AARCH64_SIMD_FMAXNM_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXNM;
+			break;
+		case AARCH64_SIMD_FMAXP_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXP;
+			break;
+		case AARCH64_SIMD_FMAX_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAX;
+			break;
+		case AARCH64_SIMD_FMINNMP_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINNMP;
+			break;
+		case AARCH64_SIMD_FMINNM_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINNM;
+			break;
+		case AARCH64_SIMD_FMINP_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINP;
+			break;
+		case AARCH64_SIMD_FMIN_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMIN;
+			break;
+		case AARCH64_SIMD_FMLA_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMLA;
+			break;
+		case AARCH64_SIMD_FMLS_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMLS;
+			break;
+		case AARCH64_SIMD_FMUL_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMUL;
+			break;
+		default:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FSUB;
 			break;
 		}
 		return decoded;
