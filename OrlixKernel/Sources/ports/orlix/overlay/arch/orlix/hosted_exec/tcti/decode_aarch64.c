@@ -297,6 +297,8 @@
 #define AARCH64_FMOV_D_D_PATTERN 0x1e604000U
 #define AARCH64_FCVT_D_S_MASK 0xfffffc00U
 #define AARCH64_FCVT_D_S_PATTERN 0x1e22c000U
+#define AARCH64_FCVT_S_D_MASK 0xfffffc00U
+#define AARCH64_FCVT_S_D_PATTERN 0x1e624000U
 #define AARCH64_FABS_S_MASK 0xfffffc00U
 #define AARCH64_FABS_S_PATTERN 0x1e20c000U
 #define AARCH64_FABS_D_MASK 0xfffffc00U
@@ -305,6 +307,10 @@
 #define AARCH64_FNEG_S_PATTERN 0x1e214000U
 #define AARCH64_FNEG_D_MASK 0xfffffc00U
 #define AARCH64_FNEG_D_PATTERN 0x1e614000U
+#define AARCH64_FSQRT_S_MASK 0xfffffc00U
+#define AARCH64_FSQRT_S_PATTERN 0x1e21c000U
+#define AARCH64_FSQRT_D_MASK 0xfffffc00U
+#define AARCH64_FSQRT_D_PATTERN 0x1e61c000U
 #define AARCH64_FP_SCALAR_1SOURCE_MASK 0xff207c00U
 #define AARCH64_FP_SCALAR_1SOURCE_PATTERN 0x1e204000U
 #define AARCH64_FP_SCALAR_2SOURCE_MASK 0xff200c00U
@@ -3325,6 +3331,28 @@ not_simd_compare_register:
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_FCVT_S_D_MASK) == AARCH64_FCVT_S_D_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u32);
+		decoded.simd_fp = true;
+		decoded.fp1_op = TCTI_FP1_FCVT;
+		return decoded;
+	}
+	if ((instruction & AARCH64_FSQRT_S_MASK) == AARCH64_FSQRT_S_PATTERN ||
+	    (instruction & AARCH64_FSQRT_D_MASK) == AARCH64_FSQRT_D_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = instruction & BIT(22) ?
+			sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_fp = true;
+		decoded.fp1_op = TCTI_FP1_FSQRT;
+		return decoded;
+	}
 	if ((instruction & AARCH64_FABS_S_MASK) == AARCH64_FABS_S_PATTERN ||
 	    (instruction & AARCH64_FABS_D_MASK) == AARCH64_FABS_D_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;

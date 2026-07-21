@@ -86,7 +86,12 @@ enum tcti_isa_coverage_status {
 	X(ASIMD_VECTOR_INDEXED_ELEMENT, ASIMD, PARTIAL, "AdvSIMD vector by indexed element", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(FP_FIXED_POINT_CONVERT, FP, PARTIAL, "floating-point fixed-point conversion", "TCTI_DECODE_FP_INT_CONVERT", "") \
 	X(FP_INTEGER_CONVERT, FP, PARTIAL, "floating-point integer conversion", "TCTI_DECODE_FP_INT_CONVERT", "tcti_decode_recognizes_complete_fp_to_gpr_family") \
-	X(FP_1SOURCE, FP, PARTIAL, "floating-point one source", "TCTI_DECODE_FP_SCALAR_1SOURCE", "") \
+	X(FP_1SOURCE, FP, COMPLETE, "floating-point one source", \
+	  "TCTI_DECODE_FP_SCALAR_1SOURCE/TCTI_DECODE_FP_SCALAR_MOVE", \
+	  "tcti_decode_recognizes_complete_fp_scalar_1source_family;" \
+	  "tcti_gadget_executes_complete_fp_scalar_move_family;" \
+	  "tcti_switch_executes_complete_fp_scalar_frint_family;" \
+	  "tcti_gadget_executes_complete_fp_scalar_native_1source_family") \
 	X(FP_COMPARE, FP, COMPLETE, "floating-point compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "tcti_gadget_executes_exhaustive_fp_compare_family") \
 	X(FP_IMMEDIATE, FP, COMPLETE, "floating-point immediate", "TCTI_DECODE_FP_SCALAR_IMMEDIATE", "tcti_gadget_executes_complete_fp_immediate_family") \
 	X(FP_CONDITIONAL_COMPARE, FP, COMPLETE, "floating-point conditional compare", "TCTI_DECODE_FP_SCALAR_COMPARE", "tcti_gadget_executes_complete_fp_conditional_compare_family") \
@@ -124,6 +129,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	14
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	13
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

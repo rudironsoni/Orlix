@@ -226,33 +226,6 @@ static int tcti_compare_fp64(u64 left, u64 right)
 	return left_negative == (left_magnitude > right_magnitude) ? -1 : 1;
 }
 
-static u64 tcti_fp32_to_fp64_bits(u32 value)
-{
-	u64 sign = value & BIT(31) ? BIT_ULL(63) : 0;
-	u32 exponent = (value >> 23) & 0xffU;
-	u32 fraction = value & GENMASK(22, 0);
-	u64 exponent64;
-
-	if (exponent == 0xff)
-		return sign | GENMASK_ULL(62, 52) | ((u64)fraction << 29);
-	if (!exponent) {
-		int normalized_exponent = -126;
-
-		if (!fraction)
-			return sign;
-		while (!(fraction & BIT(23))) {
-			fraction <<= 1;
-			normalized_exponent--;
-		}
-		fraction &= GENMASK(22, 0);
-		exponent64 = normalized_exponent + 1023;
-		return sign | (exponent64 << 52) | ((u64)fraction << 29);
-	}
-
-	exponent64 = exponent - 127 + 1023;
-	return sign | (exponent64 << 52) | ((u64)fraction << 29);
-}
-
 static int tcti_multiply_fp64_bits(u64 left, u64 right, u64 *result)
 {
 	u64 sign = (left ^ right) & BIT_ULL(63);
@@ -6211,6 +6184,8 @@ static int tcti_execute_fp_scalar_move(
 		break;
 	case TCTI_FP_MOVE_REGISTER:
 		value = current->thread.user_simd[decoded->rn * 2];
+		if (decoded->access_size == sizeof(u32))
+			value = (u32)value;
 		tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
 					    value, 0);
 		break;
@@ -6369,12 +6344,23 @@ static int tcti_execute_fp_scalar_1source(
 		}
 		break;
 	case TCTI_FP1_FCVT:
-		if (decoded->access_size != sizeof(u32) ||
-		    decoded->result_size != sizeof(u64))
-			return -EOPNOTSUPP;
-		value = tcti_fp32_to_fp64_bits(
-			current->thread.user_simd[decoded->rn * 2]);
+	case TCTI_FP1_FSQRT: {
+		u64 source[2];
+		u64 result[2] = {};
+		int ret;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		ret = tcti_native_fp_one_source(
+			decoded->fp1_op, decoded->access_size,
+			decoded->result_size, result, source,
+			current->thread.user_fpcr,
+			&current->thread.user_fpsr);
+		if (ret)
+			return ret;
+		value = result[0];
 		break;
+	}
 	case TCTI_FP1_FNEG:
 		if (decoded->access_size == sizeof(u32)) {
 			value = (u32)current->thread.user_simd[decoded->rn * 2];

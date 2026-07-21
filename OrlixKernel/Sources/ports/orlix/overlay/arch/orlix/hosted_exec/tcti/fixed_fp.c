@@ -60,6 +60,79 @@ TCTI_DEFINE_FIXED_FP_64(tcti_native_fcvtzu_x_s, "fmov s0, w0", "fcvtzu",
 TCTI_DEFINE_FIXED_FP_64(tcti_native_fcvtzu_x_d, "fmov d0, x0", "fcvtzu",
 			"x0", "d0")
 
+#define TCTI_NATIVE_FP_ONE_SOURCE_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			     instruction "\n" \
+			     "str q0, [%[result]]\n" \
+			     : \
+			     : [result] "r" (result), [source] "r" (source) \
+			     : "v0", "memory"); \
+	})
+
+int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
+	u8 access_size, u8 result_size, u64 result[2], const u64 source[2],
+	unsigned long fpcr, unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !source || !fpsr)
+		return -EINVAL;
+	if (access_size != sizeof(u32) && access_size != sizeof(u64))
+		return -EINVAL;
+	if (result_size != sizeof(u32) && result_size != sizeof(u64))
+		return -EINVAL;
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	case TCTI_FP1_FCVT:
+		if (access_size == sizeof(u32) && result_size == sizeof(u64))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt d0, s0");
+		else if (access_size == sizeof(u64) &&
+			 result_size == sizeof(u32))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt s0, d0");
+		else
+			ret = -EINVAL;
+		break;
+	case TCTI_FP1_FSQRT:
+		if (access_size == sizeof(u32) && result_size == sizeof(u32))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fsqrt s0, s0");
+		else if (access_size == sizeof(u64) &&
+			 result_size == sizeof(u64))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fsqrt d0, d0");
+		else
+			ret = -EINVAL;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
 enum tcti_native_simd_fp_shape {
 	TCTI_NATIVE_SIMD_FP_SCALAR_S,
 	TCTI_NATIVE_SIMD_FP_SCALAR_D,
