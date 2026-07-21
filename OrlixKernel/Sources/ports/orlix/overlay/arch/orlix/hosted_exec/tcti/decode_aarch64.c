@@ -216,6 +216,7 @@
 #define AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK 0x8f3ffc00U
 #define AARCH64_SIMD_ABS_NEG_PATTERN 0x0e20b800U
 #define AARCH64_SIMD_SQABS_SQNEG_PATTERN 0x0e207800U
+#define AARCH64_SIMD_SUQADD_USQADD_PATTERN 0x0e203800U
 #define AARCH64_SIMD_CLS_CLZ_PATTERN 0x0e204800U
 #define AARCH64_SIMD_REV_PATTERN 0x0e200800U
 #define AARCH64_SIMD_REV16_PATTERN 0x0e201800U
@@ -2702,6 +2703,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_SQABS_SQNEG_PATTERN ||
 	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
+		    AARCH64_SIMD_SUQADD_USQADD_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_CLS_CLZ_PATTERN) {
 		u8 size = (instruction >> 22) & 0x3U;
 		bool q = instruction & BIT(30);
@@ -2733,6 +2736,9 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		else if (pattern == AARCH64_SIMD_SQABS_SQNEG_PATTERN)
 			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_SQNEG :
 				TCTI_SIMD_ARITH_SQABS;
+		else if (pattern == AARCH64_SIMD_SUQADD_USQADD_PATTERN)
+			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_USQADD :
+				TCTI_SIMD_ARITH_SUQADD;
 		else
 			decoded.simd_arithmetic_op = u ? TCTI_SIMD_ARITH_CLZ :
 				TCTI_SIMD_ARITH_CLS;
