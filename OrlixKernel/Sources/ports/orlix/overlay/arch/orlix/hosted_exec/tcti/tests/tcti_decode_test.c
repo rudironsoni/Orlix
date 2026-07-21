@@ -24208,6 +24208,414 @@ static void tcti_switch_executes_complete_simd_fp_int_convert_family(
 	}
 }
 
+struct tcti_test_fixed_convert_operation {
+	u32 gpr_pattern;
+	u32 simd_pattern;
+	enum tcti_fp_int_convert_op gpr_operation;
+	enum tcti_fp_int_convert_op simd_operation;
+	bool int_to_fp;
+};
+
+static const struct tcti_test_fixed_convert_operation
+tcti_test_fixed_convert_operations[] = {
+	{ 0x1e180000U, 0x0f00fc00U, TCTI_FP_INT_FCVTZS_FIXED,
+	  TCTI_FP_INT_FCVTZS_FIXED_SIMD, false },
+	{ 0x1e190000U, 0x2f00fc00U, TCTI_FP_INT_FCVTZU_FIXED,
+	  TCTI_FP_INT_FCVTZU_FIXED_SIMD, false },
+	{ 0x1e020000U, 0x0f00e400U, TCTI_FP_INT_SCVTF_FIXED,
+	  TCTI_FP_INT_SCVTF_FIXED_SIMD, true },
+	{ 0x1e030000U, 0x2f00e400U, TCTI_FP_INT_UCVTF_FIXED,
+	  TCTI_FP_INT_UCVTF_FIXED_SIMD, true },
+};
+
+struct tcti_test_fixed_simd_shape {
+	bool scalar;
+	bool q;
+	u8 access_size;
+};
+
+static const struct tcti_test_fixed_simd_shape
+tcti_test_fixed_simd_shapes[] = {
+	{ true, true, sizeof(u32) },
+	{ true, true, sizeof(u64) },
+	{ false, false, sizeof(u32) },
+	{ false, true, sizeof(u32) },
+	{ false, true, sizeof(u64) },
+};
+
+static u32 tcti_test_encode_fixed_gpr(
+	const struct tcti_test_fixed_convert_operation *operation,
+	bool wide_integer, bool double_fp, u8 fractional_bits, u8 rd, u8 rn)
+{
+	return operation->gpr_pattern |
+		(wide_integer ? BIT(31) : 0) |
+		(double_fp ? BIT(22) : 0) |
+		((u32)(64 - fractional_bits) << 10) |
+		((u32)rn << 5) | rd;
+}
+
+static u32 tcti_test_encode_fixed_simd(
+	const struct tcti_test_fixed_convert_operation *operation,
+	const struct tcti_test_fixed_simd_shape *shape, u8 fractional_bits,
+	u8 rd, u8 rn)
+{
+	u8 width = shape->access_size * BITS_PER_BYTE;
+	u8 immediate = 2 * width - fractional_bits;
+
+	return operation->simd_pattern |
+		(shape->scalar ? BIT(28) : 0) |
+		(shape->q ? BIT(30) : 0) |
+		((u32)immediate << 16) |
+		((u32)rn << 5) | rd;
+}
+
+static void tcti_expect_fixed_gpr_register_encodings(struct kunit *test,
+	const struct tcti_test_fixed_convert_operation *operation,
+	bool wide_integer, bool double_fp, u8 fractional_bits)
+{
+	u8 rd;
+	u8 rn;
+
+	for (rd = 0; rd < 32; rd++) {
+		for (rn = 0; rn < 32; rn++) {
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(tcti_test_encode_fixed_gpr(
+					operation, wide_integer, double_fp,
+					fractional_bits, rd, rn));
+
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_INT_CONVERT,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, operation->gpr_operation,
+				decoded.fp_int_op);
+			KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, fractional_bits,
+				decoded.shift_amount);
+		}
+	}
+}
+
+static void tcti_decode_exhaustive_fixed_point_convert_family(
+	struct kunit *test)
+{
+	size_t operation_index;
+	size_t shape_index;
+	u8 fractional_bits;
+	u8 rd;
+	u8 rn;
+	u8 wide_integer;
+	u8 double_fp;
+
+	for (operation_index = 0;
+	     operation_index < ARRAY_SIZE(tcti_test_fixed_convert_operations);
+	     operation_index++) {
+		const struct tcti_test_fixed_convert_operation *operation =
+			&tcti_test_fixed_convert_operations[operation_index];
+
+		for (wide_integer = 0; wide_integer < 2; wide_integer++) {
+			u8 width = wide_integer ? 64 : 32;
+
+			for (double_fp = 0; double_fp < 2; double_fp++) {
+				for (fractional_bits = 1;
+				     fractional_bits <= width;
+				     fractional_bits++) {
+					tcti_expect_fixed_gpr_register_encodings(test,
+						operation, wide_integer, double_fp,
+						fractional_bits);
+				}
+			}
+		}
+
+		for (shape_index = 0;
+		     shape_index < ARRAY_SIZE(tcti_test_fixed_simd_shapes);
+		     shape_index++) {
+			const struct tcti_test_fixed_simd_shape *shape =
+				&tcti_test_fixed_simd_shapes[shape_index];
+			u8 width = shape->access_size * BITS_PER_BYTE;
+
+			for (fractional_bits = 1; fractional_bits <= width;
+			     fractional_bits++) {
+				for (rd = 0; rd < 32; rd++) {
+					for (rn = 0; rn < 32; rn++) {
+						struct tcti_decoded_instruction decoded =
+							tcti_decode_aarch64(
+								tcti_test_encode_fixed_simd(
+									operation, shape,
+									fractional_bits,
+									rd, rn));
+
+						KUNIT_EXPECT_EQ(test,
+							TCTI_DECODE_FP_INT_CONVERT,
+							decoded.decode_class);
+						KUNIT_EXPECT_EQ(test,
+							operation->simd_operation,
+							decoded.fp_int_op);
+						KUNIT_EXPECT_EQ(test,
+							shape->scalar,
+							decoded.simd_scalar);
+						KUNIT_EXPECT_EQ(test, shape->q,
+							decoded.simd_q);
+						KUNIT_EXPECT_EQ(test,
+							shape->access_size,
+							decoded.access_size);
+						KUNIT_EXPECT_EQ(test,
+							fractional_bits,
+							decoded.shift_amount);
+					}
+				}
+			}
+		}
+	}
+}
+
+static void tcti_decode_rejects_reserved_fixed_point_convert_shapes(
+	struct kunit *test)
+{
+	struct tcti_test_fixed_simd_shape reserved_double = {
+		.scalar = false,
+		.q = false,
+		.access_size = sizeof(u64),
+	};
+	size_t operation_index;
+	u8 fractional_bits;
+	u8 rd;
+	u8 rn;
+
+	for (operation_index = 0;
+	     operation_index < ARRAY_SIZE(tcti_test_fixed_convert_operations);
+	     operation_index++) {
+		const struct tcti_test_fixed_convert_operation *operation =
+			&tcti_test_fixed_convert_operations[operation_index];
+
+		for (fractional_bits = 1; fractional_bits <= 64;
+		     fractional_bits++) {
+			for (rd = 0; rd < 32; rd++) {
+				for (rn = 0; rn < 32; rn++) {
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							tcti_test_encode_fixed_simd(
+								operation,
+								&reserved_double,
+								fractional_bits,
+								rd, rn));
+
+					KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+				}
+			}
+		}
+
+		for (fractional_bits = 1; fractional_bits <= 16;
+		     fractional_bits++) {
+			u8 immediate = 32 - fractional_bits;
+
+			for (rd = 0; rd < 32; rd++) {
+				for (rn = 0; rn < 32; rn++) {
+					u32 instruction = operation->simd_pattern |
+						BIT(30) |
+						((u32)immediate << 16) |
+						((u32)rn << 5) | rd;
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(instruction);
+
+					KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+					instruction |= BIT(28);
+					decoded = tcti_decode_aarch64(instruction);
+					KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+				}
+			}
+		}
+	}
+}
+
+static u64 tcti_test_fixed_power_bits(u8 access_size, u8 fractional_bits)
+{
+	if (access_size == sizeof(u32))
+		return (u64)(127 - fractional_bits) << 23;
+	return (u64)(1023 - fractional_bits) << 52;
+}
+
+static void tcti_switch_executes_complete_fixed_point_convert_family(
+	struct kunit *test)
+{
+	struct pt_regs regs = {};
+	size_t operation_index;
+	size_t shape_index;
+	u8 fractional_bits;
+	u8 wide_integer;
+	u8 double_fp;
+
+	for (operation_index = 0;
+	     operation_index < ARRAY_SIZE(tcti_test_fixed_convert_operations);
+	     operation_index++) {
+		const struct tcti_test_fixed_convert_operation *operation =
+			&tcti_test_fixed_convert_operations[operation_index];
+
+		for (wide_integer = 0; wide_integer < 2; wide_integer++) {
+			u8 integer_size = wide_integer ? sizeof(u64) : sizeof(u32);
+			u8 width = integer_size * BITS_PER_BYTE;
+
+			for (double_fp = 0; double_fp < 2; double_fp++) {
+				u8 fp_size = double_fp ? sizeof(u64) : sizeof(u32);
+
+				for (fractional_bits = 1;
+				     fractional_bits <= width;
+				     fractional_bits++) {
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							tcti_test_encode_fixed_gpr(
+								operation, wide_integer,
+								double_fp,
+								fractional_bits, 5, 3));
+					u64 power = tcti_test_fixed_power_bits(
+						fp_size, fractional_bits);
+					int ret;
+
+					regs.pc = 0xb000;
+					regs.regs[3] = 1;
+					regs.regs[9] = 0x55aa55aa55aa55aaULL;
+					current->thread.user_simd[6] = power;
+					current->thread.user_simd[7] = 0;
+					current->thread.user_simd[10] = U64_MAX;
+					current->thread.user_simd[11] = U64_MAX;
+					current->thread.user_fpsr = BIT(27);
+					ret = tcti_switch_debug_execute_decoded(
+						NULL, &regs, &decoded, NULL);
+
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					if (operation->int_to_fp) {
+						KUNIT_EXPECT_EQ(test, power,
+							current->thread.user_simd[10]);
+						KUNIT_EXPECT_EQ(test, 0ULL,
+							current->thread.user_simd[11]);
+					} else {
+						KUNIT_EXPECT_EQ(test, 1ULL,
+							regs.regs[5]);
+					}
+					KUNIT_EXPECT_EQ(test,
+						0x55aa55aa55aa55aaULL,
+						regs.regs[9]);
+					KUNIT_EXPECT_EQ(test, 0xb004ULL, regs.pc);
+					KUNIT_EXPECT_TRUE(test,
+						current->thread.user_fpsr & BIT(27));
+				}
+			}
+		}
+
+		for (shape_index = 0;
+		     shape_index < ARRAY_SIZE(tcti_test_fixed_simd_shapes);
+		     shape_index++) {
+			const struct tcti_test_fixed_simd_shape *shape =
+				&tcti_test_fixed_simd_shapes[shape_index];
+			u8 width = shape->access_size * BITS_PER_BYTE;
+
+			for (fractional_bits = 1; fractional_bits <= width;
+			     fractional_bits++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(
+						tcti_test_encode_fixed_simd(
+							operation, shape,
+							fractional_bits, 7, 7));
+				u64 power = tcti_test_fixed_power_bits(
+					shape->access_size, fractional_bits);
+				u64 lane = operation->int_to_fp ? 1 : power;
+				u64 expected = operation->int_to_fp ? power : 1;
+				u64 packed = shape->access_size == sizeof(u32) ?
+					lane | (lane << 32) : lane;
+				u64 expected_packed =
+					shape->access_size == sizeof(u32) ?
+					expected | (expected << 32) : expected;
+				int ret;
+
+				regs.pc = 0xc000;
+				regs.regs[9] = 0xaa55aa55aa55aa55ULL;
+				current->thread.user_simd[14] = packed;
+				current->thread.user_simd[15] = packed;
+				current->thread.user_simd[16] =
+					0x0123456789abcdefULL;
+				current->thread.user_simd[17] =
+					0xfedcba9876543210ULL;
+				current->thread.user_fpsr = BIT(27);
+				ret = tcti_switch_debug_execute_decoded(
+					NULL, &regs, &decoded, NULL);
+
+				KUNIT_ASSERT_EQ(test, 0, ret);
+				if (shape->scalar) {
+					KUNIT_EXPECT_EQ(test, expected,
+						current->thread.user_simd[14]);
+					KUNIT_EXPECT_EQ(test, 0ULL,
+						current->thread.user_simd[15]);
+				} else {
+					KUNIT_EXPECT_EQ(test, expected_packed,
+						current->thread.user_simd[14]);
+					KUNIT_EXPECT_EQ(test, shape->q ?
+						expected_packed : 0ULL,
+						current->thread.user_simd[15]);
+				}
+				KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL,
+					current->thread.user_simd[16]);
+				KUNIT_EXPECT_EQ(test, 0xfedcba9876543210ULL,
+					current->thread.user_simd[17]);
+				KUNIT_EXPECT_EQ(test, 0xaa55aa55aa55aa55ULL,
+					regs.regs[9]);
+				KUNIT_EXPECT_EQ(test, 0xc004ULL, regs.pc);
+				KUNIT_EXPECT_TRUE(test,
+					current->thread.user_fpsr & BIT(27));
+			}
+		}
+	}
+}
+
+static void tcti_switch_fixed_point_preserves_signed_and_fault_semantics(
+	struct kunit *test)
+{
+	const struct tcti_test_fixed_simd_shape *scalar_s =
+		&tcti_test_fixed_simd_shapes[0];
+	struct pt_regs regs = {
+		.pc = 0xd000,
+	};
+	struct tcti_decoded_instruction decoded;
+	int ret;
+
+	current->thread.user_fpcr = BIT(22) | BIT(23);
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd[14] = 0xbf000000U;
+	current->thread.user_simd[15] = U64_MAX;
+	decoded = tcti_decode_aarch64(tcti_test_encode_fixed_simd(
+		&tcti_test_fixed_convert_operations[0], scalar_s, 1, 7, 7));
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xffffffffULL, current->thread.user_simd[14]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[15]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(27));
+
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd[14] = 0xffffffffULL;
+	current->thread.user_simd[15] = U64_MAX;
+	decoded = tcti_decode_aarch64(tcti_test_encode_fixed_simd(
+		&tcti_test_fixed_convert_operations[2], scalar_s, 1, 7, 7));
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xbf000000ULL, current->thread.user_simd[14]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[15]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(27));
+
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd[14] = 0xbf000000U;
+	current->thread.user_simd[15] = U64_MAX;
+	decoded = tcti_decode_aarch64(tcti_test_encode_fixed_simd(
+		&tcti_test_fixed_convert_operations[1], scalar_s, 1, 7, 7));
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[14]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[15]);
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(0));
+	KUNIT_EXPECT_TRUE(test, current->thread.user_fpsr & BIT(27));
+	KUNIT_EXPECT_EQ(test, 0xd00cULL, regs.pc);
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
@@ -24240,6 +24648,10 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_rejects_reserved_simd_fp_int_convert_shapes),
 	KUNIT_CASE(tcti_decode_rejects_disabled_fp16_simd_int_conversions),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_fp_int_convert_family),
+	KUNIT_CASE(tcti_decode_exhaustive_fixed_point_convert_family),
+	KUNIT_CASE(tcti_decode_rejects_reserved_fixed_point_convert_shapes),
+	KUNIT_CASE(tcti_switch_executes_complete_fixed_point_convert_family),
+	KUNIT_CASE(tcti_switch_fixed_point_preserves_signed_and_fault_semantics),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_matrix),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_table_lookup_family),

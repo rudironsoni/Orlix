@@ -6880,10 +6880,14 @@ static u64 tcti_execute_native_fcvt_fixed(
 static int tcti_execute_fp_fixed_convert(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
+	bool int_to_fp = decoded->fp_int_op == TCTI_FP_INT_SCVTF_FIXED ||
+		decoded->fp_int_op == TCTI_FP_INT_UCVTF_FIXED;
 	u64 host_fpcr;
 	u64 host_fpsr;
 	u64 guest_fpsr;
-	u64 value = current->thread.user_simd[decoded->rn * 2];
+	u64 value = int_to_fp ? tcti_read_gpr_or_zero(regs, decoded->rn,
+		decoded->access_size) :
+		current->thread.user_simd[decoded->rn * 2];
 	u64 result;
 
 	preempt_disable();
@@ -6898,7 +6902,12 @@ static int tcti_execute_fp_fixed_convert(
 		  "r" (current->thread.user_fpsr)
 		: "memory");
 
-	result = tcti_execute_native_fcvt_fixed(decoded, value);
+	if (int_to_fp)
+		result = tcti_native_gpr_to_fp_fixed(decoded->fp_int_op,
+			decoded->access_size, decoded->result_size, value,
+			decoded->shift_amount);
+	else
+		result = tcti_execute_native_fcvt_fixed(decoded, value);
 
 	asm volatile(
 		"mrs %0, fpsr\n"
@@ -6911,7 +6920,12 @@ static int tcti_execute_fp_fixed_convert(
 	current->thread.user_fpsr = guest_fpsr;
 	preempt_enable();
 
-	tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size, result);
+	if (int_to_fp)
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+			result, 0);
+	else
+		tcti_write_gpr_or_zero(regs, decoded->rd, decoded->result_size,
+			result);
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -6923,14 +6937,34 @@ static int tcti_execute_fp_int_convert(
 	u64 result;
 	u64 host_fpcr;
 	u64 host_fpsr;
-	u64 guest_fpsr;
+	unsigned long guest_fpsr;
 	u64 vector_source[2];
 	u64 vector_result[2];
 	unsigned long native_fpsr;
 
-	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS_FIXED ||
-	    decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED)
+	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTZS_FIXED &&
+	    decoded->fp_int_op <= TCTI_FP_INT_UCVTF_FIXED)
 		return tcti_execute_fp_fixed_convert(regs, decoded);
+
+	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTZS_FIXED_SIMD &&
+	    decoded->fp_int_op <= TCTI_FP_INT_UCVTF_FIXED_SIMD) {
+		vector_source[0] = current->thread.user_simd[decoded->rn * 2];
+		vector_source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		guest_fpsr = current->thread.user_fpsr;
+		if (tcti_native_fixed_simd_fp_convert(decoded->fp_int_op,
+			decoded->simd_scalar, decoded->simd_q,
+			decoded->access_size, decoded->shift_amount,
+			vector_result, vector_source, current->thread.user_fpcr,
+			&guest_fpsr))
+			return -EOPNOTSUPP;
+		current->thread.user_fpsr = guest_fpsr;
+		tcti_write_simd_fp_register(decoded->rd,
+			decoded->simd_scalar ? decoded->access_size :
+			(decoded->simd_q ? 2 * sizeof(u64) : sizeof(u64)),
+			vector_result[0], vector_result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTNS_SIMD &&
 	    decoded->fp_int_op <= TCTI_FP_INT_SCVTF_SIMD) {

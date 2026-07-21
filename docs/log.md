@@ -7,6 +7,24 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete floating-point fixed-point conversions
+
+Completed the configured Armv8.0-A floating-point fixed-point conversion family
+across GPR, AdvSIMD scalar, and AdvSIMD vector forms. The production decoder and
+executor now cover signed and unsigned `FCVTZ` and `CVTF` in both directions for
+all W/X with S/D forms and scalar S/D plus vector 2S/4S/2D shapes. Every legal
+fractional-bit immediate uses the exact native AArch64 operation while preserving
+guest FPCR and FPSR state. KUnit covers 1,703,936 legal decode combinations,
+262,144 reserved one-lane double-vector encodings, 131,072 disabled FP16
+encodings, 1,664 every-immediate value executions, signed negative results,
+unsigned invalid-operation diagnostics, aliases, upper-lane clearing, unrelated
+register preservation, and PC progression. LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding source.
+OpenMinis ish-arm64 `gen.c` and `math.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied independent mask and gadget
+decomposition cross-checks. No external implementation source was copied. The
+kernel-owned coverage inventory now marks `FP_FIXED_POINT_CONVERT` complete.
+
 ## [2026-07-21] implement | Complete floating-point integer conversions
 
 Completed the configured Armv8.0-A floating-point integer-conversion family

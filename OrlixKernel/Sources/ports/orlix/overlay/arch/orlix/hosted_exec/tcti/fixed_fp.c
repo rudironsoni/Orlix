@@ -60,6 +60,201 @@ TCTI_DEFINE_FIXED_FP_64(tcti_native_fcvtzu_x_s, "fmov s0, w0", "fcvtzu",
 TCTI_DEFINE_FIXED_FP_64(tcti_native_fcvtzu_x_d, "fmov d0, x0", "fcvtzu",
 			"x0", "d0")
 
+#define TCTI_DEFINE_FIXED_GPR_TO_FP_32(name, operation, destination, source, \
+				       move) \
+	static __attribute__((naked)) u64 name(u64 value, u64 fractional_bits) \
+	{ \
+		asm(TCTI_FIXED_FP_TABLE_32(operation, destination, source) \
+		    "2:\n" \
+		    move "\n" \
+		    "ret\n"); \
+	}
+
+#define TCTI_DEFINE_FIXED_GPR_TO_FP_64(name, operation, destination, source, \
+				       move) \
+	static __attribute__((naked)) u64 name(u64 value, u64 fractional_bits) \
+	{ \
+		asm(TCTI_FIXED_FP_TABLE_32(operation, destination, source) \
+		    TCTI_FIXED_FP_TABLE_64(operation, destination, source) \
+		    "2:\n" \
+		    move "\n" \
+		    "ret\n"); \
+	}
+
+TCTI_DEFINE_FIXED_GPR_TO_FP_32(tcti_native_scvtf_s_w, "scvtf", "s0", "w0",
+			       "fmov w0, s0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_32(tcti_native_scvtf_d_w, "scvtf", "d0", "w0",
+			       "fmov x0, d0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_64(tcti_native_scvtf_s_x, "scvtf", "s0", "x0",
+			       "fmov w0, s0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_64(tcti_native_scvtf_d_x, "scvtf", "d0", "x0",
+			       "fmov x0, d0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_32(tcti_native_ucvtf_s_w, "ucvtf", "s0", "w0",
+			       "fmov w0, s0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_32(tcti_native_ucvtf_d_w, "ucvtf", "d0", "w0",
+			       "fmov x0, d0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_64(tcti_native_ucvtf_s_x, "ucvtf", "s0", "x0",
+			       "fmov w0, s0")
+TCTI_DEFINE_FIXED_GPR_TO_FP_64(tcti_native_ucvtf_d_x, "ucvtf", "d0", "x0",
+			       "fmov x0, d0")
+
+u64 tcti_native_gpr_to_fp_fixed(enum tcti_fp_int_convert_op operation,
+	u8 access_size, u8 result_size, u64 source, u8 fractional_bits)
+{
+	bool unsigned_conversion = operation == TCTI_FP_INT_UCVTF_FIXED;
+
+	if (access_size == sizeof(u32)) {
+		if (result_size == sizeof(u32))
+			return unsigned_conversion ?
+				tcti_native_ucvtf_s_w(source, fractional_bits) :
+				tcti_native_scvtf_s_w(source, fractional_bits);
+		return unsigned_conversion ?
+			tcti_native_ucvtf_d_w(source, fractional_bits) :
+			tcti_native_scvtf_d_w(source, fractional_bits);
+	}
+
+	if (result_size == sizeof(u32))
+		return unsigned_conversion ?
+			tcti_native_ucvtf_s_x(source, fractional_bits) :
+			tcti_native_scvtf_s_x(source, fractional_bits);
+	return unsigned_conversion ?
+		tcti_native_ucvtf_d_x(source, fractional_bits) :
+		tcti_native_scvtf_d_x(source, fractional_bits);
+}
+
+#define TCTI_FIXED_SIMD_TABLE_32(operation, destination, source) \
+	"sub w2, w2, #1\n" \
+	"adr x3, 1f\n" \
+	"add x3, x3, x2, lsl #3\n" \
+	"br x3\n" \
+	"1:\n" \
+	".irp fbits,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16," \
+		"17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32\n" \
+	operation " " destination ", " source ", #\\fbits\n" \
+	"b 2f\n" \
+	".endr\n"
+
+#define TCTI_FIXED_SIMD_TABLE_64(operation, destination, source) \
+	".irp fbits,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48," \
+		"49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64\n" \
+	operation " " destination ", " source ", #\\fbits\n" \
+	"b 2f\n" \
+	".endr\n"
+
+#define TCTI_DEFINE_FIXED_SIMD_32(name, operation, destination, source) \
+	static __attribute__((naked)) void name(u64 result[2], \
+		const u64 input[2], u64 fractional_bits) \
+	{ \
+		asm("ldr q0, [x1]\n" \
+		    TCTI_FIXED_SIMD_TABLE_32(operation, destination, source) \
+		    "2:\n" \
+		    "str q0, [x0]\n" \
+		    "ret\n"); \
+	}
+
+#define TCTI_DEFINE_FIXED_SIMD_64(name, operation, destination, source) \
+	static __attribute__((naked)) void name(u64 result[2], \
+		const u64 input[2], u64 fractional_bits) \
+	{ \
+		asm("ldr q0, [x1]\n" \
+		    TCTI_FIXED_SIMD_TABLE_32(operation, destination, source) \
+		    TCTI_FIXED_SIMD_TABLE_64(operation, destination, source) \
+		    "2:\n" \
+		    "str q0, [x0]\n" \
+		    "ret\n"); \
+	}
+
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzs_s, "fcvtzs", "s0", "s0")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_fcvtzs_d, "fcvtzs", "d0", "d0")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzs_2s, "fcvtzs", "v0.2s", "v0.2s")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzs_4s, "fcvtzs", "v0.4s", "v0.4s")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_fcvtzs_2d, "fcvtzs", "v0.2d", "v0.2d")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzu_s, "fcvtzu", "s0", "s0")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_fcvtzu_d, "fcvtzu", "d0", "d0")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzu_2s, "fcvtzu", "v0.2s", "v0.2s")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_fcvtzu_4s, "fcvtzu", "v0.4s", "v0.4s")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_fcvtzu_2d, "fcvtzu", "v0.2d", "v0.2d")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_scvtf_s, "scvtf", "s0", "s0")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_scvtf_d, "scvtf", "d0", "d0")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_scvtf_2s, "scvtf", "v0.2s", "v0.2s")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_scvtf_4s, "scvtf", "v0.4s", "v0.4s")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_scvtf_2d, "scvtf", "v0.2d", "v0.2d")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_ucvtf_s, "ucvtf", "s0", "s0")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_ucvtf_d, "ucvtf", "d0", "d0")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_ucvtf_2s, "ucvtf", "v0.2s", "v0.2s")
+TCTI_DEFINE_FIXED_SIMD_32(tcti_fixed_ucvtf_4s, "ucvtf", "v0.4s", "v0.4s")
+TCTI_DEFINE_FIXED_SIMD_64(tcti_fixed_ucvtf_2d, "ucvtf", "v0.2d", "v0.2d")
+
+typedef void (*tcti_fixed_simd_fn)(u64 result[2], const u64 source[2],
+	u64 fractional_bits);
+
+static tcti_fixed_simd_fn tcti_fixed_simd_function(
+	enum tcti_fp_int_convert_op operation, bool scalar, bool q,
+	u8 access_size)
+{
+#define TCTI_FIXED_SIMD_SELECT(prefix) \
+	(access_size == sizeof(u64) ? \
+		(scalar ? prefix##_d : prefix##_2d) : \
+		(scalar ? prefix##_s : (q ? prefix##_4s : prefix##_2s)))
+
+	switch (operation) {
+	case TCTI_FP_INT_FCVTZS_FIXED_SIMD:
+		return TCTI_FIXED_SIMD_SELECT(tcti_fixed_fcvtzs);
+	case TCTI_FP_INT_FCVTZU_FIXED_SIMD:
+		return TCTI_FIXED_SIMD_SELECT(tcti_fixed_fcvtzu);
+	case TCTI_FP_INT_SCVTF_FIXED_SIMD:
+		return TCTI_FIXED_SIMD_SELECT(tcti_fixed_scvtf);
+	case TCTI_FP_INT_UCVTF_FIXED_SIMD:
+		return TCTI_FIXED_SIMD_SELECT(tcti_fixed_ucvtf);
+	default:
+		return NULL;
+	}
+
+#undef TCTI_FIXED_SIMD_SELECT
+}
+
+int tcti_native_fixed_simd_fp_convert(
+	enum tcti_fp_int_convert_op operation, bool scalar, bool q,
+	u8 access_size, u8 fractional_bits, u64 result[2],
+	const u64 source[2], unsigned long fpcr, unsigned long *fpsr)
+{
+	tcti_fixed_simd_fn function;
+	unsigned long guest_fpsr;
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+
+	if (!result || !source || !fpsr ||
+	    (access_size != sizeof(u32) && access_size != sizeof(u64)) ||
+	    !fractional_bits || fractional_bits > access_size * BITS_PER_BYTE)
+		return -EINVAL;
+
+	function = tcti_fixed_simd_function(operation, scalar, q, access_size);
+	if (!function)
+		return -EINVAL;
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     "msr fpcr, %2\n"
+		     "msr fpsr, %3\n"
+		     "isb\n"
+		     : "=&r" (host_fpcr), "=&r" (host_fpsr)
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+	function(result, source, fractional_bits);
+	asm volatile("mrs %0, fpsr\n"
+		     "msr fpcr, %1\n"
+		     "msr fpsr, %2\n"
+		     "isb\n"
+		     : "=&r" (guest_fpsr)
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+
+	return 0;
+}
+
 #define TCTI_NATIVE_FP_ONE_SOURCE_RUN(instruction) \
 	({ \
 		asm volatile("ldr q0, [%[source]]\n" \

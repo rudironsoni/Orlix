@@ -358,6 +358,9 @@
 #define AARCH64_FCVTZU_W_D_PATTERN 0x1e790000U
 #define AARCH64_FCVTZ_FIXED_GPR_MASK 0x7f3e0000U
 #define AARCH64_FCVTZ_FIXED_GPR_PATTERN 0x1e180000U
+#define AARCH64_CVTF_FIXED_GPR_PATTERN 0x1e020000U
+#define AARCH64_FP_FIXED_SIMD_SCALAR_MASK 0xdf80fc00U
+#define AARCH64_FP_FIXED_SIMD_VECTOR_MASK 0x9f80fc00U
 #define AARCH64_FP_INT_SIMD_SCALAR_MASK 0xdfbffc00U
 #define AARCH64_FP_INT_SIMD_VECTOR_MASK 0x9fbffc00U
 #define AARCH64_FCVTZS_SIMD_SCALAR_MASK 0xffbffc00U
@@ -3660,10 +3663,14 @@ fp_int_gpr_unclaimed:
 	}
 
 	if ((instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
-	    AARCH64_FCVTZ_FIXED_GPR_PATTERN) {
+	    AARCH64_FCVTZ_FIXED_GPR_PATTERN ||
+	    (instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
+	    AARCH64_CVTF_FIXED_GPR_PATTERN) {
 		u8 scale = (instruction >> 10) & 0x3fU;
 		u8 type = (instruction >> 22) & 0x3U;
 		bool is_64bit = instruction & BIT(31);
+		bool int_to_fp = (instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
+			AARCH64_CVTF_FIXED_GPR_PATTERN;
 
 		if (type > 1)
 			return decoded;
@@ -3673,13 +3680,60 @@ fp_int_gpr_unclaimed:
 		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = instruction & BIT(22) ? sizeof(u64) :
-							 sizeof(u32);
-		decoded.result_size = is_64bit ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = int_to_fp ?
+			(is_64bit ? sizeof(u64) : sizeof(u32)) :
+			(instruction & BIT(22) ? sizeof(u64) : sizeof(u32));
+		decoded.result_size = int_to_fp ?
+			(instruction & BIT(22) ? sizeof(u64) : sizeof(u32)) :
+			(is_64bit ? sizeof(u64) : sizeof(u32));
 		decoded.shift_amount = 64 - scale;
 		decoded.simd_fp = true;
-		decoded.fp_int_op = instruction & BIT(16) ?
-			TCTI_FP_INT_FCVTZU_FIXED : TCTI_FP_INT_FCVTZS_FIXED;
+		if (int_to_fp)
+			decoded.fp_int_op = instruction & BIT(16) ?
+				TCTI_FP_INT_UCVTF_FIXED :
+				TCTI_FP_INT_SCVTF_FIXED;
+		else
+			decoded.fp_int_op = instruction & BIT(16) ?
+				TCTI_FP_INT_FCVTZU_FIXED :
+				TCTI_FP_INT_FCVTZS_FIXED;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_FP_FIXED_SIMD_SCALAR_MASK) ==
+	    0x5f00fc00U ||
+	    (instruction & AARCH64_FP_FIXED_SIMD_SCALAR_MASK) ==
+	    0x5f00e400U ||
+	    (instruction & AARCH64_FP_FIXED_SIMD_VECTOR_MASK) ==
+	    0x0f00fc00U ||
+	    (instruction & AARCH64_FP_FIXED_SIMD_VECTOR_MASK) ==
+	    0x0f00e400U) {
+		u8 immediate = (instruction >> 16) & 0x7fU;
+		bool scalar = instruction & BIT(28);
+		bool int_to_fp = !(instruction & BIT(12));
+		bool is_double = immediate & BIT(6);
+
+		if (!(immediate & (BIT(5) | BIT(6))))
+			return decoded;
+		if (!scalar && is_double && !(instruction & BIT(30)))
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = is_double ? sizeof(u64) : sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.shift_amount = (is_double ? 128 : 64) - immediate;
+		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
+		decoded.simd_q = instruction & BIT(30);
+		if (int_to_fp)
+			decoded.fp_int_op = instruction & BIT(29) ?
+				TCTI_FP_INT_UCVTF_FIXED_SIMD :
+				TCTI_FP_INT_SCVTF_FIXED_SIMD;
+		else
+			decoded.fp_int_op = instruction & BIT(29) ?
+				TCTI_FP_INT_FCVTZU_FIXED_SIMD :
+				TCTI_FP_INT_FCVTZS_FIXED_SIMD;
 		return decoded;
 	}
 
