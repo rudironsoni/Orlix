@@ -110,12 +110,30 @@ static bool waitpid_observes_brk_as_sigtrap(void)
 	return WIFSIGNALED(status) && WTERMSIG(status) == SIGTRAP;
 }
 
+static bool waitpid_observes_hlt_as_sigill(void)
+{
+	pid_t child;
+	int status = 0;
+
+	child = fork();
+	if (child == 0) {
+		__asm__ volatile("hlt #0");
+		_exit(127);
+	}
+	if (child < 0)
+		return false;
+	if (waitpid(child, &status, 0) != child)
+		return false;
+
+	return WIFSIGNALED(status) && WTERMSIG(status) == SIGILL;
+}
+
 int main(void)
 {
 	static const char message[] = "ORLIX-SIGNAL-WAIT-PROBE\n";
 
 	(void)write(STDOUT_FILENO, message, sizeof(message) - 1);
-	orlix_test_plan(5);
+	orlix_test_plan(6);
 
 	orlix_test_result(signal_handler_runs(),
 			  "signal handler runs for delivered signal");
@@ -127,6 +145,8 @@ int main(void)
 			  "waitpid observes signal termination status");
 	orlix_test_result(waitpid_observes_brk_as_sigtrap(),
 			  "AArch64 BRK is delivered as SIGTRAP");
+	orlix_test_result(waitpid_observes_hlt_as_sigill(),
+			  "AArch64 HLT is delivered as SIGILL");
 
 	orlix_test_exit();
 }

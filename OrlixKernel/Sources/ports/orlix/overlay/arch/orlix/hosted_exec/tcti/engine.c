@@ -515,6 +515,7 @@ tcti_decoded_ends_block(const struct tcti_decoded_instruction *decoded)
 	switch (decoded->decode_class) {
 	case TCTI_DECODE_SVC:
 	case TCTI_DECODE_BRK:
+	case TCTI_DECODE_HLT:
 	case TCTI_DECODE_BARRIER:
 	case TCTI_DECODE_CACHE_MAINTENANCE:
 	case TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
@@ -600,7 +601,8 @@ static int tcti_build_straight_line_block(struct mm_struct *mm,
 
 		decoded = tcti_decode_aarch64(instruction);
 		if (decoded.decode_class == TCTI_DECODE_SVC ||
-		    decoded.decode_class == TCTI_DECODE_BRK) {
+		    decoded.decode_class == TCTI_DECODE_BRK ||
+		    decoded.decode_class == TCTI_DECODE_HLT) {
 			if (!count && first_exit_class)
 				*first_exit_class = decoded.decode_class;
 			return count ? 0 : -EINTR;

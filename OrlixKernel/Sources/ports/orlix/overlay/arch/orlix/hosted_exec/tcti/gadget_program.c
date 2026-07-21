@@ -45,7 +45,8 @@ int tcti_lower_decoded_instruction(
 		return -EINVAL;
 	if (decoded->decode_class == TCTI_DECODE_UNSUPPORTED ||
 	    decoded->decode_class == TCTI_DECODE_SVC ||
-	    decoded->decode_class == TCTI_DECODE_BRK)
+	    decoded->decode_class == TCTI_DECODE_BRK ||
+	    decoded->decode_class == TCTI_DECODE_HLT)
 		return -EOPNOTSUPP;
 
 	*word_count = 0;

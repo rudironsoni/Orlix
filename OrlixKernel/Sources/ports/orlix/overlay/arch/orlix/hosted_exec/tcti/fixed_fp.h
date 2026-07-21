@@ -30,7 +30,12 @@ int tcti_native_simd_fp_scalar_unary(
 	enum tcti_simd_vector_arithmetic_op operation, u8 access_size,
 	u8 result_size, u64 result[2], const u64 source[2], unsigned long fpcr,
 	unsigned long *fpsr);
-int tcti_native_simd_fp_pairwise(
+int tcti_native_simd_fp_two_register(
+	enum tcti_simd_vector_arithmetic_op operation, u8 access_size,
+	u8 result_size, u8 source_index, u8 destination_index, u64 result[2],
+	const u64 source[2], const u64 accumulator[2], unsigned long fpcr,
+	unsigned long *fpsr);
+int tcti_native_simd_fp_reduction(
 	enum tcti_simd_reduction_op operation, u8 access_size, u64 result[2],
 	const u64 source[2], unsigned long fpcr, unsigned long *fpsr);
 

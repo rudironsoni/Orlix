@@ -578,12 +578,12 @@ enum tcti_native_simd_fp_shape {
 		} \
 		break
 
-#define TCTI_NATIVE_SIMD_FP_ACCUMULATE_RUN(instruction) \
+#define TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(asm_instruction) \
 	({ \
 		asm volatile("ldr q0, [%[left]]\n" \
 			     "ldr q1, [%[right]]\n" \
 			     "ldr q2, [%[accumulator]]\n" \
-			     instruction "\n" \
+			     asm_instruction "\n" \
 			     "str q2, [%[result]]\n" \
 			     : \
 			     : [result] "r" (result), [left] "r" (left), \
@@ -592,18 +592,24 @@ enum tcti_native_simd_fp_shape {
 			     : "v0", "v1", "v2", "memory"); \
 	})
 
-#define TCTI_NATIVE_SIMD_FP_ACCUMULATE_CASE(operation, vector_2s, vector_4s, \
-					    vector_2d) \
+#define TCTI_NATIVE_SIMD_FP_ACCUMULATE_CASE(operation, scalar_s, scalar_d, \
+					    vector_2s, vector_4s, vector_2d) \
 	case operation: \
 		switch (shape) { \
+		case TCTI_NATIVE_SIMD_FP_SCALAR_S: \
+			TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(scalar_s); \
+			break; \
+		case TCTI_NATIVE_SIMD_FP_SCALAR_D: \
+			TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(scalar_d); \
+			break; \
 		case TCTI_NATIVE_SIMD_FP_VECTOR_2S: \
-			TCTI_NATIVE_SIMD_FP_ACCUMULATE_RUN(vector_2s); \
+			TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(vector_2s); \
 			break; \
 		case TCTI_NATIVE_SIMD_FP_VECTOR_4S: \
-			TCTI_NATIVE_SIMD_FP_ACCUMULATE_RUN(vector_4s); \
+			TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(vector_4s); \
 			break; \
 		case TCTI_NATIVE_SIMD_FP_VECTOR_2D: \
-			TCTI_NATIVE_SIMD_FP_ACCUMULATE_RUN(vector_2d); \
+			TCTI_NATIVE_SIMD_FP_ACCUMULATE_EXECUTE(vector_2d); \
 			break; \
 		default: \
 			ret = -EINVAL; \
@@ -729,12 +735,15 @@ int tcti_native_simd_fp_three_same(
 		"fmin v0.2s, v0.2s, v1.2s", "fmin v0.4s, v0.4s, v1.4s",
 		"fmin v0.2d, v0.2d, v1.2d");
 	TCTI_NATIVE_SIMD_FP_ACCUMULATE_CASE(TCTI_SIMD_ARITH_FMLA,
+		"fmla s2, s0, v1.s[0]", "fmla d2, d0, v1.d[0]",
 		"fmla v2.2s, v0.2s, v1.2s", "fmla v2.4s, v0.4s, v1.4s",
 		"fmla v2.2d, v0.2d, v1.2d");
 	TCTI_NATIVE_SIMD_FP_ACCUMULATE_CASE(TCTI_SIMD_ARITH_FMLS,
+		"fmls s2, s0, v1.s[0]", "fmls d2, d0, v1.d[0]",
 		"fmls v2.2s, v0.2s, v1.2s", "fmls v2.4s, v0.4s, v1.4s",
 		"fmls v2.2d, v0.2d, v1.2d");
-	TCTI_NATIVE_SIMD_FP_VECTOR_CASE(TCTI_SIMD_ARITH_FMUL,
+	TCTI_NATIVE_SIMD_FP_CASE(TCTI_SIMD_ARITH_FMUL,
+		"fmul s0, s0, s1", "fmul d0, d0, d1",
 		"fmul v0.2s, v0.2s, v1.2s", "fmul v0.4s, v0.4s, v1.4s",
 		"fmul v0.2d, v0.2d, v1.2d");
 	TCTI_NATIVE_SIMD_FP_VECTOR_CASE(TCTI_SIMD_ARITH_FSUB,
@@ -839,7 +848,176 @@ int tcti_native_simd_fp_scalar_unary(
 
 #undef TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN
 
-#define TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN(instruction) \
+#define TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			 instruction "\n" \
+			 "str q0, [%[result]]\n" \
+			 : \
+			 : [result] "r" (result), [source] "r" (source) \
+			 : "v0", "memory"); \
+	})
+
+#define TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN1(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			 "ldr q1, [%[accumulator]]\n" \
+			 instruction "\n" \
+			 "str q1, [%[result]]\n" \
+			 : \
+			 : [result] "r" (result), [source] "r" (source), \
+			   [accumulator] "r" (accumulator) \
+			 : "v0", "v1", "memory"); \
+	})
+
+#define TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(operation_value, s2, s4, d2) \
+	case operation_value: \
+		if (access_size == sizeof(u32) && result_size == sizeof(u64)) \
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(s2); \
+		else if (access_size == sizeof(u32)) \
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(s4); \
+		else \
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(d2); \
+		break
+
+int tcti_native_simd_fp_two_register(
+	enum tcti_simd_vector_arithmetic_op operation, u8 access_size,
+	u8 result_size, u8 source_index, u8 destination_index, u64 result[2],
+	const u64 source[2], const u64 accumulator[2], unsigned long fpcr,
+	unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	bool convert = operation == TCTI_SIMD_ARITH_FCVTN ||
+		operation == TCTI_SIMD_ARITH_FCVTL;
+	bool uint_estimate = operation == TCTI_SIMD_ARITH_URECPE ||
+		operation == TCTI_SIMD_ARITH_URSQRTE;
+	int ret = 0;
+
+	if (!result || !source || !accumulator || !fpsr)
+		return -EINVAL;
+	if (uint_estimate && access_size != sizeof(u32))
+		return -EINVAL;
+	if (!convert && ((access_size == sizeof(u32) &&
+		(result_size == sizeof(u64) || result_size == 2 * sizeof(u64))) ||
+		(access_size == sizeof(u64) && result_size == 2 * sizeof(u64)))) {
+		if (source_index || destination_index)
+			return -EINVAL;
+	} else if (operation == TCTI_SIMD_ARITH_FCVTN) {
+		if (access_size != sizeof(u64) || source_index ||
+		    (destination_index ? result_size != 2 * sizeof(u64) :
+		     result_size != sizeof(u64)))
+			return -EINVAL;
+	} else if (operation == TCTI_SIMD_ARITH_FCVTL) {
+		if (access_size != sizeof(u32) || result_size != 2 * sizeof(u64) ||
+		    destination_index || source_index > 1)
+			return -EINVAL;
+	} else {
+		return -EINVAL;
+	}
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     : : "r" (fpcr), "r" (*fpsr) : "memory");
+
+	switch (operation) {
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FABS,
+		"fabs v0.2s, v0.2s", "fabs v0.4s, v0.4s",
+		"fabs v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FNEG,
+		"fneg v0.2s, v0.2s", "fneg v0.4s, v0.4s",
+		"fneg v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FSQRT,
+		"fsqrt v0.2s, v0.2s", "fsqrt v0.4s, v0.4s",
+		"fsqrt v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRECPE,
+		"frecpe v0.2s, v0.2s", "frecpe v0.4s, v0.4s",
+		"frecpe v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRSQRTE,
+		"frsqrte v0.2s, v0.2s", "frsqrte v0.4s, v0.4s",
+		"frsqrte v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTN,
+		"frintn v0.2s, v0.2s", "frintn v0.4s, v0.4s",
+		"frintn v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTP,
+		"frintp v0.2s, v0.2s", "frintp v0.4s, v0.4s",
+		"frintp v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTM,
+		"frintm v0.2s, v0.2s", "frintm v0.4s, v0.4s",
+		"frintm v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTZ,
+		"frintz v0.2s, v0.2s", "frintz v0.4s, v0.4s",
+		"frintz v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTA,
+		"frinta v0.2s, v0.2s", "frinta v0.4s, v0.4s",
+		"frinta v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTX,
+		"frintx v0.2s, v0.2s", "frintx v0.4s, v0.4s",
+		"frintx v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FRINTI,
+		"frinti v0.2s, v0.2s", "frinti v0.4s, v0.4s",
+		"frinti v0.2d, v0.2d");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FCMEQ_ZERO,
+		"fcmeq v0.2s, v0.2s, #0.0", "fcmeq v0.4s, v0.4s, #0.0",
+		"fcmeq v0.2d, v0.2d, #0.0");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FCMGE_ZERO,
+		"fcmge v0.2s, v0.2s, #0.0", "fcmge v0.4s, v0.4s, #0.0",
+		"fcmge v0.2d, v0.2d, #0.0");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FCMGT_ZERO,
+		"fcmgt v0.2s, v0.2s, #0.0", "fcmgt v0.4s, v0.4s, #0.0",
+		"fcmgt v0.2d, v0.2d, #0.0");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FCMLE_ZERO,
+		"fcmle v0.2s, v0.2s, #0.0", "fcmle v0.4s, v0.4s, #0.0",
+		"fcmle v0.2d, v0.2d, #0.0");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_FCMLT_ZERO,
+		"fcmlt v0.2s, v0.2s, #0.0", "fcmlt v0.4s, v0.4s, #0.0",
+		"fcmlt v0.2d, v0.2d, #0.0");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_URECPE,
+		"urecpe v0.2s, v0.2s", "urecpe v0.4s, v0.4s", "");
+	TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE(TCTI_SIMD_ARITH_URSQRTE,
+		"ursqrte v0.2s, v0.2s", "ursqrte v0.4s, v0.4s", "");
+	case TCTI_SIMD_ARITH_FCVTN:
+		if (destination_index)
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN1(
+				"fcvtn2 v1.4s, v0.2d");
+		else
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(
+				"fcvtn v0.2s, v0.2d");
+		break;
+	case TCTI_SIMD_ARITH_FCVTL:
+		if (source_index)
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(
+				"fcvtl2 v0.2d, v0.4s");
+		else
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(
+				"fcvtl v0.2d, v0.2s");
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     : : "r" (host_fpcr), "r" (host_fpsr) : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+#undef TCTI_NATIVE_SIMD_FP_TWO_REGISTER_CASE
+#undef TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN1
+#undef TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0
+
+#define TCTI_NATIVE_SIMD_FP_REDUCTION_RUN(instruction) \
 	({ \
 		asm volatile("ldr q0, [%[source]]\n" \
 			     instruction "\n" \
@@ -849,7 +1027,7 @@ int tcti_native_simd_fp_scalar_unary(
 			     : "v0", "memory"); \
 	})
 
-int tcti_native_simd_fp_pairwise(
+int tcti_native_simd_fp_reduction(
 	enum tcti_simd_reduction_op operation, u8 access_size, u64 result[2],
 	const u64 source[2], unsigned long fpcr, unsigned long *fpsr)
 {
@@ -860,6 +1038,9 @@ int tcti_native_simd_fp_pairwise(
 
 	if (!result || !source || !fpsr ||
 	    (access_size != sizeof(u32) && access_size != sizeof(u64)))
+		return -EINVAL;
+	if (operation >= TCTI_SIMD_REDUCTION_FMAXNMV &&
+	    access_size != sizeof(u32))
 		return -EINVAL;
 
 	preempt_disable();
@@ -876,33 +1057,45 @@ int tcti_native_simd_fp_pairwise(
 	switch (operation) {
 	case TCTI_SIMD_REDUCTION_FADDP:
 		if (access_size == sizeof(u32))
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("faddp s0, v0.2s");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("faddp s0, v0.2s");
 		else
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("faddp d0, v0.2d");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("faddp d0, v0.2d");
 		break;
 	case TCTI_SIMD_REDUCTION_FMAXNMP:
 		if (access_size == sizeof(u32))
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxnmp s0, v0.2s");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxnmp s0, v0.2s");
 		else
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxnmp d0, v0.2d");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxnmp d0, v0.2d");
 		break;
 	case TCTI_SIMD_REDUCTION_FMAXP:
 		if (access_size == sizeof(u32))
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxp s0, v0.2s");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxp s0, v0.2s");
 		else
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxp d0, v0.2d");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxp d0, v0.2d");
 		break;
 	case TCTI_SIMD_REDUCTION_FMINNMP:
 		if (access_size == sizeof(u32))
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminnmp s0, v0.2s");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminnmp s0, v0.2s");
 		else
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminnmp d0, v0.2d");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminnmp d0, v0.2d");
 		break;
 	case TCTI_SIMD_REDUCTION_FMINP:
 		if (access_size == sizeof(u32))
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminp s0, v0.2s");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminp s0, v0.2s");
 		else
-			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminp d0, v0.2d");
+			TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminp d0, v0.2d");
+		break;
+	case TCTI_SIMD_REDUCTION_FMAXNMV:
+		TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxnmv s0, v0.4s");
+		break;
+	case TCTI_SIMD_REDUCTION_FMAXV:
+		TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fmaxv s0, v0.4s");
+		break;
+	case TCTI_SIMD_REDUCTION_FMINNMV:
+		TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminnmv s0, v0.4s");
+		break;
+	case TCTI_SIMD_REDUCTION_FMINV:
+		TCTI_NATIVE_SIMD_FP_REDUCTION_RUN("fminv s0, v0.4s");
 		break;
 	default:
 		ret = -EINVAL;
@@ -920,3 +1113,5 @@ int tcti_native_simd_fp_pairwise(
 	preempt_enable();
 	return ret;
 }
+
+#undef TCTI_NATIVE_SIMD_FP_REDUCTION_RUN

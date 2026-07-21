@@ -3,9 +3,27 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-21
+updated: 2026-07-22
 ---
 # Orlix Knowledge Log
+
+## [2026-07-22] implement | Expand configured AArch64 ISA coverage
+
+Expanded the guest profile and direct production-path proof for the configured
+Armv8.0-A floating-point, AdvSIMD, AES, polynomial-multiply, SHA-1, SHA-2,
+CRC32, SHA-3, SM3, SM4, and SHA-512 surface. The kernel-owned inventory reports
+56 of 56 instruction families complete with zero ratcheted gaps. KUnit now
+covers 446 cases with zero failures or skips, including exhaustive SVC, BRK,
+and HLT immediate decoding and structured HLT state. Linux kselftest proves
+BRK reaches `SIGTRAP` while HLT reaches `SIGILL`, and the app-hosted run reaches
+`ORLIX-KSELFTEST-END` before its XCTest reports one passed test with zero
+failures. The owning `xcodebuild` command still requires interruption after the
+native pass because test-session cleanup does not terminate, so clean gate
+termination and the broader ISA-completeness objective remain open. LLVM
+AArch64 TableGen 22.1.8 and OpenMinis ish-arm64 commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent inventory and
+encoding cross-checks. No external implementation source was copied.
+The TCTI component catalog summary now identifies its AArch64 EL0 ownership.
 
 ## [2026-07-21] implement | Complete AdvSIMD vector three-different coverage
 
