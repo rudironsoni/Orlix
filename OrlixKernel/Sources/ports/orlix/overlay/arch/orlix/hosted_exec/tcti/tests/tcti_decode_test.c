@@ -2066,6 +2066,103 @@ static void tcti_decode_recognizes_load_store_exclusive_class(struct kunit *test
 	KUNIT_EXPECT_EQ(test, 8U, decoded.rn);
 }
 
+static bool tcti_test_load_store_exclusive_shape_is_legal(
+	u8 size, bool o2, bool load, bool o1, u8 rs, bool o0, u8 rt2)
+{
+	if (o2)
+		return !o1 && o0 && rs == 31 && rt2 == 31;
+	if (o1)
+		return size >= 2 && (!load || rs == 31);
+	return rt2 == 31 && (!load || rs == 31);
+}
+
+static u32 tcti_test_encode_load_store_exclusive(
+	u8 size, bool o2, bool load, bool o1, u8 rs, bool o0, u8 rt2,
+	u8 rn, u8 rt)
+{
+	return 0x08000000U | ((u32)size << 30) | ((u32)o2 << 23) |
+	       ((u32)load << 22) | ((u32)o1 << 21) | ((u32)rs << 16) |
+	       ((u32)o0 << 15) | ((u32)rt2 << 10) | ((u32)rn << 5) | rt;
+}
+
+static void tcti_expect_load_store_exclusive_control_shape(
+	struct kunit *test, u8 size, bool o2, bool load, bool o1)
+{
+	struct tcti_decoded_instruction decoded;
+	u32 instruction;
+	u8 rs;
+	u8 o0;
+	u8 rt2;
+
+	for (rs = 0; rs < 32; rs++) {
+		for (o0 = 0; o0 < 2; o0++) {
+			for (rt2 = 0; rt2 < 32; rt2++) {
+				bool legal =
+					tcti_test_load_store_exclusive_shape_is_legal(
+						size, o2, load, o1, rs, o0, rt2);
+
+				instruction = tcti_test_encode_load_store_exclusive(
+					size, o2, load, o1, rs, o0, rt2, 9, 10);
+				decoded = tcti_decode_aarch64(instruction);
+				if (!legal) {
+					KUNIT_ASSERT_EQ_MSG(test,
+						TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class,
+						"instruction %#x", instruction);
+					continue;
+				}
+
+				KUNIT_ASSERT_EQ_MSG(test,
+					TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
+					decoded.decode_class,
+					"instruction %#x", instruction);
+				KUNIT_EXPECT_EQ(test, o1 && !o2, decoded.pair);
+				KUNIT_EXPECT_EQ(test, !o2, decoded.exclusive);
+				KUNIT_EXPECT_EQ(test, load && o0,
+						decoded.acquire);
+				KUNIT_EXPECT_EQ(test, !load && o0,
+						decoded.release);
+				KUNIT_EXPECT_EQ(test, rt2, decoded.rt2);
+			}
+		}
+	}
+}
+
+static void tcti_decode_exhaustive_load_store_exclusive_family(
+	struct kunit *test)
+{
+	u8 size;
+	u8 o2;
+	u8 load;
+	u8 o1;
+
+	for (size = 0; size < 4; size++)
+		for (o2 = 0; o2 < 2; o2++)
+			for (load = 0; load < 2; load++)
+				for (o1 = 0; o1 < 2; o1++)
+					tcti_expect_load_store_exclusive_control_shape(
+						test, size, o2, load, o1);
+}
+
+static void tcti_decode_load_store_exclusive_all_register_fields(
+	struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	u8 rn;
+	u8 rt;
+
+	for (rn = 0; rn < 32; rn++) {
+		for (rt = 0; rt < 32; rt++) {
+			decoded = tcti_decode_aarch64(0xc85f7c00U |
+						      ((u32)rn << 5) | rt);
+			KUNIT_ASSERT_EQ(test, TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
+					decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+		}
+	}
+}
+
 static void tcti_decode_recognizes_simd_modified_immediates(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -11369,6 +11466,144 @@ static void tcti_switch_fails_store_exclusive_without_reservation(struct kunit *
 	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[10]);
 	KUNIT_EXPECT_EQ(test, 0, current->thread.user_exclusive_valid);
 	KUNIT_EXPECT_EQ(test, 0x8304ULL, regs.pc);
+}
+
+static void tcti_gadget_executes_complete_load_store_exclusive_family(
+	struct kunit *test)
+{
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	u64 pair64[2];
+	u32 pair32[2];
+	u64 observed;
+	u32 instruction;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	regs.regs[9] = mapped;
+	regs.pc = 0x9000;
+
+	observed = 0x1122334455667788ULL;
+	ret = tcti_write_user_data(current->mm, mapped, &observed,
+				   sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, true, false, 31, false, 31, 9, 0);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* ldxr x0, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, observed, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, mapped,
+			current->thread.user_exclusive_address);
+	KUNIT_EXPECT_EQ(test, sizeof(u64),
+			current->thread.user_exclusive_size);
+	KUNIT_EXPECT_EQ(test, observed,
+			current->thread.user_exclusive_value);
+
+	regs.regs[1] = 0x8877665544332211ULL;
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, false, false, 2, false, 31, 9, 1);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* stxr w2, x1, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[2]);
+	KUNIT_EXPECT_EQ(test, 0, current->thread.user_exclusive_valid);
+	ret = tcti_read_user_data(current->mm, mapped, &observed,
+				  sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, regs.regs[1], observed);
+
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, true, false, 31, true, 31, 9, 0);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* ldaxr x0, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	observed = 0xaabbccddeeff0011ULL;
+	ret = tcti_write_user_data(current->mm, mapped, &observed,
+				   sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.regs[1] = 0x1234;
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, false, false, 2, true, 31, 9, 1);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* stlxr w2, x1, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[2]);
+	ret = tcti_read_user_data(current->mm, mapped, &pair64[0],
+				  sizeof(pair64[0]));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, observed, pair64[0]);
+
+	pair32[0] = 0x10203040U;
+	pair32[1] = 0x50607080U;
+	ret = tcti_write_user_data(current->mm, mapped, pair32,
+				   sizeof(pair32));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	instruction = tcti_test_encode_load_store_exclusive(
+		2, false, true, true, 31, false, 1, 9, 0);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* ldxp w0, w1, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, (u64)pair32[0], regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, (u64)pair32[1], regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, sizeof(pair32),
+			current->thread.user_exclusive_size);
+	regs.regs[2] = 0x90a0b0c0U;
+	regs.regs[3] = 0xd0e0f000U;
+	instruction = tcti_test_encode_load_store_exclusive(
+		2, false, false, true, 4, false, 3, 9, 2);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* stxp w4, w2, w3, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[4]);
+	ret = tcti_read_user_data(current->mm, mapped, pair32,
+				  sizeof(pair32));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x90a0b0c0U, pair32[0]);
+	KUNIT_EXPECT_EQ(test, 0xd0e0f000U, pair32[1]);
+
+	pair64[0] = 0x0123456789abcdefULL;
+	pair64[1] = 0xfedcba9876543210ULL;
+	ret = tcti_write_user_data(current->mm, mapped, pair64,
+				   sizeof(pair64));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, true, true, 31, true, 1, 9, 0);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* ldaxp x0, x1, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, pair64[0], regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, pair64[1], regs.regs[1]);
+	regs.regs[2] = 0x1111111111111111ULL;
+	regs.regs[3] = 0x2222222222222222ULL;
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, false, true, 4, true, 3, 9, 2);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* stlxp w4, x2, x3, [x9] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[4]);
+	ret = tcti_read_user_data(current->mm, mapped, pair64,
+				  sizeof(pair64));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, regs.regs[2], pair64[0]);
+	KUNIT_EXPECT_EQ(test, regs.regs[3], pair64[1]);
+
+	regs.regs[9] = mapped + 4;
+	regs.pc = 0xa000;
+	instruction = tcti_test_encode_load_store_exclusive(
+		3, false, true, false, 31, false, 31, 9, 0);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
+	KUNIT_EXPECT_EQ(test, mapped + 4, fault_address);
+	KUNIT_EXPECT_EQ(test, 0xa000ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0, current->thread.user_exclusive_valid);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -25169,6 +25404,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_system_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_exclusive_class),
+	KUNIT_CASE(tcti_decode_exhaustive_load_store_exclusive_family),
+	KUNIT_CASE(tcti_decode_load_store_exclusive_all_register_fields),
 	KUNIT_CASE(tcti_decode_recognizes_simd_modified_immediates),
 	KUNIT_CASE(tcti_decode_recognizes_basenc_simd_immediates),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_modified_immediate_family),
@@ -25355,6 +25592,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_system_registers),
 	KUNIT_CASE(tcti_switch_executes_exclusive_monitor_clear),
 	KUNIT_CASE(tcti_switch_fails_store_exclusive_without_reservation),
+	KUNIT_CASE(tcti_gadget_executes_complete_load_store_exclusive_family),
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	KUNIT_CASE(tcti_switch_executes_simd_modified_immediates),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_modified_immediate_family),

@@ -509,6 +509,7 @@ struct tcti_decoded_instruction {
 	bool acquire;
 	bool release;
 	bool exclusive;
+	bool pair;
 };
 
 struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction);

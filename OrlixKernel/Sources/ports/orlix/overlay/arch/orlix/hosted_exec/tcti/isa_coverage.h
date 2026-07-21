@@ -61,7 +61,11 @@ enum tcti_isa_coverage_status {
 	  "tcti_decode_exhaustive_load_store_register_offset_family;" \
 	  "tcti_decode_load_store_all_register_fields;" \
 	  "tcti_gadget_executes_complete_load_store_register_family") \
-	X(LOAD_STORE_EXCLUSIVE, BASE, PARTIAL, "load/store exclusive", "TCTI_DECODE_LOAD_STORE_EXCLUSIVE", "tcti_decode_recognizes_load_store_exclusive_class") \
+	X(LOAD_STORE_EXCLUSIVE, BASE, COMPLETE, "load/store exclusive", \
+	  "TCTI_DECODE_LOAD_STORE_EXCLUSIVE", \
+	  "tcti_decode_exhaustive_load_store_exclusive_family;" \
+	  "tcti_decode_load_store_exclusive_all_register_fields;" \
+	  "tcti_gadget_executes_complete_load_store_exclusive_family") \
 	X(ASIMD_STRUCTURE_LOAD_STORE, ASIMD, PARTIAL, "AdvSIMD structure load/store", "TCTI_DECODE_SIMD_LOAD_STORE_*", "") \
 	X(ASIMD_COPY, ASIMD, COMPLETE, "AdvSIMD copy", \
 	  "TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE", \
@@ -154,6 +158,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	9
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	8
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

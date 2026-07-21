@@ -434,3 +434,109 @@ int tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 	return tcti_copy_user_data(mm, user_va, (void *)buffer, size,
 				   TCTI_ACCESS_WRITE);
 }
+
+int tcti_compare_exchange_user_data(struct mm_struct *mm,
+				    unsigned long user_va,
+				    const void *expected,
+				    const void *desired,
+				    size_t size, bool *exchanged)
+{
+	unsigned long linux_perms = 0;
+	void *host_page = NULL;
+	void *host_data = NULL;
+	int ret;
+
+	if (!mm || !expected || !desired || !exchanged)
+		return -EINVAL;
+	if (size != sizeof(u8) && size != sizeof(u16) &&
+	    size != sizeof(u32) && size != sizeof(u64) && size != 16)
+		return -EINVAL;
+	if (!IS_ALIGNED(user_va, size) ||
+	    size > PAGE_SIZE - offset_in_page(user_va))
+		return -EFAULT;
+	if (user_va >= TASK_SIZE || size > TASK_SIZE - user_va)
+		return -EFAULT;
+
+retry:
+	mmap_read_lock(mm);
+	ret = tcti_resolve_user_data_locked(mm, user_va, TCTI_ACCESS_WRITE,
+					    &host_data, &linux_perms, NULL);
+	if (!ret) {
+		host_page = (void *)((unsigned long)host_data & PAGE_MASK);
+		switch (size) {
+		case sizeof(u8): {
+			u8 old = *(const u8 *)expected;
+
+			*exchanged = __atomic_compare_exchange_n(
+				(u8 *)host_data, &old,
+				*(const u8 *)desired, false,
+				__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+			break;
+		}
+		case sizeof(u16): {
+			u16 old = get_unaligned_le16(expected);
+
+			*exchanged = __atomic_compare_exchange_n(
+				(u16 *)host_data, &old,
+				get_unaligned_le16(desired), false,
+				__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+			break;
+		}
+		case sizeof(u32): {
+			u32 old = get_unaligned_le32(expected);
+
+			*exchanged = __atomic_compare_exchange_n(
+				(u32 *)host_data, &old,
+				get_unaligned_le32(desired), false,
+				__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+			break;
+		}
+		case sizeof(u64): {
+			u64 old = get_unaligned_le64(expected);
+
+			*exchanged = __atomic_compare_exchange_n(
+				(u64 *)host_data, &old,
+				get_unaligned_le64(desired), false,
+				__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+			break;
+		}
+		case 16: {
+			unsigned __int128 old;
+			unsigned __int128 new;
+
+			memcpy(&old, expected, sizeof(old));
+			memcpy(&new, desired, sizeof(new));
+			*exchanged = __atomic_compare_exchange_n(
+				(unsigned __int128 *)host_data,
+				&old, new, false, __ATOMIC_SEQ_CST,
+				__ATOMIC_SEQ_CST);
+			break;
+		}
+		}
+	}
+	mmap_read_unlock(mm);
+
+	if (ret) {
+		ret = tcti_fault_in_user_page(mm, user_va, TCTI_ACCESS_WRITE);
+		if (!ret) {
+			ret = tcti_sync_faulted_user_window(mm, user_va,
+							 TCTI_ACCESS_WRITE);
+			if (ret)
+				return ret;
+			goto retry;
+		}
+		return ret;
+	}
+
+	if (!*exchanged)
+		return 0;
+	if (linux_perms & VM_EXEC)
+		tcti_block_cache_invalidate_mm(mm);
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	ret = orlix_refresh_current_user_mapping_page_from_kernel(user_va,
+							  host_page);
+	if (ret)
+		return ret;
+#endif
+	return 0;
+}

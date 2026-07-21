@@ -60,7 +60,12 @@ int tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 int tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size);
 int tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
-			 const void *buffer, size_t size);
+			  const void *buffer, size_t size);
+int tcti_compare_exchange_user_data(struct mm_struct *mm,
+				     unsigned long user_va,
+				     const void *expected,
+				     const void *desired,
+				     size_t size, bool *exchanged);
 int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
 			   enum tcti_access access);
 void tcti_invalidate_mm(struct mm_struct *mm);

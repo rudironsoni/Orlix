@@ -1685,6 +1685,15 @@ static int tcti_execute_system_register(struct pt_regs *regs,
 	return 0;
 }
 
+static void tcti_clear_exclusive_monitor(void)
+{
+	current->thread.user_exclusive_address = 0;
+	current->thread.user_exclusive_value = 0;
+	current->thread.user_exclusive_value2 = 0;
+	current->thread.user_exclusive_size = 0;
+	current->thread.user_exclusive_valid = 0;
+}
+
 static u64 tcti_memory_base(const struct pt_regs *regs, u8 rn)
 {
 	return rn == 31 ? regs->sp : regs->regs[rn];
@@ -1698,29 +1707,40 @@ static void tcti_write_memory_base(struct pt_regs *regs, u8 rn, u64 value)
 		regs->regs[rn] = value;
 }
 
+static int tcti_encode_integer(u8 *buffer, u8 access_size, u64 value)
+{
+	switch (access_size) {
+	case sizeof(u8):
+		buffer[0] = value;
+		return 0;
+	case sizeof(u16):
+		put_unaligned_le16(value, buffer);
+		return 0;
+	case sizeof(u32):
+		put_unaligned_le32(value, buffer);
+		return 0;
+	case sizeof(u64):
+		put_unaligned_le64(value, buffer);
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
 static int tcti_store_integer(struct mm_struct *mm, unsigned long address,
 			      u8 access_size, u64 value)
 {
 	u8 buffer[sizeof(u64)];
+	int ret;
 
-	switch (access_size) {
-	case sizeof(u8):
-		buffer[0] = value;
-		break;
-	case sizeof(u16):
-		put_unaligned_le16(value, buffer);
-		break;
-	case sizeof(u32):
-		put_unaligned_le32(value, buffer);
-		break;
-	case sizeof(u64):
-		put_unaligned_le64(value, buffer);
-		break;
-	default:
-		return -EINVAL;
-	}
+	ret = tcti_encode_integer(buffer, access_size, value);
+	if (ret)
+		return ret;
 
-	return tcti_write_user_data(mm, address, buffer, access_size);
+	ret = tcti_write_user_data(mm, address, buffer, access_size);
+	if (!ret)
+		tcti_clear_exclusive_monitor();
+	return ret;
 }
 
 static int tcti_load_integer(struct mm_struct *mm, unsigned long address,
@@ -1758,6 +1778,7 @@ static int tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
 			      u8 reg, u8 access_size)
 {
 	u8 buffer[2 * sizeof(u64)];
+	int ret;
 
 	if (access_size != sizeof(u8) &&
 	    access_size != sizeof(u16) &&
@@ -1777,7 +1798,10 @@ static int tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
 	if (access_size == 2 * sizeof(u64))
 		put_unaligned_le64(current->thread.user_simd[reg * 2 + 1],
 				   buffer + sizeof(u64));
-	return tcti_write_user_data(mm, address, buffer, access_size);
+	ret = tcti_write_user_data(mm, address, buffer, access_size);
+	if (!ret)
+		tcti_clear_exclusive_monitor();
+	return ret;
 }
 
 static void tcti_write_simd_fp_register(u8 reg, u8 access_size, u64 low,
@@ -2327,24 +2351,24 @@ static int tcti_execute_load_store_register_offset(struct mm_struct *mm,
 	return 0;
 }
 
-static void tcti_clear_exclusive_monitor(void)
-{
-	current->thread.user_exclusive_address = 0;
-	current->thread.user_exclusive_size = 0;
-	current->thread.user_exclusive_valid = 0;
-}
-
 static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					    struct pt_regs *regs,
 					    const struct tcti_decoded_instruction *decoded,
 					    unsigned long *fault_address)
 {
 	unsigned long address = tcti_memory_base(regs, decoded->rn);
-	u64 value;
+	u8 expected[2 * sizeof(u64)] = {};
+	u8 desired[2 * sizeof(u64)] = {};
+	u8 total_size = decoded->access_size * (decoded->pair ? 2 : 1);
+	u64 value = 0;
+	u64 value2 = 0;
+	bool exchanged;
 	int ret;
 
 	if (fault_address)
 		*fault_address = address;
+	if (!IS_ALIGNED(address, total_size))
+		return -EFAULT;
 
 	if (decoded->load) {
 		if (!mm)
@@ -2353,13 +2377,24 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					&value);
 		if (ret)
 			return ret;
+		if (decoded->pair) {
+			ret = tcti_load_integer(mm,
+						address + decoded->access_size,
+						decoded->access_size, &value2);
+			if (ret)
+				return ret;
+		}
 		value = tcti_extend_loaded_integer(value, decoded);
 		tcti_write_gpr_or_zero(regs, decoded->rt,
 				       decoded->result_size, value);
+		if (decoded->pair)
+			tcti_write_gpr_or_zero(regs, decoded->rt2,
+					       decoded->result_size, value2);
 		if (decoded->exclusive) {
 			current->thread.user_exclusive_address = address;
-			current->thread.user_exclusive_size =
-				decoded->access_size;
+			current->thread.user_exclusive_value = value;
+			current->thread.user_exclusive_value2 = value2;
+			current->thread.user_exclusive_size = total_size;
 			current->thread.user_exclusive_valid = 1;
 		}
 		if (decoded->acquire)
@@ -2374,7 +2409,7 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 	if (decoded->exclusive &&
 	    (!current->thread.user_exclusive_valid ||
 	     current->thread.user_exclusive_address != address ||
-	     current->thread.user_exclusive_size != decoded->access_size)) {
+	     current->thread.user_exclusive_size != total_size)) {
 		tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32), 1);
 		tcti_clear_exclusive_monitor();
 		regs->pc += sizeof(u32);
@@ -2385,13 +2420,37 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		return -EINVAL;
 
 	value = tcti_read_gpr_or_zero(regs, decoded->rt, decoded->access_size);
-	ret = tcti_store_integer(mm, address, decoded->access_size, value);
-	if (ret)
-		return ret;
-
 	if (decoded->exclusive) {
-		tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32), 0);
+		if (decoded->pair)
+			value2 = tcti_read_gpr_or_zero(regs, decoded->rt2,
+						      decoded->access_size);
+		ret = tcti_encode_integer(expected, decoded->access_size,
+					  current->thread.user_exclusive_value);
+		if (!ret)
+			ret = tcti_encode_integer(desired, decoded->access_size,
+						  value);
+		if (!ret && decoded->pair)
+			ret = tcti_encode_integer(
+				expected + decoded->access_size,
+				decoded->access_size,
+				current->thread.user_exclusive_value2);
+		if (!ret && decoded->pair)
+			ret = tcti_encode_integer(desired + decoded->access_size,
+						  decoded->access_size, value2);
+		if (!ret)
+			ret = tcti_compare_exchange_user_data(
+				mm, address, expected, desired, total_size,
+				&exchanged);
 		tcti_clear_exclusive_monitor();
+		if (ret)
+			return ret;
+		tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32),
+				       exchanged ? 0 : 1);
+	} else {
+		ret = tcti_store_integer(mm, address, decoded->access_size,
+					 value);
+		if (ret)
+			return ret;
 	}
 	regs->pc += sizeof(u32);
 	return 0;

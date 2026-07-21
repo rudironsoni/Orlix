@@ -98,6 +98,8 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
 	current->thread.user_exclusive_address = 0;
+	current->thread.user_exclusive_value = 0;
+	current->thread.user_exclusive_value2 = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
 #endif
@@ -112,6 +114,8 @@ void flush_thread(void)
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
 	current->thread.user_exclusive_address = 0;
+	current->thread.user_exclusive_value = 0;
+	current->thread.user_exclusive_value2 = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
 #endif
@@ -132,6 +136,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_fpcr = 0;
 	p->thread.user_simd_valid = 0;
 	p->thread.user_exclusive_address = 0;
+	p->thread.user_exclusive_value = 0;
+	p->thread.user_exclusive_value2 = 0;
 	p->thread.user_exclusive_size = 0;
 	p->thread.user_exclusive_valid = 0;
 #endif
@@ -157,8 +163,10 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		p->thread.user_fpsr = current->thread.user_fpsr;
 		p->thread.user_fpcr = current->thread.user_fpcr;
 		p->thread.user_simd_valid = current->thread.user_simd_valid;
-		p->thread.user_exclusive_address = 0;
-		p->thread.user_exclusive_size = 0;
+	p->thread.user_exclusive_address = 0;
+	p->thread.user_exclusive_value = 0;
+	p->thread.user_exclusive_value2 = 0;
+	p->thread.user_exclusive_size = 0;
 		p->thread.user_exclusive_valid = 0;
 #endif
 	} else {
@@ -177,6 +185,11 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 
 struct task_struct *__switch_to(struct task_struct *prev, struct task_struct *next)
 {
+	prev->thread.user_exclusive_address = 0;
+	prev->thread.user_exclusive_value = 0;
+	prev->thread.user_exclusive_value2 = 0;
+	prev->thread.user_exclusive_size = 0;
+	prev->thread.user_exclusive_valid = 0;
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	orlix_hosted_switch_user_tls(next);
 #endif

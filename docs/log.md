@@ -7,6 +7,28 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete exclusive load and store coverage
+
+Closed the configured Armv8.0-A exclusive load/store inventory row. The
+production decoder now covers the complete single and pair exclusive family,
+including acquire and release forms, while rejecting later ordered
+nonexclusive encodings outside the configured profile and reserved field
+combinations. The executor records the loaded reservation value, performs
+store-exclusive through an atomic compare-exchange against guest memory,
+detects intervening writes, supports 8-byte and 16-byte pair reservations,
+enforces architectural alignment, and clears the local monitor after attempts,
+ordinary TCTI stores, `CLREX`, and task switches. KUnit exhaustively covers
+every exclusive control shape and register field, then proves `LDXR`/`STXR`,
+`LDAXR`/`STLXR`, `LDXP`/`STXP`, `LDAXP`/`STLXP`, interference failure, status
+results, memory effects, alignment faults, monitor state, and exact PC
+behavior. LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding
+source. OpenMinis ish-arm64 `gen.c` and `gadgets-aarch64/memory.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an independent
+pair-decomposition and compare-exchange cross-check. No external implementation
+source was copied. The kernel-owned inventory now reports 44 of 52 families
+complete with 8 explicit gaps.
+
 ## [2026-07-21] implement | Complete single-register load and store coverage
 
 Closed the configured Armv8.0-A single-register load and store inventory row.

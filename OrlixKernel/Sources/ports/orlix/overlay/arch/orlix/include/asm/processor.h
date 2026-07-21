@@ -65,10 +65,12 @@ struct thread_struct {
 		unsigned long user_fpcr;
 		unsigned long user_simd_valid;
 #endif
-		unsigned long user_exclusive_address;
-		unsigned char user_exclusive_size;
-		unsigned char user_exclusive_valid;
-	};
+	unsigned long user_exclusive_address;
+	unsigned long user_exclusive_value;
+	unsigned long user_exclusive_value2;
+	unsigned char user_exclusive_size;
+	unsigned char user_exclusive_valid;
+};
 
 #define INIT_THREAD			\
 {					\

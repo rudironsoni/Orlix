@@ -70,8 +70,8 @@
 #define AARCH64_MOVE_WIDE_IMM_MASK 0x1f800000U
 #define AARCH64_MOVE_WIDE_IMM_PATTERN 0x12800000U
 #define AARCH64_CLREX 0xd5033f5fU
-#define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f007c00U
-#define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08007c00U
+#define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f000000U
+#define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08000000U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK 0x9ff80c00U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN 0x0f000400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
@@ -1521,24 +1521,35 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN) {
 		u8 size = (instruction >> 30) & 0x3U;
 		bool load = instruction & BIT(22);
-		bool ordered_nonexclusive = instruction & BIT(23);
+		bool o2 = instruction & BIT(23);
+		bool o1 = instruction & BIT(21);
+		bool o0 = instruction & BIT(15);
 		u8 rs = (instruction >> 16) & 0x1fU;
+		u8 rt2 = (instruction >> 10) & 0x1fU;
+		bool pair = !o2 && o1;
 
-		if (!load && ordered_nonexclusive && rs != 31)
-			return decoded;
-		if (load && rs != 31)
-			return decoded;
+		if (o2) {
+			if (o1 || !o0 || rs != 31 || rt2 != 31)
+				return decoded;
+		} else {
+			if ((!pair && rt2 != 31) || (pair && size < 2))
+				return decoded;
+			if (load && rs != 31)
+				return decoded;
+		}
 
 		decoded.decode_class = TCTI_DECODE_LOAD_STORE_EXCLUSIVE;
 		decoded.rt = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rt2 = rt2;
 		decoded.rs = rs;
 		decoded.access_size = BIT(size);
 		decoded.result_size = decoded.access_size;
 		decoded.load = load;
-		decoded.exclusive = !ordered_nonexclusive;
-		decoded.acquire = load && (instruction & BIT(15));
-		decoded.release = !load && (instruction & BIT(15));
+		decoded.exclusive = !o2;
+		decoded.pair = pair;
+		decoded.acquire = load && o0;
+		decoded.release = !load && o0;
 		return decoded;
 	}
 
