@@ -3185,7 +3185,7 @@ static u64 tcti_simd_saturating_add_sub_lane(u64 left, u64 right, u8 bits,
 }
 
 static u64 tcti_simd_saturating_mul_high_lane(u64 left, u64 right, u8 bits,
-	bool rounding, bool *saturated)
+					       bool rounding, bool *saturated)
 {
 	u64 mask = GENMASK_ULL(bits - 1, 0);
 	s64 signed_left = sign_extend64(left & mask, bits - 1);
@@ -3202,6 +3202,42 @@ static u64 tcti_simd_saturating_mul_high_lane(u64 left, u64 right, u8 bits,
 	if (rounding)
 		product += 1LL << (bits - 2);
 	return (u64)(product >> (bits - 1)) & mask;
+}
+
+static u64 tcti_simd_saturating_double_mul_long_lane(u64 left, u64 right,
+						      u64 accumulator,
+						      u8 source_bits,
+						      bool accumulate,
+						      bool subtract,
+						      bool *saturated)
+{
+	u8 result_bits = source_bits * 2;
+	u64 source_mask = GENMASK_ULL(source_bits - 1, 0);
+	u64 result_mask = GENMASK_ULL(result_bits - 1, 0);
+	__int128 result;
+	__int128 minimum;
+	__int128 maximum;
+
+	result = (__int128)sign_extend64(left & source_mask, source_bits - 1) *
+		 sign_extend64(right & source_mask, source_bits - 1) * 2;
+	if (accumulate) {
+		__int128 signed_accumulator =
+			sign_extend64(accumulator & result_mask,
+				      result_bits - 1);
+
+		result = subtract ? signed_accumulator - result :
+				    signed_accumulator + result;
+	}
+	minimum = -((__int128)1 << (result_bits - 1));
+	maximum = ((__int128)1 << (result_bits - 1)) - 1;
+	if (result < minimum) {
+		*saturated = true;
+		result = minimum;
+	} else if (result > maximum) {
+		*saturated = true;
+		result = maximum;
+	}
+	return (u64)result & result_mask;
 }
 
 static u8 tcti_aes_rotate_left(u8 value, u8 amount)
@@ -5241,6 +5277,39 @@ static int tcti_execute_simd_vector_arithmetic(
 			current->thread.user_fpsr |= AARCH64_FPSR_QC;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 			result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_SQDMULL &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_SQDMLSL) {
+		u64 left;
+		u64 right;
+		u64 accumulator;
+		u64 result;
+		bool accumulate;
+		bool subtract;
+		bool saturated = false;
+
+		if (!decoded->simd_scalar ||
+		    (decoded->access_size != sizeof(u16) &&
+		     decoded->access_size != sizeof(u32)) ||
+		    decoded->result_size != 2 * decoded->access_size)
+			return -EOPNOTSUPP;
+		left = current->thread.user_simd[decoded->rn * 2];
+		right = current->thread.user_simd[decoded->rm * 2];
+		accumulator = current->thread.user_simd[decoded->rd * 2];
+		accumulate = decoded->simd_arithmetic_op !=
+			     TCTI_SIMD_ARITH_SQDMULL;
+		subtract = decoded->simd_arithmetic_op ==
+		   TCTI_SIMD_ARITH_SQDMLSL;
+		result = tcti_simd_saturating_double_mul_long_lane(
+			left, right, accumulator, decoded->access_size * 8,
+			accumulate, subtract, &saturated);
+		if (saturated)
+			current->thread.user_fpsr |= AARCH64_FPSR_QC;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result, 0);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
