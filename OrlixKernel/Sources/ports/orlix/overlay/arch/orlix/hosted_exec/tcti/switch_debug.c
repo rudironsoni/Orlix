@@ -6063,6 +6063,26 @@ static int tcti_execute_simd_vector_reduction(
 	u8 lane;
 	u8 lane_count;
 
+	if (decoded->simd_reduction_op >= TCTI_SIMD_REDUCTION_FADDP &&
+	    decoded->simd_reduction_op <= TCTI_SIMD_REDUCTION_FMINP) {
+		u64 source[2];
+		u64 fp_result[2] = {};
+		int ret;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		ret = tcti_native_simd_fp_pairwise(
+			decoded->simd_reduction_op, decoded->access_size,
+			fp_result, source, current->thread.user_fpcr,
+			&current->thread.user_fpsr);
+		if (ret)
+			return ret;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    fp_result[0], fp_result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->simd_reduction_op == TCTI_SIMD_REDUCTION_ADDP &&
 	    decoded->access_size == sizeof(u64) &&
 	    decoded->result_size == sizeof(u64)) {

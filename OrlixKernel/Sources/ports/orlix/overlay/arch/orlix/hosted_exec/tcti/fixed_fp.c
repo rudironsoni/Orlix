@@ -197,3 +197,85 @@ int tcti_native_simd_fp_three_same(
 	preempt_enable();
 	return ret;
 }
+
+#define TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			     instruction "\n" \
+			     "str q0, [%[result]]\n" \
+			     : \
+			     : [result] "r" (result), [source] "r" (source) \
+			     : "v0", "memory"); \
+	})
+
+int tcti_native_simd_fp_pairwise(
+	enum tcti_simd_reduction_op operation, u8 access_size, u64 result[2],
+	const u64 source[2], unsigned long fpcr, unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !source || !fpsr ||
+	    (access_size != sizeof(u32) && access_size != sizeof(u64)))
+		return -EINVAL;
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	case TCTI_SIMD_REDUCTION_FADDP:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("faddp s0, v0.2s");
+		else
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("faddp d0, v0.2d");
+		break;
+	case TCTI_SIMD_REDUCTION_FMAXNMP:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxnmp s0, v0.2s");
+		else
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxnmp d0, v0.2d");
+		break;
+	case TCTI_SIMD_REDUCTION_FMAXP:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxp s0, v0.2s");
+		else
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fmaxp d0, v0.2d");
+		break;
+	case TCTI_SIMD_REDUCTION_FMINNMP:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminnmp s0, v0.2s");
+		else
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminnmp d0, v0.2d");
+		break;
+	case TCTI_SIMD_REDUCTION_FMINP:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminp s0, v0.2s");
+		else
+			TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN("fminp d0, v0.2d");
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}

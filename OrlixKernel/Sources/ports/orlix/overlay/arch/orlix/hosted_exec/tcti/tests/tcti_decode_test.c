@@ -3528,6 +3528,61 @@ static void tcti_decode_recognizes_simd_addp_d_2d(struct kunit *test)
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 }
 
+static void tcti_decode_exhaustive_simd_fp_pairwise(struct kunit *test)
+{
+	static const struct {
+		u32 pattern;
+		enum tcti_simd_reduction_op operation;
+	} cases[] = {
+		{ 0x7e30d800U, TCTI_SIMD_REDUCTION_FADDP },
+		{ 0x7e30c800U, TCTI_SIMD_REDUCTION_FMAXNMP },
+		{ 0x7e30f800U, TCTI_SIMD_REDUCTION_FMAXP },
+		{ 0x7eb0c800U, TCTI_SIMD_REDUCTION_FMINNMP },
+		{ 0x7eb0f800U, TCTI_SIMD_REDUCTION_FMINP },
+	};
+	unsigned int case_index;
+	u8 precision;
+	u8 rn;
+	u8 rd;
+
+	for (case_index = 0; case_index < ARRAY_SIZE(cases); case_index++) {
+		for (precision = 0; precision < 2; precision++) {
+			for (rn = 0; rn < 32; rn++) {
+				for (rd = 0; rd < 32; rd++) {
+					u32 instruction = cases[case_index].pattern |
+						((u32)precision << 22) |
+						((u32)rn << 5) | rd;
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(instruction);
+
+					KUNIT_EXPECT_EQ(
+						test, TCTI_DECODE_SIMD_VECTOR_REDUCTION,
+						decoded.decode_class);
+					KUNIT_EXPECT_EQ(test,
+							cases[case_index].operation,
+							decoded.simd_reduction_op);
+					KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+					KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+					KUNIT_EXPECT_EQ(test, precision ? 8 : 4,
+							decoded.access_size);
+					KUNIT_EXPECT_EQ(test, decoded.access_size,
+							decoded.result_size);
+					KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+				}
+			}
+		}
+		{
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(cases[case_index].pattern ^ BIT(11));
+
+			KUNIT_EXPECT_FALSE(
+				test,
+				decoded.decode_class == TCTI_DECODE_SIMD_VECTOR_REDUCTION &&
+				decoded.simd_reduction_op == cases[case_index].operation);
+		}
+	}
+}
+
 static void
 tcti_decode_recognizes_complete_simd_halving_add_family(struct kunit *test)
 {
@@ -18318,6 +18373,138 @@ static void tcti_gadget_executes_simd_fp_three_same_special_cases(
 	}
 }
 
+static void tcti_test_execute_simd_fp_pairwise(
+	struct kunit *test, u32 pattern,
+	enum tcti_simd_reduction_op operation, u8 access_size, u8 rd, u8 rn,
+	u64 first, u64 second, u64 expected, unsigned long fpcr,
+	unsigned long expected_fpsr)
+{
+	u32 instruction = pattern |
+		(access_size == sizeof(u64) ? BIT(22) : 0) |
+		((u32)rn << 5) | rd;
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned int word;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_REDUCTION,
+			decoded.decode_class);
+	KUNIT_ASSERT_EQ(test, operation, decoded.simd_reduction_op);
+	for (word = 0; word < ARRAY_SIZE(before_simd); word++)
+		before_simd[word] = 0xe6e6000000000000ULL ^
+				    ((u64)instruction << 5) ^ word;
+	if (access_size == sizeof(u32)) {
+		before_simd[rn * 2] = (first & GENMASK_ULL(31, 0)) |
+					    (second << 32);
+	} else {
+		before_simd[rn * 2] = first;
+		before_simd[rn * 2 + 1] = second;
+	}
+	memcpy(current->thread.user_simd, before_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[rd * 2] = expected;
+	expected_simd[rd * 2 + 1] = 0;
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		regs.regs[word] = 0xbce0000000000000ULL ^ word;
+	regs.pc = 0x81b92000ULL;
+	regs.sp = 0x81ca3000ULL;
+	regs.pstate = PSR_N_BIT | PSR_C_BIT;
+	current->thread.user_fpcr = fpcr;
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, fpcr, current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, expected_fpsr, current->thread.user_fpsr);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x81b92004ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x81ca3000ULL, regs.sp);
+	KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT, regs.pstate);
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		KUNIT_EXPECT_EQ(test, 0xbce0000000000000ULL ^ word,
+				regs.regs[word]);
+}
+
+static void tcti_gadget_executes_complete_simd_fp_pairwise_family(
+	struct kunit *test)
+{
+	static const struct {
+		u32 pattern;
+		enum tcti_simd_reduction_op operation;
+		u32 expected_s;
+		u64 expected_d;
+	} cases[] = {
+		{ 0x7e30d800U, TCTI_SIMD_REDUCTION_FADDP,
+		  0x40000000U, 0x4000000000000000ULL },
+		{ 0x7e30c800U, TCTI_SIMD_REDUCTION_FMAXNMP,
+		  0x40400000U, 0x4008000000000000ULL },
+		{ 0x7e30f800U, TCTI_SIMD_REDUCTION_FMAXP,
+		  0x40400000U, 0x4008000000000000ULL },
+		{ 0x7eb0c800U, TCTI_SIMD_REDUCTION_FMINNMP,
+		  0xbf800000U, 0xbff0000000000000ULL },
+		{ 0x7eb0f800U, TCTI_SIMD_REDUCTION_FMINP,
+		  0xbf800000U, 0xbff0000000000000ULL },
+	};
+	unsigned int case_index;
+	u8 alias;
+
+	for (case_index = 0; case_index < ARRAY_SIZE(cases); case_index++) {
+		for (alias = 0; alias < 2; alias++) {
+			u8 rd = alias ? 31 : 0;
+			u8 rn = alias ? 31 : 1;
+
+			tcti_test_execute_simd_fp_pairwise(
+				test, cases[case_index].pattern,
+				cases[case_index].operation, sizeof(u32), rd, rn,
+				0x40400000U, 0xbf800000U,
+				cases[case_index].expected_s, 0, BIT(27));
+			tcti_test_execute_simd_fp_pairwise(
+				test, cases[case_index].pattern,
+				cases[case_index].operation, sizeof(u64), rd, rn,
+				0x4008000000000000ULL, 0xbff0000000000000ULL,
+				cases[case_index].expected_d, 0, BIT(27));
+		}
+	}
+}
+
+static void tcti_gadget_executes_simd_fp_pairwise_special_cases(
+	struct kunit *test)
+{
+	const u32 qnan = 0x7fc00000U;
+	const u32 snan = 0x7f800001U;
+	const u32 two = 0x40000000U;
+
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7e30c800U, TCTI_SIMD_REDUCTION_FMAXNMP,
+		sizeof(u32), 0, 1, qnan, two, two, 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7e30f800U, TCTI_SIMD_REDUCTION_FMAXP,
+		sizeof(u32), 0, 1, qnan, two, qnan, 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7eb0c800U, TCTI_SIMD_REDUCTION_FMINNMP,
+		sizeof(u32), 0, 1, qnan, two, two, 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7eb0f800U, TCTI_SIMD_REDUCTION_FMINP,
+		sizeof(u32), 0, 1, qnan, two, qnan, 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7e30f800U, TCTI_SIMD_REDUCTION_FMAXP,
+		sizeof(u32), 0, 1, BIT(31), 0, 0, 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7eb0f800U, TCTI_SIMD_REDUCTION_FMINP,
+		sizeof(u32), 0, 1, BIT(31), 0, BIT(31), 0, BIT(27));
+	tcti_test_execute_simd_fp_pairwise(
+		test, 0x7e30d800U, TCTI_SIMD_REDUCTION_FADDP,
+		sizeof(u32), 0, 1, snan, 0x3f800000U, qnan, BIT(25),
+		BIT(27) | BIT(0));
+}
+
 enum tcti_test_simd_copy_kind {
 	TCTI_TEST_SIMD_COPY_SCALAR_DUP,
 	TCTI_TEST_SIMD_COPY_VECTOR_DUP,
@@ -23072,6 +23259,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_addv_4s),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_addv_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_addp_d_2d),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_fp_pairwise),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_add_sub_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_add_sub_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_halving_add_family),
@@ -23266,6 +23454,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_pairwise_long_family),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_fp_three_same_family),
 	KUNIT_CASE(tcti_gadget_executes_simd_fp_three_same_special_cases),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_fp_pairwise_family),
+	KUNIT_CASE(tcti_gadget_executes_simd_fp_pairwise_special_cases),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha3_family),

@@ -7,6 +7,28 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Add scalar AdvSIMD floating-point pairwise execution
+
+Added baseline A64 scalar `FADDP`, `FMAXNMP`, `FMAXP`, `FMINNMP`, and
+`FMINP` decode and execution without removing existing instruction families or
+prematurely promoting the broader `ASIMD_SCALAR` inventory row. The production
+path preserves host FPCR and FPSR, installs guest floating-point state with
+preemption disabled, executes the exact single-precision or double-precision
+AArch64 instruction, captures guest FPSR, restores host state, and commits the
+scalar result through the normal TCTI SIMD register path. KUnit exhausts every
+source and destination register field and both precisions, then proves aliases,
+ordinary results, numeric-NaN versus propagating-NaN behavior, signed zero,
+signaling NaN with FPCR default-NaN mode, sticky FPSR state, upper-bit clearing,
+unrelated SIMD and integer state, and exact PC progression. The app-hosted KUnit
+and Linux kselftest gate reached `ORLIX-KSELFTEST-END`; XCTest passed one test
+with zero failures and zero skips in 7.701 seconds, and `xcodebuild` exited zero
+after its known `simctl diagnose` cleanup child was released. Patch-only Linux
+`checkpatch.pl` reported zero errors and zero warnings. LLVM AArch64 encodings
+and OpenMinis ish-arm64 `math.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent encoding and
+family-decomposition cross-checks. No external implementation source was
+copied.
+
 ## [2026-07-21] implement | Add AdvSIMD floating-point three-same execution
 
 Added baseline A64 scalar and vector `FABD`, `FACGE`, `FACGT`, `FCMEQ`, `FCMGE`, `FCMGT`, `FMULX`, `FRECPS`, and `FRSQRTS` decode and execution without removing existing instruction families or prematurely promoting the broader `ASIMD_SCALAR` and `ASIMD_VECTOR_3SAME` inventory rows. The Orlix-owned ISA-on-ISA path saves host FPCR and FPSR, installs guest FP state with preemption disabled, executes the exact AArch64 scalar or AdvSIMD instruction for every legal single-precision and double-precision shape, captures guest FPSR, restores host state, and commits the architectural result through the normal TCTI register path. KUnit covers every source and destination register field, selector overlap boundaries, scalar and vector widths, source and destination aliases, exact ordinary results, zero and infinity special cases, quiet and signaling NaNs, IOC accumulation, default-NaN FPCR behavior, sticky QC, upper-bit clearing, unrelated register state, and PC progression. App-hosted KUnit passed 363 of 363 cases, Linux kselftest emitted `ORLIX-KSELFTEST-END`, XCTest passed in 8.101 seconds, and the owning gate exited 0. LLVM AArch64 TableGen commit `de44ed3488693686dd1f65baad5d7bd3797eddca` and OpenMinis ish-arm64 `math.S` commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent family and decomposition cross-checks. No external implementation source was copied.

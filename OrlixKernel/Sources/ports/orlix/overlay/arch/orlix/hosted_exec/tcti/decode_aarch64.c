@@ -258,6 +258,12 @@
 #define AARCH64_SIMD_ADD_LONGV_PATTERN 0x0e303800U
 #define AARCH64_SIMD_ADDP_D_2D_MASK 0xfffffc20U
 #define AARCH64_SIMD_ADDP_D_2D_PATTERN 0x5ef1b800U
+#define AARCH64_SIMD_FP_PAIRWISE_MASK 0xffbffc00U
+#define AARCH64_SIMD_FADDP_SCALAR_PATTERN 0x7e30d800U
+#define AARCH64_SIMD_FMAXNMP_SCALAR_PATTERN 0x7e30c800U
+#define AARCH64_SIMD_FMAXP_SCALAR_PATTERN 0x7e30f800U
+#define AARCH64_SIMD_FMINNMP_SCALAR_PATTERN 0x7eb0c800U
+#define AARCH64_SIMD_FMINP_SCALAR_PATTERN 0x7eb0f800U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_MASK 0xbf000000U
 #define AARCH64_SIMD_SINGLE_STRUCTURE_PATTERN 0x0d000000U
 #define AARCH64_SIMD_MULTIPLE_STRUCTURE_MASK 0xbf200000U
@@ -3115,6 +3121,45 @@ not_simd_compare_register:
 		decoded.result_size = sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_ADDP;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_FP_PAIRWISE_MASK) ==
+		    AARCH64_SIMD_FADDP_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_PAIRWISE_MASK) ==
+		    AARCH64_SIMD_FMAXNMP_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_PAIRWISE_MASK) ==
+		    AARCH64_SIMD_FMAXP_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_PAIRWISE_MASK) ==
+		    AARCH64_SIMD_FMINNMP_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_PAIRWISE_MASK) ==
+		    AARCH64_SIMD_FMINP_SCALAR_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_FP_PAIRWISE_MASK;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_REDUCTION;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = instruction & BIT(22) ? sizeof(u64) :
+							      sizeof(u32);
+		decoded.result_size = decoded.access_size;
+		decoded.simd_fp = true;
+		switch (pattern) {
+		case AARCH64_SIMD_FADDP_SCALAR_PATTERN:
+			decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_FADDP;
+			break;
+		case AARCH64_SIMD_FMAXNMP_SCALAR_PATTERN:
+			decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_FMAXNMP;
+			break;
+		case AARCH64_SIMD_FMAXP_SCALAR_PATTERN:
+			decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_FMAXP;
+			break;
+		case AARCH64_SIMD_FMINNMP_SCALAR_PATTERN:
+			decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_FMINNMP;
+			break;
+		default:
+			decoded.simd_reduction_op = TCTI_SIMD_REDUCTION_FMINP;
+			break;
+		}
 		return decoded;
 	}
 
