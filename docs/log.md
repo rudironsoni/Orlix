@@ -7,6 +7,22 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Extend scalar floating-point integer conversions
+
+Added the baseline A64 scalar floating-point-to-GPR `FCVTNS`, `FCVTNU`,
+`FCVTPS`, `FCVTPU`, `FCVTMS`, `FCVTMU`, `FCVTAS`, and `FCVTAU` operations for
+single and double sources and 32-bit and 64-bit destinations. The generic
+decoder claims only conversion encodings it owns and falls through for existing
+transfer and specialized conversion families. Existing `FCVTZS`, `FCVTZU`,
+fixed-point, SIMD, `SCVTF`, `UCVTF`, and `FMOV` behavior remains present. KUnit
+exhausts every source and destination register field, source and destination
+width, rounding mode, and signedness, and executes positive and negative
+fractional cases under a conflicting FPCR rounding mode. The app-hosted KUnit
+and Linux kselftest gate passed one XCTest with zero failures and zero skips on
+the pinned simulator after releasing the separately tracked `simctl diagnose`
+cleanup child. The broader FP integer and fixed-point conversion inventory rows
+remain partial.
+
 ## [2026-07-21] implement | Complete scalar floating-point one-source execution
 
 Completed the configured Armv8.0-A scalar floating-point one-source family by adding both single/double `FCVT` directions and `FSQRT` to the exact native FPCR/FPSR-aware execution path while retaining the established `FMOV`, `FABS`, `FNEG`, and seven `FRINT` operations. Replaced the manual widening conversion helper with architectural AArch64 execution, added exhaustive legal and reserved encoding boundaries, all register fields and aliases, narrowing rounding-mode and inexact behavior, signaling NaN default-NaN behavior, square-root invalid-operation behavior, upper-bit clearing, unrelated state preservation, and exact PC progression. The new exhaustive scalar move proof exposed and fixed a pre-existing `FMOV S,S` bug that preserved bits 63:32 instead of truncating the 32-bit result. The kernel-owned coverage inventory now marks `FP_1SOURCE` complete and reduces its ratcheted gap count from 14 to 13. The app-hosted KUnit and Linux kselftest gate reached `ORLIX-KSELFTEST-END`; XCTest passed one test with zero failures and zero skips, and `xcodebuild` exited zero after its separately tracked `simctl diagnose` cleanup child was released. Patch-only Linux `checkpatch.pl` reported zero errors and zero warnings. LLVM AArch64 TableGen at commit `de44ed3488693686dd1f65baad5d7bd3797eddca` and OpenMinis ish-arm64 at commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent family and encoding cross-checks. No external implementation source was copied.

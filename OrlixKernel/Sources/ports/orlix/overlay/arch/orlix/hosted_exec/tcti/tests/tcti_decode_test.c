@@ -23694,6 +23694,172 @@ static void tcti_switch_preserves_compiler_rt_pair_frame(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static u32 tcti_test_encode_fp_round_to_gpr(u8 rounding, u8 opcode,
+					    bool is_64bit,
+					    bool source_double,
+					    u8 rd, u8 rn)
+{
+	return 0x1e200000U | ((u32)rounding << 19) |
+	       ((u32)opcode << 16) | (is_64bit ? BIT(31) : 0) |
+	       (source_double ? BIT(22) : 0) | ((u32)rn << 5) | rd;
+}
+
+static void tcti_decode_exhaustive_fp_round_to_gpr_family(struct kunit *test)
+{
+	static const struct {
+		u8 rounding;
+		u8 opcode;
+		enum tcti_fp_int_convert_op operation;
+	} cases[] = {
+		{ 0, 0, TCTI_FP_INT_FCVTNS },
+		{ 0, 1, TCTI_FP_INT_FCVTNU },
+		{ 1, 0, TCTI_FP_INT_FCVTPS },
+		{ 1, 1, TCTI_FP_INT_FCVTPU },
+		{ 2, 0, TCTI_FP_INT_FCVTMS },
+		{ 2, 1, TCTI_FP_INT_FCVTMU },
+		{ 3, 0, TCTI_FP_INT_FCVTZS },
+		{ 3, 1, TCTI_FP_INT_FCVTZU },
+		{ 0, 4, TCTI_FP_INT_FCVTAS },
+		{ 0, 5, TCTI_FP_INT_FCVTAU },
+	};
+	size_t index;
+	u8 is_64bit;
+	u8 source_double;
+	u8 rd;
+	u8 rn;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+			for (source_double = 0; source_double < 2;
+			     source_double++) {
+				for (rd = 0; rd < 32; rd++) {
+					for (rn = 0; rn < 32; rn++) {
+						struct tcti_decoded_instruction decoded =
+							tcti_decode_aarch64(
+								tcti_test_encode_fp_round_to_gpr(
+									cases[index].rounding,
+									cases[index].opcode,
+									is_64bit,
+									source_double,
+									rd, rn));
+
+						KUNIT_EXPECT_EQ(test,
+								TCTI_DECODE_FP_INT_CONVERT,
+								decoded.decode_class);
+						KUNIT_EXPECT_EQ(test,
+								cases[index].operation,
+								decoded.fp_int_op);
+						KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+						KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+						KUNIT_EXPECT_EQ(test,
+								source_double ? sizeof(u64) :
+											sizeof(u32),
+								decoded.access_size);
+						KUNIT_EXPECT_EQ(test,
+								is_64bit ? sizeof(u64) :
+										   sizeof(u32),
+								decoded.result_size);
+					}
+				}
+			}
+		}
+	}
+}
+
+static void tcti_decode_fp_round_to_gpr_preserves_existing_transfers(
+	struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	decoded = tcti_decode_aarch64(0x1e260020U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_SIMD_TO_GPR, decoded.fp_move_op);
+	decoded = tcti_decode_aarch64(0x1e270020U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_FP_SCALAR_MOVE,
+			decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_FP_MOVE_GPR_TO_SIMD, decoded.fp_move_op);
+}
+
+static void tcti_switch_executes_fp_round_to_gpr_family(struct kunit *test)
+{
+	static const struct {
+		u8 rounding;
+		u8 opcode;
+		enum tcti_fp_int_convert_op operation;
+		u64 positive;
+		u64 negative32;
+		u64 negative64;
+	} cases[] = {
+		{ 0, 0, TCTI_FP_INT_FCVTNS, 2, 0xfffffffeULL, ~1ULL },
+		{ 0, 1, TCTI_FP_INT_FCVTNU, 2, 0, 0 },
+		{ 1, 0, TCTI_FP_INT_FCVTPS, 2, 0xffffffffULL, ~0ULL },
+		{ 1, 1, TCTI_FP_INT_FCVTPU, 2, 0, 0 },
+		{ 2, 0, TCTI_FP_INT_FCVTMS, 1, 0xfffffffeULL, ~1ULL },
+		{ 2, 1, TCTI_FP_INT_FCVTMU, 1, 0, 0 },
+		{ 3, 0, TCTI_FP_INT_FCVTZS, 1, 0xffffffffULL, ~0ULL },
+		{ 3, 1, TCTI_FP_INT_FCVTZU, 1, 0, 0 },
+		{ 0, 4, TCTI_FP_INT_FCVTAS, 2, 0xfffffffeULL, ~1ULL },
+		{ 0, 5, TCTI_FP_INT_FCVTAU, 2, 0, 0 },
+	};
+	struct pt_regs regs;
+	size_t index;
+	u8 is_64bit;
+	u8 source_double;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		for (is_64bit = 0; is_64bit < 2; is_64bit++) {
+			for (source_double = 0; source_double < 2;
+			     source_double++) {
+				struct tcti_decoded_instruction decoded;
+				u64 expected_negative = cases[index].negative32;
+				int ret;
+
+				if (is_64bit)
+					expected_negative = cases[index].negative64;
+
+				memset(&regs, 0xa5, sizeof(regs));
+				regs.pc = 0x9500;
+				current->thread.user_fpcr = BIT(22) | BIT(23);
+				current->thread.user_fpsr = 0;
+				current->thread.user_simd[14] = source_double ?
+					0x3ff8000000000000ULL : 0x3fc00000ULL;
+				current->thread.user_simd[15] = 0x55aa55aa55aa55aaULL;
+				decoded = tcti_decode_aarch64(
+					tcti_test_encode_fp_round_to_gpr(
+						cases[index].rounding,
+						cases[index].opcode, is_64bit,
+						source_double, 24, 7));
+				KUNIT_ASSERT_EQ(test, cases[index].operation,
+						decoded.fp_int_op);
+				ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+									 &decoded, NULL);
+				KUNIT_EXPECT_EQ(test, 0, ret);
+				KUNIT_EXPECT_EQ(test, cases[index].positive,
+						regs.regs[24]);
+				KUNIT_EXPECT_EQ(test, 0x9504ULL, regs.pc);
+				KUNIT_EXPECT_EQ(test,
+						0x55aa55aa55aa55aaULL,
+						current->thread.user_simd[15]);
+
+				regs.pc = 0x9600;
+				current->thread.user_fpsr = 0;
+				current->thread.user_simd[14] = source_double ?
+					0xbff8000000000000ULL : 0xbfc00000ULL;
+				ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+									 &decoded, NULL);
+				KUNIT_EXPECT_EQ(test, 0, ret);
+				KUNIT_EXPECT_EQ(test, expected_negative,
+						regs.regs[24]);
+				KUNIT_EXPECT_EQ(test, 0x9604ULL, regs.pc);
+				if (cases[index].opcode & 1)
+					KUNIT_EXPECT_TRUE(test,
+							  current->thread.user_fpsr & BIT(0));
+			}
+		}
+	}
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
@@ -23719,6 +23885,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_fp_scalar_2source_minmax_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_fp_to_gpr_family),
 	KUNIT_CASE(tcti_switch_executes_fp_to_gpr_architectural_limits),
+	KUNIT_CASE(tcti_decode_exhaustive_fp_round_to_gpr_family),
+	KUNIT_CASE(tcti_decode_fp_round_to_gpr_preserves_existing_transfers),
+	KUNIT_CASE(tcti_switch_executes_fp_round_to_gpr_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_matrix),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_table_lookup_family),

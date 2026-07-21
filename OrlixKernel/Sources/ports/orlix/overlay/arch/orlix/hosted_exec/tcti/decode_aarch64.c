@@ -329,6 +329,8 @@
 #define AARCH64_FCMP_D_PATTERN 0x1e602000U
 #define AARCH64_FCMP_S_ZERO_PATTERN 0x1e202008U
 #define AARCH64_FCMP_D_ZERO_PATTERN 0x1e602008U
+#define AARCH64_FP_INT_GPR_MASK 0x7fa00c00U
+#define AARCH64_FP_INT_GPR_PATTERN 0x1e200000U
 #define AARCH64_SCVTF_S_W_MASK 0xfffffc00U
 #define AARCH64_SCVTF_S_W_PATTERN 0x1e220000U
 #define AARCH64_SCVTF_D_W_MASK 0xfffffc00U
@@ -685,7 +687,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 type = (instruction >> 22) & 0x3U;
 
 		if (type > 1)
-			return decoded;
+			goto fp_int_gpr_unclaimed;
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
@@ -1376,7 +1378,7 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		} else if (opcode == AARCH64_DP1_CLS_OPCODE) {
 			decoded.dp1_op = TCTI_DP1_CLS;
 		} else {
-			return decoded;
+			goto fp_int_gpr_unclaimed;
 		}
 
 		decoded.decode_class = TCTI_DECODE_DATA_PROCESSING_1SOURCE;
@@ -3504,6 +3506,48 @@ not_simd_compare_register:
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_FP_INT_GPR_MASK) ==
+	    AARCH64_FP_INT_GPR_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+		u8 rounding = (instruction >> 19) & 0x3U;
+		u8 opcode = (instruction >> 16) & 0x7U;
+
+		if (type > 1)
+			return decoded;
+		if (opcode <= 1) {
+			static const enum tcti_fp_int_convert_op operations[][2] = {
+				{ TCTI_FP_INT_FCVTNS, TCTI_FP_INT_FCVTNU },
+				{ TCTI_FP_INT_FCVTPS, TCTI_FP_INT_FCVTPU },
+				{ TCTI_FP_INT_FCVTMS, TCTI_FP_INT_FCVTMU },
+				{ TCTI_FP_INT_FCVTZS, TCTI_FP_INT_FCVTZU },
+			};
+
+			decoded.fp_int_op = operations[rounding][opcode];
+			decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+			decoded.result_size = instruction & BIT(31) ?
+				sizeof(u64) : sizeof(u32);
+		} else if (!rounding && (opcode == 4 || opcode == 5)) {
+			decoded.fp_int_op = opcode == 4 ? TCTI_FP_INT_FCVTAS :
+				TCTI_FP_INT_FCVTAU;
+			decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+			decoded.result_size = instruction & BIT(31) ?
+				sizeof(u64) : sizeof(u32);
+		} else if (!rounding && (opcode == 2 || opcode == 3)) {
+			decoded.fp_int_op = opcode == 2 ? TCTI_FP_INT_SCVTF :
+				TCTI_FP_INT_UCVTF;
+			decoded.access_size = instruction & BIT(31) ?
+				sizeof(u64) : sizeof(u32);
+			decoded.result_size = type ? sizeof(u64) : sizeof(u32);
+		} else {
+			return decoded;
+		}
+		decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.simd_fp = true;
+		return decoded;
+	}
+fp_int_gpr_unclaimed:
 	if ((instruction & AARCH64_SCVTF_S_W_MASK) == AARCH64_SCVTF_S_W_PATTERN ||
 	    (instruction & AARCH64_SCVTF_D_W_MASK) == AARCH64_SCVTF_D_W_PATTERN ||
 	    (instruction & AARCH64_SCVTF_S_X_MASK) == AARCH64_SCVTF_S_X_PATTERN ||

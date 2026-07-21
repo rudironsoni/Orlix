@@ -133,6 +133,114 @@ int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
 	return ret;
 }
 
+#define TCTI_NATIVE_FP_TO_GPR_RUN_S_W(instruction) \
+	({ \
+		u32 result32; \
+		asm volatile("fmov s0, %w[source]\n" \
+			     instruction " %w[value], s0\n" \
+			     : [value] "=r" (result32) \
+			     : [source] "r" ((u32)source) \
+			     : "v0", "memory"); \
+		*result = result32; \
+	})
+
+#define TCTI_NATIVE_FP_TO_GPR_RUN_S_X(instruction) \
+	({ \
+		asm volatile("fmov s0, %w[source]\n" \
+			     instruction " %[value], s0\n" \
+			     : [value] "=r" (*result) \
+			     : [source] "r" ((u32)source) \
+			     : "v0", "memory"); \
+	})
+
+#define TCTI_NATIVE_FP_TO_GPR_RUN_D_W(instruction) \
+	({ \
+		u32 result32; \
+		asm volatile("fmov d0, %[source]\n" \
+			     instruction " %w[value], d0\n" \
+			     : [value] "=r" (result32) \
+			     : [source] "r" (source) \
+			     : "v0", "memory"); \
+		*result = result32; \
+	})
+
+#define TCTI_NATIVE_FP_TO_GPR_RUN_D_X(instruction) \
+	({ \
+		asm volatile("fmov d0, %[source]\n" \
+			     instruction " %[value], d0\n" \
+			     : [value] "=r" (*result) \
+			     : [source] "r" (source) \
+			     : "v0", "memory"); \
+	})
+
+#define TCTI_NATIVE_FP_TO_GPR_CASE(operation, instruction) \
+	case operation: \
+		if (access_size == sizeof(u32) && result_size == sizeof(u32)) \
+			TCTI_NATIVE_FP_TO_GPR_RUN_S_W(instruction); \
+		else if (access_size == sizeof(u32) && \
+			 result_size == sizeof(u64)) \
+			TCTI_NATIVE_FP_TO_GPR_RUN_S_X(instruction); \
+		else if (access_size == sizeof(u64) && \
+			 result_size == sizeof(u32)) \
+			TCTI_NATIVE_FP_TO_GPR_RUN_D_W(instruction); \
+		else if (access_size == sizeof(u64) && \
+			 result_size == sizeof(u64)) \
+			TCTI_NATIVE_FP_TO_GPR_RUN_D_X(instruction); \
+		else \
+			ret = -EINVAL; \
+		break
+
+int tcti_native_fp_to_gpr(enum tcti_fp_int_convert_op operation,
+	u8 access_size, u8 result_size, u64 source, u64 *result,
+	unsigned long fpcr, unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !fpsr)
+		return -EINVAL;
+	*result = 0;
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTNS, "fcvtns");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTNU, "fcvtnu");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTPS, "fcvtps");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTPU, "fcvtpu");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTMS, "fcvtms");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTMU, "fcvtmu");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTAS, "fcvtas");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTAU, "fcvtau");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTZS, "fcvtzs");
+	TCTI_NATIVE_FP_TO_GPR_CASE(TCTI_FP_INT_FCVTZU, "fcvtzu");
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
 enum tcti_native_simd_fp_shape {
 	TCTI_NATIVE_SIMD_FP_SCALAR_S,
 	TCTI_NATIVE_SIMD_FP_SCALAR_D,

@@ -6203,7 +6203,6 @@ static int tcti_execute_fp_round(const struct tcti_decoded_instruction *decoded,
 	u64 host_fpcr;
 	u64 host_fpsr;
 	u64 guest_fpsr;
-
 	if (!result || decoded->result_size != decoded->access_size ||
 	    (decoded->access_size != sizeof(u32) &&
 	     decoded->access_size != sizeof(u64)))
@@ -6925,10 +6924,28 @@ static int tcti_execute_fp_int_convert(
 	u64 host_fpcr;
 	u64 host_fpsr;
 	u64 guest_fpsr;
+	unsigned long native_fpsr;
 
 	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS_FIXED ||
 	    decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED)
 		return tcti_execute_fp_fixed_convert(regs, decoded);
+
+	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTNS &&
+	    decoded->fp_int_op <= TCTI_FP_INT_FCVTAU) {
+		value = current->thread.user_simd[decoded->rn * 2];
+		native_fpsr = current->thread.user_fpsr;
+		if (tcti_native_fp_to_gpr(decoded->fp_int_op,
+					   decoded->access_size,
+					   decoded->result_size, value, &result,
+					   current->thread.user_fpcr,
+					   &native_fpsr))
+			return -EOPNOTSUPP;
+		current->thread.user_fpsr = native_fpsr;
+		tcti_write_gpr_or_zero(regs, decoded->rd,
+				       decoded->result_size, result);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if ((decoded->fp_int_op == TCTI_FP_INT_FCVTZS ||
 	     decoded->fp_int_op == TCTI_FP_INT_FCVTZU) &&
