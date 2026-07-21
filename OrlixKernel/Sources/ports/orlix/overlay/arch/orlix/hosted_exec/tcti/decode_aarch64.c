@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <linux/array_size.h>
 #include <linux/bits.h>
 #include <linux/bitops.h>
 
@@ -357,6 +358,8 @@
 #define AARCH64_FCVTZU_W_D_PATTERN 0x1e790000U
 #define AARCH64_FCVTZ_FIXED_GPR_MASK 0x7f3e0000U
 #define AARCH64_FCVTZ_FIXED_GPR_PATTERN 0x1e180000U
+#define AARCH64_FP_INT_SIMD_SCALAR_MASK 0xdfbffc00U
+#define AARCH64_FP_INT_SIMD_VECTOR_MASK 0x9fbffc00U
 #define AARCH64_FCVTZS_SIMD_SCALAR_MASK 0xffbffc00U
 #define AARCH64_FCVTZS_SIMD_SCALAR_PATTERN 0x5ea1b800U
 #define AARCH64_FCVTZU_SIMD_SCALAR_MASK 0xffbffc00U
@@ -3678,6 +3681,66 @@ fp_int_gpr_unclaimed:
 		decoded.fp_int_op = instruction & BIT(16) ?
 			TCTI_FP_INT_FCVTZU_FIXED : TCTI_FP_INT_FCVTZS_FIXED;
 		return decoded;
+	}
+
+	{
+		static const struct {
+			u32 scalar_pattern;
+			u32 vector_pattern;
+			enum tcti_fp_int_convert_op signed_operation;
+			enum tcti_fp_int_convert_op unsigned_operation;
+		} operations[] = {
+			{ 0x5e21a800U, 0x0e21a800U,
+			  TCTI_FP_INT_FCVTNS_SIMD,
+			  TCTI_FP_INT_FCVTNU_SIMD },
+			{ 0x5ea1a800U, 0x0ea1a800U,
+			  TCTI_FP_INT_FCVTPS_SIMD,
+			  TCTI_FP_INT_FCVTPU_SIMD },
+			{ 0x5e21b800U, 0x0e21b800U,
+			  TCTI_FP_INT_FCVTMS_SIMD,
+			  TCTI_FP_INT_FCVTMU_SIMD },
+			{ 0x5ea1b800U, 0x0ea1b800U,
+			  TCTI_FP_INT_FCVTZS_SIMD,
+			  TCTI_FP_INT_FCVTZU_SIMD },
+			{ 0x5e21c800U, 0x0e21c800U,
+			  TCTI_FP_INT_FCVTAS_SIMD,
+			  TCTI_FP_INT_FCVTAU_SIMD },
+			{ 0x5e21d800U, 0x0e21d800U,
+			  TCTI_FP_INT_SCVTF_SIMD,
+			  TCTI_FP_INT_UCVTF_SIMD },
+		};
+		bool scalar = instruction & BIT(28);
+		bool is_double = instruction & BIT(22);
+		bool q = instruction & BIT(30);
+		u32 mask = scalar ? AARCH64_FP_INT_SIMD_SCALAR_MASK :
+				    AARCH64_FP_INT_SIMD_VECTOR_MASK;
+		u32 pattern = instruction & mask;
+		size_t index;
+
+		for (index = 0; index < ARRAY_SIZE(operations); index++) {
+			u32 expected = scalar ? operations[index].scalar_pattern :
+						operations[index].vector_pattern;
+
+			if (pattern != expected)
+				continue;
+			if (!scalar && is_double && !q)
+				break;
+			decoded.decode_class = TCTI_DECODE_FP_INT_CONVERT;
+			decoded.rd = instruction & 0x1fU;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.access_size = is_double ? sizeof(u64) :
+							 sizeof(u32);
+			decoded.result_size = scalar ? decoded.access_size :
+						(q ? 2 * sizeof(u64) :
+						     sizeof(u64));
+			decoded.simd_fp = true;
+			decoded.simd_scalar = scalar;
+			decoded.simd_q = scalar ? false : q;
+			decoded.fp_int_op = instruction & BIT(29) ?
+				operations[index].unsigned_operation :
+				operations[index].signed_operation;
+			return decoded;
+		}
 	}
 
 	if ((instruction & AARCH64_FCVTZS_SIMD_SCALAR_MASK) ==

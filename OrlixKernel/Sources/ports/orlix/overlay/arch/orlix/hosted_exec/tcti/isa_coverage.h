@@ -85,7 +85,15 @@ enum tcti_isa_coverage_status {
 	X(ASIMD_VECTOR_ACROSS_LANES, ASIMD, PARTIAL, "AdvSIMD vector across lanes", "TCTI_DECODE_SIMD_VECTOR_REDUCTION", "") \
 	X(ASIMD_VECTOR_INDEXED_ELEMENT, ASIMD, PARTIAL, "AdvSIMD vector by indexed element", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(FP_FIXED_POINT_CONVERT, FP, PARTIAL, "floating-point fixed-point conversion", "TCTI_DECODE_FP_INT_CONVERT", "") \
-	X(FP_INTEGER_CONVERT, FP, PARTIAL, "floating-point integer conversion", "TCTI_DECODE_FP_INT_CONVERT", "tcti_decode_recognizes_complete_fp_to_gpr_family") \
+	X(FP_INTEGER_CONVERT, FP, COMPLETE, "floating-point integer conversion", \
+	  "TCTI_DECODE_FP_INT_CONVERT", \
+	  "tcti_decode_recognizes_complete_fp_to_gpr_family;" \
+	  "tcti_decode_exhaustive_fp_round_to_gpr_family;" \
+	  "tcti_switch_executes_fp_round_to_gpr_family;" \
+	  "tcti_decode_exhaustive_simd_fp_int_convert_family;" \
+	  "tcti_decode_rejects_reserved_simd_fp_int_convert_shapes;" \
+	  "tcti_decode_rejects_disabled_fp16_simd_int_conversions;" \
+	  "tcti_switch_executes_complete_simd_fp_int_convert_family") \
 	X(FP_1SOURCE, FP, COMPLETE, "floating-point one source", \
 	  "TCTI_DECODE_FP_SCALAR_1SOURCE/TCTI_DECODE_FP_SCALAR_MOVE", \
 	  "tcti_decode_recognizes_complete_fp_scalar_1source_family;" \
@@ -129,6 +137,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	13
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	12
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

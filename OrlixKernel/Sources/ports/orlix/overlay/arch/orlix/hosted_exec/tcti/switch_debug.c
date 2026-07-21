@@ -6924,11 +6924,31 @@ static int tcti_execute_fp_int_convert(
 	u64 host_fpcr;
 	u64 host_fpsr;
 	u64 guest_fpsr;
+	u64 vector_source[2];
+	u64 vector_result[2];
 	unsigned long native_fpsr;
 
 	if (decoded->fp_int_op == TCTI_FP_INT_FCVTZS_FIXED ||
 	    decoded->fp_int_op == TCTI_FP_INT_FCVTZU_FIXED)
 		return tcti_execute_fp_fixed_convert(regs, decoded);
+
+	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTNS_SIMD &&
+	    decoded->fp_int_op <= TCTI_FP_INT_SCVTF_SIMD) {
+		vector_source[0] = current->thread.user_simd[decoded->rn * 2];
+		vector_source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		native_fpsr = current->thread.user_fpsr;
+		if (tcti_native_simd_fp_convert(
+				decoded->fp_int_op, decoded->simd_scalar,
+				decoded->simd_q, decoded->access_size,
+				vector_result, vector_source,
+				current->thread.user_fpcr, &native_fpsr))
+			return -EOPNOTSUPP;
+		current->thread.user_fpsr = native_fpsr;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    vector_result[0], vector_result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->fp_int_op >= TCTI_FP_INT_FCVTNS &&
 	    decoded->fp_int_op <= TCTI_FP_INT_FCVTAU) {

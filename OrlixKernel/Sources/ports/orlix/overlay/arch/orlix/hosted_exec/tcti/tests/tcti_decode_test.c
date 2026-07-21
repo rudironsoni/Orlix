@@ -23860,6 +23860,354 @@ static void tcti_switch_executes_fp_round_to_gpr_family(struct kunit *test)
 	}
 }
 
+struct tcti_test_simd_fp_int_operation {
+	u32 scalar_pattern;
+	u32 vector_pattern;
+	enum tcti_fp_int_convert_op operation;
+};
+
+static const struct tcti_test_simd_fp_int_operation
+tcti_test_simd_fp_int_operations[] = {
+	{ 0x5e21a800U, 0x0e21a800U, TCTI_FP_INT_FCVTNS_SIMD },
+	{ 0x7e21a800U, 0x2e21a800U, TCTI_FP_INT_FCVTNU_SIMD },
+	{ 0x5ea1a800U, 0x0ea1a800U, TCTI_FP_INT_FCVTPS_SIMD },
+	{ 0x7ea1a800U, 0x2ea1a800U, TCTI_FP_INT_FCVTPU_SIMD },
+	{ 0x5e21b800U, 0x0e21b800U, TCTI_FP_INT_FCVTMS_SIMD },
+	{ 0x7e21b800U, 0x2e21b800U, TCTI_FP_INT_FCVTMU_SIMD },
+	{ 0x5ea1b800U, 0x0ea1b800U, TCTI_FP_INT_FCVTZS_SIMD },
+	{ 0x7ea1b800U, 0x2ea1b800U, TCTI_FP_INT_FCVTZU_SIMD },
+	{ 0x5e21c800U, 0x0e21c800U, TCTI_FP_INT_FCVTAS_SIMD },
+	{ 0x7e21c800U, 0x2e21c800U, TCTI_FP_INT_FCVTAU_SIMD },
+	{ 0x5e21d800U, 0x0e21d800U, TCTI_FP_INT_SCVTF_SIMD },
+	{ 0x7e21d800U, 0x2e21d800U, TCTI_FP_INT_UCVTF_SIMD },
+};
+
+struct tcti_test_simd_fp_int_runtime {
+	u64 source_s[2];
+	u64 expected_s[2];
+	u64 source_d[2];
+	u64 expected_d[2];
+	bool invalid_operation;
+};
+
+#define TCTI_TEST_FP32_CONVERT_SOURCE_LOW 0xbfc000003fc00000ULL
+#define TCTI_TEST_FP32_CONVERT_SOURCE_HIGH 0xc020000040200000ULL
+#define TCTI_TEST_FP64_CONVERT_SOURCE_LOW 0x3ff8000000000000ULL
+#define TCTI_TEST_FP64_CONVERT_SOURCE_HIGH 0xbff8000000000000ULL
+
+static const struct tcti_test_simd_fp_int_runtime
+tcti_test_simd_fp_int_runtime[] = {
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 0xfffffffe00000002ULL, 0xfffffffe00000002ULL },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0xfffffffffffffffeULL }, false,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 2, 2 },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0 }, true,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 0xffffffff00000002ULL, 0xfffffffe00000003ULL },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0xffffffffffffffffULL }, false,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 2, 3 },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0 }, true,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 0xfffffffe00000001ULL, 0xfffffffd00000002ULL },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 1, 0xfffffffffffffffeULL }, false,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 1, 2 },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 1, 0 }, true,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 0xffffffff00000001ULL, 0xfffffffe00000002ULL },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 1, 0xffffffffffffffffULL }, false,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 1, 2 },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 1, 0 }, true,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 0xfffffffe00000002ULL, 0xfffffffd00000003ULL },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0xfffffffffffffffeULL }, false,
+	},
+	{
+		{ TCTI_TEST_FP32_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP32_CONVERT_SOURCE_HIGH },
+		{ 2, 3 },
+		{ TCTI_TEST_FP64_CONVERT_SOURCE_LOW,
+		  TCTI_TEST_FP64_CONVERT_SOURCE_HIGH },
+		{ 2, 0 }, true,
+	},
+	{
+		{ 0xfffffffe00000001ULL, 0xfffffffc00000003ULL },
+		{ 0xc00000003f800000ULL, 0xc080000040400000ULL },
+		{ 1, 0xfffffffffffffffeULL },
+		{ 0x3ff0000000000000ULL, 0xc000000000000000ULL }, false,
+	},
+	{
+		{ 0x0000000200000001ULL, 0x0000000400000003ULL },
+		{ 0x400000003f800000ULL, 0x4080000040400000ULL },
+		{ 1, 2 },
+		{ 0x3ff0000000000000ULL, 0x4000000000000000ULL }, false,
+	},
+};
+
+#undef TCTI_TEST_FP64_CONVERT_SOURCE_HIGH
+#undef TCTI_TEST_FP64_CONVERT_SOURCE_LOW
+#undef TCTI_TEST_FP32_CONVERT_SOURCE_HIGH
+#undef TCTI_TEST_FP32_CONVERT_SOURCE_LOW
+
+static u32 tcti_test_encode_simd_fp_int_convert(u32 pattern, bool scalar,
+						 bool q, bool is_double,
+						 u8 rd, u8 rn)
+{
+	return pattern | (!scalar && q ? BIT(30) : 0) |
+	       (is_double ? BIT(22) : 0) | ((u32)rn << 5) | rd;
+}
+
+static void tcti_decode_exhaustive_simd_fp_int_convert_family(
+	struct kunit *test)
+{
+	size_t index;
+	u8 rd;
+	u8 rn;
+	u8 shape;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_test_simd_fp_int_operations);
+	     index++) {
+		const struct tcti_test_simd_fp_int_operation *operation =
+			&tcti_test_simd_fp_int_operations[index];
+
+		for (shape = 0; shape < 5; shape++) {
+			bool scalar = shape < 2;
+			bool is_double = shape == 1 || shape == 4;
+			bool q = shape == 3 || shape == 4;
+			u8 result_size = scalar ?
+				(is_double ? sizeof(u64) : sizeof(u32)) :
+				(q ? 2 * sizeof(u64) : sizeof(u64));
+
+			for (rd = 0; rd < 32; rd++) {
+				for (rn = 0; rn < 32; rn++) {
+					u32 pattern = scalar ? operation->scalar_pattern :
+							       operation->vector_pattern;
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							tcti_test_encode_simd_fp_int_convert(
+								pattern, scalar, q,
+								is_double, rd, rn));
+
+					KUNIT_EXPECT_EQ(test,
+							TCTI_DECODE_FP_INT_CONVERT,
+							decoded.decode_class);
+					KUNIT_EXPECT_EQ(test, operation->operation,
+							decoded.fp_int_op);
+					KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+					KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+					KUNIT_EXPECT_EQ(test, scalar,
+							decoded.simd_scalar);
+					KUNIT_EXPECT_EQ(test, q, decoded.simd_q);
+					KUNIT_EXPECT_EQ(test,
+							is_double ? sizeof(u64) :
+								    sizeof(u32),
+							decoded.access_size);
+					KUNIT_EXPECT_EQ(test, result_size,
+							decoded.result_size);
+				}
+			}
+		}
+	}
+}
+
+static void tcti_decode_rejects_reserved_simd_fp_int_convert_shapes(
+	struct kunit *test)
+{
+	size_t index;
+	u8 rd;
+	u8 rn;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_test_simd_fp_int_operations);
+	     index++) {
+		const struct tcti_test_simd_fp_int_operation *operation =
+				&tcti_test_simd_fp_int_operations[index];
+
+		for (rd = 0; rd < 32; rd++) {
+			for (rn = 0; rn < 32; rn++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(
+						tcti_test_encode_simd_fp_int_convert(
+							operation->vector_pattern,
+							false, false, true,
+							rd, rn));
+
+				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+			}
+		}
+	}
+}
+
+static void tcti_decode_rejects_disabled_fp16_simd_int_conversions(
+	struct kunit *test)
+{
+	size_t index;
+	u8 rd;
+	u8 rn;
+	u8 q;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_test_simd_fp_int_operations);
+	     index++) {
+		const struct tcti_test_simd_fp_int_operation *operation =
+				&tcti_test_simd_fp_int_operations[index];
+
+		for (rd = 0; rd < 32; rd++) {
+			for (rn = 0; rn < 32; rn++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(
+						tcti_test_encode_simd_fp_int_convert(
+							operation->scalar_pattern |
+								0x00580000U,
+							true, false, false,
+							rd, rn));
+
+				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class);
+				for (q = 0; q < 2; q++) {
+					decoded = tcti_decode_aarch64(
+						tcti_test_encode_simd_fp_int_convert(
+							operation->vector_pattern |
+								0x00580000U,
+							false, q, false,
+							rd, rn));
+					KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+							decoded.decode_class);
+				}
+			}
+		}
+	}
+}
+
+static void tcti_switch_executes_complete_simd_fp_int_convert_family(
+	struct kunit *test)
+{
+	struct pt_regs regs;
+	size_t index;
+	u8 shape;
+
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(tcti_test_simd_fp_int_operations),
+			ARRAY_SIZE(tcti_test_simd_fp_int_runtime));
+	for (index = 0; index < ARRAY_SIZE(tcti_test_simd_fp_int_operations);
+	     index++) {
+		const struct tcti_test_simd_fp_int_operation *operation =
+				&tcti_test_simd_fp_int_operations[index];
+		const struct tcti_test_simd_fp_int_runtime *runtime =
+				&tcti_test_simd_fp_int_runtime[index];
+
+		for (shape = 0; shape < 5; shape++) {
+			struct tcti_decoded_instruction decoded;
+			bool scalar = shape < 2;
+			bool is_double = shape == 1 || shape == 4;
+			bool q = shape == 3 || shape == 4;
+			u64 source[2];
+			u64 expected[2];
+			u32 pattern;
+			int ret;
+
+			if (is_double) {
+				source[0] = runtime->source_d[0];
+				source[1] = scalar ? 0 : runtime->source_d[1];
+				expected[0] = runtime->expected_d[0];
+				expected[1] = scalar ? 0 : runtime->expected_d[1];
+			} else {
+				source[0] = runtime->source_s[0];
+				source[1] = q ? runtime->source_s[1] : 0;
+				expected[0] = runtime->expected_s[0];
+				expected[1] = q ? runtime->expected_s[1] : 0;
+				if (scalar) {
+					source[0] &= GENMASK_ULL(31, 0);
+					expected[0] &= GENMASK_ULL(31, 0);
+				}
+			}
+
+			memset(&regs, 0, sizeof(regs));
+			regs.pc = 0xa000 + 0x10 * index + 4 * shape;
+			regs.regs[3] = 0x55aa55aa55aa55aaULL;
+			current->thread.user_fpcr = BIT(22) | BIT(23);
+			current->thread.user_fpsr = BIT(27);
+			current->thread.user_simd[14] = source[0];
+			current->thread.user_simd[15] = source[1];
+			current->thread.user_simd[16] = 0x0123456789abcdefULL;
+			current->thread.user_simd[17] = 0xfedcba9876543210ULL;
+			pattern = scalar ? operation->scalar_pattern :
+						     operation->vector_pattern;
+			decoded = tcti_decode_aarch64(
+				tcti_test_encode_simd_fp_int_convert(
+					pattern, scalar, q, is_double, 7, 7));
+			KUNIT_ASSERT_EQ(test, operation->operation,
+					decoded.fp_int_op);
+			ret = tcti_switch_debug_execute_decoded(NULL, &regs,
+								 &decoded, NULL);
+			KUNIT_EXPECT_EQ(test, 0, ret);
+			KUNIT_EXPECT_EQ(test, expected[0],
+					current->thread.user_simd[14]);
+			KUNIT_EXPECT_EQ(test, expected[1],
+					current->thread.user_simd[15]);
+			KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL,
+					current->thread.user_simd[16]);
+			KUNIT_EXPECT_EQ(test, 0xfedcba9876543210ULL,
+					current->thread.user_simd[17]);
+			KUNIT_EXPECT_EQ(test, 0x55aa55aa55aa55aaULL,
+					regs.regs[3]);
+			KUNIT_EXPECT_EQ(test,
+					0xa004ULL + 0x10 * index + 4 * shape,
+					regs.pc);
+			KUNIT_EXPECT_TRUE(test,
+					  current->thread.user_fpsr & BIT(27));
+			if (runtime->invalid_operation && !scalar)
+				KUNIT_EXPECT_TRUE(test,
+						  current->thread.user_fpsr & BIT(0));
+		}
+	}
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
@@ -23888,6 +24236,10 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_exhaustive_fp_round_to_gpr_family),
 	KUNIT_CASE(tcti_decode_fp_round_to_gpr_preserves_existing_transfers),
 	KUNIT_CASE(tcti_switch_executes_fp_round_to_gpr_family),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_fp_int_convert_family),
+	KUNIT_CASE(tcti_decode_rejects_reserved_simd_fp_int_convert_shapes),
+	KUNIT_CASE(tcti_decode_rejects_disabled_fp16_simd_int_conversions),
+	KUNIT_CASE(tcti_switch_executes_complete_simd_fp_int_convert_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_table_lookup_family),
 	KUNIT_CASE(tcti_switch_executes_simd_table_lookup_matrix),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_table_lookup_family),

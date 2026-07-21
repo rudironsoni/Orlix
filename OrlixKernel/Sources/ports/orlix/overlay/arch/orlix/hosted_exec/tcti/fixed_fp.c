@@ -241,6 +241,87 @@ int tcti_native_fp_to_gpr(enum tcti_fp_int_convert_op operation,
 	return ret;
 }
 
+#define TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			     instruction "\n" \
+			     "str q0, [%[result]]\n" \
+			     : \
+			     : [result] "r" (result), [source] "r" (source) \
+			     : "v0", "memory"); \
+	})
+
+#define TCTI_NATIVE_SIMD_FP_CONVERT_CASE(operation, instruction) \
+	case operation: \
+		if (scalar && access_size == sizeof(u32)) \
+			TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction " s0, s0"); \
+		else if (scalar && access_size == sizeof(u64)) \
+			TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction " d0, d0"); \
+		else if (!scalar && access_size == sizeof(u32) && !q) \
+			TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction " v0.2s, v0.2s"); \
+		else if (!scalar && access_size == sizeof(u32) && q) \
+			TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction " v0.4s, v0.4s"); \
+		else if (!scalar && access_size == sizeof(u64) && q) \
+			TCTI_NATIVE_SIMD_FP_CONVERT_RUN(instruction " v0.2d, v0.2d"); \
+		else \
+			ret = -EINVAL; \
+		break
+
+int tcti_native_simd_fp_convert(enum tcti_fp_int_convert_op operation,
+	bool scalar, bool q, u8 access_size, u64 result[2],
+	const u64 source[2], unsigned long fpcr, unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !source || !fpsr)
+		return -EINVAL;
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTNS_SIMD, "fcvtns");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTNU_SIMD, "fcvtnu");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTPS_SIMD, "fcvtps");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTPU_SIMD, "fcvtpu");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTMS_SIMD, "fcvtms");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTMU_SIMD, "fcvtmu");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTZS_SIMD, "fcvtzs");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTZU_SIMD, "fcvtzu");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTAS_SIMD, "fcvtas");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_FCVTAU_SIMD, "fcvtau");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_SCVTF_SIMD, "scvtf");
+	TCTI_NATIVE_SIMD_FP_CONVERT_CASE(TCTI_FP_INT_UCVTF_SIMD, "ucvtf");
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+#undef TCTI_NATIVE_SIMD_FP_CONVERT_CASE
+#undef TCTI_NATIVE_SIMD_FP_CONVERT_RUN
+
 enum tcti_native_simd_fp_shape {
 	TCTI_NATIVE_SIMD_FP_SCALAR_S,
 	TCTI_NATIVE_SIMD_FP_SCALAR_D,

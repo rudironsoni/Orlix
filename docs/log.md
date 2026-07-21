@@ -7,6 +7,27 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete floating-point integer conversions
+
+Completed the configured Armv8.0-A floating-point integer-conversion family
+across GPR, AdvSIMD scalar, and AdvSIMD vector forms. The production decoder now
+covers `FCVTNS`, `FCVTNU`, `FCVTPS`, `FCVTPU`, `FCVTMS`, `FCVTMU`, `FCVTZS`,
+`FCVTZU`, `FCVTAS`, `FCVTAU`, `SCVTF`, and `UCVTF` for scalar `S` and `D` and
+vector `2S`, `4S`, and `2D` shapes. Execution uses the existing Orlix TCTI
+register model and native FPCR/FPSR-preserving helper. KUnit covers 61,440 legal
+decode combinations, 12,288 reserved one-lane double-vector encodings, 36,864
+disabled FP16 encodings, and 60 value-level shape and operation executions with
+aliases, signed and unsigned lanes, exact rounding, sticky FPSR state, upper-lane
+clearing, unrelated-register preservation, and PC progression. The pinned
+app-hosted KUnit and Linux kselftest gate passed one XCTest with zero failures
+and zero skips. LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` was the primary encoding source.
+OpenMinis ish-arm64 `gen.c` and `math.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` were independent mask and gadget
+decomposition cross-checks. No external implementation source was copied. The
+kernel-owned coverage inventory now marks `FP_INTEGER_CONVERT` complete while
+`FP_FIXED_POINT_CONVERT` remains partial.
+
 ## [2026-07-21] implement | Extend scalar floating-point integer conversions
 
 Added the baseline A64 scalar floating-point-to-GPR `FCVTNS`, `FCVTNU`,

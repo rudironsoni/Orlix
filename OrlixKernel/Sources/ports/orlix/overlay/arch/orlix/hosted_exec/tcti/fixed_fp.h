@@ -12,6 +12,9 @@ int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
 int tcti_native_fp_to_gpr(enum tcti_fp_int_convert_op operation,
 	u8 access_size, u8 result_size, u64 source, u64 *result,
 	unsigned long fpcr, unsigned long *fpsr);
+int tcti_native_simd_fp_convert(enum tcti_fp_int_convert_op operation,
+	bool scalar, bool q, u8 access_size, u64 result[2],
+	const u64 source[2], unsigned long fpcr, unsigned long *fpsr);
 int tcti_native_simd_fp_three_same(
 	enum tcti_simd_vector_arithmetic_op operation, bool scalar,
 	u8 access_size, u8 result_size, u64 result[2], const u64 left[2],
