@@ -1903,6 +1903,192 @@ static void tcti_decode_recognizes_complete_simd_modified_immediate_family(
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 }
 
+static u32 tcti_test_encode_simd_modimm(bool q, bool op, bool o2, u8 cmode,
+				       u8 imm8, u8 rd)
+{
+	return 0x0f000400U | (q ? BIT(30) : 0) | (op ? BIT(29) : 0) |
+	       (o2 ? BIT(11) : 0) | ((u32)cmode << 12) |
+	       ((u32)(imm8 & 0xe0U) << 11) | ((u32)(imm8 & 0x1fU) << 5) | rd;
+}
+
+static u64 tcti_test_replicate_simd_immediate(u64 value, u8 element_size)
+{
+	u8 element_bits = element_size * 8;
+	u64 mask = GENMASK_ULL(element_bits - 1, 0);
+	u64 result = 0;
+	u8 shift;
+
+	for (shift = 0; shift < 64; shift += element_bits)
+		result |= (value & mask) << shift;
+	return result;
+}
+
+static u64 tcti_test_expand_simd_modimm(u8 cmode, bool op, u8 imm8)
+{
+	if (cmode <= 7) {
+		u8 shift = ((cmode & ~1U) >> 1) * 8;
+
+		return tcti_test_replicate_simd_immediate((u32)imm8 << shift,
+							  sizeof(u32));
+	}
+	if (cmode <= 11) {
+		u8 shift = ((cmode & ~1U) - 8) / 2 * 8;
+
+		return tcti_test_replicate_simd_immediate((u16)imm8 << shift,
+							  sizeof(u16));
+	}
+	if (cmode == 12 || cmode == 13) {
+		u8 shift = cmode == 12 ? 8 : 16;
+		u32 lane = ((u32)imm8 << shift) | (BIT(shift) - 1U);
+
+		return tcti_test_replicate_simd_immediate(lane, sizeof(u32));
+	}
+	if (cmode == 14 && !op)
+		return tcti_test_replicate_simd_immediate(imm8, sizeof(u8));
+	if (cmode == 14) {
+		u64 result = 0;
+		u8 byte;
+
+		for (byte = 0; byte < 8; byte++) {
+			if (imm8 & BIT(byte))
+				result |= 0xffULL << (byte * 8);
+		}
+		return result;
+	}
+	if (!op) {
+		u32 sign = (imm8 >> 7) & 1U;
+		u32 exponent_bit = (imm8 >> 6) & 1U;
+		u32 fraction = imm8 & 0x3fU;
+		u32 lane = (sign << 31) | ((!exponent_bit) << 30) |
+			   ((exponent_bit ? 0x1fU : 0) << 25) |
+			   (fraction << 19);
+
+		return tcti_test_replicate_simd_immediate(lane, sizeof(u32));
+	}
+
+	return ((u64)((imm8 >> 7) & 1U) << 63) |
+	       ((u64)!((imm8 >> 6) & 1U) << 62) |
+	       ((u64)(((imm8 >> 6) & 1U) ? 0xffU : 0) << 54) |
+	       ((u64)(imm8 & 0x3fU) << 48);
+}
+
+static enum tcti_simd_modified_immediate_op
+tcti_test_simd_modimm_operation(u8 cmode, bool op)
+{
+	if (cmode <= 11) {
+		if (cmode & 1U)
+			return op ? TCTI_SIMD_MODIMM_BIC : TCTI_SIMD_MODIMM_ORR;
+		return op ? TCTI_SIMD_MODIMM_MVNI : TCTI_SIMD_MODIMM_MOVI;
+	}
+	if (cmode <= 13)
+		return op ? TCTI_SIMD_MODIMM_MVNI : TCTI_SIMD_MODIMM_MOVI;
+	return TCTI_SIMD_MODIMM_MOVI;
+}
+
+static bool tcti_test_simd_modimm_is_valid(bool q, bool op, u8 cmode)
+{
+	return q || !op || cmode != 15;
+}
+
+static void tcti_decode_exhaustive_simd_modimm(struct kunit *test)
+{
+	bool seen_rd[32] = {};
+	u8 q;
+	u8 op;
+	u8 cmode;
+
+	for (q = 0; q < 2; q++) {
+		for (op = 0; op < 2; op++) {
+			for (cmode = 0; cmode < 16; cmode++) {
+				unsigned int immediate;
+
+				for (immediate = 0; immediate < 256;
+				     immediate++) {
+					u8 imm8 = immediate;
+					u8 rd = immediate & 0x1fU;
+					u32 instruction =
+						tcti_test_encode_simd_modimm(
+							q, op, false, cmode,
+							imm8, rd);
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							instruction);
+
+					if (!tcti_test_simd_modimm_is_valid(
+						    q, op, cmode)) {
+						KUNIT_EXPECT_EQ(
+							test,
+							TCTI_DECODE_UNSUPPORTED,
+							decoded.decode_class);
+						continue;
+					}
+
+					KUNIT_ASSERT_EQ_MSG(
+						test,
+						TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+						decoded.decode_class,
+						"instruction=%#x q=%u op=%u cmode=%u imm8=%#x",
+						instruction, q, op, cmode,
+						imm8);
+					KUNIT_EXPECT_EQ(
+						test,
+						tcti_test_simd_modimm_operation(
+							cmode, op),
+						decoded.simd_modified_immediate_op);
+					KUNIT_EXPECT_EQ(
+						test,
+						tcti_test_expand_simd_modimm(
+							cmode, op, imm8),
+						decoded.logical_immediate);
+					KUNIT_EXPECT_EQ(test, q ? 16U : 8U,
+							decoded.result_size);
+					KUNIT_EXPECT_EQ(test,
+							decoded.result_size,
+							decoded.access_size);
+					KUNIT_EXPECT_EQ(test, rd, decoded.rd);
+					KUNIT_EXPECT_TRUE(test,
+							  decoded.simd_fp);
+					seen_rd[rd] = true;
+				}
+			}
+		}
+	}
+
+	for (q = 0; q < 32; q++)
+		KUNIT_EXPECT_TRUE(test, seen_rd[q]);
+}
+
+static void tcti_decode_rejects_unexposed_simd_modimm_o2(struct kunit *test)
+{
+	u8 q;
+	u8 op;
+	u8 cmode;
+
+	for (q = 0; q < 2; q++) {
+		for (op = 0; op < 2; op++) {
+			for (cmode = 0; cmode < 16; cmode++) {
+				unsigned int immediate;
+
+				for (immediate = 0; immediate < 256;
+				     immediate++) {
+					u32 instruction =
+						tcti_test_encode_simd_modimm(
+							q, op, true, cmode,
+							immediate,
+							immediate & 0x1fU);
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							instruction);
+
+					KUNIT_EXPECT_EQ(test,
+							TCTI_DECODE_UNSUPPORTED,
+							decoded.decode_class);
+				}
+			}
+		}
+	}
+}
+
 static void tcti_decode_recognizes_complete_simd_scalar_element_dup_family(
 	struct kunit *test)
 {
@@ -2359,9 +2545,9 @@ tcti_decode_recognizes_complete_simd_shift_left_long_family(struct kunit *test)
 		}
 	}
 
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 			tcti_decode_aarch64(0x0f00a400U).decode_class);
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 			tcti_decode_aarch64(0x0f07a400U).decode_class);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 			tcti_decode_aarch64(0x0f40a400U).decode_class);
@@ -10620,6 +10806,127 @@ static void tcti_switch_executes_complete_simd_modified_immediate_family(
 				current->thread.user_simd[rd * 2 + 1]);
 		KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
 		KUNIT_EXPECT_EQ(test, 0x8424ULL + index * sizeof(u32), regs.pc);
+	}
+}
+
+static void tcti_gadget_executes_exhaustive_simd_modimm(struct kunit *test)
+{
+	u8 q;
+	u8 op;
+	u8 cmode;
+
+	for (q = 0; q < 2; q++) {
+		for (op = 0; op < 2; op++) {
+			for (cmode = 0; cmode < 16; cmode++) {
+				unsigned int immediate;
+
+				if (!tcti_test_simd_modimm_is_valid(
+					    q, op, cmode))
+					continue;
+				for (immediate = 0; immediate < 256;
+				     immediate++) {
+					u8 imm8 = immediate;
+					u8 rd = immediate & 0x1fU;
+					u32 instruction =
+						tcti_test_encode_simd_modimm(
+							q, op, false, cmode,
+							imm8, rd);
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(
+							instruction);
+					struct pt_regs regs = {};
+					struct pt_regs expected_regs;
+					u64 expected_simd[ARRAY_SIZE(
+						current->thread.user_simd)];
+					u64 value =
+						tcti_test_expand_simd_modimm(
+							cmode, op, imm8);
+					u64 low;
+					u64 high;
+					unsigned int index;
+					int ret;
+
+					for (index = 0;
+					     index <
+					     ARRAY_SIZE(
+						     current->thread.user_simd);
+					     index++)
+						current->thread
+							.user_simd[index] =
+							0x1122334455667788ULL ^
+							((u64)instruction
+							 << 13) ^
+							(0x0101010101010101ULL *
+							 index);
+					for (index = 0;
+					     index < ARRAY_SIZE(regs.regs);
+					     index++)
+						regs.regs[index] =
+							0x8877665544332211ULL ^
+							((u64)instruction
+							 << 7) ^
+							index;
+					regs.pc = 0x34567890000ULL;
+					regs.sp = 0x456789a0000ULL;
+					regs.pstate = PSR_Z_BIT | PSR_V_BIT |
+						      0x155UL;
+					expected_regs = regs;
+					memcpy(expected_simd,
+					       current->thread.user_simd,
+					       sizeof(expected_simd));
+					low = expected_simd[rd * 2];
+					high = expected_simd[rd * 2 + 1];
+
+					switch (tcti_test_simd_modimm_operation(
+						cmode, op)) {
+					case TCTI_SIMD_MODIMM_MOVI:
+						low = value;
+						high = value;
+						break;
+					case TCTI_SIMD_MODIMM_MVNI:
+						low = ~value;
+						high = ~value;
+						break;
+					case TCTI_SIMD_MODIMM_ORR:
+						low |= value;
+						high |= value;
+						break;
+					case TCTI_SIMD_MODIMM_BIC:
+						low &= ~value;
+						high &= ~value;
+						break;
+					}
+					expected_simd[rd * 2] = low;
+					expected_simd[rd * 2 + 1] = q ? high :
+									0;
+					current->thread.user_simd_valid = 0;
+
+					ret = tcti_switch_debug_execute_decoded(
+						NULL, &regs, &decoded, NULL);
+
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					KUNIT_EXPECT_MEMEQ(
+						test, current->thread.user_simd,
+						expected_simd,
+						sizeof(expected_simd));
+					KUNIT_EXPECT_EQ(
+						test, 1,
+						current->thread.user_simd_valid);
+					KUNIT_EXPECT_MEMEQ(test, regs.regs,
+							   expected_regs.regs,
+							   sizeof(regs.regs));
+					KUNIT_EXPECT_EQ(test, expected_regs.sp,
+							regs.sp);
+					KUNIT_EXPECT_EQ(test,
+							expected_regs.pstate,
+							regs.pstate);
+					KUNIT_EXPECT_EQ(test,
+							expected_regs.pc +
+								sizeof(u32),
+							regs.pc);
+				}
+			}
+		}
 	}
 }
 
@@ -21781,6 +22088,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_modified_immediates),
 	KUNIT_CASE(tcti_decode_recognizes_basenc_simd_immediates),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_modified_immediate_family),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_modimm),
+	KUNIT_CASE(tcti_decode_rejects_unexposed_simd_modimm_o2),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_dup_element_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_dup_gpr_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_scalar_element_dup_family),
@@ -21959,6 +22268,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	KUNIT_CASE(tcti_switch_executes_simd_modified_immediates),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_modified_immediate_family),
+	KUNIT_CASE(tcti_gadget_executes_exhaustive_simd_modimm),
 	KUNIT_CASE(tcti_switch_executes_fmov_d_negative_one_immediate),
 	KUNIT_CASE(tcti_switch_executes_basenc_simd_immediates),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_dup_element_family),

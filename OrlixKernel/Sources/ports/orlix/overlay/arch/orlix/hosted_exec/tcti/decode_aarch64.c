@@ -1652,15 +1652,6 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	if ((instruction & AARCH64_SIMD_SHIFT_LEFT_LONG_MASK) ==
-	    AARCH64_SIMD_SHIFT_LEFT_LONG_PATTERN) {
-		u8 immh = (instruction >> 19) & 0xfU;
-
-		/* Reserved immh encodings overlap the modified-immediate mask. */
-		if (!immh || (immh & 0x8U))
-			return decoded;
-	}
-
 	if ((instruction & AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK) ==
 	    AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN) {
 		if (!tcti_decode_simd_modified_immediate(instruction, &decoded))
