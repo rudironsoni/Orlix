@@ -7,6 +7,32 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete baseline AdvSIMD scalar coverage
+
+Closed the configured Armv8.0-A AdvSIMD scalar data-processing inventory row.
+The production decoder and ISA-on-ISA executor now cover scalar `FRECPE`,
+`FRECPX`, `FRSQRTE`, and `FCVTXN`, completing the operations missing from the
+already implemented scalar arithmetic, comparison, shift, conversion,
+saturating, narrowing, pairwise, and element-transfer subfamilies. The new
+native execution path preserves host FPCR and FPSR, installs and returns guest
+FP state, clears the architectural upper destination bits, and preserves
+unrelated SIMD, integer, SP, PSTATE, and PC state. KUnit enumerates every source
+and destination register encoding for all legal single-precision,
+double-precision, and narrowing forms, rejects disabled FP16 and malformed
+`FCVTXN` shapes, and executes every register alias combination plus zero,
+infinity, signaling NaN, default-NaN, invalid-operation, divide-by-zero, and
+inexact round-to-odd cases. The app-hosted gate reports 405 of 405 KUnit cases
+passing, including the three new scalar tests, reaches `ORLIX-KSELFTEST-END`,
+and passes its single XCTest in 8.517 seconds with zero failures. The owning
+command exited zero after terminating only the separately tracked `simctl
+diagnose` cleanup child. LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding and
+family inventory source. OpenMinis ish-arm64 at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` remains an independent family and
+gadget-decomposition cross-check. No external implementation source was copied.
+The kernel-owned inventory now reports 47 of 52 families complete with five
+explicit gaps.
+
 ## [2026-07-21] implement | Complete EL0 system, hint, and barrier coverage
 
 Closed the configured Armv8.0-A EL0 system-and-hint inventory row. The

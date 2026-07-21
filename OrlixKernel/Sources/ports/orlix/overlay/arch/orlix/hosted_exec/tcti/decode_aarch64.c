@@ -134,6 +134,12 @@
 #define AARCH64_SIMD_FMLS_PATTERN 0x0ea0cc00U
 #define AARCH64_SIMD_FMUL_PATTERN 0x2e20dc00U
 #define AARCH64_SIMD_FSUB_PATTERN 0x0ea0d400U
+#define AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK 0xffbffc00U
+#define AARCH64_SIMD_FRECPE_SCALAR_PATTERN 0x5ea1d800U
+#define AARCH64_SIMD_FRECPX_SCALAR_PATTERN 0x5ea1f800U
+#define AARCH64_SIMD_FRSQRTE_SCALAR_PATTERN 0x7ea1d800U
+#define AARCH64_SIMD_FCVTXN_SCALAR_MASK 0xfffffc00U
+#define AARCH64_SIMD_FCVTXN_SCALAR_PATTERN 0x7e616800U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
 #define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
 #define AARCH64_SIMD_SCALAR_ADD_SUB_MASK 0xdf20fc00U
@@ -2071,6 +2077,39 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.logical_op = operation;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK) ==
+	    AARCH64_SIMD_FRECPE_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK) ==
+	    AARCH64_SIMD_FRECPX_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK) ==
+	    AARCH64_SIMD_FRSQRTE_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FCVTXN_SCALAR_MASK) ==
+	    AARCH64_SIMD_FCVTXN_SCALAR_PATTERN) {
+		u32 estimate_pattern = instruction &
+			AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK;
+		bool fcvtxn = (instruction & AARCH64_SIMD_FCVTXN_SCALAR_MASK) ==
+			AARCH64_SIMD_FCVTXN_SCALAR_PATTERN;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = fcvtxn || (instruction & BIT(22)) ?
+			sizeof(u64) : sizeof(u32);
+		decoded.result_size = fcvtxn ? sizeof(u32) :
+			decoded.access_size;
+		decoded.simd_fp = true;
+		decoded.simd_scalar = true;
+		if (fcvtxn)
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCVTXN;
+		else if (estimate_pattern == AARCH64_SIMD_FRECPE_SCALAR_PATTERN)
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPE;
+		else if (estimate_pattern == AARCH64_SIMD_FRECPX_SCALAR_PATTERN)
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPX;
+		else
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTE;
 		return decoded;
 	}
 

@@ -355,6 +355,10 @@ enum tcti_simd_vector_arithmetic_op {
 	TCTI_SIMD_ARITH_SQRSHL,
 	TCTI_SIMD_ARITH_UQRSHL,
 	TCTI_SIMD_ARITH_USHR,
+	TCTI_SIMD_ARITH_FRECPE,
+	TCTI_SIMD_ARITH_FRECPX,
+	TCTI_SIMD_ARITH_FRSQRTE,
+	TCTI_SIMD_ARITH_FCVTXN,
 };
 
 enum tcti_simd_vector_compare_op {

@@ -4767,6 +4767,27 @@ static int tcti_execute_simd_vector_arithmetic(
 		regs->pc += sizeof(u32);
 		return 0;
 	}
+	if (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRECPE ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRECPX ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRSQRTE ||
+	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FCVTXN) {
+		u64 source[2];
+		u64 result[2] = {};
+		int ret;
+
+		source[0] = current->thread.user_simd[decoded->rn * 2];
+		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		ret = tcti_native_simd_fp_scalar_unary(
+			decoded->simd_arithmetic_op, decoded->access_size,
+			decoded->result_size, result, source,
+			current->thread.user_fpcr, &current->thread.user_fpsr);
+		if (ret)
+			return ret;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_FABD &&
 	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_FSUB) {
 		u64 left[2];

@@ -757,6 +757,88 @@ int tcti_native_simd_fp_three_same(
 	return ret;
 }
 
+#define TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[source]]\n" \
+			     instruction "\n" \
+			     "str q0, [%[result]]\n" \
+			     : \
+			     : [result] "r" (result), [source] "r" (source) \
+			     : "v0", "memory"); \
+	})
+
+int tcti_native_simd_fp_scalar_unary(
+	enum tcti_simd_vector_arithmetic_op operation, u8 access_size,
+	u8 result_size, u64 result[2], const u64 source[2], unsigned long fpcr,
+	unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !source || !fpsr)
+		return -EINVAL;
+	if (operation == TCTI_SIMD_ARITH_FCVTXN) {
+		if (access_size != sizeof(u64) || result_size != sizeof(u32))
+			return -EINVAL;
+	} else if ((access_size != sizeof(u32) &&
+		    access_size != sizeof(u64)) || result_size != access_size) {
+		return -EINVAL;
+	}
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	case TCTI_SIMD_ARITH_FRECPE:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frecpe s0, s0");
+		else
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frecpe d0, d0");
+		break;
+	case TCTI_SIMD_ARITH_FRECPX:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frecpx s0, s0");
+		else
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frecpx d0, d0");
+		break;
+	case TCTI_SIMD_ARITH_FRSQRTE:
+		if (access_size == sizeof(u32))
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frsqrte s0, s0");
+		else
+			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frsqrte d0, d0");
+		break;
+	case TCTI_SIMD_ARITH_FCVTXN:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcvtxn s0, d0");
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+#undef TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN
+
 #define TCTI_NATIVE_SIMD_FP_PAIRWISE_RUN(instruction) \
 	({ \
 		asm volatile("ldr q0, [%[source]]\n" \

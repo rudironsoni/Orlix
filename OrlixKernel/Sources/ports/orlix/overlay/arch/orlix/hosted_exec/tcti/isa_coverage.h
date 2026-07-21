@@ -100,7 +100,24 @@ enum tcti_isa_coverage_status {
 	  "tcti_switch_executes_complete_simd_scalar_shift_narrow_family;" \
 	  "tcti_switch_executes_complete_simd_scalar_saturating_narrow_family;" \
 	  "tcti_switch_executes_complete_simd_shift_left_long_family") \
-	X(ASIMD_SCALAR, ASIMD, PARTIAL, "AdvSIMD scalar data processing", "TCTI_DECODE_SIMD_VECTOR_*", "") \
+	X(ASIMD_SCALAR, ASIMD, COMPLETE, "AdvSIMD scalar data processing", \
+	  "TCTI_DECODE_SIMD_VECTOR_*", \
+	  "tcti_decode_exhaustive_simd_fp_scalar_unary;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_add_sub_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_saturating_add_sub_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_saturating_mul_high_family;" \
+	  "tcti_decode_exhaustive_simd_scalar_sqdm_long;" \
+	  "tcti_decode_exhaustive_simd_mixed_saturating_add;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_integer_unary_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_compare_zero_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_register_compare_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_shift_by_register_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_shift_immediate_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_shift_narrow_family;" \
+	  "tcti_decode_recognizes_complete_simd_scalar_saturating_narrow_family;" \
+	  "tcti_gadget_executes_complete_simd_fp_scalar_unary_family;" \
+	  "tcti_gadget_executes_complete_simd_fp_three_same_family;" \
+	  "tcti_gadget_executes_complete_simd_fp_pairwise_family") \
 	X(ASIMD_VECTOR_3SAME, ASIMD, PARTIAL, "AdvSIMD vector three same", "TCTI_DECODE_SIMD_VECTOR_*", "") \
 	X(ASIMD_VECTOR_3DIFFERENT, ASIMD, PARTIAL, "AdvSIMD vector three different", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(ASIMD_VECTOR_2REG_MISC, ASIMD, PARTIAL, "AdvSIMD vector two-register miscellaneous", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
@@ -170,6 +187,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	6
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	5
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
