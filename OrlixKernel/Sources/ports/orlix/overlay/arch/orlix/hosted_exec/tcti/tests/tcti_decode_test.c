@@ -4633,6 +4633,73 @@ static void tcti_decode_exhaustive_simd_pairwise_long(struct kunit *test)
 	}
 }
 
+static void tcti_decode_exhaustive_simd_fp_three_same(struct kunit *test)
+{
+	static const struct {
+		u32 pattern;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x2ea0d400U, TCTI_SIMD_ARITH_FABD },
+		{ 0x2e20ec00U, TCTI_SIMD_ARITH_FACGE },
+		{ 0x2ea0ec00U, TCTI_SIMD_ARITH_FACGT },
+		{ 0x0e20e400U, TCTI_SIMD_ARITH_FCMEQ },
+		{ 0x2e20e400U, TCTI_SIMD_ARITH_FCMGE },
+		{ 0x2ea0e400U, TCTI_SIMD_ARITH_FCMGT },
+		{ 0x0e20dc00U, TCTI_SIMD_ARITH_FMULX },
+		{ 0x0e20fc00U, TCTI_SIMD_ARITH_FRECPS },
+		{ 0x0ea0fc00U, TCTI_SIMD_ARITH_FRSQRTS },
+	};
+	u16 variant;
+
+	for (variant = 0; variant < 4096; variant++) {
+		u8 case_index = variant & 0xfU;
+		u8 reg = (variant >> 4) & 0x1fU;
+		u8 precision = (variant >> 9) & 0x1U;
+		u8 q = (variant >> 10) & 0x1U;
+		u8 scalar = (variant >> 11) & 0x1U;
+		u8 rn = (reg + 1) & 0x1fU;
+		u8 rm = (reg + 2) & 0x1fU;
+		u32 instruction;
+		struct tcti_decoded_instruction decoded;
+		bool valid;
+
+		if (case_index >= ARRAY_SIZE(cases))
+			continue;
+		instruction = cases[case_index].pattern | ((u32)rm << 16) |
+			((u32)rn << 5) | reg;
+		if (precision)
+			instruction |= BIT(22);
+		if (scalar)
+			instruction |= BIT(28);
+		if (q)
+			instruction |= BIT(30);
+		decoded = tcti_decode_aarch64(instruction);
+		valid = scalar ? q : q || !precision;
+		if (!valid) {
+			KUNIT_EXPECT_TRUE(test,
+				decoded.decode_class !=
+					TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ||
+				decoded.simd_arithmetic_op !=
+					cases[case_index].operation);
+			continue;
+		}
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, cases[case_index].operation,
+				decoded.simd_arithmetic_op);
+		KUNIT_EXPECT_EQ(test, reg, decoded.rd);
+		KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+		KUNIT_EXPECT_EQ(test, precision ? 8U : 4U,
+				decoded.access_size);
+		KUNIT_EXPECT_EQ(test,
+				scalar ? decoded.access_size : q ? 16U : 8U,
+				decoded.result_size);
+		KUNIT_EXPECT_EQ(test, !!scalar, decoded.simd_scalar);
+		KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
+	}
+}
+
 static void
 tcti_decode_recognizes_complete_simd_scalar_shift_immediate_family(
 	struct kunit *test)
@@ -17996,6 +18063,261 @@ static void tcti_gadget_executes_complete_simd_pairwise_long_family(
 	}
 }
 
+static u64 tcti_test_simd_fp_three_same_expected(
+	enum tcti_simd_vector_arithmetic_op operation, u8 access_size,
+	bool equal_sources)
+{
+	u64 true_value = access_size == sizeof(u32) ? GENMASK(31, 0) : U64_MAX;
+
+	if (access_size == sizeof(u32)) {
+		switch (operation) {
+		case TCTI_SIMD_ARITH_FABD:
+			return equal_sources ? 0 : 0x3f800000U;
+		case TCTI_SIMD_ARITH_FACGE:
+		case TCTI_SIMD_ARITH_FCMGE:
+			return true_value;
+		case TCTI_SIMD_ARITH_FACGT:
+		case TCTI_SIMD_ARITH_FCMEQ:
+		case TCTI_SIMD_ARITH_FCMGT:
+			return equal_sources ==
+			       (operation == TCTI_SIMD_ARITH_FCMEQ) ?
+				true_value : 0;
+		case TCTI_SIMD_ARITH_FMULX:
+			return equal_sources ? 0x40800000U : 0x40c00000U;
+		case TCTI_SIMD_ARITH_FRECPS:
+			return equal_sources ? 0xc0000000U : 0xc0800000U;
+		default:
+			return equal_sources ? 0xbf000000U : 0xbfc00000U;
+		}
+	}
+	switch (operation) {
+	case TCTI_SIMD_ARITH_FABD:
+		return equal_sources ? 0 : 0x3ff0000000000000ULL;
+	case TCTI_SIMD_ARITH_FACGE:
+	case TCTI_SIMD_ARITH_FCMGE:
+		return true_value;
+	case TCTI_SIMD_ARITH_FACGT:
+	case TCTI_SIMD_ARITH_FCMEQ:
+	case TCTI_SIMD_ARITH_FCMGT:
+		return equal_sources ==
+		       (operation == TCTI_SIMD_ARITH_FCMEQ) ?
+			true_value : 0;
+	case TCTI_SIMD_ARITH_FMULX:
+		return equal_sources ? 0x4010000000000000ULL :
+			0x4018000000000000ULL;
+	case TCTI_SIMD_ARITH_FRECPS:
+		return equal_sources ? 0xc000000000000000ULL :
+			0xc010000000000000ULL;
+	default:
+		return equal_sources ? 0xbfe0000000000000ULL :
+			0xbff8000000000000ULL;
+	}
+}
+
+static void tcti_test_execute_simd_fp_three_same(
+	struct kunit *test, u32 pattern,
+	enum tcti_simd_vector_arithmetic_op operation, bool scalar, bool q,
+	u8 access_size, u8 alias)
+{
+	u8 rd = alias == 1 ? 1 : alias == 2 ? 2 : 0;
+	u8 rn = 1;
+	u8 rm = alias == 3 ? 1 : 2;
+	u8 result_size = scalar ? access_size :
+		q ? 2 * sizeof(u64) : sizeof(u64);
+	u8 lane_count = result_size / access_size;
+	u32 instruction = pattern | (scalar ? BIT(28) : 0) |
+		(q ? BIT(30) : 0) |
+		(access_size == sizeof(u64) ? BIT(22) : 0) |
+		((u32)rm << 16) | ((u32)rn << 5) | rd;
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 left = access_size == sizeof(u32) ? 0x40400000U :
+		0x4008000000000000ULL;
+	u64 right = access_size == sizeof(u32) ? 0x40000000U :
+		0x4000000000000000ULL;
+	u64 expected = tcti_test_simd_fp_three_same_expected(
+		operation, access_size, rn == rm);
+	unsigned int word;
+	u8 lane;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+	for (word = 0; word < ARRAY_SIZE(before_simd); word++)
+		before_simd[word] =
+			0xd4d4000000000000ULL ^ ((u64)instruction << 5) ^ word;
+	for (lane = 0; lane < lane_count; lane++) {
+		tcti_test_set_simd_lane(before_simd, rn, access_size, lane, left);
+		tcti_test_set_simd_lane(before_simd, rm, access_size, lane, right);
+	}
+	memcpy(current->thread.user_simd, before_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[rd * 2] = 0;
+	expected_simd[rd * 2 + 1] = 0;
+	for (lane = 0; lane < lane_count; lane++)
+		tcti_test_set_simd_lane(expected_simd, rd, access_size, lane,
+					expected);
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		regs.regs[word] = 0xace0000000000000ULL ^ word;
+	regs.pc = 0x61b92000ULL;
+	regs.sp = 0x61ca3000ULL;
+	regs.pstate = PSR_N_BIT | PSR_Z_BIT;
+	current->thread.user_fpcr = 0;
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, 0U, current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, BIT(27), current->thread.user_fpsr);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x61b92004ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x61ca3000ULL, regs.sp);
+	KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_Z_BIT, regs.pstate);
+	for (word = 0; word < ARRAY_SIZE(regs.regs); word++)
+		KUNIT_EXPECT_EQ(test, 0xace0000000000000ULL ^ word,
+				regs.regs[word]);
+}
+
+static void tcti_gadget_executes_complete_simd_fp_three_same_family(
+	struct kunit *test)
+{
+	static const struct {
+		u32 pattern;
+		enum tcti_simd_vector_arithmetic_op operation;
+	} cases[] = {
+		{ 0x2ea0d400U, TCTI_SIMD_ARITH_FABD },
+		{ 0x2e20ec00U, TCTI_SIMD_ARITH_FACGE },
+		{ 0x2ea0ec00U, TCTI_SIMD_ARITH_FACGT },
+		{ 0x0e20e400U, TCTI_SIMD_ARITH_FCMEQ },
+		{ 0x2e20e400U, TCTI_SIMD_ARITH_FCMGE },
+		{ 0x2ea0e400U, TCTI_SIMD_ARITH_FCMGT },
+		{ 0x0e20dc00U, TCTI_SIMD_ARITH_FMULX },
+		{ 0x0e20fc00U, TCTI_SIMD_ARITH_FRECPS },
+		{ 0x0ea0fc00U, TCTI_SIMD_ARITH_FRSQRTS },
+	};
+	unsigned int case_index;
+	u8 access_size;
+	u8 alias;
+
+	for (case_index = 0; case_index < ARRAY_SIZE(cases); case_index++) {
+		for (access_size = sizeof(u32); access_size <= sizeof(u64);
+		     access_size *= 2) {
+			for (alias = 0; alias < 4; alias++) {
+				tcti_test_execute_simd_fp_three_same(
+					test, cases[case_index].pattern,
+					cases[case_index].operation, true, true,
+					access_size, alias);
+				tcti_test_execute_simd_fp_three_same(
+					test, cases[case_index].pattern,
+					cases[case_index].operation, false, true,
+					access_size, alias);
+				if (access_size == sizeof(u32))
+					tcti_test_execute_simd_fp_three_same(
+						test, cases[case_index].pattern,
+						cases[case_index].operation,
+						false, false, access_size, alias);
+			}
+		}
+	}
+}
+
+static void tcti_test_execute_simd_fp_three_same_special(
+	struct kunit *test, u32 pattern, u8 access_size, u64 left, u64 right,
+	u64 expected, unsigned long fpcr, unsigned long expected_fpsr)
+{
+	u32 instruction = pattern | BIT(28) | BIT(30) |
+		(access_size == sizeof(u64) ? BIT(22) : 0) |
+		(2U << 16) | (1U << 5);
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	struct pt_regs regs = {};
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned int word;
+	int ret;
+
+	for (word = 0; word < ARRAY_SIZE(before_simd); word++)
+		before_simd[word] = 0xe5e5000000000000ULL ^ word;
+	before_simd[2] = left;
+	before_simd[3] = 0;
+	before_simd[4] = right;
+	before_simd[5] = 0;
+	memcpy(current->thread.user_simd, before_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[0] = expected;
+	expected_simd[1] = 0;
+	regs.pc = 0x71b92000ULL;
+	current->thread.user_fpcr = fpcr;
+	current->thread.user_fpsr = BIT(27);
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, fpcr, current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, expected_fpsr, current->thread.user_fpsr);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, 0x71b92004ULL, regs.pc);
+}
+
+static void tcti_gadget_executes_simd_fp_three_same_special_cases(
+	struct kunit *test)
+{
+	u8 access_size;
+
+	for (access_size = sizeof(u32); access_size <= sizeof(u64);
+	     access_size *= 2) {
+		u64 infinity = access_size == sizeof(u32) ? 0x7f800000U :
+			0x7ff0000000000000ULL;
+		u64 one = access_size == sizeof(u32) ? 0x3f800000U :
+			0x3ff0000000000000ULL;
+		u64 one_and_half = access_size == sizeof(u32) ? 0x3fc00000U :
+			0x3ff8000000000000ULL;
+		u64 two = access_size == sizeof(u32) ? 0x40000000U :
+			0x4000000000000000ULL;
+		u64 quiet_nan = access_size == sizeof(u32) ? 0x7fc00000U :
+			0x7ff8000000000000ULL;
+		u64 signaling_nan = access_size == sizeof(u32) ? 0x7f800001U :
+			0x7ff0000000000001ULL;
+		u64 quieted_signaling_nan = signaling_nan |
+			(access_size == sizeof(u32) ? BIT_ULL(22) : BIT_ULL(51));
+
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x0e20dc00U, access_size, 0, infinity, two, 0,
+			BIT(27));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x0e20fc00U, access_size, infinity, 0, two, 0,
+			BIT(27));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x0ea0fc00U, access_size, infinity, 0,
+			one_and_half, 0, BIT(27));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x0e20e400U, access_size, quiet_nan, one, 0, 0,
+			BIT(27));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x0e20e400U, access_size, signaling_nan, one, 0, 0,
+			BIT(27) | BIT(0));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x2ea0d400U, access_size, quiet_nan, one, quiet_nan,
+			0, BIT(27));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x2ea0d400U, access_size, signaling_nan, one,
+			quieted_signaling_nan, 0, BIT(27) | BIT(0));
+		tcti_test_execute_simd_fp_three_same_special(
+			test, 0x2ea0d400U, access_size, quiet_nan, one,
+			quiet_nan, BIT(25), BIT(27));
+	}
+}
+
 enum tcti_test_simd_copy_kind {
 	TCTI_TEST_SIMD_COPY_SCALAR_DUP,
 	TCTI_TEST_SIMD_COPY_VECTOR_DUP,
@@ -22764,6 +23086,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_exhaustive_simd_scalar_sqdm_long),
 	KUNIT_CASE(tcti_decode_exhaustive_simd_mixed_saturating_add),
 	KUNIT_CASE(tcti_decode_exhaustive_simd_pairwise_long),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_fp_three_same),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_sha3_family),
@@ -22941,6 +23264,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_gadget_executes_simd_scalar_mixed_saturating_add),
 	KUNIT_CASE(tcti_gadget_executes_simd_vector_mixed_saturating_add),
 	KUNIT_CASE(tcti_gadget_executes_complete_simd_pairwise_long_family),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_fp_three_same_family),
+	KUNIT_CASE(tcti_gadget_executes_simd_fp_three_same_special_cases),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_saturating_mul_high_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_mul_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_sha3_family),

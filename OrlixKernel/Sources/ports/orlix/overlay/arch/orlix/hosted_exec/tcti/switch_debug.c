@@ -14,6 +14,7 @@
 #include <asm/tcti.h>
 
 #include "decode_aarch64.h"
+#include "fixed_fp.h"
 #include "semantics.h"
 #include "switch_debug.h"
 
@@ -4697,6 +4698,29 @@ static int tcti_execute_simd_vector_arithmetic(
 		}
 		if (saturated)
 			current->thread.user_fpsr |= AARCH64_FPSR_QC;
+		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
+					    result[0], result[1]);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+	if (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_FABD &&
+	    decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_FRSQRTS) {
+		u64 left[2];
+		u64 right[2];
+		u64 result[2] = {};
+		int ret;
+
+		left[0] = current->thread.user_simd[decoded->rn * 2];
+		left[1] = current->thread.user_simd[decoded->rn * 2 + 1];
+		right[0] = current->thread.user_simd[decoded->rm * 2];
+		right[1] = current->thread.user_simd[decoded->rm * 2 + 1];
+		ret = tcti_native_simd_fp_three_same(
+			decoded->simd_arithmetic_op, decoded->simd_scalar,
+			decoded->access_size, decoded->result_size, result, left,
+			right, current->thread.user_fpcr,
+			&current->thread.user_fpsr);
+		if (ret)
+			return ret;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
 					    result[0], result[1]);
 		regs->pc += sizeof(u32);

@@ -99,6 +99,16 @@
 #define AARCH64_SIMD_DUP_SCALAR_ELEMENT_PATTERN 0x5e000400U
 #define AARCH64_SIMD_VECTOR_LOGICAL_MASK 0x9f20fc00U
 #define AARCH64_SIMD_VECTOR_LOGICAL_PATTERN 0x0e201c00U
+#define AARCH64_SIMD_FP_THREE_SAME_MASK 0xafa0fc00U
+#define AARCH64_SIMD_FABD_PATTERN 0x2ea0d400U
+#define AARCH64_SIMD_FACGE_PATTERN 0x2e20ec00U
+#define AARCH64_SIMD_FACGT_PATTERN 0x2ea0ec00U
+#define AARCH64_SIMD_FCMEQ_PATTERN 0x0e20e400U
+#define AARCH64_SIMD_FCMGE_PATTERN 0x2e20e400U
+#define AARCH64_SIMD_FCMGT_PATTERN 0x2ea0e400U
+#define AARCH64_SIMD_FMULX_PATTERN 0x0e20dc00U
+#define AARCH64_SIMD_FRECPS_PATTERN 0x0e20fc00U
+#define AARCH64_SIMD_FRSQRTS_PATTERN 0x0ea0fc00U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
 #define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
 #define AARCH64_SIMD_SCALAR_ADD_SUB_MASK 0xdf20fc00U
@@ -1949,6 +1959,71 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FABD_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGE_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGT_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMEQ_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGE_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGT_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMULX_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRECPS_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRSQRTS_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_FP_THREE_SAME_MASK;
+		bool scalar = instruction & BIT(28);
+		bool q = instruction & BIT(30);
+		u8 access_size = instruction & BIT(22) ? sizeof(u64) : sizeof(u32);
+
+		if ((scalar && !q) || (!scalar && !q && access_size == sizeof(u64)))
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = access_size;
+		decoded.result_size = scalar ? access_size :
+			q ? 2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_scalar = scalar;
+		switch (pattern) {
+		case AARCH64_SIMD_FABD_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FABD;
+			break;
+		case AARCH64_SIMD_FACGE_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGE;
+			break;
+		case AARCH64_SIMD_FACGT_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGT;
+			break;
+		case AARCH64_SIMD_FCMEQ_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMEQ;
+			break;
+		case AARCH64_SIMD_FCMGE_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGE;
+			break;
+		case AARCH64_SIMD_FCMGT_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGT;
+			break;
+		case AARCH64_SIMD_FMULX_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMULX;
+			break;
+		case AARCH64_SIMD_FRECPS_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPS;
+			break;
+		default:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTS;
+			break;
+		}
+		return decoded;
+	}
 	if ((instruction & AARCH64_SIMD_ADD_SUB_MASK) ==
 	    AARCH64_SIMD_ADD_SUB_PATTERN ||
 	    (instruction & AARCH64_SIMD_SCALAR_ADD_SUB_MASK) ==
