@@ -907,6 +907,374 @@ static void tcti_decode_recognizes_load_store_unsigned_class(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x1c0LL, decoded.memory_offset);
 }
 
+static bool tcti_test_gpr_load_store_variant_is_legal(u8 size, u8 opc)
+{
+	return opc <= 1 || (opc == 2 && size < 3) ||
+	       (opc == 3 && size < 2);
+}
+
+static bool tcti_test_simd_load_store_variant_is_legal(u8 size, u8 opc)
+{
+	return opc <= 1 || (size == 0 && opc >= 2);
+}
+
+static u8 tcti_test_load_store_access_size(bool simd_fp, u8 size, u8 opc)
+{
+	if (simd_fp && size == 0 && opc >= 2)
+		return 16;
+	return 1U << size;
+}
+
+static void tcti_decode_exhaustive_load_store_unsigned_immediate_family(
+	struct kunit *test)
+{
+	u32 imm12;
+	u8 simd_fp;
+	u8 size;
+	u8 opc;
+
+	for (simd_fp = 0; simd_fp < 2; simd_fp++) {
+		for (size = 0; size < 4; size++) {
+			for (opc = 0; opc < 4; opc++) {
+				bool prefetch = !simd_fp && size == 3 && opc == 2;
+				bool legal = simd_fp ?
+					tcti_test_simd_load_store_variant_is_legal(size,
+									 opc) :
+					tcti_test_gpr_load_store_variant_is_legal(size,
+									opc);
+
+				for (imm12 = 0; imm12 < BIT(12); imm12++) {
+					u32 instruction = 0x39000000U |
+						((u32)size << 30) |
+						((u32)simd_fp << 26) |
+						((u32)opc << 22) |
+						(imm12 << 10) | (9U << 5) | 10U;
+					struct tcti_decoded_instruction decoded =
+						tcti_decode_aarch64(instruction);
+
+					if (prefetch) {
+						KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_HINT,
+								decoded.decode_class,
+								"instruction %#x", instruction);
+						continue;
+					}
+					if (!legal) {
+						KUNIT_ASSERT_EQ_MSG(test,
+								TCTI_DECODE_UNSUPPORTED,
+								decoded.decode_class,
+								"instruction %#x", instruction);
+						continue;
+					}
+
+					KUNIT_ASSERT_EQ_MSG(test,
+						TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
+						decoded.decode_class,
+						"instruction %#x", instruction);
+					KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
+					KUNIT_EXPECT_EQ(test, 10U, decoded.rt);
+					KUNIT_EXPECT_EQ(test, simd_fp, decoded.simd_fp);
+					KUNIT_EXPECT_EQ(test,
+						tcti_test_load_store_access_size(simd_fp,
+									 size, opc),
+						decoded.access_size);
+					KUNIT_EXPECT_EQ(test,
+						(s64)imm12 * decoded.access_size,
+						decoded.memory_offset);
+				}
+			}
+		}
+	}
+}
+
+static void tcti_expect_load_store_signed_immediate_shape(
+	struct kunit *test, u8 simd_fp, u8 size, u8 opc, u8 mode)
+{
+	bool prefetch = !simd_fp && size == 3 && opc == 2 && mode == 0;
+	bool legal = simd_fp ?
+		mode != 2 &&
+		tcti_test_simd_load_store_variant_is_legal(size, opc) :
+		tcti_test_gpr_load_store_variant_is_legal(size, opc);
+	u32 imm9;
+
+	for (imm9 = 0; imm9 < BIT(9); imm9++) {
+		u32 instruction = 0x38000000U | ((u32)size << 30) |
+			((u32)simd_fp << 26) | ((u32)opc << 22) |
+			(imm9 << 12) | ((u32)mode << 10) | (9U << 5) | 10U;
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+
+		if (prefetch) {
+			KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_HINT,
+					decoded.decode_class,
+					"instruction %#x", instruction);
+			continue;
+		}
+		if (!legal || (!simd_fp && size == 3 && opc == 2)) {
+			KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class,
+					"instruction %#x", instruction);
+			continue;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(test,
+			TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+			decoded.decode_class, "instruction %#x", instruction);
+		KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
+		KUNIT_EXPECT_EQ(test, 10U, decoded.rt);
+		KUNIT_EXPECT_EQ(test, simd_fp, decoded.simd_fp);
+		KUNIT_EXPECT_EQ(test, sign_extend64(imm9, 8),
+				 decoded.memory_offset);
+		KUNIT_EXPECT_EQ(test,
+			mode == 1 ? TCTI_MEMORY_INDEX_POST :
+			mode == 3 ? TCTI_MEMORY_INDEX_PRE :
+			TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+			decoded.memory_index_mode);
+	}
+}
+
+static void tcti_decode_exhaustive_load_store_signed_immediate_family(
+	struct kunit *test)
+{
+	u8 simd_fp;
+	u8 size;
+	u8 opc;
+	u8 mode;
+
+	for (simd_fp = 0; simd_fp < 2; simd_fp++)
+		for (size = 0; size < 4; size++)
+			for (opc = 0; opc < 4; opc++)
+				for (mode = 0; mode < 4; mode++)
+					tcti_expect_load_store_signed_immediate_shape(
+						test, simd_fp, size, opc, mode);
+}
+
+static void tcti_expect_load_store_register_offset_shape(
+	struct kunit *test, u8 simd_fp, u8 size, u8 opc)
+{
+	bool legal = simd_fp ?
+		tcti_test_simd_load_store_variant_is_legal(size, opc) :
+		tcti_test_gpr_load_store_variant_is_legal(size, opc);
+	u8 rm;
+	u8 option;
+	u8 shift;
+
+	for (rm = 0; rm < 32; rm++) {
+		for (option = 0; option < 8; option++) {
+			for (shift = 0; shift < 2; shift++) {
+				bool valid_option = option == 2 || option == 3 ||
+					option == 6 || option == 7;
+				bool prefetch = valid_option && !simd_fp &&
+					size == 3 && opc == 2;
+				u32 instruction = 0x38200800U |
+					((u32)size << 30) |
+					((u32)simd_fp << 26) |
+					((u32)opc << 22) | ((u32)rm << 16) |
+					((u32)option << 13) |
+					((u32)shift << 12) | (9U << 5) | 10U;
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(instruction);
+
+				if (prefetch) {
+					KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_HINT,
+						decoded.decode_class,
+						"instruction %#x", instruction);
+					continue;
+				}
+				if (!valid_option || !legal) {
+					KUNIT_ASSERT_EQ_MSG(test,
+						TCTI_DECODE_UNSUPPORTED,
+						decoded.decode_class,
+						"instruction %#x", instruction);
+					continue;
+				}
+
+				KUNIT_ASSERT_EQ_MSG(test,
+					TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+					decoded.decode_class,
+					"instruction %#x", instruction);
+				KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+				KUNIT_EXPECT_EQ(test, option,
+						decoded.offset_extend);
+				KUNIT_EXPECT_EQ(test, shift,
+						decoded.offset_shift);
+			}
+		}
+	}
+}
+
+static void tcti_decode_exhaustive_load_store_register_offset_family(
+	struct kunit *test)
+{
+	u8 simd_fp;
+	u8 size;
+	u8 opc;
+
+	for (simd_fp = 0; simd_fp < 2; simd_fp++)
+		for (size = 0; size < 4; size++)
+			for (opc = 0; opc < 4; opc++)
+				tcti_expect_load_store_register_offset_shape(
+					test, simd_fp, size, opc);
+}
+
+static void tcti_decode_load_store_all_register_fields(struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+	u8 rn;
+	u8 rt;
+	u8 rm;
+
+	for (rn = 0; rn < 32; rn++) {
+		for (rt = 0; rt < 32; rt++) {
+			decoded = tcti_decode_aarch64(0xf9400000U |
+						      ((u32)rn << 5) | rt);
+			KUNIT_ASSERT_EQ(test,
+				TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+
+			decoded = tcti_decode_aarch64(0xf8400800U |
+						      ((u32)rn << 5) | rt);
+			KUNIT_ASSERT_EQ(test,
+				TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
+				decoded.decode_class);
+			KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+		}
+	}
+
+	for (rn = 0; rn < 32; rn++) {
+		for (rt = 0; rt < 32; rt++) {
+			for (rm = 0; rm < 32; rm++) {
+				decoded = tcti_decode_aarch64(0xf8606800U |
+							      ((u32)rm << 16) |
+							      ((u32)rn << 5) | rt);
+				KUNIT_ASSERT_EQ(test,
+					TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, rn, decoded.rn);
+				KUNIT_EXPECT_EQ(test, rt, decoded.rt);
+				KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+			}
+		}
+	}
+}
+
+static int tcti_test_execute_single_instruction(
+	u32 instruction, struct pt_regs *regs, unsigned long *fault_address)
+{
+	struct tcti_gadget_word program[TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	size_t word_count;
+	int ret;
+
+	ret = tcti_lower_decoded_instruction(&decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	if (ret)
+		return ret;
+	return tcti_execute_gadget_program(current->mm, regs, program,
+					   word_count, fault_address);
+}
+
+static void tcti_gadget_executes_complete_load_store_register_family(
+	struct kunit *test)
+{
+	struct pt_regs regs = { 0 };
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	u32 instruction;
+	u16 halfword;
+	u8 byte;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	byte = 0x80;
+	ret = tcti_write_user_data(current->mm, mapped + 31, &byte,
+				   sizeof(byte));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.regs[9] = mapped + 32;
+	regs.pc = 0x1000;
+	instruction = 0x38000000U | (2U << 22) | (0x1ffU << 12) |
+		      (2U << 10) | (9U << 5) | 10U; /* ldtrsb x10, [x9, #-1] */
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, (u64)(s64)(s8)byte, regs.regs[10]);
+	KUNIT_EXPECT_EQ(test, mapped + 32, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, 0x1004ULL, regs.pc);
+
+	regs.regs[10] = 0xa1b2U;
+	instruction = 0x38000000U | (1U << 30) | (2U << 12) |
+		      (2U << 10) | (9U << 5) | 10U; /* sttrh w10, [x9, #2] */
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_read_user_data(current->mm, mapped + 34, &halfword,
+				  sizeof(halfword));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0xa1b2U, halfword);
+	KUNIT_EXPECT_EQ(test, mapped + 32, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, 0x1008ULL, regs.pc);
+
+	current->thread.user_simd[0] = 0x1122334455667788ULL;
+	instruction = 0x3d000000U | (5U << 10) | (9U << 5);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* str b0, [x9, #5] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_read_user_data(current->mm, mapped + 37, &byte,
+				  sizeof(byte));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x88U, byte);
+
+	halfword = 0x4567U;
+	ret = tcti_write_user_data(current->mm, mapped + 38, &halfword,
+				   sizeof(halfword));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	current->thread.user_simd[2] = ~0ULL;
+	current->thread.user_simd[3] = ~0ULL;
+	instruction = 0x7d400000U | (3U << 10) | (9U << 5) | 1U;
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* ldr h1, [x9, #6] */
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x4567ULL, current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[3]);
+
+	regs.pc = 0x2000;
+	instruction = 0xf9800000U | (9U << 5); /* prfm pldl1keep, [x9] */
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x2004ULL, regs.pc);
+	instruction = 0xf8800000U | (9U << 5); /* prfum pldl1keep, [x9] */
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x2008ULL, regs.pc);
+	instruction = 0xf8a06800U | (10U << 16) | (9U << 5);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address); /* prfm pldl1keep, [x9, x10] */
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x200cULL, regs.pc);
+
+	regs.regs[9] = 0;
+	regs.pc = 0x3000;
+	instruction = 0x38000000U | (2U << 30) | (1U << 22) |
+		      (2U << 10) | (9U << 5) | 10U; /* ldtr w10, [x9] */
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
+	KUNIT_EXPECT_EQ(test, 0UL, fault_address);
+	KUNIT_EXPECT_EQ(test, 0x3000ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[9]);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_decode_recognizes_load_store_signed_immediate_class(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -24779,9 +25147,14 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_load_store_pair_class),
 	KUNIT_CASE(tcti_gadget_executes_non_temporal_simd_pair),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_unsigned_class),
+	KUNIT_CASE(tcti_decode_exhaustive_load_store_unsigned_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_signed_immediate_class),
+	KUNIT_CASE(tcti_decode_exhaustive_load_store_signed_immediate_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_small_signed_memory_family),
 	KUNIT_CASE(tcti_decode_recognizes_load_store_register_offset_class),
+	KUNIT_CASE(tcti_decode_exhaustive_load_store_register_offset_family),
+	KUNIT_CASE(tcti_decode_load_store_all_register_fields),
+	KUNIT_CASE(tcti_gadget_executes_complete_load_store_register_family),
 	KUNIT_CASE(tcti_decode_ldrsw_signed_immediate_writes_x_register),
 	KUNIT_CASE(tcti_decode_recognizes_logical_shifted_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_logical_immediate_class),

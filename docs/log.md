@@ -7,6 +7,26 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete single-register load and store coverage
+
+Closed the configured Armv8.0-A single-register load and store inventory row.
+The production decoder now accepts unprivileged `LDTR` and `STTR` integer
+variants, every unsigned-immediate SIMD B/H/S/D/Q transfer, and architectural
+`PRFM` and `PRFUM` hints while preserving reserved prefetch, SIMD
+unprivileged, and invalid extend-option boundaries. KUnit exhaustively covers
+all unsigned and signed immediate control shapes and immediate values, every
+register-offset control shape and offset register, every base and transfer
+register field including register 31 and aliases, plus structured execution
+for sign extension, memory writes, SIMD B/H transfers, prefetch hints,
+unprivileged no-writeback behavior, exact PC progression, and memory faults.
+LLVM AArch64 TableGen at commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding
+source. OpenMinis ish-arm64 `gen.c` and `gadgets-aarch64/memory.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an independent addressing,
+width, extension, and gadget-decomposition cross-check. No external
+implementation source was copied. The kernel-owned inventory now reports 43 of
+52 families complete with 9 explicit gaps.
+
 ## [2026-07-21] verify | Close SHA1 and SHA256 ISA coverage
 
 Closed the configured Armv8.0-A SHA1 and SHA256 inventory row without replacing

@@ -1144,25 +1144,18 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		bool simd_fp = instruction & BIT(26);
 		u8 scale = size;
 
+		if (!simd_fp && size == 3 && opc == 2) {
+			decoded.decode_class = TCTI_DECODE_HINT;
+			return decoded;
+		}
+
 		if (simd_fp) {
-			if (size == 2 && opc <= 1) {
-				decoded.load = opc == 1;
-				decoded.access_size = sizeof(u32);
-				decoded.result_size = sizeof(u32);
-				scale = 2;
-			} else if (size == 3 && opc <= 1) {
-				decoded.load = opc == 1;
-				decoded.access_size = sizeof(u64);
-				decoded.result_size = sizeof(u64);
-				scale = 3;
-			} else if (size == 0 && opc >= 2) {
-				decoded.load = opc == 3;
-				decoded.access_size = 2 * sizeof(u64);
-				decoded.result_size = 2 * sizeof(u64);
-				scale = 4;
-			} else {
+			if (!tcti_decode_simd_fp_load_store_variant(
+				    size, opc, &decoded.load, &decoded.access_size,
+				    &decoded.result_size))
 				return decoded;
-			}
+			if (decoded.access_size == 2 * sizeof(u64))
+				scale = 4;
 
 			decoded.decode_class =
 				TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE;
@@ -1198,7 +1191,13 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		u8 mode = (instruction >> 10) & 0x3U;
 		bool simd_fp = instruction & BIT(26);
 
-		if (mode == 2)
+		if (!simd_fp && size == 3 && opc == 2) {
+			if (mode == 0)
+				decoded.decode_class = TCTI_DECODE_HINT;
+			return decoded;
+		}
+
+		if (simd_fp && mode == 2)
 			return decoded;
 
 		if (simd_fp) {
@@ -1215,9 +1214,9 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			decoded.memory_offset =
 				sign_extend64((instruction >> 12) & 0x1ffU, 8);
 			decoded.memory_index_mode =
-				mode == 0 ? TCTI_MEMORY_INDEX_SIGNED_OFFSET :
 				mode == 1 ? TCTI_MEMORY_INDEX_POST :
-					    TCTI_MEMORY_INDEX_PRE;
+				mode == 3 ? TCTI_MEMORY_INDEX_PRE :
+					    TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 			return decoded;
 		}
 
@@ -1233,9 +1232,9 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.memory_offset =
 			sign_extend64((instruction >> 12) & 0x1ffU, 8);
 		decoded.memory_index_mode =
-			mode == 0 ? TCTI_MEMORY_INDEX_SIGNED_OFFSET :
 			mode == 1 ? TCTI_MEMORY_INDEX_POST :
-				    TCTI_MEMORY_INDEX_PRE;
+			mode == 3 ? TCTI_MEMORY_INDEX_PRE :
+				    TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 		return decoded;
 	}
 
@@ -1248,6 +1247,10 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 		if (option != 2 && option != 3 && option != 6 && option != 7)
 			return decoded;
+		if (!simd_fp && size == 3 && opc == 2) {
+			decoded.decode_class = TCTI_DECODE_HINT;
+			return decoded;
+		}
 
 		if (simd_fp) {
 			if (!tcti_decode_simd_fp_load_store_variant(

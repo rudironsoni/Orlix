@@ -54,7 +54,13 @@ enum tcti_isa_coverage_status {
 	X(DATA_PROCESSING_3SOURCE, BASE, COMPLETE, "data processing three source", "TCTI_DECODE_MULTIPLY_ADD_SUB", "tcti_gadget_executes_complete_data_processing_3source_family") \
 	X(LOAD_LITERAL, BASE, COMPLETE, "load register literal", "TCTI_DECODE_LOAD_LITERAL", "tcti_gadget_executes_load_literal_state_transitions") \
 	X(LOAD_STORE_PAIR, BASE, COMPLETE, "load/store register pair", "TCTI_DECODE_LOAD_STORE_PAIR", "tcti_gadget_executes_non_temporal_simd_pair") \
-	X(LOAD_STORE_REGISTER, BASE, PARTIAL, "load/store register", "TCTI_DECODE_LOAD_STORE_*", "") \
+	X(LOAD_STORE_REGISTER, BASE, COMPLETE, "load/store register", \
+	  "TCTI_DECODE_LOAD_STORE_*/TCTI_DECODE_HINT", \
+	  "tcti_decode_exhaustive_load_store_unsigned_immediate_family;" \
+	  "tcti_decode_exhaustive_load_store_signed_immediate_family;" \
+	  "tcti_decode_exhaustive_load_store_register_offset_family;" \
+	  "tcti_decode_load_store_all_register_fields;" \
+	  "tcti_gadget_executes_complete_load_store_register_family") \
 	X(LOAD_STORE_EXCLUSIVE, BASE, PARTIAL, "load/store exclusive", "TCTI_DECODE_LOAD_STORE_EXCLUSIVE", "tcti_decode_recognizes_load_store_exclusive_class") \
 	X(ASIMD_STRUCTURE_LOAD_STORE, ASIMD, PARTIAL, "AdvSIMD structure load/store", "TCTI_DECODE_SIMD_LOAD_STORE_*", "") \
 	X(ASIMD_COPY, ASIMD, COMPLETE, "AdvSIMD copy", \
@@ -148,6 +154,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	10
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	9
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */
