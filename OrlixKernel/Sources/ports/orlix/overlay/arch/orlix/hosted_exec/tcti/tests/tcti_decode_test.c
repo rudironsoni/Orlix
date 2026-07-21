@@ -11196,8 +11196,8 @@ static void tcti_switch_executes_simd_cmeq_4s(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x880cULL, regs.pc);
 }
 
-static void tcti_switch_executes_complete_simd_permute_family(
-	struct kunit *test)
+static void
+tcti_switch_executes_simd_permute_known_vectors(struct kunit *test)
 {
 	static const struct {
 		u8 encoding;
@@ -16782,6 +16782,201 @@ static void tcti_gadget_executes_complete_simd_ext_family(struct kunit *test)
 	KUNIT_EXPECT_TRUE(test, saw_destination_alias);
 }
 
+static u64 tcti_test_simd_lane(const u64 simd[64], u8 reg, u8 access_size,
+			       u8 lane)
+{
+	u8 byte = lane * access_size;
+	u8 word = byte / sizeof(u64);
+	u8 shift = (byte % sizeof(u64)) * 8;
+	u64 mask = GENMASK_ULL(access_size * 8 - 1, 0);
+
+	return (simd[reg * 2 + word] >> shift) & mask;
+}
+
+static bool tcti_test_permute_operation(u8 encoding,
+					enum tcti_simd_element_move_op *operation)
+{
+	switch (encoding) {
+	case 1:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_UZP1;
+		return true;
+	case 2:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_TRN1;
+		return true;
+	case 3:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_ZIP1;
+		return true;
+	case 5:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_UZP2;
+		return true;
+	case 6:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_TRN2;
+		return true;
+	case 7:
+		*operation = TCTI_SIMD_ELEMENT_MOVE_ZIP2;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void
+tcti_test_permute_case(struct kunit *test, u8 encoding, u8 q, u8 size,
+		       u8 register_case,
+	bool seen_rn[32], bool seen_rm[32], bool seen_rd[32],
+	bool *saw_source_alias, bool *saw_destination_alias)
+{
+	u8 rn = register_case;
+	u8 rm = (register_case * 7 + encoding + size + q) & 0x1fU;
+	u8 rd = (register_case * 13 + encoding * 3 + size + q) & 0x1fU;
+	u32 instruction = 0x0e000800U | (q ? BIT(30) : 0) |
+		((u32)size << 22) | ((u32)rm << 16) |
+		((u32)encoding << 12) | ((u32)rn << 5) | rd;
+	struct tcti_decoded_instruction d = tcti_decode_aarch64(instruction);
+	enum tcti_simd_element_move_op operation;
+	bool valid_operation = tcti_test_permute_operation(encoding, &operation);
+	struct pt_regs regs = {};
+	struct pt_regs before_regs;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u8 access_size;
+	u8 result_size;
+	u8 lane_count;
+	u8 half;
+	u8 destination_lane;
+	unsigned int gpr;
+	int ret;
+
+	if (!valid_operation || (!q && size == 3)) {
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+				d.decode_class);
+		return;
+	}
+
+	access_size = BIT(size);
+	result_size = q ? 2 * sizeof(u64) : sizeof(u64);
+	lane_count = result_size / access_size;
+	half = lane_count / 2;
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
+			d.decode_class);
+	KUNIT_EXPECT_EQ(test, operation, d.simd_element_move_op);
+	KUNIT_EXPECT_EQ(test, access_size, d.access_size);
+	KUNIT_EXPECT_EQ(test, result_size, d.result_size);
+	KUNIT_EXPECT_EQ(test, rn, d.rn);
+	KUNIT_EXPECT_EQ(test, rm, d.rm);
+	KUNIT_EXPECT_EQ(test, rd, d.rd);
+	KUNIT_EXPECT_TRUE(test, d.simd_fp);
+
+	seen_rn[rn] = true;
+	seen_rm[rm] = true;
+	seen_rd[rd] = true;
+	*saw_source_alias |= rn == rm;
+	*saw_destination_alias |= rd == rn || rd == rm;
+	tcti_test_initialize_simd_registers(instruction);
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	memcpy(expected_simd, before_simd, sizeof(expected_simd));
+	expected_simd[rd * 2] = 0;
+	expected_simd[rd * 2 + 1] = 0;
+	for (destination_lane = 0; destination_lane < lane_count;
+	     destination_lane++) {
+		u8 source_reg;
+		u8 source_lane;
+		u8 destination_byte = destination_lane * access_size;
+		u8 destination_word = destination_byte / sizeof(u64);
+		u8 destination_shift =
+			(destination_byte % sizeof(u64)) * 8;
+		u64 value;
+
+		switch (operation) {
+		case TCTI_SIMD_ELEMENT_MOVE_UZP1:
+		case TCTI_SIMD_ELEMENT_MOVE_UZP2:
+			source_reg = destination_lane >= half ? rm : rn;
+			source_lane = (destination_lane % half) * 2 +
+				(operation == TCTI_SIMD_ELEMENT_MOVE_UZP2);
+			break;
+		case TCTI_SIMD_ELEMENT_MOVE_TRN1:
+		case TCTI_SIMD_ELEMENT_MOVE_TRN2:
+			source_reg = destination_lane & 1U ? rm : rn;
+			source_lane = (destination_lane / 2) * 2 +
+				(operation == TCTI_SIMD_ELEMENT_MOVE_TRN2);
+			break;
+		case TCTI_SIMD_ELEMENT_MOVE_ZIP1:
+		case TCTI_SIMD_ELEMENT_MOVE_ZIP2:
+			source_reg = destination_lane & 1U ? rm : rn;
+			source_lane = destination_lane / 2 +
+				(operation == TCTI_SIMD_ELEMENT_MOVE_ZIP2 ?
+				 half : 0);
+			break;
+		default:
+			KUNIT_FAIL(test, "unexpected permute operation %u",
+				   operation);
+			return;
+		}
+		value = tcti_test_simd_lane(before_simd, source_reg,
+					    access_size, source_lane);
+		expected_simd[rd * 2 + destination_word] |=
+			value << destination_shift;
+	}
+
+	for (gpr = 0; gpr < ARRAY_SIZE(regs.regs); gpr++)
+		regs.regs[gpr] = 0x5678000000000000ULL | gpr;
+	regs.pc = 0x10293847000ULL;
+	regs.sp = 0x56473829100ULL;
+	regs.pstate = PSR_Z_BIT | PSR_V_BIT | 0x155UL;
+	before_regs = regs;
+	current->thread.user_simd_valid = 0;
+
+	ret = tcti_switch_debug_execute_decoded(NULL, &regs, &d, NULL);
+
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, current->thread.user_simd, expected_simd,
+			   sizeof(expected_simd));
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_simd_valid);
+	KUNIT_EXPECT_MEMEQ(test, before_regs.regs, regs.regs,
+			   sizeof(regs.regs));
+	KUNIT_EXPECT_EQ(test, before_regs.sp, regs.sp);
+	KUNIT_EXPECT_EQ(test, before_regs.pstate, regs.pstate);
+	KUNIT_EXPECT_EQ(test, before_regs.pc + sizeof(u32), regs.pc);
+}
+
+static void
+tcti_gadget_executes_complete_simd_permute_family(struct kunit *test)
+{
+	bool seen_rn[32] = {};
+	bool seen_rm[32] = {};
+	bool seen_rd[32] = {};
+	bool saw_source_alias = false;
+	bool saw_destination_alias = false;
+	u8 encoding;
+
+	for (encoding = 0; encoding < 8; encoding++) {
+		u8 q;
+
+		for (q = 0; q < 2; q++) {
+			u8 size;
+
+			for (size = 0; size < 4; size++) {
+				u8 register_case;
+
+				for (register_case = 0; register_case < 32;
+				     register_case++)
+					tcti_test_permute_case(test, encoding, q, size,
+							       register_case, seen_rn, seen_rm,
+						seen_rd, &saw_source_alias,
+						&saw_destination_alias);
+			}
+		}
+	}
+
+	for (encoding = 0; encoding < 32; encoding++) {
+		KUNIT_EXPECT_TRUE(test, seen_rn[encoding]);
+		KUNIT_EXPECT_TRUE(test, seen_rm[encoding]);
+		KUNIT_EXPECT_TRUE(test, seen_rd[encoding]);
+	}
+	KUNIT_EXPECT_TRUE(test, saw_source_alias);
+	KUNIT_EXPECT_TRUE(test, saw_destination_alias);
+}
+
 static void tcti_switch_executes_simd_ext_16b(struct kunit *test)
 {
 	struct tcti_decoded_instruction decoded;
@@ -21099,7 +21294,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_simd_and_16b),
 	KUNIT_CASE(tcti_switch_executes_simd_orr_4s_immediate),
 	KUNIT_CASE(tcti_switch_executes_simd_cmeq_4s),
-	KUNIT_CASE(tcti_switch_executes_complete_simd_permute_family),
+	KUNIT_CASE(tcti_switch_executes_simd_permute_known_vectors),
+	KUNIT_CASE(tcti_gadget_executes_complete_simd_permute_family),
 	KUNIT_CASE(tcti_switch_executes_simd_uzp1_4h),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h0),
 	KUNIT_CASE(tcti_switch_executes_simd_umov_w_h1),

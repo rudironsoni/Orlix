@@ -7,6 +7,10 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] test | Complete AdvSIMD permute coverage
+
+Closed A64 AdvSIMD `UZP1`, `UZP2`, `TRN1`, `TRN2`, `ZIP1`, and `ZIP2` through production decode and execution. KUnit now enumerates every three-bit opcode slot, both vector widths, every element-size encoding, and every source and destination register field. It proves exact lane selection, source-source and destination-source aliases, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, exact PC progression, rejection of both reserved opcode slots, and rejection of the illegal 64-bit `size=3` form. The kernel-owned inventory reports 35 of 52 families complete with 17 explicit gaps.
+
 ## [2026-07-21] test | Complete AdvSIMD table lookup coverage
 
 Closed A64 AdvSIMD `TBL` and `TBX` through production decode and execution. KUnit now proves both result widths, one through four consecutive table registers including `V31` wraparound, every table-base, index, and destination register field, valid and out-of-range indexes, index-table, destination-table, and destination-index aliases, `TBL` zero fill, `TBX` destination retention, 64-bit upper-half clearing, unrelated SIMD and integer state preservation, and exact PC progression. The kernel-owned inventory reports 34 of 52 families complete with 18 explicit gaps.
