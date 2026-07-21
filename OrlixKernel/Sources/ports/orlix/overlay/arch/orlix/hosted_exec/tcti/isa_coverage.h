@@ -139,7 +139,23 @@ enum tcti_isa_coverage_status {
 	  "tcti_decode_exhaustive_simd_fp_three_same;" \
 	  "tcti_gadget_executes_complete_simd_fp_vector_three_same_family;" \
 	  "tcti_gadget_executes_complete_polynomial_multiply_family") \
-	X(ASIMD_VECTOR_3DIFFERENT, ASIMD, PARTIAL, "AdvSIMD vector three different", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
+	X(ASIMD_VECTOR_3DIFFERENT, ASIMD, COMPLETE, \
+	  "AdvSIMD vector three different", \
+	  "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", \
+	  "tcti_decode_recognizes_complete_simd_add_sub_wide_family;" \
+	  "tcti_decode_recognizes_complete_simd_add_sub_long_family;" \
+	  "tcti_decode_recognizes_complete_simd_multiply_long_family;" \
+	  "tcti_decode_recognizes_complete_simd_pmull_family;" \
+	  "tcti_decode_recognizes_complete_simd_add_sub_narrow_high_family;" \
+	  "tcti_decode_recognizes_complete_simd_absolute_difference_long_family;" \
+	  "tcti_decode_exhaustive_simd_vector_sqdm_long;" \
+	  "tcti_switch_executes_complete_simd_add_sub_wide_family;" \
+	  "tcti_switch_executes_complete_simd_add_sub_long_family;" \
+	  "tcti_switch_executes_complete_simd_multiply_long_family;" \
+	  "tcti_switch_executes_simd_pmull_known_vectors;" \
+	  "tcti_switch_executes_complete_simd_add_sub_narrow_high_family;" \
+	  "tcti_switch_executes_complete_simd_absolute_difference_long_family;" \
+	  "tcti_gadget_executes_simd_vector_sqdm_long") \
 	X(ASIMD_VECTOR_2REG_MISC, ASIMD, PARTIAL, "AdvSIMD vector two-register miscellaneous", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
 	X(ASIMD_VECTOR_ACROSS_LANES, ASIMD, PARTIAL, "AdvSIMD vector across lanes", "TCTI_DECODE_SIMD_VECTOR_REDUCTION", "") \
 	X(ASIMD_VECTOR_INDEXED_ELEMENT, ASIMD, PARTIAL, "AdvSIMD vector by indexed element", "TCTI_DECODE_SIMD_VECTOR_ARITHMETIC", "") \
@@ -207,6 +223,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	4
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	3
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

@@ -179,6 +179,10 @@
 #define AARCH64_SIMD_SCALAR_SQDMLAL_PATTERN 0x5e209000U
 #define AARCH64_SIMD_SCALAR_SQDMLSL_PATTERN 0x5e20b000U
 #define AARCH64_SIMD_SCALAR_SQDMULL_PATTERN 0x5e20d000U
+#define AARCH64_SIMD_VECTOR_SQDM_LONG_MASK 0xbf20fc00U
+#define AARCH64_SIMD_VECTOR_SQDMLAL_PATTERN 0x0e209000U
+#define AARCH64_SIMD_VECTOR_SQDMLSL_PATTERN 0x0e20b000U
+#define AARCH64_SIMD_VECTOR_SQDMULL_PATTERN 0x0e20d000U
 #define AARCH64_SIMD_AES_MASK 0xffff8c00U
 #define AARCH64_SIMD_AES_PATTERN 0x4e280800U
 #define AARCH64_SIMD_SHA1_THREE_REGISTER_MASK 0xffe04c00U
@@ -2740,6 +2744,35 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		if (pattern == AARCH64_SIMD_SCALAR_SQDMLAL_PATTERN)
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMLAL;
 		else if (pattern == AARCH64_SIMD_SCALAR_SQDMLSL_PATTERN)
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMLSL;
+		else
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMULL;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_VECTOR_SQDM_LONG_MASK) ==
+		    AARCH64_SIMD_VECTOR_SQDMLAL_PATTERN ||
+	    (instruction & AARCH64_SIMD_VECTOR_SQDM_LONG_MASK) ==
+		    AARCH64_SIMD_VECTOR_SQDMLSL_PATTERN ||
+	    (instruction & AARCH64_SIMD_VECTOR_SQDM_LONG_MASK) ==
+		    AARCH64_SIMD_VECTOR_SQDMULL_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+		u32 pattern = instruction & AARCH64_SIMD_VECTOR_SQDM_LONG_MASK;
+
+		if (size != 1 && size != 2)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.simd_source_index = !!(instruction & BIT(30));
+		decoded.simd_fp = true;
+		if (pattern == AARCH64_SIMD_VECTOR_SQDMLAL_PATTERN)
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMLAL;
+		else if (pattern == AARCH64_SIMD_VECTOR_SQDMLSL_PATTERN)
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMLSL;
 		else
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_SQDMULL;

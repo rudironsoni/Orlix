@@ -7,6 +7,30 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete AdvSIMD vector three-different coverage
+
+Closed the configured Armv8.0-A AdvSIMD vector three-different inventory row
+against LLVM AArch64 TableGen commit
+`de44ed3488693686dd1f65baad5d7bd3797eddca`. Existing production decoder,
+executor, and direct KUnit evidence already covered narrowing add/subtract,
+signed and unsigned absolute-difference long and accumulate, widening
+add/subtract, wide add/subtract, signed and unsigned multiply-long accumulate
+and subtract, and polynomial multiply. Added the missing vector and upper-half
+`SQDMULL`, `SQDMLAL`, and `SQDMLSL` forms through the existing Orlix-owned
+decoder and saturating execution helper. New KUnit evidence covers both legal
+source widths, both source halves, every register field, source-destination and
+all-register aliases, reserved widths, ordinary and saturating results, sticky
+`FPSR.QC`, full-vector writes, unrelated SIMD and integer state, and exact PC
+progression. The app-hosted gate reports 407 of 407 KUnit cases passing, reaches
+`ORLIX-KSELFTEST-END`, and passes its single XCTest in 12.166 seconds with zero
+failures. The owning command returned exit zero after terminating only Xcode's
+lingering `simctl diagnose` cleanup child. The structured result bundle reports
+one passed test, zero failures, and zero skipped tests. OpenMinis ish-arm64 `math.S` and
+`gen.c` at commit `89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an
+independent family-decomposition cross-check. No external implementation source
+was copied. The kernel-owned inventory now reports 49 of 52 families complete
+with three explicit gaps.
+
 ## [2026-07-21] audit | Complete AdvSIMD vector three-same coverage
 
 Closed the configured Armv8.0-A AdvSIMD vector three-same inventory row after
