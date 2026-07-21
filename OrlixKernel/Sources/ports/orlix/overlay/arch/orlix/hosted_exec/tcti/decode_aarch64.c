@@ -1122,7 +1122,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			decoded.simd_lane_index =
 				(decoded.simd_q << 1) |
 				((instruction >> 12) & 1U);
-		} else if (base_opcode == 4 && size == 1) {
+		} else if (base_opcode == 4 && size == 1 &&
+			   !(instruction & BIT(12))) {
 			decoded.access_size = sizeof(u64);
 			decoded.simd_lane_index = decoded.simd_q;
 		} else {

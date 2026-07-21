@@ -66,7 +66,14 @@ enum tcti_isa_coverage_status {
 	  "tcti_decode_exhaustive_load_store_exclusive_family;" \
 	  "tcti_decode_load_store_exclusive_all_register_fields;" \
 	  "tcti_gadget_executes_complete_load_store_exclusive_family") \
-	X(ASIMD_STRUCTURE_LOAD_STORE, ASIMD, PARTIAL, "AdvSIMD structure load/store", "TCTI_DECODE_SIMD_LOAD_STORE_*", "") \
+	X(ASIMD_STRUCTURE_LOAD_STORE, ASIMD, COMPLETE, \
+	  "AdvSIMD structure load/store", "TCTI_DECODE_SIMD_LOAD_STORE_*", \
+	  "tcti_decode_exhaustive_simd_single_structure_family;" \
+	  "tcti_decode_exhaustive_simd_multiple_structure_family;" \
+	  "tcti_decode_simd_structure_all_register_fields;" \
+	  "tcti_switch_exhausts_simd_single_structure_execution;" \
+	  "tcti_switch_exhausts_simd_multiple_structure_execution;" \
+	  "tcti_switch_reports_simd_multiple_structure_fault_order") \
 	X(ASIMD_COPY, ASIMD, COMPLETE, "AdvSIMD copy", \
 	  "TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE", \
 	  "tcti_gadget_executes_complete_simd_copy_family") \
@@ -158,6 +165,6 @@ static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 };
 
 /* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	8
+#define ORLIX_TCTI_ISA_EXPECTED_GAPS	7
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

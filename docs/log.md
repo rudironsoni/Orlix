@@ -7,6 +7,27 @@ updated: 2026-07-21
 ---
 # Orlix Knowledge Log
 
+## [2026-07-21] implement | Complete AdvSIMD structure load and store coverage
+
+Closed the configured Armv8.0-A AdvSIMD structure load/store inventory row.
+The production decoder now rejects the reserved 64-bit single-structure form
+with `S=1`, while retaining the complete `LD1` through `LD4`, `ST1` through
+`ST4`, and `LD1R` through `LD4R` single and multiple structure families.
+KUnit exhaustively covers all 49,152 single and multiple structure control
+combinations and every base and vector-register field. Its execution matrix
+proves every legal lane and replicate form, every multiple-structure opcode,
+all element widths, both 64-bit and 128-bit vector widths, loads and stores,
+sequential and interleaved layouts, register-list wrapping, writeback, memory
+fault order, unrelated SIMD state preservation, and exact PC progression. The
+app-hosted KUnit and Linux kselftest gate reports 396 of 396 tests passing, and
+XCTest passed its single owning test in 8.749 seconds. LLVM AArch64 TableGen at
+commit `de44ed3488693686dd1f65baad5d7bd3797eddca` remains the primary encoding
+source. OpenMinis ish-arm64 `gen.c` and `gadgets-aarch64/memory.S` at commit
+`89269e6fef7ab7aa61b133deae90d78e34a09ed1` supplied an independent structure
+count, lane decomposition, interleaving, and writeback cross-check. No external
+implementation source was copied. The kernel-owned inventory now reports 45 of
+52 families complete with 7 explicit gaps.
+
 ## [2026-07-21] implement | Complete exclusive load and store coverage
 
 Closed the configured Armv8.0-A exclusive load/store inventory row. The

@@ -3386,7 +3386,194 @@ static void tcti_decode_recognizes_complete_simd_multiple_structure_family(
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 		tcti_decode_aarch64(0x4c401100U).decode_class);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
-		tcti_decode_aarch64(0x4c417100U).decode_class);
+			tcti_decode_aarch64(0x4c417100U).decode_class);
+}
+
+static u32 tcti_test_encode_simd_multiple_structure(
+	bool q, bool post_index, bool load, u8 rm, u8 opcode, u8 size,
+	u8 rn, u8 rt)
+{
+	return 0x0c000000U | (q ? BIT(30) : 0) |
+		(post_index ? BIT(23) : 0) | (load ? BIT(22) : 0) |
+		((u32)rm << 16) | ((u32)opcode << 12) |
+		((u32)size << 10) | ((u32)rn << 5) | rt;
+}
+
+static u8 tcti_test_simd_multiple_structure_count(u8 opcode)
+{
+	switch (opcode) {
+	case 7:
+		return 1;
+	case 8:
+	case 10:
+		return 2;
+	case 4:
+	case 6:
+		return 3;
+	case 0:
+	case 2:
+		return 4;
+	default:
+		return 0;
+	}
+}
+
+static void tcti_decode_exhaustive_simd_multiple_structure_family(
+	struct kunit *test)
+{
+	u32 control;
+
+	for (control = 0; control < BIT(14); control++) {
+		u8 size = control & 0x3U;
+		u8 opcode = (control >> 2) & 0xfU;
+		u8 rm = (control >> 6) & 0x1fU;
+		bool load = control & BIT(11);
+		bool post_index = control & BIT(12);
+		bool q = control & BIT(13);
+		u8 count = tcti_test_simd_multiple_structure_count(opcode);
+		bool legal = count && (post_index || !rm);
+		u32 instruction = tcti_test_encode_simd_multiple_structure(
+			q, post_index, load, rm, opcode, size, 9, 10);
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+
+		if (!legal) {
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class, "instruction=%08x", instruction);
+			continue;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(test,
+			TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE,
+			decoded.decode_class, "instruction=%08x", instruction);
+		KUNIT_EXPECT_EQ(test, count, decoded.simd_structure_count);
+		KUNIT_EXPECT_EQ(test, q ? 16 : 8, decoded.result_size);
+		KUNIT_EXPECT_EQ(test, (u8)BIT(size), decoded.access_size);
+		KUNIT_EXPECT_EQ(test, load, decoded.load);
+		KUNIT_EXPECT_EQ(test,
+			opcode == 0 || opcode == 4 || opcode == 8,
+			decoded.simd_interleaved);
+		KUNIT_EXPECT_EQ(test, post_index,
+			decoded.memory_index_mode == TCTI_MEMORY_INDEX_POST);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+	}
+}
+
+static bool tcti_test_simd_single_structure_is_legal(
+	bool post_index, bool load, u8 rm, u8 opcode, bool s, u8 size)
+{
+	u8 base_opcode = opcode & ~1U;
+
+	if (!post_index && rm)
+		return false;
+	if (load && !s && (opcode == 6 || opcode == 7))
+		return true;
+	if (base_opcode == 0)
+		return true;
+	if (base_opcode == 2)
+		return !(size & 1U);
+	if (base_opcode == 4)
+		return size == 0 || (size == 1 && !s);
+	return false;
+}
+
+static u32 tcti_test_encode_simd_single_structure(
+	bool q, bool post_index, bool load, bool r, u8 rm, u8 opcode,
+	bool s, u8 size, u8 rn, u8 rt)
+{
+	return 0x0d000000U | (q ? BIT(30) : 0) |
+		(post_index ? BIT(23) : 0) | (load ? BIT(22) : 0) |
+		(r ? BIT(21) : 0) | ((u32)rm << 16) |
+		((u32)opcode << 13) | (s ? BIT(12) : 0) |
+		((u32)size << 10) | ((u32)rn << 5) | rt;
+}
+
+static void tcti_decode_exhaustive_simd_single_structure_family(
+	struct kunit *test)
+{
+	u32 control;
+
+	for (control = 0; control < BIT(15); control++) {
+		u8 size = control & 0x3U;
+		bool s = control & BIT(2);
+		u8 opcode = (control >> 3) & 0x7U;
+		u8 rm = (control >> 6) & 0x1fU;
+		bool r = control & BIT(11);
+		bool load = control & BIT(12);
+		bool post_index = control & BIT(13);
+		bool q = control & BIT(14);
+		bool replicate = load && !s &&
+			(opcode == 6 || opcode == 7);
+		bool legal = tcti_test_simd_single_structure_is_legal(
+			post_index, load, rm, opcode, s, size);
+		u32 instruction = tcti_test_encode_simd_single_structure(
+			q, post_index, load, r, rm, opcode, s, size, 9, 10);
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+
+		if (!legal) {
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class, "instruction=%08x", instruction);
+			continue;
+		}
+
+		KUNIT_ASSERT_EQ_MSG(test,
+			replicate ? TCTI_DECODE_SIMD_LOAD_REPLICATE :
+				TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
+			decoded.decode_class, "instruction=%08x", instruction);
+		KUNIT_EXPECT_EQ(test, r ? (opcode & 1U ? 4 : 2) :
+			(opcode & 1U ? 3 : 1), decoded.simd_structure_count);
+		KUNIT_EXPECT_EQ(test, post_index,
+			decoded.memory_index_mode == TCTI_MEMORY_INDEX_POST);
+		KUNIT_EXPECT_EQ(test, replicate, decoded.simd_replicate);
+		KUNIT_EXPECT_EQ(test, load, decoded.load);
+		KUNIT_EXPECT_EQ(test, rm, decoded.rm);
+		if (replicate) {
+			KUNIT_EXPECT_EQ(test, (u8)BIT(size), decoded.access_size);
+			KUNIT_EXPECT_EQ(test, q ? 16 : 8, decoded.result_size);
+		} else if ((opcode & ~1U) == 0) {
+			KUNIT_EXPECT_EQ(test, sizeof(u8), decoded.access_size);
+			KUNIT_EXPECT_EQ(test, (q << 3) | (s << 2) | size,
+				decoded.simd_lane_index);
+		} else if ((opcode & ~1U) == 2) {
+			KUNIT_EXPECT_EQ(test, sizeof(u16), decoded.access_size);
+			KUNIT_EXPECT_EQ(test, (q << 2) | (s << 1) | (size >> 1),
+				decoded.simd_lane_index);
+		} else {
+			KUNIT_EXPECT_EQ(test, size ? sizeof(u64) : sizeof(u32),
+				decoded.access_size);
+			KUNIT_EXPECT_EQ(test, size ? q : (q << 1) | s,
+				decoded.simd_lane_index);
+		}
+	}
+}
+
+static void tcti_decode_simd_structure_all_register_fields(struct kunit *test)
+{
+	u16 fields;
+
+	for (fields = 0; fields < BIT(10); fields++) {
+		u8 rn = (fields >> 5) & 0x1fU;
+		u8 rt = fields & 0x1fU;
+		struct tcti_decoded_instruction multiple = tcti_decode_aarch64(
+			tcti_test_encode_simd_multiple_structure(
+				true, true, true, 31, 0, 0, rn, rt));
+		struct tcti_decoded_instruction single = tcti_decode_aarch64(
+			tcti_test_encode_simd_single_structure(
+				true, true, true, true, 31, 0, false, 0,
+				rn, rt));
+
+		KUNIT_ASSERT_EQ(test,
+			TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE,
+			multiple.decode_class);
+		KUNIT_EXPECT_EQ(test, rn, multiple.rn);
+		KUNIT_EXPECT_EQ(test, rt, multiple.rd);
+		KUNIT_ASSERT_EQ(test,
+			TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
+			single.decode_class);
+		KUNIT_EXPECT_EQ(test, rn, single.rn);
+		KUNIT_EXPECT_EQ(test, rt, single.rd);
+	}
 }
 
 static void tcti_decode_recognizes_complete_simd_ext_family(struct kunit *test)
@@ -20518,6 +20705,265 @@ static void tcti_switch_reports_simd_multiple_structure_fault_order(
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static u8 *tcti_test_simd_register_bytes(u8 reg)
+{
+	return (u8 *)&current->thread.user_simd[(reg & 0x1fU) * 2];
+}
+
+static void tcti_test_initialize_simd_structure_registers(
+	u8 rd, u8 count, u8 before[4][16])
+{
+	u8 index;
+
+	for (index = 0; index < count; index++) {
+		u8 *bytes = tcti_test_simd_register_bytes(rd + index);
+		u8 byte;
+
+		for (byte = 0; byte < 16; byte++)
+			bytes[byte] = 0x40U ^ (index * 0x31U) ^ byte;
+		memcpy(before[index], bytes, 16);
+	}
+}
+
+static void tcti_switch_exhausts_simd_single_structure_execution(
+	struct kunit *test)
+{
+	unsigned long mapped;
+	u16 control;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	for (control = 0; control < BIT(9); control++) {
+		u8 size = control & 0x3U;
+		bool s = control & BIT(2);
+		u8 opcode = (control >> 3) & 0x7U;
+		bool r = control & BIT(6);
+		bool load = control & BIT(7);
+		bool q = control & BIT(8);
+		bool replicate = load && !s &&
+			(opcode == 6 || opcode == 7);
+		u8 count;
+		u8 access_size;
+		u8 before[4][16];
+		u8 memory[64];
+		u8 observed[64] = {};
+		struct pt_regs regs = {};
+		unsigned long fault_address = 0;
+		u32 instruction;
+		struct tcti_decoded_instruction decoded;
+		u8 index;
+
+		if (!tcti_test_simd_single_structure_is_legal(
+				false, load, 0, opcode, s, size))
+			continue;
+
+		instruction = tcti_test_encode_simd_single_structure(
+			q, false, load, r, 0, opcode, s, size, 20, 29);
+		decoded = tcti_decode_aarch64(instruction);
+		count = decoded.simd_structure_count;
+		access_size = decoded.access_size;
+		for (index = 0; index < sizeof(memory); index++)
+			memory[index] = 0x80U ^ index ^ control;
+		tcti_test_initialize_simd_structure_registers(29, count, before);
+		current->thread.user_simd[28 * 2] = 0x2828282828282828ULL;
+		current->thread.user_simd[1 * 2] = 0x0101010101010101ULL;
+		if (load) {
+			ret = tcti_write_user_data(current->mm, mapped, memory,
+				count * access_size);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+		}
+		regs.regs[20] = mapped;
+		regs.pc = 0x9100;
+		ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, &fault_address);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "instruction=%08x", instruction);
+
+		if (load) {
+			for (index = 0; index < count; index++) {
+				u8 expected[16];
+
+				if (replicate) {
+					u8 byte;
+					u8 vector_bytes = q ? 16 : 8;
+
+					memset(expected, 0, sizeof(expected));
+					for (byte = 0; byte < vector_bytes; byte++)
+						expected[byte] = memory[
+							index * access_size +
+							byte % access_size];
+				} else {
+					memcpy(expected, before[index], sizeof(expected));
+					memcpy(expected +
+						decoded.simd_lane_index * access_size,
+						memory + index * access_size,
+						access_size);
+				}
+				KUNIT_EXPECT_MEMEQ(test, expected,
+					tcti_test_simd_register_bytes(29 + index),
+					sizeof(expected));
+			}
+		} else {
+			ret = tcti_read_user_data(current->mm, mapped, observed,
+				count * access_size);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			for (index = 0; index < count; index++)
+				KUNIT_EXPECT_MEMEQ(test,
+					before[index] +
+						decoded.simd_lane_index * access_size,
+					observed + index * access_size,
+					access_size);
+		}
+		KUNIT_EXPECT_EQ(test, 0x9104ULL, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0x2828282828282828ULL,
+			current->thread.user_simd[28 * 2]);
+		KUNIT_EXPECT_EQ(test, 0x0101010101010101ULL,
+			current->thread.user_simd[1 * 2]);
+	}
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_test_expect_simd_multiple_load(
+	struct kunit *test, const u8 memory[64], u8 count, u8 vector_bytes,
+	u8 access_size, bool interleaved)
+{
+	u8 index;
+
+	for (index = 0; index < count; index++) {
+		u8 expected[16] = {};
+		u8 byte;
+
+		for (byte = 0; byte < vector_bytes; byte++) {
+			u8 source = interleaved ?
+				((byte / access_size) * count + index) *
+					access_size + byte % access_size :
+				index * vector_bytes + byte;
+
+			expected[byte] = memory[source];
+		}
+		KUNIT_EXPECT_MEMEQ(test, expected,
+			tcti_test_simd_register_bytes(29 + index),
+			sizeof(expected));
+	}
+}
+
+static void tcti_test_expect_simd_multiple_store(
+	struct kunit *test, const u8 before[4][16], const u8 observed[64],
+	u8 count, u8 vector_bytes, u8 access_size, bool interleaved)
+{
+	u8 index;
+
+	for (index = 0; index < count * vector_bytes; index++) {
+		u8 reg_index;
+		u8 byte;
+
+		if (interleaved) {
+			reg_index = (index / access_size) % count;
+			byte = (index / (count * access_size)) * access_size +
+				index % access_size;
+		} else {
+			reg_index = index / vector_bytes;
+			byte = index % vector_bytes;
+		}
+		KUNIT_EXPECT_EQ(test, before[reg_index][byte], observed[index]);
+	}
+}
+
+static void tcti_test_execute_simd_multiple_structure_case(
+	struct kunit *test, unsigned long mapped, u8 q, u8 size,
+	u8 opcode, bool load)
+{
+	u8 count = tcti_test_simd_multiple_structure_count(opcode);
+	u8 vector_bytes = q ? 16 : 8;
+	u8 access_size = BIT(size);
+	bool interleaved = opcode == 0 || opcode == 4 || opcode == 8;
+	u8 before[4][16];
+	u8 memory[64];
+	u8 observed[64] = {};
+	struct pt_regs regs = {};
+	unsigned long fault_address = 0;
+	u32 instruction = tcti_test_encode_simd_multiple_structure(
+		q, false, load, 0, opcode, size, 20, 29);
+	struct tcti_decoded_instruction decoded =
+		tcti_decode_aarch64(instruction);
+	u8 index;
+	int ret;
+
+	for (index = 0; index < sizeof(memory); index++)
+		memory[index] = 0xc0U ^ index ^ (opcode << 1) ^ (load << 6);
+	tcti_test_initialize_simd_structure_registers(29, count, before);
+	current->thread.user_simd[28 * 2] = 0x2828282828282828ULL;
+	current->thread.user_simd[1 * 2] = 0x0101010101010101ULL;
+	if (load) {
+		ret = tcti_write_user_data(current->mm, mapped, memory,
+			count * vector_bytes);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+	regs.regs[20] = mapped;
+	regs.pc = 0x9200;
+	ret = tcti_switch_debug_execute_decoded(
+		current->mm, &regs, &decoded, &fault_address);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "instruction=%08x", instruction);
+
+	if (load) {
+		tcti_test_expect_simd_multiple_load(
+			test, memory, count, vector_bytes,
+			access_size, interleaved);
+	} else {
+		ret = tcti_read_user_data(current->mm, mapped, observed,
+			count * vector_bytes);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		tcti_test_expect_simd_multiple_store(
+			test, before, observed, count, vector_bytes,
+			access_size, interleaved);
+	}
+	KUNIT_EXPECT_EQ(test, 0x9204ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0x2828282828282828ULL,
+		current->thread.user_simd[28 * 2]);
+	KUNIT_EXPECT_EQ(test, 0x0101010101010101ULL,
+		current->thread.user_simd[1 * 2]);
+}
+
+static void tcti_switch_exhausts_simd_multiple_structure_execution(
+	struct kunit *test)
+{
+	static const u8 opcodes[] = { 0, 2, 4, 6, 7, 8, 10 };
+	unsigned long mapped;
+	u8 q;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	for (q = 0; q < 2; q++) {
+		u8 size;
+
+		for (size = 0; size < 4; size++) {
+			u8 opcode_index;
+
+			for (opcode_index = 0;
+			     opcode_index < ARRAY_SIZE(opcodes); opcode_index++) {
+				tcti_test_execute_simd_multiple_structure_case(
+					test, mapped, q, size,
+					opcodes[opcode_index], false);
+				tcti_test_execute_simd_multiple_structure_case(
+					test, mapped, q, size,
+					opcodes[opcode_index], true);
+			}
+		}
+	}
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static void tcti_switch_executes_ldrsw_sign_extension_from_mapped_mm(struct kunit *test)
 {
 	const u32 value = 0xffffffcdU;
@@ -25429,6 +25875,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_recognizes_simd_ld1r_4s),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_single_structure_family),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_multiple_structure_family),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_single_structure_family),
+	KUNIT_CASE(tcti_decode_exhaustive_simd_multiple_structure_family),
+	KUNIT_CASE(tcti_decode_simd_structure_all_register_fields),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_ext_family),
 	KUNIT_CASE(tcti_decode_recognizes_simd_ext_16b),
 	KUNIT_CASE(tcti_decode_recognizes_complete_simd_permute_family),
@@ -25700,6 +26149,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_switch_executes_complete_simd_single_structure_family),
 	KUNIT_CASE(tcti_switch_executes_complete_simd_multiple_structure_family),
 	KUNIT_CASE(tcti_switch_reports_simd_multiple_structure_fault_order),
+	KUNIT_CASE(tcti_switch_exhausts_simd_single_structure_execution),
+	KUNIT_CASE(tcti_switch_exhausts_simd_multiple_structure_execution),
 	KUNIT_CASE(tcti_switch_executes_ldrsw_sign_extension_from_mapped_mm),
 	KUNIT_CASE(tcti_switch_preserves_compiler_rt_pair_frame),
 	KUNIT_CASE(tcti_switch_stores_simd_s_register_to_mapped_mm),
