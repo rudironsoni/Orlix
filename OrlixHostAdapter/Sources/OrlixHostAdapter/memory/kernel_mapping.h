@@ -72,6 +72,14 @@ __attribute__((visibility("hidden"))) int orlix_host_user_refresh_page(
     unsigned long length,
     int writable,
     int executable);
+__attribute__((visibility("hidden"))) int orlix_host_user_refresh_page_range(
+    unsigned long target_address,
+    const void *source_page,
+    unsigned long page_length,
+    unsigned long range_offset,
+    unsigned long range_length,
+    int writable,
+    int executable);
 
 __attribute__((visibility("hidden"))) int orlix_host_user_refresh_window(
     unsigned long target_address,
@@ -82,6 +90,10 @@ __attribute__((visibility("hidden"))) int orlix_host_user_mapping_last_failure(
     struct orlix_host_user_mapping_failure *failure);
 
 __attribute__((visibility("hidden"))) void orlix_host_user_unmap_pages(
+    unsigned long target_address,
+    unsigned long length);
+
+__attribute__((visibility("hidden"))) void orlix_host_user_discard_pages(
     unsigned long target_address,
     unsigned long length);
 

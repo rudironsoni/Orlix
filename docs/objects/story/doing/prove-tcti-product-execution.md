@@ -3,7 +3,7 @@ type: story
 tags:
   - story
   - orlix-tcti
-updated: 2026-07-17
+updated: 2026-07-24
 status: doing
 summary: "Prove safe TCTI execution through owning kernel, userspace, and app-hosted tests."
 story_of:
@@ -21,4 +21,4 @@ blocks:
 
 As an Orlix user, I want ordinary AArch64 Linux ELF instructions to execute safely through TCTI so Linux userspace reaches syscall dispatch and console output without executable guest mappings or a second process model.
 
-The TCTI scope envelope records the owning test order without replacing native results. This story advances from complete AArch64 EL0 ISA coverage in KUnit and Linux-visible kselftest through mlibc, Coreutils, HostAdapter, OrlixOS, native app, pinned simulator, authorized device validation, and product-default promotion. Package suites expose compatibility regressions, but do not define or prove ISA completeness.
+The TCTI scope envelope records the owning test order without replacing native results. This story advances from explicit classification of every leaf in the pinned Arm source and complete typed proof of the union of applicable AArch64 EL0 feature configurations through kernel dependency proof and KUnit, Linux-visible kselftest, upstream mlibc, OrlixMLibC-built syscall and UAPI proof, a POSIX shell environment, then jq, curl, and zsh package proof. Coreutils, HostAdapter, OrlixOS, native app, pinned simulator, authorized device validation when selected, and product-default promotion follow without replacing an earlier tier. The runtime HWCAP profile is a separate advertisement projection and cannot narrow the completion target. Package suites expose compatibility regressions, but do not define or prove ISA completeness.

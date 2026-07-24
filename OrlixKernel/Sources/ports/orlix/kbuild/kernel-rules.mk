@@ -1021,10 +1021,16 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 
 ifeq ($(ORLIX_KERNEL_KUNIT),1)
 ORLIX_KERNEL_LINUX_SOURCES += \
+	arch/$(ORLIX_PORT_ARCH)/boot/boot_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/runtime_projection.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_memory_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_decode_test.c \
 	lib/kunit/assert.c \
 	lib/kunit/attributes.c \
 	lib/kunit/device.c \
+	lib/kunit/executor.c \
+	lib/glob.c \
 	lib/kunit/hooks.c \
 	lib/kunit/platform.c \
 	lib/kunit/resource.c \
@@ -1740,7 +1746,7 @@ __kunit: __prepare-kbuild
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.o; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kernel-archive: __prepare-kbuild
@@ -1769,6 +1775,24 @@ __kernel-archive: __prepare-kbuild
 	mkdir -p "$$root"; \
 	$(call orlix_product_adapter_prepare); \
 	mkdir -p "$(ORLIX_KERNEL_BUILD_DIR)/init"; \
+	inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/gen_inventory.c"; \
+	inventory_definition="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/inventory.def"; \
+	inventory_dir="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests"; \
+	inventory_tool="$$inventory_dir/gen_inventory"; \
+	inventory_header="$$inventory_dir/inventory.h"; \
+	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
+		mkdir -p "$$inventory_dir"; \
+		if [ ! -x "$$inventory_tool" ] || [ "$$inventory_generator" -nt "$$inventory_tool" ] || [ "$$inventory_definition" -nt "$$inventory_tool" ]; then \
+			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
+				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
+				"$$hostcc" -std=c11 -Wall -Wextra -Werror \
+				"$$inventory_generator" -o "$$inventory_tool"; \
+		fi; \
+		if [ ! -s "$$inventory_header" ] || [ "$$inventory_tool" -nt "$$inventory_header" ] || [ "$$inventory_definition" -nt "$$inventory_header" ]; then \
+			"$$inventory_tool" "$$inventory_header"; \
+		fi; \
+	fi; \
 	build_version="$${KBUILD_BUILD_VERSION:-$$(cd "$(ORLIX_KERNEL_BUILD_DIR)" && "$(ORLIX_KERNEL_PORT_ABS)/scripts/build-version")}"; \
 	build_timestamp="$${KBUILD_BUILD_TIMESTAMP:-$$(LC_ALL=C date)}"; \
 	smp_flag=""; \
@@ -1795,15 +1819,25 @@ __kernel-archive: __prepare-kbuild
 		archive_tmp="$$output_dir/.$(ORLIX_KERNEL_ARCHIVE_NAME).tmp.$$$$"; \
 		symbols_tmp="$$output_dir/.symbols.txt.tmp.$$$$"; \
 		mkdir -p "$$obj_dir"; \
+		object_dependencies_current() { \
+			object="$$1"; depfile="$$2"; \
+			[ -s "$$depfile" ] || return 1; \
+			while IFS= read -r dependency; do \
+				[ -n "$$dependency" ] || continue; \
+				[ -e "$$dependency" ] && [ "$$object" -nt "$$dependency" ] || return 1; \
+			done < <(perl -0pe 's/\\\n/ /g; s/^[^:]*:\\s*//' "$$depfile" | tr ' ' '\n'); \
+		}; \
 		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ] && \
 			grep -q '_arch_boot_entry' "$$output_dir/symbols.txt" && \
 			grep -q '_arch_boot_params' "$$output_dir/symbols.txt"; then \
 			archive_ready=1; \
-			for dep in \
+			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
+				"$$inventory_generator" \
+				"$$inventory_definition" \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
-				if [ ! -e "$$dep" ] || [ ! "$$archive" -nt "$$dep" ]; then archive_ready=0; break; fi; \
+				if [ ! -e "$$cache_dep" ] || [ ! "$$archive" -nt "$$cache_dep" ]; then archive_ready=0; break; fi; \
 			done; \
 			if [ "$$archive_ready" -eq 1 ]; then \
 				for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
@@ -1812,6 +1846,8 @@ __kernel-archive: __prepare-kbuild
 					obj_name="$${src_rel//\//_}.o"; \
 					obj="$$obj_dir/$$obj_name"; \
 					if [ -e "$$obj" ] && [ ! "$$archive" -nt "$$obj" ]; then archive_ready=0; break; fi; \
+					dep="$$obj_dir/$${obj_name%.o}.d"; \
+					if ! object_dependencies_current "$$archive" "$$dep"; then archive_ready=0; break; fi; \
 				done; \
 			fi; \
 			if [ "$$archive_ready" -eq 1 ]; then \
@@ -1827,14 +1863,16 @@ __kernel-archive: __prepare-kbuild
 			obj_name="$${src_rel//\//_}.o"; \
 			obj="$$obj_dir/$$obj_name"; \
 			verified="$$obj.verified"; \
+			dep="$$obj_dir/$${obj_name%.o}.d"; \
 			if [ ! -s "$$obj" ] || [ ! -e "$$verified" ]; then object_set_ready=0; break; fi; \
 			if [ ! -s "$$src" ] || [ ! "$$obj" -nt "$$src" ]; then object_set_ready=0; break; fi; \
-			for dep in \
+			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
-				if [ ! -e "$$dep" ] || [ ! "$$obj" -nt "$$dep" ]; then object_set_ready=0; break 2; fi; \
+				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
 			done; \
+			if ! object_dependencies_current "$$obj" "$$dep"; then object_set_ready=0; break; fi; \
 			objects_probe+=("$$obj"); \
 		done; \
 		if [ "$$object_set_ready" -eq 1 ]; then \
@@ -1874,12 +1912,13 @@ __kernel-archive: __prepare-kbuild
 				[ "$$obj" -nt "$$src" ] && \
 				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
-				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ]; then \
+				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
+				object_dependencies_current "$$obj" "$$dep"; then \
 				needs_build=0; \
 			fi; \
 			if [ "$$needs_build" -eq 1 ]; then \
 				printf '  ORLIXCC %s %s\n' "$$platform" "$$src_rel" >&2; \
-				/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+			/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
 				if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 					echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 					exit 1; \
@@ -1992,6 +2031,7 @@ __orlixmlibc-sysroot: __validate-profile
 
 __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 	@set -euo pipefail; \
+	$(call orlix_kernel_acquire_profile_lock); \
 	selected_libc="$(libc)"; \
 	case "$$selected_libc" in orlixmlibc) ;; *) echo "unsupported libc=$$selected_libc (expected orlixmlibc)" >&2; exit 1 ;; esac; \
 	install_dir="$(KSELFTEST_INSTALL_DIR)"; \
@@ -2032,8 +2072,11 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 		FORCE_TARGETS=1 \
 		USERCFLAGS="--sysroot=$$sysroot $$header_flags -fPIE -DORLIX_HOSTED_USER_BASE_ADDRESS=$$hosted_user_base" \
 		USERLDFLAGS="--sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$orlix_crt_flags" \
+		ORLIX_FIXED_EXEC_BASE_ADDRESS="$$hosted_user_base" \
 		LDLIBS="$$orlix_ldlibs" \
 		install; \
+	find "$$install_dir/orlix" -type f -perm -0100 \
+		-exec llvm-strip --strip-all {} +; \
 	printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
 	[ -s "$$install_dir/run_kselftest.sh" ] || { echo "missing installed kselftest runner" >&2; exit 1; }; \
 	echo "installed OrlixMLibC-built kselftests: $$install_dir"

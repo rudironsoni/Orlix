@@ -10,6 +10,8 @@ TEST_GEN_PROGS += cgroup_namespace_probe
 TEST_GEN_PROGS += cgroup_pids_probe
 TEST_GEN_PROGS += cgroup_unified_probe
 TEST_GEN_PROGS += file_mmap_content_probe
+TEST_GEN_PROGS += anonymous_zero_page_probe
+TEST_GEN_PROGS += fixed_exec_probe
 TEST_GEN_PROGS += overlayfs_probe
 TEST_GEN_PROGS += hostname_domainname_probe
 TEST_GEN_PROGS += oci_cgroup_resources_probe
@@ -20,11 +22,17 @@ TEST_GEN_PROGS += oci_process_attributes_probe
 TEST_GEN_PROGS += oci_rootfs_controls_probe
 TEST_GEN_PROGS += oci_time_namespace_probe
 TEST_GEN_PROGS += readonly_root_probe
+TEST_GEN_PROGS += stack_growth_probe
 TEST_GEN_PROGS += time_namespace_probe
 TEST_GEN_PROGS += time_surface_probe
 TEST_GEN_PROGS += tcti_system_probe
 TEST_GEN_PROGS += tcti_hwcap_probe
+TEST_GEN_PROGS += tcti_crypto_probe
+TEST_GEN_PROGS += tcti_lse_atomic_probe
 TEST_GEN_PROGS += user_namespace_probe
 TEST_GEN_PROGS += pty_terminal_probe
 
 include ../lib.mk
+
+$(OUTPUT)/fixed_exec_probe: CFLAGS := $(filter-out -fPIE,$(CFLAGS)) -fno-pie -DORLIX_FIXED_EXEC_BASE_ADDRESS=$(ORLIX_FIXED_EXEC_BASE_ADDRESS)
+$(OUTPUT)/fixed_exec_probe: LDFLAGS := $(filter-out -static-pie,$(LDFLAGS)) -static -no-pie -Wl,--image-base=$(ORLIX_FIXED_EXEC_BASE_ADDRESS)

@@ -7,6 +7,7 @@
 #include <linux/memblock.h>
 #include <linux/mm.h>
 #include <linux/mmzone.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/build_bug.h>
 #include <linux/kernel.h>
@@ -29,6 +30,65 @@ pgd_t swapper_pg_dir[PTRS_PER_PGD] __page_aligned_bss;
 phys_addr_t orlix_phys_ram_base __ro_after_init;
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
+/* PTE and page locks are acquired before this mutex. No spinlock nests it. */
+static DEFINE_MUTEX(orlix_host_user_mapping_mutex);
+
+static int orlix_host_user_map_page_serialized(unsigned long target,
+		const void *source, unsigned long length, bool writable,
+		bool executable)
+{
+	int ret;
+
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	ret = orlix_host_user_map_page(target, source, length, writable,
+				       executable);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+	return ret;
+}
+
+static int orlix_host_user_refresh_page_serialized(unsigned long target,
+		const void *source, unsigned long length, bool writable,
+		bool executable)
+{
+	int ret;
+
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	ret = orlix_host_user_refresh_page(target, source, length, writable,
+					   executable);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+	return ret;
+}
+
+static int orlix_host_user_refresh_window_serialized(unsigned long start,
+		unsigned long length,
+		const struct orlix_host_user_page_segment *segments,
+		unsigned long segment_count)
+{
+	int ret;
+
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	ret = orlix_host_user_refresh_window(start, length, segments,
+					     segment_count);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+	return ret;
+}
+
+void orlix_host_user_unmap_pages_serialized(unsigned long address,
+					    unsigned long length)
+{
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	orlix_host_user_unmap_pages(address, length);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+}
+
+void orlix_host_user_discard_pages_serialized(unsigned long address,
+					      unsigned long length)
+{
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	orlix_host_user_discard_pages(address, length);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+}
+
 unsigned long orlix_hosted_vmalloc_start __ro_after_init;
 unsigned long orlix_hosted_vmalloc_end __ro_after_init;
 
@@ -85,7 +145,7 @@ static pgprot_t protection_map[16] __ro_after_init = {
 
 DECLARE_VM_GET_PAGE_PROT
 
-unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)] __page_aligned_bss;
+struct page *empty_zero_page;
 EXPORT_SYMBOL(empty_zero_page);
 
 void __init paging_init(void)
@@ -124,6 +184,8 @@ void __init mem_init(void)
 	BUG_ON(!mem_map);
 #endif
 	memblock_free_all();
+	empty_zero_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+	BUG_ON(!empty_zero_page);
 }
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -131,9 +193,23 @@ struct orlix_host_pte_window {
 	unsigned long target;
 	unsigned long length;
 	unsigned long pfn;
+	struct page *page;
 	bool writable;
 	bool executable;
 };
+
+static int orlix_pin_user_window_page(struct orlix_host_pte_window *window)
+{
+	struct page *page;
+
+	if (!pfn_valid(window->pfn))
+		return -EFAULT;
+	page = pfn_to_page(window->pfn);
+	if (!get_page_unless_zero(page))
+		return -EFAULT;
+	window->page = page;
+	return 0;
+}
 
 static unsigned long orlix_host_mapping_granule(void)
 {
@@ -324,6 +400,9 @@ static int orlix_user_pte_window(struct mm_struct *mm,
 	window->writable = !!pte_write(entry) ||
 		!!(vma && (vma->vm_flags & VM_WRITE));
 	window->executable = !!(pte_val(entry) & _PAGE_EXEC);
+	ret = orlix_pin_user_window_page(window);
+	if (ret)
+		goto unlock_fault;
 	mmap_read_unlock(mm);
 	return 0;
 
@@ -372,7 +451,7 @@ static int orlix_user_present_pte_window(struct mm_struct *mm,
 	window->pfn = pte_pfn(entry);
 	window->writable = !!pte_write(entry);
 	window->executable = !!(pte_val(entry) & _PAGE_EXEC);
-	return 0;
+	return orlix_pin_user_window_page(window);
 }
 
 void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
@@ -408,12 +487,6 @@ retry:
 			required = VM_EXEC;
 			fault_flags |= FAULT_FLAG_INSTRUCTION;
 		} else if (host_fault_flags & ORLIX_HOST_USER_FAULT_WRITE) {
-			required = VM_WRITE;
-			fault_flags |= FAULT_FLAG_WRITE;
-		} else if (vma->vm_flags & VM_EXEC) {
-			required = VM_EXEC;
-			fault_flags |= FAULT_FLAG_INSTRUCTION;
-		} else if (vma->vm_flags & VM_WRITE) {
 			required = VM_WRITE;
 			fault_flags |= FAULT_FLAG_WRITE;
 		}
@@ -472,8 +545,10 @@ static int orlix_sync_user_pte_page(struct mm_struct *mm, unsigned long page)
 		return ret;
 
 	source = __va(PFN_PHYS(window.pfn));
-	ret = orlix_host_user_map_page(window.target, source, window.length,
-				       window.writable, window.executable);
+	ret = orlix_host_user_map_page_serialized(window.target, source,
+						 window.length, window.writable,
+						 window.executable);
+	put_page(window.page);
 	return ret;
 }
 
@@ -488,8 +563,10 @@ static int orlix_refresh_user_pte_page(struct mm_struct *mm, unsigned long page)
 		return ret;
 
 	source = __va(PFN_PHYS(window.pfn));
-	ret = orlix_host_user_refresh_page(window.target, source, window.length,
-					   window.writable, window.executable);
+	ret = orlix_host_user_refresh_page_serialized(window.target, source,
+						     window.length, window.writable,
+						     window.executable);
+	put_page(window.page);
 	return ret;
 }
 
@@ -500,12 +577,58 @@ static int orlix_refresh_user_pte_page_from_kernel(struct mm_struct *mm,
 	struct orlix_host_pte_window window;
 	int ret;
 
+	mmap_read_lock(mm);
 	ret = orlix_user_present_pte_window(mm, page, &window);
 	if (ret)
-		return ret;
+		goto out_unlock;
+	if (source != __va(PFN_PHYS(window.pfn))) {
+		put_page(window.page);
+		ret = -ESTALE;
+		goto out_unlock;
+	}
 
+	mutex_lock(&orlix_host_user_mapping_mutex);
 	ret = orlix_host_user_refresh_page(window.target, source, window.length,
 					   window.writable, window.executable);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+	put_page(window.page);
+out_unlock:
+	mmap_read_unlock(mm);
+	return ret;
+}
+
+static int orlix_refresh_user_pte_page_range_from_kernel(struct mm_struct *mm,
+							 unsigned long page,
+							 const void *source,
+							 unsigned long offset,
+							 size_t length)
+{
+	struct orlix_host_pte_window window;
+	int ret;
+
+	mmap_read_lock(mm);
+	ret = orlix_user_present_pte_window(mm, page, &window);
+	if (ret)
+		goto out_unlock;
+	if (source != __va(PFN_PHYS(window.pfn))) {
+		put_page(window.page);
+		ret = -ESTALE;
+		goto out_unlock;
+	}
+	if (offset > window.length || length > window.length - offset) {
+		put_page(window.page);
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+
+	mutex_lock(&orlix_host_user_mapping_mutex);
+	ret = orlix_host_user_refresh_page_range(
+		window.target, source, window.length, offset, length,
+		window.writable, window.executable);
+	mutex_unlock(&orlix_host_user_mapping_mutex);
+	put_page(window.page);
+out_unlock:
+	mmap_read_unlock(mm);
 	return ret;
 }
 
@@ -522,6 +645,7 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	unsigned long window_pages;
 	unsigned long cursor;
 	struct orlix_host_user_page_segment *segments;
+	struct page **pinned_pages;
 	struct orlix_host_user_page_segment *page_segment = NULL;
 	unsigned long segment_count = 0;
 	int page_ret = -EFAULT;
@@ -537,6 +661,11 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	segments = kcalloc(window_pages, sizeof(*segments), GFP_KERNEL);
 	if (!segments)
 		return -ENOMEM;
+	pinned_pages = kcalloc(window_pages, sizeof(*pinned_pages), GFP_KERNEL);
+	if (!pinned_pages) {
+		kfree(segments);
+		return -ENOMEM;
+	}
 
 	for (cursor = window_start; cursor < window_end; cursor += PAGE_SIZE) {
 		struct orlix_host_pte_window window;
@@ -562,6 +691,7 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 		}
 
 		source = __va(PFN_PHYS(window.pfn));
+		pinned_pages[segment_count] = window.page;
 		segments[segment_count++] =
 			(struct orlix_host_user_page_segment) {
 				.target_address = window.target,
@@ -577,14 +707,15 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 	}
 
 	if (page_ret) {
+		while (segment_count)
+			put_page(pinned_pages[--segment_count]);
+		kfree(pinned_pages);
 		kfree(segments);
 		return page_ret;
 	}
 
-	ret = orlix_host_user_refresh_window(window_start,
-					     window_end - window_start,
-					     segments,
-					     segment_count);
+	ret = orlix_host_user_refresh_window_serialized(
+		window_start, window_end - window_start, segments, segment_count);
 	if (ret) {
 		struct orlix_host_user_mapping_failure failure;
 		int failure_ret;
@@ -633,6 +764,9 @@ static int orlix_sync_user_host_window(struct mm_struct *mm,
 					ret);
 		}
 	}
+	while (segment_count)
+		put_page(pinned_pages[--segment_count]);
+	kfree(pinned_pages);
 	kfree(segments);
 	return ret;
 }
@@ -646,6 +780,7 @@ static int orlix_refresh_user_host_window_from_kernel(struct mm_struct *mm,
 	unsigned long window_pages;
 	unsigned long cursor;
 	struct orlix_host_user_page_segment *segments;
+	struct page **pinned_pages;
 	unsigned long segment_count = 0;
 	int page_ret = -EFAULT;
 	int ret;
@@ -662,6 +797,11 @@ static int orlix_refresh_user_host_window_from_kernel(struct mm_struct *mm,
 	segments = kcalloc(window_pages, sizeof(*segments), GFP_KERNEL);
 	if (!segments)
 		return -ENOMEM;
+	pinned_pages = kcalloc(window_pages, sizeof(*pinned_pages), GFP_KERNEL);
+	if (!pinned_pages) {
+		kfree(segments);
+		return -ENOMEM;
+	}
 
 	for (cursor = window_start; cursor < window_end; cursor += PAGE_SIZE) {
 		struct orlix_host_pte_window window;
@@ -688,6 +828,7 @@ static int orlix_refresh_user_host_window_from_kernel(struct mm_struct *mm,
 
 		source = cursor == page ? source_page :
 			__va(PFN_PHYS(window.pfn));
+		pinned_pages[segment_count] = window.page;
 		segments[segment_count++] =
 			(struct orlix_host_user_page_segment) {
 				.target_address = window.target,
@@ -701,13 +842,18 @@ static int orlix_refresh_user_host_window_from_kernel(struct mm_struct *mm,
 	}
 
 	if (page_ret) {
+		while (segment_count)
+			put_page(pinned_pages[--segment_count]);
+		kfree(pinned_pages);
 		kfree(segments);
 		return page_ret;
 	}
 
-	ret = orlix_host_user_refresh_window(window_start,
-					     window_end - window_start,
-					     segments, segment_count);
+	ret = orlix_host_user_refresh_window_serialized(
+		window_start, window_end - window_start, segments, segment_count);
+	while (segment_count)
+		put_page(pinned_pages[--segment_count]);
+	kfree(pinned_pages);
 	kfree(segments);
 	return ret;
 }
@@ -837,6 +983,12 @@ void orlix_sync_current_user_minimal_mappings(struct pt_regs *regs)
 		      regs->pc, ret);
 }
 
+static bool orlix_hosted_user_window_contains(unsigned long address)
+{
+	return address >= ORLIX_HOSTED_USER_BASE &&
+	       address < ORLIX_HOSTED_STACK_TOP;
+}
+
 int orlix_sync_current_user_mapping_page(unsigned long address)
 {
 	struct mm_struct *mm = current->mm;
@@ -845,7 +997,8 @@ int orlix_sync_current_user_mapping_page(unsigned long address)
 	if (!mm)
 		return -EINVAL;
 
-	if (!page || page >= TASK_SIZE)
+	if (!page || page >= TASK_SIZE ||
+	    !orlix_hosted_user_window_contains(page))
 		return 0;
 
 	return orlix_sync_user_host_window(mm, page);
@@ -859,24 +1012,26 @@ int orlix_refresh_current_user_mapping_page(unsigned long address)
 	if (!mm)
 		return -EINVAL;
 
-	if (!page || page >= TASK_SIZE)
+	if (!page || page >= TASK_SIZE ||
+	    !orlix_hosted_user_window_contains(page))
 		return 0;
 
 	return orlix_refresh_user_pte_page(mm, page);
 }
 
-int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
-							const void *source_page)
+int orlix_refresh_user_mapping_page_from_kernel(struct mm_struct *mm,
+						 unsigned long address,
+						 const void *source_page)
 {
 	static atomic_t refresh_report_budget = ATOMIC_INIT(16);
-	struct mm_struct *mm = current->mm;
 	unsigned long page = address & PAGE_MASK;
 	int ret;
 
 	if (!mm)
 		return -EINVAL;
 
-	if (!page || page >= TASK_SIZE)
+	if (!page || page >= TASK_SIZE ||
+	    !orlix_hosted_user_window_contains(page))
 		return 0;
 
 	ret = orlix_refresh_user_pte_page_from_kernel(mm, page, source_page);
@@ -938,6 +1093,13 @@ int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
 	return ret;
 }
 
+int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
+							 const void *source_page)
+{
+	return orlix_refresh_user_mapping_page_from_kernel(current->mm, address,
+							       source_page);
+}
+
 static int orlix_sync_current_user_stack_window(unsigned long start,
 						unsigned long end)
 {
@@ -963,6 +1125,34 @@ static unsigned long orlix_hosted_fault_window_pages(void)
 	return max_t(unsigned long, 1, arch_boot_host_page_size() / PAGE_SIZE);
 }
 
+int orlix_refresh_user_mapping_range_from_kernel(struct mm_struct *mm,
+						  unsigned long address,
+						  const void *source_page,
+						  size_t length)
+{
+	unsigned long page = address & PAGE_MASK;
+	unsigned long offset = offset_in_page(address);
+
+	if (!mm || !source_page)
+		return -EINVAL;
+	if (length > PAGE_SIZE - offset)
+		return -EINVAL;
+	if (!page || page >= TASK_SIZE ||
+	    !orlix_hosted_user_window_contains(page))
+		return 0;
+
+	return orlix_refresh_user_pte_page_range_from_kernel(mm, page, source_page,
+							      offset, length);
+}
+
+int orlix_refresh_current_user_mapping_range_from_kernel(unsigned long address,
+							  const void *source_page,
+							  size_t length)
+{
+	return orlix_refresh_user_mapping_range_from_kernel(current->mm, address,
+								 source_page, length);
+}
+
 int orlix_sync_current_user_fault_window(unsigned long address,
 					 unsigned long fault_flags)
 {
@@ -977,7 +1167,8 @@ int orlix_sync_current_user_fault_window(unsigned long address,
 	unsigned long window_pages;
 	int ret;
 
-	if (!address || address >= TASK_SIZE)
+	if (!address || address >= TASK_SIZE ||
+	    !orlix_hosted_user_window_contains(address))
 		return 0;
 
 	if (!mm)

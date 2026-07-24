@@ -105,6 +105,17 @@ For upstream conformance work, upstream sources and tests are authoritative. Fix
 9. Check simulator/app crash reports after app-hosted test failures or crashes.
 10. Commit and push after a coherent verified checkpoint when implementation work is complete.
 
+## External Xcode Recovery
+
+This Mac uses `xcode-offload` sparsebundle mounts. Keep Apple-facing paths standard and recover the owning mount before changing project code:
+
+1. Run strict `xcode-offload doctor` before diagnosing Xcode or CoreSimulator as a repository defect.
+2. Recreate and open simulator devices with `xcode-offload sim recreate` and `xcode-offload sim open`.
+3. Treat `codesign` or another reader blocked on a large DerivedData file as a stale DerivedData mount. Treat CoreSimulator installation blocked in `dvt_installApplicationAtPath` as a stale DeviceSet mount.
+4. `xcode-offload mounts repair` does not remount a volume it considers mounted. Stop only the processes holding the affected mount, shut down Simulator before DeviceSet work, discover the current disk with `df`, detach that disk without hard-coding its identifier, then run `xcode-offload mounts repair --scope user`.
+5. After remounting, rerun strict doctor. For DerivedData, verify a representative large generated file reads promptly and matches its authoritative build-root copy. For DeviceSet, verify device enumeration and reopen the intended simulator through `xcode-offload`.
+6. Preserve external build-root artifacts, unrelated simulator data, archives, repository files, and other machine caches throughout recovery.
+
 ## XcodeBuildMCP
 
 If using XcodeBuildMCP, use the installed XcodeBuildMCP skill before calling XcodeBuildMCP tools.

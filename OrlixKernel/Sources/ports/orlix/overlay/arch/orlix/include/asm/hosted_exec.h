@@ -6,6 +6,7 @@
 
 struct pt_regs;
 struct task_struct;
+struct mm_struct;
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
 void orlix_hosted_capture_host_context(void);
@@ -31,7 +32,21 @@ void orlix_sync_current_user_minimal_mappings(struct pt_regs *regs);
 int orlix_sync_current_user_mapping_page(unsigned long address);
 int orlix_refresh_current_user_mapping_page(unsigned long address);
 int orlix_refresh_current_user_mapping_page_from_kernel(unsigned long address,
-							const void *source_page);
+							 const void *source_page);
+int orlix_refresh_user_mapping_page_from_kernel(struct mm_struct *mm,
+						 unsigned long address,
+						 const void *source_page);
+int orlix_refresh_current_user_mapping_range_from_kernel(unsigned long address,
+							  const void *source_page,
+							  size_t length);
+int orlix_refresh_user_mapping_range_from_kernel(struct mm_struct *mm,
+						  unsigned long address,
+						  const void *source_page,
+						  size_t length);
+void orlix_host_user_unmap_pages_serialized(unsigned long address,
+					    unsigned long length);
+void orlix_host_user_discard_pages_serialized(unsigned long address,
+					      unsigned long length);
 int orlix_sync_current_user_fault_window(unsigned long address,
 					 unsigned long fault_flags);
 int orlix_sync_hosted_kernel_fault(unsigned long address);

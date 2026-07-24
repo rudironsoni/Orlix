@@ -38,9 +38,36 @@ ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMUL
 ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
+ORLIX_AARCHMRS_INSTRUCTIONS ?=
+ORLIX_AARCHMRS_FEATURES ?=
+ORLIX_AARCHMRS_REGISTERS ?=
+export ORLIX_AARCHMRS_INSTRUCTIONS
+export ORLIX_AARCHMRS_FEATURES
+export ORLIX_AARCHMRS_REGISTERS
+ORLIX_TCTI_INVENTORY_AUDITOR := $(ORLIX_BUILD_ROOT)/AgentHarness/orlix-tcti/audit_inventory
+ORLIX_TCTI_INVENTORY_CONTRACT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/inventory_contract_test
+ORLIX_TCTI_TARGET_IMPORT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_inventory_import_test
+ORLIX_TCTI_TARGET_CONDITION_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_condition_serialization_test
+ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_proof_registry_test
+ORLIX_TCTI_RUNTIME_PROJECTION_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_runtime_projection_test
+ORLIX_TCTI_FEATURE_MODEL_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_model_test
+ORLIX_TCTI_FEATURE_SAT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_sat_test
+ORLIX_TCTI_FEATURE_TYPED_IR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_typed_ir_test
+ORLIX_TCTI_REGISTER_MODEL_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_register_model_test
+ORLIX_TCTI_TYPED_EXPRESSION_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_typed_expression_test
+ORLIX_TCTI_SYSTEM_ACCESS_SELECTOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_system_access_selector_test
+ORLIX_TCTI_SCALAR_OPERATION_CATALOG_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_scalar_operation_catalog_test
+ORLIX_TCTI_LSE_OPERATION_CATALOG_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_lse_operation_catalog_test
+ORLIX_TCTI_PROOF_CANDIDATE_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_proof_candidate_test
+ORLIX_TCTI_HWCAP_COHORT_CATALOG_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_hwcap_cohort_catalog_test
+ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_manifest_generator
+ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_manifest_generator_test
+ORLIX_TCTI_TARGET_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_ledger_test
+ORLIX_TCTI_SOURCE_MANIFEST := OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa/source_manifest.def
+ORLIX_TCTI_CLASSIFICATION_LEDGER := OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa/target_classification.def
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests tcti-isa-host-tests tcti-isa-audit tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -55,6 +82,8 @@ help:
 	@printf '%s\n' '  Orlix/Makefile'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Owning test suites:'
+	@printf '%s\n' '  tcti-isa-host-tests    run deterministic TCTI inventory contract tests'
+	@printf '%s\n' '  tcti-isa-audit         audit the complete target ledger against pinned Arm sources'
 	@printf '%s\n' '  tcti-kernel-tests run TCTI KUnit and app-hosted Linux kselftests'
 	@printf '%s\n' '  mlibc-tests         run the upstream mlibc suite through OrlixOS'
 	@printf '%s\n' '  coreutils-tests     run the upstream Coreutils suite through OrlixOS'
@@ -263,6 +292,159 @@ beta-simulator-gate: beta-prerequisites
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
 		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
+
+tcti-isa-host-tests:
+	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
+	@$(CC) -std=c17 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/inventory_contract.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/inventory_contract_test.c \
+		-o '$(ORLIX_TCTI_INVENTORY_CONTRACT_TEST)'
+	@'$(ORLIX_TCTI_INVENTORY_CONTRACT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import_test.c \
+		-o '$(ORLIX_TCTI_TARGET_IMPORT_TEST)'
+	@'$(ORLIX_TCTI_TARGET_IMPORT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization_test.c \
+		-o '$(ORLIX_TCTI_TARGET_CONDITION_TEST)'
+	@'$(ORLIX_TCTI_TARGET_CONDITION_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry_test.c \
+		-o '$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
+	@'$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
+	@$(CC) -DTCTI_RUNTIME_PROJECTION_HOST_TEST -std=c11 \
+		-Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/runtime_projection.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_projection_test.c \
+		-o '$(ORLIX_TCTI_RUNTIME_PROJECTION_TEST)'
+	@'$(ORLIX_TCTI_RUNTIME_PROJECTION_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_model_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_MODEL_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_sat.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_sat_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_SAT_TEST)'
+	@'$(ORLIX_TCTI_FEATURE_SAT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_register_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_register_model_test.c \
+		-o '$(ORLIX_TCTI_REGISTER_MODEL_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_typed_expression.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_typed_expression_test.c \
+		-o '$(ORLIX_TCTI_TYPED_EXPRESSION_TEST)'
+	@'$(ORLIX_TCTI_TYPED_EXPRESSION_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_system_access_selector.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_system_access_selector_test.c \
+		-o '$(ORLIX_TCTI_SYSTEM_ACCESS_SELECTOR_TEST)'
+	@'$(ORLIX_TCTI_SYSTEM_ACCESS_SELECTOR_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_scalar_operation_catalog.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_scalar_operation_catalog_test.c \
+		-o '$(ORLIX_TCTI_SCALAR_OPERATION_CATALOG_TEST)'
+	@'$(ORLIX_TCTI_SCALAR_OPERATION_CATALOG_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_lse_operation_catalog.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_lse_operation_catalog_test.c \
+		-o '$(ORLIX_TCTI_LSE_OPERATION_CATALOG_TEST)'
+	@'$(ORLIX_TCTI_LSE_OPERATION_CATALOG_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_scalar_operation_catalog.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_lse_operation_catalog.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_candidate.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_candidate_test.c \
+		-o '$(ORLIX_TCTI_PROOF_CANDIDATE_TEST)'
+	@'$(ORLIX_TCTI_PROOF_CANDIDATE_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_hwcap_cohort_catalog.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_hwcap_cohort_catalog_test.c \
+		-o '$(ORLIX_TCTI_HWCAP_COHORT_CATALOG_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_manifest_generator.c \
+		-o '$(ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_ledger.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_ledger_test.c \
+		-o '$(ORLIX_TCTI_TARGET_LEDGER_TEST)'
+	@'$(ORLIX_TCTI_TARGET_LEDGER_TEST)'
+
+tcti-isa-audit: tcti-isa-host-tests
+	@set -euo pipefail; \
+	if [ -z "$${ORLIX_AARCHMRS_INSTRUCTIONS}" ]; then \
+		echo "ORLIX_AARCHMRS_INSTRUCTIONS must name pinned Arm Instructions.json" >&2; \
+		exit 2; \
+	fi; \
+	if [ ! -f "$${ORLIX_AARCHMRS_INSTRUCTIONS}" ]; then \
+		echo "Arm Instructions.json not found: $${ORLIX_AARCHMRS_INSTRUCTIONS}" >&2; \
+		exit 2; \
+	fi; \
+	if [ -z "$${ORLIX_AARCHMRS_FEATURES}" ]; then \
+		echo "ORLIX_AARCHMRS_FEATURES must name pinned Arm Features.json" >&2; \
+		exit 2; \
+	fi; \
+	if [ ! -f "$${ORLIX_AARCHMRS_FEATURES}" ]; then \
+		echo "Arm Features.json not found: $${ORLIX_AARCHMRS_FEATURES}" >&2; \
+		exit 2; \
+	fi; \
+	if [ -z "$${ORLIX_AARCHMRS_REGISTERS}" ]; then \
+		echo "ORLIX_AARCHMRS_REGISTERS must name pinned Arm Registers.json" >&2; \
+		exit 2; \
+	fi; \
+	if [ ! -f "$${ORLIX_AARCHMRS_REGISTERS}" ]; then \
+		echo "Arm Registers.json not found: $${ORLIX_AARCHMRS_REGISTERS}" >&2; \
+		exit 2; \
+	fi; \
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_typed_expression.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_typed_ir.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_typed_ir_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_TYPED_IR_TEST)'; \
+	'$(ORLIX_TCTI_FEATURE_TYPED_IR_TEST)' "$${ORLIX_AARCHMRS_FEATURES}"; \
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_manifest_generator_test.c \
+		-o '$(ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR_TEST)'; \
+	'$(ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR_TEST)' \
+		"$${ORLIX_AARCHMRS_INSTRUCTIONS}"; \
+	'$(ORLIX_TCTI_HWCAP_COHORT_CATALOG_TEST)' \
+		"$${ORLIX_AARCHMRS_INSTRUCTIONS}"; \
+	'$(ORLIX_TCTI_FEATURE_MODEL_TEST)' "$${ORLIX_AARCHMRS_FEATURES}"; \
+	'$(ORLIX_TCTI_REGISTER_MODEL_TEST)' "$${ORLIX_AARCHMRS_REGISTERS}"; \
+	'$(ORLIX_TCTI_SOURCE_MANIFEST_GENERATOR)' --check \
+		"$${ORLIX_AARCHMRS_INSTRUCTIONS}" '$(ORLIX_TCTI_SOURCE_MANIFEST)'; \
+	mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'; \
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/audit_inventory.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_sat.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_typed_ir.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_typed_expression.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_inventory_import.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_condition_serialization.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_register_model.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_ledger.c \
+		-o '$(ORLIX_TCTI_INVENTORY_AUDITOR)'; \
+	'$(ORLIX_TCTI_INVENTORY_AUDITOR)' \
+		"$${ORLIX_AARCHMRS_INSTRUCTIONS}" \
+		"$${ORLIX_AARCHMRS_FEATURES}" \
+		"$${ORLIX_AARCHMRS_REGISTERS}"
 
 tcti-kernel-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

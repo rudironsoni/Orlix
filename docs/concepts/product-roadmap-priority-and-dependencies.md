@@ -3,7 +3,7 @@ type: concept
 tags:
   - roadmap
   - guidance
-updated: 2026-07-16
+updated: 2026-07-24
 summary: "Order Orlix epics, stories, and tasks by their hard delivery dependencies, parallel work, optional proof, and external approvals."
 applies:
   - "[Orlix](../objects/product/orlix.md)"
@@ -24,9 +24,9 @@ This page records the durable execution order across the complete epic, story, a
 ## Priority sequence
 
 1. **P0, preserve the ontology and start long-lead approvals.** Keep the typed roadmap authoritative, and begin Herdr, mobile terminal, and downloaded-content approval work because external lead time can run in parallel.
-2. **P1, complete the owning TCTI test ladder.** Run KUnit, kselftest, mlibc, Coreutils, HostAdapter, OrlixOS, app, and app-hosted simulator tests in promotion order. Local session binding, Herdr topology work, and OCI image import may progress in parallel without claiming the blocked product tiers.
-3. **P2, unlock the product foundations.** After the pinned simulator proof, integrate the approved Herdr platform, implement and prove Local Instance isolation, complete authorized TCTI device proof when authorized, promote TCTI, and validate mobile presentation.
-4. **P3, validate and publish the mobile terminal release.** The first public release proves terminal, Herdr, Local Runtime, TCTI, and mobile presentation. It does not claim OCI or Docker behavior.
+2. **P1, complete the full AArch64 target before the owning TCTI product ladder.** Explicitly classify all 4,350 pinned Arm source leaves, prove every applicable EL0 feature variant, including LSE atomic semantics and any required privileged-at-EL0 behavior, then run kernel KUnit, Linux kernel-interface kselftest, upstream mlibc, OrlixMLibC-built syscall and UAPI kselftest, POSIX shell proof, and the jq, curl, zsh package ladder in ADR 0017 order. Runtime HWCAP and HWCAP2 may advertise a capability only after the complete target and owning proof are green. Local session binding, Herdr topology work, and OCI image import may progress in parallel without claiming the blocked product tiers.
+3. **P2, unlock the product foundations.** After the pinned simulator proof, integrate the approved Herdr platform, implement and prove Local Instance isolation, promote TCTI, and validate mobile presentation. Authorized TCTI device proof remains optional until an operator selects it for a candidate.
+4. **P3, validate and publish the mobile terminal release stage.** The first public mobile terminal stage proves terminal, Herdr, Local Runtime, TCTI, and mobile presentation. It does not claim OCI or Docker behavior, and it may finish before OCI. The three-stage Orlix release epic does not finish until the later OCI and native macOS stages do.
 5. **P4, complete OCI lifecycle and Docker compatibility.** Build on proven Local Instance isolation, imported OCI content, and the released terminal foundation.
 6. **P5, validate and publish the mobile container release.** Add OCI, Docker, and downloaded-content behavior while preserving the mobile terminal contract.
 7. **P6, implement and publish native macOS.** Reuse the two proven mobile product contracts, then add the native Mac target and host integration.
@@ -44,7 +44,7 @@ This page records the durable execution order across the complete epic, story, a
 | [Orlix release](../objects/epic/doing/orlix-release.md) | [Validate and publish the mobile container release](../objects/story/todo/validate-and-publish-mobile-container-release.md) | P5 | Mobile terminal release and OCI lifecycle | Native macOS release |
 | [Orlix release](../objects/epic/doing/orlix-release.md) | [Validate and publish the native macOS release](../objects/story/todo/validate-and-publish-native-macos-release.md) | P6 | Mobile container release | Native Mac publication |
 
-The release epic spans three stages, so its completion depends on native, TCTI, and OCI work even though the mobile terminal story can finish before OCI and Docker. Story edges define the promotion order within that epic.
+The Orlix release epic spans three stages, so its completion depends on native, TCTI, and OCI work. Only the mobile terminal release story, which is the first stage of that epic, can finish before OCI and Docker. Story edges define the promotion order within the epic.
 
 ## Complete task dependency matrix
 
@@ -56,15 +56,16 @@ The release epic spans three stages, so its completion depends on native, TCTI, 
 | P0, external | [Secure Herdr commercial integration](../objects/task/todo/secure-herdr-commercial-integration.md) | None | Herdr integration |
 | P0, external | [Secure mobile terminal distribution approval](../objects/task/todo/secure-mobile-terminal-distribution-approval.md) | None | Mobile terminal archive and upload |
 | P0, external | [Secure downloaded-content distribution approval](../objects/task/todo/secure-downloaded-content-distribution-approval.md) | None | Mobile container simulator and archive gates |
-| P1 | [Complete the pinned simulator TCTI ladder](../objects/task/doing/complete-pinned-simulator-tcti-ladder.md) | Current TCTI task envelope | Herdr integration, Local Instance lifecycle, authorized TCTI device proof |
+| P1 | [Complete AArch64 ISA-on-ISA coverage](../objects/task/doing/complete-aarch64-isa-on-isa-coverage.md) | Complete pinned Arm source inventory | Pinned simulator TCTI ladder |
+| P1 | [Complete the pinned simulator TCTI ladder](../objects/task/doing/complete-pinned-simulator-tcti-ladder.md) | Complete AArch64 ISA-on-ISA coverage | Herdr integration, Local Instance lifecycle, authorized TCTI device proof |
 | P1 | [Bind local sessions through OrlixOS](../objects/task/doing/bind-local-sessions-through-orlixos.md) | Existing terminal transport and console policy | Local Instance lifecycle and mobile presentation proof |
 | P1 | [Keep Herdr authoritative for terminal topology](../objects/task/doing/keep-herdr-authoritative-for-terminal-topology.md) | Validated Herdr integration | Mobile presentation and terminal simulator proof |
 | P1, parallel | [Import OCI image content](../objects/task/doing/import-oci-image-content.md) | None | OCI runtime lifecycle |
 | P2 | [Integrate and validate the Herdr terminal platform](../objects/task/todo/integrate-and-validate-herdr-terminal-platform.md) | Herdr approval and pinned TCTI simulator proof | Authoritative Herdr topology |
 | P2 | [Implement namespaced Local Instance lifecycle](../objects/task/todo/implement-namespaced-local-instance-lifecycle.md) | Local session binding and pinned TCTI simulator proof | Concurrent Local Instance isolation |
 | P2 | [Prove concurrent Local Instance isolation](../objects/task/todo/prove-concurrent-local-instance-isolation.md) | Namespaced Local Instance lifecycle | OCI runtime lifecycle and terminal simulator proof |
-| P2, external | [Run authorized TCTI device validation](../objects/task/todo/run-authorized-tcti-device-validation.md) | Pinned TCTI simulator ladder | TCTI product-default promotion |
-| P2 | [Promote TCTI as the product default](../objects/task/todo/promote-tcti-as-product-default.md) | Authorized TCTI device validation | Mobile terminal simulator proof |
+| P2, optional external | [Run authorized TCTI device validation](../objects/task/todo/run-authorized-tcti-device-validation.md) | Pinned TCTI simulator ladder and explicit authorization | Candidate-specific device promotion when selected |
+| P2 | [Promote TCTI as the product default](../objects/task/todo/promote-tcti-as-product-default.md) | Complete AArch64 ISA-on-ISA coverage and pinned TCTI simulator ladder | Mobile terminal simulator proof |
 | P2 | [Validate mobile platform presentation](../objects/task/todo/validate-mobile-platform-presentation.md) | Herdr topology and local session binding | Mobile terminal simulator proof |
 | P3 | [Validate the mobile terminal simulator product](../objects/task/doing/validate-mobile-terminal-simulator-product.md) | Herdr topology, mobile presentation, Local Instance isolation, TCTI product default | Optional device proof and terminal archive |
 | P3, optional external | [Validate an authorized mobile terminal device](../objects/task/todo/validate-authorized-mobile-terminal-device.md) | Mobile terminal simulator proof | Candidate-specific promotion when selected |

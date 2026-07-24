@@ -138,6 +138,13 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         kernelCommandLineSuffix: "orlix.kselftest=pty_terminal_probe"
     )
 
+    static let kernelTCTICrypto = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=tcti_crypto_probe"
+    )
+
     static let kernelSignalWait = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
@@ -305,6 +312,13 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
         kernelCommandLineSuffix: "orlix.kselftest=rlimit_probe"
+    )
+
+    static let kernelStackGrowth = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix: "orlix.kselftest=stack_growth_probe"
     )
 
     static let kernelProcessCapability = OrlixUpstreamTestRunSpec(
@@ -700,6 +714,20 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
     }
 
     func run() throws -> String {
+		let completion = DispatchSemaphore(value: 0)
+
+		return try run(
+			signalCompletion: { completion.signal() },
+			waitForCompletion: { timeout in
+				completion.wait(timeout: .now() + timeout) == .success
+			}
+		)
+	}
+
+	func run(
+		signalCompletion: @escaping () -> Void,
+		waitForCompletion: (TimeInterval) -> Bool
+	) throws -> String {
         let rootImage = try spec.rootImageDescriptor()
         guard let rootBundleResourceName = rootImage.initrdBundleName else {
             throw OrlixUpstreamTestRunError.missingRootfsBundle(
@@ -754,7 +782,7 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
         }
         let recorder = TerminalOutputRecorder()
 		session.terminal.resize(rows: 24, columns: 80)
-        let completion = DispatchSemaphore(value: 0)
+		let completion = OrlixUpstreamTestCompletion(signalCompletion)
         let bootStatus = BootStatusRecorder()
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
@@ -776,8 +804,7 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             }
         }
 
-        let deadline = DispatchTime.now() + spec.timeout
-        guard completion.wait(timeout: deadline) == .success else {
+		guard waitForCompletion(spec.timeout) else {
             let text = Self.combinedUpstreamOutput(
                 terminal: recorder.text,
                 console: session.recentConsoleOutputText
@@ -895,6 +922,27 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
 private struct HostDirectoryFixture {
     let rootDirectory: URL
     let registrations: [OrlixHostDirectoryRegistration]
+}
+
+private final class OrlixUpstreamTestCompletion: @unchecked Sendable {
+	private let lock = NSLock()
+	private let action: () -> Void
+	private var signaled = false
+
+	init(_ action: @escaping () -> Void) {
+		self.action = action
+	}
+
+	func signal() {
+		lock.lock()
+		guard !signaled else {
+			lock.unlock()
+			return
+		}
+		signaled = true
+		lock.unlock()
+		action()
+	}
 }
 
 private final class BootStatusRecorder: @unchecked Sendable {

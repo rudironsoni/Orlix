@@ -3,29 +3,30 @@
 #include <linux/hash.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <asm/page.h>
 
 #include "block_cache.h"
 
 static DEFINE_SPINLOCK(tcti_global_cache_lock);
 static struct hlist_head tcti_global_block_hash[TCTI_BLOCK_CACHE_BUCKETS];
 static LIST_HEAD(tcti_global_blocks);
-static atomic_t tcti_global_translation_generation = ATOMIC_INIT(1);
-static atomic_t tcti_global_code_generation = ATOMIC_INIT(1);
+static atomic64_t tcti_global_code_generation = ATOMIC64_INIT(1);
 static u32 tcti_global_block_count;
 
 static u32 tcti_block_hash(struct mm_struct *mm, unsigned long guest_pc,
-			   u32 code_generation)
+			   u64 code_generation)
 {
 	unsigned long key = (unsigned long)mm;
 
 	key ^= guest_pc >> 2;
 	key ^= (unsigned long)code_generation << 17;
+	key ^= (unsigned long)(code_generation >> 32);
 	return hash_long(key, TCTI_BLOCK_CACHE_BUCKET_BITS);
 }
 
 static struct tcti_block *tcti_block_find_locked(struct mm_struct *mm,
 						 unsigned long guest_pc,
-						 u32 code_generation)
+						 u64 code_generation)
 {
 	struct tcti_block *block;
 	u32 bucket = tcti_block_hash(mm, guest_pc, code_generation);
@@ -60,33 +61,78 @@ static void tcti_block_cache_evict_oldest_locked(void)
 	tcti_block_put(block);
 }
 
-u32 tcti_translation_generation(struct mm_struct *mm)
+u64 tcti_translation_generation(struct mm_struct *mm)
 {
-	(void)mm;
-	return (u32)atomic_read(&tcti_global_translation_generation);
+	if (!mm)
+		return 0;
+
+	return (u64)atomic64_read(&mm->context.orlix_tcti_mapping_sequence);
 }
 
-u32 tcti_code_generation(struct mm_struct *mm)
+/*
+ * Accessors may sleep on the backing page before taking this read lock, but
+ * must not acquire a page-table or page lock while holding it. PTE writers
+ * enter through tcti_mapping_sequence_begin() with their existing PTE lock.
+ */
+bool tcti_translation_generation_stable(struct mm_struct *mm,
+					u64 generation)
 {
-	(void)mm;
-	return (u32)atomic_read(&tcti_global_code_generation);
+	return mm && !(generation & 1) &&
+	       generation == tcti_translation_generation(mm);
 }
 
-void tcti_bump_translation_generation(struct mm_struct *mm)
+bool tcti_mapping_access_lock(struct mm_struct *mm, u64 generation)
+{
+	if (!mm)
+		return false;
+
+	read_lock(&mm->context.orlix_tcti_mapping_lock);
+	if (tcti_translation_generation_stable(mm, generation))
+		return true;
+	read_unlock(&mm->context.orlix_tcti_mapping_lock);
+	return false;
+}
+
+void tcti_mapping_access_unlock(struct mm_struct *mm)
+{
+	if (mm)
+		read_unlock(&mm->context.orlix_tcti_mapping_lock);
+}
+
+void tcti_mapping_sequence_begin(struct mm_struct *mm)
+{
+	if (!mm)
+		return;
+
+	write_lock(&mm->context.orlix_tcti_mapping_lock);
+	atomic64_inc(&mm->context.orlix_tcti_mapping_sequence);
+	tcti_bump_code_generation(mm);
+}
+
+void tcti_mapping_sequence_end(struct mm_struct *mm)
+{
+	if (!mm)
+		return;
+
+	atomic64_inc(&mm->context.orlix_tcti_mapping_sequence);
+	write_unlock(&mm->context.orlix_tcti_mapping_lock);
+}
+
+u64 tcti_code_generation(struct mm_struct *mm)
 {
 	(void)mm;
-	atomic_inc(&tcti_global_translation_generation);
+	return (u64)atomic64_read(&tcti_global_code_generation);
 }
 
 void tcti_bump_code_generation(struct mm_struct *mm)
 {
 	(void)mm;
-	atomic_inc(&tcti_global_code_generation);
+	atomic64_inc(&tcti_global_code_generation);
 }
 
 struct tcti_block *tcti_block_cache_lookup(struct mm_struct *mm,
 					   unsigned long guest_pc,
-					   u32 code_generation)
+					   u64 code_generation)
 {
 	struct tcti_block *block;
 	unsigned long flags;
@@ -106,7 +152,7 @@ struct tcti_block *tcti_block_cache_lookup(struct mm_struct *mm,
 int tcti_block_cache_insert(struct mm_struct *mm,
 			    unsigned long guest_start_pc,
 			    unsigned long guest_end_pc,
-			    u32 code_generation,
+			    u64 code_generation,
 			    u32 instruction_count,
 			    const struct tcti_gadget_word *program,
 			    u32 program_words,
@@ -140,6 +186,11 @@ int tcti_block_cache_insert(struct mm_struct *mm,
 	memcpy(block->program, program, program_words * sizeof(*program));
 
 	spin_lock_irqsave(&tcti_global_cache_lock, flags);
+	if (code_generation != tcti_code_generation(mm)) {
+		spin_unlock_irqrestore(&tcti_global_cache_lock, flags);
+		tcti_block_free(block);
+		return -ESTALE;
+	}
 	existing = tcti_block_find_locked(mm, guest_start_pc, code_generation);
 	if (existing) {
 		if (out) {
@@ -184,13 +235,53 @@ void tcti_block_cache_invalidate_mm(struct mm_struct *mm)
 	struct tcti_block *tmp;
 	unsigned long flags;
 
-	tcti_bump_translation_generation(mm);
 	tcti_bump_code_generation(mm);
 
 	spin_lock_irqsave(&tcti_global_cache_lock, flags);
 	list_for_each_entry_safe(block, tmp, &tcti_global_blocks, mm_node) {
 		if (block->mm != mm)
 			continue;
+		hlist_del_init(&block->hash_node);
+		list_del_init(&block->mm_node);
+		tcti_global_block_count--;
+		tcti_block_put(block);
+	}
+	spin_unlock_irqrestore(&tcti_global_cache_lock, flags);
+}
+
+void tcti_block_cache_invalidate_range(struct mm_struct *mm,
+				       unsigned long start, unsigned long end)
+{
+	struct tcti_block *block;
+	struct tcti_block *tmp;
+	unsigned long flags;
+
+	if (!mm || end <= start)
+		return;
+	tcti_bump_code_generation(mm);
+	spin_lock_irqsave(&tcti_global_cache_lock, flags);
+	list_for_each_entry_safe(block, tmp, &tcti_global_blocks, mm_node) {
+		if (block->mm != mm || block->guest_end_pc <= start ||
+		    block->guest_start_pc >= end)
+			continue;
+		hlist_del_init(&block->hash_node);
+		list_del_init(&block->mm_node);
+		tcti_global_block_count--;
+		tcti_block_put(block);
+	}
+	spin_unlock_irqrestore(&tcti_global_cache_lock, flags);
+}
+
+void tcti_block_cache_invalidate_all(void)
+{
+	struct tcti_block *block;
+	struct tcti_block *tmp;
+	unsigned long flags;
+
+	tcti_bump_code_generation(NULL);
+
+	spin_lock_irqsave(&tcti_global_cache_lock, flags);
+	list_for_each_entry_safe(block, tmp, &tcti_global_blocks, mm_node) {
 		hlist_del_init(&block->hash_node);
 		list_del_init(&block->mm_node);
 		tcti_global_block_count--;
@@ -213,9 +304,13 @@ void tcti_block_cache_reset_for_tests(void)
 		tcti_global_block_count--;
 		tcti_block_put(block);
 	}
-	atomic_set(&tcti_global_translation_generation, 1);
-	atomic_set(&tcti_global_code_generation, 1);
+	atomic64_set(&tcti_global_code_generation, 1);
 	spin_unlock_irqrestore(&tcti_global_cache_lock, flags);
+}
+
+void tcti_block_cache_set_generation_for_tests(u64 generation)
+{
+	atomic64_set(&tcti_global_code_generation, generation);
 }
 
 u32 tcti_block_cache_count_for_tests(void)

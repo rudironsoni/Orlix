@@ -249,9 +249,6 @@ void orlix_hosted_set_current_user_tls(unsigned long user_tls)
 	if (!current->mm)
 		return;
 
-	if (!orlix_hosted_valid_user_tls(user_tls))
-		return;
-
 	current->thread.user_tls = user_tls;
 	orlix_hosted_restore_task_user_tls(current);
 }

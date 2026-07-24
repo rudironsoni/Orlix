@@ -40,5 +40,9 @@ int tcti_execute_gadget_program(struct mm_struct *mm, struct pt_regs *regs,
 				const struct tcti_gadget_word *program,
 				size_t word_count,
 				unsigned long *fault_address);
+int tcti_execute_gadget_program_authorized(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation);
 
 #endif /* ORLIX_TCTI_GADGET_PROGRAM_H */

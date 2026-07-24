@@ -3,9 +3,32 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-22
+updated: 2026-07-23
 ---
 # Orlix Knowledge Log
+
+## [2026-07-23] align | Separate full ISA proof from runtime promotion
+
+Aligned the TCTI component, coverage task, simulator ladder, default-promotion task, and roadmap with ADRs 0017, 0022, and 0029. The 4,350-leaf Arm inventory remains the completion target, LSE requires production-path KUnit and Linux-visible kselftest before `HWCAP_ATOMICS`, the mlibc-linked syscall/UAPI rerun remains a distinct proof stage, and external-language generators or semantic oracles cannot define TCTI correctness.
+
+## [2026-07-23] correct | Make the complete Arm source inventory the TCTI goal
+
+Added ADR 0029 and corrected the active TCTI epic, story, tasks, and roadmap so
+the complete pinned 4,350-leaf Arm inventory defines
+ISA-on-ISA completion. Every leaf now requires an explicit target
+classification, applicable EL0 feature alternatives remain blocking across the
+union of feature configurations, and privileged leaves require their
+architecturally correct EL0 behavior. The current Linux HWCAP and HWCAP2 profile
+is a separate safe-advertisement projection and cannot hide missing instruction
+semantics or make the completeness audit pass.
+
+## [2026-07-23] decide | Keep TCTI implementation and proof kernel-native
+
+Amended ADR 0022 so TCTI implementation, ISA inventory, structured diagnostics,
+and correctness proof remain C-native under `arch/orlix`, with KUnit and
+kselftest as the authoritative owning surfaces. External-language scripts may
+not generate or model TCTI behavior, define its ISA inventory, or replace
+structured kernel proof.
 
 ## [2026-07-22] implement | Expand configured AArch64 ISA coverage
 
@@ -509,3 +532,15 @@ Replaced semaphore polling in the app-hosted runtime proof with XCTest-native ex
 ## [2026-07-15] model | Normalize roadmap priorities and dependencies
 
 Split release work into mobile terminal, mobile container, and native macOS stages, separated the native application and Local Runtime stories, and recorded every epic, story, and task in one durable priority matrix. Added inverse dependency and cycle validation so the authored graph cannot silently drift from the documented execution order.
+
+## [2026-07-24] correct | Separate TCTI target completion from current evidence
+
+Corrected the TCTI target, promotion, and roadmap language so the 4,350-leaf target remains unfinished until its owning audit and per-family proof close. The scope envelope now records required proof tiers without presenting current results, includes every ADR 0017 tier, keeps runtime rejection distinct from target completion, reruns the app-hosted ladder only after coverage, and makes optional device validation independent of product-default promotion.
+
+## [2026-07-24] define | Reconcile system-access semantics without changing the ISA denominator
+
+Recorded the three-file Arm source contract and made `Instructions.json` the immutable 4,350 direct instruction-encoding denominator. `Registers.json` accessors now supply supplemental variants mapped through generic system-access leaves, so `RNDR` and `RNDRRS` do not create new instruction leaves. Missing, ambiguous, reserved, or contradictory accessor selector mappings are audit failures.
+
+## [2026-07-24] implement | Establish the C-native complete-ISA audit foundation
+
+Added the exact 4,350-leaf source manifest, explicit target classification and proof ledgers, typed feature and register import models, source-bound operation catalogs, and focused production-path KUnit coverage for the current scalar, atomic, and cryptographic families. The checkpoint keeps Arm JSON inputs in explicit host audit tooling, keeps ordinary kernel execution C-native, and records unresolved classifications and semantic domains as blocking gaps rather than completion evidence.

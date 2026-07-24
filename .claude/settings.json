@@ -1,1 +1,56 @@
-{}
+{
+  "permissions": {
+    "deny": [
+      "Read(credentials/)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/pre_tool_use_guard.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/permission_request_guard.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/post_tool_use_review.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/stop_claim_check.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

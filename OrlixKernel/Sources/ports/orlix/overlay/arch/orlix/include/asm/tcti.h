@@ -9,6 +9,7 @@ struct mm_struct;
 struct page;
 struct pt_regs;
 struct task_struct;
+struct vm_area_struct;
 
 enum tcti_exit_reason {
 	TCTI_EXIT_SYSCALL,
@@ -18,12 +19,38 @@ enum tcti_exit_reason {
 	TCTI_EXIT_SIGNAL_POINT,
 	TCTI_EXIT_YIELD,
 	TCTI_EXIT_TASK_EXIT,
+	TCTI_EXIT_ALIGNMENT_FAULT,
 };
 
 enum tcti_access {
 	TCTI_ACCESS_FETCH,
 	TCTI_ACCESS_READ,
 	TCTI_ACCESS_WRITE,
+};
+
+/*
+ * These are the acquire/release variants encoded by AArch64 atomics.  There
+ * is deliberately no implicit seq_cst variant: the decoder must select the
+ * ordering specified by the guest instruction.
+ */
+enum tcti_atomic_memory_order {
+	TCTI_ATOMIC_MEMORY_RELAXED,
+	TCTI_ATOMIC_MEMORY_ACQUIRE,
+	TCTI_ATOMIC_MEMORY_RELEASE,
+	TCTI_ATOMIC_MEMORY_ACQ_REL,
+};
+
+enum tcti_atomic_memory_operation {
+	TCTI_ATOMIC_MEMORY_CAS,
+	TCTI_ATOMIC_MEMORY_SWP,
+	TCTI_ATOMIC_MEMORY_ADD,
+	TCTI_ATOMIC_MEMORY_CLR,
+	TCTI_ATOMIC_MEMORY_EOR,
+	TCTI_ATOMIC_MEMORY_SET,
+	TCTI_ATOMIC_MEMORY_SMAX,
+	TCTI_ATOMIC_MEMORY_SMIN,
+	TCTI_ATOMIC_MEMORY_UMAX,
+	TCTI_ATOMIC_MEMORY_UMIN,
 };
 
 struct tcti_result {
@@ -40,8 +67,8 @@ struct tcti_user_page {
 	void *host_data;
 	struct page *page;
 	unsigned long linux_perms;
-	u32 translation_generation;
-	u32 code_generation;
+	u64 translation_generation;
+	u64 code_generation;
 	bool cow_sensitive;
 	bool has_translated_blocks;
 };
@@ -61,6 +88,20 @@ int tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size);
 int tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 			  const void *buffer, size_t size);
+int tcti_load_exclusive_user_data(struct mm_struct *mm,
+				  unsigned long user_va, void *buffer, size_t size,
+				  unsigned long *pfn, u64 *generation,
+				  u64 *mapping_generation);
+int tcti_store_exclusive_user_data(struct mm_struct *mm,
+				   unsigned long user_va, const void *buffer,
+				   size_t size, unsigned long reserved_pfn,
+				   u64 reserved_generation,
+				   u64 reserved_mapping_generation, bool *stored);
+int tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
+			  enum tcti_atomic_memory_operation operation,
+			  enum tcti_atomic_memory_order order,
+			  const void *expected, const void *operand,
+			  void *old_value, size_t size, bool *exchanged);
 int tcti_compare_exchange_user_data(struct mm_struct *mm,
 				     unsigned long user_va,
 				     const void *expected,
@@ -69,5 +110,21 @@ int tcti_compare_exchange_user_data(struct mm_struct *mm,
 int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
 			   enum tcti_access access);
 void tcti_invalidate_mm(struct mm_struct *mm);
+void tcti_invalidate_all(void);
+void tcti_invalidate_vma(struct vm_area_struct *vma);
+void tcti_invalidate_range(struct mm_struct *mm, unsigned long start,
+			   unsigned long end);
+bool tcti_mapping_access_lock(struct mm_struct *mm, u64 generation);
+void tcti_mapping_access_unlock(struct mm_struct *mm);
+void tcti_mapping_sequence_begin(struct mm_struct *mm);
+void tcti_mapping_sequence_end(struct mm_struct *mm);
+void tcti_note_pte_update(struct mm_struct *mm);
+void tcti_note_pte_update_range(struct mm_struct *mm, unsigned long start,
+				unsigned long end);
+void tcti_note_pte_update_address(struct mm_struct *mm,
+				  unsigned long address);
+void tcti_flush_task_state(struct task_struct *task);
+void tcti_release_task_state(struct task_struct *task);
+void tcti_prepare_signal_delivery(void);
 
 #endif /* _ASM_ORLIX_TCTI_H */

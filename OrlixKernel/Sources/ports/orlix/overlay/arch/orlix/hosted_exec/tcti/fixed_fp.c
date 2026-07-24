@@ -276,9 +276,11 @@ int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
 
 	if (!result || !source || !fpsr)
 		return -EINVAL;
-	if (access_size != sizeof(u32) && access_size != sizeof(u64))
+	if (access_size != sizeof(u16) && access_size != sizeof(u32) &&
+	    access_size != sizeof(u64))
 		return -EINVAL;
-	if (result_size != sizeof(u32) && result_size != sizeof(u64))
+	if (result_size != sizeof(u16) && result_size != sizeof(u32) &&
+	    result_size != sizeof(u64))
 		return -EINVAL;
 
 	preempt_disable();
@@ -299,6 +301,18 @@ int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
 		else if (access_size == sizeof(u64) &&
 			 result_size == sizeof(u32))
 			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt s0, d0");
+		else if (access_size == sizeof(u16) &&
+			 result_size == sizeof(u64))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt d0, h0");
+		else if (access_size == sizeof(u64) &&
+			 result_size == sizeof(u16))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt h0, d0");
+		else if (access_size == sizeof(u32) &&
+			 result_size == sizeof(u16))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt h0, s0");
+		else if (access_size == sizeof(u16) &&
+			 result_size == sizeof(u32))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fcvt s0, h0");
 		else
 			ret = -EINVAL;
 		break;
@@ -826,6 +840,21 @@ int tcti_native_simd_fp_scalar_unary(
 		else
 			TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("frsqrte d0, d0");
 		break;
+	case TCTI_SIMD_ARITH_FCMEQ_ZERO:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcmeq d0, d0, #0.0");
+		break;
+	case TCTI_SIMD_ARITH_FCMGE_ZERO:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcmge d0, d0, #0.0");
+		break;
+	case TCTI_SIMD_ARITH_FCMGT_ZERO:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcmgt d0, d0, #0.0");
+		break;
+	case TCTI_SIMD_ARITH_FCMLE_ZERO:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcmle d0, d0, #0.0");
+		break;
+	case TCTI_SIMD_ARITH_FCMLT_ZERO:
+		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcmlt d0, d0, #0.0");
+		break;
 	case TCTI_SIMD_ARITH_FCVTXN:
 		TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN("fcvtxn s0, d0");
 		break;
@@ -890,7 +919,8 @@ int tcti_native_simd_fp_two_register(
 	unsigned long host_fpsr;
 	unsigned long guest_fpsr;
 	bool convert = operation == TCTI_SIMD_ARITH_FCVTN ||
-		operation == TCTI_SIMD_ARITH_FCVTL;
+		operation == TCTI_SIMD_ARITH_FCVTL ||
+		operation == TCTI_SIMD_ARITH_FCVTXN;
 	bool uint_estimate = operation == TCTI_SIMD_ARITH_URECPE ||
 		operation == TCTI_SIMD_ARITH_URSQRTE;
 	int ret = 0;
@@ -904,7 +934,8 @@ int tcti_native_simd_fp_two_register(
 		(access_size == sizeof(u64) && result_size == 2 * sizeof(u64)))) {
 		if (source_index || destination_index)
 			return -EINVAL;
-	} else if (operation == TCTI_SIMD_ARITH_FCVTN) {
+	} else if (operation == TCTI_SIMD_ARITH_FCVTN ||
+		   operation == TCTI_SIMD_ARITH_FCVTXN) {
 		if (access_size != sizeof(u64) || source_index ||
 		    (destination_index ? result_size != 2 * sizeof(u64) :
 		     result_size != sizeof(u64)))
@@ -989,6 +1020,14 @@ int tcti_native_simd_fp_two_register(
 		else
 			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(
 				"fcvtn v0.2s, v0.2d");
+		break;
+	case TCTI_SIMD_ARITH_FCVTXN:
+		if (destination_index)
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN1(
+				"fcvtxn2 v1.4s, v0.2d");
+		else
+			TCTI_NATIVE_SIMD_FP_TWO_REGISTER_RUN0(
+				"fcvtxn v0.2s, v0.2d");
 		break;
 	case TCTI_SIMD_ARITH_FCVTL:
 		if (source_index)

@@ -15,7 +15,7 @@
 #define ENTRY_ROOT "/mnt/orlix-environment-entry-root"
 #define ENTRY_BINARY ENTRY_ROOT "/environment-entry-probe"
 #define ENTRY_OS_RELEASE ENTRY_ROOT "/etc/os-release"
-#define PARENT_MARKER "/orlix-environment-entry-parent-marker"
+#define PARENT_MARKER "/tmp/orlix-environment-entry-parent-marker"
 
 static bool env_has_child_marker(char *const envp[])
 {

@@ -27,6 +27,8 @@
 #define AARCH64_PC_RELATIVE_ADDRESS_PATTERN 0x10000000U
 #define AARCH64_ADD_SUB_IMM_MASK 0x1f000000U
 #define AARCH64_ADD_SUB_IMM_PATTERN 0x11000000U
+#define AARCH64_MIN_MAX_IMM_MASK 0x7ff00000U
+#define AARCH64_MIN_MAX_IMM_PATTERN 0x11c00000U
 #define AARCH64_ADD_SUB_SHIFTED_REG_MASK 0x1f200000U
 #define AARCH64_ADD_SUB_SHIFTED_REG_PATTERN 0x0b000000U
 #define AARCH64_ADD_SUB_EXTENDED_REG_MASK 0x1f200000U
@@ -83,6 +85,14 @@
 #define AARCH64_MOVE_WIDE_IMM_PATTERN 0x12800000U
 #define AARCH64_LOAD_STORE_EXCLUSIVE_MASK 0x3f000000U
 #define AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN 0x08000000U
+#define AARCH64_LSE_CAS_MASK 0x3fa07c00U
+#define AARCH64_LSE_CAS_PATTERN 0x08a07c00U
+#define AARCH64_LSE_CASP_MASK 0xbfa07c00U
+#define AARCH64_LSE_CASP_PATTERN 0x08207c00U
+#define AARCH64_LSE_RMW_MASK 0x3f200c00U
+#define AARCH64_LSE_RMW_PATTERN 0x38200000U
+#define AARCH64_LSE128_RMW_MASK 0xff200c00U
+#define AARCH64_LSE128_RMW_PATTERN 0x19200000U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK 0x9ff80c00U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN 0x0f000400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
@@ -142,6 +152,8 @@
 #define AARCH64_SIMD_FRSQRTE_SCALAR_PATTERN 0x7ea1d800U
 #define AARCH64_SIMD_FCVTXN_SCALAR_MASK 0xfffffc00U
 #define AARCH64_SIMD_FCVTXN_SCALAR_PATTERN 0x7e616800U
+#define AARCH64_SIMD_FCVTXN_VECTOR_MASK 0xbffffc00U
+#define AARCH64_SIMD_FCVTXN_VECTOR_PATTERN 0x2e616800U
 #define AARCH64_SIMD_ADD_SUB_MASK 0x9f20fc00U
 #define AARCH64_SIMD_ADD_SUB_PATTERN 0x0e208400U
 #define AARCH64_SIMD_SCALAR_ADD_SUB_MASK 0xdf20fc00U
@@ -297,6 +309,8 @@
 #define AARCH64_SIMD_FCVT_LONG_NARROW_MASK 0xbf3ffc00U
 #define AARCH64_SIMD_FCVTN_VECTOR_PATTERN 0x0e216800U
 #define AARCH64_SIMD_FCVTL_VECTOR_PATTERN 0x0e217800U
+#define AARCH64_SIMD_SHLL_MASK 0xbf3ffc00U
+#define AARCH64_SIMD_SHLL_PATTERN 0x2e213800U
 #define AARCH64_SIMD_UINT_ESTIMATE_MASK 0xbffffc00U
 #define AARCH64_SIMD_URECPE_VECTOR_PATTERN 0x0ea1c800U
 #define AARCH64_SIMD_URSQRTE_VECTOR_PATTERN 0x2ea1c800U
@@ -354,6 +368,10 @@
 #define AARCH64_FCVT_D_S_PATTERN 0x1e22c000U
 #define AARCH64_FCVT_S_D_MASK 0xfffffc00U
 #define AARCH64_FCVT_S_D_PATTERN 0x1e624000U
+#define AARCH64_FCVT_D_H_PATTERN 0x1ee2c000U
+#define AARCH64_FCVT_H_D_PATTERN 0x1e63c000U
+#define AARCH64_FCVT_H_S_PATTERN 0x1e23c000U
+#define AARCH64_FCVT_S_H_PATTERN 0x1ee24000U
 #define AARCH64_FABS_S_MASK 0xfffffc00U
 #define AARCH64_FABS_S_PATTERN 0x1e20c000U
 #define AARCH64_FABS_D_MASK 0xfffffc00U
@@ -881,6 +899,23 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	/*
+	 * FEAT_CSSC occupies the shift == 3 reservation in the generic
+	 * add/sub-immediate encoding. Decode it before that broader family so a
+	 * legal min/max immediate never becomes an add/sub instruction.
+	 */
+	if ((instruction & AARCH64_MIN_MAX_IMM_MASK) ==
+	    AARCH64_MIN_MAX_IMM_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_MIN_MAX_IMMEDIATE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.is_64bit = instruction & BIT(31);
+		decoded.min_max_immediate = (instruction >> 10) & 0xffU;
+		decoded.min_max_immediate_op =
+			(enum tcti_min_max_immediate_op)((instruction >> 18) & 0x3U);
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_ADD_SUB_IMM_MASK) ==
 	    AARCH64_ADD_SUB_IMM_PATTERN) {
 		u8 shift = (instruction >> 22) & 0x3U;
@@ -1371,6 +1406,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		if (option != 2 && option != 3 && option != 6 && option != 7)
 			return decoded;
 		if (!simd_fp && size == 3 && opc == 2) {
+			if ((instruction & 0x1fU) >= 24)
+				return decoded;
 			decoded.decode_class = TCTI_DECODE_HINT;
 			return decoded;
 		}
@@ -1635,6 +1672,100 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_LSE_CAS_MASK) == AARCH64_LSE_CAS_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_LSE_ATOMIC;
+		decoded.lse_atomic_op = TCTI_LSE_ATOMIC_CAS;
+		decoded.rs = tcti_bits(instruction, 16, 5);
+		decoded.rn = tcti_bits(instruction, 5, 5);
+		decoded.rt = tcti_bits(instruction, 0, 5);
+		decoded.access_size = 1U << tcti_bits(instruction, 30, 2);
+		decoded.result_size = decoded.access_size;
+		decoded.acquire = instruction & BIT(22);
+		decoded.release = instruction & BIT(15);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_LSE_CASP_MASK) == AARCH64_LSE_CASP_PATTERN) {
+		decoded.rs = tcti_bits(instruction, 16, 5);
+		decoded.rt = tcti_bits(instruction, 0, 5);
+		if ((decoded.rs & 1U) || (decoded.rt & 1U))
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_LSE_ATOMIC;
+		decoded.lse_atomic_op = TCTI_LSE_ATOMIC_CAS;
+		decoded.rn = tcti_bits(instruction, 5, 5);
+		decoded.rt2 = decoded.rt + 1;
+		decoded.access_size = 4U << tcti_bits(instruction, 30, 1);
+		decoded.result_size = decoded.access_size;
+		decoded.is_64bit = tcti_bits(instruction, 30, 1);
+		decoded.acquire = instruction & BIT(22);
+		decoded.release = instruction & BIT(15);
+		decoded.pair = true;
+		return decoded;
+	}
+
+	/*
+	 * FEAT_LSE128 uses two independently encoded 64-bit registers as the
+	 * 128-bit operand and returned old value. DDI 0602 declares XZR in either
+	 * result lane UNDEFINED and Rt == Rt2 CONSTRAINED UNPREDICTABLE, so reject
+	 * all three forms rather than assigning local execution semantics.
+	 */
+	if ((instruction & AARCH64_LSE128_RMW_MASK) ==
+	    AARCH64_LSE128_RMW_PATTERN) {
+		u8 op = tcti_bits(instruction, 12, 4);
+
+		switch (op) {
+		case 1:
+			decoded.lse_atomic_op = TCTI_LSE_ATOMIC_CLR;
+			break;
+		case 3:
+			decoded.lse_atomic_op = TCTI_LSE_ATOMIC_SET;
+			break;
+		case 8:
+			decoded.lse_atomic_op = TCTI_LSE_ATOMIC_SWP;
+			break;
+		default:
+			return decoded;
+		}
+		decoded.rt = tcti_bits(instruction, 0, 5);
+		decoded.rt2 = tcti_bits(instruction, 16, 5);
+		if (decoded.rt == 31 || decoded.rt2 == 31 ||
+		    decoded.rt == decoded.rt2)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_LSE_ATOMIC;
+		decoded.rn = tcti_bits(instruction, 5, 5);
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = decoded.access_size;
+		decoded.is_64bit = true;
+		decoded.acquire = instruction & BIT(23);
+		decoded.release = instruction & BIT(22);
+		decoded.pair = true;
+		decoded.lse128 = true;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_LSE_RMW_MASK) == AARCH64_LSE_RMW_PATTERN) {
+		u8 op = tcti_bits(instruction, 12, 4);
+
+		if (op > 8)
+			return decoded;
+		decoded.decode_class = TCTI_DECODE_LSE_ATOMIC;
+		decoded.lse_atomic_op = op == 8 ? TCTI_LSE_ATOMIC_SWP :
+			TCTI_LSE_ATOMIC_ADD + op;
+		decoded.rs = tcti_bits(instruction, 16, 5);
+		decoded.rn = tcti_bits(instruction, 5, 5);
+		decoded.rt = tcti_bits(instruction, 0, 5);
+		decoded.access_size = 1U << tcti_bits(instruction, 30, 2);
+		decoded.result_size = decoded.access_size;
+		decoded.acquire = instruction & BIT(23);
+		decoded.release = instruction & BIT(22);
+		return decoded;
+	}
+
+	/* Reject reserved LSE encodings before the broader exclusive decoder. */
+	if ((instruction & 0xbf200000U) == 0x08200000U ||
+	    (instruction & 0x3f208000U) == AARCH64_LSE_RMW_PATTERN)
+		return decoded;
+
 	if ((instruction & AARCH64_LOAD_STORE_EXCLUSIVE_MASK) ==
 	    AARCH64_LOAD_STORE_EXCLUSIVE_PATTERN) {
 		u8 size = (instruction >> 30) & 0x3U;
@@ -1891,6 +2022,26 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.simd_element_move_op = instruction & BIT(29) ?
 			TCTI_SIMD_ELEMENT_MOVE_USHLL :
 			TCTI_SIMD_ELEMENT_MOVE_SSHLL;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_SHLL_MASK) ==
+	    AARCH64_SIMD_SHLL_PATTERN) {
+		u8 size = (instruction >> 22) & 0x3U;
+
+		if (size == 3)
+			return decoded;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = BIT(size);
+		decoded.result_size = 2 * sizeof(u64);
+		decoded.shift_amount = decoded.access_size * 8;
+		decoded.simd_source_index = instruction & BIT(30) ?
+			sizeof(u64) / decoded.access_size : 0;
+		decoded.simd_fp = true;
+		decoded.simd_element_move_op = TCTI_SIMD_ELEMENT_MOVE_USHLL;
 		return decoded;
 	}
 
@@ -3127,8 +3278,12 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 		if (scalar) {
 			if (!q || pattern == AARCH64_SIMD_CLS_CLZ_PATTERN ||
-			    (pattern == AARCH64_SIMD_ABS_NEG_PATTERN && size != 3))
+			    (pattern == AARCH64_SIMD_ABS_NEG_PATTERN && size != 3)) {
+				if ((instruction & AARCH64_FP_SCALAR_2SOURCE_MASK) ==
+				    AARCH64_FP_SCALAR_2SOURCE_PATTERN)
+					goto simd_two_register_misc_unclaimed;
 				return decoded;
+			}
 		} else if ((!q && size == 3) ||
 			   (pattern == AARCH64_SIMD_CLS_CLZ_PATTERN && size == 3)) {
 			return decoded;
@@ -3156,6 +3311,8 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 				TCTI_SIMD_ARITH_CLS;
 		return decoded;
 	}
+
+simd_two_register_misc_unclaimed:
 
 	if ((instruction & AARCH64_SIMD_TWO_REGISTER_MISC_MASK) ==
 	    AARCH64_SIMD_REV_PATTERN) {
@@ -3231,6 +3388,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if ((instruction & AARCH64_SIMD_FCVTXN_VECTOR_MASK) ==
+	    AARCH64_SIMD_FCVTXN_VECTOR_PATTERN) {
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = instruction & BIT(30) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_destination_index = !!(instruction & BIT(30));
+		decoded.simd_fp = true;
+		decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCVTXN;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_SIMD_UINT_ESTIMATE_MASK) ==
 	    AARCH64_SIMD_URECPE_VECTOR_PATTERN ||
 	    (instruction & AARCH64_SIMD_UINT_ESTIMATE_MASK) ==
@@ -3274,6 +3445,16 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			  TCTI_SIMD_ARITH_FCMLE_ZERO },
 			{ AARCH64_SIMD_FCMLT_ZERO_VECTOR_PATTERN,
 			  TCTI_SIMD_ARITH_FCMLT_ZERO },
+			{ AARCH64_SIMD_FCMEQ_ZERO_VECTOR_PATTERN | BIT(28),
+			  TCTI_SIMD_ARITH_FCMEQ_ZERO },
+			{ AARCH64_SIMD_FCMGE_ZERO_VECTOR_PATTERN | BIT(28),
+			  TCTI_SIMD_ARITH_FCMGE_ZERO },
+			{ AARCH64_SIMD_FCMGT_ZERO_VECTOR_PATTERN | BIT(28),
+			  TCTI_SIMD_ARITH_FCMGT_ZERO },
+			{ AARCH64_SIMD_FCMLE_ZERO_VECTOR_PATTERN | BIT(28),
+			  TCTI_SIMD_ARITH_FCMLE_ZERO },
+			{ AARCH64_SIMD_FCMLT_ZERO_VECTOR_PATTERN | BIT(28),
+			  TCTI_SIMD_ARITH_FCMLT_ZERO },
 		};
 		u32 pattern = instruction & AARCH64_SIMD_FP_TWO_REGISTER_MASK;
 		size_t index;
@@ -3281,16 +3462,22 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		for (index = 0; index < ARRAY_SIZE(operations); index++) {
 			if (pattern != operations[index].pattern)
 				continue;
-			if ((instruction & BIT(22)) && !(instruction & BIT(30)))
+			if ((instruction & BIT(28)) &&
+			    (!(instruction & BIT(30)) ||
+			     ((instruction >> 22) & 0x3U) != 2))
+				return decoded;
+			if (!(instruction & BIT(28)) &&
+			    (instruction & BIT(22)) && !(instruction & BIT(30)))
 				return decoded;
 			decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 			decoded.rd = instruction & 0x1fU;
 			decoded.rn = (instruction >> 5) & 0x1fU;
-			decoded.access_size = instruction & BIT(22) ?
-				sizeof(u64) : sizeof(u32);
-			decoded.result_size = instruction & BIT(30) ?
-				2 * sizeof(u64) : sizeof(u64);
+			decoded.access_size = instruction & BIT(28) ? sizeof(u64) :
+				instruction & BIT(22) ? sizeof(u64) : sizeof(u32);
+			decoded.result_size = instruction & BIT(28) ? sizeof(u64) :
+				instruction & BIT(30) ? 2 * sizeof(u64) : sizeof(u64);
 			decoded.simd_fp = true;
+			decoded.simd_scalar = !!(instruction & BIT(28));
 			decoded.simd_arithmetic_op = operations[index].operation;
 			return decoded;
 		}
@@ -3397,8 +3584,12 @@ not_simd_compare_register:
 
 		if ((scalar && (!q || size != 3)) ||
 		    (!scalar && !q && size == 3) ||
-		    (pattern == AARCH64_SIMD_CMLT_ZERO_PATTERN && u))
+		    (pattern == AARCH64_SIMD_CMLT_ZERO_PATTERN && u)) {
+			if ((instruction & AARCH64_FP_SCALAR_2SOURCE_MASK) ==
+			    AARCH64_FP_SCALAR_2SOURCE_PATTERN)
+				goto simd_compare_zero_unclaimed;
 			return decoded;
+		}
 
 		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_COMPARE;
 		decoded.rd = instruction & 0x1fU;
@@ -3419,6 +3610,8 @@ not_simd_compare_register:
 			decoded.simd_compare_op = TCTI_SIMD_COMPARE_CMLT;
 		return decoded;
 	}
+
+simd_compare_zero_unclaimed:
 
 	if ((instruction & AARCH64_SIMD_CMHI_2D_MASK) ==
 	    AARCH64_SIMD_CMHI_2D_PATTERN) {
@@ -3819,6 +4012,33 @@ not_simd_compare_register:
 		decoded.fp1_op = TCTI_FP1_FCVT;
 		return decoded;
 	}
+	if ((instruction & AARCH64_FCVT_D_S_MASK) == AARCH64_FCVT_D_H_PATTERN ||
+	    (instruction & AARCH64_FCVT_D_S_MASK) == AARCH64_FCVT_H_D_PATTERN ||
+	    (instruction & AARCH64_FCVT_D_S_MASK) == AARCH64_FCVT_H_S_PATTERN ||
+	    (instruction & AARCH64_FCVT_D_S_MASK) == AARCH64_FCVT_S_H_PATTERN) {
+		u32 pattern = instruction & AARCH64_FCVT_D_S_MASK;
+
+		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		if (pattern == AARCH64_FCVT_D_H_PATTERN) {
+			decoded.access_size = sizeof(u16);
+			decoded.result_size = sizeof(u64);
+		} else if (pattern == AARCH64_FCVT_H_D_PATTERN) {
+			decoded.access_size = sizeof(u64);
+			decoded.result_size = sizeof(u16);
+		} else if (pattern == AARCH64_FCVT_H_S_PATTERN) {
+			decoded.access_size = sizeof(u32);
+			decoded.result_size = sizeof(u16);
+		} else {
+			decoded.access_size = sizeof(u16);
+			decoded.result_size = sizeof(u32);
+		}
+		decoded.simd_fp = true;
+		decoded.fp1_op = TCTI_FP1_FCVT;
+		return decoded;
+	}
+
 	if ((instruction & AARCH64_FSQRT_S_MASK) == AARCH64_FSQRT_S_PATTERN ||
 	    (instruction & AARCH64_FSQRT_D_MASK) == AARCH64_FSQRT_D_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;

@@ -127,7 +127,52 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
     orlix_host_user_sync_writable_mappings();
     XCTAssertEqual(source[0], 0xa5);
 
+    ((volatile unsigned char *)target)[1] = 0xb6;
     orlix_host_user_unmap_pages(target, linuxPageSize);
+    XCTAssertEqual(source[1], 0xb6);
+    free(source);
+}
+
+- (void)testDiscardUserMappingDoesNotCopyBackStaleWritableShadow
+{
+    const unsigned long linuxPageSize = ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE;
+    vm_address_t reserved = 0;
+    kern_return_t status = vm_allocate(mach_task_self(),
+                                       &reserved,
+                                       (vm_size_t)linuxPageSize,
+                                       VM_FLAGS_ANYWHERE);
+    XCTAssertEqual(status, KERN_SUCCESS);
+    XCTAssertNotEqual(reserved, (vm_address_t)0);
+    if (status != KERN_SUCCESS || !reserved) {
+        return;
+    }
+
+    status = vm_deallocate(mach_task_self(), reserved, (vm_size_t)linuxPageSize);
+    XCTAssertEqual(status, KERN_SUCCESS);
+
+    unsigned char *source = malloc((size_t)linuxPageSize);
+    XCTAssertTrue(source != NULL);
+    if (!source) {
+        return;
+    }
+    memset(source, 0x11, (size_t)linuxPageSize);
+
+    int ret = orlix_host_user_map_page((unsigned long)reserved,
+                                       source,
+                                       linuxPageSize,
+                                       1,
+                                       0);
+    XCTAssertEqual(ret, 0);
+    if (ret != 0) {
+        free(source);
+        return;
+    }
+    ((volatile unsigned char *)reserved)[0] = 0x22;
+    source[0] = 0x33;
+
+    orlix_host_user_discard_pages((unsigned long)reserved, linuxPageSize);
+
+    XCTAssertEqual(source[0], 0x33);
     free(source);
 }
 
@@ -248,6 +293,19 @@ static int OrlixHostAdapterTestCreateDiscoveredGap(unsigned long length,
                                        1);
     XCTAssertEqual(ret, 0);
     XCTAssertEqual(((volatile unsigned char *)reserved)[0], 0xa5);
+
+    source[1] = 0x11;
+    source[17] = 0x22;
+    ret = orlix_host_user_refresh_page_range((unsigned long)reserved,
+                                             source,
+                                             linuxPageSize,
+                                             17,
+                                             1,
+                                             1,
+                                             1);
+    XCTAssertEqual(ret, 0);
+    XCTAssertEqual(((volatile unsigned char *)reserved)[1], 0xd5);
+    XCTAssertEqual(((volatile unsigned char *)reserved)[17], 0x22);
 
     vm_address_t regionAddress = reserved;
     vm_size_t regionSize = 0;

@@ -180,6 +180,25 @@ static bool test_name_equals(const char *name, size_t name_len,
 	       orlix_memcmp(name, expected, name_len) == 0;
 }
 
+static int enter_readonly_test_root(void)
+{
+	static const char root[] = "/orlix-readonly-root";
+
+	if (mkdir(root, 0755) != 0 && errno != EEXIST)
+		return -1;
+	if (mount("/", root, NULL, MS_BIND, NULL) != 0)
+		return -1;
+	if (mount("/proc", "/orlix-readonly-root/proc", NULL, MS_BIND, NULL) != 0)
+		return -1;
+	if (mount(NULL, root, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY,
+		  NULL) != 0)
+		return -1;
+	if (chdir(root) != 0 || chroot(".") != 0 || chdir("/") != 0)
+		return -1;
+
+	return 0;
+}
+
 static void build_test_path(char *path, size_t capacity, const char *name,
 			    size_t name_len)
 {
@@ -207,7 +226,14 @@ static int run_test(const char *name, size_t name_len)
 		char *const argv[] = { path, NULL };
 
 		orlix_test_comment("child exec /orlix/", name, name_len);
+		if (test_name_equals(name, name_len, "readonly_root_probe") &&
+		    cmdline_has_token("orlix.root.readonly=1") &&
+		    enter_readonly_test_root() != 0) {
+			orlix_test_comment_uint("readonly root setup errno ", errno);
+			_exit(127);
+		}
 		execv(path, argv);
+		orlix_test_comment_uint("exec errno ", errno);
 		_exit(127);
 	}
 	if (child < 0)
@@ -263,11 +289,6 @@ static void run_orlix_tests(const char *data, size_t size)
 				     &name, &name_len) &&
 		    selected_test_matches(name, name_len) &&
 		    default_test_is_runnable(name, name_len)) {
-			if (test_name_equals(name, name_len,
-					     "readonly_root_probe") &&
-			    cmdline_has_token("orlix.root.readonly=1"))
-				(void)mount(NULL, "/", NULL,
-					     MS_REMOUNT | MS_RDONLY, NULL);
 			int result = run_test(name, name_len);
 
 			orlix_test_result(result == 0, name);

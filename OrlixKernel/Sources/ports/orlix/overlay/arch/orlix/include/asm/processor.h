@@ -59,7 +59,8 @@ struct orlix_cpu_context {
 struct thread_struct {
 	struct orlix_cpu_context cpu_context;
 #if defined(ORLIX_APP_HOSTED_BOOT)
-		unsigned long user_tls;
+	struct tcti_tlb *orlix_tcti_tlb;
+	unsigned long user_tls;
 		unsigned long user_simd[64];
 		unsigned long user_fpsr;
 		unsigned long user_fpcr;
@@ -68,6 +69,9 @@ struct thread_struct {
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;
 	unsigned long user_exclusive_value2;
+	unsigned long user_exclusive_pfn;
+	u64 user_exclusive_generation;
+	u64 user_exclusive_mapping_generation;
 	unsigned char user_exclusive_size;
 	unsigned char user_exclusive_valid;
 };

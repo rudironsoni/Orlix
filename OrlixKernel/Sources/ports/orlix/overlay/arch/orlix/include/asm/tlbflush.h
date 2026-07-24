@@ -4,9 +4,10 @@
 
 #include <asm/page.h>
 #include <asm/processor.h>
+#include <asm/tcti.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-#include <internal/asm/host_memory.h>
+#include <asm/hosted_exec.h>
 #endif
 
 struct mm_struct;
@@ -27,7 +28,7 @@ static inline void orlix_flush_host_user_range(unsigned long start,
 	start &= PAGE_MASK;
 	end = (end + PAGE_SIZE - 1) & PAGE_MASK;
 	if (end > start)
-		orlix_host_user_unmap_pages(start, end - start);
+		orlix_host_user_unmap_pages_serialized(start, end - start);
 #endif
 }
 
@@ -35,24 +36,36 @@ static inline void flush_tlb_all(void)
 {
 	orlix_flush_host_user_range(ORLIX_HOSTED_USER_BASE,
 				    ORLIX_HOSTED_STACK_TOP);
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_invalidate_all();
+#endif
 }
 
 static inline void flush_tlb_mm(struct mm_struct *mm)
 {
 	orlix_flush_host_user_range(ORLIX_HOSTED_USER_BASE,
 				    ORLIX_HOSTED_STACK_TOP);
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_invalidate_mm(mm);
+#endif
 }
 
 static inline void flush_tlb_page(struct vm_area_struct *vma,
 				  unsigned long address)
 {
 	orlix_flush_host_user_range(address, address + PAGE_SIZE);
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+		tcti_invalidate_range(vma->vm_mm, address, address + PAGE_SIZE);
+#endif
 }
 
 static inline void flush_tlb_range(struct vm_area_struct *vma,
 				   unsigned long start, unsigned long end)
 {
 	orlix_flush_host_user_range(start, end);
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+		tcti_invalidate_range(vma->vm_mm, start, end);
+#endif
 }
 
 static inline void flush_tlb_kernel_range(unsigned long start,

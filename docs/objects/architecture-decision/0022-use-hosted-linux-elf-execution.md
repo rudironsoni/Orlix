@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-17
+updated: 2026-07-24
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
@@ -11,13 +11,15 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 derived_from:
   - "[TCTI reference review](../../sources/tcti/reference-review.md)"
+amended_by:
+  - "[ADR 0029](0029-separate-complete-aarch64-target-from-runtime-profile.md)"
 ---
 
 # ADR 0022: Use Linux ELF With Orlix TCTI On iOS
 
 ## Status
 
-Accepted, revised 2026-06-30.
+Accepted, revised 2026-07-24.
 
 ## Context
 
@@ -46,9 +48,32 @@ Product development and simulator validation use the same TCTI guest backend and
 
 The first physical-iPhone userspace backend is Orlix TCTI. TCTI belongs under `arch/orlix` and only owns guest AArch64 EL0 instruction fetch, decode, data-only gadget-program dispatch, guest register execution, guest memory fast paths, `svc #0` exits, user fault exits, yield/signal exits, unsupported-instruction reporting, and hot-path counters.
 
-TCTI implements the complete AArch64 EL0 instruction set exposed to the guest, including integer, branch, load/store, atomic, SIMD, floating-point, crypto, and system-register behavior available in the declared guest ISA profile. Package workloads may prioritize implementation order, but they do not define instruction coverage. An architecturally valid instruction in the exposed profile may not be replaced by an unsupported-instruction exit, a hard-coded workload special case, or a reduced semantic approximation. Reserved, unallocated, privileged, and unadvertised optional-extension encodings must produce their architecturally defined exception or deterministic TCTI exit.
+TCTI completion requires the complete AArch64 EL0 instruction set exposed to the guest, including integer, branch, load/store, atomic, SIMD, floating-point, crypto, and system-register behavior available in the declared guest ISA profile. Package workloads may prioritize implementation order, but they do not define instruction coverage. An architecturally valid instruction in the exposed profile may not be replaced by an unsupported-instruction exit, a hard-coded workload special case, or a reduced semantic approximation. Reserved, unallocated, privileged, and unadvertised optional-extension encodings must produce their architecturally defined exception or deterministic TCTI exit.
+
+ADR 0029 refines only how completeness is counted and capabilities are
+promoted. The complete pinned Arm source inventory remains visible as the
+implementation target even while the runtime HWCAP profile advertises a smaller
+proved subset. That refinement does not broaden TCTI beyond guest EL0
+instruction execution or change any Linux, OrlixHostAdapter, executable-memory,
+or App Store ownership boundary in this decision.
+
+TCTI implementation, ISA inventory, production diagnostics, and correctness
+proof are kernel-owned and C-native. Production code and test-only observation
+surfaces belong under `OrlixKernel/Sources/ports/orlix/overlay/arch/orlix`.
+KUnit is authoritative for decoder boundaries, lowering, exact register and
+flag transitions, PC behavior, guest-memory effects, cache invariants, and
+structured exits. Linux kselftest is authoritative for Linux-visible
+integration reached through those exits. External-language scripts must not
+implement or generate TCTI behavior, define the guest ISA inventory, model
+architectural semantics, act as an instruction oracle, or replace KUnit or
+kselftest evidence. Native debuggers and disassemblers may observe a failure,
+but a durable regression and its proof must remain in the owning C test surface.
 
 Guest ELF text pages remain host data mappings. Linux `VM_EXEC` remains meaningful, but TCTI enforces execute permission using Linux-owned VMA/PTE or Orlix arch/mm metadata. TCTI must not require JIT, MAP_JIT, RWX memory, generated executable memory, host executable page permissions for guest ELF text, Mach-O translated guest binaries, modified guest binaries, Wasm, or QEMU.
+
+Executable-block construction and execution require the same Linux-owned mapping authorization. TCTI records the stable per-mm mapping generation while fetching and building a block, then revalidates and holds that generation while executing guest memory accesses. A PTE mutation invalidates the authorization; stale TLB or block-cache state must miss, retry, or fault rather than access a replacement mapping.
+
+Guest writes commit to Linux-owned memory before the private host shadow is refreshed. If that postcommit refresh fails, OrlixKernel reports the failure and discards the affected host mapping. The discard path must not copy stale shadow data back into the authoritative Linux page.
 
 The execution stack is:
 
@@ -69,14 +94,23 @@ Linux ELF / AArch64 Linux userspace
 
 - Raw unmodified AArch64 Linux binaries issuing normal Linux `svc #0` are first-class compatibility targets.
 - TCTI completeness requires full decode, lowering, and semantic coverage of the guest-exposed AArch64 EL0 ISA profile. Passing mlibc, Coreutils, or another workload does not establish ISA completeness.
+- TCTI cache, translation, and execution diagnostics must expose structured
+  kernel-owned state that focused KUnit can assert. Temporary host scripts are
+  not an acceptable substitute for missing `arch/orlix` observability.
 - Orlix-built packages remain Linux ELF binaries linked against OrlixMLibC.
 - No public Orlix syscall facade is added.
 - TCTI must call the existing `arch/orlix` Linux syscall dispatch path rather than adding a syscall emulator.
 - Guest text may be read by TCTI as data, but never mapped executable by the host.
+- An executable block is authorized only for the stable mapping generation observed during its construction and revalidated during execution.
+- Postcommit host-refresh failure discards the stale host mapping without copying it back over committed Linux memory.
 - Host-native Orlix components and Linux kernel semantics do not pass through TCTI.
 - Direct native guest execution may exist only as a separate oracle or benchmark and cannot satisfy product-development, simulator-readiness, or release gates.
 - TCTI performance claims require exact workload, device or simulator, build configuration, command, baseline, counters, and Markdown report.
-- Runtime proof must use boot progress, Linux console/PTY, HostAdapter console mirror, `linux-console` logs, and `host-vm` traces. UIKit screen state is not the proof surface.
+- Runtime integration may use boot progress and source-preserving Linux
+  console, PTY, HostAdapter, and host-VM diagnostics. Terminal text and
+  human-readable logs do not prove TCTI instruction correctness when structured
+  TCTI results, registers, guest memory, counters, or fault state are available.
+  UIKit screen state is not a proof surface.
 
 ## Rejected Alternatives
 
@@ -85,6 +119,8 @@ Linux ELF / AArch64 Linux userspace
 - Adding a custom Orlix Linux-like userspace ABI.
 - Embedding libc, shell, VFS, fd, process, or signal behavior in TCTI.
 - Moving Linux syscall/process/VFS policy into OrlixHostAdapter.
+- External-language TCTI generators, architectural behavior models, instruction
+  test oracles, and host-side substitutes for kernel KUnit or Linux kselftest.
 - Treating QEMU, Wasm, JIT, MAP_JIT, RWX memory, generated executable memory, or host-executable guest text as the TestFlight/App Store path.
 - Copying iSH, OpenMinis, or ios-linuxkit internals wholesale and renaming them Orlix.
 

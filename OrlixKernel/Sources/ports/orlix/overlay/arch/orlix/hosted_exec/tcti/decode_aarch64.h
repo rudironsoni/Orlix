@@ -12,6 +12,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_HINT,
 	TCTI_DECODE_BARRIER,
 	TCTI_DECODE_CACHE_MAINTENANCE,
+	TCTI_DECODE_MIN_MAX_IMMEDIATE,
 	TCTI_DECODE_ADD_SUB_IMMEDIATE,
 	TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
 	TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER,
@@ -40,6 +41,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_SYSTEM_REGISTER,
 	TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
+	TCTI_DECODE_LSE_ATOMIC,
 	TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 	TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
 	TCTI_DECODE_SIMD_TABLE_LOOKUP,
@@ -186,6 +188,19 @@ enum tcti_data_processing_2source_op {
 	TCTI_DP2_RORV,
 	TCTI_DP2_CRC32,
 	TCTI_DP2_CRC32C,
+};
+
+enum tcti_lse_atomic_op {
+	TCTI_LSE_ATOMIC_CAS = 0,
+	TCTI_LSE_ATOMIC_SWP,
+	TCTI_LSE_ATOMIC_ADD,
+	TCTI_LSE_ATOMIC_CLR,
+	TCTI_LSE_ATOMIC_EOR,
+	TCTI_LSE_ATOMIC_SET,
+	TCTI_LSE_ATOMIC_SMAX,
+	TCTI_LSE_ATOMIC_SMIN,
+	TCTI_LSE_ATOMIC_UMAX,
+	TCTI_LSE_ATOMIC_UMIN,
 };
 
 enum tcti_data_processing_1source_op {
@@ -482,6 +497,13 @@ enum tcti_multiply_add_sub_op {
 	TCTI_MUL_UMULH,
 };
 
+enum tcti_min_max_immediate_op {
+	TCTI_MIN_MAX_IMMEDIATE_SMAX = 0,
+	TCTI_MIN_MAX_IMMEDIATE_UMAX,
+	TCTI_MIN_MAX_IMMEDIATE_SMIN,
+	TCTI_MIN_MAX_IMMEDIATE_UMIN,
+};
+
 struct tcti_decoded_instruction {
 	enum tcti_decode_class decode_class;
 	u32 instruction;
@@ -493,6 +515,7 @@ struct tcti_decoded_instruction {
 	u8 rt2;
 	u16 imm12;
 	u16 imm16;
+	u8 min_max_immediate;
 	u8 hint_imm;
 	u8 barrier_option;
 	u8 shift;
@@ -540,12 +563,14 @@ struct tcti_decoded_instruction {
 	enum tcti_bitfield_op bitfield_op;
 	enum tcti_data_processing_1source_op dp1_op;
 	enum tcti_data_processing_2source_op dp2_op;
+	enum tcti_lse_atomic_op lse_atomic_op;
 	enum tcti_fp_scalar_move_op fp_move_op;
 	enum tcti_fp_scalar_1source_op fp1_op;
 	enum tcti_fp_scalar_2source_op fp2_op;
 	enum tcti_fp_scalar_3source_op fp3_op;
 	enum tcti_fp_int_convert_op fp_int_op;
 	enum tcti_multiply_add_sub_op mul_op;
+	enum tcti_min_max_immediate_op min_max_immediate_op;
 	enum tcti_simd_reduction_op simd_reduction_op;
 	enum tcti_simd_element_move_op simd_element_move_op;
 	enum tcti_simd_table_lookup_op simd_table_lookup_op;
@@ -564,6 +589,7 @@ struct tcti_decoded_instruction {
 	bool release;
 	bool exclusive;
 	bool pair;
+	bool lse128;
 };
 
 struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction);

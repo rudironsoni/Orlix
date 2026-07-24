@@ -26,11 +26,15 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelFDAlias)
     }
 
-    func testPTYTerminalProbeCompletesThroughOrlixOSTerminalSession() throws {
-        try OrlixUpstreamXCTest.run(.kernelPTYTerminal)
-    }
+	func testPTYTerminalProbeCompletesThroughOrlixOSTerminalSession() throws {
+		try OrlixUpstreamXCTest.run(.kernelPTYTerminal)
+	}
 
-    func testSignalWaitProbeCompletesThroughOrlixOSTerminalSession() throws {
+	func testTCTICryptoProbeCompletesThroughOrlixOSTerminalSession() throws {
+		try OrlixUpstreamXCTest.run(.kernelTCTICrypto)
+	}
+
+	func testSignalWaitProbeCompletesThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelSignalWait)
     }
 
@@ -127,6 +131,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
 
     func testRlimitProbeCompletesThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelRlimit)
+    }
+
+    func testStackGrowthProbeCompletesThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelStackGrowth)
     }
 
     func testProcessCapabilityProbeCompletesThroughOrlixOSTerminalSession() throws {

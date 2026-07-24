@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/stop_claim_check.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

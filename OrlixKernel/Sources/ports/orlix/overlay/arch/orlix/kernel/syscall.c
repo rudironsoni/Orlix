@@ -32,7 +32,7 @@ SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 
 	mapped = ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
 	if (!IS_ERR_VALUE(mapped) && len)
-		orlix_host_user_unmap_pages(mapped, PAGE_ALIGN(len));
+		orlix_host_user_unmap_pages_serialized(mapped, PAGE_ALIGN(len));
 
 	return mapped;
 }

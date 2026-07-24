@@ -85,7 +85,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	flush_tlb_mm(current->mm);
 #if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
-	tcti_invalidate_mm(current->mm);
+	tcti_flush_task_state(current);
 	pr_debug("Orlix TCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
 		current->comm, task_pid_nr(current), regs->pc, regs->sp,
 		regs->pstate, regs->syscallno);
@@ -100,6 +100,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
+	current->thread.user_exclusive_pfn = 0;
+	current->thread.user_exclusive_generation = 0;
+	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
 #endif
@@ -108,6 +111,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 void flush_thread(void)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
+#if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_flush_task_state(current);
+#endif
 	current->thread.user_tls = 0;
 	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
 	current->thread.user_fpsr = 0;
@@ -116,6 +122,9 @@ void flush_thread(void)
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
+	current->thread.user_exclusive_pfn = 0;
+	current->thread.user_exclusive_generation = 0;
+	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
 #endif
@@ -130,6 +139,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 #endif
 	memset(&p->thread.cpu_context, 0, sizeof(p->thread.cpu_context));
 #if defined(ORLIX_APP_HOSTED_BOOT)
+	p->thread.orlix_tcti_tlb = NULL;
 	p->thread.user_tls = 0;
 	memset(p->thread.user_simd, 0, sizeof(p->thread.user_simd));
 	p->thread.user_fpsr = 0;
@@ -138,6 +148,9 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
+	p->thread.user_exclusive_pfn = 0;
+	p->thread.user_exclusive_generation = 0;
+	p->thread.user_exclusive_mapping_generation = 0;
 	p->thread.user_exclusive_size = 0;
 	p->thread.user_exclusive_valid = 0;
 #endif
@@ -166,6 +179,9 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
+	p->thread.user_exclusive_pfn = 0;
+	p->thread.user_exclusive_generation = 0;
+	p->thread.user_exclusive_mapping_generation = 0;
 	p->thread.user_exclusive_size = 0;
 		p->thread.user_exclusive_valid = 0;
 #endif
@@ -183,11 +199,23 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	return 0;
 }
 
+void exit_thread(struct task_struct *task)
+{
+#if defined(ORLIX_APP_HOSTED_BOOT) && IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	tcti_release_task_state(task);
+#else
+	(void)task;
+#endif
+}
+
 struct task_struct *__switch_to(struct task_struct *prev, struct task_struct *next)
 {
 	prev->thread.user_exclusive_address = 0;
 	prev->thread.user_exclusive_value = 0;
 	prev->thread.user_exclusive_value2 = 0;
+	prev->thread.user_exclusive_pfn = 0;
+	prev->thread.user_exclusive_generation = 0;
+	prev->thread.user_exclusive_mapping_generation = 0;
 	prev->thread.user_exclusive_size = 0;
 	prev->thread.user_exclusive_valid = 0;
 #if defined(ORLIX_APP_HOSTED_BOOT)

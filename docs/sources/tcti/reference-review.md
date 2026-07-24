@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-21
+updated: 2026-07-23
 status: current
 summary: "Canonical repository source for tcti reference review."
 ---
@@ -42,7 +42,7 @@ This review records reference material used for the Orlix TCTI plan. The first i
 
 - AArch64 guest-only TCTI path.
 - No product fallback interpreter for guest execution. A debug switch path may exist only as a correctness oracle.
-- Generated gadget table from a source-of-truth generator, with deterministic generated output.
+- Data-only gadget dispatch. The reviewed iSH Python generator remains provenance only and does not define, generate, or implement Orlix TCTI behavior.
 - Data-only gadget stream.
 - `tcti_entry_block(gadgets, cpu_state)`-style entry shape.
 - Generation-stamped TLB and block cache entries.

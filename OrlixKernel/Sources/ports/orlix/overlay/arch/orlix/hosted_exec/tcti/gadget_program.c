@@ -2,6 +2,7 @@
 #include <linux/errno.h>
 #include <linux/string.h>
 
+#include "block_cache.h"
 #include "decode_aarch64.h"
 #include "gadget_program.h"
 #include "semantics.h"
@@ -13,12 +14,14 @@ static int tcti_gadget_execute_decoded(struct mm_struct *mm,
 				       const struct tcti_gadget_word **cursor,
 				       unsigned long *fault_address)
 {
-	struct tcti_decoded_instruction decoded;
+	const struct tcti_decoded_instruction *decoded;
 
-	memcpy(&decoded, *cursor, sizeof(decoded));
+	BUILD_BUG_ON(__alignof__(struct tcti_decoded_instruction) >
+		     __alignof__(struct tcti_gadget_word));
+	decoded = (const struct tcti_decoded_instruction *)*cursor;
 	*cursor += TCTI_DECODED_INSTRUCTION_WORDS;
 
-	return tcti_execute_decoded_semantics(mm, regs, &decoded,
+	return tcti_execute_decoded_semantics(mm, regs, decoded,
 					      fault_address);
 }
 
@@ -88,21 +91,26 @@ int tcti_append_decoded_instruction(
 	return 0;
 }
 
-int tcti_execute_gadget_program(struct mm_struct *mm, struct pt_regs *regs,
-				const struct tcti_gadget_word *program,
-				size_t word_count,
-				unsigned long *fault_address)
+static int tcti_execute_gadget_program_checked(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, bool authorize, u64 code_generation)
 {
 	const struct tcti_gadget_word *cursor = program;
 	const struct tcti_gadget_word *end = program + word_count;
 
 	if (!regs || !program || !word_count)
 		return -EINVAL;
+	if (authorize && !mm)
+		return -EINVAL;
 
 	while (cursor < end) {
-		tcti_gadget_fn gadget = (tcti_gadget_fn)cursor->value;
+		tcti_gadget_fn gadget;
 		int ret;
 
+		if (authorize && code_generation != tcti_code_generation(mm))
+			return -ESTALE;
+		gadget = (tcti_gadget_fn)cursor->value;
 		cursor++;
 		if (!gadget)
 			return -EINVAL;
@@ -115,4 +123,23 @@ int tcti_execute_gadget_program(struct mm_struct *mm, struct pt_regs *regs,
 	}
 
 	return -EINVAL;
+}
+
+int tcti_execute_gadget_program(struct mm_struct *mm, struct pt_regs *regs,
+				const struct tcti_gadget_word *program,
+				size_t word_count,
+				unsigned long *fault_address)
+{
+	return tcti_execute_gadget_program_checked(mm, regs, program, word_count,
+						  fault_address, false, 0);
+}
+
+int tcti_execute_gadget_program_authorized(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation)
+{
+	return tcti_execute_gadget_program_checked(
+		mm, regs, program, word_count, fault_address, true,
+		code_generation);
 }

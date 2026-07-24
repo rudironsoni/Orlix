@@ -62,6 +62,7 @@ tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
 	case TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
 	case TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
+	case TCTI_DECODE_LSE_ATOMIC:
 		return decoded->load ? TCTI_ACCESS_READ : TCTI_ACCESS_WRITE;
 	default:
 		return TCTI_ACCESS_FETCH;
@@ -1048,6 +1049,72 @@ static int tcti_execute_add_sub_result(struct pt_regs *regs,
 	return 0;
 }
 
+static int tcti_execute_min_max_immediate(
+	struct pt_regs *regs,
+	const struct tcti_decoded_instruction *decoded)
+{
+	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
+	u64 source = tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
+	u64 result;
+
+	if (decoded->is_64bit) {
+		s64 signed_source = (s64)source;
+		s64 signed_immediate = (s8)decoded->min_max_immediate;
+		u64 unsigned_immediate = decoded->min_max_immediate;
+
+		switch (decoded->min_max_immediate_op) {
+		case TCTI_MIN_MAX_IMMEDIATE_SMAX:
+			result = signed_source > signed_immediate ? source :
+				(u64)signed_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_UMAX:
+			result = source > unsigned_immediate ? source :
+				unsigned_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_SMIN:
+			result = signed_source < signed_immediate ? source :
+				(u64)signed_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_UMIN:
+			result = source < unsigned_immediate ? source :
+				unsigned_immediate;
+			break;
+		default:
+			return -EINVAL;
+		}
+	} else {
+		u32 source32 = source;
+		s32 signed_source = source32;
+		s32 signed_immediate = (s8)decoded->min_max_immediate;
+		u32 unsigned_immediate = decoded->min_max_immediate;
+
+		switch (decoded->min_max_immediate_op) {
+		case TCTI_MIN_MAX_IMMEDIATE_SMAX:
+			result = signed_source > signed_immediate ? source32 :
+				(u32)signed_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_UMAX:
+			result = source32 > unsigned_immediate ? source32 :
+				unsigned_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_SMIN:
+			result = signed_source < signed_immediate ? source32 :
+				(u32)signed_immediate;
+			break;
+		case TCTI_MIN_MAX_IMMEDIATE_UMIN:
+			result = source32 < unsigned_immediate ? source32 :
+				unsigned_immediate;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	tcti_write_gpr_or_zero(regs, decoded->rd, access_size, result);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int tcti_execute_add_sub_shifted_register(struct pt_regs *regs,
 						 const struct tcti_decoded_instruction *decoded)
 {
@@ -1722,6 +1789,9 @@ static void tcti_clear_exclusive_monitor(void)
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
+	current->thread.user_exclusive_pfn = 0;
+	current->thread.user_exclusive_generation = 0;
+	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
 }
@@ -1753,6 +1823,29 @@ static int tcti_encode_integer(u8 *buffer, u8 access_size, u64 value)
 		return 0;
 	case sizeof(u64):
 		put_unaligned_le64(value, buffer);
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int tcti_decode_integer(const u8 *buffer, u8 access_size, u64 *value)
+{
+	if (!buffer || !value)
+		return -EINVAL;
+
+	switch (access_size) {
+	case sizeof(u8):
+		*value = buffer[0];
+		return 0;
+	case sizeof(u16):
+		*value = get_unaligned_le16(buffer);
+		return 0;
+	case sizeof(u32):
+		*value = get_unaligned_le32(buffer);
+		return 0;
+	case sizeof(u64):
+		*value = get_unaligned_le64(buffer);
 		return 0;
 	default:
 		return -EINVAL;
@@ -2425,9 +2518,12 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					    unsigned long *fault_address)
 {
 	unsigned long address = tcti_memory_base(regs, decoded->rn);
-	u8 expected[2 * sizeof(u64)] = {};
+	u8 loaded[2 * sizeof(u64)] = {};
 	u8 desired[2 * sizeof(u64)] = {};
 	u8 total_size = decoded->access_size * (decoded->pair ? 2 : 1);
+	unsigned long reservation_pfn = 0;
+	u64 reservation_generation = 0;
+	u64 reservation_mapping_generation = 0;
 	u64 value = 0;
 	u64 value2 = 0;
 	bool exchanged;
@@ -2441,14 +2537,18 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 	if (decoded->load) {
 		if (!mm)
 			return -EINVAL;
-		ret = tcti_load_integer(mm, address, decoded->access_size,
-					&value);
+		ret = tcti_load_exclusive_user_data(mm, address, loaded,
+						    total_size, &reservation_pfn,
+						    &reservation_generation,
+						    &reservation_mapping_generation);
+		if (ret)
+			return ret;
+		ret = tcti_decode_integer(loaded, decoded->access_size, &value);
 		if (ret)
 			return ret;
 		if (decoded->pair) {
-			ret = tcti_load_integer(mm,
-						address + decoded->access_size,
-						decoded->access_size, &value2);
+			ret = tcti_decode_integer(loaded + decoded->access_size,
+						  decoded->access_size, &value2);
 			if (ret)
 				return ret;
 		}
@@ -2462,6 +2562,11 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 			current->thread.user_exclusive_address = address;
 			current->thread.user_exclusive_value = value;
 			current->thread.user_exclusive_value2 = value2;
+			current->thread.user_exclusive_pfn = reservation_pfn;
+			current->thread.user_exclusive_generation =
+				reservation_generation;
+			current->thread.user_exclusive_mapping_generation =
+				reservation_mapping_generation;
 			current->thread.user_exclusive_size = total_size;
 			current->thread.user_exclusive_valid = 1;
 		}
@@ -2492,22 +2597,17 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		if (decoded->pair)
 			value2 = tcti_read_gpr_or_zero(regs, decoded->rt2,
 						      decoded->access_size);
-		ret = tcti_encode_integer(expected, decoded->access_size,
-					  current->thread.user_exclusive_value);
-		if (!ret)
-			ret = tcti_encode_integer(desired, decoded->access_size,
-						  value);
-		if (!ret && decoded->pair)
-			ret = tcti_encode_integer(
-				expected + decoded->access_size,
-				decoded->access_size,
-				current->thread.user_exclusive_value2);
+		ret = tcti_encode_integer(desired, decoded->access_size,
+					  value);
 		if (!ret && decoded->pair)
 			ret = tcti_encode_integer(desired + decoded->access_size,
 						  decoded->access_size, value2);
 		if (!ret)
-			ret = tcti_compare_exchange_user_data(
-				mm, address, expected, desired, total_size,
+			ret = tcti_store_exclusive_user_data(
+				mm, address, desired, total_size,
+				current->thread.user_exclusive_pfn,
+				current->thread.user_exclusive_generation,
+				current->thread.user_exclusive_mapping_generation,
 				&exchanged);
 		tcti_clear_exclusive_monitor();
 		if (ret)
@@ -2519,6 +2619,194 @@ static int tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					 value);
 		if (ret)
 			return ret;
+	}
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int tcti_lse_memory_order(const struct tcti_decoded_instruction *decoded,
+				 enum tcti_atomic_memory_order *order)
+{
+	if (!decoded || !order)
+		return -EINVAL;
+
+	if (decoded->acquire)
+		*order = decoded->release ? TCTI_ATOMIC_MEMORY_ACQ_REL :
+			 TCTI_ATOMIC_MEMORY_ACQUIRE;
+	else
+		*order = decoded->release ? TCTI_ATOMIC_MEMORY_RELEASE :
+			 TCTI_ATOMIC_MEMORY_RELAXED;
+	return 0;
+}
+
+static int tcti_lse_memory_operation(enum tcti_lse_atomic_op lse_op,
+				     enum tcti_atomic_memory_operation *operation)
+{
+	if (!operation)
+		return -EINVAL;
+
+	switch (lse_op) {
+	case TCTI_LSE_ATOMIC_CAS:
+		*operation = TCTI_ATOMIC_MEMORY_CAS;
+		return 0;
+	case TCTI_LSE_ATOMIC_SWP:
+		*operation = TCTI_ATOMIC_MEMORY_SWP;
+		return 0;
+	case TCTI_LSE_ATOMIC_ADD:
+		*operation = TCTI_ATOMIC_MEMORY_ADD;
+		return 0;
+	case TCTI_LSE_ATOMIC_CLR:
+		*operation = TCTI_ATOMIC_MEMORY_CLR;
+		return 0;
+	case TCTI_LSE_ATOMIC_EOR:
+		*operation = TCTI_ATOMIC_MEMORY_EOR;
+		return 0;
+	case TCTI_LSE_ATOMIC_SET:
+		*operation = TCTI_ATOMIC_MEMORY_SET;
+		return 0;
+	case TCTI_LSE_ATOMIC_SMAX:
+		*operation = TCTI_ATOMIC_MEMORY_SMAX;
+		return 0;
+	case TCTI_LSE_ATOMIC_SMIN:
+		*operation = TCTI_ATOMIC_MEMORY_SMIN;
+		return 0;
+	case TCTI_LSE_ATOMIC_UMAX:
+		*operation = TCTI_ATOMIC_MEMORY_UMAX;
+		return 0;
+	case TCTI_LSE_ATOMIC_UMIN:
+		*operation = TCTI_ATOMIC_MEMORY_UMIN;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static bool
+tcti_lse_alignment_fault(const struct tcti_decoded_instruction *decoded,
+			 unsigned long address)
+{
+	u8 size;
+
+	if (!decoded || decoded->decode_class != TCTI_DECODE_LSE_ATOMIC)
+		return false;
+	if (decoded->rn == 31 && !IS_ALIGNED(address, 16))
+		return true;
+	size = decoded->access_size * (decoded->pair ? 2 : 1);
+	return size && !IS_ALIGNED(address, size);
+}
+
+static int tcti_execute_lse_atomic(struct mm_struct *mm,
+				   struct pt_regs *regs,
+				   const struct tcti_decoded_instruction *decoded,
+				   unsigned long *fault_address)
+{
+	enum tcti_atomic_memory_operation operation;
+	enum tcti_atomic_memory_order order;
+	unsigned long address;
+	u8 expected[2 * sizeof(u64)] = {};
+	u8 operand[2 * sizeof(u64)] = {};
+	u8 old_value[2 * sizeof(u64)] = {};
+	u8 total_size;
+	u64 source;
+	u64 source2;
+	u64 old;
+	u64 old2;
+	bool exchanged;
+	int ret;
+
+	if (!mm || !regs || !decoded)
+		return -EINVAL;
+
+	address = tcti_memory_base(regs, decoded->rn);
+	if (fault_address)
+		*fault_address = address;
+	if (decoded->access_size != sizeof(u8) &&
+	    decoded->access_size != sizeof(u16) &&
+	    decoded->access_size != sizeof(u32) &&
+	    decoded->access_size != sizeof(u64))
+		return -EINVAL;
+	if (decoded->pair && !decoded->lse128 &&
+	    ((decoded->lse_atomic_op == TCTI_LSE_ATOMIC_CAS &&
+	      decoded->access_size < sizeof(u32)) || decoded->rs > 30 ||
+	     decoded->rt > 30))
+		return -EINVAL;
+
+	total_size = decoded->access_size * (decoded->pair ? 2 : 1);
+	if (tcti_lse_alignment_fault(decoded, address))
+		return -EFAULT;
+
+	ret = tcti_lse_memory_order(decoded, &order);
+	if (ret)
+		return ret;
+	ret = tcti_lse_memory_operation(decoded->lse_atomic_op, &operation);
+	if (ret)
+		return ret;
+
+	source = tcti_read_gpr_or_zero(regs,
+				       decoded->lse128 ? decoded->rt : decoded->rs,
+				       decoded->access_size);
+	ret = tcti_encode_integer(operand, decoded->access_size,
+				  decoded->lse_atomic_op == TCTI_LSE_ATOMIC_CAS ?
+				  tcti_read_gpr_or_zero(regs, decoded->rt,
+						decoded->access_size) : source);
+	if (ret)
+		return ret;
+	if (operation == TCTI_ATOMIC_MEMORY_CAS) {
+		ret = tcti_encode_integer(expected, decoded->access_size, source);
+		if (ret)
+			return ret;
+	}
+	if (decoded->pair) {
+		/* Snapshot both source lanes before any returned old-value writeback. */
+		source2 = tcti_read_gpr_or_zero(regs,
+					decoded->lse128 ? decoded->rt2 : decoded->rs + 1,
+					decoded->access_size);
+		ret = tcti_encode_integer(operation == TCTI_ATOMIC_MEMORY_CAS ?
+					  expected + decoded->access_size :
+					  operand + decoded->access_size,
+					  decoded->access_size, source2);
+		if (ret)
+			return ret;
+		if (operation == TCTI_ATOMIC_MEMORY_CAS) {
+			ret = tcti_encode_integer(operand + decoded->access_size,
+						  decoded->access_size,
+						  tcti_read_gpr_or_zero(regs, decoded->rt + 1,
+								       decoded->access_size));
+			if (ret)
+				return ret;
+		}
+	}
+
+	ret = tcti_atomic_user_data(mm, address, operation, order,
+				    operation == TCTI_ATOMIC_MEMORY_CAS ? expected : NULL,
+				    operand, old_value, total_size, &exchanged);
+	if (ret)
+		return ret;
+	if (operation != TCTI_ATOMIC_MEMORY_CAS || exchanged)
+		tcti_clear_exclusive_monitor();
+	ret = tcti_decode_integer(old_value, decoded->access_size, &old);
+	if (ret)
+		return ret;
+	if (decoded->pair) {
+		ret = tcti_decode_integer(old_value + decoded->access_size,
+					  decoded->access_size, &old2);
+		if (ret)
+			return ret;
+	}
+
+	if (decoded->lse128) {
+		tcti_write_gpr_or_zero(regs, decoded->rt, decoded->access_size, old);
+		tcti_write_gpr_or_zero(regs, decoded->rt2, decoded->access_size, old2);
+	} else if (operation == TCTI_ATOMIC_MEMORY_CAS) {
+		tcti_write_gpr_or_zero(regs, decoded->rs, decoded->access_size, old);
+		if (decoded->pair)
+			tcti_write_gpr_or_zero(regs, decoded->rs + 1,
+					       decoded->access_size, old2);
+	} else {
+		tcti_write_gpr_or_zero(regs, decoded->rt, decoded->access_size, old);
+		if (decoded->pair)
+			tcti_write_gpr_or_zero(regs, decoded->rt2,
+					       decoded->access_size, old2);
 	}
 	regs->pc += sizeof(u32);
 	return 0;
@@ -4805,7 +5093,8 @@ static int tcti_execute_simd_vector_arithmetic(
 	}
 	if ((!decoded->simd_scalar &&
 	     (decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRECPE ||
-	      decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRSQRTE)) ||
+	      decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FRSQRTE ||
+	      decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FCVTXN)) ||
 	    decoded->simd_arithmetic_op == TCTI_SIMD_ARITH_FNEG ||
 	    (decoded->simd_arithmetic_op >= TCTI_SIMD_ARITH_FABS &&
 	     decoded->simd_arithmetic_op <= TCTI_SIMD_ARITH_URSQRTE)) {
@@ -4818,12 +5107,19 @@ static int tcti_execute_simd_vector_arithmetic(
 		source[1] = current->thread.user_simd[decoded->rn * 2 + 1];
 		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
 		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
-		ret = tcti_native_simd_fp_two_register(
-			decoded->simd_arithmetic_op, decoded->access_size,
-			decoded->result_size, decoded->simd_source_index,
-			decoded->simd_destination_index, result, source,
-			accumulator, current->thread.user_fpcr,
-			&current->thread.user_fpsr);
+		if (decoded->simd_scalar)
+			ret = tcti_native_simd_fp_scalar_unary(
+				decoded->simd_arithmetic_op, decoded->access_size,
+				decoded->result_size, result, source,
+				current->thread.user_fpcr,
+				&current->thread.user_fpsr);
+		else
+			ret = tcti_native_simd_fp_two_register(
+				decoded->simd_arithmetic_op, decoded->access_size,
+				decoded->result_size, decoded->simd_source_index,
+				decoded->simd_destination_index, result, source,
+				accumulator, current->thread.user_fpcr,
+				&current->thread.user_fpsr);
 		if (ret)
 			return ret;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
@@ -7557,6 +7853,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		source = tcti_read_add_sub_immediate_source(regs, decoded);
 		return tcti_execute_add_sub_result(regs, decoded, source,
 						   immediate, true);
+	case TCTI_DECODE_MIN_MAX_IMMEDIATE:
+		return tcti_execute_min_max_immediate(regs, decoded);
 	case TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER:
 		return tcti_execute_add_sub_shifted_register(regs, decoded);
 	case TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER:
@@ -7639,6 +7937,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
 		return tcti_execute_load_store_exclusive(mm, regs, decoded,
 							 fault_address);
+	case TCTI_DECODE_LSE_ATOMIC:
+		return tcti_execute_lse_atomic(mm, regs, decoded, fault_address);
 	case TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
 		return tcti_execute_simd_modified_immediate(regs, decoded);
 	case TCTI_DECODE_FP_SCALAR_IMMEDIATE:
@@ -7734,6 +8034,13 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 			result.instruction = instruction;
 			return result;
 		}
+		if (decoded.decode_class == TCTI_DECODE_HLT) {
+			result.reason = TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
+			result.status = -EOPNOTSUPP;
+			result.pc = regs->pc;
+			result.instruction = instruction;
+			return result;
+		}
 
 		fault_address = regs->pc;
 		ret = tcti_switch_debug_execute_decoded(mm, regs, &decoded,
@@ -7742,7 +8049,12 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 			continue;
 
 		if (ret == -EFAULT || ret == -EACCES) {
-			result.reason = TCTI_EXIT_USER_FAULT;
+			result.reason =
+				ret == -EFAULT &&
+				tcti_lse_alignment_fault(&decoded,
+							 fault_address) ?
+				TCTI_EXIT_ALIGNMENT_FAULT :
+				TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = fault_address;
 			result.fault_access = tcti_fault_access_for_decoded(&decoded);

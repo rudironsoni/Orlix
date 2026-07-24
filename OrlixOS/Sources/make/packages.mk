@@ -326,5 +326,5 @@ $(ORLIXOS_GETENT_BINARY): $(ORLIXOS_GETENT_SOURCE) $(ORLIXOS_MLIBC_SYSROOT)/.orl
 	"$(ORLIXOS_CC)" --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIXOS_GETENT_SOURCE)" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIXOS_GETENT_BINARY)"; \
 	"$(ORLIXOS_STRIP)" "$(ORLIXOS_GETENT_BINARY)"; \
 	file "$(ORLIXOS_GETENT_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
-	"$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" | grep -Eq 'Type:[[:space:]]+DYN ' || { "$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
+	"$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" | grep -E 'Type:[[:space:]]+DYN ' >/dev/null || { "$(ORLIXOS_READELF)" -h "$(ORLIXOS_GETENT_BINARY)" >&2; exit 1; }; \
 	echo "built Orlix Linux getent package input: $(ORLIXOS_GETENT_BINARY)"

@@ -41,7 +41,7 @@
 
 struct tcti_hot_block {
 	unsigned long guest_pc;
-	u32 code_generation;
+	u64 code_generation;
 	struct tcti_block *block;
 };
 
@@ -482,6 +482,7 @@ tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
 	case TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
 	case TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 	case TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
+	case TCTI_DECODE_LSE_ATOMIC:
 	case TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
 	case TCTI_DECODE_SIMD_LOAD_REPLICATE:
 	case TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
@@ -489,19 +490,6 @@ tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
 	default:
 		return TCTI_ACCESS_FETCH;
 	}
-}
-
-static enum tcti_access
-tcti_fault_access_for_program(const struct tcti_gadget_word *program,
-			      size_t word_count)
-{
-	struct tcti_decoded_instruction decoded;
-
-	if (!program || word_count <= TCTI_DECODED_INSTRUCTION_WORDS)
-		return TCTI_ACCESS_FETCH;
-
-	memcpy(&decoded, &program[1], sizeof(decoded));
-	return tcti_fault_access_for_decoded(&decoded);
 }
 
 static bool
@@ -543,26 +531,41 @@ static void tcti_set_yield_result(struct mm_struct *mm,
 	result->instruction = instruction;
 }
 
-static enum tcti_access
-tcti_fault_access_for_program_pc(const struct tcti_block *block,
-				 unsigned long pc)
+static bool tcti_decoded_for_program_pc(
+	const struct tcti_gadget_word *program, size_t program_words,
+	unsigned long start_pc, u32 instruction_count, unsigned long pc,
+	struct tcti_decoded_instruction *decoded)
 {
 	unsigned long index;
 	size_t offset;
-	struct tcti_decoded_instruction decoded;
 
-	if (!block || pc < block->guest_start_pc)
-		return TCTI_ACCESS_FETCH;
-	index = (pc - block->guest_start_pc) / sizeof(u32);
-	if (index >= block->instruction_count)
-		return TCTI_ACCESS_FETCH;
+	if (!program || !decoded || pc < start_pc ||
+	    !IS_ALIGNED(pc - start_pc, sizeof(u32)))
+		return false;
+	index = (pc - start_pc) / sizeof(u32);
+	if (index >= instruction_count)
+		return false;
 
 	offset = index * (1U + TCTI_DECODED_INSTRUCTION_WORDS);
-	if (offset + 1 + TCTI_DECODED_INSTRUCTION_WORDS > block->program_words)
-		return TCTI_ACCESS_FETCH;
+	if (offset + 1 + TCTI_DECODED_INSTRUCTION_WORDS > program_words)
+		return false;
 
-	memcpy(&decoded, &block->program[offset + 1], sizeof(decoded));
-	return tcti_fault_access_for_decoded(&decoded);
+	memcpy(decoded, &program[offset + 1], sizeof(*decoded));
+	return true;
+}
+
+static bool
+tcti_lse_alignment_fault(const struct tcti_decoded_instruction *decoded,
+			 unsigned long address)
+{
+	u8 size;
+
+	if (!decoded || decoded->decode_class != TCTI_DECODE_LSE_ATOMIC)
+		return false;
+	if (decoded->rn == 31 && !IS_ALIGNED(address, 16))
+		return true;
+	size = decoded->access_size * (decoded->pair ? 2 : 1);
+	return size && !IS_ALIGNED(address, size);
 }
 
 static int tcti_build_straight_line_block(struct mm_struct *mm,
@@ -639,7 +642,7 @@ static void tcti_hot_blocks_release(struct tcti_hot_block *hot_blocks)
 
 static struct tcti_block *
 tcti_hot_blocks_lookup(struct tcti_hot_block *hot_blocks,
-		       unsigned long guest_pc, u32 code_generation)
+		       unsigned long guest_pc, u64 code_generation)
 {
 	u32 i;
 
@@ -700,13 +703,14 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		struct tcti_decoded_instruction decoded;
 		unsigned long fault_address = regs->pc;
 		unsigned long block_pc = regs->pc;
-		u32 code_generation;
+		u64 code_generation;
 		size_t word_count = 0;
 		u32 block_instruction_count = 0;
 		u32 instruction;
 		enum tcti_decode_class first_exit_class =
 			TCTI_DECODE_UNSUPPORTED;
 		bool global_cache_ref = false;
+		bool fault_decoded;
 		int ret;
 
 		if (++instruction_count % TCTI_PROGRESS_REPORT_INTERVAL == 0)
@@ -737,25 +741,27 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			}
 		}
 		if (block) {
-			enum tcti_access block_fault_access;
+			struct tcti_decoded_instruction block_decoded;
+			enum tcti_access block_fault_access = TCTI_ACCESS_FETCH;
 			u32 block_instruction = 0;
 			u32 block_program_words = block->program_words;
 			unsigned long long before_pc = regs->pc;
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
+			bool block_decoded_valid;
 
-			block_fault_access = tcti_fault_access_for_program(
-				block->program, block->program_words);
-			if (block->program_words > TCTI_DECODED_INSTRUCTION_WORDS) {
-				struct tcti_decoded_instruction block_decoded;
-
-				memcpy(&block_decoded, &block->program[1],
-				       sizeof(block_decoded));
+			block_decoded_valid = tcti_decoded_for_program_pc(
+				block->program, block->program_words,
+				block->guest_start_pc, block->instruction_count,
+				regs->pc, &block_decoded);
+			if (block_decoded_valid) {
+				block_fault_access =
+					tcti_fault_access_for_decoded(&block_decoded);
 				block_instruction = block_decoded.instruction;
 			}
-			ret = tcti_execute_gadget_program(mm, regs, block->program,
-							 block->program_words,
-							 &fault_address);
+			ret = tcti_execute_gadget_program_authorized(
+				mm, regs, block->program, block->program_words,
+				&fault_address, block->code_generation);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
 		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=1\n",
 					task->comm, task_pid_nr(task),
@@ -764,18 +770,24 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 					block_instruction, ret, block_program_words,
 					block->instruction_count);
 			if (ret == -EFAULT || ret == -EACCES) {
-				block_fault_access =
-					tcti_fault_access_for_program_pc(block,
-									 regs->pc);
-				if (block_fault_access == TCTI_ACCESS_FETCH)
+				block_decoded_valid = tcti_decoded_for_program_pc(
+					block->program, block->program_words,
+					block->guest_start_pc,
+					block->instruction_count, regs->pc,
+					&block_decoded);
+				if (block_decoded_valid) {
 					block_fault_access =
-						tcti_fault_access_for_program(
-							block->program,
-							block->program_words);
+						tcti_fault_access_for_decoded(
+							&block_decoded);
+					block_instruction =
+						block_decoded.instruction;
+				}
 			}
 			if (global_cache_ref)
 				tcti_block_put(block);
 			if (!ret)
+				continue;
+			if (ret == -ESTALE)
 				continue;
 			if (ret == -EAGAIN) {
 				tcti_set_yield_result(mm, regs, &result);
@@ -784,11 +796,17 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			}
 
 			if (ret == -EFAULT || ret == -EACCES) {
-				pr_info("Orlix TCTI: cached block fault task=%s pid=%d pc=%#llx ret=%d fault=%#lx insn=%#x code_generation=%u words=%u\n",
+				pr_info("Orlix TCTI: cached block fault task=%s pid=%d pc=%#llx ret=%d fault=%#lx insn=%#x code_generation=%llu words=%u\n",
 					task->comm, task_pid_nr(task), regs->pc,
 					ret, fault_address, block_instruction,
-					code_generation, block_program_words);
-				result.reason = TCTI_EXIT_USER_FAULT;
+					(unsigned long long)code_generation,
+					block_program_words);
+				result.reason =
+					ret == -EFAULT && block_decoded_valid &&
+					tcti_lse_alignment_fault(
+						&block_decoded, fault_address) ?
+					TCTI_EXIT_ALIGNMENT_FAULT :
+					TCTI_EXIT_USER_FAULT;
 				result.status = ret;
 				result.fault_address = fault_address;
 				result.fault_access = block_fault_access;
@@ -812,6 +830,8 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 						     &block_instruction_count,
 						     &instruction,
 						     &first_exit_class);
+		if (code_generation != tcti_code_generation(mm))
+			continue;
 		if (ret == -EINTR) {
 			if (first_exit_class == TCTI_DECODE_SVC) {
 				result.reason = TCTI_EXIT_SYSCALL;
@@ -852,6 +872,8 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			block_pc + block_instruction_count * sizeof(u32),
 			code_generation, block_instruction_count, program,
 			word_count, &block);
+		if (ret == -ESTALE)
+			continue;
 		if (!ret && block) {
 			unsigned long long before_pc = regs->pc;
 			unsigned long long before_sp = regs->sp;
@@ -859,9 +881,9 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 
 			tcti_hot_blocks_remember(hot_blocks, &hot_block_cursor,
 						 block);
-			ret = tcti_execute_gadget_program(mm, regs, block->program,
-							  block->program_words,
-							  &fault_address);
+			ret = tcti_execute_gadget_program_authorized(
+				mm, regs, block->program, block->program_words,
+				&fault_address, block->code_generation);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
 		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
@@ -875,9 +897,9 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
 
-			ret = tcti_execute_gadget_program(mm, regs, program,
-							  word_count,
-							  &fault_address);
+			ret = tcti_execute_gadget_program_authorized(
+				mm, regs, program, word_count, &fault_address,
+				code_generation);
 			if (atomic_dec_if_positive(&tcti_block_trace_budget) >= 0)
 		pr_debug("Orlix TCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%zu count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
@@ -888,6 +910,8 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		}
 		if (!ret)
 			continue;
+		if (ret == -ESTALE)
+			continue;
 		if (ret == -EAGAIN) {
 			tcti_set_yield_result(mm, regs, &result);
 			tcti_hot_blocks_release(hot_blocks);
@@ -895,7 +919,18 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		}
 
 		if (ret == -EFAULT || ret == -EACCES) {
-			result.reason = TCTI_EXIT_USER_FAULT;
+			fault_decoded = tcti_decoded_for_program_pc(
+				program, word_count, block_pc,
+				block_instruction_count, regs->pc, &decoded);
+
+			if (fault_decoded)
+				instruction = decoded.instruction;
+			result.reason =
+				ret == -EFAULT && fault_decoded &&
+				tcti_lse_alignment_fault(&decoded,
+							 fault_address) ?
+				TCTI_EXIT_ALIGNMENT_FAULT :
+				TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = fault_address;
 			result.fault_access = tcti_fault_access_for_decoded(&decoded);
@@ -916,6 +951,14 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 
 void tcti_prepare_syscall_handoff(struct pt_regs *regs)
 {
+	current->thread.user_exclusive_address = 0;
+	current->thread.user_exclusive_value = 0;
+	current->thread.user_exclusive_value2 = 0;
+	current->thread.user_exclusive_pfn = 0;
+	current->thread.user_exclusive_generation = 0;
+	current->thread.user_exclusive_mapping_generation = 0;
+	current->thread.user_exclusive_size = 0;
+	current->thread.user_exclusive_valid = 0;
 	regs->orig_x0 = regs->regs[0];
 	regs->syscallno = regs->regs[8];
 	regs->pc += sizeof(u32);
@@ -1172,6 +1215,11 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 			}
 			tcti_report_exit(current, regs, &result);
 			do_group_exit(SIGSEGV);
+			break;
+		case TCTI_EXIT_ALIGNMENT_FAULT:
+			force_sig_fault(SIGBUS, BUS_ADRALN,
+					(void __user *)result.fault_address);
+			orlix_exit_to_user_mode_work(regs);
 			break;
 		case TCTI_EXIT_UNSUPPORTED_INSTRUCTION:
 			tcti_report_unsupported(current, regs, &result);

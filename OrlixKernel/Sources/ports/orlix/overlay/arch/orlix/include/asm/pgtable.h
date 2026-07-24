@@ -7,6 +7,9 @@
 #include <linux/types.h>
 #include <asm/page.h>
 #include <asm/processor.h>
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#include <asm/tcti.h>
+#endif
 
 /*
  * Orlix uses unsigned long page-table entries.  Derive the number of index
@@ -90,10 +93,15 @@ typedef struct { unsigned long pud; } pud_t;
 #define PAGE_KERNEL	__pgprot(_PAGE_PRESENT | _PAGE_WRITE | _PAGE_ACCESSED | \
 				 _PAGE_DIRTY | _PAGE_EXEC)
 
-extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
-#define ZERO_PAGE(vaddr)	virt_to_page(empty_zero_page)
+extern struct page *empty_zero_page;
+#define ZERO_PAGE(vaddr)	(empty_zero_page)
 
 #define set_pte(ptep, pte)	WRITE_ONCE(*(ptep), (pte))
+
+#if defined(ORLIX_APP_HOSTED_BOOT)
+struct mm_struct;
+extern struct mm_struct init_mm;
+#endif
 
 static inline void set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
@@ -121,9 +129,17 @@ static inline int pte_present(pte_t pte)
 }
 
 static inline void pte_clear(struct mm_struct *mm, unsigned long addr,
-				     pte_t *ptep)
+			     pte_t *ptep)
 {
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	if (mm != &init_mm)
+		tcti_mapping_sequence_begin(mm);
+#endif
 	set_pte(ptep, __pte(0));
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	if (mm != &init_mm)
+		tcti_note_pte_update_range(mm, addr, addr + PAGE_SIZE);
+#endif
 }
 
 static inline int pmd_none(pmd_t pmd)
@@ -240,8 +256,6 @@ static inline pte_t pte_mkyoung(pte_t pte)
 #define PFN_PTE_SHIFT	PAGE_SHIFT
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-struct mm_struct;
-extern struct mm_struct init_mm;
 void orlix_sync_hosted_kernel_pte(unsigned long address);
 #endif
 
@@ -249,23 +263,31 @@ void orlix_sync_hosted_kernel_pte(unsigned long address);
 static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
 			    pte_t *ptep, pte_t pte, unsigned int nr)
 {
+	unsigned long start = addr;
+
 #if !defined(ORLIX_APP_HOSTED_BOOT)
 	(void)mm;
 	(void)addr;
 #endif
+#if !defined(ORLIX_APP_HOSTED_BOOT) || !defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	(void)start;
+#endif
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	if (mm != &init_mm)
+		tcti_mapping_sequence_begin(mm);
+#endif
 	for (;;) {
 		set_pte(ptep, pte);
-#if defined(ORLIX_APP_HOSTED_BOOT)
-		if (mm == &init_mm && addr >= VMALLOC_START &&
-		    addr < VMALLOC_END && pte_present(pte))
-			orlix_sync_hosted_kernel_pte(addr);
-#endif
 		if (--nr == 0)
 			break;
 		addr += PAGE_SIZE;
 		ptep++;
 		pte_val(pte) += 1UL << PFN_PTE_SHIFT;
 	}
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+	if (mm != &init_mm)
+		tcti_note_pte_update_range(mm, start, addr + PAGE_SIZE);
+#endif
 }
 
 static inline unsigned long pte_pfn(pte_t pte)

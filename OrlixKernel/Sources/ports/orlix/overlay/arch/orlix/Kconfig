@@ -5,6 +5,7 @@ config ORLIX
 	select IRQ_DOMAIN
 	select HAVE_PAGE_SIZE_4KB
 	select HAVE_PAGE_SIZE_16KB
+	select HAVE_EXIT_THREAD
 	select OF
 	select OF_IRQ
 	select HAS_IOMEM

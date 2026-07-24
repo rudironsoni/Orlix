@@ -3,6 +3,9 @@
 #define _ASM_ORLIX_MMU_H
 
 #ifndef __ASSEMBLY__
+#include <linux/atomic.h>
+#include <linux/rwlock.h>
+
 typedef struct {
 	unsigned long end_brk;
 #ifdef CONFIG_BINFMT_ELF_FDPIC
@@ -10,6 +13,8 @@ typedef struct {
 	unsigned long interp_fdpic_loadmap;
 #endif
 	unsigned long orlix_tcti_static_pie_base;
+	atomic64_t orlix_tcti_mapping_sequence;
+	rwlock_t orlix_tcti_mapping_lock;
 } mm_context_t;
 #endif
 

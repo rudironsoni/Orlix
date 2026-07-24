@@ -51,6 +51,8 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__DATA,__modver \
 	__DATA,__builtin_fw \
 	__DATA,__note \
+	__DATA,__kunit_suites \
+	__DATA,__kunit_inits \
 	__DATA,__rmem_tbl \
 	__DATA,__rmem_end \
 	__DATA,__orlix_bnd \
@@ -94,6 +96,7 @@ for path in "$(ORLIX_KERNEL_BUILD_DIR)" "$$adapter_root" "$$adapter_include"; do
 done; \
 adapter_stamp="$$adapter_root/.orlix-product-adapter-ready"; \
 if [ -s "$$adapter_stamp" ] && \
+	[ "$$adapter_stamp" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
 	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 	[ "$$adapter_stamp" -nt "$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds" ] && \
 	[ -s "$$adapter_include/linux/init.h" ] && \
@@ -101,6 +104,8 @@ if [ -s "$$adapter_stamp" ] && \
 	[ -s "$$adapter_include/linux/compiler.h" ] && \
 	[ -s "$$adapter_include/linux/module.h" ] && \
 	[ -s "$$adapter_include/linux/moduleparam.h" ] && \
+	[ -s "$$adapter_include/kunit/test.h" ] && \
+	[ -s "$$adapter_include/asm-generic/preempt.h" ] && \
 	[ -s "$$adapter_root/source/kernel/sched/core.c" ] && \
 	[ -s "$$adapter_root/source/lib/crc32.c" ] && \
 	[ -s "$$adapter_root/source/mm/page_alloc.c" ] && \
@@ -110,8 +115,10 @@ if [ -s "$$adapter_stamp" ] && \
 else \
 	rm -rf "$$adapter_root"; \
 	mkdir -p "$$adapter_include/linux"; \
+	mkdir -p "$$adapter_include/kunit"; \
 	mkdir -p "$$adapter_include/linux/sched"; \
 	mkdir -p "$$adapter_include/asm"; \
+	mkdir -p "$$adapter_include/asm-generic"; \
 	mkdir -p "$$adapter_include/net"; \
 	mkdir -p "$$adapter_root/source/lib"; \
 	mkdir -p "$$adapter_root/source/lib/crypto"; \
@@ -361,7 +368,9 @@ cp "$$linux_root/include/linux/percpu-defs.h" "$$adapter_include/linux/percpu-de
 cp "$$linux_root/include/linux/sched/debug.h" "$$adapter_include/linux/sched/debug.h"; \
 cp "$$linux_root/include/linux/syscalls.h" "$$adapter_include/linux/syscalls.h"; \
 cp "$$linux_root/include/linux/once_lite.h" "$$adapter_include/linux/once_lite.h"; \
+cp "$$linux_root/include/kunit/test.h" "$$adapter_include/kunit/test.h"; \
 cp "$$linux_root/include/asm-generic/bitsperlong.h" "$$adapter_include/asm/bitsperlong.h"; \
+cp -R "$$linux_root/include/asm-generic/." "$$adapter_include/asm-generic/"; \
 cp "$$linux_root/include/net/net_debug.h" "$$adapter_include/net/net_debug.h"; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.text")' '__section("__TEXT,__init_text")'; \
 replace_once "$$adapter_include/linux/init.h" '__section(".init.data")' '__section("__DATA,__init_data")'; \
@@ -397,6 +406,8 @@ replace_once "$$adapter_include/linux/moduleparam.h" '__section("__param")' '__s
 replace_all "$$adapter_include/linux/once.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
 perl -0pi -e 'my $$inserted = s/\n#if defined\(CONFIG_OF\) && !defined\(MODULE\)\n/\n#define __orlix_product_of_table_section_reservedmem "__DATA,__rmem_tbl"\n#define __orlix_product_of_table_section(table) __orlix_product_of_table_section_##table\n\n#if defined(CONFIG_OF) \&\& !defined(MODULE)\n/; die "failed to insert Orlix OF section table map\n" unless $$inserted == 1; my $$section = s/__used __section\("__" #table "_of_table"\)/__used __section(__orlix_product_of_table_section(table))/; die "failed to replace Linux OF declaration section for Mach-O\n" unless $$section == 1;' "$$adapter_include/linux/of.h"; \
 replace_once "$$adapter_include/linux/once_lite.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_once "$$adapter_include/kunit/test.h" '__section(".kunit_test_suites")' '__section("__DATA,__kunit_suites")'; \
+replace_once "$$adapter_include/kunit/test.h" '__section(".kunit_init_test_suites")' '__section("__DATA,__kunit_inits")'; \
 replace_once "$$adapter_include/linux/percpu-defs.h" '__section(".discard")' '__section("__DATA,__discard")'; \
 replace_once "$$adapter_include/linux/sched/debug.h" '__section(".sched.text")' '__section("__TEXT,__sched_text")'; \
 replace_all "$$adapter_include/net/net_debug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
@@ -754,6 +765,8 @@ orlix_product_adapter_generate_boundaries() { \
 		emit_section_pair_if_needed ___per_cpu_start ___per_cpu_end __DATA __percpu; \
 		if undefined_symbol_present ___bss_start || undefined_symbol_present ___bss_stop; then if section_present __DATA __bss && ! section_present __DATA __common; then emit_section_pair ___bss_start ___bss_stop __DATA __bss; else emit_empty_pair ___bss_start ___bss_stop; fi; fi; \
 		emit_section_pair_if_needed ___start___param ___stop___param __DATA __param; \
+		emit_section_pair_if_needed ___kunit_suites_start ___kunit_suites_end __DATA __kunit_suites; \
+		emit_section_pair_if_needed ___kunit_init_suites_start ___kunit_init_suites_end __DATA __kunit_inits; \
 		emit_section_pair_if_needed ___start_lsm_info ___end_lsm_info __DATA __lsm_info; \
 		emit_section_pair_if_needed ___start_early_lsm_info ___end_early_lsm_info __DATA __early_lsm_info; \
 		emit_section_pair_if_needed ___start___modver ___stop___modver __DATA __modver; \
@@ -766,7 +779,7 @@ orlix_product_adapter_generate_boundaries() { \
 		emit_section_pair_if_needed ___start___bug_table ___stop___bug_table __DATA __bug_table; \
 	} > "$$boundary_src"; \
 	/usr/bin/env -u SDKROOT "$$cc" -target "$$target" -isysroot / -x assembler -c "$$boundary_src" -o "$$boundary_obj"; \
-	for symbol in _jiffies _init_stack _init_thread_union ___start_init_stack ___end_init_stack __sdata __edata ___init_begin ___init_end ___cpuidle_text_start ___cpuidle_text_end ___irqentry_text_start ___irqentry_text_end ___noinstr_text_start ___noinstr_text_end ___sched_text_start ___sched_text_end ___softirqentry_text_start ___softirqentry_text_end ___start_rodata ___end_rodata ___sched_class_highest ___sched_class_lowest ___setup_start ___setup_end ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end ___con_initcall_start ___con_initcall_end ___start_once ___end_once ___start_ro_after_init ___end_ro_after_init ___start_builtin_fw ___end_builtin_fw ___per_cpu_start ___per_cpu_end ___bss_start ___bss_stop ___start___param ___stop___param ___start_lsm_info ___end_lsm_info ___start_early_lsm_info ___end_early_lsm_info ___start___modver ___stop___modver ___start_notes ___stop_notes ___start___ksymtab ___stop___ksymtab ___start___kcrctab ___stop___kcrctab ___start___ex_table ___stop___ex_table ___start___jump_table ___stop___jump_table ___start___bug_table ___stop___bug_table; do if undefined_symbol_present "$$symbol"; then "$$nm_cmd" -m "$$boundary_obj" | grep -F -q "$$symbol" || { echo "product boundary object missing requested symbol: $$symbol" >&2; exit 1; }; fi; done; \
+	for symbol in _jiffies _init_stack _init_thread_union ___start_init_stack ___end_init_stack __sdata __edata ___init_begin ___init_end ___cpuidle_text_start ___cpuidle_text_end ___irqentry_text_start ___irqentry_text_end ___noinstr_text_start ___noinstr_text_end ___sched_text_start ___sched_text_end ___softirqentry_text_start ___softirqentry_text_end ___start_rodata ___end_rodata ___sched_class_highest ___sched_class_lowest ___setup_start ___setup_end ___initcall_start ___initcall0_start ___initcall1_start ___initcall2_start ___initcall3_start ___initcall4_start ___initcall5_start ___initcall6_start ___initcall7_start ___initcall_end ___con_initcall_start ___con_initcall_end ___start_once ___end_once ___start_ro_after_init ___end_ro_after_init ___start_builtin_fw ___end_builtin_fw ___per_cpu_start ___per_cpu_end ___bss_start ___bss_stop ___start___param ___stop___param ___kunit_suites_start ___kunit_suites_end ___kunit_init_suites_start ___kunit_init_suites_end ___start_lsm_info ___end_lsm_info ___start_early_lsm_info ___end_early_lsm_info ___start___modver ___stop___modver ___start_notes ___stop_notes ___start___ksymtab ___stop___ksymtab ___start___kcrctab ___stop___kcrctab ___start___ex_table ___stop___ex_table ___start___jump_table ___stop___jump_table ___start___bug_table ___stop___bug_table; do if undefined_symbol_present "$$symbol"; then "$$nm_cmd" -m "$$boundary_obj" | grep -F -q "$$symbol" || { echo "product boundary object missing requested symbol: $$symbol" >&2; exit 1; }; fi; done; \
 	objs+=("$$boundary_obj"); \
 	echo "generated Orlix product boundary object: $$boundary_obj"; \
 };

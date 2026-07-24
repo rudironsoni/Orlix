@@ -1,33 +1,14 @@
-# Codex adapter for Orlix.
-# Repo-local workflow logic belongs in .agents/skills, not in custom MCP servers.
-# User secrets, machine-local MCP credentials, sandbox mode, and approval policy
-# belong in ~/.codex/config.toml.
-
 [features]
 hooks = true
 
 [agents]
-max_depth = 1
+max_concurrent_threads_per_session = 16
 
-[agents."tcti-llvm-inspector"]
+[agents.tcti-llvm-inspector]
 description = "Orlix TCTI LLVM inspector: reports exact ELF, Mach-O, disassembly, relocation, symbol, section, and LLDB facts without changing source. See .codex/subagents/tcti-llvm-inspector.md."
 
-[mcp_servers.openaiDeveloperDocs]
-url = "https://developers.openai.com/mcp"
-enabled = true
-required = false
-tool_timeout_sec = 60
-
-[mcp_servers.context7]
-url = "https://mcp.context7.com/mcp"
-enabled = false
-required = false
-tool_timeout_sec = 60
-env_http_headers = { "CONTEXT7_API_KEY" = "CONTEXT7_API_KEY" }
-
 [mcp_servers.lldb]
-command = "lldb-mcp"
-enabled = false
+command = "/bin/zsh"
+args = [ "-lc", "exec \"$(brew --prefix llvm)/bin/lldb-mcp\"" ]
 required = false
-enabled_tools = ["lldb_command"]
 tool_timeout_sec = 60

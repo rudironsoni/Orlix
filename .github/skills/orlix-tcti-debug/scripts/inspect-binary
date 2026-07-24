@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+binary="${1:?binary path required}"
+file "$binary"
+xcrun llvm-objdump -f "$binary"
+xcrun llvm-objdump -d "$binary"
