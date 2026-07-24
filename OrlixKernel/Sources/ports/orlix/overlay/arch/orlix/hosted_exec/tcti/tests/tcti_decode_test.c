@@ -21,6 +21,7 @@
 #include "../fixed_fp.h"
 #include "../gadget_program.h"
 #include <inventory.h>
+#include <target_inventory.h>
 #include "../isa_coverage.h"
 #include "runtime_projection.h"
 #include "../switch_debug.h"
@@ -28,14 +29,40 @@
 
 static void tcti_guest_profile_matches_elf_auxv(struct kunit *test)
 {
+	const unsigned long previous_unproved_hwcap =
+		HWCAP_FP | HWCAP_ASIMD | HWCAP_AES | HWCAP_PMULL |
+		HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 | HWCAP_SHA3 |
+		HWCAP_SM3 | HWCAP_SM4 | HWCAP_SHA512;
+
 	KUNIT_EXPECT_EQ(test, 8, ORLIX_EL0_ARCH_MAJOR);
 	KUNIT_EXPECT_EQ(test, 0, ORLIX_EL0_ARCH_MINOR);
-	KUNIT_EXPECT_EQ(test,
-		(unsigned long)(HWCAP_FP | HWCAP_ASIMD | HWCAP_AES |
-			HWCAP_PMULL | HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 |
-			HWCAP_SHA3 | HWCAP_SM3 | HWCAP_SM4 | HWCAP_SHA512),
-		(unsigned long)ELF_HWCAP);
+	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP);
+	KUNIT_EXPECT_NE(test, previous_unproved_hwcap,
+			(unsigned long)ELF_HWCAP);
 	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP2);
+}
+
+static void tcti_complete_target_inventory_is_kernel_visible(
+	struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, 4350U, TCTI_A64_GENERATED_SOURCE_COUNT);
+	KUNIT_EXPECT_EQ(test, 3272U,
+			TCTI_A64_GENERATED_UNCLASSIFIED_COUNT);
+	KUNIT_EXPECT_EQ(test, 0U,
+			TCTI_A64_GENERATED_CLASSIFICATION_COMPLETE);
+	KUNIT_EXPECT_EQ(test, 0U, TCTI_A64_GENERATED_ISA_COMPLETE);
+	KUNIT_EXPECT_EQ(test, (size_t)TCTI_A64_GENERATED_SOURCE_COUNT,
+			ARRAY_SIZE(tcti_a64_generated_rows));
+	KUNIT_EXPECT_STREQ(test, "vFATAp1-A",
+			  TCTI_A64_GENERATED_ARCHITECTURE);
+	KUNIT_EXPECT_STREQ(test, "818", TCTI_A64_GENERATED_BUILD);
+	KUNIT_EXPECT_STREQ(test, "2026-06_rel",
+			  TCTI_A64_GENERATED_REFERENCE);
+	KUNIT_EXPECT_STREQ(test, "2.9.5", TCTI_A64_GENERATED_SCHEMA);
+	KUNIT_EXPECT_STREQ(test,
+			  "a1ad2c6538a47cd97d8762791ac5af88"
+			  "bce1d5f6aff096c9b77aef853e76acfe",
+			  TCTI_A64_GENERATED_INSTRUCTIONS_SHA256);
 }
 
 static void tcti_runtime_profile_rejects_coarse_family_status(
@@ -214,7 +241,12 @@ static void tcti_isa_coverage_inventory_is_machine_auditable(struct kunit *test)
 	for (i = 0; i < ARRAY_SIZE(extension_present); i++)
 		KUNIT_EXPECT_TRUE_MSG(test, extension_present[i],
 			"TCTI ISA extension %zu has no coverage row", i);
-	KUNIT_EXPECT_EQ(test, (unsigned long)ELF_HWCAP, covered_hwcap);
+	KUNIT_EXPECT_EQ(test,
+		(unsigned long)(HWCAP_FP | HWCAP_ASIMD | HWCAP_AES |
+			HWCAP_PMULL | HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 |
+			HWCAP_SHA3 | HWCAP_SM3 | HWCAP_SM4 | HWCAP_SHA512),
+		covered_hwcap);
+	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP);
 
 	kunit_info(test, "TCTI ISA coverage: %zu/%zu complete, %zu gaps",
 		   ARRAY_SIZE(tcti_isa_coverage) - gaps,
@@ -30491,6 +30523,7 @@ static void tcti_switch_executes_simd_shll_family(struct kunit *test)
 
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
+	KUNIT_CASE(tcti_complete_target_inventory_is_kernel_visible),
 	KUNIT_CASE(tcti_runtime_profile_rejects_coarse_family_status),
 	KUNIT_CASE(tcti_runtime_projection_rejects_advertised_incomplete_feature),
 	KUNIT_CASE(tcti_runtime_projection_keeps_unadvertised_gap_in_target),

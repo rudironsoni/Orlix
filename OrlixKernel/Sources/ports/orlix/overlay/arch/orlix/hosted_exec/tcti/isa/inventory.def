@@ -2,11 +2,7 @@
 /* Normalized from the pinned BSD-3-Clause Arm AARCHMRS source. */
 /* Consumed by the Kbuild C host tool. Do not edit generated build headers. */
 
-TCTI_A64_PROFILE(8, 0,
-	(HWCAP_FP | HWCAP_ASIMD | HWCAP_AES | HWCAP_PMULL |
-	 HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 | HWCAP_SHA3 |
-	 HWCAP_SHA512 | HWCAP_SM3 | HWCAP_SM4),
-	0)
+TCTI_A64_PROFILE(8, 0, 0, 0)
 TCTI_A64_SOURCE("vFATAp1-A", "818",
 	"2026-06_rel", "2.9.5",
 	"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe",

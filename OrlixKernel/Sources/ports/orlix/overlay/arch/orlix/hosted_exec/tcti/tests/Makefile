@@ -13,18 +13,27 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_logical_shifted_register_test.o \
 	tcti_bitfield_extract_source_bound_test.o
 
-hostprogs := gen_inventory
+hostprogs := gen_inventory target_isa_kbuild_generator
 
 quiet_cmd_tcti_inventory = GEN     $@
       cmd_tcti_inventory = $(obj)/gen_inventory $@
 
-targets += inventory.h
-clean-files += inventory.h
+quiet_cmd_tcti_target_inventory = GEN     $@
+      cmd_tcti_target_inventory = $(obj)/target_isa_kbuild_generator > $@.tmp && \
+				   mv $@.tmp $@
+
+targets += inventory.h target_inventory.h
+clean-files += inventory.h target_inventory.h target_inventory.h.tmp
 
 $(obj)/inventory.h: $(obj)/gen_inventory \
 			    $(src)/../isa/inventory.def FORCE
 	$(call if_changed,tcti_inventory)
 
-$(obj)/tcti_decode_test.o: $(obj)/inventory.h
+$(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
+			   $(src)/../isa/source_manifest.def \
+			   $(src)/../isa/target_classification.def FORCE
+	$(call if_changed,tcti_target_inventory)
+
+$(obj)/tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
 
 ccflags-y += -I$(obj)

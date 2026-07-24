@@ -2,6 +2,7 @@
 #include "target_proof_registry.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define EXPECT(value) do { \
 	if (!(value)) { \
@@ -246,6 +247,39 @@ static int privileged_profiles_and_count_caps_fail_closed(void)
 	return 0;
 }
 
+static int logical_shifted_register_registry_is_source_bound(void)
+{
+	static const char *const operations[] = {
+		"AND_log_shift", "BIC_log_shift", "ORR_log_shift",
+		"ORN_log_shift", "EOR_log_shift", "EON",
+		"ANDS_log_shift", "BICS",
+	};
+	const struct tcti_target_proof_registry_entry *entries;
+	enum tcti_target_proof_registry_error error;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(count == sizeof(operations) / sizeof(operations[0]));
+	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_OK);
+	for (index = 0; index < count; index++) {
+		uint32_t requirements;
+
+		EXPECT(!strcmp(entries[index].operation_id, operations[index]));
+		EXPECT(entries[index].classification_mask ==
+		       TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
+		EXPECT(entries[index].linux_interface ==
+		       TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		EXPECT(entries[index].binding_count == 2);
+		EXPECT(tcti_target_proof_operation_requirements(
+			       operations[index], 1, &requirements) == 0);
+		EXPECT(entries[index].obligations == requirements);
+	}
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -268,6 +302,8 @@ int main(void)
 		  typed_kselftest_provenance_is_source_and_build_bound },
 		{ "privileged_profiles_and_count_caps_fail_closed",
 		  privileged_profiles_and_count_caps_fail_closed },
+		{ "logical_shifted_register_registry_is_source_bound",
+		  logical_shifted_register_registry_is_source_bound },
 	};
 	size_t index;
 

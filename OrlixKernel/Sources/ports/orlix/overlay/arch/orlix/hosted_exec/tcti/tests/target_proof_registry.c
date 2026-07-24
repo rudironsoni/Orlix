@@ -66,10 +66,22 @@ struct kunit_case_provenance {
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c"
 #define LSE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse_decode_test.c"
+#define LOGICAL_SHIFT_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c"
+#define LOGICAL_SHIFT_SUITE "orlix-tcti-logical-shifted-register"
+#define LOGICAL_SHIFT_SUITE_SYMBOL "tcti_logical_shifted_register_test_suite"
+#define LOGICAL_SHIFT_CASE_ARRAY "tcti_logical_shifted_register_test_cases"
+#define LOGICAL_SHIFT_CONDITION \
+	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
+#define LOGICAL_BASE_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define LOGICAL_FLAGS_OBLIGATIONS \
+	(LOGICAL_BASE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"afe70b7fd88e1d20ed3dab97d7e32c4db0a545e2b2e7df2836771f05a6ad35a2"
+	"08f3b4aaec38c5f71f69eb93ef250011b8c7d19e0806ab5097e7f1dc83b50884"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -82,11 +94,14 @@ struct kunit_case_provenance {
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ DECODE_SOURCE,
-	  "d670fd77b154e08eefeedca0d7e24c4bed5cb1f1b0afe5e266069f2dabae0231",
+	"0baac30bf4df50437d090b3e9ac04921568852c50d418280ff35f2039fa9f6fe",
 	  "tcti_decode_test.o" },
 	{ LSE_SOURCE,
 	  "49e3d4cc6b7db58162bead19c795d51197c3186d0c4cd0f1bd0b9c475180b997",
 	  "tcti_lse_decode_test.o" },
+	{ LOGICAL_SHIFT_SOURCE,
+	  "f35b94be9f9baeb31ce504e0513c53eb83f483e528585e998d79005f3e9c7e6f",
+	  "tcti_logical_shifted_register_test.o" },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -106,6 +121,39 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_register_and_overlap_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "tcti_logical_shifted_register_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
@@ -117,6 +165,14 @@ static const struct operation_requirements operation_requirements[] = {
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_PC |
 		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
+	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
+	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
+	{ "ORN_log_shift", LOGICAL_BASE_OBLIGATIONS },
+	{ "EOR_log_shift", LOGICAL_BASE_OBLIGATIONS },
+	{ "EON", LOGICAL_BASE_OBLIGATIONS },
+	{ "ANDS_log_shift", LOGICAL_FLAGS_OBLIGATIONS },
+	{ "BICS", LOGICAL_FLAGS_OBLIGATIONS },
 	{ "LDADD", BASELINE_OBLIGATIONS |
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
@@ -132,6 +188,171 @@ static const struct operation_requirements operation_requirements[] = {
 		TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
 		TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 };
+
+static const struct tcti_target_proof_case logical_base_cases[] = {
+	{ "tcti_logical_shifted_register_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_shifted_register_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_BASE_OBLIGATIONS },
+	{ "tcti_logical_shifted_register_register_and_overlap_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_logical_shifted_register_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case logical_base_alias_cases[] = {
+	{ "tcti_logical_shifted_register_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_shifted_register_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_BASE_OBLIGATIONS },
+	{ "tcti_logical_shifted_register_register_and_overlap_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_logical_shifted_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_logical_shifted_register_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case logical_flags_cases[] = {
+	{ "tcti_logical_shifted_register_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_shifted_register_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ "tcti_logical_shifted_register_register_and_overlap_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_logical_shifted_register_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case logical_flags_alias_cases[] = {
+	{ "tcti_logical_shifted_register_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_shifted_register_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ "tcti_logical_shifted_register_register_and_overlap_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_logical_shifted_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_logical_shifted_register_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+#define LOGICAL_BINDING(leaf, mnemonic, pattern, cases) \
+	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases }
+
+static const struct tcti_target_proof_binding logical_and_bindings[] = {
+	LOGICAL_BINDING("AND_32_log_shift", "AND", 0x0a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING("AND_64_log_shift", "AND", 0x8a000000U, UINT64_C(0x1f)),
+};
+
+static const struct tcti_target_proof_binding logical_bic_bindings[] = {
+	LOGICAL_BINDING("BIC_32_log_shift", "BIC", 0x0a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING("BIC_64_log_shift", "BIC", 0x8a200000U, UINT64_C(0x1f)),
+};
+
+static const struct tcti_target_proof_binding logical_orr_bindings[] = {
+	LOGICAL_BINDING("ORR_32_log_shift", "ORR", 0x2a000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING("ORR_64_log_shift", "ORR", 0xaa000000U, UINT64_C(0x3f)),
+};
+
+static const struct tcti_target_proof_binding logical_orn_bindings[] = {
+	LOGICAL_BINDING("ORN_32_log_shift", "ORN", 0x2a200000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING("ORN_64_log_shift", "ORN", 0xaa200000U, UINT64_C(0x3f)),
+};
+
+static const struct tcti_target_proof_binding logical_eor_bindings[] = {
+	LOGICAL_BINDING("EOR_32_log_shift", "EOR", 0x4a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING("EOR_64_log_shift", "EOR", 0xca000000U, UINT64_C(0x1f)),
+};
+
+static const struct tcti_target_proof_binding logical_eon_bindings[] = {
+	LOGICAL_BINDING("EON_32_log_shift", "EON", 0x4a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING("EON_64_log_shift", "EON", 0xca200000U, UINT64_C(0x1f)),
+};
+
+static const struct tcti_target_proof_binding logical_ands_bindings[] = {
+	LOGICAL_BINDING("ANDS_32_log_shift", "ANDS", 0x6a000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING("ANDS_64_log_shift", "ANDS", 0xea000000U, UINT64_C(0x3f)),
+};
+
+static const struct tcti_target_proof_binding logical_bics_bindings[] = {
+	LOGICAL_BINDING("BICS_32_log_shift", "BICS", 0x6a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING("BICS_64_log_shift", "BICS", 0xea200000U, UINT64_C(0x1f)),
+};
+
+#undef LOGICAL_BINDING
+
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
+#define LOGICAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
+	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE, cases, ARRAY_COUNT(cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL }
+
+static const struct tcti_target_proof_registry_entry proof_registry_entries[] = {
+	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
+		      logical_and_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-bic", "BIC_log_shift",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
+		      logical_bic_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-orr", "ORR_log_shift",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_alias_cases,
+		      logical_orr_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-orn", "ORN_log_shift",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_alias_cases,
+		      logical_orn_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-eor", "EOR_log_shift",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
+		      logical_eor_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-eon", "EON",
+		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
+		      logical_eon_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-ands", "ANDS_log_shift",
+		      LOGICAL_FLAGS_OBLIGATIONS, logical_flags_alias_cases,
+		      logical_ands_bindings),
+	LOGICAL_ENTRY("kunit:logical-shifted-register-bics", "BICS",
+		      LOGICAL_FLAGS_OBLIGATIONS, logical_flags_cases,
+		      logical_bics_bindings),
+};
+
+#undef LOGICAL_ENTRY
+#undef ARRAY_COUNT
 
 static bool empty(const char *text)
 {
@@ -760,6 +981,7 @@ const struct tcti_target_proof_registry_entry *
 tcti_target_proof_registry_entries(size_t *count)
 {
 	if (count)
-		*count = 0;
-	return NULL;
+		*count = sizeof(proof_registry_entries) /
+			 sizeof(proof_registry_entries[0]);
+	return proof_registry_entries;
 }

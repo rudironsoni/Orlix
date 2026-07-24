@@ -548,3 +548,7 @@ Added the exact 4,350-leaf source manifest, explicit target classification and p
 ## [2026-07-24] correct | Make canonical C artifacts the TCTI inventory boundary
 
 Restricted raw Arm source import to an explicit maintainer refresh operation and made canonical fixed-width C artifacts under `arch/orlix` the only inventory inputs for normal kernel, KUnit, kselftest, product, and complete-target audit paths. Kconfig remains build and capability selection rather than an ISA inventory store. Added source-bound logical shifted-register and bitfield/EXTR KUnit coverage, corrected EXTR reserved-bit decoding, and retained unresolved classifications and missing production-path proof as blocking work.
+
+## [2026-07-24] implement | Version the complete register source inside arch/orlix
+
+Published the pinned Arm register topology as durable C-native source under `arch/orlix`, including every register, metadata record, permission, field, value domain, constraint, accessor, selector, and typed expression relationship. The external Arm JSON remains an explicit maintainer-refresh input only. Normal kernel, KUnit, kselftest, product, and complete-target audit paths require no JSON parser or external source path, while the completion audit continues to report every unclassified and unproved instruction leaf as blocking.

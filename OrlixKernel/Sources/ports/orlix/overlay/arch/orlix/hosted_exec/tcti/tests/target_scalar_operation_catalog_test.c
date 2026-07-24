@@ -40,6 +40,11 @@ static int catalog_is_exact_and_unproved(void)
 	EXPECT(count == TCTI_SCALAR_OPERATION_CATALOG_EXPECTED_COUNT);
 	EXPECT(tcti_scalar_operation_catalog_sha256(entries, count,
 						    catalog_sha256) == 0);
+	if (strcmp(catalog_sha256,
+		   TCTI_SCALAR_OPERATION_CATALOG_REVIEWED_SHA256))
+		fprintf(stderr, "catalog SHA-256: expected %s, actual %s\n",
+			TCTI_SCALAR_OPERATION_CATALOG_REVIEWED_SHA256,
+			catalog_sha256);
 	EXPECT(!strcmp(catalog_sha256,
 		       TCTI_SCALAR_OPERATION_CATALOG_REVIEWED_SHA256));
 	if (tcti_scalar_operation_catalog_validate(entries, count, &error) < 0) {
