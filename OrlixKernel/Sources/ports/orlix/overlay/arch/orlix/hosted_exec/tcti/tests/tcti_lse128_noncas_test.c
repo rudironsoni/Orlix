@@ -261,7 +261,7 @@ static void tcti_lse128_unaligned_fault_preserves_state(struct kunit *test)
 	KUNIT_EXPECT_MEMEQ(test, &initial, &observed, sizeof(initial));
 	regs.regs[10] = mapped;
 	before = regs;
-	KUNIT_ASSERT_EQ(test, 0, ksys_mprotect(mapped, PAGE_SIZE, PROT_READ));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(mapped, PAGE_SIZE, PROT_READ));
 	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &decoded,
 						       &fault_address);
 	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
@@ -269,8 +269,8 @@ static void tcti_lse128_unaligned_fault_preserves_state(struct kunit *test)
 	ret = tcti_read_user_data(current->mm, mapped, &observed, sizeof(observed));
 	KUNIT_ASSERT_EQ(test, 0, ret);
 	KUNIT_EXPECT_MEMEQ(test, &initial, &observed, sizeof(initial));
-	KUNIT_ASSERT_EQ(test, 0, ksys_mprotect(mapped, PAGE_SIZE,
-							 PROT_READ | PROT_WRITE));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(mapped, PAGE_SIZE,
+						      PROT_READ | PROT_WRITE));
 
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }

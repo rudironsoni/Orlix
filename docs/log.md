@@ -544,3 +544,7 @@ Recorded the three-file Arm source contract and made `Instructions.json` the imm
 ## [2026-07-24] implement | Establish the C-native complete-ISA audit foundation
 
 Added the exact 4,350-leaf source manifest, explicit target classification and proof ledgers, typed feature and register import models, source-bound operation catalogs, and focused production-path KUnit coverage for the current scalar, atomic, and cryptographic families. The checkpoint keeps Arm JSON inputs in explicit host audit tooling, keeps ordinary kernel execution C-native, and records unresolved classifications and semantic domains as blocking gaps rather than completion evidence.
+
+## [2026-07-24] correct | Make canonical C artifacts the TCTI inventory boundary
+
+Restricted raw Arm source import to an explicit maintainer refresh operation and made canonical fixed-width C artifacts under `arch/orlix` the only inventory inputs for normal kernel, KUnit, kselftest, product, and complete-target audit paths. Kconfig remains build and capability selection rather than an ISA inventory store. Added source-bound logical shifted-register and bitfield/EXTR KUnit coverage, corrected EXTR reserved-bit decoding, and retained unresolved classifications and missing production-path proof as blocking work.

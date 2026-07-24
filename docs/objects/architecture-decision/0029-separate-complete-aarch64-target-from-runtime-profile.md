@@ -95,6 +95,27 @@ Each source must report architecture `vFATAp1-A`, build `818`, reference
 `2026-06_rel`, schema `2.9.5`, and timestamp `2026-06-24 17:12:14`. A digest
 or metadata mismatch is an audit failure, not a source fallback.
 
+Raw Arm JSON is external maintainer-refresh input only. The refresh tool reads
+the pinned JSON sources, validates their hashes and metadata, and publishes
+canonical fixed-width C artifacts under `arch/orlix`. Those C artifacts are the
+only ISA inventory inputs consumed by normal kernel builds, KUnit, kselftest,
+product builds, and `tcti-isa-audit`. None of those paths may depend on a JSON
+parser, a JSON file, or a path to the external Arm source tree.
+
+The published C artifacts must retain the source provenance and architectural
+information required to enforce this decision, including the fixed 4,350-leaf
+denominator, feature predicates and alternatives, source classifications,
+system-accessor relationships, and proof bindings. Refresh is an explicit
+maintainer action. It must publish the complete coherent artifact set
+atomically, reject incomplete or mismatched inputs, and leave the previously
+published set authoritative after failure.
+
+Kconfig selects kernel capabilities and build composition. It does not store,
+generate, filter, or redefine the target ISA inventory. A Kconfig or runtime
+capability choice may control what Linux advertises only after the corresponding
+complete-target proof passes; it may not remove leaves or feature alternatives
+from the canonical C artifacts.
+
 System-access reconciliation must fail loudly when an
 `Accessors.SystemAccessor` cannot be mapped to its generic instruction leaf,
 when its read or write direction cannot be represented, or when its encoded
@@ -162,6 +183,9 @@ acceptable.
   every applicable EL0 semantic variant is implemented and proved, and every
   non-executable classification has its required relationship or rejection
   proof.
+- Normal kernel, KUnit, kselftest, product, and audit paths consume only the
+  canonical fixed-width C artifacts under `arch/orlix`; raw Arm JSON and its
+  parser remain confined to the explicit maintainer-refresh path.
 - The runtime HWCAP projection may lag implementation safely, but it cannot
   make the completeness audit pass.
 - Workload traces and the current runtime profile may prioritize families, but

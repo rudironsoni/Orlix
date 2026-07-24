@@ -26,6 +26,16 @@ Implement 100% AArch64 ISA-on-ISA compatibility through Orlix-owned TCTI fetch, 
 Completion requires:
 
 - a C-native, build-time target inventory constructed from every one of the 4,350 leaves in the pinned Arm AARCHMRS 2026-06 source;
+- canonical fixed-width C artifacts under `arch/orlix` as the only ISA
+  inventory inputs to normal kernel builds, KUnit, kselftest, product builds,
+  and `tcti-isa-audit`, with no JSON parser, JSON file, or external Arm-source
+  path in those dependency graphs;
+- an explicit maintainer-refresh path that alone reads the pinned Arm JSON,
+  validates the complete three-source contract, and atomically publishes a
+  coherent C artifact set without replacing the previous authoritative set
+  after failure;
+- Kconfig used only for capability and build selection, never as the inventory
+  store, generator, filter, or completion denominator;
 - an immutable 4,350-leaf direct instruction-encoding denominator from pinned `Instructions.json`, plus a supplemental reconciliation of pinned `Registers.json` system accessors to the generic `MRS`, `MSR`, and `SYS` leaves without inventing new instruction leaves; `RNDR` and `RNDRRS` remain access variants, not missing source leaves;
 - SHA-256 and `_meta.version` validation for pinned `Instructions.json` (`a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe`), `Features.json` (`633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187`), and `Registers.json` (`5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874`), each with architecture `vFATAp1-A`, build `818`, reference `2026-06_rel`, schema `2.9.5`, and timestamp `2026-06-24 17:12:14`;
 - a hard audit failure for every unmapped, directionally ambiguous, reserved, contradictory, or otherwise unrepresented `Accessors.SystemAccessor` selector space, with provenance from each accessor to its generic source leaf and no synthetic direct leaf or silent fallback;
@@ -46,11 +56,23 @@ Completion requires:
 
 ## Remaining sequence
 
-1. Complete the exact feature-domain satisfiability audit. Evaluate `SAT(Features.json constraints && leaf condition)` for every pinned leaf across Boolean, integer, signed and unsigned width, enum and set membership, field and value, equality and inequality, ordering, implication, and equivalence semantics. Unsupported grammar, approximation, branch or resource exhaustion, and an unevaluated leaf are hard audit failures.
-2. Preserve and classify every leaf conditioned by `FEAT_LOR`, `FEAT_LSUI`, `FEAT_LSE128`, `FEAT_THE`, and `FEAT_LSE2`. Each leaf requires exact applicable EL0 semantics or typed proof of its non-EL0, undefined or unallocated, alias or duplicate, or impossible-domain classification. Disabled HWCAP or HWCAP2 advertisement cannot remove these leaves from the target.
-3. Reconcile every pinned `Accessors.SystemAccessor` to the generic `MRS`, `MSR`, or `SYS` leaf that carries its access direction and selector space. Reject any accessor that is unmapped, ambiguous, reserved, contradictory, or cannot retain source provenance. The reconciliation supplies supplemental system-access semantic variants and never changes the 4,350 direct instruction-encoding denominator. `RNDR` and `RNDRRS` are required variants of generic system access, not newly discovered instruction leaves.
-4. Populate the C-native proof registry as classifications and evidence land. Every claimed proof must resolve to one registry entry with the correct proof identifier, instruction family, and allowed classification. Missing, unknown, duplicate, family-mismatched, or classification-mismatched references are hard audit failures, and the final registry cannot be empty.
-5. Close the complete-target audit only after exact feature-domain evaluation covers all 4,350 leaves, all supplemental system-access variants reconcile to their generic leaves, the five named feature domains have complete classifications and required semantics or rejection proof, every proof reference resolves through the populated registry, and no leaf or accessor remains unclassified or unmapped.
+1. Complete the maintainer-refresh pipeline and the canonical fixed-width C
+   artifact contract. The refresh path alone reads and validates the three
+   pinned Arm JSON sources, then atomically publishes the complete artifact set
+   under `arch/orlix`. Prove that normal kernel, KUnit, kselftest, product, and
+   `tcti-isa-audit` dependency graphs contain no JSON parser, JSON file, or
+   external source path.
+2. Complete the exact feature-domain satisfiability audit from the canonical C
+   artifacts. Evaluate the retained equivalent of
+   `SAT(Features.json constraints && leaf condition)` for every pinned leaf
+   across Boolean, integer, signed and unsigned width, enum and set membership,
+   field and value, equality and inequality, ordering, implication, and
+   equivalence semantics. Unsupported grammar, approximation, branch or
+   resource exhaustion, and an unevaluated leaf are hard audit failures.
+3. Preserve and classify every leaf conditioned by `FEAT_LOR`, `FEAT_LSUI`, `FEAT_LSE128`, `FEAT_THE`, and `FEAT_LSE2`. Each leaf requires exact applicable EL0 semantics or typed proof of its non-EL0, undefined or unallocated, alias or duplicate, or impossible-domain classification. Disabled HWCAP or HWCAP2 advertisement cannot remove these leaves from the target.
+4. Reconcile every pinned `Accessors.SystemAccessor` to the generic `MRS`, `MSR`, or `SYS` leaf that carries its access direction and selector space. Reject any accessor that is unmapped, ambiguous, reserved, contradictory, or cannot retain source provenance. The reconciliation supplies supplemental system-access semantic variants and never changes the 4,350 direct instruction-encoding denominator. `RNDR` and `RNDRRS` are required variants of generic system access, not newly discovered instruction leaves.
+5. Populate the C-native proof registry as classifications and evidence land. Every claimed proof must resolve to one registry entry with the correct proof identifier, instruction family, and allowed classification. Missing, unknown, duplicate, family-mismatched, or classification-mismatched references are hard audit failures, and the final registry cannot be empty.
+6. Close the complete-target audit only after the canonical C artifact pipeline is closed, exact feature-domain evaluation covers all 4,350 leaves, all supplemental system-access variants reconcile to their generic leaves, the five named feature domains have complete classifications and required semantics or rejection proof, every proof reference resolves through the populated registry, and no leaf or accessor remains unclassified or unmapped.
 
 The current runtime HWCAP profile may remain narrower while implementation is incomplete, but it cannot define the completion denominator or remove a leaf from blocking work. Until an extension is advertised, TCTI may reject its unadvertised encodings with the architecturally required EL0 behavior. That safety behavior does not complete the feature-conditioned target leaves. An extension capability may be advertised only after its complete target leaves and required Linux-visible behavior pass their owning proof.
 

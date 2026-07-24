@@ -9,7 +9,9 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_crypto_extension_decode_boundary_test.o \
 	tcti_atomic_128_rmw_test.o \
 	tcti_lse_source_bound_test.o \
-	tcti_lse128_noncas_test.o
+	tcti_lse128_noncas_test.o \
+	tcti_logical_shifted_register_test.o \
+	tcti_bitfield_extract_source_bound_test.o
 
 hostprogs := gen_inventory
 
