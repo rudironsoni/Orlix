@@ -552,3 +552,7 @@ Restricted raw Arm source import to an explicit maintainer refresh operation and
 ## [2026-07-24] implement | Version the complete register source inside arch/orlix
 
 Published the pinned Arm register topology as durable C-native source under `arch/orlix`, including every register, metadata record, permission, field, value domain, constraint, accessor, selector, and typed expression relationship. The external Arm JSON remains an explicit maintainer-refresh input only. Normal kernel, KUnit, kselftest, product, and complete-target audit paths require no JSON parser or external source path, while the completion audit continues to report every unclassified and unproved instruction leaf as blocking.
+
+## [2026-07-24] define | Require authoritative semantic provenance for every TCTI leaf
+
+Made the pinned Arm AARCHMRS 2026-06 package authoritative for the 4,350-leaf target and pinned official Arm ASL authoritative for per-leaf semantics. Every leaf now requires a machine-checkable source, feature, semantic, classification, implementation, KUnit, applicable kselftest, runtime-advertisement, implementation-status, and proof-status chain. Missing or ambiguous edges fail closed. Linux remains authoritative only for Linux integration, while external implementations and formal-method references may inform investigation or proof design without becoming semantic or runtime dependencies.

@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-23
+updated: 2026-07-24
 status: current
 summary: "Canonical repository source for tcti reference review."
 ---
@@ -10,6 +10,32 @@ summary: "Canonical repository source for tcti reference review."
 # TCTI reference review
 
 This review records reference material used for the Orlix TCTI plan. The first implementation is clean-room/reference-only. No iSH, OpenMinis, or ios-linuxkit source is copied.
+
+## Authority hierarchy and proof boundary
+
+The pinned Arm AARCHMRS 2026-06 source is the sole authority for the 4,350-leaf TCTI completion target. Its instruction identifiers, encodings, feature predicates, register metadata, and allocation state define the target inventory. A public mirror of another release is useful for discovery, but it does not verify, replace, or establish provenance for the pinned 2026-06 source.
+
+Pinned official Arm ASL is the semantic authority for each source leaf. Orlix records the applicable ASL semantic entry, including its decode predicates, side effects, exceptions, UNDEFINED behavior, and CONSTRAINED UNPREDICTABLE behavior. A leaf without an executable ASL entry requires an explicit source-backed disposition. Orlix does not translate ASL into TCTI or make ASL an execution-time dependency.
+
+Linux arm64 is an integration reference only. It informs Linux-owned capability advertisement, exception delivery, ABI interaction, and normal Linux-visible behavior. It does not define TCTI instruction semantics or reduce the AARCHMRS target. Linux and KVM selftests are behavior references that help construct Linux-visible kselftests, but they do not replace production-path TCTI KUnit proof.
+
+Sail, Isla, Islaris, and formal-validation papers are methodology references only. They motivate source-to-proof traceability, explicit state transitions, and allowed versus forbidden memory-ordering outcomes. They are not Orlix runtime dependencies, proof oracles, semantic generators, or completion authorities. OpenMinis, iSH, QEMU, Unicorn, LLVM, and binutils are non-authoritative comparison references. They can identify decoder families, aliases, edge cases, and test vectors, but cannot establish correctness or be copied into the Orlix execution model.
+
+Every source leaf must have a machine-checkable provenance chain:
+
+```text
+pinned AARCHMRS release and source-leaf identifier
+  -> retained EL0 feature predicate and ASL semantic entry
+  -> classification and explicit alias relationship where applicable
+  -> owning arch/orlix decoder and executor
+  -> production-path KUnit state-transition evidence
+  -> owning Linux kselftest where Linux-visible
+  -> runtime HWCAP or HWCAP2 dependency when advertised
+```
+
+The target audit fails for a missing, unclassified, implicitly excluded, or unproved link in this chain. It also fails if a runtime capability reaches the Linux advertisement projection without complete owning evidence. Privileged and non-EL0 leaves remain visible, with the required EL0 rejection or exception behavior as their proof obligation.
+
+External-language models, generators, host-side TCTI models, workload-defined subsets, exact-opcode shortcuts, log scraping, router logs, and terminal text are prohibited as ISA proof. TCTI implementation, inventory, diagnostics, and KUnit evidence remain C-native under `arch/orlix`; Linux-visible effects are proven through owning kselftests.
 
 ## Primary Reference
 

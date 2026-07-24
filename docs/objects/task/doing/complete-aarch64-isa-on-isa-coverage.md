@@ -49,6 +49,46 @@ Completion requires:
 - explicit LSE atomic coverage for CAS, CASP, and read-modify-write forms, including legal encoding boundaries, memory effects, atomicity, ordering, faults, and required Linux-visible behavior; `HWCAP_ATOMICS` may be advertised only after those complete target leaves pass their production-path KUnit and applicable kselftest proof;
 - deterministic architectural handling of reserved, unallocated, privileged, unsupported-at-EL0, and not-yet-advertised optional-extension encodings;
 - typed leaf-level KUnit evidence connecting each authoritative leaf to its expected decoder class, decoded operation, production lowering and execution path, legal encoding boundaries, register and flag transitions, memory effects, faults, PC changes, aliasing, atomicity, ordering, and exception results;
+- a machine-checkable source-to-proof contract for every direct leaf. Each
+  record must retain the pinned three-source bundle identity, source ordinal,
+  AARCHMRS identifier, instruction family, complete inheritance and alias path,
+  encoding and operand source span, effective feature-condition AST and
+  canonical digest, effective `operation_id`, ASL semantic locator, shared
+  decode and operation digests, EL classification, semantic classification,
+  canonical alias or duplicate relationship, implementation owner,
+  implementation status, KUnit owner, applicable Linux-visible kselftest owner,
+  proof status, and runtime `HWCAP` or `HWCAP2` dependency. Inapplicable
+  kselftest or runtime-advertisement edges require explicit typed
+  `not_applicable` dispositions rather than missing values;
+- a separately pinned Arm shared-ASL corpus identity for every semantic record,
+  including its release, digest, corpus-relative entry locator, normalized
+  source digest, and referenced shared-helper identifiers. `operation_id`
+  alone is not ASL provenance. Any non-empty AARCHMRS `operational_note` must
+  have a separate authoritative-note digest and an explicit behavior and proof
+  obligation, because the source defines it as behavior that ASL cannot
+  express;
+- explicit applicability and ownership statuses for every leaf and every
+  feature-conditioned semantic variant. Applicability is one of
+  `applicable_el0`, `non_el0`, `undefined_or_unallocated`,
+  `alias_or_duplicate`, or `impossible_domain`, and an
+  `impossible_domain` result requires a checked unsatisfiability witness from
+  the complete feature domain. Required EL0 variants must name their owning
+  production decoder and executor symbols, KUnit owner, and applicable
+  kselftest owner. Aliases and duplicates must name a canonical source leaf
+  and state whether the relationship is an encoding, decode, semantic, or
+  assembler-only alias;
+- a hard audit failure for a missing, stale, malformed, ambiguous, or
+  non-canonical source, semantic, applicability, implementation, proof, alias,
+  operational-note, or advertisement edge. The audit must also fail when an
+  ASL reference, source span, helper dependency, condition branch, required
+  result field, or Linux-visible proof obligation is absent;
+- Arm AARCHMRS and the pinned Arm shared-ASL corpus as the sole authority for
+  ISA inventory and semantic expectations. Linux remains authoritative for
+  Linux-visible interfaces and exception delivery. Sail, Isla, Islaris, QEMU,
+  Unicorn, LLVM, binutils, KVM selftests, OpenMinis, hardware experiments, and
+  terminal or log output may inform test selection or investigation only. They
+  must never supply completion semantics, replace an Arm source edge, become a
+  runtime dependency, or decide an HWCAP or HWCAP2 advertisement;
 - executable-block construction, TLB lookup, and guest memory execution authorized by one stable per-mm mapping generation, with PTE mutations forcing stale cached authorization to miss, retry, or fault;
 - postcommit host-refresh failure that reports the failed refresh and discards the stale host shadow without copying it back over the authoritative Linux page;
 - Linux kselftest proof for representative live execution and Linux-visible integration without moving ISA assertions into XCTest or a host-side Swift gate;
@@ -71,8 +111,16 @@ Completion requires:
    resource exhaustion, and an unevaluated leaf are hard audit failures.
 3. Preserve and classify every leaf conditioned by `FEAT_LOR`, `FEAT_LSUI`, `FEAT_LSE128`, `FEAT_THE`, and `FEAT_LSE2`. Each leaf requires exact applicable EL0 semantics or typed proof of its non-EL0, undefined or unallocated, alias or duplicate, or impossible-domain classification. Disabled HWCAP or HWCAP2 advertisement cannot remove these leaves from the target.
 4. Reconcile every pinned `Accessors.SystemAccessor` to the generic `MRS`, `MSR`, or `SYS` leaf that carries its access direction and selector space. Reject any accessor that is unmapped, ambiguous, reserved, contradictory, or cannot retain source provenance. The reconciliation supplies supplemental system-access semantic variants and never changes the 4,350 direct instruction-encoding denominator. `RNDR` and `RNDRRS` are required variants of generic system access, not newly discovered instruction leaves.
-5. Populate the C-native proof registry as classifications and evidence land. Every claimed proof must resolve to one registry entry with the correct proof identifier, instruction family, and allowed classification. Missing, unknown, duplicate, family-mismatched, or classification-mismatched references are hard audit failures, and the final registry cannot be empty.
-6. Close the complete-target audit only after the canonical C artifact pipeline is closed, exact feature-domain evaluation covers all 4,350 leaves, all supplemental system-access variants reconcile to their generic leaves, the five named feature domains have complete classifications and required semantics or rejection proof, every proof reference resolves through the populated registry, and no leaf or accessor remains unclassified or unmapped.
+5. Populate the C-native semantic and proof registry as classifications and
+   evidence land. Every direct leaf and semantic variant must resolve through
+   its complete source-to-proof contract, including source spans, effective
+   condition, ASL and operational-note provenance where present, explicit
+   applicability, canonical alias relation where applicable, production owner,
+   KUnit owner, Linux-visible owner where applicable, and runtime-advertisement
+   dependency. Missing, unknown, duplicate, family-mismatched,
+   classification-mismatched, condition-mismatched, or stale references are
+   hard audit failures, and the final registry cannot be empty.
+6. Close the complete-target audit only after the canonical C artifact pipeline is closed, exact feature-domain evaluation covers all 4,350 leaves, all supplemental system-access variants reconcile to their generic leaves, the five named feature domains have complete classifications and required semantics or rejection proof, each ASL and operational-note edge is source-bound, every proof reference resolves through the populated registry, and no leaf, semantic variant, accessor, owner, or required proof obligation remains unclassified, unmapped, or unproved.
 
 The current runtime HWCAP profile may remain narrower while implementation is incomplete, but it cannot define the completion denominator or remove a leaf from blocking work. Until an extension is advertised, TCTI may reject its unadvertised encodings with the architecturally required EL0 behavior. That safety behavior does not complete the feature-conditioned target leaves. An extension capability may be advertised only after its complete target leaves and required Linux-visible behavior pass their owning proof.
 

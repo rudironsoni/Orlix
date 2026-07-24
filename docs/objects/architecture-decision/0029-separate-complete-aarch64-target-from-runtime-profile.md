@@ -95,6 +95,46 @@ Each source must report architecture `vFATAp1-A`, build `818`, reference
 `2026-06_rel`, schema `2.9.5`, and timestamp `2026-06-24 17:12:14`. A digest
 or metadata mismatch is an audit failure, not a source fallback.
 
+## Authority and machine-checkable provenance
+
+The pinned Arm AARCHMRS package is the architectural authority for the target
+inventory. `Instructions.json` defines the 4,350 direct instruction leaves;
+`Features.json` defines the feature domain and its constraints; and
+`Registers.json` defines the supplemental system-access variants reached by
+generic instruction leaves. The pinned Arm shared ASL pseudocode is the
+authoritative semantic reference for every leaf, and the maintainer refresh
+must record its corpus identity and stable semantic locator. Linux arm64 implementation
+and selftests, LLVM, binutils, QEMU, OpenMinis, Sail, Isla, Islaris, Unicorn,
+and other external material may guide implementation, differential diagnosis,
+or test design. None of them may replace Arm source, define completion, or
+satisfy TCTI proof.
+
+The published C artifacts must make the following graph machine-checkable for
+every direct leaf. The graph starts with each source file's kind, architecture,
+build, reference, schema, timestamp, byte length, and digest. It then binds
+the leaf ordinal, AARCHMRS identity and type, mnemonic, operation and semantic
+locator, raw-source span, encoding fields and operands, and condition root to
+every referenced feature parameter and applicable feature constraint. The
+leaf then binds to exactly one classification, any explicit canonical
+alias-or-duplicate relationship, its production decoder and execution owner,
+its KUnit proof, any required Linux-visible kselftest, and its runtime
+advertisement dependency. The pinned ASL corpus is part of the source
+reconciliation contract. Every leaf requires an ASL locator or an explicit
+source-backed reason that no executable ASL entry applies. An `operation`
+string alone is not ASL provenance.
+
+`Registers.json` adds a supplemental graph for every
+`Accessors.SystemAccessor`: source span, access direction, condition,
+selector expression and encoding, generic `MRS`, `MSR`, or `SYS` leaf, and a
+mapping disposition. The disposition is one of mapped, reserved, privileged,
+unsupported, contradictory, or invalid. It does not create a new direct leaf.
+An absent source identity, leaf, condition edge, feature reference,
+classification, proof, required kselftest, accessor mapping, selector-space
+disposition, or runtime-advertisement dependency is a hard audit failure.
+Likewise, an unparsed condition, unresolved feature reference, unevaluated
+applicability domain, unsupported source grammar, ambiguous selector, or
+inconsistent cross-source identity fails closed.
+
 Raw Arm JSON is external maintainer-refresh input only. The refresh tool reads
 the pinned JSON sources, validates their hashes and metadata, and publishes
 canonical fixed-width C artifacts under `arch/orlix`. Those C artifacts are the
