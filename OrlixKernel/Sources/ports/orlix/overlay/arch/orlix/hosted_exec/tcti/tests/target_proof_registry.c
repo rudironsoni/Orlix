@@ -990,7 +990,8 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 #define SCALAR_PROOF_REGISTRY_BINDING_COUNT 38U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 11U
 
 static struct tcti_target_proof_registry_entry proof_registry_entries[
 	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
@@ -1899,12 +1900,14 @@ source_leaf_rejection_registry_operations[] = {
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-ereta-non-el0",
+	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-drps-non-el0",
 	  .classification = 2 },
 };
 static struct tcti_target_proof_binding
 source_leaf_rejection_registry_bindings[
-	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT];
+	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT];
 static const struct tcti_target_proof_case source_leaf_rejection_cases[] = {
 	{ "tcti_source_leaf_rejections_match_pinned_tuples",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1965,9 +1968,12 @@ static bool build_source_leaf_rejection_registry(void)
 		struct source_leaf_rejection_registry_operation *operation =
 			&source_leaf_rejection_registry_operations[index];
 
-		if (operation->binding_count != 1)
+		if (!operation->binding_count ||
+		    binding_offset + operation->binding_count >
+		    ARRAY_COUNT(source_leaf_rejection_registry_bindings))
 			return false;
-		operation->binding_offset = binding_offset++;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
 		operation->binding_count = 0;
 	}
 	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
@@ -1993,6 +1999,9 @@ static bool build_source_leaf_rejection_registry(void)
 			.kunit_case_mask = UINT64_C(0x3),
 			.source_ordinal = source->ordinal,
 		};
+		if (operation->operation_id &&
+		    strcmp(operation->operation_id, source->operation_id))
+			return false;
 		operation->operation_id = source->operation_id;
 	}
 	for (index = 0;
@@ -2004,7 +2013,7 @@ static bool build_source_leaf_rejection_registry(void)
 			NON_EL0_REJECTION_OBLIGATIONS :
 			UNDEFINED_REJECTION_OBLIGATIONS;
 
-		if (operation->binding_count != 1 || !operation->operation_id)
+		if (!operation->binding_count || !operation->operation_id)
 			return false;
 		proof_registry_entries[entry_base + index] =
 			(struct tcti_target_proof_registry_entry) {

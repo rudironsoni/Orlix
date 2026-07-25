@@ -647,3 +647,13 @@ provenance plane for named all-fixed encoding fields. Focused tests bind inherit
 source objects, and prove fixed and partially variable fields remain disjoint.
 This checkpoint records source provenance only. It grants no feature-applicability,
 semantic, implementation, KUnit, kselftest, or runtime-advertisement credit.
+
+## [2026-07-25] test | Bind ERETAA and ERETAB EL0 rejection
+
+Classified pinned source ordinals 2300 and 2301 as non-EL0 and bound both
+`ERETA` leaves to one source-specific rejection proof. Production-path KUnit
+drives each instruction through `tcti_resume_user`, requires the structured
+unsupported result, and verifies unchanged architectural state. The registry
+now supports multiple exact source bindings for one operation while rejecting
+mixed-operation bindings. Both leaves remain ASL-blocked with all semantic
+obligations unproved.

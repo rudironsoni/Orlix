@@ -4,8 +4,16 @@
  * feature-conditioned PAuth, BTI, and GCS leaf remains explicit and cannot
  * fall through to a baseline decoder class while shared ASL is absent.
  */
+#include <asm/processor.h>
+#include <asm/ptrace.h>
+#include <asm/tcti.h>
 #include <kunit/test.h>
+#include <linux/err.h>
+#include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/sched.h>
 #include <linux/string.h>
+#include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
 #include "../isa/pauth_bti_gcs_obligation_ledger.h"
@@ -76,10 +84,74 @@ static void pauth_bti_gcs_non_el0_exits_remain_distinct(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 2U, non_el0);
 }
 
+static unsigned long pauth_bti_gcs_map_instruction(struct kunit *test,
+						    u32 instruction)
+{
+	u32 program[] = { instruction, 0xd4000001U };
+	unsigned long mapped;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	ret = tcti_write_user_data(current->mm, mapped, program,
+				   sizeof(program));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	return mapped;
+}
+
+static void pauth_bti_gcs_non_el0_rejections_preserve_architectural_state(
+	struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(pauth_bti_gcs_rows); index++) {
+		const struct tcti_pauth_bti_gcs_obligation_record *row =
+			&pauth_bti_gcs_rows[index];
+		struct pt_regs regs = { };
+		struct pt_regs before;
+		struct tcti_result result;
+		unsigned long mapped;
+
+		if (row->required_behavior !=
+		    TCTI_PAUTH_BTI_GCS_NON_EL0_REJECTION)
+			continue;
+
+		mapped = pauth_bti_gcs_map_instruction(test, row->pattern);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x123456789abcdef0ULL;
+		regs.regs[30] = 0x0fedcba987654321ULL;
+		before = regs;
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				    result.reason, "%u %s", row->source_ordinal,
+				    row->source_id);
+		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+				    "%u %s", row->source_ordinal, row->source_id);
+		KUNIT_EXPECT_EQ_MSG(test, row->pattern, result.instruction,
+				    "%u %s", row->source_ordinal, row->source_id);
+		KUNIT_EXPECT_EQ(test, before.pc, result.pc);
+		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs,
+				   sizeof(regs.regs));
+		KUNIT_EXPECT_EQ(test, before.pc, regs.pc);
+		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, before.syscallno, regs.syscallno);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+}
+
 static struct kunit_case pauth_bti_gcs_cases[] = {
 	KUNIT_CASE(pauth_bti_gcs_inventory_is_complete_and_explicit),
 	KUNIT_CASE(pauth_bti_gcs_unimplemented_leaves_fail_closed),
 	KUNIT_CASE(pauth_bti_gcs_non_el0_exits_remain_distinct),
+	KUNIT_CASE(pauth_bti_gcs_non_el0_rejections_preserve_architectural_state),
 	{}
 };
 
