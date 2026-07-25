@@ -604,3 +604,25 @@ unresolved and blocks the complete-target audit. Runtime projection validates
 the artifact but cannot use structural membership to promote HWCAP or HWCAP2,
 so feature applicability, satisfiability, implementation, and owning proof
 remain explicit open obligations.
+
+## [2026-07-25] decide | Pin authoritative TCTI semantic and proof sources
+
+Enhanced ADR 0022 to make pinned Arm AARCHMRS 2026-06 the sole 4,350-leaf
+target authority and official Arm shared ASL the semantic authority. Recorded
+the required C-native per-leaf source-to-proof graph, hard failure for missing
+classification or ownership, Linux-only integration references,
+verification-methodology references, and the prohibition on external semantic
+or proof oracles.
+
+## [2026-07-25] verify | Compile reviewed TCTI regressions without promoting proof
+
+Validated the C-native 4,350-leaf host audit and authenticated proof registry,
+then built the KUnit-enabled iOS Simulator product archive with reviewed scalar
+LSE RMW, literal-load and PRFM, and AdvSIMD modified-immediate regression
+suites. The truthful audit remains incomplete at 1,085 classified and 3,265
+unclassified leaves, with 4,350 missing official shared-ASL provenance edges,
+4,057 unresolved feature conditions, 1,044 source-binding failures, 196 stale
+proof bindings, and 417 bindings with unproved obligations. Strict
+`xcode-offload doctor` failed on six legacy system-mount conditions, so
+app-hosted KUnit and kselftest execution were not attempted and no runtime
+capability was promoted.

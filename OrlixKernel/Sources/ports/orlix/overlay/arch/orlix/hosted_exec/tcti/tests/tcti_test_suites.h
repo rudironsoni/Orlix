@@ -14,6 +14,10 @@ extern struct kunit_suite tcti_lse_source_bound_test_suite;
 extern struct kunit_suite tcti_lse128_noncas_test_suite;
 extern struct kunit_suite tcti_add_sub_immediate_test_suite;
 extern struct kunit_suite tcti_logical_shifted_register_test_suite;
+extern struct kunit_suite tcti_logical_immediate_source_bound_test_suite;
+extern struct kunit_suite tcti_move_wide_source_bound_test_suite;
+extern struct kunit_suite tcti_add_sub_register_source_bound_test_suite;
 extern struct kunit_suite tcti_bitfield_extract_source_bound_test_suite;
+extern struct kunit_suite tcti_source_leaf_classification_test_suite;
 
 #endif

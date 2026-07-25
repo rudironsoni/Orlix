@@ -308,6 +308,32 @@ static bool operation_resolves(const struct tcti_target_instruction_artifact *ar
 	return false;
 }
 
+/*
+ * An OperationAlias may traverse other OperationAlias records, but its final
+ * operation must still be represented by a source instruction leaf.  Without
+ * this check, a mutually consistent pair of fabricated target and resolved
+ * strings can pass validation even though no pinned instruction owns the
+ * semantics.  Alias provenance is supplemental, never a substitute for a
+ * semantic leaf and its proof obligation.
+ */
+static bool operation_has_source_leaf(
+	const struct tcti_target_instruction_artifact *artifact,
+	const char *operation)
+{
+	size_t index;
+
+	for (index = 0; index < artifact->leaf_count; index++) {
+		const char *leaf_operation;
+
+		if (!artifact_string(artifact,
+			artifact->leaves[index].operation_offset, &leaf_operation))
+			return false;
+		if (!strcmp(leaf_operation, operation))
+			return true;
+	}
+	return false;
+}
+
 static bool mark_operation_alias_reachability(
 	const struct tcti_target_instruction_artifact *artifact,
 	const char *operation, bool reachable[
@@ -374,7 +400,8 @@ static int validate_aliases(const struct tcti_target_instruction_artifact *artif
 			return fail_alias(result,
 				TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID,
 				(u32)index);
-		if (!operation_resolves(artifact, declared, resolved))
+		if (!operation_resolves(artifact, declared, resolved) ||
+		    !operation_has_source_leaf(artifact, resolved))
 			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
 				(u32)index);
 	}
@@ -391,7 +418,8 @@ static int validate_aliases(const struct tcti_target_instruction_artifact *artif
 		    !span_identity_matches(artifact->string_pool,
 			artifact->string_pool_size, alias->source_identity_offset,
 			alias->source_offset, alias->source_length) ||
-		    !operation_resolves(artifact, declared, resolved))
+		    !operation_resolves(artifact, declared, resolved) ||
+		    !operation_has_source_leaf(artifact, resolved))
 			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
 				(u32)index);
 		for (previous = 0; previous < index; previous++) {

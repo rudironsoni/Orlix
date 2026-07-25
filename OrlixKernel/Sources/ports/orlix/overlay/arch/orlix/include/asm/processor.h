@@ -3,6 +3,7 @@
 #define _ASM_ORLIX_PROCESSOR_H
 
 #include <linux/compiler.h>
+#include <asm/tcti.h>
 #include <asm/thread_info.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -63,8 +64,9 @@ struct thread_struct {
 	unsigned long user_tls;
 		unsigned long user_simd[64];
 		unsigned long user_fpsr;
-		unsigned long user_fpcr;
-		unsigned long user_simd_valid;
+	unsigned long user_fpcr;
+	unsigned long user_simd_valid;
+	struct tcti_sve_state user_sve;
 #endif
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;

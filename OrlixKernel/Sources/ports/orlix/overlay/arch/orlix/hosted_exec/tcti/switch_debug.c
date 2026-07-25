@@ -17,6 +17,7 @@
 #include "decode_aarch64.h"
 #include "fixed_fp.h"
 #include "semantics.h"
+#include "sve_state.h"
 #include "switch_debug.h"
 
 #define AARCH64_ADRP_PAGE_MASK (~0xfffULL)
@@ -43,6 +44,21 @@ extern u64 tcti_native_fcvtzu_x_s(u64 value, u64 fractional_bits);
 extern u64 tcti_native_fcvtzu_x_d(u64 value, u64 fractional_bits);
 
 static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
+
+static int tcti_execute_sve_predicated_integer_binary(
+	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
+{
+	/*
+	 * The decoder and state semantics are present, but SVE remains absent from
+	 * the runtime capability projection until its full source-bound proof gate
+	 * is complete.  Keep the production path explicit and fail structurally.
+	 */
+	return tcti_sve_execute_predicated_integer_binary(
+		&current->thread.user_sve, regs, current->thread.user_simd, false,
+		decoded->sve_integer_binary_op, decoded->sve_predication,
+		decoded->rd, decoded->sve_pg, decoded->rn, decoded->rm,
+		decoded->sve_element_bytes);
+}
 
 static enum tcti_access
 tcti_fault_access_for_decoded(const struct tcti_decoded_instruction *decoded)
@@ -157,6 +173,12 @@ static bool tcti_fp32_is_nan(u32 value)
 	       (value & GENMASK(22, 0));
 }
 
+static bool tcti_fp16_is_nan(u16 value)
+{
+	return (value & GENMASK(14, 10)) == GENMASK(14, 10) &&
+	       (value & GENMASK(9, 0));
+}
+
 static bool tcti_fp64_is_nan(u64 value)
 {
 	return (value & GENMASK_ULL(62, 52)) == GENMASK_ULL(62, 52) &&
@@ -166,6 +188,11 @@ static bool tcti_fp64_is_nan(u64 value)
 static bool tcti_fp32_is_signaling_nan(u32 value)
 {
 	return tcti_fp32_is_nan(value) && !(value & BIT(22));
+}
+
+static bool tcti_fp16_is_signaling_nan(u16 value)
+{
+	return tcti_fp16_is_nan(value) && !(value & BIT(9));
 }
 
 static bool tcti_fp64_is_signaling_nan(u64 value)
@@ -204,6 +231,24 @@ static int tcti_compare_fp32(u32 left, u32 right)
 	u32 right_magnitude = right & GENMASK(30, 0);
 
 	if (tcti_fp32_is_nan(left) || tcti_fp32_is_nan(right))
+		return -2;
+	if (!left_magnitude && !right_magnitude)
+		return 0;
+	if (left_negative != right_negative)
+		return left_negative ? -1 : 1;
+	if (left_magnitude == right_magnitude)
+		return 0;
+	return left_negative == (left_magnitude > right_magnitude) ? -1 : 1;
+}
+
+static int tcti_compare_fp16(u16 left, u16 right)
+{
+	bool left_negative = left & BIT(15);
+	bool right_negative = right & BIT(15);
+	u16 left_magnitude = left & GENMASK(14, 0);
+	u16 right_magnitude = right & GENMASK(14, 0);
+
+	if (tcti_fp16_is_nan(left) || tcti_fp16_is_nan(right))
 		return -2;
 	if (!left_magnitude && !right_magnitude)
 		return 0;
@@ -1030,6 +1075,22 @@ static int tcti_execute_data_processing_2source(struct pt_regs *regs,
 		result = decoded->is_64bit ? ror64(left, amount) :
 					     ror32(left, amount);
 		break;
+	case TCTI_DP2_SMAX:
+		result = decoded->is_64bit ?
+			((s64)left > (s64)right ? left : right) :
+			((s32)(u32)left > (s32)(u32)right ? left : right);
+		break;
+	case TCTI_DP2_UMAX:
+		result = left > right ? left : right;
+		break;
+	case TCTI_DP2_SMIN:
+		result = decoded->is_64bit ?
+			((s64)left < (s64)right ? left : right) :
+			((s32)(u32)left < (s32)(u32)right ? left : right);
+		break;
+	case TCTI_DP2_UMIN:
+		result = left < right ? left : right;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -1059,6 +1120,18 @@ static int tcti_execute_data_processing_1source(struct pt_regs *regs,
 		if (value & BIT_ULL(data_size - 1))
 			value = ~value & mask;
 		result = value ? data_size - fls64(value) - 1 : data_size - 1;
+		break;
+	case TCTI_DP1_CTZ:
+		value &= mask;
+		result = value ? (decoded->is_64bit ? __ffs64(value) :
+			__ffs((u32)value)) : data_size;
+		break;
+	case TCTI_DP1_CNT:
+		result = decoded->is_64bit ? hweight64(value) : hweight32(value);
+		break;
+	case TCTI_DP1_ABS:
+		value &= mask;
+		result = value & BIT_ULL(data_size - 1) ? (-value) & mask : value;
 		break;
 	case TCTI_DP1_RBIT:
 		value &= mask;
@@ -4758,11 +4831,17 @@ static int tcti_execute_simd_vector_arithmetic(
 		}
 		accumulator[0] = current->thread.user_simd[decoded->rd * 2];
 		accumulator[1] = current->thread.user_simd[decoded->rd * 2 + 1];
-		ret = tcti_native_simd_fp_three_same(
-			decoded->simd_arithmetic_op, decoded->simd_scalar,
-			decoded->access_size, decoded->result_size, result, left,
-			right, accumulator, current->thread.user_fpcr,
-			&current->thread.user_fpsr);
+		if (decoded->access_size == sizeof(u16))
+			ret = tcti_native_simd_fp16_three_same(
+				decoded->simd_arithmetic_op, decoded->simd_scalar,
+				decoded->simd_q, result, left, right, accumulator,
+				current->thread.user_fpcr, &current->thread.user_fpsr);
+		else
+			ret = tcti_native_simd_fp_three_same(
+				decoded->simd_arithmetic_op, decoded->simd_scalar,
+				decoded->access_size, decoded->result_size, result, left,
+				right, accumulator, current->thread.user_fpcr,
+				&current->thread.user_fpsr);
 		if (ret)
 			return ret;
 		tcti_write_simd_fp_register(decoded->rd, decoded->result_size,
@@ -6347,7 +6426,8 @@ static int tcti_execute_fp_round(const struct tcti_decoded_instruction *decoded,
 	u64 host_fpsr;
 	u64 guest_fpsr;
 	if (!result || decoded->result_size != decoded->access_size ||
-	    (decoded->access_size != sizeof(u32) &&
+	    (decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32) &&
 	     decoded->access_size != sizeof(u64)))
 		return -EOPNOTSUPP;
 
@@ -6363,7 +6443,48 @@ static int tcti_execute_fp_round(const struct tcti_decoded_instruction *decoded,
 		  "r" (current->thread.user_fpsr)
 		: "memory");
 
-	if (decoded->access_size == sizeof(u32)) {
+	if (decoded->access_size == sizeof(u16)) {
+		u16 result16;
+
+#define TCTI_EXECUTE_FRINT_H(instruction) \
+	({ \
+		asm volatile( \
+			"fmov h0, %w1\n" \
+			instruction " h0, h0\n" \
+			"fmov %w0, h0\n" \
+			: "=r" (result16) \
+			: "r" ((u32)value) \
+			: "v0", "memory"); \
+	})
+
+		switch (decoded->fp1_op) {
+		case TCTI_FP1_FRINTN:
+			TCTI_EXECUTE_FRINT_H("frintn");
+			break;
+		case TCTI_FP1_FRINTP:
+			TCTI_EXECUTE_FRINT_H("frintp");
+			break;
+		case TCTI_FP1_FRINTM:
+			TCTI_EXECUTE_FRINT_H("frintm");
+			break;
+		case TCTI_FP1_FRINTZ:
+			TCTI_EXECUTE_FRINT_H("frintz");
+			break;
+		case TCTI_FP1_FRINTA:
+			TCTI_EXECUTE_FRINT_H("frinta");
+			break;
+		case TCTI_FP1_FRINTX:
+			TCTI_EXECUTE_FRINT_H("frintx");
+			break;
+		case TCTI_FP1_FRINTI:
+			TCTI_EXECUTE_FRINT_H("frinti");
+			break;
+		default:
+			goto unsupported;
+		}
+#undef TCTI_EXECUTE_FRINT_H
+		*result = result16;
+	} else if (decoded->access_size == sizeof(u32)) {
 		u32 result32;
 
 #define TCTI_EXECUTE_FRINT_S(instruction) \
@@ -6475,7 +6596,10 @@ static int tcti_execute_fp_scalar_1source(
 
 	switch (decoded->fp1_op) {
 	case TCTI_FP1_FABS:
-		if (decoded->access_size == sizeof(u32)) {
+		if (decoded->access_size == sizeof(u16)) {
+			value = current->thread.user_simd[decoded->rn * 2] &
+				GENMASK(14, 0);
+		} else if (decoded->access_size == sizeof(u32)) {
 			value = current->thread.user_simd[decoded->rn * 2] &
 				GENMASK(30, 0);
 		} else if (decoded->access_size == sizeof(u64)) {
@@ -6504,7 +6628,10 @@ static int tcti_execute_fp_scalar_1source(
 		break;
 	}
 	case TCTI_FP1_FNEG:
-		if (decoded->access_size == sizeof(u32)) {
+		if (decoded->access_size == sizeof(u16)) {
+			value = (u16)current->thread.user_simd[decoded->rn * 2];
+			value ^= BIT(15);
+		} else if (decoded->access_size == sizeof(u32)) {
 			value = (u32)current->thread.user_simd[decoded->rn * 2];
 			value ^= BIT(31);
 		} else if (decoded->access_size == sizeof(u64)) {
@@ -6545,7 +6672,8 @@ static int tcti_execute_fp_scalar_2source(
 	u64 guest_fpsr;
 
 	if (decoded->result_size == decoded->access_size &&
-	    (decoded->access_size == sizeof(u32) ||
+	    (decoded->access_size == sizeof(u16) ||
+	     decoded->access_size == sizeof(u32) ||
 	     decoded->access_size == sizeof(u64))) {
 		preempt_disable();
 		asm volatile(
@@ -6558,7 +6686,55 @@ static int tcti_execute_fp_scalar_2source(
 			: "r" (current->thread.user_fpcr),
 			  "r" (current->thread.user_fpsr)
 			: "memory");
-		if (decoded->access_size == sizeof(u32)) {
+		if (decoded->access_size == sizeof(u16)) {
+			u16 result16;
+
+#define TCTI_EXECUTE_FP2_H(instruction) \
+			({ \
+				asm volatile( \
+					"fmov h0, %w1\n" \
+					"fmov h1, %w2\n" \
+					instruction " h0, h0, h1\n" \
+					"fmov %w0, h0\n" \
+					: "=r" (result16) \
+					: "r" ((u32)left), "r" ((u32)right) \
+					: "v0", "v1", "memory"); \
+			})
+
+			switch (decoded->fp2_op) {
+			case TCTI_FP2_FDIV:
+				TCTI_EXECUTE_FP2_H("fdiv");
+				break;
+			case TCTI_FP2_FADD:
+				TCTI_EXECUTE_FP2_H("fadd");
+				break;
+			case TCTI_FP2_FSUB:
+				TCTI_EXECUTE_FP2_H("fsub");
+				break;
+			case TCTI_FP2_FMUL:
+				TCTI_EXECUTE_FP2_H("fmul");
+				break;
+			case TCTI_FP2_FMAX:
+				TCTI_EXECUTE_FP2_H("fmax");
+				break;
+			case TCTI_FP2_FMIN:
+				TCTI_EXECUTE_FP2_H("fmin");
+				break;
+			case TCTI_FP2_FMAXNM:
+				TCTI_EXECUTE_FP2_H("fmaxnm");
+				break;
+			case TCTI_FP2_FMINNM:
+				TCTI_EXECUTE_FP2_H("fminnm");
+				break;
+			case TCTI_FP2_FNMUL:
+				TCTI_EXECUTE_FP2_H("fnmul");
+				break;
+			default:
+				goto restore_host_fp_state;
+			}
+#undef TCTI_EXECUTE_FP2_H
+			result = result16;
+		} else if (decoded->access_size == sizeof(u32)) {
 			u32 result32;
 
 #define TCTI_EXECUTE_FP2_S(instruction) \
@@ -6720,7 +6896,8 @@ static int tcti_execute_fp_scalar_3source(
 	u64 result = 0;
 
 	if (decoded->result_size != decoded->access_size ||
-	    (decoded->access_size != sizeof(u32) &&
+	    (decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32) &&
 	     decoded->access_size != sizeof(u64)) ||
 	    decoded->fp3_op > TCTI_FP3_FNMSUB)
 		return -EOPNOTSUPP;
@@ -6737,7 +6914,42 @@ static int tcti_execute_fp_scalar_3source(
 		  "r" (current->thread.user_fpsr)
 		: "memory");
 
-	if (decoded->access_size == sizeof(u32)) {
+	if (decoded->access_size == sizeof(u16)) {
+		u16 result16;
+
+#define TCTI_EXECUTE_FP3_H(instruction) \
+		({ \
+			asm volatile( \
+				"fmov h0, %w1\n" \
+				"fmov h1, %w2\n" \
+				"fmov h2, %w3\n" \
+				instruction " h0, h0, h1, h2\n" \
+				"fmov %w0, h0\n" \
+				: "=r" (result16) \
+				: "r" ((u32)left), "r" ((u32)right), \
+				  "r" ((u32)addend) \
+				: "v0", "v1", "v2", "memory"); \
+		})
+
+		switch (decoded->fp3_op) {
+		case TCTI_FP3_FMADD:
+			TCTI_EXECUTE_FP3_H("fmadd");
+			break;
+		case TCTI_FP3_FMSUB:
+			TCTI_EXECUTE_FP3_H("fmsub");
+			break;
+		case TCTI_FP3_FNMADD:
+			TCTI_EXECUTE_FP3_H("fnmadd");
+			break;
+		case TCTI_FP3_FNMSUB:
+			TCTI_EXECUTE_FP3_H("fnmsub");
+			break;
+		default:
+			return -EOPNOTSUPP;
+		}
+#undef TCTI_EXECUTE_FP3_H
+		result = result16;
+	} else if (decoded->access_size == sizeof(u32)) {
 		u32 result32;
 
 #define TCTI_EXECUTE_FP3_S(instruction) \
@@ -6830,7 +7042,14 @@ static int tcti_execute_fp_scalar_compare(
 		return 0;
 	}
 
-	if (decoded->access_size == sizeof(u32)) {
+	if (decoded->access_size == sizeof(u16)) {
+		result = tcti_compare_fp16(left, right);
+		invalid_operation =
+			(decoded->fp_signal_all_nans &&
+			 (tcti_fp16_is_nan(left) || tcti_fp16_is_nan(right))) ||
+			tcti_fp16_is_signaling_nan(left) ||
+			tcti_fp16_is_signaling_nan(right);
+	} else if (decoded->access_size == sizeof(u32)) {
 		result = tcti_compare_fp32(left, right);
 		invalid_operation =
 			(decoded->fp_signal_all_nans &&
@@ -6860,14 +7079,17 @@ static int tcti_execute_fp_conditional_select(
 {
 	u64 result;
 
-	if (decoded->access_size != sizeof(u32) &&
+	if (decoded->access_size != sizeof(u16) &&
+	    decoded->access_size != sizeof(u32) &&
 	    decoded->access_size != sizeof(u64))
 		return -EOPNOTSUPP;
 
 	result = tcti_condition_passed(regs, decoded->condition) ?
 		 current->thread.user_simd[decoded->rn * 2] :
 		 current->thread.user_simd[decoded->rm * 2];
-	if (decoded->access_size == sizeof(u32))
+	if (decoded->access_size == sizeof(u16))
+		result = (u16)result;
+	else if (decoded->access_size == sizeof(u32))
 		result = (u32)result;
 
 	tcti_write_simd_fp_register(decoded->rd, decoded->access_size,
@@ -7296,19 +7518,30 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return -EINVAL;
 
 	switch (decoded->decode_class) {
+	case TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY:
+		return tcti_execute_sve_predicated_integer_binary(regs, decoded);
 	case TCTI_DECODE_HINT:
 		regs->pc += sizeof(u32);
 		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3 ?
 			-EAGAIN : 0;
 	case TCTI_DECODE_BARRIER:
+		/*
+		 * DSB <imm2>nXS is a distinct FEAT_XS completion contract. Do not
+		 * collapse it into the ordinary host fence until that guest-visible
+		 * ordering semantics has authoritative implementation and proof.
+		 */
+		if (decoded->barrier_nxs)
+			return -EOPNOTSUPP;
 		__atomic_thread_fence(__ATOMIC_SEQ_CST);
 		regs->pc += sizeof(u32);
 		return 0;
 	case TCTI_DECODE_CACHE_MAINTENANCE:
-		if (decoded->cache_maintenance_op == TCTI_CACHE_IC_IVAU && mm)
-			tcti_invalidate_mm(mm);
-		regs->pc += sizeof(u32);
-		return 0;
+		/*
+		 * The accepted EL0 cache-maintenance leaves remain unproved until
+		 * their official translation, permission, and fault semantics are
+		 * implemented from the pinned Arm ASL.
+		 */
+		return -EOPNOTSUPP;
 	case TCTI_DECODE_PC_RELATIVE_ADDRESS:
 		if (decoded->rd != 31) {
 			u64 base = decoded->page_relative ?
@@ -7402,6 +7635,8 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return tcti_execute_move_wide_immediate(regs, decoded);
 	case TCTI_DECODE_SYSTEM_REGISTER:
 		return tcti_execute_system_register(regs, decoded);
+	case TCTI_DECODE_SME_PSTATE_IMMEDIATE:
+		return -EOPNOTSUPP;
 	case TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR:
 		tcti_clear_exclusive_monitor();
 		regs->pc += sizeof(u32);

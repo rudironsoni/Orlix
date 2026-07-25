@@ -1037,6 +1037,154 @@ static void tcti_lse_decode_rejects_invalid_casp_pairs(struct kunit *test)
 	}
 }
 
+/*
+ * Execute the complete scalar and pair exclusive matrix through the same
+ * tcti_resume_user() path used by an EL0 task. The direct execution tests
+ * above cover individual state transitions; this matrix additionally binds
+ * the decoder, reservation state, result surface, and SVC handoff together.
+ */
+static u32 tcti_lse_exclusive_instruction(u8 size, bool ordered, bool load,
+					 bool pair, bool acquire_release, u8 rs,
+					 u8 rt2, u8 rn, u8 rt)
+{
+	return 0x08000000U | ((u32)size << 30) |
+		((u32)ordered << 23) | ((u32)load << 22) |
+		((u32)pair << 21) | ((u32)rs << 16) |
+		((u32)acquire_release << 15) | ((u32)rt2 << 10) |
+		((u32)rn << 5) | rt;
+}
+
+static int tcti_lse_write_resume_program(unsigned long address,
+					 const u32 *program, size_t count)
+{
+	int ret;
+
+	ret = sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
+	if (ret)
+		return ret;
+	ret = tcti_write_user_data(current->mm, address, program,
+				   count * sizeof(*program));
+	if (ret)
+		return ret;
+	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
+}
+
+static void tcti_lse_resume_executes_exclusive_and_ordered_matrix(
+	struct kunit *test)
+{
+	static const u32 svc = 0xd4000001U;
+	static const struct {
+		bool ordered;
+		bool pair;
+		bool acquire_release;
+	} forms[] = {
+		{ false, false, false }, /* LDXR/STXR */
+		{ false, false, true },  /* LDAXR/STLXR */
+		{ false, true, false },  /* LDXP/STXP */
+		{ false, true, true },   /* LDAXP/STLXP */
+		{ true, false, true },   /* LDAR/STLR */
+	};
+	unsigned long instructions = tcti_lse_map(test);
+	unsigned long data = tcti_lse_map(test);
+	size_t form_index;
+	u8 size;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+
+	for (form_index = 0; form_index < ARRAY_SIZE(forms); form_index++) {
+		const bool pair = forms[form_index].pair;
+		const u8 first_size = pair ? 2 : 0;
+		const u8 last_size = 3;
+
+		for (size = first_size; size <= last_size; size++) {
+			const u8 width = 1U << size;
+			const u8 total_size = pair ? 2 * width : width;
+			const u64 mask = tcti_lse_mask(width);
+			const u64 initial[2] = {
+				0x1122334455667788ULL & mask,
+				0x8877665544332211ULL & mask,
+			};
+			const u64 desired[2] = {
+				0x0123456789abcdefULL & mask,
+				0xfedcba9876543210ULL & mask,
+			};
+			const u32 program[] = {
+				tcti_lse_exclusive_instruction(
+					size, forms[form_index].ordered, true, pair,
+					forms[form_index].acquire_release, 31,
+					pair ? 1 : 31, 10, 0),
+				tcti_lse_exclusive_instruction(
+					size, forms[form_index].ordered, false, pair,
+					forms[form_index].acquire_release,
+					forms[form_index].ordered ? 31 : 2,
+					pair ? 5 : 31, 10, 4),
+				svc,
+			};
+			struct pt_regs regs = {};
+			struct tcti_result result;
+			u64 observed[2] = {};
+			int ret;
+
+			ret = tcti_lse_write_resume_program(instructions, program,
+							   ARRAY_SIZE(program));
+			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
+					    form_index, width);
+			ret = tcti_write_user_data(current->mm, data, initial,
+					   total_size);
+			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
+					    form_index, width);
+			regs.regs[4] = desired[0];
+			regs.regs[5] = desired[1];
+			regs.regs[10] = data;
+			regs.regs[2] = U64_MAX;
+			regs.pc = instructions;
+			regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+				PSR_C_BIT | PSR_V_BIT;
+			regs.syscallno = NO_SYSCALL;
+
+			result = tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+					    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, 0L, result.status,
+					    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, instructions + 2 * sizeof(u32),
+					    result.pc, "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, svc, result.instruction,
+					    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, instructions + 2 * sizeof(u32), regs.pc,
+					    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, initial[0], regs.regs[0],
+					    "form=%zu size=%u", form_index, width);
+			if (pair)
+				KUNIT_EXPECT_EQ_MSG(test, initial[1], regs.regs[1],
+						    "form=%zu size=%u", form_index, width);
+			if (forms[form_index].ordered)
+				KUNIT_EXPECT_EQ_MSG(test, U64_MAX, regs.regs[2],
+						    "form=%zu size=%u", form_index, width);
+			else
+				KUNIT_EXPECT_EQ_MSG(test, 0ULL, regs.regs[2],
+						    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, PSR_MODE_EL0t | PSR_N_BIT |
+					PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT, regs.pstate,
+					"form=%zu size=%u", form_index, width);
+			ret = tcti_read_user_data(current->mm, data, observed, total_size);
+			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
+					    form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, desired[0], observed[0],
+					    "form=%zu size=%u", form_index, width);
+			if (pair)
+				KUNIT_EXPECT_EQ_MSG(test, desired[1], observed[1],
+						    "form=%zu size=%u", form_index, width);
+			KUNIT_EXPECT_EQ_MSG(test, 0, current->thread.user_exclusive_valid,
+					    "form=%zu size=%u", form_index, width);
+		}
+	}
+
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
 static struct kunit_case tcti_lse_decode_test_cases[] = {
 	KUNIT_CASE(tcti_lse_decode_cas_leaves),
 	KUNIT_CASE(tcti_lse_decode_casp_leaves),
@@ -1052,6 +1200,7 @@ static struct kunit_case tcti_lse_decode_test_cases[] = {
 	KUNIT_CASE(tcti_lse_decode_rejects_reserved_neighbors),
 	KUNIT_CASE(tcti_lse_decode_preserves_allocated_exclusive_neighbors),
 	KUNIT_CASE(tcti_lse_decode_rejects_invalid_casp_pairs),
+	KUNIT_CASE(tcti_lse_resume_executes_exclusive_and_ordered_matrix),
 	{}
 };
 

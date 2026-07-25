@@ -317,7 +317,9 @@ int tcti_native_fp_one_source(enum tcti_fp_scalar_1source_op operation,
 			ret = -EINVAL;
 		break;
 	case TCTI_FP1_FSQRT:
-		if (access_size == sizeof(u32) && result_size == sizeof(u32))
+		if (access_size == sizeof(u16) && result_size == sizeof(u16))
+			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fsqrt h0, h0");
+		else if (access_size == sizeof(u32) && result_size == sizeof(u32))
 			TCTI_NATIVE_FP_ONE_SOURCE_RUN("fsqrt s0, s0");
 		else if (access_size == sizeof(u64) &&
 			 result_size == sizeof(u64))
@@ -779,6 +781,214 @@ int tcti_native_simd_fp_three_same(
 	preempt_enable();
 	return ret;
 }
+
+/*
+ * FEAT_FP16 AdvSIMD three-same forms use H scalars, 4H vectors, or 8H
+ * vectors.  Keep their native execution separate from the S/D helper above:
+ * the decoder must validate the FP16 encoding and select this helper, while
+ * this layer owns the architectural FPCR/FPSR transaction and register width.
+ */
+enum tcti_native_simd_fp16_shape {
+	TCTI_NATIVE_SIMD_FP16_SCALAR_H,
+	TCTI_NATIVE_SIMD_FP16_VECTOR_4H,
+	TCTI_NATIVE_SIMD_FP16_VECTOR_8H,
+};
+
+#define TCTI_NATIVE_SIMD_FP16_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[left]]\n" \
+			     "ldr q1, [%[right]]\n" \
+			     instruction "\n" \
+			     "str q0, [%[result]]\n" \
+				     : \
+				     : [result] "r" (result), [left] "r" (left), \
+				       [right] "r" (right) \
+				     : "v0", "v1", "memory"); \
+	})
+
+#define TCTI_NATIVE_SIMD_FP16_ACCUMULATE_RUN(instruction) \
+	({ \
+		asm volatile("ldr q0, [%[left]]\n" \
+			     "ldr q1, [%[right]]\n" \
+			     "ldr q2, [%[accumulator]]\n" \
+			     instruction "\n" \
+			     "str q2, [%[result]]\n" \
+				     : \
+				     : [result] "r" (result), [left] "r" (left), \
+				       [right] "r" (right), [accumulator] "r" (accumulator) \
+				     : "v0", "v1", "v2", "memory"); \
+	})
+
+#define TCTI_NATIVE_SIMD_FP16_CASE(operation_value, scalar_instruction, \
+					 vector_4h_instruction, vector_8h_instruction) \
+	case operation_value: \
+		switch (shape) { \
+		case TCTI_NATIVE_SIMD_FP16_SCALAR_H: \
+			TCTI_NATIVE_SIMD_FP16_RUN(scalar_instruction); \
+			break; \
+		case TCTI_NATIVE_SIMD_FP16_VECTOR_4H: \
+			TCTI_NATIVE_SIMD_FP16_RUN(vector_4h_instruction); \
+			break; \
+		case TCTI_NATIVE_SIMD_FP16_VECTOR_8H: \
+			TCTI_NATIVE_SIMD_FP16_RUN(vector_8h_instruction); \
+			break; \
+		} \
+		break
+
+#define TCTI_NATIVE_SIMD_FP16_ACCUMULATE_CASE(operation_value, \
+						    scalar_instruction, \
+						    vector_4h_instruction, \
+						    vector_8h_instruction) \
+	case operation_value: \
+		switch (shape) { \
+		case TCTI_NATIVE_SIMD_FP16_SCALAR_H: \
+			TCTI_NATIVE_SIMD_FP16_ACCUMULATE_RUN(scalar_instruction); \
+			break; \
+		case TCTI_NATIVE_SIMD_FP16_VECTOR_4H: \
+			TCTI_NATIVE_SIMD_FP16_ACCUMULATE_RUN(vector_4h_instruction); \
+			break; \
+		case TCTI_NATIVE_SIMD_FP16_VECTOR_8H: \
+			TCTI_NATIVE_SIMD_FP16_ACCUMULATE_RUN(vector_8h_instruction); \
+			break; \
+		} \
+		break
+
+#define TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(operation_value, \
+					  vector_4h_instruction, vector_8h_instruction) \
+	case operation_value: \
+		if (shape == TCTI_NATIVE_SIMD_FP16_SCALAR_H) { \
+			ret = -EINVAL; \
+			break; \
+		} \
+		if (shape == TCTI_NATIVE_SIMD_FP16_VECTOR_4H) \
+			TCTI_NATIVE_SIMD_FP16_RUN(vector_4h_instruction); \
+		else \
+			TCTI_NATIVE_SIMD_FP16_RUN(vector_8h_instruction); \
+		break
+
+int tcti_native_simd_fp16_three_same(
+	enum tcti_simd_vector_arithmetic_op operation, bool scalar, bool q,
+	u64 result[2], const u64 left[2], const u64 right[2],
+	const u64 accumulator[2], unsigned long fpcr, unsigned long *fpsr)
+{
+	enum tcti_native_simd_fp16_shape shape;
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret = 0;
+
+	if (!result || !left || !right || !accumulator || !fpsr)
+		return -EINVAL;
+	if (scalar)
+		shape = TCTI_NATIVE_SIMD_FP16_SCALAR_H;
+	else if (q)
+		shape = TCTI_NATIVE_SIMD_FP16_VECTOR_8H;
+	else
+		shape = TCTI_NATIVE_SIMD_FP16_VECTOR_4H;
+
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n"
+		     "mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (fpcr), "r" (*fpsr)
+		     : "memory");
+
+	switch (operation) {
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FABD,
+		"fabd h0, h0, h1", "fabd v0.4h, v0.4h, v1.4h",
+		"fabd v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FACGE,
+		"facge h0, h0, h1", "facge v0.4h, v0.4h, v1.4h",
+		"facge v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FACGT,
+		"facgt h0, h0, h1", "facgt v0.4h, v0.4h, v1.4h",
+		"facgt v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FCMEQ,
+		"fcmeq h0, h0, h1", "fcmeq v0.4h, v0.4h, v1.4h",
+		"fcmeq v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FCMGE,
+		"fcmge h0, h0, h1", "fcmge v0.4h, v0.4h, v1.4h",
+		"fcmge v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FCMGT,
+		"fcmgt h0, h0, h1", "fcmgt v0.4h, v0.4h, v1.4h",
+		"fcmgt v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMULX,
+		"fmulx h0, h0, h1", "fmulx v0.4h, v0.4h, v1.4h",
+		"fmulx v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FRECPS,
+		"frecps h0, h0, h1", "frecps v0.4h, v0.4h, v1.4h",
+		"frecps v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FRSQRTS,
+		"frsqrts h0, h0, h1", "frsqrts v0.4h, v0.4h, v1.4h",
+		"frsqrts v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(TCTI_SIMD_ARITH_FADDP,
+		"faddp v0.4h, v0.4h, v1.4h", "faddp v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FADD,
+		"fadd h0, h0, h1", "fadd v0.4h, v0.4h, v1.4h",
+		"fadd v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FDIV,
+		"fdiv h0, h0, h1", "fdiv v0.4h, v0.4h, v1.4h",
+		"fdiv v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMAXNM,
+		"fmaxnm h0, h0, h1", "fmaxnm v0.4h, v0.4h, v1.4h",
+		"fmaxnm v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(TCTI_SIMD_ARITH_FMAXNMP,
+		"fmaxnmp v0.4h, v0.4h, v1.4h",
+		"fmaxnmp v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMAX,
+		"fmax h0, h0, h1", "fmax v0.4h, v0.4h, v1.4h",
+		"fmax v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(TCTI_SIMD_ARITH_FMAXP,
+		"fmaxp v0.4h, v0.4h, v1.4h", "fmaxp v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMINNM,
+		"fminnm h0, h0, h1", "fminnm v0.4h, v0.4h, v1.4h",
+		"fminnm v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(TCTI_SIMD_ARITH_FMINNMP,
+		"fminnmp v0.4h, v0.4h, v1.4h",
+		"fminnmp v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMIN,
+		"fmin h0, h0, h1", "fmin v0.4h, v0.4h, v1.4h",
+		"fmin v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_VECTOR_CASE(TCTI_SIMD_ARITH_FMINP,
+		"fminp v0.4h, v0.4h, v1.4h", "fminp v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_ACCUMULATE_CASE(TCTI_SIMD_ARITH_FMLA,
+		"fmla h2, h0, v1.h[0]", "fmla v2.4h, v0.4h, v1.4h",
+		"fmla v2.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_ACCUMULATE_CASE(TCTI_SIMD_ARITH_FMLS,
+		"fmls h2, h0, v1.h[0]", "fmls v2.4h, v0.4h, v1.4h",
+		"fmls v2.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FMUL,
+		"fmul h0, h0, h1", "fmul v0.4h, v0.4h, v1.4h",
+		"fmul v0.8h, v0.8h, v1.8h");
+	TCTI_NATIVE_SIMD_FP16_CASE(TCTI_SIMD_ARITH_FSUB,
+		"fsub h0, h0, h1", "fsub v0.4h, v0.4h, v1.4h",
+		"fsub v0.8h, v0.8h, v1.8h");
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n"
+		     "msr fpsr, %1\n"
+		     "isb\n"
+		     :
+		     : "r" (host_fpcr), "r" (host_fpsr)
+		     : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+#undef TCTI_NATIVE_SIMD_FP16_ACCUMULATE_CASE
+#undef TCTI_NATIVE_SIMD_FP16_VECTOR_CASE
+#undef TCTI_NATIVE_SIMD_FP16_CASE
+#undef TCTI_NATIVE_SIMD_FP16_ACCUMULATE_RUN
+#undef TCTI_NATIVE_SIMD_FP16_RUN
 
 #define TCTI_NATIVE_SIMD_FP_SCALAR_UNARY_RUN(instruction) \
 	({ \

@@ -28,6 +28,21 @@ enum tcti_access {
 	TCTI_ACCESS_WRITE,
 };
 
+/* SVE state is task-local and always interpreted by TCTI C semantics. */
+#define TCTI_SVE_MIN_VL_BYTES	16U
+#define TCTI_SVE_MAX_VL_BYTES	256U
+#define TCTI_SVE_ZREG_COUNT	32U
+#define TCTI_SVE_PREG_COUNT	16U
+#define TCTI_SVE_PREG_MAX_BYTES	(TCTI_SVE_MAX_VL_BYTES / 8U)
+
+struct tcti_sve_state {
+	u16 vl_bytes;
+	u8 z[TCTI_SVE_ZREG_COUNT][TCTI_SVE_MAX_VL_BYTES];
+	u8 p[TCTI_SVE_PREG_COUNT][TCTI_SVE_PREG_MAX_BYTES];
+	u8 ffr[TCTI_SVE_PREG_MAX_BYTES];
+	bool valid;
+};
+
 /*
  * These are the acquire/release variants encoded by AArch64 atomics.  There
  * is deliberately no implicit seq_cst variant: the decoder must select the

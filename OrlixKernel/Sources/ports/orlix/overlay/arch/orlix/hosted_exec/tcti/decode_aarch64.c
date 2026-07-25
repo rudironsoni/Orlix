@@ -2,6 +2,7 @@
 #include <linux/array_size.h>
 #include <linux/bits.h>
 #include <linux/bitops.h>
+#include <linux/errno.h>
 
 #include "decode_aarch64.h"
 
@@ -11,10 +12,19 @@
 #define AARCH64_BRK_PATTERN 0xd4200000U
 #define AARCH64_HLT_MASK 0xffe0001fU
 #define AARCH64_HLT_PATTERN 0xd4400000U
+#define AARCH64_SMSTOP_SM 0xd503427fU
+#define AARCH64_SMSTART_SM 0xd503437fU
+#define AARCH64_SMSTOP_ZA 0xd503447fU
+#define AARCH64_SMSTART_ZA 0xd503457fU
+#define AARCH64_SMSTOP_SM_ZA 0xd503467fU
+#define AARCH64_SMSTART_SM_ZA 0xd503477fU
 #define AARCH64_HINT_MASK 0xfffff01fU
 #define AARCH64_HINT_PATTERN 0xd503201fU
 #define AARCH64_BARRIER_MASK 0xfffff0ffU
 #define AARCH64_DSB_PATTERN 0xd503309fU
+/* AARCHMRS 2026-06 source ordinal 2276, DSB_BOn_barriers, FEAT_XS. */
+#define AARCH64_DSB_NXS_MASK 0xfffff3ffU
+#define AARCH64_DSB_NXS_PATTERN 0xd503323fU
 #define AARCH64_DMB_PATTERN 0xd50330bfU
 #define AARCH64_ISB_PATTERN 0xd50330dfU
 #define AARCH64_CLREX_PATTERN 0xd503305fU
@@ -146,6 +156,40 @@
 #define AARCH64_SIMD_FMLS_PATTERN 0x0ea0cc00U
 #define AARCH64_SIMD_FMUL_PATTERN 0x2e20dc00U
 #define AARCH64_SIMD_FSUB_PATTERN 0x0ea0d400U
+#define AARCH64_SIMD_FP16_THREE_SAME_MASK 0xbfe0fc00U
+#define AARCH64_SIMD_FMAXNM_FP16_PATTERN 0x0e400400U
+#define AARCH64_SIMD_FMLA_FP16_PATTERN 0x0e400c00U
+#define AARCH64_SIMD_FADD_FP16_PATTERN 0x0e401400U
+#define AARCH64_SIMD_FMULX_FP16_PATTERN 0x0e401c00U
+#define AARCH64_SIMD_FCMEQ_FP16_PATTERN 0x0e402400U
+#define AARCH64_SIMD_FMAX_FP16_PATTERN 0x0e403400U
+#define AARCH64_SIMD_FRECPS_FP16_PATTERN 0x0e403c00U
+#define AARCH64_SIMD_FMINNM_FP16_PATTERN 0x0ec00400U
+#define AARCH64_SIMD_FMLS_FP16_PATTERN 0x0ec00c00U
+#define AARCH64_SIMD_FMIN_FP16_PATTERN 0x0ec03400U
+#define AARCH64_SIMD_FRSQRTS_FP16_PATTERN 0x0ec03c00U
+#define AARCH64_SIMD_FMAXNMP_FP16_PATTERN 0x2e400400U
+#define AARCH64_SIMD_FADDP_FP16_PATTERN 0x2e401400U
+#define AARCH64_SIMD_FMUL_FP16_PATTERN 0x2e401c00U
+#define AARCH64_SIMD_FCMGE_FP16_PATTERN 0x2e402400U
+#define AARCH64_SIMD_FACGE_FP16_PATTERN 0x2e402c00U
+#define AARCH64_SIMD_FMAXP_FP16_PATTERN 0x2e403400U
+#define AARCH64_SIMD_FDIV_FP16_PATTERN 0x2e403c00U
+#define AARCH64_SIMD_FMINNMP_FP16_PATTERN 0x2ec00400U
+#define AARCH64_SIMD_FABD_FP16_PATTERN 0x2ec01400U
+#define AARCH64_SIMD_FCMGT_FP16_PATTERN 0x2ec02400U
+#define AARCH64_SIMD_FACGT_FP16_PATTERN 0x2ec02c00U
+#define AARCH64_SIMD_FMINP_FP16_PATTERN 0x2ec03400U
+#define AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK 0xffe0fc00U
+#define AARCH64_SIMD_FMULX_FP16_SCALAR_PATTERN 0x5e401c00U
+#define AARCH64_SIMD_FCMEQ_FP16_SCALAR_PATTERN 0x5e402400U
+#define AARCH64_SIMD_FRECPS_FP16_SCALAR_PATTERN 0x5e403c00U
+#define AARCH64_SIMD_FRSQRTS_FP16_SCALAR_PATTERN 0x5ec03c00U
+#define AARCH64_SIMD_FCMGE_FP16_SCALAR_PATTERN 0x7e402400U
+#define AARCH64_SIMD_FACGE_FP16_SCALAR_PATTERN 0x7e402c00U
+#define AARCH64_SIMD_FABD_FP16_SCALAR_PATTERN 0x7ec01400U
+#define AARCH64_SIMD_FCMGT_FP16_SCALAR_PATTERN 0x7ec02400U
+#define AARCH64_SIMD_FACGT_FP16_SCALAR_PATTERN 0x7ec02c00U
 #define AARCH64_SIMD_SCALAR_FP_ESTIMATE_MASK 0xffbffc00U
 #define AARCH64_SIMD_FRECPE_SCALAR_PATTERN 0x5ea1d800U
 #define AARCH64_SIMD_FRECPX_SCALAR_PATTERN 0x5ea1f800U
@@ -376,14 +420,17 @@
 #define AARCH64_FABS_S_PATTERN 0x1e20c000U
 #define AARCH64_FABS_D_MASK 0xfffffc00U
 #define AARCH64_FABS_D_PATTERN 0x1e60c000U
+#define AARCH64_FABS_H_PATTERN 0x1ee0c000U
 #define AARCH64_FNEG_S_MASK 0xfffffc00U
 #define AARCH64_FNEG_S_PATTERN 0x1e214000U
 #define AARCH64_FNEG_D_MASK 0xfffffc00U
 #define AARCH64_FNEG_D_PATTERN 0x1e614000U
+#define AARCH64_FNEG_H_PATTERN 0x1ee14000U
 #define AARCH64_FSQRT_S_MASK 0xfffffc00U
 #define AARCH64_FSQRT_S_PATTERN 0x1e21c000U
 #define AARCH64_FSQRT_D_MASK 0xfffffc00U
 #define AARCH64_FSQRT_D_PATTERN 0x1e61c000U
+#define AARCH64_FSQRT_H_PATTERN 0x1ee1c000U
 #define AARCH64_FP_SCALAR_1SOURCE_MASK 0xff207c00U
 #define AARCH64_FP_SCALAR_1SOURCE_PATTERN 0x1e204000U
 #define AARCH64_FP_SCALAR_2SOURCE_MASK 0xff200c00U
@@ -400,8 +447,10 @@
 #define AARCH64_FCMP_S_PATTERN 0x1e202000U
 #define AARCH64_FCMP_D_MASK 0xffe0fc0fU
 #define AARCH64_FCMP_D_PATTERN 0x1e602000U
+#define AARCH64_FCMP_H_PATTERN 0x1ee02000U
 #define AARCH64_FCMP_S_ZERO_PATTERN 0x1e202008U
 #define AARCH64_FCMP_D_ZERO_PATTERN 0x1e602008U
+#define AARCH64_FCMP_H_ZERO_PATTERN 0x1ee02008U
 #define AARCH64_FP_INT_GPR_MASK 0x7fa00c00U
 #define AARCH64_FP_INT_GPR_PATTERN 0x1e200000U
 #define AARCH64_SCVTF_S_W_MASK 0xfffffc00U
@@ -729,12 +778,49 @@ static void tcti_decode_memory_common(struct tcti_decoded_instruction *decoded,
 				       &decoded->result_size);
 }
 
+/*
+ * AARCHMRS 2026-06 leaves 2245-2249 and 2256-2265.  These encodings overlap the
+ * generic HINT class, but their PAuth and BTI ASL operations are absent from
+ * the pinned source bundle.  Do not turn an unimplemented extension into a
+ * silently successful HINT.  They remain undefined to the TCTI guest until
+ * their individual source leaves have production semantics and proof.
+ */
+static bool tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
+{
+	static const u32 pauth_hints[] = {
+		0xd50320ffU, /* XPACLRI */
+		0xd503211fU, /* PACIA1716 */
+		0xd503215fU, /* PACIB1716 */
+		0xd503219fU, /* AUTIA1716 */
+		0xd50321dfU, /* AUTIB1716 */
+		0xd503231fU, /* PACIAZ */
+		0xd503233fU, /* PACIASP */
+		0xd503235fU, /* PACIBZ */
+		0xd503237fU, /* PACIBSP */
+		0xd503239fU, /* AUTIAZ */
+		0xd50323bfU, /* AUTIASP */
+		0xd50323dfU, /* AUTIBZ */
+		0xd50323ffU, /* AUTIBSP */
+		0xd50324ffU, /* PACM, FEAT_PAuth_LR */
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(pauth_hints); index++)
+		if (instruction == pauth_hints[index])
+			return true;
+
+	/* BTI permits the four BType encodings selected by bits [7:6]. */
+	return (instruction & 0xffffff3fU) == 0xd503241fU;
+}
+
 struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 {
 	struct tcti_decoded_instruction decoded = {
 		.decode_class = TCTI_DECODE_UNSUPPORTED,
 		.instruction = instruction,
 	};
+	struct tcti_sve_predicated_integer_binary sve_predicated_binary;
+	int sve_ret;
 
 	if ((instruction & AARCH64_SVC_MASK) == AARCH64_SVC_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_SVC;
@@ -754,6 +840,48 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	switch (instruction) {
+	case AARCH64_SMSTART_SM:
+	case AARCH64_SMSTART_ZA:
+	case AARCH64_SMSTART_SM_ZA:
+		decoded.decode_class = TCTI_DECODE_SME_PSTATE_IMMEDIATE;
+		decoded.sme_pstate_operation = TCTI_SME_PSTATE_SMSTART;
+		decoded.sme_streaming_mode =
+			instruction != AARCH64_SMSTART_ZA;
+		decoded.sme_za = instruction != AARCH64_SMSTART_SM;
+		return decoded;
+	case AARCH64_SMSTOP_SM:
+	case AARCH64_SMSTOP_ZA:
+	case AARCH64_SMSTOP_SM_ZA:
+		decoded.decode_class = TCTI_DECODE_SME_PSTATE_IMMEDIATE;
+		decoded.sme_pstate_operation = TCTI_SME_PSTATE_SMSTOP;
+		decoded.sme_streaming_mode =
+			instruction != AARCH64_SMSTOP_ZA;
+		decoded.sme_za = instruction != AARCH64_SMSTOP_SM;
+		return decoded;
+	default:
+		break;
+	}
+
+	sve_ret = tcti_decode_sve_predicated_integer_binary(instruction,
+						      &sve_predicated_binary);
+	if (!sve_ret) {
+		decoded.decode_class = TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY;
+		decoded.sve_integer_binary_op = sve_predicated_binary.op;
+		decoded.sve_predication = sve_predicated_binary.predication;
+		decoded.rd = sve_predicated_binary.zd;
+		decoded.rn = sve_predicated_binary.zn;
+		decoded.rm = sve_predicated_binary.zm;
+		decoded.sve_pg = sve_predicated_binary.pg;
+		decoded.sve_element_bytes = sve_predicated_binary.element_bytes;
+		return decoded;
+	}
+	if (sve_ret == -EINVAL)
+		return decoded;
+
+	if (tcti_is_unimplemented_pauth_or_bti_hint(instruction))
+		return decoded;
+
 	if ((instruction & AARCH64_HINT_MASK) == AARCH64_HINT_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_HINT;
 		decoded.hint_imm = (instruction >> 5) & 0x7fU;
@@ -762,11 +890,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_BARRIER_MASK) == AARCH64_DSB_PATTERN ||
 	    (instruction & AARCH64_BARRIER_MASK) == AARCH64_DMB_PATTERN ||
-	    (instruction & AARCH64_BARRIER_MASK) == AARCH64_ISB_PATTERN) {
+	    (instruction & AARCH64_BARRIER_MASK) == AARCH64_ISB_PATTERN ||
+	    (instruction & AARCH64_DSB_NXS_MASK) == AARCH64_DSB_NXS_PATTERN) {
 		u32 pattern = instruction & AARCH64_BARRIER_MASK;
+		bool nxs = (instruction & AARCH64_DSB_NXS_MASK) ==
+			AARCH64_DSB_NXS_PATTERN;
 
 		decoded.barrier_option = (instruction >> 8) & 0xfU;
-		if (pattern == AARCH64_ISB_PATTERN) {
+		if (nxs) {
+			/* DSB <imm2>nXS permits only options 2, 6, 10, and 14. */
+			if ((decoded.barrier_option & 0x3U) != 0x2U)
+				return decoded;
+			decoded.barrier_op = TCTI_BARRIER_DSB;
+			decoded.barrier_nxs = true;
+		} else if (pattern == AARCH64_ISB_PATTERN) {
 			if (decoded.barrier_option != 0xfU)
 				return decoded;
 			decoded.barrier_op = TCTI_BARRIER_ISB;
@@ -816,13 +953,17 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	}
 
 	if ((instruction & AARCH64_FCSEL_MASK) == AARCH64_FCSEL_PATTERN) {
+		u8 type = (instruction >> 22) & 0x3U;
+
+		if (type == 2)
+			return decoded;
 		decoded.decode_class = TCTI_DECODE_FP_CONDITIONAL_SELECT;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.condition = (instruction >> 12) & 0xfU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type == 3 ? sizeof(u16) :
+			type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		return decoded;
@@ -831,14 +972,15 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	if ((instruction & AARCH64_FCCMP_MASK) == AARCH64_FCCMP_PATTERN) {
 		u8 type = (instruction >> 22) & 0x3U;
 
-		if (type > 1)
+		if (type == 2)
 			goto fp_int_gpr_unclaimed;
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.condition = (instruction >> 12) & 0xfU;
 		decoded.nzcv = instruction & 0xfU;
-		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type == 3 ? sizeof(u16) :
+			type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.fp_conditional = true;
 		decoded.fp_signal_all_nans = instruction & BIT(4);
@@ -850,14 +992,15 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 	    AARCH64_FP_SCALAR_3SOURCE_PATTERN) {
 		u8 type = (instruction >> 22) & 0x3U;
 
-		if (type > 1)
+		if (type == 2)
 			return decoded;
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_3SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.ra = (instruction >> 10) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type == 3 ? sizeof(u16) :
+			type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.fp3_op = (enum tcti_fp_scalar_3source_op)(
@@ -1168,6 +1311,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			(mode == 0 || mode == 2) ?
 				TCTI_MEMORY_INDEX_SIGNED_OFFSET :
 				    TCTI_MEMORY_INDEX_PRE;
+
+		/*
+		 * The pinned source omits the pair overlap ASL. Reject shared
+		 * destinations and writeback overlaps instead of inventing an
+		 * execution order. This is fail-closed containment and remains
+		 * unproved until the official pinned ASL is available.
+		 */
+		if ((decoded.load && decoded.rt == decoded.rt2) ||
+		    ((mode == 1 || mode == 3) &&
+		     (decoded.rn == decoded.rt || decoded.rn == decoded.rt2)))
+			return (struct tcti_decoded_instruction) {
+				.decode_class = TCTI_DECODE_UNSUPPORTED,
+				.instruction = instruction,
+			};
 		return decoded;
 	}
 
@@ -1393,6 +1550,20 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			mode == 1 ? TCTI_MEMORY_INDEX_POST :
 			mode == 3 ? TCTI_MEMORY_INDEX_PRE :
 				    TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+
+		/*
+		 * The pinned source does not include the ASL needed to select an
+		 * allowed writeback-overlap outcome. Reject overlapping ordinary
+		 * integer pre/post-index forms instead of inventing a local order.
+		 * This is fail-closed containment, not source-bound ISA proof.
+		 * Rn == 31 is SP while Rt == 31 is ZR, so that case does not overlap.
+		 */
+		if (!simd_fp && (mode == 1 || mode == 3) &&
+		    decoded.rn == decoded.rt && decoded.rn != 31)
+			return (struct tcti_decoded_instruction) {
+				.decode_class = TCTI_DECODE_UNSUPPORTED,
+				.instruction = instruction,
+			};
 		return decoded;
 	}
 
@@ -1546,6 +1717,12 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			decoded.dp1_op = TCTI_DP1_CLZ;
 		} else if (opcode == AARCH64_DP1_CLS_OPCODE) {
 			decoded.dp1_op = TCTI_DP1_CLS;
+		} else if (opcode == 0x06) {
+			decoded.dp1_op = TCTI_DP1_CTZ;
+		} else if (opcode == 0x07) {
+			decoded.dp1_op = TCTI_DP1_CNT;
+		} else if (opcode == 0x08) {
+			decoded.dp1_op = TCTI_DP1_ABS;
 		} else {
 			goto fp_int_gpr_unclaimed;
 		}
@@ -1579,6 +1756,18 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			break;
 		case 0x0b:
 			decoded.dp2_op = TCTI_DP2_RORV;
+			break;
+		case 0x18:
+			decoded.dp2_op = TCTI_DP2_SMAX;
+			break;
+		case 0x19:
+			decoded.dp2_op = TCTI_DP2_UMAX;
+			break;
+		case 0x1a:
+			decoded.dp2_op = TCTI_DP2_SMIN;
+			break;
+		case 0x1b:
+			decoded.dp2_op = TCTI_DP2_UMIN;
 			break;
 		case 0x10 ... 0x17: {
 			u8 size = opcode & 0x3U;
@@ -2307,6 +2496,198 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPX;
 		else
 			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTE;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMULX_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMEQ_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRECPS_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRSQRTS_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGE_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGE_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FABD_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGT_FP16_SCALAR_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGT_FP16_SCALAR_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_FP16_SCALAR_THREE_SAME_MASK;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = sizeof(u16);
+		decoded.result_size = sizeof(u16);
+		decoded.simd_fp = true;
+		decoded.simd_scalar = true;
+		decoded.simd_q = true;
+		switch (pattern) {
+		case AARCH64_SIMD_FMULX_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMULX;
+			break;
+		case AARCH64_SIMD_FCMEQ_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMEQ;
+			break;
+		case AARCH64_SIMD_FRECPS_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPS;
+			break;
+		case AARCH64_SIMD_FRSQRTS_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTS;
+			break;
+		case AARCH64_SIMD_FCMGE_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGE;
+			break;
+		case AARCH64_SIMD_FACGE_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGE;
+			break;
+		case AARCH64_SIMD_FABD_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FABD;
+			break;
+		case AARCH64_SIMD_FCMGT_FP16_SCALAR_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGT;
+			break;
+		default:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGT;
+			break;
+		}
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMAXNM_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMLA_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FADD_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMULX_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMEQ_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMAX_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRECPS_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMINNM_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMLS_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMIN_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FRSQRTS_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMAXNMP_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FADDP_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMUL_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGE_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGE_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMAXP_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FDIV_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMINNMP_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FABD_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FCMGT_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FACGT_FP16_PATTERN ||
+	    (instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK) ==
+	    AARCH64_SIMD_FMINP_FP16_PATTERN) {
+		u32 pattern = instruction & AARCH64_SIMD_FP16_THREE_SAME_MASK;
+
+		decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.access_size = sizeof(u16);
+		decoded.result_size = instruction & BIT(30) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded.simd_fp = true;
+		decoded.simd_q = !!(instruction & BIT(30));
+		switch (pattern) {
+		case AARCH64_SIMD_FMAXNM_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXNM;
+			break;
+		case AARCH64_SIMD_FMLA_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMLA;
+			break;
+		case AARCH64_SIMD_FADD_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FADD;
+			break;
+		case AARCH64_SIMD_FMULX_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMULX;
+			break;
+		case AARCH64_SIMD_FCMEQ_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMEQ;
+			break;
+		case AARCH64_SIMD_FMAX_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAX;
+			break;
+		case AARCH64_SIMD_FRECPS_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRECPS;
+			break;
+		case AARCH64_SIMD_FMINNM_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINNM;
+			break;
+		case AARCH64_SIMD_FMLS_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMLS;
+			break;
+		case AARCH64_SIMD_FMIN_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMIN;
+			break;
+		case AARCH64_SIMD_FRSQRTS_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FRSQRTS;
+			break;
+		case AARCH64_SIMD_FMAXNMP_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXNMP;
+			break;
+		case AARCH64_SIMD_FADDP_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FADDP;
+			break;
+		case AARCH64_SIMD_FMUL_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMUL;
+			break;
+		case AARCH64_SIMD_FCMGE_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGE;
+			break;
+		case AARCH64_SIMD_FACGE_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGE;
+			break;
+		case AARCH64_SIMD_FMAXP_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMAXP;
+			break;
+		case AARCH64_SIMD_FDIV_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FDIV;
+			break;
+		case AARCH64_SIMD_FMINNMP_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINNMP;
+			break;
+		case AARCH64_SIMD_FABD_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FABD;
+			break;
+		case AARCH64_SIMD_FCMGT_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FCMGT;
+			break;
+		case AARCH64_SIMD_FACGT_FP16_PATTERN:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FACGT;
+			break;
+		default:
+			decoded.simd_arithmetic_op = TCTI_SIMD_ARITH_FMINP;
+			break;
+		}
 		return decoded;
 	}
 
@@ -4042,24 +4423,28 @@ simd_compare_zero_unclaimed:
 	}
 
 	if ((instruction & AARCH64_FSQRT_S_MASK) == AARCH64_FSQRT_S_PATTERN ||
-	    (instruction & AARCH64_FSQRT_D_MASK) == AARCH64_FSQRT_D_PATTERN) {
+	    (instruction & AARCH64_FSQRT_D_MASK) == AARCH64_FSQRT_D_PATTERN ||
+	    (instruction & AARCH64_FSQRT_S_MASK) == AARCH64_FSQRT_H_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = instruction & BIT(22) ?
-			sizeof(u64) : sizeof(u32);
+		decoded.access_size = ((instruction >> 22) & 0x3U) == 3 ?
+			sizeof(u16) : instruction & BIT(22) ? sizeof(u64) :
+			sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.fp1_op = TCTI_FP1_FSQRT;
 		return decoded;
 	}
 	if ((instruction & AARCH64_FABS_S_MASK) == AARCH64_FABS_S_PATTERN ||
-	    (instruction & AARCH64_FABS_D_MASK) == AARCH64_FABS_D_PATTERN) {
+	    (instruction & AARCH64_FABS_D_MASK) == AARCH64_FABS_D_PATTERN ||
+	    (instruction & AARCH64_FABS_S_MASK) == AARCH64_FABS_H_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = ((instruction >> 22) & 0x3U) == 3 ?
+			sizeof(u16) : instruction & BIT(22) ? sizeof(u64) :
+			sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.fp1_op = TCTI_FP1_FABS;
@@ -4067,12 +4452,14 @@ simd_compare_zero_unclaimed:
 	}
 
 	if ((instruction & AARCH64_FNEG_S_MASK) == AARCH64_FNEG_S_PATTERN ||
-	    (instruction & AARCH64_FNEG_D_MASK) == AARCH64_FNEG_D_PATTERN) {
+	    (instruction & AARCH64_FNEG_D_MASK) == AARCH64_FNEG_D_PATTERN ||
+	    (instruction & AARCH64_FNEG_S_MASK) == AARCH64_FNEG_H_PATTERN) {
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = ((instruction >> 22) & 0x3U) == 3 ?
+			sizeof(u16) : instruction & BIT(22) ? sizeof(u64) :
+			sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		decoded.fp1_op = TCTI_FP1_FNEG;
@@ -4084,7 +4471,7 @@ simd_compare_zero_unclaimed:
 		u8 type = (instruction >> 22) & 0x3U;
 		u8 opcode = (instruction >> 15) & 0x3fU;
 
-		if (type > 1)
+		if (type == 2)
 			return decoded;
 		switch (opcode) {
 		case 8:
@@ -4114,7 +4501,8 @@ simd_compare_zero_unclaimed:
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_1SOURCE;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
-		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type == 3 ? sizeof(u16) :
+			type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		return decoded;
@@ -4125,7 +4513,7 @@ simd_compare_zero_unclaimed:
 		u8 type = (instruction >> 22) & 0x3U;
 		u8 opcode = (instruction >> 12) & 0xfU;
 
-		if (type > 1)
+		if (type == 2)
 			return decoded;
 
 		switch (opcode) {
@@ -4164,7 +4552,8 @@ simd_compare_zero_unclaimed:
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size = type ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = type == 3 ? sizeof(u16) :
+			type ? sizeof(u64) : sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.simd_fp = true;
 		return decoded;
@@ -4184,19 +4573,24 @@ simd_compare_zero_unclaimed:
 
 	if ((instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_S_PATTERN ||
 	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_PATTERN ||
+	    (instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_H_PATTERN ||
 	    (instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_S_ZERO_PATTERN ||
-	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_ZERO_PATTERN) {
+	    (instruction & AARCH64_FCMP_D_MASK) == AARCH64_FCMP_D_ZERO_PATTERN ||
+	    (instruction & AARCH64_FCMP_S_MASK) == AARCH64_FCMP_H_ZERO_PATTERN) {
 		bool compare_zero =
 			(instruction & AARCH64_FCMP_S_MASK) ==
 				AARCH64_FCMP_S_ZERO_PATTERN ||
 			(instruction & AARCH64_FCMP_D_MASK) ==
-				AARCH64_FCMP_D_ZERO_PATTERN;
+				AARCH64_FCMP_D_ZERO_PATTERN ||
+			(instruction & AARCH64_FCMP_S_MASK) ==
+				AARCH64_FCMP_H_ZERO_PATTERN;
 
 		decoded.decode_class = TCTI_DECODE_FP_SCALAR_COMPARE;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
-		decoded.access_size =
-			(instruction & BIT(22)) ? sizeof(u64) : sizeof(u32);
+		decoded.access_size = ((instruction >> 22) & 0x3U) == 3 ?
+			sizeof(u16) : instruction & BIT(22) ? sizeof(u64) :
+			sizeof(u32);
 		decoded.result_size = decoded.access_size;
 		decoded.immediate = compare_zero;
 		decoded.fp_signal_all_nans = instruction & BIT(4);

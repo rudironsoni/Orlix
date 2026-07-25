@@ -340,6 +340,54 @@ static int adversarial_c_fixtures(void)
 	fixture.classification[2].relation = saved_relation;
 	fixture.classification[2].canonical = saved_canonical;
 
+	fixture.classification[1].evidence = "fixture-canonical-owner";
+	fixture.classification[1].proof = "fixture-proof";
+	fixture.classification[2].classification =
+		TCTI_A64_KBUILD_ALIAS_OR_DUPLICATE;
+	fixture.classification[2].relation = TCTI_A64_KBUILD_RELATION_ALIAS;
+	fixture.classification[2].canonical = fixture.source[1].name;
+	fixture.classification[2].evidence = "fixture-alias-edge";
+	/* Source aliases can have their own operation, encoding, and proof. */
+	fixture.classification[2].proof = "fixture-alias-proof";
+	output = tmpfile();
+	CHECK(output != NULL);
+	CHECK(tcti_a64_kbuild_generate_header(
+		&fixture.metadata, fixture.source, TCTI_A64_KBUILD_SOURCE_COUNT,
+		fixture.classification, TCTI_A64_KBUILD_SOURCE_COUNT,
+		&fixture.accessor_metadata, fixture.accessors,
+		TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT, output) ==
+		TCTI_A64_KBUILD_GENERATOR_OK);
+	fclose(output);
+
+	fixture.classification[2].canonical = "missing-canonical";
+	CHECK(!expect_failure(&fixture,
+		TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION));
+	fixture.classification[2].canonical = fixture.source[1].name;
+
+	fixture.classification[1].classification =
+		TCTI_A64_KBUILD_ALIAS_OR_DUPLICATE;
+	fixture.classification[1].relation =
+		TCTI_A64_KBUILD_RELATION_DUPLICATE;
+	fixture.classification[1].canonical = fixture.source[2].name;
+	fixture.classification[1].evidence = "fixture-cycle-edge";
+	fixture.classification[1].proof = "fixture-proof";
+	CHECK(!expect_failure(&fixture,
+		TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION));
+	fixture.classification[1].classification = TCTI_A64_KBUILD_REQUIRED;
+	fixture.classification[1].relation = TCTI_A64_KBUILD_RELATION_NONE;
+	fixture.classification[1].canonical = "";
+	fixture.classification[1].evidence = "";
+	fixture.classification[1].proof = "";
+
+	fixture.classification[2].canonical = fixture.source[0].name;
+	CHECK(!expect_failure(&fixture,
+		TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION));
+	fixture.classification[2].classification = TCTI_A64_KBUILD_REQUIRED;
+	fixture.classification[2].relation = TCTI_A64_KBUILD_RELATION_NONE;
+	fixture.classification[2].canonical = "";
+	fixture.classification[2].evidence = "";
+	fixture.classification[2].proof = "";
+
 	saved_condition = fixture.source[3].condition_tcnd_hex;
 	fixture.source[3].condition_tcnd_hex = "not-tcnd";
 	CHECK(!expect_failure(&fixture,

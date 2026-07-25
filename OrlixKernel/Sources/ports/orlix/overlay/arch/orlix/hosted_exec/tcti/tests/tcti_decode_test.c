@@ -24,6 +24,7 @@
 #include <inventory.h>
 #include <target_inventory.h>
 #include "../isa_coverage.h"
+#include "../semantics.h"
 #include "runtime_projection.h"
 #include "../switch_debug.h"
 #include "../tlb.h"
@@ -47,7 +48,7 @@ static void tcti_complete_target_inventory_is_kernel_visible(
 	struct kunit *test)
 {
 	KUNIT_EXPECT_EQ(test, 4350U, TCTI_A64_GENERATED_SOURCE_COUNT);
-	KUNIT_EXPECT_EQ(test, 3264U,
+	KUNIT_EXPECT_EQ(test, 3265U,
 			TCTI_A64_GENERATED_UNCLASSIFIED_COUNT);
 	KUNIT_EXPECT_EQ(test, 0U,
 			TCTI_A64_GENERATED_CLASSIFICATION_COMPLETE);
@@ -74,7 +75,7 @@ static void tcti_runtime_profile_uses_full_target_without_promotion(
 	KUNIT_EXPECT_EQ(test, 0,
 			tcti_runtime_projection_audit(&projection));
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.target_leaf_count);
-	KUNIT_EXPECT_EQ(test, (size_t)1086, projection.classified_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1085, projection.classified_leaf_count);
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.unproved_leaf_count);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap2);
@@ -286,7 +287,7 @@ static void tcti_isa_coverage_inventory_is_machine_auditable(struct kunit *test)
 		KUNIT_EXPECT_NOT_NULL(test, family->kunit);
 		KUNIT_EXPECT_NE(test, '\0', family->name[0]);
 		KUNIT_EXPECT_NE(test, '\0', family->decoder[0]);
-		if (family->status == TCTI_ISA_COVERAGE_COMPLETE) {
+		if (family->status == TCTI_ISA_LOCAL_COVERAGE_COMPLETE) {
 			KUNIT_EXPECT_NE(test, '\0', family->kunit[0]);
 		} else {
 			gaps++;
@@ -316,10 +317,13 @@ static void tcti_isa_coverage_inventory_is_machine_auditable(struct kunit *test)
 		covered_hwcap);
 	KUNIT_EXPECT_EQ(test, 0UL, (unsigned long)ELF_HWCAP);
 
-	kunit_info(test, "TCTI ISA coverage: %zu/%zu complete, %zu gaps",
+	kunit_info(test,
+		   "TCTI local decoder-family coverage: %zu/%zu covered, %zu gaps",
 		   ARRAY_SIZE(tcti_isa_coverage) - gaps,
 		   ARRAY_SIZE(tcti_isa_coverage), gaps);
-	KUNIT_EXPECT_EQ(test, (size_t)ORLIX_TCTI_ISA_EXPECTED_GAPS, gaps);
+	KUNIT_EXPECT_EQ(test,
+			(size_t)ORLIX_TCTI_ISA_EXPECTED_LOCAL_DECODER_GAPS,
+			gaps);
 }
 
 static void tcti_configured_profile_encodings_are_decoded(struct kunit *test)
@@ -1666,6 +1670,37 @@ static void tcti_decode_load_store_pair_fixed_mask_boundaries(
 	}
 }
 
+static void tcti_decode_rejects_constrained_unpredictable_pair_overlaps(
+	struct kunit *test)
+{
+	struct tcti_decoded_instruction decoded;
+
+	/* LDP with a shared destination is constrained unpredictable. */
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		false, 2, 2, true, 0, 3, 3, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+
+	/* Writeback forms may not overlap the base with either transfer register. */
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		false, 2, 1, true, 1, 4, 2, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		false, 2, 3, true, -1, 2, 4, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		false, 2, 1, false, 1, 4, 2, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		true, 2, 3, false, -1, 2, 4, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+
+	/* Offset forms do not write back, so a base overlap remains representable. */
+	decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
+		false, 2, 2, true, 0, 4, 2, 4));
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_LOAD_STORE_PAIR,
+			decoded.decode_class);
+}
+
 static void tcti_gadget_executes_non_temporal_simd_pair(struct kunit *test)
 {
 	struct tcti_gadget_word
@@ -2409,6 +2444,284 @@ static void tcti_gadget_executes_complete_load_store_register_family(
 	KUNIT_EXPECT_EQ(test, 0UL, fault_address);
 	KUNIT_EXPECT_EQ(test, 0x3000ULL, regs.pc);
 	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[9]);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+/*
+ * These are execution tests rather than another decoder enumeration.  The
+ * decoder matrix above already visits every immediate and register-offset
+ * encoding.  Keep the state-transition checks here so that the test executes
+ * the same lowered instruction path used by the TCTI engine.
+ */
+static u32 tcti_test_encode_gpr_load_store_immediate(u8 size, u8 opc,
+					      s16 immediate, u8 mode,
+					      u8 rn, u8 rt)
+{
+	u32 instruction;
+
+	if (mode == TCTI_MEMORY_INDEX_SIGNED_OFFSET && immediate >= 0 &&
+	    immediate % (1U << size) == 0 &&
+	    immediate / (1U << size) < BIT(12)) {
+		instruction = 0x39000000U |
+			((u32)size << 30) | ((u32)opc << 22) |
+			((u32)(immediate >> size) << 10);
+	} else {
+		instruction = 0x38000000U |
+			((u32)size << 30) | ((u32)opc << 22) |
+			(((u32)immediate & 0x1ffU) << 12) |
+			((u32)mode << 10);
+	}
+
+	return instruction | ((u32)rn << 5) | rt;
+}
+
+static u32 tcti_test_encode_gpr_load_store_register_offset(u8 size, u8 opc,
+						   u8 rm, u8 option, bool shift,
+						   u8 rn, u8 rt)
+{
+	return 0x38200800U | ((u32)size << 30) | ((u32)opc << 22) |
+		((u32)rm << 16) | ((u32)option << 13) |
+		(shift ? BIT(12) : 0) | ((u32)rn << 5) | rt;
+}
+
+static u64 tcti_test_load_store_masked_value(u64 value, u8 size)
+{
+	return size == sizeof(u8) ? (u8)value :
+	       size == sizeof(u16) ? (u16)value :
+	       size == sizeof(u32) ? (u32)value : value;
+}
+
+static void tcti_gadget_executes_gpr_load_store_immediate_addressing(
+	struct kunit *test)
+{
+	static const u64 values[] = {
+		0x8877665544332211ULL,
+	};
+	static const u8 modes[] = {
+		TCTI_MEMORY_INDEX_SIGNED_OFFSET,
+		TCTI_MEMORY_INDEX_PRE,
+		TCTI_MEMORY_INDEX_POST,
+	};
+	unsigned long mapped;
+	u8 size;
+	u8 mode_index;
+	u8 load;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	for (size = 0; size < 4; size++) {
+		u8 access_size = 1U << size;
+
+		for (mode_index = 0; mode_index < ARRAY_SIZE(modes); mode_index++) {
+			u8 mode = modes[mode_index];
+
+			for (load = 0; load < 2; load++) {
+				struct pt_regs regs = { .pc = 0x7100 };
+				unsigned long fault_address = 0;
+				unsigned long base = mapped + 128;
+				unsigned long address = mode == TCTI_MEMORY_INDEX_POST ?
+					base : base + access_size;
+				u64 observed = 0;
+				u32 instruction;
+
+				regs.regs[9] = base;
+				instruction = tcti_test_encode_gpr_load_store_immediate(
+					size, 1, access_size, mode, 9, 10);
+				if (load) {
+					ret = tcti_write_user_data(current->mm, address,
+							   &values[0], access_size);
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					regs.regs[10] = ~0ULL;
+				} else {
+					instruction = tcti_test_encode_gpr_load_store_immediate(
+						size, 0, access_size, mode, 9, 10);
+					regs.regs[10] = values[0];
+				}
+
+				ret = tcti_test_execute_single_instruction(instruction, &regs,
+								   &fault_address);
+				KUNIT_ASSERT_EQ_MSG(test, 0, ret,
+					"size=%u mode=%u load=%u", size, mode, load);
+				KUNIT_EXPECT_EQ(test, 0x7104ULL, regs.pc);
+				KUNIT_EXPECT_EQ(test, address, fault_address);
+				KUNIT_EXPECT_EQ(test,
+					mode == TCTI_MEMORY_INDEX_SIGNED_OFFSET ? base :
+					base + access_size, regs.regs[9]);
+
+				if (load) {
+					KUNIT_EXPECT_EQ(test,
+						tcti_test_load_store_masked_value(values[0],
+									   access_size), regs.regs[10]);
+				} else {
+					ret = tcti_read_user_data(current->mm, address,
+							  &observed, access_size);
+					KUNIT_ASSERT_EQ(test, 0, ret);
+					KUNIT_EXPECT_EQ(test,
+						tcti_test_load_store_masked_value(values[0],
+									   access_size), observed);
+				}
+			}
+		}
+	}
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_gadget_executes_gpr_load_store_register_offsets(
+	struct kunit *test)
+{
+	static const struct {
+		u8 option;
+		bool shift;
+		u64 rm_value;
+		s64 offset;
+	} cases[] = {
+		{ 2, false, 3, 3 }, /* UXTW */
+		{ 3, true, 3, 24 }, /* LSL #3 */
+		{ 6, false, 0xfffffffdU, -3 }, /* SXTW */
+		{ 7, false, (u64)-3, -3 }, /* SXTX */
+	};
+	unsigned long mapped;
+	size_t index;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct pt_regs regs = { .pc = 0x7200 };
+		unsigned long fault_address = 0;
+		unsigned long base = mapped + 128;
+		unsigned long address = base + cases[index].offset;
+		u64 value = 0x8877665544332211ULL;
+		u64 observed = 0;
+		u32 instruction;
+
+		regs.regs[9] = base;
+		regs.regs[11] = cases[index].rm_value;
+		ret = tcti_write_user_data(current->mm, address, &value,
+					   sizeof(value));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		instruction = tcti_test_encode_gpr_load_store_register_offset(
+			3, 1, 11, cases[index].option, cases[index].shift, 9, 10);
+		ret = tcti_test_execute_single_instruction(instruction, &regs,
+							   &fault_address);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "option=%u", cases[index].option);
+		KUNIT_EXPECT_EQ(test, value, regs.regs[10]);
+		KUNIT_EXPECT_EQ(test, address, fault_address);
+		KUNIT_EXPECT_EQ(test, base, regs.regs[9]);
+		KUNIT_EXPECT_EQ(test, 0x7204ULL, regs.pc);
+
+		regs.pc = 0x7204;
+		regs.regs[10] = ~value;
+		instruction = tcti_test_encode_gpr_load_store_register_offset(
+			3, 0, 11, cases[index].option, cases[index].shift, 9, 10);
+		ret = tcti_test_execute_single_instruction(instruction, &regs,
+							   &fault_address);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		ret = tcti_read_user_data(current->mm, address, &observed,
+					  sizeof(observed));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, ~value, observed);
+		KUNIT_EXPECT_EQ(test, 0x7208ULL, regs.pc);
+	}
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_gadget_load_store_preserves_fault_and_zero_register_state(
+	struct kunit *test)
+{
+	static const struct {
+		u8 size;
+		u8 opc;
+		u64 value;
+		u64 expected;
+	} signed_loads[] = {
+		{ 0, 2, 0x80, 0xffffffffffffff80ULL },
+		{ 0, 3, 0x80, 0x00000000ffffff80ULL },
+		{ 1, 2, 0x8001, 0xffffffffffff8001ULL },
+		{ 1, 3, 0x8001, 0x00000000ffff8001ULL },
+		{ 2, 2, 0x80000001, 0xffffffff80000001ULL },
+	};
+	struct pt_regs regs = { .pc = 0x7300 };
+	unsigned long fault_address = 0;
+	unsigned long mapped;
+	u64 value = 0x80000000ULL;
+	u64 observed = ~0ULL;
+	u32 instruction;
+	size_t index;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+
+	/* A sign-extending load to XZR still performs the memory access. */
+	ret = tcti_write_user_data(current->mm, mapped + 16, &value,
+				   sizeof(u32));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.regs[9] = mapped;
+	instruction = tcti_test_encode_gpr_load_store_immediate(
+		2, 2, 16, TCTI_MEMORY_INDEX_SIGNED_OFFSET, 9, 31);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0x7304ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, mapped + 16, fault_address);
+	KUNIT_EXPECT_EQ(test, mapped, regs.regs[9]);
+
+	for (index = 0; index < ARRAY_SIZE(signed_loads); index++) {
+		u8 access_size = 1U << signed_loads[index].size;
+
+		ret = tcti_write_user_data(current->mm, mapped + 48,
+					   &signed_loads[index].value, access_size);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		regs.regs[10] = ~0ULL;
+		instruction = tcti_test_encode_gpr_load_store_immediate(
+			signed_loads[index].size, signed_loads[index].opc, 48,
+			TCTI_MEMORY_INDEX_SIGNED_OFFSET, 9, 10);
+		ret = tcti_test_execute_single_instruction(instruction, &regs,
+							   &fault_address);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "size=%u opc=%u",
+			signed_loads[index].size, signed_loads[index].opc);
+		KUNIT_EXPECT_EQ(test, signed_loads[index].expected, regs.regs[10]);
+	}
+
+	/* STR XZR writes architectural zero, independent of stale host state. */
+	regs.pc = 0x7304;
+	instruction = tcti_test_encode_gpr_load_store_immediate(
+		3, 0, 24, TCTI_MEMORY_INDEX_SIGNED_OFFSET, 9, 31);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_read_user_data(current->mm, mapped + 24, &observed,
+					  sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, observed);
+
+	/* A pre-indexed fault cannot commit PC, destination, or base writeback. */
+	regs.regs[9] = 0;
+	regs.regs[10] = 0xfeedfacefeedfaceULL;
+	regs.pc = 0x7400;
+	fault_address = ~0UL;
+	instruction = tcti_test_encode_gpr_load_store_immediate(
+		3, 1, 8, TCTI_MEMORY_INDEX_PRE, 9, 10);
+	ret = tcti_test_execute_single_instruction(instruction, &regs,
+						   &fault_address);
+	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
+	KUNIT_EXPECT_EQ(test, 8UL, fault_address);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, 0xfeedfacefeedfaceULL, regs.regs[10]);
+	KUNIT_EXPECT_EQ(test, 0x7400ULL, regs.pc);
 
 	ret = vm_munmap(mapped, PAGE_SIZE);
 	KUNIT_EXPECT_EQ(test, 0, ret);
@@ -3275,6 +3588,23 @@ static void tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit *test)
 				decoded.decode_class);
 			KUNIT_EXPECT_EQ(test, immediate, decoded.barrier_option);
 		}
+	}
+
+	for (immediate = 0; immediate < 16; immediate++) {
+		struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+			0xd503323fU | ((u32)immediate << 8));
+		bool legal = (immediate & 0x3U) == 0x2U;
+
+		KUNIT_EXPECT_EQ_MSG(test,
+			legal ? TCTI_DECODE_BARRIER : TCTI_DECODE_UNSUPPORTED,
+			decoded.decode_class, "DSB nXS instruction=%08x",
+			decoded.instruction);
+		if (!legal)
+			continue;
+
+		KUNIT_EXPECT_EQ(test, TCTI_BARRIER_DSB, decoded.barrier_op);
+		KUNIT_EXPECT_EQ(test, immediate, decoded.barrier_option);
+		KUNIT_EXPECT_TRUE(test, decoded.barrier_nxs);
 	}
 
 	for (immediate = 0; immediate < ARRAY_SIZE(cache_operations);
@@ -9744,6 +10074,142 @@ static void tcti_resume_user_reports_unsupported_instruction(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+static void tcti_resume_user_rejects_unavailable_sme_pstate_aliases(
+	struct kunit *test)
+{
+	static const struct {
+		u32 instruction;
+		enum tcti_sme_pstate_operation operation;
+		bool streaming_mode;
+		bool za;
+	} aliases[] = {
+		{ 0xd503437fU, TCTI_SME_PSTATE_SMSTART, true, false },
+		{ 0xd503457fU, TCTI_SME_PSTATE_SMSTART, false, true },
+		{ 0xd503477fU, TCTI_SME_PSTATE_SMSTART, true, true },
+		{ 0xd503427fU, TCTI_SME_PSTATE_SMSTOP, true, false },
+		{ 0xd503447fU, TCTI_SME_PSTATE_SMSTOP, false, true },
+		{ 0xd503467fU, TCTI_SME_PSTATE_SMSTOP, true, true },
+	};
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(aliases); index++) {
+		const typeof(*aliases) *alias = &aliases[index];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(alias->instruction);
+		struct tcti_result result;
+		struct pt_regs regs = { 0 };
+		struct pt_regs before;
+		unsigned long mapped;
+		int ret;
+
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_SME_PSTATE_IMMEDIATE,
+				decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, alias->operation,
+				decoded.sme_pstate_operation);
+		KUNIT_EXPECT_EQ(test, alias->streaming_mode,
+				decoded.sme_streaming_mode);
+		KUNIT_EXPECT_EQ(test, alias->za, decoded.sme_za);
+
+		mapped = tcti_test_map_instructions(test, &alias->instruction, 1);
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x0123456789abcdefULL;
+		regs.regs[19] = 0xfedcba9876543210ULL;
+		before = regs;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+		KUNIT_EXPECT_EQ(test, mapped, result.pc);
+		KUNIT_EXPECT_EQ(test, alias->instruction, result.instruction);
+		KUNIT_EXPECT_EQ(test, 0, memcmp(&before, &regs, sizeof(regs)));
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+	}
+}
+
+static void tcti_sme_pstate_decode_rejects_non_alias_encodings(
+	struct kunit *test)
+{
+	static const u32 non_aliases[] = {
+		0xd503407fU, 0xd503417fU, 0xd503487fU, 0xd5034f7fU,
+	};
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(non_aliases); index++)
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(non_aliases[index]).decode_class);
+}
+
+static void tcti_resume_user_rejects_non_el0_system_accesses(struct kunit *test)
+{
+	/*
+	 * The pinned AARCHMRS system-accessor reconciliation records the generic
+	 * MRS, MSR, SYS, and SYSL forms. SCTLR_EL1 and AT S1E1R require EL1,
+	 * while SYSL exercises the generic system-instruction encoding. TCTI must
+	 * reject each unimplemented form in the guest before a host privileged
+	 * operation could be attempted.
+	 */
+	static const struct {
+		u32 instruction;
+		const char *name;
+	} cases[] = {
+		{ 0xd5381007U, "mrs x7, sctlr_el1" },
+		{ 0xd5181007U, "msr sctlr_el1, x7" },
+		{ 0xd5087807U, "at s1e1r, x7" },
+		{ 0xd5280007U, "sysl x7, #0, c0, c0, #0" },
+	};
+	unsigned long old_tls = current->thread.user_tls;
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct tcti_result result;
+		struct pt_regs regs = { 0 };
+		unsigned long mapped;
+		int ret;
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(cases[index].instruction).decode_class,
+			"%s", cases[index].name);
+		mapped = tcti_test_map_instructions(test,
+			&cases[index].instruction, 1);
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[7] = 0x123456789abcdef0ULL;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "%s", cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+			"%s", cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, mapped, result.pc, "%s",
+			cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, cases[index].instruction,
+			result.instruction, "%s", cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, mapped, regs.pc, "%s",
+			cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, 0x123456789abcdef0ULL, regs.regs[7],
+			"%s", cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT,
+			regs.pstate, "%s", cases[index].name);
+		KUNIT_EXPECT_EQ_MSG(test, old_tls, current->thread.user_tls,
+			"%s", cases[index].name);
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+	}
+}
+
 static void tcti_resume_user_executes_branch_sequence(struct kunit *test)
 {
 	static const u32 instructions[] = {
@@ -9778,6 +10244,199 @@ static void tcti_resume_user_executes_branch_sequence(struct kunit *test)
 
 	ret = vm_munmap(mapped, PAGE_SIZE);
 	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static u32 tcti_test_encode_branch_immediate(bool link, s32 immediate)
+{
+	return 0x14000000U | (link ? BIT(31) : 0) |
+		((u32)immediate & (BIT(26) - 1));
+}
+
+static u32 tcti_test_encode_branch_conditional(u8 condition, s32 immediate)
+{
+	return 0x54000000U |
+		(((u32)immediate & (BIT(19) - 1)) << 5) | condition;
+}
+
+static u32 tcti_test_encode_compare_branch(bool is_64bit, bool nonzero,
+					    s32 immediate, u8 rt)
+{
+	return 0x34000000U | (is_64bit ? BIT(31) : 0) |
+		(nonzero ? BIT(24) : 0) |
+		(((u32)immediate & (BIT(19) - 1)) << 5) | rt;
+}
+
+static u32 tcti_test_encode_test_branch(bool nonzero, u8 test_bit,
+					 s32 immediate, u8 rt)
+{
+	return 0x36000000U | ((u32)(test_bit & BIT(5)) << 26) |
+		(nonzero ? BIT(24) : 0) |
+		((u32)(test_bit & 0x1fU) << 19) |
+		(((u32)immediate & (BIT(14) - 1)) << 5) | rt;
+}
+
+static u32 tcti_test_encode_branch_register(enum tcti_branch_register_op op,
+					      u8 rn)
+{
+	u32 pattern;
+
+	switch (op) {
+	case TCTI_BRANCH_REGISTER_BR:
+		pattern = 0xd61f0000U;
+		break;
+	case TCTI_BRANCH_REGISTER_BLR:
+		pattern = 0xd63f0000U;
+		break;
+	case TCTI_BRANCH_REGISTER_RET:
+		pattern = 0xd65f0000U;
+		break;
+	default:
+		return 0;
+	}
+
+	return pattern | ((u32)rn << 5);
+}
+
+static u32 tcti_test_encode_move_register(u8 rd, u8 rn)
+{
+	/* ORR Xd, Xn, XZR, the architectural MOV register alias. */
+	return 0xaa1f0000U | ((u32)rn << 5) | rd;
+}
+
+static u32 tcti_test_encode_adr(s32 immediate, u8 rd)
+{
+	u32 imm21 = (u32)immediate & (BIT(21) - 1);
+
+	return 0x10000000U | ((imm21 & 0x3U) << 29) |
+		((imm21 >> 2) << 5) | rd;
+}
+
+static void tcti_resume_user_executes_complete_baseline_control_flow(
+	struct kunit *test)
+{
+	/*
+	 * This executes the baseline control-flow families through the real engine,
+	 * rather than only through the gadget unit path. Each conditional skips a
+	 * poison move. BL enters a helper that makes an indirect BLR call, whose
+	 * RET returns to a BR that restores the original direct-call continuation.
+	 */
+	u32 instructions[] = {
+		0xd2800000U, /* mov x0, #0 */
+		0,           /* cbz x0, .+8 */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0xd2800021U, /* mov x1, #1 */
+		0,           /* cbnz w1, .+8 */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0xd2800002U, /* mov x2, #0 */
+		0,           /* tbz x2, #63, .+8 */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0xd2800023U, /* mov x3, #1 */
+		0,           /* tbnz x3, #0, .+8 */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0xeb00001fU, /* subs xzr, x0, x0 */
+		0,           /* b.eq .+8 */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0,           /* bl helper */
+		0,           /* b svc */
+		0xd29bd5a9U, /* mov x9, #0xdead */
+		0xd4000001U, /* svc #0 */
+		0xd503201fU, /* nop */
+		0,           /* mov x6, x30 */
+		0,           /* adr x5, indirect_helper */
+		0,           /* blr x5 */
+		0,           /* br x6 */
+		0xd503201fU, /* nop */
+		0xd2800544U, /* mov x4, #42 */
+		0,           /* ret */
+	};
+	struct tcti_result result;
+	struct pt_regs regs = { 0 };
+	unsigned long mapped;
+	int ret;
+
+	instructions[1] = tcti_test_encode_compare_branch(true, false, 2, 0);
+	instructions[4] = tcti_test_encode_compare_branch(false, true, 2, 1);
+	instructions[7] = tcti_test_encode_test_branch(false, 63, 2, 2);
+	instructions[10] = tcti_test_encode_test_branch(true, 0, 2, 3);
+	instructions[13] = tcti_test_encode_branch_conditional(0, 2);
+	instructions[15] = tcti_test_encode_branch_immediate(true, 5);
+	instructions[16] = tcti_test_encode_branch_immediate(false, 2);
+	instructions[20] = tcti_test_encode_move_register(6, 30);
+	instructions[21] = tcti_test_encode_adr(16, 5);
+	instructions[22] = tcti_test_encode_branch_register(
+		TCTI_BRANCH_REGISTER_BLR, 5);
+	instructions[23] = tcti_test_encode_branch_register(
+		TCTI_BRANCH_REGISTER_BR, 6);
+	instructions[26] = tcti_test_encode_branch_register(
+		TCTI_BRANCH_REGISTER_RET, 30);
+
+	mapped = tcti_test_map_instructions(test, instructions,
+					    ARRAY_SIZE(instructions));
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	regs.pc = mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+
+	result = tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, mapped + 18 * sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, instructions[18], result.instruction);
+	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[4]);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[9]);
+	KUNIT_EXPECT_EQ(test, mapped + 16 * sizeof(u32), regs.regs[6]);
+	KUNIT_EXPECT_EQ(test, mapped + 25 * sizeof(u32), regs.regs[5]);
+	KUNIT_EXPECT_EQ(test, mapped + 23 * sizeof(u32), regs.regs[30]);
+	KUNIT_EXPECT_NE(test, 0UL, regs.pstate & PSR_Z_BIT);
+	KUNIT_EXPECT_EQ(test, mapped + 18 * sizeof(u32), regs.pc);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
+static void tcti_resume_user_rejects_invalid_baseline_control_encodings(
+	struct kunit *test)
+{
+	static const u32 invalid_instructions[] = {
+		0x54000010U, /* BC.cond is HBC-conditioned, not B.cond. */
+		0xd61f0001U, /* BR with a reserved low bit. */
+		0xd69f03e0U, /* ERET is non-EL0. */
+	};
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(invalid_instructions); index++) {
+		struct tcti_result result;
+		struct pt_regs regs = { 0 };
+		unsigned long mapped;
+		int ret;
+
+		mapped = tcti_test_map_instructions(test,
+			&invalid_instructions[index], 1);
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x1122334455667788ULL;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "index=%u", index);
+		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+			"index=%u", index);
+		KUNIT_EXPECT_EQ_MSG(test, mapped, result.pc, "index=%u", index);
+		KUNIT_EXPECT_EQ_MSG(test, invalid_instructions[index],
+			result.instruction, "index=%u", index);
+		KUNIT_EXPECT_EQ_MSG(test, 0x1122334455667788ULL,
+			regs.regs[0], "index=%u", index);
+		KUNIT_EXPECT_EQ_MSG(test, mapped, regs.pc, "index=%u", index);
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+	}
 }
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -13799,6 +14458,9 @@ static void tcti_switch_executes_complete_hint_barrier_cache_family(
 	static const u32 barriers[] = {
 		0xd5033f9fU, 0xd5033bbfU, 0xd5033fdfU,
 	};
+	static const u32 nxs_barriers[] = {
+		0xd503323fU, 0xd503363fU, 0xd5033a3fU, 0xd5033e3fU,
+	};
 	static const u32 cache_operations[] = {
 		0xd50b7520U, 0xd50b7a20U, 0xd50b7b20U, 0xd50b7e20U,
 	};
@@ -13834,16 +14496,71 @@ static void tcti_switch_executes_complete_hint_barrier_cache_family(
 		KUNIT_EXPECT_EQ(test, 0x7204ULL, regs.pc);
 	}
 
+	for (immediate = 0; immediate < ARRAY_SIZE(nxs_barriers); immediate++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(nxs_barriers[immediate]);
+		struct pt_regs regs = {
+			.pc = 0x7200,
+			.pstate = PSR_N_BIT | PSR_C_BIT,
+		};
+		int ret = tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &decoded, NULL);
+
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_BARRIER,
+				decoded.decode_class);
+		KUNIT_EXPECT_TRUE(test, decoded.barrier_nxs);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, ret);
+		KUNIT_EXPECT_EQ(test, 0x7200ULL, regs.pc);
+		KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT, regs.pstate);
+	}
+
 	for (immediate = 0; immediate < ARRAY_SIZE(cache_operations);
 	     immediate++) {
 		struct tcti_decoded_instruction decoded =
 			tcti_decode_aarch64(cache_operations[immediate] | 9U);
-		struct pt_regs regs = { .pc = 0x7300 };
+		struct pt_regs regs = {
+			.pc = 0x7300,
+			.pstate = PSR_N_BIT | PSR_C_BIT,
+		};
 		int ret = tcti_switch_debug_execute_decoded(
 			current->mm, &regs, &decoded, NULL);
 
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, ret);
+		KUNIT_EXPECT_EQ(test, 0x7300ULL, regs.pc);
+		KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT, regs.pstate);
+	}
+
+	{
+		static const u32 program[] = {
+			0xd5033e3fU, /* dsb synXS */
+			0xd4000001U, /* svc #0 */
+		};
+		struct pt_regs regs = {
+			.sp = STACK_TOP - 16,
+			.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT,
+			.syscallno = NO_SYSCALL,
+		};
+		struct tcti_result result;
+		unsigned long mapped;
+		int ret;
+
+		mapped = tcti_test_map_instructions(test, program,
+						   ARRAY_SIZE(program));
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason);
+		KUNIT_EXPECT_EQ(test, -ENOSYS, result.status);
+		KUNIT_EXPECT_EQ(test, mapped, result.pc);
+		KUNIT_EXPECT_EQ(test, program[0], result.instruction);
+		KUNIT_EXPECT_EQ(test, mapped, regs.pc);
+		KUNIT_EXPECT_EQ(test, PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT,
+				regs.pstate);
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
 		KUNIT_EXPECT_EQ(test, 0, ret);
-		KUNIT_EXPECT_EQ(test, 0x7304ULL, regs.pc);
 	}
 }
 
@@ -30624,6 +31341,155 @@ static void tcti_switch_executes_simd_shll_family(struct kunit *test)
 		tcti_decode_aarch64(0x2ee13820U).decode_class);
 }
 
+static void tcti_decode_advsimd_fp16_three_same_source_rows(
+	struct kunit *test)
+{
+	/* 32 pinned 2026-06 source leaves, 55 legal encodings including Q. */
+	static const struct {
+		u32 instruction;
+		enum tcti_simd_vector_arithmetic_op operation;
+		bool scalar;
+		bool q;
+	} rows[] = {
+		{ 0x5e421c00U, TCTI_SIMD_ARITH_FMULX, true, true },
+		{ 0x5e422400U, TCTI_SIMD_ARITH_FCMEQ, true, true },
+		{ 0x5e423c00U, TCTI_SIMD_ARITH_FRECPS, true, true },
+		{ 0x5ec23c00U, TCTI_SIMD_ARITH_FRSQRTS, true, true },
+		{ 0x7e422400U, TCTI_SIMD_ARITH_FCMGE, true, true },
+		{ 0x7e422c00U, TCTI_SIMD_ARITH_FACGE, true, true },
+		{ 0x7ec21400U, TCTI_SIMD_ARITH_FABD, true, true },
+		{ 0x7ec22400U, TCTI_SIMD_ARITH_FCMGT, true, true },
+		{ 0x7ec22c00U, TCTI_SIMD_ARITH_FACGT, true, true },
+		{ 0x0e421400U, TCTI_SIMD_ARITH_FADD, false, false },
+		{ 0x4e421400U, TCTI_SIMD_ARITH_FADD, false, true },
+		{ 0x0e420400U, TCTI_SIMD_ARITH_FMAXNM, false, false },
+		{ 0x4e420400U, TCTI_SIMD_ARITH_FMAXNM, false, true },
+		{ 0x0e420c00U, TCTI_SIMD_ARITH_FMLA, false, false },
+		{ 0x4e420c00U, TCTI_SIMD_ARITH_FMLA, false, true },
+		{ 0x0ec00c00U, TCTI_SIMD_ARITH_FMLS, false, false },
+		{ 0x4ec20c00U, TCTI_SIMD_ARITH_FMLS, false, true },
+		{ 0x2e423400U, TCTI_SIMD_ARITH_FMAXP, false, false },
+		{ 0x6e423400U, TCTI_SIMD_ARITH_FMAXP, false, true },
+		{ 0x0ec23400U, TCTI_SIMD_ARITH_FMIN, false, false },
+		{ 0x4ec23400U, TCTI_SIMD_ARITH_FMIN, false, true },
+		{ 0x0ec23c00U, TCTI_SIMD_ARITH_FRSQRTS, false, false },
+		{ 0x4ec23c00U, TCTI_SIMD_ARITH_FRSQRTS, false, true },
+		{ 0x2e421400U, TCTI_SIMD_ARITH_FADDP, false, false },
+		{ 0x6e421400U, TCTI_SIMD_ARITH_FADDP, false, true },
+		{ 0x2e420400U, TCTI_SIMD_ARITH_FMAXNMP, false, false },
+		{ 0x6e420400U, TCTI_SIMD_ARITH_FMAXNMP, false, true },
+		{ 0x2e423c00U, TCTI_SIMD_ARITH_FDIV, false, false },
+		{ 0x6e423c00U, TCTI_SIMD_ARITH_FDIV, false, true },
+		{ 0x2ec20400U, TCTI_SIMD_ARITH_FMINNMP, false, false },
+		{ 0x6ec20400U, TCTI_SIMD_ARITH_FMINNMP, false, true },
+		{ 0x0e421c00U, TCTI_SIMD_ARITH_FMULX, false, false },
+		{ 0x4e421c00U, TCTI_SIMD_ARITH_FMULX, false, true },
+		{ 0x2e421c00U, TCTI_SIMD_ARITH_FMUL, false, false },
+		{ 0x6e421c00U, TCTI_SIMD_ARITH_FMUL, false, true },
+		{ 0x2ec21400U, TCTI_SIMD_ARITH_FABD, false, false },
+		{ 0x6ec21400U, TCTI_SIMD_ARITH_FABD, false, true },
+		{ 0x0e422400U, TCTI_SIMD_ARITH_FCMEQ, false, false },
+		{ 0x4e422400U, TCTI_SIMD_ARITH_FCMEQ, false, true },
+		{ 0x0e423400U, TCTI_SIMD_ARITH_FMAX, false, false },
+		{ 0x4e423400U, TCTI_SIMD_ARITH_FMAX, false, true },
+		{ 0x0e423c00U, TCTI_SIMD_ARITH_FRECPS, false, false },
+		{ 0x4e423c00U, TCTI_SIMD_ARITH_FRECPS, false, true },
+		{ 0x0ec20400U, TCTI_SIMD_ARITH_FMINNM, false, false },
+		{ 0x4ec20400U, TCTI_SIMD_ARITH_FMINNM, false, true },
+		{ 0x2e422400U, TCTI_SIMD_ARITH_FCMGE, false, false },
+		{ 0x6e422400U, TCTI_SIMD_ARITH_FCMGE, false, true },
+		{ 0x2ec22400U, TCTI_SIMD_ARITH_FCMGT, false, false },
+		{ 0x6ec22400U, TCTI_SIMD_ARITH_FCMGT, false, true },
+		{ 0x2e422c00U, TCTI_SIMD_ARITH_FACGE, false, false },
+		{ 0x6e422c00U, TCTI_SIMD_ARITH_FACGE, false, true },
+		{ 0x2ec22c00U, TCTI_SIMD_ARITH_FACGT, false, false },
+		{ 0x6ec22c00U, TCTI_SIMD_ARITH_FACGT, false, true },
+		{ 0x2ec23400U, TCTI_SIMD_ARITH_FMINP, false, false },
+		{ 0x6ec23400U, TCTI_SIMD_ARITH_FMINP, false, true },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(rows); index++) {
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(rows[index].instruction);
+		struct tcti_decoded_instruction reserved =
+			tcti_decode_aarch64(rows[index].instruction ^ BIT(23));
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class, "row %zu", index);
+		KUNIT_EXPECT_EQ_MSG(test, sizeof(u16), decoded.access_size,
+			"row %zu", index);
+		KUNIT_EXPECT_EQ_MSG(test, rows[index].scalar, decoded.simd_scalar,
+			"row %zu", index);
+		KUNIT_EXPECT_EQ_MSG(test, rows[index].q, decoded.simd_q,
+			"row %zu", index);
+		KUNIT_EXPECT_EQ_MSG(test, rows[index].operation,
+			decoded.simd_arithmetic_op, "row %zu", index);
+		KUNIT_EXPECT_EQ_MSG(test,
+			rows[index].scalar ? sizeof(u16) :
+			(rows[index].q ? 2 * sizeof(u64) : sizeof(u64)),
+			decoded.result_size, "row %zu", index);
+		KUNIT_EXPECT_NE_MSG(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			reserved.decode_class, "reserved row %zu", index);
+	}
+}
+
+static void tcti_resume_user_executes_advsimd_fp16_three_same(
+	struct kunit *test)
+{
+	static const u32 instructions[] = {
+		0x4e421420U, /* fadd v0.8h, v1.8h, v2.8h */
+		0x2e421423U, /* faddp v3.4h, v1.4h, v2.4h */
+		0x5e412424U, /* fcmeq h4, h1, h1 */
+		0xd4000001U, /* svc #0 */
+	};
+	struct tcti_result result;
+	struct pt_regs regs = {};
+	unsigned long mapped;
+	int ret;
+
+	mapped = tcti_test_map_instructions(test, instructions,
+		ARRAY_SIZE(instructions));
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	current->thread.user_simd[2] = 0x4400420040003c00ULL;
+	current->thread.user_simd[3] = 0x4400420040003c00ULL;
+	current->thread.user_simd[4] = 0x3c00400042004400ULL;
+	current->thread.user_simd[5] = 0x3c00400042004400ULL;
+	current->thread.user_simd_valid = 1;
+	current->thread.user_fpcr = 0;
+	current->thread.user_fpsr = BIT(27);
+	regs.pc = mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[8] = __NR_getpid;
+
+	result = tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test,
+		mapped + (ARRAY_SIZE(instructions) - 1) * sizeof(u32),
+		result.pc);
+	KUNIT_EXPECT_EQ(test, instructions[ARRAY_SIZE(instructions) - 1],
+		result.instruction);
+	KUNIT_EXPECT_EQ(test, 0x4500450045004500ULL,
+		current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, 0x4500450045004500ULL,
+		current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 0x4200470047004200ULL,
+		current->thread.user_simd[6]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[7]);
+	KUNIT_EXPECT_EQ(test, 0xffffULL, current->thread.user_simd[8]);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[9]);
+	KUNIT_EXPECT_EQ(test,
+		mapped + (ARRAY_SIZE(instructions) - 1) * sizeof(u32), regs.pc);
+	KUNIT_EXPECT_EQ(test, BIT(27), current->thread.user_fpsr);
+
+	ret = vm_munmap(mapped, PAGE_SIZE);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_complete_target_inventory_is_kernel_visible),
@@ -30705,6 +31571,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_exhaustive_load_store_pair_family),
 	KUNIT_CASE(tcti_decode_load_store_pair_all_register_fields),
 	KUNIT_CASE(tcti_decode_load_store_pair_fixed_mask_boundaries),
+	KUNIT_CASE(tcti_decode_rejects_constrained_unpredictable_pair_overlaps),
 	KUNIT_CASE(tcti_gadget_executes_non_temporal_simd_pair),
 	KUNIT_CASE(tcti_gadget_executes_complete_load_store_pair_family),
 	KUNIT_CASE(tcti_gadget_reports_load_store_pair_second_fault),
@@ -30717,6 +31584,9 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_exhaustive_load_store_register_offset_family),
 	KUNIT_CASE(tcti_decode_load_store_all_register_fields),
 	KUNIT_CASE(tcti_gadget_executes_complete_load_store_register_family),
+	KUNIT_CASE(tcti_gadget_executes_gpr_load_store_immediate_addressing),
+	KUNIT_CASE(tcti_gadget_executes_gpr_load_store_register_offsets),
+	KUNIT_CASE(tcti_gadget_load_store_preserves_fault_and_zero_register_state),
 	KUNIT_CASE(tcti_decode_ldrsw_signed_immediate_writes_x_register),
 	KUNIT_CASE(tcti_decode_recognizes_logical_shifted_register_class),
 	KUNIT_CASE(tcti_decode_recognizes_logical_immediate_class),
@@ -30875,7 +31745,12 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_resume_user_observes_mprotect_write_transition),
 	KUNIT_CASE(tcti_resume_user_observes_fresh_backing_after_remap),
 	KUNIT_CASE(tcti_resume_user_reports_unsupported_instruction),
+	KUNIT_CASE(tcti_resume_user_rejects_unavailable_sme_pstate_aliases),
+	KUNIT_CASE(tcti_sme_pstate_decode_rejects_non_alias_encodings),
+	KUNIT_CASE(tcti_resume_user_rejects_non_el0_system_accesses),
 	KUNIT_CASE(tcti_resume_user_executes_branch_sequence),
+	KUNIT_CASE(tcti_resume_user_executes_complete_baseline_control_flow),
+	KUNIT_CASE(tcti_resume_user_rejects_invalid_baseline_control_encodings),
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	KUNIT_CASE(tcti_resume_user_updates_tls_register_state),
 #endif
@@ -31098,6 +31973,8 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_simd_indexed_preserves_source_aliasing),
 	KUNIT_CASE(tcti_simd_indexed_rejects_invalid_runtime_shapes),
 	KUNIT_CASE(tcti_decode_exhaustive_simd_vector_two_register_fp_family),
+	KUNIT_CASE(tcti_decode_advsimd_fp16_three_same_source_rows),
+	KUNIT_CASE(tcti_resume_user_executes_advsimd_fp16_three_same),
 	KUNIT_CASE(tcti_gadget_executes_simd_vector_two_register_fp_family),
 	KUNIT_CASE(tcti_simd_vector_two_register_rejects_invalid_runtime_shapes),
 #endif
@@ -31113,4 +31990,326 @@ static struct kunit_suite tcti_decode_test_suite = {
 
 kunit_test_suite(tcti_decode_test_suite);
 
+/*
+ * Exact direct leaves implemented by the production decoder and executor.
+ * These ordinal, name, operation, and encoding tuples come from the pinned
+ * AARCHMRS 2026-06 source manifest.  The central proof registry consumes this
+ * suite's provenance separately, so it is deliberately kept out of this
+ * decoder-owned test object.
+ */
+struct tcti_branch_control_source_leaf {
+	u16 ordinal;
+	const char *name;
+	const char *operation;
+	u32 mask;
+	u32 pattern;
+};
+
+static const struct tcti_branch_control_source_leaf
+tcti_branch_control_source_leaves[] = {
+	{ 2211, "B_only_condbranch", "B_cond", 0xff000010U, 0x54000000U },
+	{ 2227, "SVC_EX_exception", "SVC", 0xffe0001fU, 0xd4000001U },
+	{ 2230, "BRK_EX_exception", "BRK", 0xffe0001fU, 0xd4200000U },
+	{ 2231, "HLT_EX_exception", "HLT", 0xffe0001fU, 0xd4400000U },
+	{ 2238, "NOP_HI_hints", "NOP", 0xffffffffU, 0xd503201fU },
+	{ 2239, "YIELD_HI_hints", "YIELD", 0xffffffffU, 0xd503203fU },
+	{ 2240, "WFE_HI_hints", "WFE", 0xffffffffU, 0xd503205fU },
+	{ 2241, "WFI_HI_hints", "WFI", 0xffffffffU, 0xd503207fU },
+	{ 2242, "SEV_HI_hints", "SEV", 0xffffffffU, 0xd503209fU },
+	{ 2243, "SEVL_HI_hints", "SEVL", 0xffffffffU, 0xd50320bfU },
+	{ 2254, "CSDB_HI_hints", "CSDB", 0xffffffffU, 0xd503229fU },
+	{ 2270, "HINT_HM_hints", "HINT", 0xfffff01fU, 0xd503201fU },
+	{ 2288, "BR_64_branch_reg", "BR", 0xfffffc1fU, 0xd61f0000U },
+	{ 2291, "BLR_64_branch_reg", "BLR", 0xfffffc1fU, 0xd63f0000U },
+	{ 2294, "RET_64R_branch_reg", "RET", 0xfffffc1fU, 0xd65f0000U },
+	{ 2312, "B_only_branch_imm", "B_uncond", 0xfc000000U, 0x14000000U },
+	{ 2313, "BL_only_branch_imm", "BL", 0xfc000000U, 0x94000000U },
+	{ 2314, "CBZ_32_compbranch", "CBZ", 0xff000000U, 0x34000000U },
+	{ 2315, "CBNZ_32_compbranch", "CBNZ", 0xff000000U, 0x35000000U },
+	{ 2316, "CBZ_64_compbranch", "CBZ", 0xff000000U, 0xb4000000U },
+	{ 2317, "CBNZ_64_compbranch", "CBNZ", 0xff000000U, 0xb5000000U },
+	{ 2342, "TBZ_only_testbranch", "TBZ", 0x7f000000U, 0x36000000U },
+	{ 2343, "TBNZ_only_testbranch", "TBNZ", 0x7f000000U, 0x37000000U },
+};
+
+/*
+ * These overlapping encodings carry non-baseline feature conditions in the
+ * pinned source.  They remain intentionally outside the source-bound table:
+ * accepting their broader decoder class is not a substitute for their own
+ * architectural semantics and feature-domain proof.
+ */
+static const struct {
+	u16 ordinal;
+	const char *name;
+	const char *feature;
+} tcti_branch_control_feature_gaps[] = {
+	{ 2212, "BC_only_condbranch", "FEAT_HBC" },
+	{ 2228, "HVC_EX_exception", "non-EL0" },
+	{ 2229, "SMC_EX_exception", "non-EL0" },
+	{ 2235, "TENTER_te_exception", "FEAT_TEV" },
+	{ 2244, "DGH_HI_hints", "FEAT_DGH" },
+	{ 2245, "XPACLRI_HI_hints", "FEAT_PAuth" },
+	{ 2250, "ESB_HI_hints", "FEAT_RAS" },
+	{ 2253, "GCSB_HD_hints", "FEAT_GCS" },
+	{ 2255, "CLRBHB_HI_hints", "FEAT_CLRBHB" },
+	{ 2264, "BTI_HB_hints", "FEAT_BTI" },
+	{ 2289, "BRAAZ_64_branch_reg", "FEAT_PAuth" },
+	{ 2290, "BRABZ_64_branch_reg", "FEAT_PAuth" },
+	{ 2292, "BLRAAZ_64_branch_reg", "FEAT_PAuth" },
+	{ 2293, "BLRABZ_64_branch_reg", "FEAT_PAuth" },
+	{ 2296, "RETAA_64E_branch_reg", "FEAT_PAuth" },
+	{ 2298, "RETAB_64E_branch_reg", "FEAT_PAuth" },
+	{ 2302, "TEXIT_te_branch_reg", "FEAT_TEV" },
+	{ 2304, "BRAA_64P_branch_reg", "FEAT_PAuth" },
+	{ 2305, "BRAB_64P_branch_reg", "FEAT_PAuth" },
+	{ 2306, "BLRAA_64P_branch_reg", "FEAT_PAuth" },
+	{ 2307, "BLRAB_64P_branch_reg", "FEAT_PAuth" },
+};
+
+/*
+ * Pinned AARCHMRS 2026-06 source leaves whose generic decoder parents would
+ * otherwise obscure an unavailable control-flow extension.  The ASL
+ * availability ledger marks every operation here as absent and blocking, so
+ * a TCTI guest must receive the ordinary undefined-instruction path instead
+ * of HINT, BR, BLR, or RET behavior.
+ */
+static const struct tcti_branch_control_source_leaf
+tcti_pauth_bti_blocking_leaves[] = {
+	{ 2245, "XPACLRI_HI_hints", "XPAC", 0xffffffffU, 0xd50320ffU },
+	{ 2246, "PACIA1716_HI_hints", "PACIA", 0xffffffffU, 0xd503211fU },
+	{ 2247, "PACIB1716_HI_hints", "PACIB", 0xffffffffU, 0xd503215fU },
+	{ 2248, "AUTIA1716_HI_hints", "AUTIA", 0xffffffffU, 0xd503219fU },
+	{ 2249, "AUTIB1716_HI_hints", "AUTIB", 0xffffffffU, 0xd50321dfU },
+	{ 2256, "PACIAZ_HI_hints", "PACIA", 0xffffffffU, 0xd503231fU },
+	{ 2257, "PACIASP_HI_hints", "PACIA", 0xffffffffU, 0xd503233fU },
+	{ 2258, "PACIBZ_HI_hints", "PACIB", 0xffffffffU, 0xd503235fU },
+	{ 2259, "PACIBSP_HI_hints", "PACIB", 0xffffffffU, 0xd503237fU },
+	{ 2260, "AUTIAZ_HI_hints", "AUTIA", 0xffffffffU, 0xd503239fU },
+	{ 2261, "AUTIASP_HI_hints", "AUTIA", 0xffffffffU, 0xd50323bfU },
+	{ 2262, "AUTIBZ_HI_hints", "AUTIB", 0xffffffffU, 0xd50323dfU },
+	{ 2263, "AUTIBSP_HI_hints", "AUTIB", 0xffffffffU, 0xd50323ffU },
+	{ 2264, "BTI_HB_hints", "BTI", 0xffffff3fU, 0xd503241fU },
+	{ 2265, "PACM_HI_hints", "PACM", 0xffffffffU, 0xd50324ffU },
+	{ 2289, "BRAAZ_64_branch_reg", "BRA", 0xfffffc1fU, 0xd61f081fU },
+	{ 2290, "BRABZ_64_branch_reg", "BRA", 0xfffffc1fU, 0xd61f0c1fU },
+	{ 2292, "BLRAAZ_64_branch_reg", "BLRA", 0xfffffc1fU, 0xd63f081fU },
+	{ 2293, "BLRABZ_64_branch_reg", "BLRA", 0xfffffc1fU, 0xd63f0c1fU },
+	{ 2295, "RETAASPPCR_64M_branch_reg", "RETASPPCR_reg", 0xffffffe0U, 0xd65f0be0U },
+	{ 2296, "RETAA_64E_branch_reg", "RETA", 0xffffffffU, 0xd65f0bffU },
+	{ 2297, "RETABSPPCR_64M_branch_reg", "RETASPPCR_reg", 0xffffffe0U, 0xd65f0fe0U },
+	{ 2298, "RETAB_64E_branch_reg", "RETA", 0xffffffffU, 0xd65f0fffU },
+	{ 2304, "BRAA_64P_branch_reg", "BRA", 0xfffffc00U, 0xd71f0800U },
+	{ 2305, "BRAB_64P_branch_reg", "BRA", 0xfffffc00U, 0xd71f0c00U },
+	{ 2306, "BLRAA_64P_branch_reg", "BLRA", 0xfffffc00U, 0xd73f0800U },
+	{ 2307, "BLRAB_64P_branch_reg", "BLRA", 0xfffffc00U, 0xd73f0c00U },
+};
+
+static void tcti_branch_control_source_bindings(struct kunit *test)
+{
+	size_t index;
+
+	KUNIT_EXPECT_EQ(test, 23U, ARRAY_SIZE(tcti_branch_control_source_leaves));
+	for (index = 0; index < ARRAY_SIZE(tcti_branch_control_source_leaves);
+	     index++) {
+		const struct tcti_branch_control_source_leaf *leaf =
+			&tcti_branch_control_source_leaves[index];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(leaf->pattern);
+
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, decoded.instruction,
+				    "%u %s %s", leaf->ordinal, leaf->name,
+				    leaf->operation);
+		KUNIT_EXPECT_NE_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				    decoded.decode_class, "%u %s", leaf->ordinal,
+				    leaf->name);
+	}
+
+	for (index = 1; index < ARRAY_SIZE(tcti_branch_control_source_leaves);
+	     index++)
+		KUNIT_EXPECT_NE_MSG(test,
+			tcti_branch_control_source_leaves[index - 1].ordinal,
+			tcti_branch_control_source_leaves[index].ordinal,
+			"duplicate pinned source ordinal");
+}
+
+static void tcti_branch_control_feature_conditions_remain_gaps(
+	struct kunit *test)
+{
+	size_t gap;
+	size_t bound;
+
+	KUNIT_EXPECT_GT(test, ARRAY_SIZE(tcti_branch_control_feature_gaps), 0U);
+	for (gap = 0; gap < ARRAY_SIZE(tcti_branch_control_feature_gaps); gap++) {
+		for (bound = 0;
+		     bound < ARRAY_SIZE(tcti_branch_control_source_leaves); bound++)
+			KUNIT_EXPECT_NE_MSG(test,
+				tcti_branch_control_feature_gaps[gap].ordinal,
+				tcti_branch_control_source_leaves[bound].ordinal,
+				"feature-conditioned %s (%s) was source-bound",
+				tcti_branch_control_feature_gaps[gap].name,
+				tcti_branch_control_feature_gaps[gap].feature);
+	}
+}
+
+static void tcti_pauth_bti_control_flow_leaves_fail_closed(struct kunit *test)
+{
+	static const u32 bti_encodings[] = {
+		0xd503241fU, 0xd503245fU, 0xd503249fU, 0xd50324dfU,
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_pauth_bti_blocking_leaves);
+	     index++) {
+		const struct tcti_branch_control_source_leaf *leaf =
+			&tcti_pauth_bti_blocking_leaves[index];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(leaf->pattern);
+
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern & leaf->mask,
+				    decoded.instruction & leaf->mask,
+				    "%u %s lost its pinned encoding", leaf->ordinal,
+				    leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				    decoded.decode_class, "%u %s %s must block",
+				    leaf->ordinal, leaf->name, leaf->operation);
+	}
+
+	for (index = 0; index < ARRAY_SIZE(bti_encodings); index++)
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				    tcti_decode_aarch64(bti_encodings[index]).decode_class,
+				    "BTI BType encoding %#x must block",
+				    bti_encodings[index]);
+
+}
+
+static void tcti_branch_control_production_path_semantics(struct kunit *test)
+{
+	tcti_resume_user_executes_complete_baseline_control_flow(test);
+	tcti_resume_user_rejects_invalid_baseline_control_encodings(test);
+}
+
+static void tcti_branch_control_exception_and_hint_paths(struct kunit *test)
+{
+	tcti_decode_covers_complete_exception_generation_family(test);
+	tcti_resume_user_reports_syscall_and_register_state(test);
+	tcti_resume_user_reports_breakpoint_and_register_state(test);
+	tcti_resume_user_reports_hlt_as_undefined(test);
+	tcti_switch_executes_complete_hint_barrier_cache_family(test);
+	tcti_engine_reports_structured_hint_yields(test);
+}
+
+static struct kunit_case tcti_branch_control_source_bound_test_cases[] = {
+	KUNIT_CASE(tcti_branch_control_source_bindings),
+	KUNIT_CASE(tcti_branch_control_feature_conditions_remain_gaps),
+	KUNIT_CASE(tcti_pauth_bti_control_flow_leaves_fail_closed),
+	KUNIT_CASE(tcti_branch_control_production_path_semantics),
+	KUNIT_CASE(tcti_branch_control_exception_and_hint_paths),
+	{}
+};
+
+struct kunit_suite tcti_branch_control_source_bound_test_suite = {
+	.name = "orlix-tcti-branch-control-source-bound",
+	.init = tcti_decode_test_init,
+	.exit = tcti_decode_test_exit,
+	.test_cases = tcti_branch_control_source_bound_test_cases,
+};
+
+kunit_test_suite(tcti_branch_control_source_bound_test_suite);
+
 MODULE_LICENSE("GPL");
+
+struct tcti_cssc_scalar_source_leaf {
+	u16 ordinal;
+	const char *name;
+	u32 pattern;
+	u64 left;
+	u64 right;
+	u64 expected;
+};
+
+static const struct tcti_cssc_scalar_source_leaf
+tcti_cssc_scalar_source_leaves[] = {
+	{ 3368, "SMAX_32_dp_2src", 0x1ac06000U, 0x80000000U, 2U, 2U },
+	{ 3369, "UMAX_32_dp_2src", 0x1ac06400U, 0x80000000U, 2U,
+	  0x80000000U },
+	{ 3370, "SMIN_32_dp_2src", 0x1ac06800U, 0x80000000U, 2U,
+	  0x80000000U },
+	{ 3371, "UMIN_32_dp_2src", 0x1ac06c00U, 0x80000000U, 2U, 2U },
+	{ 3384, "SMAX_64_dp_2src", 0x9ac06000U, BIT_ULL(63), 2U, 2U },
+	{ 3385, "UMAX_64_dp_2src", 0x9ac06400U, BIT_ULL(63), 2U,
+	  BIT_ULL(63) },
+	{ 3386, "SMIN_64_dp_2src", 0x9ac06800U, BIT_ULL(63), 2U,
+	  BIT_ULL(63) },
+	{ 3387, "UMIN_64_dp_2src", 0x9ac06c00U, BIT_ULL(63), 2U, 2U },
+	{ 3394, "CTZ_32_dp_1src", 0x5ac01800U, 0x10U, 0U, 4U },
+	{ 3395, "CNT_32_dp_1src", 0x5ac01c00U, 0xf000000fU, 0U, 8U },
+	{ 3396, "ABS_32_dp_1src", 0x5ac02000U, 0x80000000U, 0U,
+	  0x80000000U },
+	{ 3403, "CTZ_64_dp_1src", 0xdac01800U, BIT_ULL(63), 0U, 63U },
+	{ 3404, "CNT_64_dp_1src", 0xdac01c00U, 0xf00000000000000fULL, 0U,
+	  8U },
+	{ 3405, "ABS_64_dp_1src", 0xdac02000U, BIT_ULL(63), 0U,
+	  BIT_ULL(63) },
+};
+
+static void tcti_cssc_scalar_source_bindings(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_cssc_scalar_source_leaves);
+	     index++) {
+		const struct tcti_cssc_scalar_source_leaf *leaf =
+			&tcti_cssc_scalar_source_leaves[index];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(leaf->pattern);
+
+		KUNIT_EXPECT_NE_MSG(test, TCTI_DECODE_UNSUPPORTED,
+			decoded.decode_class, "%u %s", leaf->ordinal, leaf->name);
+	}
+}
+
+static void tcti_cssc_scalar_executes_production_path(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_cssc_scalar_source_leaves);
+	     index++) {
+		const struct tcti_cssc_scalar_source_leaf *leaf =
+			&tcti_cssc_scalar_source_leaves[index];
+		struct pt_regs regs = { };
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(leaf->pattern | 3U | (4U << 5) |
+					    (5U << 16));
+
+		regs.regs[4] = leaf->left;
+		regs.regs[5] = leaf->right;
+		KUNIT_ASSERT_EQ_MSG(test, 0,
+			tcti_execute_decoded_semantics(NULL, &regs, &decoded, NULL),
+			"%u %s", leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->expected, regs.regs[3],
+			"%u %s", leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ(test, (unsigned long)sizeof(u32), regs.pc);
+	}
+}
+
+static void tcti_cssc_scalar_rejects_reserved_encodings(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x5ac02400U).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(0x1ac07000U).decode_class);
+}
+
+static struct kunit_case tcti_cssc_scalar_source_bound_test_cases[] = {
+	KUNIT_CASE(tcti_cssc_scalar_source_bindings),
+	KUNIT_CASE(tcti_cssc_scalar_executes_production_path),
+	KUNIT_CASE(tcti_cssc_scalar_rejects_reserved_encodings),
+	{}
+};
+
+static struct kunit_suite tcti_cssc_scalar_source_bound_test_suite = {
+	.name = "orlix-tcti-cssc-scalar-source-bound",
+	.test_cases = tcti_cssc_scalar_source_bound_test_cases,
+};
+
+kunit_test_suite(tcti_cssc_scalar_source_bound_test_suite);

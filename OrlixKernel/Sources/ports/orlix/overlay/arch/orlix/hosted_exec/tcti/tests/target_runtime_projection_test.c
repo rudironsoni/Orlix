@@ -32,6 +32,7 @@ static const struct tcti_runtime_projection_capability capabilities[] = {
 struct live_provider_fixture {
 	size_t calls;
 	bool fail;
+	bool prove_after_first_pass;
 };
 
 static int read_live_leaf(const void *context, size_t index,
@@ -50,7 +51,9 @@ static int read_live_leaf(const void *context, size_t index,
 		.classification = TCTI_RUNTIME_LEAF_REQUIRED_EL0,
 		.proof = "source-bound-proof-record",
 		.source_bound = true,
-		.proved = index != 0,
+		.proved = index != 0 ||
+			(fixture->prove_after_first_pass &&
+			 fixture->calls > TARGET_LEAF_COUNT),
 	};
 	return 0;
 }
@@ -460,7 +463,7 @@ static void live_provider_retains_full_target_and_fails_closed(void)
 	EXPECT(result.classified_leaf_count == TARGET_LEAF_COUNT);
 	EXPECT(result.unproved_leaf_count == 1);
 	EXPECT(result.unadvertised_incomplete_feature_count == 1);
-	EXPECT(fixture.calls == TARGET_LEAF_COUNT * 2);
+	EXPECT(fixture.calls == TARGET_LEAF_COUNT);
 
 	fixture.calls = 0;
 	EXPECT(tcti_runtime_projection_audit_provider(
@@ -486,6 +489,33 @@ static void live_provider_retains_full_target_and_fails_closed(void)
 		       &result) == -EINVAL);
 }
 
+static void provider_cannot_promote_from_a_second_observation(void)
+{
+	struct live_provider_fixture fixture = {
+		.prove_after_first_pass = true,
+	};
+	const struct tcti_runtime_projection_provider provider = {
+		.context = &fixture,
+		.leaf_count = TARGET_LEAF_COUNT,
+		.read_leaf = read_live_leaf,
+	};
+	const struct tcti_runtime_projection_profile advertised_profile = {
+		.hwcap = HWCAP_ALPHA,
+	};
+	const struct tcti_runtime_projection_capability alpha_capability[] = {
+		{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_ALPHA, "FEAT_ALPHA" },
+	};
+	struct tcti_runtime_projection_result result;
+
+	EXPECT(tcti_runtime_projection_audit_provider(
+		       &provider, &advertised_profile, alpha_capability,
+		       sizeof(alpha_capability) / sizeof(alpha_capability[0]),
+		       &result) == -EINVAL);
+	EXPECT(fixture.calls == TARGET_LEAF_COUNT);
+	EXPECT(result.unproved_leaf_count == 1);
+	EXPECT(result.advertised_without_proof_hwcap == HWCAP_ALPHA);
+}
+
 int main(void)
 {
 	advertised_feature_rejects_unclassified_leaf();
@@ -502,11 +532,12 @@ int main(void)
 	unadvertised_gap_cannot_authorize_or_block_proved_bit();
 	unmapped_advertised_capability_is_reported();
 	live_provider_retains_full_target_and_fails_closed();
+	provider_cannot_promote_from_a_second_observation();
 
 	if (failures) {
 		fprintf(stderr, "runtime projection tests: %d failed\n", failures);
 		return 1;
 	}
-	puts("runtime projection tests: 13 passed");
+	puts("runtime projection tests: 14 passed");
 	return 0;
 }

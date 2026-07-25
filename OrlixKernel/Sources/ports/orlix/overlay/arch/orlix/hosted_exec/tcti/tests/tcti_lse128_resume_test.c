@@ -14,30 +14,56 @@
 
 #define TCTI_LSE128_SVC 0xd4000001U
 #define TCTI_LSE128_OPERATION_MASK (0xfU << 12)
+#define TCTI_LSE_CASP_BASE 0x08207c00U
 
 struct tcti_lse128_value {
 	u64 low;
 	u64 high;
 };
 
+struct tcti_lse_casp32_value {
+	u32 low;
+	u32 high;
+};
+
 struct tcti_lse128_leaf {
+	u32 source_ordinal;
 	enum tcti_lse_atomic_op operation;
+	u8 order;
 	u32 instruction;
 };
 
+/* AARCHMRS 2026-06 source ordinals 2345 through 2352. */
+struct tcti_lse_casp_leaf {
+	u32 source_ordinal;
+	bool is_64bit;
+	u8 order;
+};
+
+static const struct tcti_lse_casp_leaf tcti_lse_casp_leaves[] = {
+	{ 2345U, false, 0 },
+	{ 2346U, false, 2 },
+	{ 2347U, false, 1 },
+	{ 2348U, false, 3 },
+	{ 2349U, true, 0 },
+	{ 2350U, true, 2 },
+	{ 2351U, true, 1 },
+	{ 2352U, true, 3 },
+};
+
 static const struct tcti_lse128_leaf tcti_lse128_leaves[] = {
-	{ TCTI_LSE_ATOMIC_CLR, 0x19201000U },
-	{ TCTI_LSE_ATOMIC_SET, 0x19203000U },
-	{ TCTI_LSE_ATOMIC_SWP, 0x19208000U },
-	{ TCTI_LSE_ATOMIC_CLR, 0x19601000U },
-	{ TCTI_LSE_ATOMIC_SET, 0x19603000U },
-	{ TCTI_LSE_ATOMIC_SWP, 0x19608000U },
-	{ TCTI_LSE_ATOMIC_CLR, 0x19a01000U },
-	{ TCTI_LSE_ATOMIC_SET, 0x19a03000U },
-	{ TCTI_LSE_ATOMIC_SWP, 0x19a08000U },
-	{ TCTI_LSE_ATOMIC_CLR, 0x19e01000U },
-	{ TCTI_LSE_ATOMIC_SET, 0x19e03000U },
-	{ TCTI_LSE_ATOMIC_SWP, 0x19e08000U },
+	{ 2521U, TCTI_LSE_ATOMIC_CLR, 0, 0x19201000U },
+	{ 2522U, TCTI_LSE_ATOMIC_SET, 0, 0x19203000U },
+	{ 2523U, TCTI_LSE_ATOMIC_SWP, 0, 0x19208000U },
+	{ 2527U, TCTI_LSE_ATOMIC_CLR, 2, 0x19601000U },
+	{ 2528U, TCTI_LSE_ATOMIC_SET, 2, 0x19603000U },
+	{ 2529U, TCTI_LSE_ATOMIC_SWP, 2, 0x19608000U },
+	{ 2533U, TCTI_LSE_ATOMIC_CLR, 1, 0x19a01000U },
+	{ 2534U, TCTI_LSE_ATOMIC_SET, 1, 0x19a03000U },
+	{ 2535U, TCTI_LSE_ATOMIC_SWP, 1, 0x19a08000U },
+	{ 2539U, TCTI_LSE_ATOMIC_CLR, 3, 0x19e01000U },
+	{ 2540U, TCTI_LSE_ATOMIC_SET, 3, 0x19e03000U },
+	{ 2541U, TCTI_LSE_ATOMIC_SWP, 3, 0x19e08000U },
 };
 
 static const u8 tcti_lse128_reserved_operations[] = {
@@ -73,6 +99,16 @@ static u32 tcti_lse128_instruction(const struct tcti_lse128_leaf *leaf,
 				   u8 rt2, u8 rn, u8 rt)
 {
 	return leaf->instruction | ((u32)rt2 << 16) | ((u32)rn << 5) | rt;
+}
+
+static u32 tcti_lse_casp_instruction(const struct tcti_lse_casp_leaf *leaf,
+				    u8 rs, u8 rn, u8 rt)
+{
+	return TCTI_LSE_CASP_BASE |
+		(leaf->is_64bit ? BIT(30) : 0) |
+		(leaf->order & 1U ? BIT(22) : 0) |
+		(leaf->order & 2U ? BIT(15) : 0) |
+		((u32)rs << 16) | ((u32)rn << 5) | rt;
 }
 
 static struct tcti_lse128_value
@@ -236,7 +272,7 @@ static void tcti_lse128_resume_rejects_instruction(
 	KUNIT_EXPECT_MEMEQ(test, &initial, &observed, sizeof(observed));
 }
 
-static void tcti_lse128_resume_all_current_leaves(struct kunit *test)
+static void tcti_lse128_resume_all_source_leaves(struct kunit *test)
 {
 	const struct tcti_lse128_value initial = {
 		.low = 0x0123456789abcdefULL,
@@ -260,13 +296,29 @@ static void tcti_lse128_resume_all_current_leaves(struct kunit *test)
 		const struct tcti_lse128_value expected =
 			tcti_lse128_expected(leaf, &initial, &operand);
 		struct tcti_lse128_value observed = {};
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(program[0]);
 		struct pt_regs regs = {};
 		struct tcti_result result;
 		int ret;
 
 		ret = tcti_lse128_write_program(instructions, program,
 						ARRAY_SIZE(program));
-		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_LSE_ATOMIC,
+			decoded.decode_class, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->operation, decoded.lse_atomic_op,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_TRUE_MSG(test, decoded.lse128,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_TRUE_MSG(test, decoded.pair,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, sizeof(u64), decoded.access_size,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, !!(leaf->order & 1U), decoded.acquire,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, !!(leaf->order & 2U), decoded.release,
+			"source=%u", leaf->source_ordinal);
 		ret = tcti_write_user_data(current->mm, data, &initial,
 					   sizeof(initial));
 		KUNIT_ASSERT_EQ(test, 0, ret);
@@ -280,22 +332,225 @@ static void tcti_lse128_resume_all_current_leaves(struct kunit *test)
 
 		result = tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
-			"leaf=%zu", index);
-		KUNIT_EXPECT_EQ_MSG(test, 0L, result.status, "leaf=%zu", index);
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 0L, result.status,
+			"source=%u", leaf->source_ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, instructions + sizeof(u32), result.pc,
-			"leaf=%zu", index);
+			"source=%u", leaf->source_ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, TCTI_LSE128_SVC, result.instruction,
-			"leaf=%zu", index);
-		KUNIT_EXPECT_EQ_MSG(test, initial.low, regs.regs[8], "leaf=%zu", index);
-		KUNIT_EXPECT_EQ_MSG(test, initial.high, regs.regs[6], "leaf=%zu", index);
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, initial.low, regs.regs[8],
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, initial.high, regs.regs[6],
+			"source=%u", leaf->source_ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, instructions + sizeof(u32), regs.pc,
-			"leaf=%zu", index);
+			"source=%u", leaf->source_ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
 			PSR_C_BIT | PSR_V_BIT, regs.pstate, "leaf=%zu", index);
 		ret = tcti_read_user_data(current->mm, data, &observed,
 					  sizeof(observed));
-		KUNIT_ASSERT_EQ(test, 0, ret);
-		KUNIT_EXPECT_MEMEQ(test, &expected, &observed, sizeof(observed));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ_MSG(test, &expected, &observed, sizeof(observed),
+			"source=%u", leaf->source_ordinal);
+	}
+
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse_casp_resume_all_source_leaves(struct kunit *test)
+{
+	const struct tcti_lse128_value expected = {
+		.low = 0x0123456789abcdefULL,
+		.high = 0xfedcba9876543210ULL,
+	};
+	const struct tcti_lse128_value desired = {
+		.low = 0x1122334455667788ULL,
+		.high = 0x8877665544332211ULL,
+	};
+	const struct tcti_lse128_value mismatch = {
+		.low = 0xa55aa55a01234567ULL,
+		.high = 0x5aa55aa5fedcba98ULL,
+	};
+	const struct tcti_lse_casp32_value expected32 = {
+		.low = expected.low,
+		.high = expected.high,
+	};
+	const struct tcti_lse_casp32_value desired32 = {
+		.low = desired.low,
+		.high = desired.high,
+	};
+	const struct tcti_lse_casp32_value mismatch32 = {
+		.low = mismatch.low,
+		.high = mismatch.high,
+	};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	size_t index;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	for (index = 0; index < ARRAY_SIZE(tcti_lse_casp_leaves); index++) {
+		const struct tcti_lse_casp_leaf *leaf = &tcti_lse_casp_leaves[index];
+		const u32 program[] = {
+			tcti_lse_casp_instruction(leaf, 6, 10, 8), TCTI_LSE128_SVC,
+		};
+		const size_t lane_size = leaf->is_64bit ? sizeof(u64) : sizeof(u32);
+		const size_t total_size = 2 * lane_size;
+		const void *expected_value = leaf->is_64bit ? (const void *)&expected :
+			(const void *)&expected32;
+		const void *desired_value = leaf->is_64bit ? (const void *)&desired :
+			(const void *)&desired32;
+		const void *mismatch_value = leaf->is_64bit ? (const void *)&mismatch :
+			(const void *)&mismatch32;
+		u8 observed[sizeof(struct tcti_lse128_value)] = {};
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(program[0]);
+		struct pt_regs regs = {};
+		struct tcti_result result;
+		int ret;
+
+		ret = tcti_lse128_write_program(instructions, program,
+						ARRAY_SIZE(program));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_LSE_ATOMIC,
+			decoded.decode_class, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_LSE_ATOMIC_CAS,
+			decoded.lse_atomic_op, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_TRUE(test, decoded.pair);
+		KUNIT_EXPECT_EQ(test, lane_size, decoded.access_size);
+		KUNIT_EXPECT_EQ(test, !!(leaf->order & 1U), decoded.acquire);
+		KUNIT_EXPECT_EQ(test, !!(leaf->order & 2U), decoded.release);
+		ret = tcti_write_user_data(current->mm, data, expected_value,
+					   total_size);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		regs.regs[6] = leaf->is_64bit ? expected.low : expected32.low;
+		regs.regs[7] = leaf->is_64bit ? expected.high : expected32.high;
+		regs.regs[8] = leaf->is_64bit ? desired.low : desired32.low;
+		regs.regs[9] = leaf->is_64bit ? desired.high : desired32.high;
+		regs.regs[10] = data;
+		regs.pc = instructions;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+			PSR_C_BIT | PSR_V_BIT;
+		regs.syscallno = NO_SYSCALL;
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 0L, result.status, "source=%u",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, instructions + sizeof(u32), result.pc,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_LSE128_SVC, result.instruction,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+			PSR_C_BIT | PSR_V_BIT, regs.pstate, "source=%u",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->is_64bit ? expected.low : expected32.low,
+			regs.regs[6], "source=%u",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->is_64bit ? expected.high : expected32.high,
+			regs.regs[7], "source=%u",
+			leaf->source_ordinal);
+		ret = tcti_read_user_data(current->mm, data, &observed, total_size);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ(test, desired_value, observed, total_size);
+
+		ret = tcti_write_user_data(current->mm, data, mismatch_value, total_size);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		regs.regs[6] = leaf->is_64bit ? expected.low : expected32.low;
+		regs.regs[7] = leaf->is_64bit ? expected.high : expected32.high;
+		regs.regs[8] = leaf->is_64bit ? desired.low : desired32.low;
+		regs.regs[9] = leaf->is_64bit ? desired.high : desired32.high;
+		regs.pc = instructions;
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			"source=%u mismatch", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, instructions + sizeof(u32), result.pc,
+			"source=%u mismatch", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+			PSR_C_BIT | PSR_V_BIT, regs.pstate, "source=%u mismatch",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->is_64bit ? mismatch.low : mismatch32.low,
+			regs.regs[6],
+			"source=%u mismatch", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->is_64bit ? mismatch.high : mismatch32.high,
+			regs.regs[7],
+			"source=%u mismatch", leaf->source_ordinal);
+		ret = tcti_read_user_data(current->mm, data, &observed, total_size);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u mismatch",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ(test, mismatch_value, observed, total_size);
+	}
+
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse_casp_rejects_invalid_register_pairs(struct kunit *test)
+{
+	const struct tcti_lse_casp_leaf *leaf = &tcti_lse_casp_leaves[4];
+
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(tcti_lse_casp_instruction(leaf, 7, 10, 8)).decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+		tcti_decode_aarch64(tcti_lse_casp_instruction(leaf, 6, 10, 9)).decode_class);
+}
+
+static void tcti_lse_casp_alignment_faults_preserve_source_state(
+	struct kunit *test)
+{
+	const u8 initial[2 * sizeof(struct tcti_lse128_value)] = {
+		[0 ... (2 * sizeof(struct tcti_lse128_value)) - 1] = 0x5a,
+	};
+	u8 observed[sizeof(initial)] = {};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	size_t index;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	for (index = 0; index < ARRAY_SIZE(tcti_lse_casp_leaves); index++) {
+		const struct tcti_lse_casp_leaf *leaf = &tcti_lse_casp_leaves[index];
+		const u32 program[] = {
+			tcti_lse_casp_instruction(leaf, 6, 10, 8), TCTI_LSE128_SVC,
+		};
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		struct tcti_result result;
+		int ret;
+
+		ret = tcti_lse128_write_program(instructions, program,
+						ARRAY_SIZE(program));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		ret = tcti_write_user_data(current->mm, data, initial, sizeof(initial));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		regs.regs[6] = 0x0123456789abcdefULL;
+		regs.regs[7] = 0xfedcba9876543210ULL;
+		regs.regs[8] = 0x1122334455667788ULL;
+		regs.regs[9] = 0x8877665544332211ULL;
+		regs.regs[10] = data + 1;
+		regs.pc = instructions;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+			PSR_C_BIT | PSR_V_BIT;
+		regs.syscallno = NO_SYSCALL;
+		before = regs;
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_ALIGNMENT_FAULT, result.reason,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, -EFAULT, result.status, "source=%u",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, data + 1, result.fault_address,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_ACCESS_WRITE, result.fault_access,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, instructions, result.pc, "source=%u",
+			leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, program[0], result.instruction,
+			"source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		ret = tcti_read_user_data(current->mm, data, observed, sizeof(observed));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "source=%u", leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ(test, initial, observed, sizeof(initial));
 	}
 
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
@@ -532,7 +787,10 @@ static void tcti_lse128_resume_rejects_fixed_bit_near_misses(
 }
 
 static struct kunit_case tcti_lse128_resume_test_cases[] = {
-	KUNIT_CASE(tcti_lse128_resume_all_current_leaves),
+	KUNIT_CASE(tcti_lse128_resume_all_source_leaves),
+	KUNIT_CASE(tcti_lse_casp_resume_all_source_leaves),
+	KUNIT_CASE(tcti_lse_casp_rejects_invalid_register_pairs),
+	KUNIT_CASE(tcti_lse_casp_alignment_faults_preserve_source_state),
 	KUNIT_CASE(tcti_lse128_resume_fault_does_not_mutate),
 	KUNIT_CASE(tcti_lse128_resume_alignment_faults_all_leaves),
 	KUNIT_CASE(tcti_lse128_resume_readonly_faults_all_leaves),

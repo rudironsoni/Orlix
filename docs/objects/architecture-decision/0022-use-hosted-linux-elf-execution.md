@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-24
+updated: 2026-07-25
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
@@ -56,6 +56,31 @@ implementation target even while the runtime HWCAP profile advertises a smaller
 proved subset. That refinement does not broaden TCTI beyond guest EL0
 instruction execution or change any Linux, OrlixHostAdapter, executable-memory,
 or App Store ownership boundary in this decision.
+
+TCTI has one authoritative ISA source hierarchy. The pinned Arm AARCHMRS
+2026-06 release defines the complete 4,350-leaf target, including feature
+predicates, aliases, duplicates, encoding relationships, and non-EL0 or
+undefined behavior. The separately pinned official Arm shared-ASL corpus
+defines instruction semantics. Runtime HWCAP and HWCAP2 are a downstream
+advertisement projection and never define, filter, or reduce the completion
+target.
+
+Linux arm64 sources, Linux kselftests, and KVM selftests may inform Linux
+integration and test selection. Islaris, Isla, and research describing
+validation against authoritative Arm specifications may inform verification
+methodology. None of those sources supplies TCTI instruction semantics. QEMU,
+Unicorn, Sail-generated code, external interpreters, external instruction
+generators, host-side ISA models, terminal output, and log scraping cannot act
+as semantic or proof authorities.
+
+Every AARCHMRS leaf must resolve through a machine-checkable, C-native
+source-to-proof record under `arch/orlix`. At minimum, the record retains its
+AARCHMRS identifier, instruction family, feature predicates, EL and semantic
+classification, alias or duplicate relationship, owning production
+implementation, owning KUnit, applicable Linux kselftest, runtime HWCAP or
+HWCAP2 dependency, implementation status, and proof status. The build fails
+when any required source, semantic provenance, classification, ownership, or
+proof edge is missing, malformed, ambiguous, stale, or unproved.
 
 TCTI implementation, ISA inventory, production diagnostics, and correctness
 proof are kernel-owned and C-native. Production code and test-only observation

@@ -5,14 +5,13 @@
 #include <linux/types.h>
 
 /*
- * Architectural A64 encoding families required by the Orlix guest profile.
- * This inventory is independent of the current decoder. A family becomes
- * complete only after its legal and unallocated encoding boundaries, operand
- * extraction, architectural state transitions, and structured exits have
- * direct KUnit evidence through the production TCTI path.
+ * Legacy local decoder-family regression catalog.
  *
- * Optional extension HWCAP bits are exposed only while their rows remain
- * complete under direct owning KUnit proof.
+ * A covered row means only that this named decoder family has the listed local
+ * KUnit coverage. It does not classify or prove every pinned AARCHMRS leaf in
+ * that family, define the 4,350-leaf completion target, or authorize HWCAP or
+ * HWCAP2. The checked target inventory, completion audit, proof registry, and
+ * runtime projection own those decisions.
  */
 enum tcti_isa_extension {
 	TCTI_ISA_BASE = 0,
@@ -29,9 +28,9 @@ enum tcti_isa_extension {
 	TCTI_ISA_EXTENSION_COUNT,
 };
 
-enum tcti_isa_coverage_status {
-	TCTI_ISA_COVERAGE_PARTIAL = 0,
-	TCTI_ISA_COVERAGE_COMPLETE,
+enum tcti_isa_local_coverage_status {
+	TCTI_ISA_LOCAL_COVERAGE_PARTIAL = 0,
+	TCTI_ISA_LOCAL_COVERAGE_COMPLETE,
 };
 
 #define ORLIX_TCTI_ISA_FAMILIES(X) \
@@ -303,7 +302,7 @@ enum tcti_isa_family_id {
 struct tcti_isa_family_coverage {
 	enum tcti_isa_family_id id;
 	enum tcti_isa_extension extension;
-	enum tcti_isa_coverage_status status;
+	enum tcti_isa_local_coverage_status status;
 	const char *name;
 	const char *decoder;
 	const char *kunit;
@@ -312,12 +311,12 @@ struct tcti_isa_family_coverage {
 static const struct tcti_isa_family_coverage tcti_isa_coverage[] = {
 #define TCTI_ISA_FAMILY_ROW(id, extension, status, name, decoder, kunit) \
 	{ TCTI_ISA_FAMILY_##id, TCTI_ISA_##extension, \
-	  TCTI_ISA_COVERAGE_##status, name, decoder, kunit },
+	  TCTI_ISA_LOCAL_COVERAGE_##status, name, decoder, kunit },
 	ORLIX_TCTI_ISA_FAMILIES(TCTI_ISA_FAMILY_ROW)
 #undef TCTI_ISA_FAMILY_ROW
 };
 
-/* Ratchet this to zero only by closing rows with direct owning KUnit proof. */
-#define ORLIX_TCTI_ISA_EXPECTED_GAPS	0
+/* Local catalog consistency only. Never use this as target completion proof. */
+#define ORLIX_TCTI_ISA_EXPECTED_LOCAL_DECODER_GAPS	0
 
 #endif /* ORLIX_TCTI_ISA_COVERAGE_H */

@@ -5,8 +5,20 @@
 
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
+#include "crypto_sve_sme_target_contract.h"
+#include "target_instruction_artifact.h"
+
+static const char *crypto_artifact_string(
+	const struct tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+	return (const char *)artifact->string_pool + offset;
+}
 
 struct crypto_leaf {
+	u32 source_ordinal;
+	const char *source_id;
 	const char *name;
 	u32 mask;
 	u32 value;
@@ -18,23 +30,23 @@ struct crypto_leaf {
 };
 
 static const struct crypto_leaf crypto_leaves[] = {
-	{ "SHA512H", 0xffe0fc00U, 0xce608000U, TCTI_SIMD_ARITH_SHA512H, true, false, 0, 0 },
-	{ "SHA512H2", 0xffe0fc00U, 0xce608400U, TCTI_SIMD_ARITH_SHA512H2, true, false, 0, 0 },
-	{ "SHA512SU1", 0xffe0fc00U, 0xce608800U, TCTI_SIMD_ARITH_SHA512SU1, true, false, 0, 0 },
-	{ "SHA512SU0", 0xfffffc00U, 0xcec08000U, TCTI_SIMD_ARITH_SHA512SU0, false, false, 0, 0 },
-	{ "EOR3", 0xffe08000U, 0xce000000U, TCTI_SIMD_ARITH_EOR3, true, true, 0, 0 },
-	{ "RAX1", 0xffe0fc00U, 0xce608c00U, TCTI_SIMD_ARITH_RAX1, true, false, 0, 0 },
-	{ "XAR", 0xffe00000U, 0xce800000U, TCTI_SIMD_ARITH_XAR, true, false, 10, 6 },
-	{ "BCAX", 0xffe08000U, 0xce200000U, TCTI_SIMD_ARITH_BCAX, true, true, 0, 0 },
-	{ "SM3SS1", 0xffe08000U, 0xce400000U, TCTI_SIMD_ARITH_SM3SS1, true, true, 0, 0 },
-	{ "SM3TT1A", 0xffe0cc00U, 0xce408000U, TCTI_SIMD_ARITH_SM3TT1A, true, false, 12, 2 },
-	{ "SM3TT1B", 0xffe0cc00U, 0xce408400U, TCTI_SIMD_ARITH_SM3TT1B, true, false, 12, 2 },
-	{ "SM3TT2A", 0xffe0cc00U, 0xce408800U, TCTI_SIMD_ARITH_SM3TT2A, true, false, 12, 2 },
-	{ "SM3TT2B", 0xffe0cc00U, 0xce408c00U, TCTI_SIMD_ARITH_SM3TT2B, true, false, 12, 2 },
-	{ "SM3PARTW1", 0xffe0fc00U, 0xce60c000U, TCTI_SIMD_ARITH_SM3PARTW1, true, false, 0, 0 },
-	{ "SM3PARTW2", 0xffe0fc00U, 0xce60c400U, TCTI_SIMD_ARITH_SM3PARTW2, true, false, 0, 0 },
-	{ "SM4E", 0xfffffc00U, 0xcec08400U, TCTI_SIMD_ARITH_SM4E, false, false, 0, 0 },
-	{ "SM4EKEY", 0xffe0fc00U, 0xce60c800U, TCTI_SIMD_ARITH_SM4EKEY, true, false, 0, 0 },
+	{ 4071U, "SHA512H_QQV_cryptosha512_3", "SHA512H", 0xffe0fc00U, 0xce608000U, TCTI_SIMD_ARITH_SHA512H, true, false, 0, 0 },
+	{ 4072U, "SHA512H2_QQV_cryptosha512_3", "SHA512H2", 0xffe0fc00U, 0xce608400U, TCTI_SIMD_ARITH_SHA512H2, true, false, 0, 0 },
+	{ 4073U, "SHA512SU1_VVV2_cryptosha512_3", "SHA512SU1", 0xffe0fc00U, 0xce608800U, TCTI_SIMD_ARITH_SHA512SU1, true, false, 0, 0 },
+	{ 4082U, "SHA512SU0_VV2_cryptosha512_2", "SHA512SU0", 0xfffffc00U, 0xcec08000U, TCTI_SIMD_ARITH_SHA512SU0, false, false, 0, 0 },
+	{ 4078U, "EOR3_VVV16_crypto4", "EOR3", 0xffe08000U, 0xce000000U, TCTI_SIMD_ARITH_EOR3, true, true, 0, 0 },
+	{ 4074U, "RAX1_VVV2_cryptosha512_3", "RAX1", 0xffe0fc00U, 0xce608c00U, TCTI_SIMD_ARITH_RAX1, true, false, 0, 0 },
+	{ 4081U, "XAR_VVV2_crypto3_imm6", "XAR", 0xffe00000U, 0xce800000U, TCTI_SIMD_ARITH_XAR, true, false, 10, 6 },
+	{ 4079U, "BCAX_VVV16_crypto4", "BCAX", 0xffe08000U, 0xce200000U, TCTI_SIMD_ARITH_BCAX, true, true, 0, 0 },
+	{ 4080U, "SM3SS1_VVV4_crypto4", "SM3SS1", 0xffe08000U, 0xce400000U, TCTI_SIMD_ARITH_SM3SS1, true, true, 0, 0 },
+	{ 4067U, "SM3TT1A_VVV4_crypto3_imm2", "SM3TT1A", 0xffe0cc00U, 0xce408000U, TCTI_SIMD_ARITH_SM3TT1A, true, false, 12, 2 },
+	{ 4068U, "SM3TT1B_VVV4_crypto3_imm2", "SM3TT1B", 0xffe0cc00U, 0xce408400U, TCTI_SIMD_ARITH_SM3TT1B, true, false, 12, 2 },
+	{ 4069U, "SM3TT2A_VVV4_crypto3_imm2", "SM3TT2A", 0xffe0cc00U, 0xce408800U, TCTI_SIMD_ARITH_SM3TT2A, true, false, 12, 2 },
+	{ 4070U, "SM3TT2B_VVV_crypto3_imm2", "SM3TT2B", 0xffe0cc00U, 0xce408c00U, TCTI_SIMD_ARITH_SM3TT2B, true, false, 12, 2 },
+	{ 4075U, "SM3PARTW1_VVV4_cryptosha512_3", "SM3PARTW1", 0xffe0fc00U, 0xce60c000U, TCTI_SIMD_ARITH_SM3PARTW1, true, false, 0, 0 },
+	{ 4076U, "SM3PARTW2_VVV4_cryptosha512_3", "SM3PARTW2", 0xffe0fc00U, 0xce60c400U, TCTI_SIMD_ARITH_SM3PARTW2, true, false, 0, 0 },
+	{ 4083U, "SM4E_VV4_cryptosha512_2", "SM4E", 0xfffffc00U, 0xcec08400U, TCTI_SIMD_ARITH_SM4E, false, false, 0, 0 },
+	{ 4077U, "SM4EKEY_VVV4_cryptosha512_3", "SM4EKEY", 0xffe0fc00U, 0xce60c800U, TCTI_SIMD_ARITH_SM4EKEY, true, false, 0, 0 },
 };
 
 static u32 crypto_instruction(const struct crypto_leaf *leaf, u32 value,
@@ -66,9 +78,11 @@ static void crypto_expect_decode(struct kunit *test,
 	struct tcti_decoded_instruction decoded = tcti_decode_aarch64(instruction);
 
 	KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
-			decoded.decode_class, "%s %#x", leaf->name, instruction);
+			decoded.decode_class, "%s (%u, %s) %#x", leaf->name,
+			leaf->source_ordinal, leaf->source_id, instruction);
 	KUNIT_EXPECT_EQ_MSG(test, leaf->op, decoded.simd_arithmetic_op,
-			"%s %#x", leaf->name, instruction);
+			"%s (%u, %s) %#x", leaf->name, leaf->source_ordinal,
+			leaf->source_id, instruction);
 	KUNIT_EXPECT_EQ(test, 17U, decoded.rd);
 	KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
 	KUNIT_EXPECT_EQ(test, leaf->rm ? 3U : 0U, decoded.rm);
@@ -78,6 +92,70 @@ static void crypto_expect_decode(struct kunit *test,
 	KUNIT_EXPECT_EQ(test, 16U, decoded.result_size);
 	KUNIT_EXPECT_TRUE(test, decoded.simd_fp);
 	KUNIT_EXPECT_FALSE(test, decoded.simd_scalar);
+}
+
+static void crypto_source_leaf_provenance_is_complete(struct kunit *test)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(crypto_leaves); i++) {
+		const struct crypto_leaf *leaf = &crypto_leaves[i];
+
+		KUNIT_EXPECT_NE_MSG(test, 0U, leaf->source_ordinal,
+			"%s has no pinned source ordinal", leaf->name);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->source_id);
+		if (!leaf->source_id)
+			continue;
+		KUNIT_EXPECT_NE_MSG(test, '\0', leaf->source_id[0],
+			"%s has an empty pinned source identifier", leaf->name);
+	}
+}
+
+static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
+{
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	unsigned int i;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	for (i = 0; i < ARRAY_SIZE(tcti_crypto_sve_sme_target_contract); i++) {
+		const struct tcti_crypto_target_contract_row *row =
+			&tcti_crypto_sve_sme_target_contract[i];
+		const struct tcti_target_instruction_artifact_leaf *leaf;
+		const char *source_id;
+		const char *mnemonic;
+
+		KUNIT_ASSERT_LT_MSG(test, row->source_ordinal, artifact->leaf_count,
+			"contract row %u source=%s", i, row->source_id);
+		leaf = &artifact->leaves[row->source_ordinal];
+		source_id = crypto_artifact_string(artifact, leaf->name_offset);
+		mnemonic = crypto_artifact_string(artifact, leaf->mnemonic_offset);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, source_id, "ordinal=%u",
+			row->source_ordinal);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, mnemonic, "ordinal=%u",
+			row->source_ordinal);
+		KUNIT_EXPECT_STREQ_MSG(test, row->source_id, source_id,
+			"source ordinal=%u", row->source_ordinal);
+		KUNIT_EXPECT_STREQ_MSG(test, row->mnemonic, mnemonic,
+			"source ordinal=%u", row->source_ordinal);
+		KUNIT_EXPECT_GT_MSG(test, leaf->condition_length, 0U,
+			"source ordinal=%u must retain its pinned feature predicate",
+			row->source_ordinal);
+		KUNIT_EXPECT_NOT_NULL_MSG(test, row->asl_operation,
+			"source ordinal=%u must retain its ASL locator",
+			row->source_ordinal);
+		KUNIT_EXPECT_NE_MSG(test, '\0', row->asl_operation[0],
+			"source ordinal=%u must retain its ASL locator",
+			row->source_ordinal);
+		if (row->family == TCTI_CRYPTO_TARGET_ADVSIMD)
+			KUNIT_EXPECT_EQ_MSG(test,
+				TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED, row->status,
+				"classic leaf %s must remain ASL-blocked", row->source_id);
+		else
+			KUNIT_EXPECT_EQ_MSG(test,
+				TCTI_CRYPTO_TARGET_REQUIRED_UNIMPLEMENTED, row->status,
+				"vector/matrix leaf %s must remain visible", row->source_id);
+	}
 }
 
 static void crypto_decode_legal_and_immediate_variants(struct kunit *test)
@@ -263,6 +341,8 @@ static void crypto_executor_aliasing(struct kunit *test)
 }
 
 static struct kunit_case crypto_extension_cases[] = {
+	KUNIT_CASE(crypto_source_leaf_provenance_is_complete),
+	KUNIT_CASE(crypto_sve_sme_target_contract_is_source_bound),
 	KUNIT_CASE(crypto_decode_legal_and_immediate_variants),
 	KUNIT_CASE(crypto_decode_rejects_fixed_neighbours),
 	KUNIT_CASE(crypto_executor_known_vectors),

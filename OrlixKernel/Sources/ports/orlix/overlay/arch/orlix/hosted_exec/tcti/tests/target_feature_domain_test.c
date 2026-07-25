@@ -277,6 +277,24 @@ static const struct tcti_feature_domain_environment environment = {
 	.field = field,
 };
 
+static int disabled_feature(void *context, const char *name,
+	struct tcti_feature_domain_value *value)
+{
+	(void)context;
+	if (strcmp(name, "F"))
+		return -1;
+	*value = (struct tcti_feature_domain_value) {
+		.kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL,
+		.boolean = 0,
+	};
+	return 0;
+}
+
+static const struct tcti_feature_domain_environment disabled_environment = {
+	.feature = disabled_feature,
+	.field = field,
+};
+
 static struct tcti_feature_domain_scratch scratch = {
 	.active = active,
 	.active_count = sizeof(active),
@@ -555,6 +573,318 @@ static int parses_and_compares_exact_128_bit_value_literals(void)
 	return 0;
 }
 
+static int feature_configuration_union_retains_all_candidates(void)
+{
+	static const struct tcti_feature_artifact_parameter parameters[] = {
+		{ .name = "F" },
+	};
+	static const struct tcti_feature_artifact_constraint constraints[] = {
+		{ .node_index = N_FEATURE },
+	};
+	static const struct tcti_feature_artifact artifact = {
+		.counts = { .parameter_count = 1, .constraint_count = 1,
+			.node_count = N_COUNT },
+		.parameters = parameters,
+		.constraints = constraints,
+		.nodes = nodes,
+		.children = children,
+	};
+	struct tcti_feature_domain_union_candidate candidates[] = {
+		{ .environment = &disabled_environment },
+		{ .environment = &environment },
+	};
+	tcti_feature_artifact_u8 active_a[N_COUNT];
+	tcti_feature_artifact_u8 active_b[N_COUNT];
+	struct tcti_feature_domain_scratch evaluators[] = {
+		{ .active = active_a, .active_count = N_COUNT, .max_depth = 64 },
+		{ .active = active_b, .active_count = N_COUNT, .max_depth = 64 },
+	};
+	struct tcti_feature_domain_union_scratch union_scratch = {
+		.evaluators = evaluators,
+		.evaluator_count = 2,
+	};
+	struct tcti_feature_domain_union_result result;
+
+	CHECK(!tcti_feature_domain_evaluate_constraint_union(&artifact,
+		candidates, 2, &union_scratch, &result));
+	CHECK(result.candidate_count == 2);
+	CHECK(result.evaluated_count == 2);
+	CHECK(result.satisfied_count == 1);
+	CHECK(result.unsatisfied_count == 1);
+	CHECK(result.unsupported_count == 0);
+	return 0;
+}
+
+static int feature_configuration_union_reports_unsupported_candidates(void)
+{
+	static const struct tcti_feature_artifact_parameter parameters[] = {
+		{ .name = "F" },
+	};
+	static const struct tcti_feature_artifact_constraint constraints[] = {
+		{ .node_index = N_FEATURE },
+	};
+	static const struct tcti_feature_artifact artifact = {
+		.counts = { .parameter_count = 1, .constraint_count = 1,
+			.node_count = N_COUNT },
+		.parameters = parameters,
+		.constraints = constraints,
+		.nodes = nodes,
+		.children = children,
+	};
+	struct tcti_feature_domain_environment missing = environment;
+	struct tcti_feature_domain_union_candidate candidates[] = {
+		{ .environment = &environment },
+		{ .environment = &missing },
+	};
+	tcti_feature_artifact_u8 active_a[N_COUNT];
+	tcti_feature_artifact_u8 active_b[N_COUNT];
+	struct tcti_feature_domain_scratch evaluators[] = {
+		{ .active = active_a, .active_count = N_COUNT, .max_depth = 64 },
+		{ .active = active_b, .active_count = N_COUNT, .max_depth = 64 },
+	};
+	struct tcti_feature_domain_union_scratch union_scratch = {
+		.evaluators = evaluators,
+		.evaluator_count = 2,
+	};
+	struct tcti_feature_domain_union_result result;
+
+	missing.feature = NULL;
+	CHECK(tcti_feature_domain_evaluate_constraint_union(&artifact,
+		candidates, 2, &union_scratch, &result));
+	CHECK(result.evaluated_count == 1);
+	CHECK(result.satisfied_count == 1);
+	CHECK(result.unsupported_count == 1);
+	CHECK(result.first_unsupported.error ==
+		TCTI_FEATURE_DOMAIN_MISSING_FEATURE);
+	CHECK(tcti_feature_domain_evaluate_constraint_union(&artifact,
+		candidates, 0, &union_scratch, &result));
+	return 0;
+}
+
+struct tcnd_fixture_context {
+	tcti_feature_artifact_u8 feature;
+	const char *operand;
+};
+
+static int tcnd_hex_nibble(char byte, unsigned int *value)
+{
+	if (byte >= '0' && byte <= '9') {
+		*value = (unsigned int)(byte - '0');
+		return 0;
+	}
+	if (byte >= 'a' && byte <= 'f') {
+		*value = (unsigned int)(byte - 'a' + 10);
+		return 0;
+	}
+	if (byte >= 'A' && byte <= 'F') {
+		*value = (unsigned int)(byte - 'A' + 10);
+		return 0;
+	}
+	return -1;
+}
+
+static int tcnd_source_equals(const char *hex, size_t offset, size_t length,
+	const char *text)
+{
+	size_t index;
+
+	if (strlen(text) != length)
+		return 0;
+	for (index = 0; index < length; index++) {
+		unsigned int high;
+		unsigned int low;
+
+		if (tcnd_hex_nibble(hex[(offset + index) * 2U], &high) ||
+		    tcnd_hex_nibble(hex[(offset + index) * 2U + 1U], &low) ||
+		    (unsigned char)((high << 4) | low) != (unsigned char)text[index])
+			return 0;
+	}
+	return 1;
+}
+
+static int tcnd_feature(void *context, const char *hex, size_t offset,
+	size_t length, tcti_feature_artifact_u8 *enabled)
+{
+	struct tcnd_fixture_context *fixture = context;
+
+	if (!tcnd_source_equals(hex, offset, length, "F"))
+		return -1;
+	*enabled = fixture->feature;
+	return 0;
+}
+
+static int tcnd_operand(void *context, const char *hex, size_t offset,
+	size_t length, const char **value, size_t *value_length)
+{
+	struct tcnd_fixture_context *fixture = context;
+
+	if (!tcnd_source_equals(hex, offset, length, "op"))
+		return -1;
+	*value = fixture->operand;
+	*value_length = strlen(*value);
+	return 0;
+}
+
+static int tcnd_union_evaluates_features_and_operand_alternatives(void)
+{
+	/* AND(FEATURE(F), EQ(OPERAND(op), VALUE(A))). */
+	static const char condition[] =
+		"54434e4401070000002402000000050000000146"
+		"09000000150300000006000000026f7004000000050000000141";
+	static const struct tcti_feature_artifact_parameter parameters[] = {
+		{ .name = "F" },
+	};
+	static const struct tcti_feature_artifact artifact = {
+		.counts = { .parameter_count = 1 },
+		.parameters = parameters,
+	};
+	struct tcnd_fixture_context first = { .feature = 0, .operand = "A" };
+	struct tcnd_fixture_context second = { .feature = 1, .operand = "A" };
+	struct tcnd_fixture_context third = { .feature = 1, .operand = "B" };
+	struct tcti_feature_domain_tcnd_environment environments[] = {
+		{ .context = &first, .feature = tcnd_feature, .operand = tcnd_operand },
+		{ .context = &second, .feature = tcnd_feature, .operand = tcnd_operand },
+		{ .context = &third, .feature = tcnd_feature, .operand = tcnd_operand },
+	};
+	struct tcti_feature_domain_tcnd_union_candidate candidates[] = {
+		{ .environment = &environments[0] },
+		{ .environment = &environments[1] },
+		{ .environment = &environments[2] },
+	};
+	struct tcti_feature_domain_tcnd_union_result result;
+	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+	tcti_feature_artifact_u8 satisfied;
+
+	CHECK(!tcti_feature_domain_evaluate_tcnd(&artifact, condition,
+		&environments[1], &satisfied, &diagnostic));
+	CHECK(satisfied == 1);
+	CHECK(!tcti_feature_domain_evaluate_tcnd_union(&artifact, condition,
+		candidates, 3, &result));
+	CHECK(result.candidate_count == 3);
+	CHECK(result.evaluated_count == 3);
+	CHECK(result.satisfied_count == 1);
+	CHECK(result.unsatisfied_count == 2);
+	CHECK(result.unsupported_count == 0);
+	return 0;
+}
+
+static int tcnd_union_fails_loudly_on_unbound_operands(void)
+{
+	static const char condition[] =
+		"54434e440109000000150300000006000000026f7004000000050000000141";
+	static const struct tcti_feature_artifact_parameter parameters[] = {
+		{ .name = "unused" },
+	};
+	static const struct tcti_feature_artifact artifact = {
+		.parameters = parameters,
+	};
+	struct tcnd_fixture_context fixture = { .feature = 1, .operand = "A" };
+	struct tcti_feature_domain_tcnd_environment environment = {
+		.context = &fixture,
+		.feature = tcnd_feature,
+	};
+	struct tcti_feature_domain_tcnd_union_candidate candidate = {
+		.environment = &environment,
+	};
+	struct tcti_feature_domain_tcnd_union_result result;
+
+	CHECK(tcti_feature_domain_evaluate_tcnd_union(&artifact, condition,
+		&candidate, 1, &result));
+	CHECK(result.evaluated_count == 0);
+	CHECK(result.unsupported_count == 1);
+	CHECK(result.first_unsupported.error ==
+		TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
+static int tcnd_union_evaluates_not_or_and_set_membership(void)
+{
+	/* OR(NOT(FEATURE(F)), IN(OPERAND(op), SET(VALUE(A), VALUE(B)))). */
+	static const char condition[] =
+		"54434e4401080000003c060000000a02000000050000000146"
+		"0b000000280300000006000000026f70050000001800000002"
+		"0400000005000000014104000000050000000142";
+	static const struct tcti_feature_artifact_parameter parameters[] = {
+		{ .name = "F" },
+	};
+	static const struct tcti_feature_artifact artifact = {
+		.counts = { .parameter_count = 1 },
+		.parameters = parameters,
+	};
+	struct tcnd_fixture_context first = { .feature = 1, .operand = "B" };
+	struct tcnd_fixture_context second = { .feature = 1, .operand = "C" };
+	struct tcnd_fixture_context third = { .feature = 0, .operand = "C" };
+	struct tcti_feature_domain_tcnd_environment environments[] = {
+		{ .context = &first, .feature = tcnd_feature, .operand = tcnd_operand },
+		{ .context = &second, .feature = tcnd_feature, .operand = tcnd_operand },
+		{ .context = &third, .feature = tcnd_feature, .operand = tcnd_operand },
+	};
+	struct tcti_feature_domain_tcnd_union_candidate candidates[] = {
+		{ .environment = &environments[0] },
+		{ .environment = &environments[1] },
+		{ .environment = &environments[2] },
+	};
+	struct tcti_feature_domain_tcnd_union_result result;
+
+	CHECK(!tcti_feature_domain_evaluate_tcnd_union(&artifact, condition,
+		candidates, 3, &result));
+	CHECK(result.evaluated_count == 3);
+	CHECK(result.satisfied_count == 2);
+	CHECK(result.unsatisfied_count == 1);
+	return 0;
+}
+
+static int source_ordinals_900_through_1199_are_explicitly_evaluated(void)
+{
+	const struct tcti_feature_artifact *artifact =
+		tcti_feature_artifact_canonical();
+	static const struct tcti_feature_domain_tcnd_environment no_assignment;
+	static const struct tcti_feature_domain_tcnd_union_candidate candidate = {
+		.environment = &no_assignment,
+	};
+	size_t total = 0;
+	size_t evaluated = 0;
+	size_t satisfied = 0;
+	size_t missing_feature = 0;
+	size_t missing_operand = 0;
+	size_t invalid = 0;
+
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(...) \
+	do { } while (0);
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, \
+	mask, pattern, condition, source_offset, source_length) \
+	do { \
+		if ((ordinal) >= 900U && (ordinal) < 1200U) { \
+			struct tcti_feature_domain_tcnd_union_result result; \
+			total++; \
+			if (!tcti_feature_domain_evaluate_tcnd_union(artifact, \
+				condition, &candidate, 1, &result)) { \
+				evaluated += result.evaluated_count; \
+				satisfied += result.satisfied_count; \
+			} else if (result.first_unsupported.error == \
+				TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE) { \
+				missing_feature++; \
+			} else if (result.first_unsupported.error == \
+				TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND) { \
+				missing_operand++; \
+			} else { \
+				invalid++; \
+			} \
+		} \
+	} while (0);
+#include "../isa/source_manifest.def"
+#undef TCTI_A64_SOURCE_MANIFEST_ROW
+#undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+	CHECK(total == 300);
+	CHECK(evaluated == 0);
+	CHECK(satisfied == 0);
+	CHECK(missing_feature == 248);
+	CHECK(missing_operand == 52);
+	CHECK(invalid == 0);
+	return 0;
+}
+
 int main(void)
 {
 	if (tcnd_feature_terminals_bind_to_checked_parameters() ||
@@ -562,7 +892,13 @@ int main(void)
 	    fails_loud_on_missing_values_types_and_overflow() ||
 	    fails_loud_on_malformed_references_and_cycles() ||
 	    rejects_insufficient_scratch_and_depth() ||
-	    parses_and_compares_exact_128_bit_value_literals())
+	    parses_and_compares_exact_128_bit_value_literals() ||
+	    feature_configuration_union_retains_all_candidates() ||
+	    feature_configuration_union_reports_unsupported_candidates() ||
+	    tcnd_union_evaluates_features_and_operand_alternatives() ||
+	    tcnd_union_fails_loudly_on_unbound_operands() ||
+	    tcnd_union_evaluates_not_or_and_set_membership() ||
+	    source_ordinals_900_through_1199_are_explicitly_evaluated())
 		return 1;
 	puts("PASS target feature-domain evaluator");
 	return 0;

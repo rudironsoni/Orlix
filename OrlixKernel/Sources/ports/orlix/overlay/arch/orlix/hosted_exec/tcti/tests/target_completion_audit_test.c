@@ -21,21 +21,21 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(tcti_target_completion_audit(&result) == -1);
 	EXPECT(result.source_rows == 4350);
 	EXPECT(result.classification_rows == 4350);
-	EXPECT(result.classified_rows == 1086);
-	EXPECT(result.unclassified_rows == 3264);
+	EXPECT(result.classified_rows == 1085);
+	EXPECT(result.unclassified_rows == 3265);
 	EXPECT(result.required_el0_rows == 1076);
-	EXPECT(result.non_el0_rows == 9);
+	EXPECT(result.non_el0_rows == 8);
 	EXPECT(result.undefined_or_unallocated_rows == 1);
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.source_bound_rows == 32);
-	EXPECT(result.source_unbound_rows == 1054);
+	EXPECT(result.source_bound_rows == 41);
+	EXPECT(result.source_unbound_rows == 1044);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
-	EXPECT(result.stale_proof_bindings == 0);
-	EXPECT(result.unproved_obligation_bindings == 212);
+	EXPECT(result.stale_proof_bindings == 196);
+	EXPECT(result.unproved_obligation_bindings == 417);
 	EXPECT(result.asl_availability_rows == 4350);
 	EXPECT(result.invalid_asl_availability_rows == 0);
 	EXPECT(result.unavailable_asl_rows == 4350);
@@ -52,13 +52,15 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.runtime_capability_cohort_candidate_membership_rows == 5592);
 	EXPECT(result.unresolved_runtime_capability_cohort_membership_rows == 5592);
 	EXPECT(result.invalid_runtime_capability_cohort_rows == 0);
-	EXPECT(result.errors == 19427);
+	EXPECT(result.errors == 19526);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_STALE_PROOF_BINDING);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
 	EXPECT(result.error_mask &
@@ -456,7 +458,8 @@ static int stale_proof_binding_fails_hard(void)
 		       copy, source_count, classification,
 		       classification_count, registry, registry_count,
 		       &result) == -1);
-	EXPECT(result.stale_proof_bindings == 1);
+	EXPECT(result.stale_proof_bindings ==
+	       baseline.stale_proof_bindings + 1);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_STALE_PROOF_BINDING);
 	EXPECT(result.source_bound_rows + 1 == baseline.source_bound_rows);
@@ -841,6 +844,36 @@ static int mismatched_asl_source_tuple_fails_hard(void)
 	return 0;
 }
 
+static int mismatched_asl_operation_object_fails_hard(void)
+{
+	const struct tcti_target_completion_asl_provenance *provenance;
+	const struct tcti_target_completion_asl_row *live;
+	const struct tcti_target_completion_source_row *source;
+	struct tcti_target_completion_asl_row *copy;
+	struct tcti_target_completion_result result;
+	size_t availability_count;
+	size_t source_count;
+
+	source = tcti_target_completion_source(&source_count);
+	provenance = tcti_target_completion_asl_provenance();
+	live = tcti_target_completion_asl_availability(&availability_count);
+	copy = malloc(availability_count * sizeof(*copy));
+	EXPECT(copy != NULL);
+	memcpy(copy, live, availability_count * sizeof(*copy));
+	copy[3434].operation_object = "operations/not_the_source_operation";
+	memset(&result, 0, sizeof(result));
+	EXPECT(tcti_target_completion_validate_asl_availability(
+		       source, source_count, provenance, copy, availability_count,
+		       &result) == -1);
+	EXPECT(result.invalid_asl_availability_rows == 1);
+	EXPECT(result.asl_availability_rows == 4349);
+	EXPECT(result.unavailable_asl_rows == 4349);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+	free(copy);
+	return 0;
+}
+
 static int malformed_asl_provenance_fails_hard(void)
 {
 	const struct tcti_target_completion_asl_provenance *live;
@@ -897,7 +930,7 @@ static int unproven_available_asl_status_fails_hard(void)
 	return 0;
 }
 
-static int fabricated_alias_cannot_inherit_canonical_proof(void)
+static int alias_relationship_does_not_require_source_identity(void)
 {
 	const struct tcti_target_completion_classification_row *live;
 	const struct tcti_target_completion_source_row *source;
@@ -962,9 +995,10 @@ static int fabricated_alias_cannot_inherit_canonical_proof(void)
 	EXPECT(tcti_target_completion_validate(
 		       source, source_count, copy, classification_count,
 		       registry_copy, registry_count, &result) == -1);
-	EXPECT(result.invalid_relationship_rows == 1);
+	EXPECT(result.invalid_relationship_rows == 0);
+	EXPECT(result.source_unbound_rows > 0);
 	EXPECT(result.error_mask &
-	       TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP);
+	       TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 	free(binding_copy);
 	free(registry_copy);
 	free(copy);
@@ -1026,12 +1060,14 @@ int main(void)
 		{ "missing_asl_row_fails_hard", missing_asl_row_fails_hard },
 		{ "mismatched_asl_source_tuple_fails_hard",
 		  mismatched_asl_source_tuple_fails_hard },
+		{ "mismatched_asl_operation_object_fails_hard",
+		  mismatched_asl_operation_object_fails_hard },
 		{ "malformed_asl_provenance_fails_hard",
 		  malformed_asl_provenance_fails_hard },
 		{ "unproven_available_asl_status_fails_hard",
 		  unproven_available_asl_status_fails_hard },
-		{ "fabricated_alias_cannot_inherit_canonical_proof",
-		  fabricated_alias_cannot_inherit_canonical_proof },
+		{ "alias_relationship_does_not_require_source_identity",
+		  alias_relationship_does_not_require_source_identity },
 	};
 	size_t index;
 

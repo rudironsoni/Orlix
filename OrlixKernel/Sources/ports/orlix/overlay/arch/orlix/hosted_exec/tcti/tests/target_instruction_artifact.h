@@ -2,11 +2,10 @@
 #ifndef ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_H
 #define ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_H
 
-#include <stddef.h>
-
 #ifdef __KERNEL__
 #include <linux/types.h>
 #else
+#include <stddef.h>
 #include <stdint.h>
 typedef uint32_t u32;
 typedef uint8_t u8;

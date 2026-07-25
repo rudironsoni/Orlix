@@ -19,7 +19,14 @@ int main(void)
 	       "stale_proof_bindings=%zu unproved_obligation_bindings=%zu "
 	       "source_condition_domain_bound=%zu "
 	       "invalid_source_conditions=%zu "
-	       "unresolved_feature_applicability=%zu "
+		"unresolved_feature_applicability=%zu "
+		"evaluated_feature_applicability=%zu "
+		"satisfied_feature_applicability=%zu "
+		"unsatisfied_feature_applicability=%zu "
+		"unsupported_feature_applicability=%zu "
+		"missing_feature_configuration=%zu "
+		"missing_instruction_operand=%zu "
+		"invalid_feature_applicability=%zu "
 	       "invalid_feature_artifact=%zu "
 	       "asl_availability=%zu invalid_asl_availability=%zu "
 	       "unavailable_asl=%zu "
@@ -48,7 +55,14 @@ int main(void)
 	       result.unproved_obligation_bindings,
 	       result.source_condition_domain_bound_rows,
 	       result.invalid_source_condition_rows,
-	       result.unresolved_feature_applicability_rows,
+		result.unresolved_feature_applicability_rows,
+		result.evaluated_feature_applicability_rows,
+		result.satisfied_feature_applicability_rows,
+		result.unsatisfied_feature_applicability_rows,
+		result.unsupported_feature_applicability_rows,
+		result.unresolved_feature_configuration_rows,
+		result.unresolved_instruction_operand_rows,
+		result.invalid_feature_applicability_rows,
 	       result.invalid_feature_artifact,
 	       result.asl_availability_rows,
 	       result.invalid_asl_availability_rows,

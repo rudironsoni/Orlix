@@ -9,6 +9,8 @@
 #include "../switch_debug.h"
 
 struct source_row {
+	u32 ordinal;
+	const char *leaf;
 	u32 mask;
 	u32 pattern;
 	enum tcti_decode_class class;
@@ -16,14 +18,86 @@ struct source_row {
 };
 
 static const struct source_row source_rows[] = {
-	{ 0xffe08000U, 0x13800000U, TCTI_DECODE_EXTRACT, 0 },
-	{ 0xffe00000U, 0x93c00000U, TCTI_DECODE_EXTRACT, 0 },
-	{ 0xffc00000U, 0x13000000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
-	{ 0xffc00000U, 0x33000000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
-	{ 0xffc00000U, 0x53000000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
-	{ 0xffc00000U, 0x93400000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
-	{ 0xffc00000U, 0xb3400000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
-	{ 0xffc00000U, 0xd3400000U, TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
+	{ 2169U, "EXTR_32_extract", 0xffe08000U, 0x13800000U,
+	  TCTI_DECODE_EXTRACT, 0 },
+	{ 2170U, "EXTR_64_extract", 0xffe00000U, 0x93c00000U,
+	  TCTI_DECODE_EXTRACT, 0 },
+	{ 2205U, "SBFM_32M_bitfield", 0xffc00000U, 0x13000000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
+	{ 2206U, "BFM_32M_bitfield", 0xffc00000U, 0x33000000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
+	{ 2207U, "UBFM_32M_bitfield", 0xffc00000U, 0x53000000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
+	{ 2208U, "SBFM_64M_bitfield", 0xffc00000U, 0x93400000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
+	{ 2209U, "BFM_64M_bitfield", 0xffc00000U, 0xb3400000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
+	{ 2210U, "UBFM_64M_bitfield", 0xffc00000U, 0xd3400000U,
+	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
+};
+
+struct scalar_source_row {
+	u32 ordinal;
+	const char *leaf;
+	u32 mask;
+	u32 pattern;
+	enum tcti_decode_class class;
+	union {
+		enum tcti_data_processing_1source_op dp1;
+		enum tcti_data_processing_2source_op dp2;
+	} op;
+};
+
+static const struct scalar_source_row dp1_source_rows[] = {
+	{ 3389U, "RBIT_32_dp_1src", 0xfffffc00U, 0x5ac00000U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_RBIT } },
+	{ 3390U, "REV16_32_dp_1src", 0xfffffc00U, 0x5ac00400U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_REV16 } },
+	{ 3391U, "REV_32_dp_1src", 0xfffffc00U, 0x5ac00800U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_REV } },
+	{ 3392U, "CLZ_32_dp_1src", 0xfffffc00U, 0x5ac01000U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_CLZ } },
+	{ 3393U, "CLS_32_dp_1src", 0xfffffc00U, 0x5ac01400U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_CLS } },
+	{ 3397U, "RBIT_64_dp_1src", 0xfffffc00U, 0xdac00000U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_RBIT } },
+	{ 3398U, "REV16_64_dp_1src", 0xfffffc00U, 0xdac00400U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_REV16 } },
+	{ 3399U, "REV32_64_dp_1src", 0xfffffc00U, 0xdac00800U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_REV32 } },
+	{ 3400U, "REV_64_dp_1src", 0xfffffc00U, 0xdac00c00U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_REV } },
+	{ 3401U, "CLZ_64_dp_1src", 0xfffffc00U, 0xdac01000U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_CLZ } },
+	{ 3402U, "CLS_64_dp_1src", 0xfffffc00U, 0xdac01400U,
+	  TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = TCTI_DP1_CLS } },
+};
+
+static const struct scalar_source_row dp2_source_rows[] = {
+	{ 3356U, "UDIV_32_dp_2src", 0xffe0fc00U, 0x1ac00800U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_UDIV } },
+	{ 3357U, "SDIV_32_dp_2src", 0xffe0fc00U, 0x1ac00c00U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_SDIV } },
+	{ 3358U, "LSLV_32_dp_2src", 0xffe0fc00U, 0x1ac02000U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_LSLV } },
+	{ 3359U, "LSRV_32_dp_2src", 0xffe0fc00U, 0x1ac02400U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_LSRV } },
+	{ 3360U, "ASRV_32_dp_2src", 0xffe0fc00U, 0x1ac02800U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_ASRV } },
+	{ 3361U, "RORV_32_dp_2src", 0xffe0fc00U, 0x1ac02c00U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_RORV } },
+	{ 3373U, "UDIV_64_dp_2src", 0xffe0fc00U, 0x9ac00800U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_UDIV } },
+	{ 3374U, "SDIV_64_dp_2src", 0xffe0fc00U, 0x9ac00c00U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_SDIV } },
+	{ 3377U, "LSLV_64_dp_2src", 0xffe0fc00U, 0x9ac02000U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_LSLV } },
+	{ 3378U, "LSRV_64_dp_2src", 0xffe0fc00U, 0x9ac02400U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_LSRV } },
+	{ 3379U, "ASRV_64_dp_2src", 0xffe0fc00U, 0x9ac02800U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_ASRV } },
+	{ 3380U, "RORV_64_dp_2src", 0xffe0fc00U, 0x9ac02c00U,
+	  TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = TCTI_DP2_RORV } },
 };
 
 struct alias_case {
@@ -151,12 +225,213 @@ static void source_fingerprints(struct kunit *test)
 		struct tcti_decoded_instruction decoded =
 			tcti_decode_aarch64(source_rows[i].pattern);
 
-		KUNIT_EXPECT_EQ(test, source_rows[i].pattern,
-				source_rows[i].pattern & source_rows[i].mask);
-		KUNIT_ASSERT_EQ(test, source_rows[i].class, decoded.decode_class);
+		KUNIT_EXPECT_EQ_MSG(test, source_rows[i].pattern,
+				    source_rows[i].pattern & source_rows[i].mask,
+				    "%s source ordinal %u", source_rows[i].leaf,
+				    source_rows[i].ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, source_rows[i].class,
+				    decoded.decode_class, "%s source ordinal %u",
+				    source_rows[i].leaf, source_rows[i].ordinal);
 		if (decoded.decode_class == TCTI_DECODE_BITFIELD)
-			KUNIT_EXPECT_EQ(test, source_rows[i].op,
-					decoded.bitfield_op);
+			KUNIT_EXPECT_EQ_MSG(test, source_rows[i].op,
+					    decoded.bitfield_op, "%s source ordinal %u",
+					    source_rows[i].leaf,
+					    source_rows[i].ordinal);
+	}
+}
+
+static void scalar_source_fingerprints(struct kunit *test)
+{
+	size_t i;
+
+	for (i = 0; i < ARRAY_SIZE(dp1_source_rows); i++) {
+		const struct scalar_source_row *row = &dp1_source_rows[i];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(row->pattern);
+
+		KUNIT_EXPECT_EQ_MSG(test, row->pattern, row->pattern & row->mask,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, row->class, decoded.decode_class,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, row->op.dp1, decoded.dp1_op,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(dp2_source_rows); i++) {
+		const struct scalar_source_row *row = &dp2_source_rows[i];
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(row->pattern);
+
+		KUNIT_EXPECT_EQ_MSG(test, row->pattern, row->pattern & row->mask,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, row->class, decoded.decode_class,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, row->op.dp2, decoded.dp2_op,
+				    "%s source ordinal %u", row->leaf,
+				    row->ordinal);
+	}
+}
+
+static u64 scalar_reverse_bits(u64 value, u8 width)
+{
+	u64 result = 0;
+	u8 bit;
+
+	for (bit = 0; bit < width; bit++)
+		result |= ((value >> bit) & 1) << (width - bit - 1);
+	return result;
+}
+
+static u64 scalar_reverse_bytes(u64 value, u8 width, u8 lane_width)
+{
+	u64 result = 0;
+	u8 lane;
+	u8 byte;
+
+	for (lane = 0; lane < width; lane += lane_width)
+		for (byte = 0; byte < lane_width / 8; byte++)
+			result |= ((value >> (lane + byte * 8)) & 0xff) <<
+				(lane + lane_width - 8 - byte * 8);
+	return result;
+}
+
+static u64 scalar_count_leading_zeros(u64 value, u8 width)
+{
+	u64 count = 0;
+	int bit;
+
+	for (bit = width - 1; bit >= 0; bit--) {
+		if (value & BIT_ULL(bit))
+			break;
+		count++;
+	}
+	return count;
+}
+
+static u64 scalar_count_leading_sign_bits(u64 value, u8 width)
+{
+	bool sign = value & BIT_ULL(width - 1);
+	u64 count = 0;
+	int bit;
+
+	for (bit = width - 2; bit >= 0; bit--) {
+		if (!!(value & BIT_ULL(bit)) != sign)
+			break;
+		count++;
+	}
+	return count;
+}
+
+static u64 scalar_dp1_expected(enum tcti_data_processing_1source_op op,
+			       u64 value, u8 width)
+{
+	switch (op) {
+	case TCTI_DP1_RBIT:
+		return scalar_reverse_bits(value, width);
+	case TCTI_DP1_REV16:
+		return scalar_reverse_bytes(value, width, 16);
+	case TCTI_DP1_REV32:
+		return scalar_reverse_bytes(value, width, 32);
+	case TCTI_DP1_REV:
+		return scalar_reverse_bytes(value, width, width);
+	case TCTI_DP1_CLZ:
+		return scalar_count_leading_zeros(value, width);
+	case TCTI_DP1_CLS:
+		return scalar_count_leading_sign_bits(value, width);
+	default:
+		return 0;
+	}
+}
+
+static u64 scalar_dp2_expected(enum tcti_data_processing_2source_op op,
+			       bool is_64bit, u64 left, u64 right)
+{
+	u8 width = is_64bit ? 64 : 32;
+	u64 mask = width_mask(is_64bit);
+	u8 amount;
+
+	left &= mask;
+	right &= mask;
+	amount = right & (width - 1);
+	switch (op) {
+	case TCTI_DP2_UDIV:
+		return right ? left / right : 0;
+	case TCTI_DP2_SDIV:
+		if (!right)
+			return 0;
+		if (is_64bit)
+			return (s64)left == S64_MIN && (s64)right == -1 ?
+				left : (u64)((s64)left / (s64)right);
+		return (s32)(u32)left == S32_MIN && (s32)(u32)right == -1 ?
+			(u32)left : (u32)((s32)(u32)left / (s32)(u32)right);
+	case TCTI_DP2_LSLV:
+		return left << amount;
+	case TCTI_DP2_LSRV:
+		return left >> amount;
+	case TCTI_DP2_ASRV:
+		return is_64bit ? (u64)((s64)left >> amount) :
+			(u32)((s32)(u32)left >> amount);
+	case TCTI_DP2_RORV:
+		return amount ? (left >> amount) |
+			(left << (width - amount)) : left;
+	default:
+		return 0;
+	}
+}
+
+static void scalar_source_execution(struct kunit *test)
+{
+	const u8 rd = 7;
+	const u8 rn = 19;
+	const u8 rm = 11;
+	size_t i;
+
+	for (i = 0; i < ARRAY_SIZE(dp1_source_rows); i++) {
+		const struct scalar_source_row *row = &dp1_source_rows[i];
+		u32 instruction = row->pattern | ((u32)rn << 5) | rd;
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+		struct pt_regs regs, before;
+		u8 width = decoded.is_64bit ? 64 : 32;
+		u64 expected;
+
+		seed_regs(&regs, instruction);
+		regs.regs[rn] = 0x8123456789abcdefULL;
+		before = regs;
+		expected = scalar_dp1_expected(decoded.dp1_op,
+			before.regs[rn] & width_mask(decoded.is_64bit), width);
+		KUNIT_ASSERT_EQ_MSG(test, 0,
+			tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL),
+			"%s source ordinal %u", row->leaf, row->ordinal);
+		expect_state(test, &before, &regs, rd,
+			     expected & width_mask(decoded.is_64bit));
+	}
+
+	for (i = 0; i < ARRAY_SIZE(dp2_source_rows); i++) {
+		const struct scalar_source_row *row = &dp2_source_rows[i];
+		u32 instruction = row->pattern | ((u32)rm << 16) |
+			((u32)rn << 5) | rd;
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(instruction);
+		struct pt_regs regs, before;
+		u64 expected;
+
+		seed_regs(&regs, instruction);
+		regs.regs[rn] = 0x8123456789abcdefULL;
+		regs.regs[rm] = 35;
+		before = regs;
+		expected = scalar_dp2_expected(decoded.dp2_op, decoded.is_64bit,
+			before.regs[rn], before.regs[rm]);
+		KUNIT_ASSERT_EQ_MSG(test, 0,
+			tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL),
+			"%s source ordinal %u", row->leaf, row->ordinal);
+		expect_state(test, &before, &regs, rd,
+			     expected & width_mask(decoded.is_64bit));
 	}
 }
 
@@ -306,6 +581,8 @@ static void extract_overlap_xzr_state(struct kunit *test)
 
 static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(source_fingerprints),
+	KUNIT_CASE(scalar_source_fingerprints),
+	KUNIT_CASE(scalar_source_execution),
 	KUNIT_CASE(exhaustive_bitfield_decode),
 	KUNIT_CASE(exhaustive_extract_decode),
 	KUNIT_CASE(bitfield_alias_state),

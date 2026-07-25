@@ -14,6 +14,8 @@
  * legal neighbour only when it resolves to another entry in this table.
  */
 struct tcti_crypto_decode_leaf {
+	u32 source_ordinal;
+	const char *source_id;
 	const char *mnemonic;
 	u32 fixed_mask;
 	u32 value;
@@ -25,37 +27,53 @@ struct tcti_crypto_decode_leaf {
 };
 
 static const struct tcti_crypto_decode_leaf tcti_crypto_decode_leaves[] = {
-	{ "AESE", 0xfffffc00U, 0x4e284800U, TCTI_SIMD_ARITH_AESE,
+	{ 3507U, "AESE_B_cryptoaes", "AESE", 0xfffffc00U, 0x4e284800U,
+	  TCTI_SIMD_ARITH_AESE,
 	  16, 16, false, false },
-	{ "AESD", 0xfffffc00U, 0x4e285800U, TCTI_SIMD_ARITH_AESD,
+	{ 3508U, "AESD_B_cryptoaes", "AESD", 0xfffffc00U, 0x4e285800U,
+	  TCTI_SIMD_ARITH_AESD,
 	  16, 16, false, false },
-	{ "AESMC", 0xfffffc00U, 0x4e286800U, TCTI_SIMD_ARITH_AESMC,
+	{ 3509U, "AESMC_B_cryptoaes", "AESMC", 0xfffffc00U, 0x4e286800U,
+	  TCTI_SIMD_ARITH_AESMC,
 	  16, 16, false, false },
-	{ "AESIMC", 0xfffffc00U, 0x4e287800U, TCTI_SIMD_ARITH_AESIMC,
+	{ 3510U, "AESIMC_B_cryptoaes", "AESIMC", 0xfffffc00U, 0x4e287800U,
+	  TCTI_SIMD_ARITH_AESIMC,
 	  16, 16, false, false },
-	{ "SHA1C", 0xffe0fc00U, 0x5e000000U, TCTI_SIMD_ARITH_SHA1C,
+	{ 3511U, "SHA1C_QSV_cryptosha3", "SHA1C", 0xffe0fc00U, 0x5e000000U,
+	  TCTI_SIMD_ARITH_SHA1C,
 	  16, 16, false, true },
-	{ "SHA1P", 0xffe0fc00U, 0x5e001000U, TCTI_SIMD_ARITH_SHA1P,
+	{ 3512U, "SHA1P_QSV_cryptosha3", "SHA1P", 0xffe0fc00U, 0x5e001000U,
+	  TCTI_SIMD_ARITH_SHA1P,
 	  16, 16, false, true },
-	{ "SHA1M", 0xffe0fc00U, 0x5e002000U, TCTI_SIMD_ARITH_SHA1M,
+	{ 3513U, "SHA1M_QSV_cryptosha3", "SHA1M", 0xffe0fc00U, 0x5e002000U,
+	  TCTI_SIMD_ARITH_SHA1M,
 	  16, 16, false, true },
-	{ "SHA1SU0", 0xffe0fc00U, 0x5e003000U, TCTI_SIMD_ARITH_SHA1SU0,
+	{ 3514U, "SHA1SU0_VVV_cryptosha3", "SHA1SU0", 0xffe0fc00U,
+	  0x5e003000U, TCTI_SIMD_ARITH_SHA1SU0,
 	  16, 16, false, true },
-	{ "SHA1H", 0xfffffc00U, 0x5e280800U, TCTI_SIMD_ARITH_SHA1H,
+	{ 3518U, "SHA1H_SS_cryptosha2", "SHA1H", 0xfffffc00U, 0x5e280800U,
+	  TCTI_SIMD_ARITH_SHA1H,
 	  4, 4, true, false },
-	{ "SHA1SU1", 0xfffffc00U, 0x5e281800U, TCTI_SIMD_ARITH_SHA1SU1,
+	{ 3519U, "SHA1SU1_VV_cryptosha2", "SHA1SU1", 0xfffffc00U,
+	  0x5e281800U, TCTI_SIMD_ARITH_SHA1SU1,
 	  16, 16, false, false },
-	{ "SHA256H", 0xffe0fc00U, 0x5e004000U, TCTI_SIMD_ARITH_SHA256H,
+	{ 3515U, "SHA256H_QQV_cryptosha3", "SHA256H", 0xffe0fc00U,
+	  0x5e004000U, TCTI_SIMD_ARITH_SHA256H,
 	  16, 16, false, true },
-	{ "SHA256H2", 0xffe0fc00U, 0x5e005000U, TCTI_SIMD_ARITH_SHA256H2,
+	{ 3516U, "SHA256H2_QQV_cryptosha3", "SHA256H2", 0xffe0fc00U,
+	  0x5e005000U, TCTI_SIMD_ARITH_SHA256H2,
 	  16, 16, false, true },
-	{ "SHA256SU1", 0xffe0fc00U, 0x5e006000U, TCTI_SIMD_ARITH_SHA256SU1,
+	{ 3517U, "SHA256SU1_VVV_cryptosha3", "SHA256SU1", 0xffe0fc00U,
+	  0x5e006000U, TCTI_SIMD_ARITH_SHA256SU1,
 	  16, 16, false, true },
-	{ "SHA256SU0", 0xfffffc00U, 0x5e282800U, TCTI_SIMD_ARITH_SHA256SU0,
+	{ 3520U, "SHA256SU0_VV_cryptosha2", "SHA256SU0", 0xfffffc00U,
+	  0x5e282800U, TCTI_SIMD_ARITH_SHA256SU0,
 	  16, 16, false, false },
-	{ "PMULL", 0xbf20fc00U, 0x0e20e000U, TCTI_SIMD_ARITH_PMULL,
+	{ 3883U, "PMULL_asimddiff_L", "PMULL", 0xbf20fc00U, 0x0e20e000U,
+	  TCTI_SIMD_ARITH_PMULL,
 	  1, 16, false, true },
-	{ "PMUL", 0xbf20fc00U, 0x2e209c00U, TCTI_SIMD_ARITH_PMUL,
+	{ 3955U, "PMUL_asimdsame_only", "PMUL", 0xbf20fc00U, 0x2e209c00U,
+	  TCTI_SIMD_ARITH_PMUL,
 	  1, 8, false, true },
 };
 
@@ -84,10 +102,12 @@ static void tcti_crypto_decode_expect_leaf(struct kunit *test,
 		tcti_decode_aarch64(instruction);
 
 	KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
-			    decoded.decode_class, "%s instruction %#x",
-			    leaf->mnemonic, instruction);
+			    decoded.decode_class, "%s (%u, %s) instruction %#x",
+			    leaf->mnemonic, leaf->source_ordinal, leaf->source_id,
+			    instruction);
 	KUNIT_EXPECT_EQ_MSG(test, leaf->operation, decoded.simd_arithmetic_op,
-			    "%s instruction %#x", leaf->mnemonic, instruction);
+			    "%s (%u, %s) instruction %#x", leaf->mnemonic,
+			    leaf->source_ordinal, leaf->source_id, instruction);
 	KUNIT_EXPECT_EQ_MSG(test, 17U, decoded.rd, "%s instruction %#x",
 			    leaf->mnemonic, instruction);
 	KUNIT_EXPECT_EQ_MSG(test, 9U, decoded.rn, "%s instruction %#x",
@@ -185,18 +205,21 @@ static void tcti_crypto_decode_rejects_fixed_bit_neighbours(struct kunit *test)
 				KUNIT_EXPECT_EQ_MSG(test,
 					TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 					decoded.decode_class,
-					"legal neighbour %#x of %s", mutation,
-					leaf->mnemonic);
+					"legal neighbour %#x of %s (%u, %s)",
+					mutation, leaf->mnemonic, leaf->source_ordinal,
+					leaf->source_id);
 				KUNIT_EXPECT_EQ_MSG(test, expected->operation,
 					decoded.simd_arithmetic_op,
-					"legal neighbour %#x of %s", mutation,
-					leaf->mnemonic);
+					"legal neighbour %#x of %s (%u, %s)",
+					mutation, leaf->mnemonic, leaf->source_ordinal,
+					leaf->source_id);
 				continue;
 			}
 			KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
 					decoded.decode_class,
-					"reserved neighbour %#x of %s", mutation,
-					leaf->mnemonic);
+					"reserved neighbour %#x of %s (%u, %s)",
+					mutation, leaf->mnemonic, leaf->source_ordinal,
+					leaf->source_id);
 		}
 	}
 }
@@ -220,7 +243,9 @@ static void tcti_crypto_decode_rejects_reserved_polynomial_sizes(
 
 			KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
 				tcti_decode_aarch64(instruction).decode_class,
-				"reserved PMUL size=%u q=%u", size, source_index);
+				"reserved PMUL (%u, %s) size=%u q=%u",
+				pmul->source_ordinal, pmul->source_id, size,
+				source_index);
 		}
 		for (size = 1; size < 3; size++) {
 			u32 instruction = tcti_crypto_decode_with_registers(pmull,
@@ -228,7 +253,9 @@ static void tcti_crypto_decode_rejects_reserved_polynomial_sizes(
 
 			KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
 				tcti_decode_aarch64(instruction).decode_class,
-				"reserved PMULL size=%u q=%u", size, source_index);
+				"reserved PMULL (%u, %s) size=%u q=%u",
+				pmull->source_ordinal, pmull->source_id, size,
+				source_index);
 		}
 	}
 }

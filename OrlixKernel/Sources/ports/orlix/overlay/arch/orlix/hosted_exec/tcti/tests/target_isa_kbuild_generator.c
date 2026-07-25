@@ -7,6 +7,7 @@
  */
 #include "target_isa_kbuild_generator.h"
 
+#include <stdbool.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
@@ -139,6 +140,58 @@ uint64_t tcti_a64_kbuild_system_accessor_identity(
 	return identity;
 }
 
+static size_t find_source_row(const struct tcti_a64_kbuild_source_row *source,
+				      size_t source_count, const char *name)
+{
+	size_t index;
+
+	if (!name || !name[0])
+		return source_count;
+	for (index = 0; index < source_count; index++)
+		if (source[index].name && !strcmp(source[index].name, name))
+			return index;
+	return source_count;
+}
+
+/*
+ * The source schema declares aliases through operation and instruction-alias
+ * objects. Those objects can deliberately resolve operations with different
+ * names and constrained encodings, so source-row identity is not an alias
+ * predicate. The inventory ledger instead records the reviewed direct edge,
+ * which must terminate at one classified canonical owner.
+ */
+static bool valid_terminal_relationship(
+	const struct tcti_a64_kbuild_source_row *source,
+	const struct tcti_a64_kbuild_classification_row *classification,
+	size_t source_count, size_t row_index)
+{
+	const struct tcti_a64_kbuild_classification_row *row =
+		&classification[row_index];
+	const struct tcti_a64_kbuild_classification_row *canonical;
+	size_t canonical_index;
+
+	if (row->classification != TCTI_A64_KBUILD_ALIAS_OR_DUPLICATE)
+		return row->relation == TCTI_A64_KBUILD_RELATION_NONE &&
+		       !row->canonical[0];
+	if (row->relation != TCTI_A64_KBUILD_RELATION_ALIAS &&
+	    row->relation != TCTI_A64_KBUILD_RELATION_DUPLICATE)
+		return false;
+	if (!row->canonical[0] || !row->evidence[0] || !row->proof[0] ||
+	    !strcmp(row->name, row->canonical))
+		return false;
+	canonical_index = find_source_row(source, source_count, row->canonical);
+	if (canonical_index == source_count)
+		return false;
+	canonical = &classification[canonical_index];
+	if (canonical->classification == TCTI_A64_KBUILD_UNCLASSIFIED ||
+	    canonical->classification == TCTI_A64_KBUILD_ALIAS_OR_DUPLICATE ||
+	    canonical->relation != TCTI_A64_KBUILD_RELATION_NONE ||
+	    canonical->canonical[0] || !canonical->evidence[0] ||
+	    !canonical->proof[0])
+		return false;
+	return true;
+}
+
 static enum tcti_a64_kbuild_generator_error validate_inputs(
 	const struct tcti_a64_kbuild_metadata *metadata,
 	const struct tcti_a64_kbuild_source_row *source,
@@ -212,20 +265,6 @@ static enum tcti_a64_kbuild_generator_error validate_inputs(
 		     TCTI_A64_KBUILD_ALIAS_OR_DUPLICATE) !=
 		    (class_row->relation != TCTI_A64_KBUILD_RELATION_NONE))
 			return TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION;
-		if (class_row->relation != TCTI_A64_KBUILD_RELATION_NONE) {
-			int found = 0;
-
-			if (!strcmp(class_row->name, class_row->canonical))
-				return TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION;
-			for (prior = 0; prior < source_count; prior++)
-				if (!strcmp(source[prior].name,
-					    class_row->canonical)) {
-					found = 1;
-					break;
-				}
-			if (!found)
-				return TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION;
-		}
 		if (class_row->classification == TCTI_A64_KBUILD_UNCLASSIFIED &&
 		    (class_row->relation != TCTI_A64_KBUILD_RELATION_NONE ||
 		     class_row->canonical[0] || class_row->evidence[0] ||
@@ -235,6 +274,10 @@ static enum tcti_a64_kbuild_generator_error validate_inputs(
 			if (!strcmp(source[prior].name, source_row->name))
 				return TCTI_A64_KBUILD_GENERATOR_DUPLICATE_SOURCE;
 	}
+	for (index = 0; index < source_count; index++)
+		if (!valid_terminal_relationship(source, classification,
+						 source_count, index))
+			return TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION;
 	if (!fixed_text(accessor_metadata->architecture,
 			TCTI_A64_KBUILD_ARCHITECTURE) ||
 	    !fixed_text(accessor_metadata->build, TCTI_A64_KBUILD_BUILD) ||

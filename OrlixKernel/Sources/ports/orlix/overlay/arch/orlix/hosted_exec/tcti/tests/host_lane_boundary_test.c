@@ -234,6 +234,16 @@ static bool raw_arm_source_content(const char *text)
 	return false;
 }
 
+/*
+ * The pinned-source importer is a maintainer-only build-time tool, owned by
+ * arch/orlix.  It may live in this one directory, while ordinary TCTI source
+ * and every include closure remain forbidden from reaching it.
+ */
+static bool build_time_inventory_source(const char *path)
+{
+	return strstr(path, "/hosted_exec/tcti/isa/build-time/") != NULL;
+}
+
 static bool include_visited(struct include_scan *scan, const char *path)
 {
 	size_t index;
@@ -368,8 +378,8 @@ static void scan_overlay_tree(const char *directory, struct include_scan *scan)
 					strcmp(entry->d_name, "host_lane_boundary_test.c") &&
 					(raw_arm_source_name(entry->d_name) ||
 					 raw_arm_source_content(text));
-				if (raw_source)
-					fail(path, "raw Arm source machinery must live outside OrlixKernel overlay");
+				if (raw_source && !build_time_inventory_source(path))
+					fail(path, "raw Arm source machinery must live in tcti/isa/build-time");
 				free(text);
 			}
 			if (c_source_file_name(entry->d_name) && !raw_source)

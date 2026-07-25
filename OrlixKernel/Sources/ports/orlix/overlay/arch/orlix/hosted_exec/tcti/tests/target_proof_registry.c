@@ -55,6 +55,7 @@ struct operation_requirements {
 	 TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
 	 TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+#define EXCLUSIVE_REQUIRED_OBLIGATIONS LSE_REQUIRED_OBLIGATIONS
 
 struct kunit_source_provenance {
 	const char *source;
@@ -113,10 +114,10 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define LSE_SOURCE_BOUND_SUITE_SYMBOL "tcti_lse_source_bound_test_suite"
 #define LSE_SOURCE_BOUND_CASE_ARRAY "tcti_lse_source_bound_test_cases"
 #define LSE128_SOURCE \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c"
-#define LSE128_SUITE "orlix_tcti_lse128_noncas"
-#define LSE128_SUITE_SYMBOL "tcti_lse128_noncas_test_suite"
-#define LSE128_CASE_ARRAY "tcti_lse128_noncas_cases"
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse128_resume_test.c"
+#define LSE128_SUITE "orlix-tcti-lse128-resume"
+#define LSE128_SUITE_SYMBOL "tcti_lse128_resume_test_suite"
+#define LSE128_CASE_ARRAY "tcti_lse128_resume_test_cases"
 #define LOGICAL_SHIFT_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c"
 #define LOGICAL_SHIFT_SUITE "orlix-tcti-logical-shifted-register"
@@ -132,12 +133,44 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ADD_SUB_IMMEDIATE_SUITE "orlix-tcti-add-sub-immediate"
 #define ADD_SUB_IMMEDIATE_SUITE_SYMBOL "tcti_add_sub_immediate_test_suite"
 #define ADD_SUB_IMMEDIATE_CASE_ARRAY "tcti_add_sub_immediate_test_cases"
+#define LOGICAL_IMMEDIATE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_logical_immediate_source_bound_test.c"
+#define LOGICAL_IMMEDIATE_SUITE "orlix-tcti-logical-immediate-source-bound"
+#define LOGICAL_IMMEDIATE_SUITE_SYMBOL \
+	"tcti_logical_immediate_source_bound_test_suite"
+#define LOGICAL_IMMEDIATE_CASE_ARRAY \
+	"tcti_logical_immediate_source_bound_test_cases"
+#define MOVE_WIDE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_move_wide_source_bound_test.c"
+#define MOVE_WIDE_SUITE "orlix-tcti-move-wide-source-bound"
+#define MOVE_WIDE_SUITE_SYMBOL "tcti_move_wide_source_bound_test_suite"
+#define MOVE_WIDE_CASE_ARRAY "tcti_move_wide_source_bound_test_cases"
+#define ADD_SUB_REGISTER_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_add_sub_register_source_bound_test.c"
+#define ADD_SUB_REGISTER_SUITE "orlix-tcti-add-sub-register-source-bound"
+#define ADD_SUB_REGISTER_SUITE_SYMBOL \
+	"tcti_add_sub_register_source_bound_test_suite"
+#define ADD_SUB_REGISTER_CASE_ARRAY "asr_cases"
+#define SOURCE_LEAF_CLASSIFICATION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_source_leaf_classification_test.c"
+#define SOURCE_LEAF_CLASSIFICATION_SUITE \
+	"orlix-tcti-source-leaf-classification"
+#define SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL \
+	"tcti_source_leaf_classification_test_suite"
+#define SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY \
+	"tcti_source_leaf_classification_test_cases"
+#define DECODE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c"
+#define DECODE_SUITE "orlix-tcti-decode"
+#define DECODE_SUITE_SYMBOL "tcti_decode_test_suite"
+#define DECODE_CASE_ARRAY "tcti_decode_test_cases"
 #define CSSC_CONDITION \
 	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
 #define ADD_SUB_IMMEDIATE_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
 #define LOGICAL_SHIFT_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
+#define SCALAR_CONDITION LOGICAL_SHIFT_CONDITION
 #define LSE_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4c5345"
 #define LSE128_CONDITION \
@@ -147,10 +180,15 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	 TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define LOGICAL_FLAGS_OBLIGATIONS \
 	(LOGICAL_BASE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define SCALAR_BASE_OBLIGATIONS LOGICAL_BASE_OBLIGATIONS
+#define SCALAR_FLAGS_OBLIGATIONS LOGICAL_FLAGS_OBLIGATIONS
+#define ORDINARY_LOAD_STORE_OBLIGATIONS \
+	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"d6e7cfcab85143310ef2fe1688ead3a157244650f376cc3101e44b6473b65627"
+	"140f63cc2e5e26bd31f0534fadacb55968dbb70b9832e520560676f594ff10f0"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -163,27 +201,63 @@ static const struct source_bound_proof source_bound_proofs[] = {
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ LSE_SOURCE,
-	  "49e3d4cc6b7db58162bead19c795d51197c3186d0c4cd0f1bd0b9c475180b997",
+	  "b17702ca0aa33d05c0dd69afb0f6a4ac0fada8abb2a51c69db9a19ede8cd4164",
 	  "tcti_lse_decode_test.o" },
 	{ LSE_SOURCE_BOUND_SOURCE,
 	  "11dd4385bf91b6a933cc0bd3ca88d757305da1a8d860655ce02f338b5a1349f1",
 	  "tcti_lse_source_bound_test.o" },
 	{ LSE128_SOURCE,
-	  "5e770479521fd09e7eb75eb2611d70e65d9284748e1ad7762c70552ac983057f",
-	  "tcti_lse128_noncas_test.o" },
+	  "a6e2de3cf42ad68c3919395208d63ddbfa6ea5f5a40165edd6129186bd529e23",
+	  "tcti_lse128_resume_test.o" },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "f35b94be9f9baeb31ce504e0513c53eb83f483e528585e998d79005f3e9c7e6f",
 	  "tcti_logical_shifted_register_test.o" },
 	{ CSSC_SOURCE,
-	  "4df4f19290967bbe34a478bced0216f74e6be2e9c9ce343280c66f907d72ffca",
+	  "fb131872813d8e2ee4192e581ffcdb62cce347ca2aa9cdb3bf5b1b06155c9dca",
 	  "tcti_cssc_min_max_immediate_test.o" },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "b04ec5608b426884e4963af565aea7a59309225711bf6811f8acbdb16538b3ba",
 	  "tcti_add_sub_immediate_test.o" },
+	{ LOGICAL_IMMEDIATE_SOURCE,
+	  "2030d6efe518ec6118d82e41247b2fbeae7c04442e248db65342e9ad771721f6",
+	  "tcti_logical_immediate_source_bound_test.o" },
+	{ MOVE_WIDE_SOURCE,
+	  "96bcc43f38b5e0e79d62ff6f9ef17100ba5b58e9e4f64dfae2d8c35eb4911323",
+	  "tcti_move_wide_source_bound_test.o" },
+	{ ADD_SUB_REGISTER_SOURCE,
+	  "ac6c5af06d59ba16130aee4dd83593148a0b4ef15d5fd14e32c531161fa6ec29",
+	  "tcti_add_sub_register_source_bound_test.o" },
+	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
+	  "a6d4768f0458875a667ec8f4dca2a722a5adac831aa0fd9d4cd24f1079d3d25c",
+	  "tcti_source_leaf_classification_test.o" },
+	{ DECODE_SOURCE,
+		"4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",
+	  "tcti_decode_test.o" },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_decode_exhaustive_load_store_exclusive_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_decode_load_store_exclusive_all_register_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_switch_fails_store_exclusive_without_reservation",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_gadget_executes_complete_load_store_exclusive_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ LSE_SOURCE, "orlix-tcti-lse-decode",
 	  "tcti_lse_decode_test_suite", "tcti_lse_decode_test_cases",
 	  "tcti_lse_execute_rmw_matrix",
@@ -209,28 +283,27 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "lse_source_bound_rejects_reserved_encodings",
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
-	  LSE128_CASE_ARRAY, "tcti_lse128_decode_all_leaves",
+	  LSE128_CASE_ARRAY, "tcti_lse128_resume_all_source_leaves",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
-	  LSE128_CASE_ARRAY, "tcti_lse128_rejects_reserved_operations",
-	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
-	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
-	  LSE128_CASE_ARRAY, "tcti_lse128_accepts_independent_odd_registers",
-	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
-	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
-	  LSE128_CASE_ARRAY, "tcti_lse128_execute_all_leaves",
-	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
-	  LSE128_CASE_ARRAY, "tcti_lse128_rejects_overlapping_result_lanes",
-	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
-		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	  LSE128_CASE_ARRAY, "tcti_lse128_resume_rejects_reserved_operations",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_resume_alignment_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_resume_readonly_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_resume_unmapped_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
 	  LSE128_CASE_ARRAY,
-	  "tcti_lse128_fixed_bit_near_misses_are_not_decoded",
+	  "tcti_lse128_resume_rejects_fixed_bit_near_misses",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
@@ -319,6 +392,103 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
 	  "tcti_add_sub_immediate_source_mask_boundaries",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_complete_decode_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_production_path_semantics",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_aliases_and_special_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+	  LOGICAL_IMMEDIATE_SUITE_SYMBOL, LOGICAL_IMMEDIATE_CASE_ARRAY,
+	  "tcti_logical_immediate_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_complete_legal_decode_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_all_immediates_decode",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_production_path_semantics",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_fixed_bit_neighbours_and_reserved",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+	  ADD_SUB_REGISTER_SUITE_SYMBOL, ADD_SUB_REGISTER_CASE_ARRAY,
+	  "asr_source_and_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+	  ADD_SUB_REGISTER_SUITE_SYMBOL, ADD_SUB_REGISTER_CASE_ARRAY,
+	  "asr_resume_semantics", TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+	  ADD_SUB_REGISTER_SUITE_SYMBOL, ADD_SUB_REGISTER_CASE_ARRAY,
+	  "asr_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
+	  SOURCE_LEAF_CLASSIFICATION_SUITE,
+	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
+	  SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY,
+	  "tcti_source_leaf_rejections_match_pinned_tuples",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
+	  SOURCE_LEAF_CLASSIFICATION_SUITE,
+	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
+	  SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY,
+	  "tcti_source_leaf_rejections_are_structured_el0_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_decode_exhaustive_load_store_unsigned_immediate_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_decode_exhaustive_load_store_signed_immediate_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
+	  "tcti_decode_exhaustive_load_store_register_offset_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
@@ -365,6 +535,69 @@ static const struct operation_requirements operation_requirements[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+#define SCALAR_REQUIREMENT(operation, obligations) { operation, obligations }
+	SCALAR_REQUIREMENT("AND_log_imm", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ORR_log_imm", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("EOR_log_imm", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ANDS_log_imm", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MOVN", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MOVZ", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MOVK", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADD_addsub_shift", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDS_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUB_addsub_shift", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUBS_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADD_addsub_ext", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDS_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUB_addsub_ext", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUBS_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADC", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADCS", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SBC", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SBCS", SCALAR_FLAGS_OBLIGATIONS),
+#undef SCALAR_REQUIREMENT
+	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRH_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRH_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSH_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSH_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSW_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSW_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_imm_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_imm_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_reg_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_reg_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTR", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTRB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTRH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTRSB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTRSH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTRSW", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDURB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDURH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDURSB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDURSH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDURSW", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDUR_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDUR_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STRH_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STRH_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STR_imm_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STR_imm_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STR_reg_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STR_reg_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTR", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTRB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTRH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STURB", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STURH", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STUR_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STUR_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
 #define LSE_REQUIREMENT(operation) \
 	{ operation, LSE_REQUIRED_OBLIGATIONS }
 	LSE_REQUIREMENT("CASB"),
@@ -402,13 +635,25 @@ static const struct operation_requirements operation_requirements[] = {
 	LSE_REQUIREMENT("LDSETP"),
 	LSE_REQUIREMENT("SWPP"),
 #undef LSE_REQUIREMENT
-	{ "LDXR", BASELINE_OBLIGATIONS |
-		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		TCTI_TARGET_PROOF_OBLIGATION_PC |
-		TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
-		TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
-		TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+#define EXCLUSIVE_REQUIREMENT(operation) \
+	{ operation, EXCLUSIVE_REQUIRED_OBLIGATIONS }
+	EXCLUSIVE_REQUIREMENT("STXP"),
+	EXCLUSIVE_REQUIREMENT("STLXP"),
+	EXCLUSIVE_REQUIREMENT("LDXP"),
+	EXCLUSIVE_REQUIREMENT("LDAXP"),
+	EXCLUSIVE_REQUIREMENT("STXRB"),
+	EXCLUSIVE_REQUIREMENT("STLXRB"),
+	EXCLUSIVE_REQUIREMENT("LDXRB"),
+	EXCLUSIVE_REQUIREMENT("LDAXRB"),
+	EXCLUSIVE_REQUIREMENT("STXRH"),
+	EXCLUSIVE_REQUIREMENT("STLXRH"),
+	EXCLUSIVE_REQUIREMENT("LDXRH"),
+	EXCLUSIVE_REQUIREMENT("LDAXRH"),
+	EXCLUSIVE_REQUIREMENT("STXR"),
+	EXCLUSIVE_REQUIREMENT("STLXR"),
+	EXCLUSIVE_REQUIREMENT("LDXR"),
+	EXCLUSIVE_REQUIREMENT("LDAXR"),
+#undef EXCLUSIVE_REQUIREMENT
 };
 
 static const struct tcti_target_proof_case logical_base_cases[] = {
@@ -624,24 +869,43 @@ static const struct tcti_target_proof_case lse_source_bound_cases[] = {
 };
 
 static const struct tcti_target_proof_case lse128_source_bound_cases[] = {
-	{ "tcti_lse128_decode_all_leaves",
+	{ "tcti_lse128_resume_all_source_leaves",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "tcti_lse128_rejects_reserved_operations",
-	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
-	{ "tcti_lse128_accepts_independent_odd_registers",
-	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
-	{ "tcti_lse128_execute_all_leaves",
-	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "tcti_lse128_rejects_overlapping_result_lanes",
-	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
-		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
-	{ "tcti_lse128_fixed_bit_near_misses_are_not_decoded",
+	{ "tcti_lse128_resume_rejects_reserved_operations",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_lse128_resume_alignment_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "tcti_lse128_resume_readonly_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "tcti_lse128_resume_unmapped_faults_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "tcti_lse128_resume_rejects_fixed_bit_near_misses",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct tcti_target_proof_case exclusive_source_bound_cases[] = {
+	{ "tcti_decode_exhaustive_load_store_exclusive_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_decode_load_store_exclusive_all_register_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "tcti_switch_fails_store_exclusive_without_reservation",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "tcti_gadget_executes_complete_load_store_exclusive_family",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 };
 
 #define ADD_SUB_IMMEDIATE_BASE_BINDING(ordinal, leaf, mnemonic, pattern) \
@@ -718,11 +982,22 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
 #define CORE_PROOF_REGISTRY_ENTRY_COUNT 16U
+#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
+#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 19U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 38U
+#define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
+#define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
 
 static struct tcti_target_proof_registry_entry proof_registry_entries[
-	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT] = {
+	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
+	ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT +
+	SCALAR_PROOF_REGISTRY_ENTRY_COUNT +
+	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
+	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -779,6 +1054,63 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 #undef CSSC_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS
+
+struct ordinary_load_store_registry_operation {
+	const char *operation_id;
+	const char *proof_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static struct ordinary_load_store_registry_operation
+	ordinary_load_store_registry_operations[] = {
+	{ .operation_id = "LDRB_imm", .proof_id = "kunit:ordinary-load-store-ldrb-imm" },
+	{ .operation_id = "LDRB_reg", .proof_id = "kunit:ordinary-load-store-ldrb-reg" },
+	{ .operation_id = "LDRH_imm", .proof_id = "kunit:ordinary-load-store-ldrh-imm" },
+	{ .operation_id = "LDRH_reg", .proof_id = "kunit:ordinary-load-store-ldrh-reg" },
+	{ .operation_id = "LDRSB_imm", .proof_id = "kunit:ordinary-load-store-ldrsb-imm" },
+	{ .operation_id = "LDRSB_reg", .proof_id = "kunit:ordinary-load-store-ldrsb-reg" },
+	{ .operation_id = "LDRSH_imm", .proof_id = "kunit:ordinary-load-store-ldrsh-imm" },
+	{ .operation_id = "LDRSH_reg", .proof_id = "kunit:ordinary-load-store-ldrsh-reg" },
+	{ .operation_id = "LDRSW_imm", .proof_id = "kunit:ordinary-load-store-ldrsw-imm" },
+	{ .operation_id = "LDRSW_reg", .proof_id = "kunit:ordinary-load-store-ldrsw-reg" },
+	{ .operation_id = "LDR_imm_fpsimd", .proof_id = "kunit:ordinary-load-store-ldr-imm-fpsimd" },
+	{ .operation_id = "LDR_imm_gen", .proof_id = "kunit:ordinary-load-store-ldr-imm-gen" },
+	{ .operation_id = "LDR_reg_fpsimd", .proof_id = "kunit:ordinary-load-store-ldr-reg-fpsimd" },
+	{ .operation_id = "LDR_reg_gen", .proof_id = "kunit:ordinary-load-store-ldr-reg-gen" },
+	{ .operation_id = "LDTR", .proof_id = "kunit:ordinary-load-store-ldtr" },
+	{ .operation_id = "LDTRB", .proof_id = "kunit:ordinary-load-store-ldtrb" },
+	{ .operation_id = "LDTRH", .proof_id = "kunit:ordinary-load-store-ldtrh" },
+	{ .operation_id = "LDTRSB", .proof_id = "kunit:ordinary-load-store-ldtrsb" },
+	{ .operation_id = "LDTRSH", .proof_id = "kunit:ordinary-load-store-ldtrsh" },
+	{ .operation_id = "LDTRSW", .proof_id = "kunit:ordinary-load-store-ldtrsw" },
+	{ .operation_id = "LDURB", .proof_id = "kunit:ordinary-load-store-ldurb" },
+	{ .operation_id = "LDURH", .proof_id = "kunit:ordinary-load-store-ldurh" },
+	{ .operation_id = "LDURSB", .proof_id = "kunit:ordinary-load-store-ldursb" },
+	{ .operation_id = "LDURSH", .proof_id = "kunit:ordinary-load-store-ldursh" },
+	{ .operation_id = "LDURSW", .proof_id = "kunit:ordinary-load-store-ldursw" },
+	{ .operation_id = "LDUR_fpsimd", .proof_id = "kunit:ordinary-load-store-ldur-fpsimd" },
+	{ .operation_id = "LDUR_gen", .proof_id = "kunit:ordinary-load-store-ldur-gen" },
+	{ .operation_id = "STRB_imm", .proof_id = "kunit:ordinary-load-store-strb-imm" },
+	{ .operation_id = "STRB_reg", .proof_id = "kunit:ordinary-load-store-strb-reg" },
+	{ .operation_id = "STRH_imm", .proof_id = "kunit:ordinary-load-store-strh-imm" },
+	{ .operation_id = "STRH_reg", .proof_id = "kunit:ordinary-load-store-strh-reg" },
+	{ .operation_id = "STR_imm_fpsimd", .proof_id = "kunit:ordinary-load-store-str-imm-fpsimd" },
+	{ .operation_id = "STR_imm_gen", .proof_id = "kunit:ordinary-load-store-str-imm-gen" },
+	{ .operation_id = "STR_reg_fpsimd", .proof_id = "kunit:ordinary-load-store-str-reg-fpsimd" },
+	{ .operation_id = "STR_reg_gen", .proof_id = "kunit:ordinary-load-store-str-reg-gen" },
+	{ .operation_id = "STTR", .proof_id = "kunit:ordinary-load-store-sttr" },
+	{ .operation_id = "STTRB", .proof_id = "kunit:ordinary-load-store-sttrb" },
+	{ .operation_id = "STTRH", .proof_id = "kunit:ordinary-load-store-sttrh" },
+	{ .operation_id = "STURB", .proof_id = "kunit:ordinary-load-store-sturb" },
+	{ .operation_id = "STURH", .proof_id = "kunit:ordinary-load-store-sturh" },
+	{ .operation_id = "STUR_fpsimd", .proof_id = "kunit:ordinary-load-store-stur-fpsimd" },
+	{ .operation_id = "STUR_gen", .proof_id = "kunit:ordinary-load-store-stur-gen" },
+};
+
+static struct tcti_target_proof_binding ordinary_load_store_registry_bindings[
+	ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT];
+static bool ordinary_load_store_registry_ready;
 
 struct lse_registry_operation {
 	const char *operation_id;
@@ -942,6 +1274,403 @@ static bool build_lse_registry(void)
 	return true;
 }
 
+/*
+ * These source suites are registered as ownership evidence only. The complete
+ * obligation mask remains unresolved until an execution result is imported.
+ */
+struct scalar_registry_operation {
+	const char *operation_id;
+	const char *proof_id;
+	const char *source;
+	const char *suite;
+	const struct tcti_target_proof_case *cases;
+	size_t case_count;
+	uint32_t minimum_ordinal;
+	uint32_t maximum_ordinal;
+	size_t expected_bindings;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static const struct tcti_target_proof_case logical_immediate_base_cases[] = {
+	{ "tcti_logical_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_immediate_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_immediate_complete_decode_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_immediate_production_path_semantics",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_logical_immediate_aliases_and_special_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_logical_immediate_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case logical_immediate_flags_cases[] = {
+	{ "tcti_logical_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_immediate_fixed_bit_neighbours",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_logical_immediate_complete_decode_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_logical_immediate_production_path_semantics",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_logical_immediate_aliases_and_special_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_logical_immediate_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case move_wide_cases[] = {
+	{ "tcti_move_wide_source_bindings", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_move_wide_complete_legal_decode_matrix",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_move_wide_all_immediates_decode",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_move_wide_production_path_semantics",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_move_wide_fixed_bit_neighbours_and_reserved",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct tcti_target_proof_case add_sub_register_base_cases[] = {
+	{ "asr_source_and_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "asr_resume_semantics", TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "asr_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case add_sub_register_flags_cases[] = {
+	{ "asr_source_and_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "asr_resume_semantics", TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "asr_reserved_structured_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+#define SCALAR_OPERATION(operation, proof, source_file, source_suite, case_set, \
+			 minimum, maximum, expected) \
+	{ operation, proof, source_file, source_suite, case_set, ARRAY_COUNT(case_set), \
+	  minimum, maximum, expected, 0, 0 }
+
+static struct scalar_registry_operation scalar_registry_operations[] = {
+	SCALAR_OPERATION("AND_log_imm", "kunit:logical-immediate-and",
+		LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+		logical_immediate_base_cases, 2191U, 2198U, 2),
+	SCALAR_OPERATION("ORR_log_imm", "kunit:logical-immediate-orr",
+		LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+		logical_immediate_base_cases, 2191U, 2198U, 2),
+	SCALAR_OPERATION("EOR_log_imm", "kunit:logical-immediate-eor",
+		LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+		logical_immediate_base_cases, 2191U, 2198U, 2),
+	SCALAR_OPERATION("ANDS_log_imm", "kunit:logical-immediate-ands",
+		LOGICAL_IMMEDIATE_SOURCE, LOGICAL_IMMEDIATE_SUITE,
+		logical_immediate_flags_cases, 2191U, 2198U, 2),
+	SCALAR_OPERATION("MOVN", "kunit:move-wide-movn", MOVE_WIDE_SOURCE,
+		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	SCALAR_OPERATION("MOVZ", "kunit:move-wide-movz", MOVE_WIDE_SOURCE,
+		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	SCALAR_OPERATION("MOVK", "kunit:move-wide-movk", MOVE_WIDE_SOURCE,
+		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	SCALAR_OPERATION("ADD_addsub_shift", "kunit:add-sub-register-add-shift",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3450U, 3457U, 2),
+	SCALAR_OPERATION("ADDS_addsub_shift", "kunit:add-sub-register-adds-shift",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3450U, 3457U, 2),
+	SCALAR_OPERATION("SUB_addsub_shift", "kunit:add-sub-register-sub-shift",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3450U, 3457U, 2),
+	SCALAR_OPERATION("SUBS_addsub_shift", "kunit:add-sub-register-subs-shift",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3450U, 3457U, 2),
+	SCALAR_OPERATION("ADD_addsub_ext", "kunit:add-sub-register-add-ext",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3458U, 3465U, 2),
+	SCALAR_OPERATION("ADDS_addsub_ext", "kunit:add-sub-register-adds-ext",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3458U, 3465U, 2),
+	SCALAR_OPERATION("SUB_addsub_ext", "kunit:add-sub-register-sub-ext",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3458U, 3465U, 2),
+	SCALAR_OPERATION("SUBS_addsub_ext", "kunit:add-sub-register-subs-ext",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3458U, 3465U, 2),
+	SCALAR_OPERATION("ADC", "kunit:add-sub-register-adc",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3466U, 3473U, 2),
+	SCALAR_OPERATION("ADCS", "kunit:add-sub-register-adcs",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3466U, 3473U, 2),
+	SCALAR_OPERATION("SBC", "kunit:add-sub-register-sbc",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_base_cases, 3466U, 3473U, 2),
+	SCALAR_OPERATION("SBCS", "kunit:add-sub-register-sbcs",
+		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
+		add_sub_register_flags_cases, 3466U, 3473U, 2),
+};
+
+#undef SCALAR_OPERATION
+
+static struct tcti_target_proof_binding scalar_registry_bindings[
+	SCALAR_PROOF_REGISTRY_BINDING_COUNT];
+static bool scalar_registry_ready;
+
+static struct scalar_registry_operation *
+scalar_registry_operation_for(const struct source_manifest_binding *source)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(scalar_registry_operations); index++) {
+		struct scalar_registry_operation *operation =
+			&scalar_registry_operations[index];
+
+		if (!strcmp(source->operation_id, operation->operation_id) &&
+		    !strcmp(source->condition_tcnd_hex, SCALAR_CONDITION) &&
+		    source->ordinal >= operation->minimum_ordinal &&
+		    source->ordinal <= operation->maximum_ordinal)
+			return operation;
+	}
+	return NULL;
+}
+
+static bool build_scalar_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t index;
+
+	if (scalar_registry_ready)
+		return true;
+	if (ARRAY_COUNT(scalar_registry_operations) !=
+	    SCALAR_PROOF_REGISTRY_ENTRY_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		struct scalar_registry_operation *operation =
+			scalar_registry_operation_for(&source_manifest_bindings[index]);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(scalar_registry_operations); index++) {
+		struct scalar_registry_operation *operation =
+			&scalar_registry_operations[index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != SCALAR_PROOF_REGISTRY_BINDING_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		const struct source_manifest_binding *source =
+			&source_manifest_bindings[index];
+		struct scalar_registry_operation *operation =
+			scalar_registry_operation_for(source);
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		binding = &scalar_registry_bindings[operation->binding_offset +
+			operation->binding_count++];
+		binding->leaf_name = source->leaf_name;
+		binding->mnemonic = source->mnemonic;
+		binding->encoding_mask = source->encoding_mask;
+		binding->encoding_pattern = source->encoding_pattern;
+		binding->condition_tcnd_hex = source->condition_tcnd_hex;
+		binding->kunit_case_mask =
+			(UINT64_C(1) << operation->case_count) - 1;
+		binding->source_ordinal = source->ordinal;
+	}
+	for (index = 0; index < ARRAY_COUNT(scalar_registry_operations); index++) {
+		struct scalar_registry_operation *operation =
+			&scalar_registry_operations[index];
+		struct tcti_target_proof_registry_entry *entry =
+			&proof_registry_entries[CORE_PROOF_REGISTRY_ENTRY_COUNT +
+				LSE_PROOF_REGISTRY_ENTRY_COUNT + index];
+		uint32_t obligations;
+
+		if (operation->binding_count != operation->expected_bindings ||
+		    tcti_target_proof_operation_requirements(operation->operation_id, 1,
+						   &obligations))
+			return false;
+		*entry = (struct tcti_target_proof_registry_entry){
+			.id = operation->proof_id,
+			.operation_id = operation->operation_id,
+			.classification_mask = TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+			.obligations = obligations,
+			.linux_interface =
+				TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+			.kunit_source = operation->source,
+			.kunit_suite = operation->suite,
+			.kunit_cases = operation->cases,
+			.kunit_case_count = operation->case_count,
+			.bindings = &scalar_registry_bindings[operation->binding_offset],
+			.binding_count = operation->binding_count,
+			.kselftest = NULL,
+			.unproved_obligations = obligations,
+		};
+	}
+	scalar_registry_ready = true;
+	return true;
+}
+
+struct exclusive_registry_operation {
+	const char *operation_id;
+	const char *proof_id;
+	size_t expected_bindings;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static struct exclusive_registry_operation exclusive_registry_operations[] = {
+	{ "STXP", "kunit:exclusive-stxp", 2, 0, 0 },
+	{ "STLXP", "kunit:exclusive-stlxp", 2, 0, 0 },
+	{ "LDXP", "kunit:exclusive-ldxp", 2, 0, 0 },
+	{ "LDAXP", "kunit:exclusive-ldaxp", 2, 0, 0 },
+	{ "STXRB", "kunit:exclusive-stxrb", 1, 0, 0 },
+	{ "STLXRB", "kunit:exclusive-stlxrb", 1, 0, 0 },
+	{ "LDXRB", "kunit:exclusive-ldxrb", 1, 0, 0 },
+	{ "LDAXRB", "kunit:exclusive-ldaxrb", 1, 0, 0 },
+	{ "STXRH", "kunit:exclusive-stxrh", 1, 0, 0 },
+	{ "STLXRH", "kunit:exclusive-stlxrh", 1, 0, 0 },
+	{ "LDXRH", "kunit:exclusive-ldxrh", 1, 0, 0 },
+	{ "LDAXRH", "kunit:exclusive-ldaxrh", 1, 0, 0 },
+	{ "STXR", "kunit:exclusive-stxr", 2, 0, 0 },
+	{ "STLXR", "kunit:exclusive-stlxr", 2, 0, 0 },
+	{ "LDXR", "kunit:exclusive-ldxr", 2, 0, 0 },
+	{ "LDAXR", "kunit:exclusive-ldaxr", 2, 0, 0 },
+};
+
+static struct tcti_target_proof_binding exclusive_registry_bindings[
+	EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT];
+static bool exclusive_registry_ready;
+
+static struct exclusive_registry_operation *
+exclusive_registry_operation_for(const struct source_manifest_binding *source)
+{
+	size_t index;
+
+	if (strcmp(source->condition_tcnd_hex, LOGICAL_SHIFT_CONDITION))
+		return NULL;
+	for (index = 0; index < ARRAY_COUNT(exclusive_registry_operations); index++)
+		if (!strcmp(source->operation_id,
+			    exclusive_registry_operations[index].operation_id))
+			return &exclusive_registry_operations[index];
+	return NULL;
+}
+
+static bool build_exclusive_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t index;
+
+	if (exclusive_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		struct exclusive_registry_operation *operation =
+			exclusive_registry_operation_for(&source_manifest_bindings[index]);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(exclusive_registry_operations); index++) {
+		struct exclusive_registry_operation *operation =
+			&exclusive_registry_operations[index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		const struct source_manifest_binding *source =
+			&source_manifest_bindings[index];
+		struct exclusive_registry_operation *operation =
+			exclusive_registry_operation_for(source);
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		binding = &exclusive_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		binding->leaf_name = source->leaf_name;
+		binding->mnemonic = source->mnemonic;
+		binding->encoding_mask = source->encoding_mask;
+		binding->encoding_pattern = source->encoding_pattern;
+		binding->condition_tcnd_hex = source->condition_tcnd_hex;
+		binding->kunit_case_mask =
+			(UINT64_C(1) << ARRAY_COUNT(exclusive_source_bound_cases)) - 1;
+		binding->source_ordinal = source->ordinal;
+	}
+	for (index = 0; index < ARRAY_COUNT(exclusive_registry_operations); index++) {
+		struct exclusive_registry_operation *operation =
+			&exclusive_registry_operations[index];
+		struct tcti_target_proof_registry_entry *entry =
+			&proof_registry_entries[CORE_PROOF_REGISTRY_ENTRY_COUNT +
+				LSE_PROOF_REGISTRY_ENTRY_COUNT +
+				SCALAR_PROOF_REGISTRY_ENTRY_COUNT + index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		*entry = (struct tcti_target_proof_registry_entry) {
+			.id = operation->proof_id,
+			.operation_id = operation->operation_id,
+			.classification_mask = TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+			.obligations = EXCLUSIVE_REQUIRED_OBLIGATIONS,
+			.linux_interface =
+				TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+			.kunit_source = DECODE_SOURCE,
+			.kunit_suite = DECODE_SUITE,
+			.kunit_cases = exclusive_source_bound_cases,
+			.kunit_case_count = ARRAY_COUNT(exclusive_source_bound_cases),
+			.bindings = &exclusive_registry_bindings[operation->binding_offset],
+			.binding_count = operation->binding_count,
+			.kselftest = NULL,
+			/* KUnit source ownership does not prove atomicity or ordering. */
+			.unproved_obligations = EXCLUSIVE_REQUIRED_OBLIGATIONS,
+		};
+	}
+	exclusive_registry_ready = true;
+	return true;
+}
+
 static bool empty(const char *text)
 {
 	return !text || !text[0];
@@ -962,6 +1691,133 @@ source_manifest_binding(uint32_t ordinal)
 		if (source_manifest_bindings[index].ordinal == ordinal)
 			return &source_manifest_bindings[index];
 	return NULL;
+}
+
+static const struct tcti_target_proof_case ordinary_load_store_cases[] = {
+	{ "tcti_decode_exhaustive_load_store_unsigned_immediate_family",
+	  ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "tcti_decode_exhaustive_load_store_signed_immediate_family",
+	  ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "tcti_decode_exhaustive_load_store_register_offset_family",
+	  ORDINARY_LOAD_STORE_OBLIGATIONS },
+};
+
+static struct ordinary_load_store_registry_operation *
+ordinary_load_store_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(ordinary_load_store_registry_operations);
+	     index++)
+		if (!strcmp(proof_id,
+			    ordinary_load_store_registry_operations[index].proof_id))
+			return &ordinary_load_store_registry_operations[index];
+	return NULL;
+}
+
+static uint64_t ordinary_load_store_case_mask(
+	const struct source_manifest_binding *source)
+{
+	if ((source->encoding_pattern & 0x3b000000U) == 0x39000000U)
+		return UINT64_C(1);
+	if ((source->encoding_pattern & 0x3b200000U) == 0x38000000U)
+		return UINT64_C(2);
+	if ((source->encoding_pattern & 0x3b200c00U) == 0x38200800U)
+		return UINT64_C(4);
+	return 0;
+}
+
+static bool build_ordinary_load_store_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t index;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT;
+
+	if (ordinary_load_store_registry_ready)
+		return true;
+	if (ARRAY_COUNT(ordinary_load_store_registry_operations) !=
+	    ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct ordinary_load_store_registry_operation *operation =
+			ordinary_load_store_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (!source || strcmp(source->operation_id, operation->operation_id) ||
+		    !ordinary_load_store_case_mask(source))
+			return false;
+		operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(ordinary_load_store_registry_operations);
+	     index++) {
+		struct ordinary_load_store_registry_operation *operation =
+			&ordinary_load_store_registry_operations[index];
+
+		if (!operation->binding_count)
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct ordinary_load_store_registry_operation *operation =
+			ordinary_load_store_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		binding = &ordinary_load_store_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		*binding = (struct tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask = ordinary_load_store_case_mask(source),
+			.source_ordinal = source->ordinal,
+		};
+	}
+	for (index = 0; index < ARRAY_COUNT(ordinary_load_store_registry_operations);
+	     index++) {
+		struct ordinary_load_store_registry_operation *operation =
+			&ordinary_load_store_registry_operations[index];
+
+		if (!operation->binding_count)
+			return false;
+		proof_registry_entries[entry_base + index] =
+			(struct tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask =
+					TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+				.obligations = ORDINARY_LOAD_STORE_OBLIGATIONS,
+				.linux_interface =
+					TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = DECODE_SOURCE,
+				.kunit_suite = DECODE_SUITE,
+				.kunit_cases = ordinary_load_store_cases,
+				.kunit_case_count = ARRAY_COUNT(ordinary_load_store_cases),
+				.bindings = &ordinary_load_store_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations =
+					ORDINARY_LOAD_STORE_OBLIGATIONS,
+			};
+	}
+	ordinary_load_store_registry_ready = true;
+	return true;
 }
 
 static bool proof_binding_matches_source_manifest(
@@ -1015,6 +1871,166 @@ static size_t source_bound_proof_matches_registry(
 				matches++;
 	}
 	return matches;
+}
+
+struct source_leaf_rejection_registry_operation {
+	const char *proof_id;
+	unsigned int classification;
+	const char *operation_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static struct source_leaf_rejection_registry_operation
+source_leaf_rejection_registry_operations[] = {
+	{ .proof_id = "kunit:source-leaf-udf-undefined",
+	  .classification = 3 },
+	{ .proof_id = "kunit:source-leaf-hvc-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-smc-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-dcps1-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-dcps2-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-dcps3-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sysl-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-eret-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-drps-non-el0",
+	  .classification = 2 },
+};
+static struct tcti_target_proof_binding
+source_leaf_rejection_registry_bindings[
+	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT];
+static const struct tcti_target_proof_case source_leaf_rejection_cases[] = {
+	{ "tcti_source_leaf_rejections_match_pinned_tuples",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_source_leaf_rejections_are_structured_el0_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+};
+
+static const struct tcti_target_proof_case source_leaf_undefined_cases[] = {
+	{ "tcti_source_leaf_rejections_match_pinned_tuples",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_source_leaf_rejections_are_structured_el0_exits",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+};
+static bool source_leaf_rejection_registry_ready;
+
+static struct source_leaf_rejection_registry_operation *
+source_leaf_rejection_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0;
+	     index < ARRAY_COUNT(source_leaf_rejection_registry_operations);
+	     index++)
+		if (!strcmp(proof_id,
+			    source_leaf_rejection_registry_operations[index].proof_id))
+			return &source_leaf_rejection_registry_operations[index];
+	return NULL;
+}
+
+static bool build_source_leaf_rejection_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
+		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t index;
+
+	if (source_leaf_rejection_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct source_leaf_rejection_registry_operation *operation =
+			source_leaf_rejection_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0;
+	     index < ARRAY_COUNT(source_leaf_rejection_registry_operations);
+	     index++) {
+		struct source_leaf_rejection_registry_operation *operation =
+			&source_leaf_rejection_registry_operations[index];
+
+		if (operation->binding_count != 1)
+			return false;
+		operation->binding_offset = binding_offset++;
+		operation->binding_count = 0;
+	}
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct source_leaf_rejection_registry_operation *operation =
+			source_leaf_rejection_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (!source)
+			return false;
+		binding = &source_leaf_rejection_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		*binding = (struct tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask = UINT64_C(0x3),
+			.source_ordinal = source->ordinal,
+		};
+		operation->operation_id = source->operation_id;
+	}
+	for (index = 0;
+	     index < ARRAY_COUNT(source_leaf_rejection_registry_operations);
+	     index++) {
+		const struct source_leaf_rejection_registry_operation *operation =
+			&source_leaf_rejection_registry_operations[index];
+		uint32_t obligations = operation->classification == 2 ?
+			NON_EL0_REJECTION_OBLIGATIONS :
+			UNDEFINED_REJECTION_OBLIGATIONS;
+
+		if (operation->binding_count != 1 || !operation->operation_id)
+			return false;
+		proof_registry_entries[entry_base + index] =
+			(struct tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask = 1U << operation->classification,
+				.obligations = obligations,
+				.linux_interface =
+					TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = SOURCE_LEAF_CLASSIFICATION_SOURCE,
+				.kunit_suite = SOURCE_LEAF_CLASSIFICATION_SUITE,
+			.kunit_cases = operation->classification == 2 ?
+				source_leaf_rejection_cases :
+				source_leaf_undefined_cases,
+			.kunit_case_count = operation->classification == 2 ?
+				ARRAY_COUNT(source_leaf_rejection_cases) :
+				ARRAY_COUNT(source_leaf_undefined_cases),
+				.bindings = &source_leaf_rejection_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations = obligations,
+			};
+	}
+	source_leaf_rejection_registry_ready = true;
+	return true;
 }
 
 int tcti_target_proof_operation_requirements(
@@ -1675,7 +2691,10 @@ enum tcti_target_proof_registry_error tcti_target_proof_registry_lookup(
 const struct tcti_target_proof_registry_entry *
 tcti_target_proof_registry_entries(size_t *count)
 {
-	if (!build_lse_registry()) {
+	if (!build_lse_registry() || !build_scalar_registry() ||
+	    !build_exclusive_registry() ||
+	    !build_ordinary_load_store_registry() ||
+	    !build_source_leaf_rejection_registry()) {
 		if (count)
 			*count = 0;
 		return NULL;

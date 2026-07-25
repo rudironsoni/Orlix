@@ -14,9 +14,21 @@
 #include <asm/tcti.h>
 #include <asm/uaccess.h>
 
+#include "../decode_aarch64.h"
+#include "../switch_debug.h"
 #include "tcti_test_suites.h"
 
 #define TCTI_ATOMIC_PAIR_ITERATIONS 1024
+#define TCTI_EXCLUSIVE_BASE 0x08000000U
+
+static u32 tcti_exclusive_instruction(u8 size, bool load, bool acquire_release,
+				     u8 rs, u8 rn, u8 rt)
+{
+	return TCTI_EXCLUSIVE_BASE | ((u32)size << 30) |
+		((u32)load << 22) | ((u32)rs << 16) |
+		((u32)acquire_release << 15) | (31U << 10) |
+		((u32)rn << 5) | rt;
+}
 
 static int tcti_atomic_memory_test_init(struct kunit *test)
 {
@@ -622,6 +634,92 @@ static void tcti_exclusive_reservation_rejects_restored_mapping_generation(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
+/*
+ * Exercise the production decoded path, rather than only the backing-memory
+ * helpers. LDAXR must establish a reservation, a later ordinary write must
+ * break it even when it restores the original bytes, and STLXR must report
+ * failure without changing memory. A fresh LDAXR/STLXR pair must then store
+ * exactly once and clear the monitor on both terminal paths.
+ */
+static void tcti_exclusive_acqrel_status_and_monitor_transitions(
+	struct kunit *test)
+{
+	const u64 initial = 0x1122334455667788ULL;
+	const u64 desired = 0x8877665544332211ULL;
+	const u32 ldaxr_instruction = tcti_exclusive_instruction(
+		3, true, true, 31, 10, 0);
+	const u32 stlxr_instruction = tcti_exclusive_instruction(
+		3, false, true, 2, 10, 4);
+	const struct tcti_decoded_instruction ldaxr =
+		tcti_decode_aarch64(ldaxr_instruction);
+	const struct tcti_decoded_instruction stlxr =
+		tcti_decode_aarch64(stlxr_instruction);
+	unsigned long mapped = tcti_atomic_test_map(test, PROT_READ | PROT_WRITE);
+	struct pt_regs regs = {};
+	u64 observed = 0;
+	int ret;
+
+	if (!mapped)
+		return;
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
+			ldaxr.decode_class);
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
+			stlxr.decode_class);
+	KUNIT_EXPECT_TRUE(test, ldaxr.load);
+	KUNIT_EXPECT_TRUE(test, ldaxr.exclusive);
+	KUNIT_EXPECT_TRUE(test, ldaxr.acquire);
+	KUNIT_EXPECT_FALSE(test, ldaxr.release);
+	KUNIT_EXPECT_FALSE(test, stlxr.load);
+	KUNIT_EXPECT_TRUE(test, stlxr.exclusive);
+	KUNIT_EXPECT_FALSE(test, stlxr.acquire);
+	KUNIT_EXPECT_TRUE(test, stlxr.release);
+
+	ret = tcti_write_user_data(current->mm, mapped, &initial,
+				   sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.regs[10] = mapped;
+	regs.regs[4] = desired;
+	regs.pc = 0x1000;
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &ldaxr,
+						       NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, initial, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0x1004ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_exclusive_valid);
+
+	ret = tcti_write_user_data(current->mm, mapped, &initial,
+				   sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &stlxr,
+						       NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[2]);
+	KUNIT_EXPECT_EQ(test, 0x1008ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0, current->thread.user_exclusive_valid);
+	ret = tcti_read_user_data(current->mm, mapped, &observed,
+				  sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, initial, observed);
+
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &ldaxr,
+						       NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, initial, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0x100cULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 1, current->thread.user_exclusive_valid);
+	ret = tcti_switch_debug_execute_decoded(current->mm, &regs, &stlxr,
+						       NULL);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0ULL, regs.regs[2]);
+	KUNIT_EXPECT_EQ(test, 0x1010ULL, regs.pc);
+	KUNIT_EXPECT_EQ(test, 0, current->thread.user_exclusive_valid);
+	ret = tcti_read_user_data(current->mm, mapped, &observed,
+				  sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, desired, observed);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
 static void tcti_start_thread_clears_exclusive_reservation_state(
 	struct kunit *test)
 {
@@ -687,6 +785,7 @@ static struct kunit_case tcti_atomic_memory_test_cases[] = {
 	KUNIT_CASE(tcti_signal_delivery_clears_exclusive_reservation_state),
 	KUNIT_CASE(
 		tcti_exclusive_reservation_rejects_restored_mapping_generation),
+	KUNIT_CASE(tcti_exclusive_acqrel_status_and_monitor_transitions),
 	{}
 };
 

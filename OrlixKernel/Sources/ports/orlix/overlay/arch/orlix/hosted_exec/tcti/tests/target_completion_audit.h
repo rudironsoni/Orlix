@@ -197,6 +197,14 @@ struct tcti_target_completion_result {
 	size_t invalid_source_condition_rows;
 	/* No leaf may be treated as applicable without an exact union result. */
 	size_t unresolved_feature_applicability_rows;
+	size_t evaluated_feature_applicability_rows;
+	size_t satisfied_feature_applicability_rows;
+	size_t unsatisfied_feature_applicability_rows;
+	size_t unsupported_feature_applicability_rows;
+	/* The TCND evaluator records why an otherwise valid source row is blocked. */
+	size_t unresolved_feature_configuration_rows;
+	size_t unresolved_instruction_operand_rows;
+	size_t invalid_feature_applicability_rows;
 	size_t invalid_feature_artifact;
 	/* ASL provenance must bind every leaf and remain unavailable until present. */
 	size_t asl_availability_rows;

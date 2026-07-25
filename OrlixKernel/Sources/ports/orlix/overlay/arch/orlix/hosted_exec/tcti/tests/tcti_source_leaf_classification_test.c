@@ -1,0 +1,214 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#include <asm/processor.h>
+#include <asm/ptrace.h>
+#include <asm/tcti.h>
+#include <kunit/test.h>
+#include <linux/err.h>
+#include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/sched.h>
+#include <linux/syscalls.h>
+
+#include "../decode_aarch64.h"
+#include "tcti_test_suites.h"
+#include "tcti_source_leaf_rejection_catalog.h"
+
+#define SOURCE_LEAF_SVC 0xd4000001U
+
+enum tcti_system_leaf_el0_classification {
+	TCTI_SYSTEM_LEAF_EL0_VARIANT_REQUIRED,
+	TCTI_SYSTEM_LEAF_NON_EL0_REJECTION,
+	TCTI_SYSTEM_LEAF_FEATURE_CONDITIONED_EL0_PARTITION_REQUIRED,
+};
+
+enum tcti_system_leaf_relation {
+	TCTI_SYSTEM_LEAF_RELATION_NONE,
+};
+
+enum tcti_system_leaf_implementation_status {
+	TCTI_SYSTEM_LEAF_PENDING,
+	TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
+};
+
+enum tcti_system_leaf_proof_status {
+	TCTI_SYSTEM_LEAF_UNPROVED,
+	TCTI_SYSTEM_LEAF_PROVED,
+};
+
+struct system_leaf_classification {
+	u32 ordinal;
+	const char *name;
+	const char *operation;
+	const char *feature_predicate;
+	enum tcti_system_leaf_el0_classification el0_classification;
+	enum tcti_system_leaf_relation relation;
+	const char *asl_operation;
+	const char *owner;
+	const char *proof_id;
+	enum tcti_system_leaf_implementation_status implementation_status;
+	enum tcti_system_leaf_proof_status proof_status;
+};
+
+#define TCTI_SYSTEM_LEAF_CLASSIFICATION(ordinal, name, operation, feature, \
+					el0_classification, relation, asl_operation, \
+					owner, proof_id, implementation_status, \
+					proof_status) \
+	{ ordinal, name, operation, feature, el0_classification, relation, \
+	  asl_operation, owner, proof_id, implementation_status, proof_status },
+static const struct system_leaf_classification system_leaf_classifications[] = {
+#include "../isa/system_leaf_classification.def"
+};
+#undef TCTI_SYSTEM_LEAF_CLASSIFICATION
+
+static void tcti_system_leaf_catalog_tracks_authoritative_fanout(
+	struct kunit *test)
+{
+	static const u32 expected_ordinals[] = {
+		2281U, 2282U, 2283U, 2284U, 2285U, 2286U, 2287U,
+	};
+	static const char * const expected_features[] = {
+		"true", "true", "true", "true", "FEAT_SYSINSTR128",
+		"FEAT_SYSREG128", "FEAT_SYSREG128",
+	};
+	size_t index;
+
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(expected_ordinals),
+				ARRAY_SIZE(system_leaf_classifications));
+	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++) {
+		const struct system_leaf_classification *leaf =
+			&system_leaf_classifications[index];
+
+		KUNIT_EXPECT_EQ_MSG(test, expected_ordinals[index], leaf->ordinal,
+				    "system catalog index %zu", index);
+		KUNIT_EXPECT_STREQ_MSG(test, expected_features[index],
+				       leaf->feature_predicate,
+				       "source ordinal %u", leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_SYSTEM_LEAF_RELATION_NONE,
+				    leaf->relation, "source ordinal %u", leaf->ordinal);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->name);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->operation);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->asl_operation);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->owner);
+		KUNIT_EXPECT_NOT_NULL(test, leaf->proof_id);
+	}
+
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_NON_EL0_REJECTION,
+			system_leaf_classifications[1].el0_classification);
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
+			system_leaf_classifications[1].implementation_status);
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_PROVED,
+			system_leaf_classifications[1].proof_status);
+
+	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++)
+		if (index != 1) {
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_SYSTEM_LEAF_PENDING,
+					    system_leaf_classifications[index].implementation_status,
+					    "source ordinal %u",
+					    system_leaf_classifications[index].ordinal);
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_SYSTEM_LEAF_UNPROVED,
+					    system_leaf_classifications[index].proof_status,
+					    "source ordinal %u",
+					    system_leaf_classifications[index].ordinal);
+		}
+}
+
+static unsigned long source_leaf_map(struct kunit *test, u32 instruction)
+{
+	u32 program[] = { instruction, SOURCE_LEAF_SVC };
+	unsigned long mapped;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	ret = tcti_write_user_data(current->mm, mapped, program,
+				   sizeof(program));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	return mapped;
+}
+
+#include "tcti_system_accessor_partition_test.h"
+
+static void tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < tcti_source_leaf_rejection_count(); index++) {
+		struct tcti_source_leaf_rejection entry;
+		const struct tcti_source_leaf_rejection *leaf =
+			tcti_source_leaf_rejection_at(index, &entry);
+		struct tcti_decoded_instruction decoded;
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern,
+				    leaf->pattern & leaf->mask,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
+		decoded = tcti_decode_aarch64(leaf->pattern);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				    decoded.decode_class,
+				    "%s (%s) source ordinal %u was accepted at EL0",
+				    leaf->name, leaf->operation, leaf->ordinal);
+	}
+}
+
+static void tcti_source_leaf_rejections_are_structured_el0_exits(
+	struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < tcti_source_leaf_rejection_count(); index++) {
+		struct tcti_source_leaf_rejection entry;
+		const struct tcti_source_leaf_rejection *leaf =
+			tcti_source_leaf_rejection_at(index, &entry);
+		struct pt_regs regs = { };
+		struct pt_regs before;
+		struct tcti_result result;
+		unsigned long mapped;
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		mapped = source_leaf_map(test, leaf->pattern);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x123456789abcdef0ULL;
+		before = regs;
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				    result.reason, "%s source ordinal %u",
+				    leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, result.instruction,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
+		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs,
+				   sizeof(regs.regs));
+		KUNIT_EXPECT_EQ_MSG(test, before.pc, regs.pc,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+}
+
+static struct kunit_case tcti_source_leaf_classification_test_cases[] = {
+	KUNIT_CASE(tcti_system_leaf_catalog_tracks_authoritative_fanout),
+	KUNIT_CASE(tcti_system_accessor_partition_binds_source_metadata),
+	KUNIT_CASE(tcti_system_accessor_partition_matches_decoder_contract),
+	KUNIT_CASE(tcti_system_accessor_partition_rejections_are_structured_el0_exits),
+	KUNIT_CASE(tcti_source_leaf_rejections_match_pinned_tuples),
+	KUNIT_CASE(tcti_source_leaf_rejections_are_structured_el0_exits),
+	{}
+};
+
+struct kunit_suite tcti_source_leaf_classification_test_suite = {
+	.name = "orlix-tcti-source-leaf-classification",
+	.test_cases = tcti_source_leaf_classification_test_cases,
+};
+kunit_test_suite(tcti_source_leaf_classification_test_suite);

@@ -114,6 +114,10 @@ enum tcti_feature_domain_tcnd_error {
 	TCTI_FEATURE_DOMAIN_TCND_ENCODING,
 	TCTI_FEATURE_DOMAIN_TCND_DEPTH,
 	TCTI_FEATURE_DOMAIN_TCND_UNKNOWN_FEATURE,
+	TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE,
+	TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND,
+	TCTI_FEATURE_DOMAIN_TCND_CALLBACK_VALUE,
+	TCTI_FEATURE_DOMAIN_TCND_TYPE,
 };
 
 struct tcti_feature_domain_tcnd_diagnostic {
@@ -125,6 +129,51 @@ struct tcti_feature_domain_tcnd_diagnostic {
 int tcti_feature_domain_validate_tcnd_features(
 	const struct tcti_feature_artifact *artifact, const char *tcnd_hex,
 	struct tcti_feature_domain_tcnd_diagnostic *diagnostic);
+
+/*
+ * Exact TCND v1 evaluation for one explicit target configuration.  The
+ * callbacks receive an offset and byte length into the checked TCND hex
+ * string, so evaluation never relies on temporary NUL-terminated copies of
+ * Arm-owned data. `feature` supplies a Boolean feature state. `operand`
+ * supplies the exact source-value spelling of one instruction operand,
+ * including its length. Every missing
+ * callback, unknown feature, malformed record, unsupported value kind, and
+ * type mismatch fails closed with a typed diagnostic.
+ */
+struct tcti_feature_domain_tcnd_environment {
+	void *context;
+	int (*feature)(void *context, const char *tcnd_hex,
+		       size_t byte_offset, size_t byte_length,
+		       tcti_feature_artifact_u8 *enabled);
+	int (*operand)(void *context, const char *tcnd_hex,
+		       size_t byte_offset, size_t byte_length,
+		       const char **value, size_t *value_length);
+};
+
+int tcti_feature_domain_evaluate_tcnd(
+	const struct tcti_feature_artifact *artifact, const char *tcnd_hex,
+	const struct tcti_feature_domain_tcnd_environment *environment,
+	tcti_feature_artifact_u8 *satisfied,
+	struct tcti_feature_domain_tcnd_diagnostic *diagnostic);
+
+struct tcti_feature_domain_tcnd_union_candidate {
+	const struct tcti_feature_domain_tcnd_environment *environment;
+};
+
+struct tcti_feature_domain_tcnd_union_result {
+	size_t candidate_count;
+	size_t evaluated_count;
+	size_t satisfied_count;
+	size_t unsatisfied_count;
+	size_t unsupported_count;
+	struct tcti_feature_domain_tcnd_diagnostic first_unsupported;
+};
+
+/* Evaluate one source condition across every supplied target configuration. */
+int tcti_feature_domain_evaluate_tcnd_union(
+	const struct tcti_feature_artifact *artifact, const char *tcnd_hex,
+	const struct tcti_feature_domain_tcnd_union_candidate *candidates,
+	size_t candidate_count, struct tcti_feature_domain_tcnd_union_result *result);
 
 /* Evaluate one feature-constraint root or return a typed hard failure. */
 int tcti_feature_domain_evaluate(
@@ -145,5 +194,43 @@ int tcti_feature_domain_evaluate_constraints(
 	struct tcti_feature_domain_scratch *scratch,
 	tcti_feature_artifact_u8 *satisfied,
 	struct tcti_feature_domain_diagnostic *diagnostic);
+
+/*
+ * A target leaf is applicable when at least one explicitly supplied Arm
+ * feature configuration satisfies its constraints.  This is a target-domain
+ * union, not a runtime HWCAP projection.  Every supplied configuration is
+ * evaluated, so an unsupported field relation or missing feature callback is
+ * retained in `unsupported_count` even when another configuration satisfies
+ * the same constraints.
+ *
+ * The caller owns one scratch object for each candidate because evaluation is
+ * deliberately allocation-free.  A hard evaluation failure returns -1 after
+ * recording the first diagnostic and does not make the offending candidate
+ * disappear from the union.
+ */
+struct tcti_feature_domain_union_candidate {
+	const struct tcti_feature_domain_environment *environment;
+};
+
+struct tcti_feature_domain_union_scratch {
+	struct tcti_feature_domain_scratch *evaluators;
+	size_t evaluator_count;
+};
+
+struct tcti_feature_domain_union_result {
+	size_t candidate_count;
+	size_t evaluated_count;
+	size_t satisfied_count;
+	size_t unsatisfied_count;
+	size_t unsupported_count;
+	struct tcti_feature_domain_diagnostic first_unsupported;
+};
+
+int tcti_feature_domain_evaluate_constraint_union(
+	const struct tcti_feature_artifact *artifact,
+	const struct tcti_feature_domain_union_candidate *candidates,
+	size_t candidate_count,
+	struct tcti_feature_domain_union_scratch *scratch,
+	struct tcti_feature_domain_union_result *result);
 
 #endif /* ORLIX_TCTI_TARGET_FEATURE_DOMAIN_H */

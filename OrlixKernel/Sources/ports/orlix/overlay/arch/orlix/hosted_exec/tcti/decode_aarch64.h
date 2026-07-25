@@ -4,6 +4,8 @@
 
 #include <linux/types.h>
 
+#include "sve_decode.h"
+
 enum tcti_decode_class {
 	TCTI_DECODE_UNSUPPORTED = 0,
 	TCTI_DECODE_SVC,
@@ -39,6 +41,8 @@ enum tcti_decode_class {
 	TCTI_DECODE_MULTIPLY_ADD_SUB,
 	TCTI_DECODE_MOVE_WIDE_IMMEDIATE,
 	TCTI_DECODE_SYSTEM_REGISTER,
+	TCTI_DECODE_SME_PSTATE_IMMEDIATE,
+	TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY,
 	TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
 	TCTI_DECODE_LSE_ATOMIC,
@@ -153,6 +157,11 @@ enum tcti_system_register {
 	TCTI_SYSTEM_REGISTER_CNTVCT_EL0,
 };
 
+enum tcti_sme_pstate_operation {
+	TCTI_SME_PSTATE_SMSTART = 0,
+	TCTI_SME_PSTATE_SMSTOP,
+};
+
 enum tcti_barrier_op {
 	TCTI_BARRIER_DSB = 0,
 	TCTI_BARRIER_DMB,
@@ -188,6 +197,10 @@ enum tcti_data_processing_2source_op {
 	TCTI_DP2_RORV,
 	TCTI_DP2_CRC32,
 	TCTI_DP2_CRC32C,
+	TCTI_DP2_SMAX,
+	TCTI_DP2_UMAX,
+	TCTI_DP2_SMIN,
+	TCTI_DP2_UMIN,
 };
 
 enum tcti_lse_atomic_op {
@@ -210,6 +223,9 @@ enum tcti_data_processing_1source_op {
 	TCTI_DP1_REV16,
 	TCTI_DP1_REV32,
 	TCTI_DP1_CLS,
+	TCTI_DP1_CTZ,
+	TCTI_DP1_CNT,
+	TCTI_DP1_ABS,
 };
 
 enum tcti_simd_vector_arithmetic_op {
@@ -529,6 +545,7 @@ struct tcti_decoded_instruction {
 	bool immediate;
 	bool fp_conditional;
 	bool fp_signal_all_nans;
+	bool barrier_nxs;
 	s64 pc_relative_imm;
 	bool page_relative;
 	s64 branch_imm;
@@ -557,6 +574,9 @@ struct tcti_decoded_instruction {
 	enum tcti_move_wide_op move_wide_op;
 	enum tcti_branch_register_op branch_register_op;
 	enum tcti_system_register system_register;
+	enum tcti_sme_pstate_operation sme_pstate_operation;
+	enum tcti_sve_integer_binary_op sve_integer_binary_op;
+	enum tcti_sve_predication sve_predication;
 	enum tcti_barrier_op barrier_op;
 	enum tcti_cache_maintenance_op cache_maintenance_op;
 	enum tcti_conditional_select_op conditional_select_op;
@@ -575,6 +595,10 @@ struct tcti_decoded_instruction {
 	enum tcti_simd_element_move_op simd_element_move_op;
 	enum tcti_simd_table_lookup_op simd_table_lookup_op;
 	bool system_register_write;
+	bool sme_streaming_mode;
+	bool sme_za;
+	u8 sve_pg;
+	u8 sve_element_bytes;
 	u8 bitfield_immr;
 	u8 bitfield_imms;
 	u8 rs;

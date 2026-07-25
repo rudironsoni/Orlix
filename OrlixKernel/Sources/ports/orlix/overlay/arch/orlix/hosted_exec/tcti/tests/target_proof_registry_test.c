@@ -316,7 +316,11 @@ static int logical_shifted_register_registry_is_source_bound(void)
 	entries = tcti_target_proof_registry_entries(&count);
 	EXPECT(entries != NULL);
 	EXPECT(count >= sizeof(operations) / sizeof(operations[0]));
-	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	if (tcti_target_proof_registry_validate(entries, count, &error)) {
+		fprintf(stderr, "%s:%d: registry validation error %u\n",
+			__FILE__, __LINE__, (unsigned int)error);
+		return -1;
+	}
 	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
 		       entries, count, &error) == 0);
 	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_OK);
@@ -507,6 +511,100 @@ static int lse_registry_cannot_clear_unproved_duties_statically(void)
 	return 0;
 }
 
+static int scalar_source_bindings_are_complete_and_fail_closed(void)
+{
+	const struct tcti_target_proof_registry_entry *entries;
+	struct tcti_target_proof_registry_entry copied[256];
+	struct tcti_target_proof_binding duplicate[2];
+	struct tcti_target_proof_registry_entry entry;
+	enum tcti_target_proof_registry_error error;
+	size_t binding_count = 0;
+	size_t entry_count = 0;
+	size_t count;
+	size_t index;
+	size_t scalar_index = 0;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(count <= sizeof(copied) / sizeof(copied[0]));
+	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
+		       entries, count, &error) == 0);
+	for (index = 0; index < count; index++) {
+		const struct tcti_target_proof_registry_entry *candidate =
+			&entries[index];
+
+		if (strncmp(candidate->id, "kunit:logical-immediate-", 24) &&
+		    strncmp(candidate->id, "kunit:move-wide-", 16) &&
+		    strncmp(candidate->id, "kunit:add-sub-register-", 23))
+			continue;
+		EXPECT(candidate->unproved_obligations == candidate->obligations);
+		EXPECT(candidate->linux_interface ==
+		       TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		if (!strcmp(candidate->id, "kunit:logical-immediate-and"))
+			scalar_index = index;
+		entry_count++;
+		binding_count += candidate->binding_count;
+	}
+	EXPECT(entry_count == 19);
+	EXPECT(binding_count == 38);
+
+	/* A missing binding must leave its source-bound proof row unmatched. */
+	memcpy(copied, entries, count * sizeof(copied[0]));
+	EXPECT(copied[scalar_index].binding_count == 2);
+	copied[scalar_index].binding_count--;
+	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
+		       copied, count, &error) == -1);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+
+	/* A duplicate source tuple and a changed pinned tuple both fail locally. */
+	entry = entries[scalar_index];
+	memcpy(duplicate, entry.bindings, sizeof(duplicate));
+	duplicate[1] = duplicate[0];
+	entry.bindings = duplicate;
+	EXPECT(tcti_target_proof_registry_validate(&entry, 1, &error) == -1);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY);
+	duplicate[1] = entries[scalar_index].bindings[1];
+	duplicate[0].encoding_pattern ^= 0x1000000U;
+	EXPECT(tcti_target_proof_registry_validate(&entry, 1, &error) == -1);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+	return 0;
+}
+
+static int exclusive_registry_binds_exact_baseline_leaves(void)
+{
+	const struct tcti_target_proof_registry_entry *entries;
+	enum tcti_target_proof_registry_error error;
+	size_t binding_count = 0;
+	size_t entry_count = 0;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
+		       entries, count, &error) == 0);
+	for (index = 0; index < count; index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[index];
+
+		if (strncmp(entry->id, "kunit:exclusive-", 16))
+			continue;
+		EXPECT(entry->classification_mask ==
+		       TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
+		EXPECT(entry->obligations == LSE_OBLIGATIONS);
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->linux_interface ==
+		       TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		entry_count++;
+		binding_count += entry->binding_count;
+	}
+	EXPECT(entry_count == 16);
+	EXPECT(binding_count == 24);
+	return 0;
+}
+
 static int source_registration_discharges_zero_semantic_obligations(void)
 {
 	const struct tcti_target_proof_registry_entry *entries;
@@ -525,7 +623,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 212);
+	EXPECT(binding_count == 417);
 	return 0;
 }
 
@@ -561,6 +659,10 @@ int main(void)
 		  lse_registry_binds_180_leaves_without_claiming_completion },
 		{ "lse_registry_cannot_clear_unproved_duties_statically",
 		  lse_registry_cannot_clear_unproved_duties_statically },
+		{ "scalar_source_bindings_are_complete_and_fail_closed",
+		  scalar_source_bindings_are_complete_and_fail_closed },
+		{ "exclusive_registry_binds_exact_baseline_leaves",
+		  exclusive_registry_binds_exact_baseline_leaves },
 		{ "source_registration_discharges_zero_semantic_obligations",
 		  source_registration_discharges_zero_semantic_obligations },
 	};

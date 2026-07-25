@@ -3,8 +3,9 @@
  * Generate the KUnit-facing A64 inventory header from normalized Arm data.
  *
  * The Arm AARCHMRS archive is a maintenance input, not a kernel build
- * dependency. inventory.def is the reviewed, repository-owned normalization
- * of that pinned source. This host tool validates it and emits build output.
+ * dependency. source_manifest.def and target_classification.def are the
+ * complete reviewed target ledgers. inventory.def is only the narrow runtime
+ * decoder projection, whose disposition is derived from those ledgers here.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,9 +15,11 @@
 #include <unistd.h>
 
 enum inventory_disposition {
+	INVENTORY_UNCLASSIFIED,
 	INVENTORY_REQUIRED,
 	INVENTORY_NON_EL0,
 	INVENTORY_ARCHITECTURALLY_UNDEFINED,
+	INVENTORY_ALIAS_OR_DUPLICATE,
 };
 
 enum inventory_condition_kind {
@@ -34,6 +37,18 @@ struct inventory_entry {
 	uint32_t mask;
 	uint32_t pattern;
 	uint32_t witness;
+};
+
+struct source_manifest_entry {
+	const char *name;
+	const char *mnemonic;
+	const char *operation_id;
+	uint32_t mask;
+	uint32_t pattern;
+};
+
+struct classification_entry {
+	const char *name;
 	enum inventory_disposition disposition;
 };
 
@@ -57,25 +72,14 @@ struct inventory_condition {
 	static const char inventory_source_schema[] = schema; \
 	static const char inventory_source_sha256[] = sha256; \
 	static const char inventory_source_url[] = url;
-#define TCTI_A64_SOURCE_COUNTS(total, selected, excluded) \
-	static const size_t inventory_source_total = (total); \
-	static const size_t inventory_source_selected = (selected); \
-	static const size_t inventory_source_excluded = (excluded);
 #define TCTI_A64_FEATURE(...)
-#define TCTI_A64_COUNTS(required, non_el0, undefined, conditions) \
-	static const size_t inventory_expected_required = (required); \
-	static const size_t inventory_expected_non_el0 = (non_el0); \
-	static const size_t inventory_expected_undefined = (undefined); \
-	static const size_t inventory_expected_conditions = (conditions);
-#define TCTI_A64_ENCODING(disposition, name, mnemonic, operation_id, mask, \
+#define TCTI_A64_RUNTIME_ENCODING(name, mnemonic, operation_id, mask, \
 			  pattern, witness)
 #define TCTI_A64_CONDITION(name, kind)
 #include "../isa/inventory.def"
 #undef TCTI_A64_CONDITION
-#undef TCTI_A64_ENCODING
-#undef TCTI_A64_COUNTS
+#undef TCTI_A64_RUNTIME_ENCODING
 #undef TCTI_A64_FEATURE
-#undef TCTI_A64_SOURCE_COUNTS
 #undef TCTI_A64_SOURCE
 #undef TCTI_A64_PROFILE
 
@@ -84,23 +88,19 @@ struct inventory_condition {
 #define ARCHITECTURALLY_UNDEFINED INVENTORY_ARCHITECTURALLY_UNDEFINED
 #define TCTI_A64_PROFILE(major, minor, hwcap, hwcap2)
 #define TCTI_A64_SOURCE(release, build, ref, schema, sha256, url)
-#define TCTI_A64_SOURCE_COUNTS(total, selected, excluded)
 #define TCTI_A64_FEATURE(...)
-#define TCTI_A64_COUNTS(required, non_el0, undefined, conditions)
 #define TCTI_A64_CONDITION(name, kind)
-#define TCTI_A64_ENCODING(disposition, name, mnemonic, operation_id, mask, \
+#define TCTI_A64_RUNTIME_ENCODING(name, mnemonic, operation_id, mask, \
 			  pattern, witness) \
 	{ stringify(name), stringify(mnemonic), stringify(operation_id), \
-	  (mask), (pattern), (witness), (disposition) },
+	  (mask), (pattern), (witness) },
 
 static const struct inventory_entry inventory[] = {
 #include "../isa/inventory.def"
 };
-#undef TCTI_A64_ENCODING
+#undef TCTI_A64_RUNTIME_ENCODING
 #undef TCTI_A64_CONDITION
-#undef TCTI_A64_COUNTS
 #undef TCTI_A64_FEATURE
-#undef TCTI_A64_SOURCE_COUNTS
 #undef TCTI_A64_SOURCE
 #undef TCTI_A64_PROFILE
 #undef ARCHITECTURALLY_UNDEFINED
@@ -114,10 +114,8 @@ static const struct inventory_entry inventory[] = {
 #define SYSTEM_ENCODING INVENTORY_CONDITION_SYSTEM_ENCODING
 #define TCTI_A64_PROFILE(major, minor, hwcap, hwcap2)
 #define TCTI_A64_SOURCE(release, build, ref, schema, sha256, url)
-#define TCTI_A64_SOURCE_COUNTS(total, selected, excluded)
 #define TCTI_A64_FEATURE(...)
-#define TCTI_A64_COUNTS(required, non_el0, undefined, conditions)
-#define TCTI_A64_ENCODING(disposition, name, mnemonic, operation_id, mask, \
+#define TCTI_A64_RUNTIME_ENCODING(name, mnemonic, operation_id, mask, \
 			  pattern, witness)
 #define TCTI_A64_CONDITION(name, kind) { stringify(name), (kind) },
 
@@ -125,10 +123,8 @@ static const struct inventory_condition inventory_conditions[] = {
 #include "../isa/inventory.def"
 };
 #undef TCTI_A64_CONDITION
-#undef TCTI_A64_ENCODING
-#undef TCTI_A64_COUNTS
+#undef TCTI_A64_RUNTIME_ENCODING
 #undef TCTI_A64_FEATURE
-#undef TCTI_A64_SOURCE_COUNTS
 #undef TCTI_A64_SOURCE
 #undef TCTI_A64_PROFILE
 #undef SYSTEM_ENCODING
@@ -136,6 +132,44 @@ static const struct inventory_condition inventory_conditions[] = {
 #undef OPTION_NOT_3
 #undef IMMH_NOT_ZERO
 #undef RM_NOT_31
+
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation_id, \
+				     mask, pattern, condition, offset, length) \
+	{ name, mnemonic, operation_id, (mask), (pattern) },
+static const struct source_manifest_entry source_manifest[] = {
+#include "../isa/source_manifest.def"
+};
+#undef TCTI_A64_SOURCE_MANIFEST_ROW
+#undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+#define UNCLASSIFIED INVENTORY_UNCLASSIFIED
+#define REQUIRED INVENTORY_REQUIRED
+#define REQUIRED_EL0 INVENTORY_REQUIRED
+#define NON_EL0 INVENTORY_NON_EL0
+#define ARCHITECTURALLY_UNDEFINED INVENTORY_ARCHITECTURALLY_UNDEFINED
+#define ARCH_UNDEFINED_OR_UNALLOCATED INVENTORY_ARCHITECTURALLY_UNDEFINED
+#define ALIAS_OR_DUPLICATE INVENTORY_ALIAS_OR_DUPLICATE
+#define TCTI_A64_TARGET_RELATION_NONE
+#define TCTI_A64_TARGET_RELATION_ALIAS
+#define TCTI_A64_TARGET_RELATION_DUPLICATE
+#define TCTI_A64_TARGET_CLASSIFICATION(name, classification, relation, \
+				       canonical, evidence, proof) \
+	{ stringify(name), (classification) },
+static const struct classification_entry target_classification[] = {
+#include "../isa/target_classification.def"
+};
+#undef TCTI_A64_TARGET_CLASSIFICATION
+#undef TCTI_A64_TARGET_RELATION_DUPLICATE
+#undef TCTI_A64_TARGET_RELATION_ALIAS
+#undef TCTI_A64_TARGET_RELATION_NONE
+#undef ALIAS_OR_DUPLICATE
+#undef ARCH_UNDEFINED_OR_UNALLOCATED
+#undef ARCHITECTURALLY_UNDEFINED
+#undef NON_EL0
+#undef REQUIRED_EL0
+#undef REQUIRED
+#undef UNCLASSIFIED
 
 static bool condition_holds(enum inventory_condition_kind kind,
 			    uint32_t instruction)
@@ -171,11 +205,40 @@ static const struct inventory_entry *find_inventory_entry(const char *name)
 	return NULL;
 }
 
+static const struct source_manifest_entry *find_source_manifest_entry(
+	const char *name)
+{
+	size_t i;
+
+	for (i = 0; i < sizeof(source_manifest) / sizeof(source_manifest[0]); i++)
+		if (!strcmp(name, source_manifest[i].name))
+			return &source_manifest[i];
+	return NULL;
+}
+
+static const struct classification_entry *find_target_classification(
+	const char *name)
+{
+	size_t i;
+
+	for (i = 0;
+	     i < sizeof(target_classification) / sizeof(target_classification[0]);
+	     i++)
+		if (!strcmp(name, target_classification[i].name))
+			return &target_classification[i];
+	return NULL;
+}
+
+static bool inventory_entry_is_required(const struct inventory_entry *entry)
+{
+	const struct classification_entry *classification =
+		find_target_classification(entry->name);
+
+	return classification && classification->disposition == INVENTORY_REQUIRED;
+}
+
 static int validate_inventory(void)
 {
-	size_t required = 0;
-	size_t non_el0 = 0;
-	size_t undefined = 0;
 	size_t i;
 
 	if (!inventory_arch_major || inventory_arch_minor > 99 ||
@@ -186,20 +249,15 @@ static int validate_inventory(void)
 		fprintf(stderr, "incomplete configured A64 metadata\n");
 		return -1;
 	}
-	if (inventory_source_total !=
-		    inventory_source_selected + inventory_source_excluded ||
-	    inventory_source_selected !=
-		    sizeof(inventory) / sizeof(inventory[0])) {
-		fprintf(stderr,
-			"source leaf counts differ: %zu/%zu/%zu, inventory %zu\n",
-			inventory_source_total, inventory_source_selected,
-			inventory_source_excluded,
-			sizeof(inventory) / sizeof(inventory[0]));
+	if (!sizeof(source_manifest) || !sizeof(target_classification)) {
+		fprintf(stderr, "target ledgers are empty\n");
 		return -1;
 	}
 
 	for (i = 0; i < sizeof(inventory) / sizeof(inventory[0]); i++) {
 		const struct inventory_entry *entry = &inventory[i];
+		const struct source_manifest_entry *source;
+		const struct classification_entry *classification;
 		size_t j;
 
 		if (!entry->name[0] || !entry->mnemonic[0] ||
@@ -215,6 +273,16 @@ static int validate_inventory(void)
 			fprintf(stderr, "%s witness violates its mask\n", entry->name);
 			return -1;
 		}
+		source = find_source_manifest_entry(entry->name);
+		classification = find_target_classification(entry->name);
+		if (!source || !classification ||
+		    strcmp(entry->mnemonic, source->mnemonic) ||
+		    strcmp(entry->operation_id, source->operation_id) ||
+		    entry->mask != source->mask || entry->pattern != source->pattern) {
+			fprintf(stderr, "%s is not a source-derived runtime projection\n",
+				entry->name);
+			return -1;
+		}
 		for (j = 0; j < i; j++) {
 			if (!strcmp(entry->name, inventory[j].name)) {
 				fprintf(stderr, "duplicate inventory name: %s\n",
@@ -223,39 +291,6 @@ static int validate_inventory(void)
 			}
 		}
 
-		switch (entry->disposition) {
-		case INVENTORY_REQUIRED:
-			required++;
-			break;
-		case INVENTORY_NON_EL0:
-			non_el0++;
-			break;
-		case INVENTORY_ARCHITECTURALLY_UNDEFINED:
-			undefined++;
-			break;
-		default:
-			fprintf(stderr, "%s has invalid disposition\n", entry->name);
-			return -1;
-		}
-	}
-
-	if (required != inventory_expected_required ||
-	    non_el0 != inventory_expected_non_el0 ||
-	    undefined != inventory_expected_undefined) {
-		fprintf(stderr,
-			"inventory counts differ: %zu/%zu/%zu, expected %zu/%zu/%zu\n",
-			required, non_el0, undefined,
-			inventory_expected_required, inventory_expected_non_el0,
-			inventory_expected_undefined);
-		return -1;
-	}
-	if (sizeof(inventory_conditions) / sizeof(inventory_conditions[0]) !=
-	    inventory_expected_conditions) {
-		fprintf(stderr, "condition count differs: %zu, expected %zu\n",
-			sizeof(inventory_conditions) /
-				sizeof(inventory_conditions[0]),
-			inventory_expected_conditions);
-		return -1;
 	}
 
 	for (i = 0;
@@ -348,14 +383,14 @@ static int emit_header(FILE *output)
 	fprintf(output, "static const struct tcti_a64_encoding_inventory_entry\n"
 		"tcti_a64_encoding_inventory[] = {\n");
 	for (i = 0; i < sizeof(inventory) / sizeof(inventory[0]); i++)
-		if (inventory[i].disposition == INVENTORY_REQUIRED)
+		if (inventory_entry_is_required(&inventory[i]))
 			emit_entry(output, &inventory[i]);
 	fprintf(output, "};\n\n");
 
 	fprintf(output, "static const struct tcti_a64_encoding_inventory_entry\n"
 		"tcti_a64_unsupported_encoding_inventory[] = {\n");
 	for (i = 0; i < sizeof(inventory) / sizeof(inventory[0]); i++)
-		if (inventory[i].disposition != INVENTORY_REQUIRED)
+		if (!inventory_entry_is_required(&inventory[i]))
 			emit_entry(output, &inventory[i]);
 	fprintf(output, "};\n\n");
 

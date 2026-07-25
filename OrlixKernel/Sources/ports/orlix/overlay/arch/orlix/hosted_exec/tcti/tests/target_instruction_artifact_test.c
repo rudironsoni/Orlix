@@ -534,6 +534,25 @@ static void test_alias_rejections_and_denominator(void)
 	expect_alias_error(&fixture,
 		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
 
+	/* A self-consistent fabricated terminal operation has no source leaf. */
+	fixture_initialize(&fixture);
+	fixture.operation_aliases[0].target_operation_offset =
+		add_string(&fixture, "missingOperation");
+	fixture.operation_aliases[0].resolved_operation_offset =
+		add_string(&fixture, "missingOperation");
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[0].resolved_operation_offset =
+		add_string(&fixture, "missingOperation");
+	fixture.operation_aliases[0].target_operation_offset =
+		add_string(&fixture, "missingOperation");
+	fixture.operation_aliases[0].resolved_operation_offset =
+		fixture.instruction_aliases[0].resolved_operation_offset;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
 	/* OA[0] remains internally well-formed but no source edge reaches it. */
 	fixture_initialize(&fixture);
 	fixture.leaves[0].operation_offset = fixture.leaves[

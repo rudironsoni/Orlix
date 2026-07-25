@@ -93,32 +93,6 @@ static int tcti_runtime_ledger_read_leaf(const void *context, size_t index,
 	return 0;
 }
 
-static bool tcti_runtime_feature_is_proved(
-	const struct tcti_runtime_projection_provider *provider,
-	const char *feature, bool *present)
-{
-	bool complete = true;
-	size_t i;
-
-	*present = false;
-	for (i = 0; i < provider->leaf_count; i++) {
-		struct tcti_runtime_projection_leaf leaf;
-
-		if (provider->read_leaf(provider->context, i, &leaf))
-			return false;
-
-		if (!tcti_runtime_leaf_has_feature(&leaf, feature))
-			continue;
-		*present = true;
-		if (leaf.unresolved_feature_semantics ||
-		    !tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
-		    !leaf.proof[0] || !leaf.source_bound || !leaf.proved)
-			complete = false;
-	}
-
-	return *present && complete;
-}
-
 static unsigned long *tcti_runtime_result_word(
 	struct tcti_runtime_projection_result *result,
 	enum tcti_runtime_capability_word word, bool proved)
@@ -161,6 +135,12 @@ int tcti_runtime_projection_audit_provider(
 	size_t capability_count,
 	struct tcti_runtime_projection_result *result)
 {
+	bool feature_present[TCTI_RUNTIME_PROJECTION_MAX_CAPABILITY_MAPPINGS] = {
+		false,
+	};
+	bool feature_proved[TCTI_RUNTIME_PROJECTION_MAX_CAPABILITY_MAPPINGS];
+	unsigned long seen_hwcap = 0;
+	unsigned long seen_hwcap2 = 0;
 	size_t i;
 
 	tcti_runtime_projection_result_init(result, provider, profile);
@@ -173,10 +153,31 @@ int tcti_runtime_projection_audit_provider(
 	    capability_count >
 		    TCTI_RUNTIME_PROJECTION_MAX_CAPABILITY_MAPPINGS)
 		return -EINVAL;
+	for (i = 0; i < capability_count; i++) {
+		const struct tcti_runtime_projection_capability *mapping =
+			&capabilities[i];
+		unsigned long *seen;
+
+		if (!mapping->feature || !mapping->feature[0] ||
+		    !mapping->bit || (mapping->bit & (mapping->bit - 1)))
+			return -EINVAL;
+		if (mapping->word == TCTI_RUNTIME_CAPABILITY_HWCAP)
+			seen = &seen_hwcap;
+		else if (mapping->word == TCTI_RUNTIME_CAPABILITY_HWCAP2)
+			seen = &seen_hwcap2;
+		else
+			return -EINVAL;
+		if (*seen & mapping->bit)
+			return -EINVAL;
+		*seen |= mapping->bit;
+		feature_proved[i] = true;
+	}
 
 	for (i = 0; i < provider->leaf_count; i++) {
 		struct tcti_runtime_projection_leaf leaf;
+		bool leaf_proved;
 		size_t feature;
+		size_t capability;
 
 		if (provider->read_leaf(provider->context, i, &leaf))
 			return -EINVAL;
@@ -200,10 +201,20 @@ int tcti_runtime_projection_audit_provider(
 			result->classified_leaf_count++;
 		if (leaf.source_bound)
 			result->source_bound_leaf_count++;
-		if (leaf.unresolved_feature_semantics ||
-		    !tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
-		    !leaf.proof[0] || !leaf.source_bound || !leaf.proved)
+		leaf_proved = !leaf.unresolved_feature_semantics &&
+			tcti_runtime_leaf_is_classified(&leaf) && leaf.proof &&
+			leaf.proof[0] && leaf.source_bound && leaf.proved;
+		if (!leaf_proved)
 			result->unproved_leaf_count++;
+		for (capability = 0; capability < capability_count;
+		     capability++) {
+			if (!tcti_runtime_leaf_has_feature(
+					&leaf, capabilities[capability].feature))
+				continue;
+			feature_present[capability] = true;
+			if (!leaf_proved)
+				feature_proved[capability] = false;
+		}
 	}
 
 	for (i = 0; i < capability_count; i++) {
@@ -212,12 +223,9 @@ int tcti_runtime_projection_audit_provider(
 		unsigned long *mapped;
 		unsigned long *proved;
 		unsigned long advertised;
-		bool feature_present;
-		bool feature_proved;
+		bool cohort_present;
+		bool cohort_proved;
 
-		if (!mapping->feature || !mapping->feature[0] ||
-		    !mapping->bit || (mapping->bit & (mapping->bit - 1)))
-			return -EINVAL;
 		mapped = tcti_runtime_result_word(result, mapping->word, false);
 		proved = tcti_runtime_result_word(result, mapping->word, true);
 		if (!mapped || !proved || (*mapped & mapping->bit))
@@ -228,21 +236,20 @@ int tcti_runtime_projection_audit_provider(
 			mapping->word == TCTI_RUNTIME_CAPABILITY_HWCAP ?
 				result->advertised_hwcap :
 				result->advertised_hwcap2;
-		feature_proved = tcti_runtime_feature_is_proved(provider,
-						       mapping->feature,
-						       &feature_present);
+		cohort_present = feature_present[i];
+		cohort_proved = cohort_present && feature_proved[i];
 		/*
 		 * The capability table is an authoritative projection contract, even
 		 * while the corresponding HWCAP bit is intentionally zero. A stale
 		 * mapping must therefore fail before a later profile change can expose it.
 		 */
-		if (!feature_present)
+		if (!cohort_present)
 			result->missing_feature_mapping_count++;
-		if (feature_proved)
+		if (cohort_proved)
 			*proved |= mapping->bit;
 		if (!(advertised & mapping->bit)) {
 			result->unadvertised_mapping_count++;
-			if (!feature_proved)
+			if (!cohort_proved)
 				result->unadvertised_incomplete_feature_count++;
 		}
 		result->mapping_count++;

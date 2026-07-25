@@ -226,6 +226,11 @@ static void validate_source_feature_domain(
 	}
 	for (index = 0; index < source_count; index++) {
 		struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+		static const struct tcti_feature_domain_tcnd_environment no_assignment;
+		static const struct tcti_feature_domain_tcnd_union_candidate no_candidate = {
+			.environment = &no_assignment,
+		};
+		struct tcti_feature_domain_tcnd_union_result applicability;
 		const struct tcti_target_instruction_artifact_leaf *leaf =
 			&instruction_artifact->leaves[index];
 
@@ -241,13 +246,37 @@ static void validate_source_feature_domain(
 		}
 		result->source_condition_domain_bound_rows++;
 		/*
-		 * Structural binding is deliberately not treated as a SAT witness.
-		 * This must remain a hard blocker until the build-time C-native
-		 * feature/operand union artifact supplies one exact result per leaf.
+		 * Run every source row through the exact TCND evaluator. The checked
+		 * target has no generated feature-configuration union or encoding
+		 * operand assignment artifact yet, so each missing binding remains a
+		 * typed completion blocker rather than an implicit all-row placeholder.
 		 */
-		result->unresolved_feature_applicability_rows++;
-		record_error(result,
-			     TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
+		if (tcti_feature_domain_evaluate_tcnd_union(feature_artifact,
+			source[index].condition_tcnd_hex, &no_candidate, 1,
+			&applicability)) {
+			result->unresolved_feature_applicability_rows++;
+			result->unsupported_feature_applicability_rows++;
+			switch (applicability.first_unsupported.error) {
+			case TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
+				result->unresolved_feature_configuration_rows++;
+				break;
+			case TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
+				result->unresolved_instruction_operand_rows++;
+				break;
+			default:
+				result->invalid_feature_applicability_rows++;
+				break;
+			}
+			record_error(result,
+				TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
+		} else {
+			result->evaluated_feature_applicability_rows +=
+				applicability.evaluated_count;
+			result->satisfied_feature_applicability_rows +=
+				applicability.satisfied_count;
+			result->unsatisfied_feature_applicability_rows +=
+				applicability.unsatisfied_count;
+		}
 	}
 }
 
@@ -388,6 +417,17 @@ static bool asl_availability_is_valid(const char *availability)
 	return availability && !strcmp(availability, "shared_asl_absent_blocking");
 }
 
+static bool asl_operation_object_is_valid(const char *operation_id,
+					  const char *operation_object)
+{
+	static const char prefix[] = "operations/";
+	size_t prefix_length = sizeof(prefix) - 1U;
+
+	return !empty(operation_id) && operation_object &&
+		!strncmp(operation_object, prefix, prefix_length) &&
+		!strcmp(operation_object + prefix_length, operation_id);
+}
+
 static bool sha256_hex_is_valid(const char *value)
 {
 	size_t index;
@@ -464,7 +504,8 @@ int tcti_target_completion_validate_asl_availability(
 		canonical = &asl_rows[index];
 		valid = source_row_well_formed(&source[index], index) &&
 			row->ordinal == index && !empty(row->name) &&
-			!empty(row->operation_id) && !empty(row->operation_object) &&
+			asl_operation_object_is_valid(row->operation_id,
+						      row->operation_object) &&
 			row->source_length != 0U &&
 			row->source_offset <
 				TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
@@ -799,18 +840,15 @@ static bool valid_alias_relationship(
 {
 	const struct tcti_target_completion_classification_row *row =
 		&classification[row_index];
-	size_t source_index;
 	size_t canonical_classification;
 	size_t canonical_source;
 
 	if (row->relation != TCTI_TARGET_COMPLETION_RELATION_ALIAS &&
 	    row->relation != TCTI_TARGET_COMPLETION_RELATION_DUPLICATE)
 		return false;
-	if (empty(row->canonical_name) ||
+	if (empty(row->canonical_name) || empty(row->evidence) ||
+	    empty(row->proof_id) ||
 	    !strcmp(row->name, row->canonical_name))
-		return false;
-	source_index = find_source(source, source_count, row->name);
-	if (source_index == source_count)
 		return false;
 	canonical_classification = find_classification(
 		classification, classification_count, row->canonical_name);
@@ -821,24 +859,19 @@ static bool valid_alias_relationship(
 	    classification[canonical_classification].classification ==
 		    TCTI_TARGET_COMPLETION_UNCLASSIFIED ||
 	    classification[canonical_classification].classification ==
-		    TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE)
+		    TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE ||
+	    classification[canonical_classification].relation !=
+		    TCTI_TARGET_COMPLETION_RELATION_NONE ||
+	    !empty(classification[canonical_classification].canonical_name) ||
+	    empty(classification[canonical_classification].evidence) ||
+	    empty(classification[canonical_classification].proof_id))
 		return false;
 	/*
-	 * An inherited proof is only valid for two source leaves that describe
-	 * the same decoded operation and encoding.  A matching condition alone
-	 * is insufficient, because it would allow unrelated leaves to borrow a
-	 * canonical proof merely by sharing a feature condition.
+	 * AARCHMRS InstructionAlias and OperationAlias records may resolve a
+	 * distinct operation or constrained encoding. The pinned source records
+	 * the relationship as a provenance edge, not source-row identity.
 	 */
-	if (strcmp(source[source_index].operation_id,
-		   source[canonical_source].operation_id) ||
-	    source[source_index].mask != source[canonical_source].mask ||
-	    source[source_index].pattern != source[canonical_source].pattern ||
-	    strcmp(source[source_index].condition_tcnd_hex,
-		   source[canonical_source].condition_tcnd_hex))
-		return false;
-	return !empty(row->proof_id) &&
-	       !strcmp(row->proof_id,
-		       classification[canonical_classification].proof_id);
+	return true;
 }
 
 static bool classification_row_well_formed(
@@ -1147,13 +1180,6 @@ int tcti_target_completion_validate(
 					    canonical_classification],
 				    registry, registry_count) ||
 			    !alias_binding_valid) {
-				if (relationship_valid &&
-				    !alias_binding_valid) {
-					result->invalid_relationship_rows++;
-					record_error(
-						result,
-						TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP);
-				}
 				result->source_unbound_rows++;
 				record_error(
 					result,
