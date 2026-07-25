@@ -7,6 +7,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	../isa/target_ordinal_ledger.o \
 	target_ordinal_ledger_test.o \
 	target_feature_artifact.o \
+	target_instruction_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
 	tcti_atomic_memory_test.o tcti_lse_decode_test.o tcti_uaccess_test.o \
 	tcti_cssc_min_max_immediate_test.o \
