@@ -6,15 +6,13 @@
 
 #include "sve_state.h"
 
-/* AARCHMRS 2026-06 encodesets for the five owned *_z_p_zz_ leaves. */
-#define AARCH64_SVE_PREDICATED_BINARY_MASK	0xff38e000U
-#define AARCH64_SVE_PREDICATED_ARITHMETIC	0x04000000U
-#define AARCH64_SVE_PREDICATED_LOGICAL		0x04180000U
+/* AARCHMRS 2026-06 encodeset for the owned predicated Zdn binary leaves. */
+#define AARCH64_SVE_PREDICATED_INTEGER_BINARY_MASK	0xff20e000U
+#define AARCH64_SVE_PREDICATED_INTEGER_BINARY		0x04000000U
 
 /*
- * AARCHMRS 2026-06 source leaves add_z_p_zz_, sub_z_p_zz_, orr_z_p_zz_,
- * eor_z_p_zz_, and and_z_p_zz_.  Each is merging-predicated and uses Zdn as
- * both the destination and first source.
+ * AARCHMRS 2026-06 source ordinals 0-2 and 5-21. Each is
+ * merging-predicated and uses Zdn as both the destination and first source.
  */
 struct tcti_sve_predicated_integer_binary {
 	enum tcti_sve_integer_binary_op op;
@@ -27,7 +25,7 @@ struct tcti_sve_predicated_integer_binary {
 };
 
 /*
- * Returns zero for one of the five owned source leaves, -ENOENT when the
+ * Returns zero for one of the owned source leaves, -ENOENT when the
  * instruction is outside their encoding space, or -EINVAL for a reserved
  * opcode in that encoding space.  The central TCTI decoder must call this
  * before its unsupported fallthrough, then dispatch a successful descriptor

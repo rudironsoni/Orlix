@@ -3,61 +3,47 @@
 
 #include "sve_decode.h"
 
-static int tcti_sve_decode_arithmetic(u8 opcode,
-				      enum tcti_sve_integer_binary_op *op)
-{
-	switch (opcode) {
-	case 0:
-		*op = TCTI_SVE_INTEGER_ADD;
-		return 0;
-	case 1:
-		*op = TCTI_SVE_INTEGER_SUB;
-		return 0;
-	default:
-		return -EINVAL;
-	}
-}
-
-static int tcti_sve_decode_logical(u8 opcode,
-				   enum tcti_sve_integer_binary_op *op)
-{
-	switch (opcode) {
-	case 0:
-		*op = TCTI_SVE_INTEGER_ORR;
-		return 0;
-	case 1:
-		*op = TCTI_SVE_INTEGER_EOR;
-		return 0;
-	case 2:
-		*op = TCTI_SVE_INTEGER_AND;
-		return 0;
-	default:
-		return -EINVAL;
-	}
-}
+static const s8 tcti_sve_integer_binary_ops[32] = {
+	[0 ... 31] = -1,
+	[0] = TCTI_SVE_INTEGER_ADD,
+	[1] = TCTI_SVE_INTEGER_SUB,
+	[3] = TCTI_SVE_INTEGER_SUBR,
+	[8] = TCTI_SVE_INTEGER_SMAX,
+	[9] = TCTI_SVE_INTEGER_UMAX,
+	[10] = TCTI_SVE_INTEGER_SMIN,
+	[11] = TCTI_SVE_INTEGER_UMIN,
+	[12] = TCTI_SVE_INTEGER_SABD,
+	[13] = TCTI_SVE_INTEGER_UABD,
+	[16] = TCTI_SVE_INTEGER_MUL,
+	[18] = TCTI_SVE_INTEGER_SMULH,
+	[19] = TCTI_SVE_INTEGER_UMULH,
+	[20] = TCTI_SVE_INTEGER_SDIV,
+	[21] = TCTI_SVE_INTEGER_UDIV,
+	[22] = TCTI_SVE_INTEGER_SDIVR,
+	[23] = TCTI_SVE_INTEGER_UDIVR,
+	[24] = TCTI_SVE_INTEGER_ORR,
+	[25] = TCTI_SVE_INTEGER_EOR,
+	[26] = TCTI_SVE_INTEGER_AND,
+	[27] = TCTI_SVE_INTEGER_BIC,
+};
 
 int tcti_decode_sve_predicated_integer_binary(
 	u32 instruction, struct tcti_sve_predicated_integer_binary *decoded)
 {
-	u32 class;
 	u8 opcode;
-	int ret;
 
 	if (!decoded)
 		return -EINVAL;
 
-	class = instruction & AARCH64_SVE_PREDICATED_BINARY_MASK;
-	if (class != AARCH64_SVE_PREDICATED_ARITHMETIC &&
-	    class != AARCH64_SVE_PREDICATED_LOGICAL)
+	if ((instruction & AARCH64_SVE_PREDICATED_INTEGER_BINARY_MASK) !=
+	    AARCH64_SVE_PREDICATED_INTEGER_BINARY)
 		return -ENOENT;
 
-	opcode = (instruction >> 16) & 0x7U;
-	if (class == AARCH64_SVE_PREDICATED_ARITHMETIC)
-		ret = tcti_sve_decode_arithmetic(opcode, &decoded->op);
-	else
-		ret = tcti_sve_decode_logical(opcode, &decoded->op);
-	if (ret)
-		return ret;
+	opcode = (instruction >> 16) & 0x1fU;
+	if (tcti_sve_integer_binary_ops[opcode] < 0)
+		return -EINVAL;
+	decoded->op = (enum tcti_sve_integer_binary_op)
+		tcti_sve_integer_binary_ops[opcode];
 
 	decoded->predication = TCTI_SVE_PREDICATE_MERGING;
 	decoded->element_bytes = 1U << ((instruction >> 22) & 0x3U);

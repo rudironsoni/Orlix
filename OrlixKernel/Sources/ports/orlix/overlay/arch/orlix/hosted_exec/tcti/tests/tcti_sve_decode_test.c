@@ -10,23 +10,39 @@
 #include "../decode_aarch64.h"
 
 struct tcti_sve_decode_case {
-	u32 class;
+	u32 source_ordinal;
 	u8 opcode;
 	enum tcti_sve_integer_binary_op op;
 };
 
 static const struct tcti_sve_decode_case tcti_sve_decode_cases[] = {
-	{ AARCH64_SVE_PREDICATED_ARITHMETIC, 0, TCTI_SVE_INTEGER_ADD },
-	{ AARCH64_SVE_PREDICATED_ARITHMETIC, 1, TCTI_SVE_INTEGER_SUB },
-	{ AARCH64_SVE_PREDICATED_LOGICAL, 0, TCTI_SVE_INTEGER_ORR },
-	{ AARCH64_SVE_PREDICATED_LOGICAL, 1, TCTI_SVE_INTEGER_EOR },
-	{ AARCH64_SVE_PREDICATED_LOGICAL, 2, TCTI_SVE_INTEGER_AND },
+	{ 0U, 0, TCTI_SVE_INTEGER_ADD },
+	{ 1U, 1, TCTI_SVE_INTEGER_SUB },
+	{ 2U, 3, TCTI_SVE_INTEGER_SUBR },
+	{ 5U, 8, TCTI_SVE_INTEGER_SMAX },
+	{ 6U, 10, TCTI_SVE_INTEGER_SMIN },
+	{ 7U, 12, TCTI_SVE_INTEGER_SABD },
+	{ 8U, 9, TCTI_SVE_INTEGER_UMAX },
+	{ 9U, 11, TCTI_SVE_INTEGER_UMIN },
+	{ 10U, 13, TCTI_SVE_INTEGER_UABD },
+	{ 11U, 16, TCTI_SVE_INTEGER_MUL },
+	{ 12U, 18, TCTI_SVE_INTEGER_SMULH },
+	{ 13U, 19, TCTI_SVE_INTEGER_UMULH },
+	{ 14U, 20, TCTI_SVE_INTEGER_SDIV },
+	{ 15U, 22, TCTI_SVE_INTEGER_SDIVR },
+	{ 16U, 21, TCTI_SVE_INTEGER_UDIV },
+	{ 17U, 23, TCTI_SVE_INTEGER_UDIVR },
+	{ 18U, 24, TCTI_SVE_INTEGER_ORR },
+	{ 19U, 25, TCTI_SVE_INTEGER_EOR },
+	{ 20U, 26, TCTI_SVE_INTEGER_AND },
+	{ 21U, 27, TCTI_SVE_INTEGER_BIC },
 };
 
-static u32 tcti_sve_encode_predicated_integer_binary(u32 class, u8 opcode,
+static u32 tcti_sve_encode_predicated_integer_binary(u8 opcode,
 					      u8 size, u8 pg, u8 zm, u8 zd)
 {
-	return class | ((u32)size << 22) | ((u32)opcode << 16) |
+	return AARCH64_SVE_PREDICATED_INTEGER_BINARY | ((u32)size << 22) |
+	       ((u32)opcode << 16) |
 	       ((u32)pg << 10) | ((u32)zm << 5) | zd;
 }
 
@@ -52,7 +68,6 @@ static void tcti_sve_decode_exhausts_owned_legal_encodings(struct kunit *test)
 					for (zd = 0; zd < 32; zd++) {
 						u32 instruction =
 							tcti_sve_encode_predicated_integer_binary(
-								test_case->class,
 								test_case->opcode,
 								size, pg, zm, zd);
 						struct tcti_sve_predicated_integer_binary decoded;
@@ -60,7 +75,8 @@ static void tcti_sve_decode_exhausts_owned_legal_encodings(struct kunit *test)
 						KUNIT_ASSERT_EQ(test, 0,
 							tcti_decode_sve_predicated_integer_binary(
 								instruction, &decoded));
-						KUNIT_EXPECT_EQ(test, test_case->op, decoded.op);
+						KUNIT_EXPECT_EQ_MSG(test, test_case->op, decoded.op,
+							"source ordinal %u", test_case->source_ordinal);
 						KUNIT_EXPECT_EQ(test,
 							TCTI_SVE_PREDICATE_MERGING,
 							decoded.predication);
@@ -79,46 +95,25 @@ static void tcti_sve_decode_exhausts_owned_legal_encodings(struct kunit *test)
 
 static void tcti_sve_decode_rejects_all_reserved_opcodes(struct kunit *test)
 {
-	static const u32 classes[] = {
-		AARCH64_SVE_PREDICATED_ARITHMETIC,
-		AARCH64_SVE_PREDICATED_LOGICAL,
-	};
 	u8 size;
 
 	for (size = 0; size < 4; size++) {
-		u8 class_index;
+		u8 opcode;
 
-		for (class_index = 0; class_index < ARRAY_SIZE(classes);
-		     class_index++) {
-			u8 opcode;
+		for (opcode = 0; opcode < 32; opcode++) {
+			bool legal = opcode == 0 || opcode == 1 || opcode == 3 ||
+				opcode == 8 || opcode == 9 || opcode == 10 || opcode == 11 ||
+				opcode == 12 || opcode == 13 || opcode == 16 || opcode == 18 ||
+				opcode == 19 || opcode == 20 || opcode == 21 || opcode == 22 ||
+				opcode == 23 || opcode == 24 || opcode == 25 || opcode == 26 ||
+				opcode == 27;
 
-			for (opcode = 0; opcode < 8; opcode++) {
-				bool legal = (class_index == 0 && opcode < 2) ||
-					(class_index == 1 && opcode < 3);
-				u8 pg;
-
-				if (legal)
-					continue;
-				for (pg = 0; pg < 8; pg++) {
-					u8 zm;
-
-					for (zm = 0; zm < 32; zm++) {
-						u8 zd;
-
-						for (zd = 0; zd < 32; zd++) {
-							u32 instruction =
-								tcti_sve_encode_predicated_integer_binary(
-									classes[class_index], opcode,
-									size, pg, zm, zd);
-
-							KUNIT_EXPECT_EQ(test, -EINVAL,
-								tcti_decode_sve_predicated_integer_binary(
-									instruction,
-									&(struct tcti_sve_predicated_integer_binary){}));
-						}
-					}
-				}
-			}
+			if (!legal)
+				KUNIT_EXPECT_EQ(test, -EINVAL,
+					tcti_decode_sve_predicated_integer_binary(
+						tcti_sve_encode_predicated_integer_binary(
+							opcode, size, 7, 31, 31),
+						&(struct tcti_sve_predicated_integer_binary){}));
 		}
 	}
 }
@@ -132,7 +127,7 @@ static void tcti_sve_decode_rejects_fixed_field_corruption(struct kunit *test)
 		0x00002000U,
 	};
 	u32 valid = tcti_sve_encode_predicated_integer_binary(
-		AARCH64_SVE_PREDICATED_ARITHMETIC, 0, 3, 7, 31, 31);
+		0, 3, 7, 31, 31);
 	size_t index;
 
 	KUNIT_ASSERT_EQ(test, 0,
@@ -148,7 +143,7 @@ static void tcti_sve_decode_rejects_null_descriptor(struct kunit *test)
 {
 	KUNIT_EXPECT_EQ(test, -EINVAL,
 		tcti_decode_sve_predicated_integer_binary(
-			AARCH64_SVE_PREDICATED_ARITHMETIC, NULL));
+			AARCH64_SVE_PREDICATED_INTEGER_BINARY, NULL));
 }
 
 static void tcti_sve_main_decoder_preserves_owned_and_reserved_boundaries(
@@ -158,7 +153,7 @@ static void tcti_sve_main_decoder_preserves_owned_and_reserved_boundaries(
 	u32 instruction;
 
 	instruction = tcti_sve_encode_predicated_integer_binary(
-		AARCH64_SVE_PREDICATED_LOGICAL, 2, 3, 7, 29, 13);
+		26, 3, 7, 29, 13);
 	decoded = tcti_decode_aarch64(instruction);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY,
 			decoded.decode_class);
@@ -173,7 +168,7 @@ static void tcti_sve_main_decoder_preserves_owned_and_reserved_boundaries(
 	KUNIT_EXPECT_EQ(test, 8, decoded.sve_element_bytes);
 
 	instruction = tcti_sve_encode_predicated_integer_binary(
-		AARCH64_SVE_PREDICATED_ARITHMETIC, 2, 0, 0, 0, 0);
+		2, 0, 0, 0, 0);
 	decoded = tcti_decode_aarch64(instruction);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 }

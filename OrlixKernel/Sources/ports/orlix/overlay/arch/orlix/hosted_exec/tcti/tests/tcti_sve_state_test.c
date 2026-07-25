@@ -197,8 +197,15 @@ static void tcti_sve_integer_binary_covers_all_integer_operations(
 {
 	static const enum tcti_sve_integer_binary_op operations[] = {
 		TCTI_SVE_INTEGER_ADD, TCTI_SVE_INTEGER_SUB,
+		TCTI_SVE_INTEGER_SUBR, TCTI_SVE_INTEGER_SMAX,
+		TCTI_SVE_INTEGER_SMIN, TCTI_SVE_INTEGER_SABD,
+		TCTI_SVE_INTEGER_UMAX, TCTI_SVE_INTEGER_UMIN,
+		TCTI_SVE_INTEGER_UABD, TCTI_SVE_INTEGER_MUL,
+		TCTI_SVE_INTEGER_SMULH, TCTI_SVE_INTEGER_UMULH,
+		TCTI_SVE_INTEGER_SDIV, TCTI_SVE_INTEGER_SDIVR,
+		TCTI_SVE_INTEGER_UDIV, TCTI_SVE_INTEGER_UDIVR,
 		TCTI_SVE_INTEGER_AND, TCTI_SVE_INTEGER_ORR,
-		TCTI_SVE_INTEGER_EOR,
+		TCTI_SVE_INTEGER_EOR, TCTI_SVE_INTEGER_BIC,
 	};
 	struct tcti_sve_state state;
 	unsigned long user_simd[64];
@@ -223,6 +230,36 @@ static void tcti_sve_integer_binary_covers_all_integer_operations(
 		case TCTI_SVE_INTEGER_SUB:
 			KUNIT_EXPECT_EQ(test, 0x2a, state.z[0][0]);
 			break;
+		case TCTI_SVE_INTEGER_SUBR:
+			KUNIT_EXPECT_EQ(test, 0xd6, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SMAX:
+		case TCTI_SVE_INTEGER_UMAX:
+			KUNIT_EXPECT_EQ(test, 0x66, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SMIN:
+		case TCTI_SVE_INTEGER_UMIN:
+			KUNIT_EXPECT_EQ(test, 0x3c, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SABD:
+		case TCTI_SVE_INTEGER_UABD:
+			KUNIT_EXPECT_EQ(test, 0x2a, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_MUL:
+			KUNIT_EXPECT_EQ(test, 0xe8, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SMULH:
+		case TCTI_SVE_INTEGER_UMULH:
+			KUNIT_EXPECT_EQ(test, 0x17, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SDIV:
+		case TCTI_SVE_INTEGER_UDIV:
+			KUNIT_EXPECT_EQ(test, 1, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_SDIVR:
+		case TCTI_SVE_INTEGER_UDIVR:
+			KUNIT_EXPECT_EQ(test, 0, state.z[0][0]);
+			break;
 		case TCTI_SVE_INTEGER_AND:
 			KUNIT_EXPECT_EQ(test, 0x24, state.z[0][0]);
 			break;
@@ -231,6 +268,9 @@ static void tcti_sve_integer_binary_covers_all_integer_operations(
 			break;
 		case TCTI_SVE_INTEGER_EOR:
 			KUNIT_EXPECT_EQ(test, 0x5a, state.z[0][0]);
+			break;
+		case TCTI_SVE_INTEGER_BIC:
+			KUNIT_EXPECT_EQ(test, 0x42, state.z[0][0]);
 			break;
 		}
 	}

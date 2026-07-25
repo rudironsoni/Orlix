@@ -16,13 +16,27 @@ enum tcti_sve_predication {
 };
 
 enum tcti_sve_integer_binary_op {
-	/* AARCHMRS 2026-06: add_z_p_zz_, sub_z_p_zz_, and_z_p_zz_,
-	 * orr_z_p_zz_, and eor_z_p_zz_. */
+	/* AARCHMRS 2026-06 source ordinals 0-2 and 5-21. */
 	TCTI_SVE_INTEGER_ADD,
 	TCTI_SVE_INTEGER_SUB,
+	TCTI_SVE_INTEGER_SUBR,
+	TCTI_SVE_INTEGER_SMAX,
+	TCTI_SVE_INTEGER_SMIN,
+	TCTI_SVE_INTEGER_SABD,
+	TCTI_SVE_INTEGER_UMAX,
+	TCTI_SVE_INTEGER_UMIN,
+	TCTI_SVE_INTEGER_UABD,
+	TCTI_SVE_INTEGER_MUL,
+	TCTI_SVE_INTEGER_SMULH,
+	TCTI_SVE_INTEGER_UMULH,
+	TCTI_SVE_INTEGER_SDIV,
+	TCTI_SVE_INTEGER_SDIVR,
+	TCTI_SVE_INTEGER_UDIV,
+	TCTI_SVE_INTEGER_UDIVR,
 	TCTI_SVE_INTEGER_AND,
 	TCTI_SVE_INTEGER_ORR,
 	TCTI_SVE_INTEGER_EOR,
+	TCTI_SVE_INTEGER_BIC,
 };
 
 /* `user_simd` is the authoritative shared V0-V31 low-128-bit backing. */

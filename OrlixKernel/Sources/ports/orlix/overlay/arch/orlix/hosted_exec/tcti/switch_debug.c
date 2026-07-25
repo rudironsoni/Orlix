@@ -48,13 +48,8 @@ static bool tcti_condition_passed(const struct pt_regs *regs, u8 condition);
 static int tcti_execute_sve_predicated_integer_binary(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
-	/*
-	 * The decoder and state semantics are present, but SVE remains absent from
-	 * the runtime capability projection until its full source-bound proof gate
-	 * is complete.  Keep the production path explicit and fail structurally.
-	 */
 	return tcti_sve_execute_predicated_integer_binary(
-		&current->thread.user_sve, regs, current->thread.user_simd, false,
+		&current->thread.user_sve, regs, current->thread.user_simd, true,
 		decoded->sve_integer_binary_op, decoded->sve_predication,
 		decoded->rd, decoded->sve_pg, decoded->rn, decoded->rm,
 		decoded->sve_element_bytes);
