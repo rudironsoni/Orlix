@@ -54,7 +54,7 @@ ORLIX_TCTI_FEATURE_DOMAIN_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feat
 ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_field_domain_binding_artifact_test
 ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_runtime_capability_cohort_artifact_test
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_isa_kbuild_generator_test
-ORLIX_TCTI_COMPLETION_AUDIT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_completion_audit_test
+ORLIX_TCTI_ORDINAL_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_ordinal_ledger_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
 .PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests kernel-archive-cache-tests tcti-isa-host-tests tcti-isa-audit tcti-isa-maintainer tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
@@ -380,17 +380,11 @@ tcti-isa-host-tests:
 		-o '$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
 	@'$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
-		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_field_domain_binding_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit_test.c \
-		-o '$(ORLIX_TCTI_COMPLETION_AUDIT_TEST)'
-	@'$(ORLIX_TCTI_COMPLETION_AUDIT_TEST)'
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa/target_ordinal_ledger.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_ordinal_ledger_test.c \
+		-o '$(ORLIX_TCTI_ORDINAL_LEDGER_TEST)'
+	@'$(ORLIX_TCTI_ORDINAL_LEDGER_TEST)'
 
 tcti-isa-audit: tcti-isa-host-tests
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
