@@ -676,6 +676,12 @@ static int branch_control_registry_binds_exact_source_rows(void)
 		const char *mnemonic;
 		const char *operation_id;
 	} expected[] = {
+		{ 2227U, "kunit:branch-control-svc", "SVC_EX_exception",
+		  "SVC", "SVC" },
+		{ 2230U, "kunit:branch-control-brk", "BRK_EX_exception",
+		  "BRK", "BRK" },
+		{ 2231U, "kunit:branch-control-hlt", "HLT_EX_exception",
+		  "HLT", "HLT" },
 		{ 2211U, "kunit:branch-control-b-cond", "B_only_condbranch",
 		  "B", "B_cond" },
 		{ 2288U, "kunit:branch-control-br", "BR_64_branch_reg",
@@ -755,8 +761,8 @@ static int branch_control_registry_binds_exact_source_rows(void)
 				       expected[expected_index].operation_id));
 		}
 	}
-	EXPECT(entry_count == 10);
-	EXPECT(binding_count == 12);
+	EXPECT(entry_count == 13);
+	EXPECT(binding_count == 15);
 	return 0;
 }
 

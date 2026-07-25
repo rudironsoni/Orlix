@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Source-bound production-path coverage for the base branch-control leaves.
+ * Source-bound production-path coverage for base branch and exception-control
+ * leaves.
  *
  * The rows below intentionally cover only the pinned AARCHMRS leaves whose
  * decode class and EL0 execution semantics are implemented by the production
@@ -27,6 +28,9 @@
 #define BCS_SVC_TAKEN 0xd4000041U
 
 enum bcs_kind {
+	BCS_SVC,
+	BCS_BRK,
+	BCS_HLT,
 	BCS_B_COND,
 	BCS_B,
 	BCS_BL,
@@ -51,6 +55,12 @@ struct bcs_leaf {
 
 /* Pinned source_manifest.def ordinals and source encodings. */
 static const struct bcs_leaf bcs_leaves[] = {
+	{ 2227, "SVC_EX_exception", "SVC", 0xffe0001fU, 0xd4000001U,
+	  BCS_SVC, false },
+	{ 2230, "BRK_EX_exception", "BRK", 0xffe0001fU, 0xd4200000U,
+	  BCS_BRK, false },
+	{ 2231, "HLT_EX_exception", "HLT", 0xffe0001fU, 0xd4400000U,
+	  BCS_HLT, false },
 	{ 2211, "B_only_condbranch", "B_cond", 0xff000010U, 0x54000000U,
 	  BCS_B_COND, false },
 	{ 2288, "BR_64_branch_reg", "BR", 0xfffffc1fU, 0xd61f0000U,
@@ -80,6 +90,12 @@ static const struct bcs_leaf bcs_leaves[] = {
 static enum tcti_decode_class bcs_decode_class(const struct bcs_leaf *leaf)
 {
 	switch (leaf->kind) {
+	case BCS_SVC:
+		return TCTI_DECODE_SVC;
+	case BCS_BRK:
+		return TCTI_DECODE_BRK;
+	case BCS_HLT:
+		return TCTI_DECODE_HLT;
 	case BCS_B_COND:
 		return TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE;
 	case BCS_B:
@@ -106,6 +122,10 @@ static u32 bcs_instruction(const struct bcs_leaf *leaf, bool taken)
 	u32 instruction = leaf->pattern;
 
 	switch (leaf->kind) {
+	case BCS_SVC:
+	case BCS_BRK:
+	case BCS_HLT:
+		return instruction | (0x1234U << 5);
 	case BCS_B_COND:
 		return instruction | (2U << 5);
 	case BCS_B:
@@ -194,6 +214,48 @@ static bool bcs_can_fall_through(const struct bcs_leaf *leaf)
 	       leaf->kind == BCS_TBNZ;
 }
 
+static bool bcs_is_exception_control(const struct bcs_leaf *leaf)
+{
+	return leaf->kind == BCS_SVC || leaf->kind == BCS_BRK ||
+	       leaf->kind == BCS_HLT;
+}
+
+static void bcs_expect_exception_control(struct kunit *test,
+					 const struct bcs_leaf *leaf,
+					 const struct pt_regs *before,
+					 const struct pt_regs *regs,
+					 const struct tcti_result *result,
+					 u32 instruction)
+{
+	enum tcti_exit_reason expected_reason;
+	long expected_status;
+
+	switch (leaf->kind) {
+	case BCS_SVC:
+		expected_reason = TCTI_EXIT_SYSCALL;
+		expected_status = 0;
+		break;
+	case BCS_BRK:
+		expected_reason = TCTI_EXIT_BREAKPOINT;
+		expected_status = 0x1234;
+		break;
+	case BCS_HLT:
+		expected_reason = TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
+		expected_status = -EOPNOTSUPP;
+		break;
+	default:
+		return;
+	}
+
+	KUNIT_EXPECT_EQ(test, expected_reason, result->reason);
+	KUNIT_EXPECT_EQ(test, expected_status, result->status);
+	KUNIT_EXPECT_EQ(test, before->pc, result->pc);
+	KUNIT_EXPECT_EQ(test, instruction, result->instruction);
+	KUNIT_EXPECT_MEMEQ(test, before, regs, sizeof(*regs));
+	KUNIT_EXPECT_EQ(test, before->pstate, regs->pstate);
+	KUNIT_EXPECT_EQ(test, before->pc, regs->pc);
+}
+
 static void bcs_source_decode(struct kunit *test)
 {
 	size_t index;
@@ -235,6 +297,12 @@ static void bcs_production_resume(struct kunit *test)
 			bcs_seed_regs(&regs, address, leaf, taken);
 			before = regs;
 			result = tcti_resume_user(current, &regs, current->mm);
+			if (bcs_is_exception_control(leaf)) {
+				bcs_expect_exception_control(test, leaf, &before, &regs,
+							     &result, instruction);
+				KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+				continue;
+			}
 			expected_svc = taken ? BCS_SVC_TAKEN : BCS_SVC_NOT_TAKEN;
 
 			KUNIT_ASSERT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,

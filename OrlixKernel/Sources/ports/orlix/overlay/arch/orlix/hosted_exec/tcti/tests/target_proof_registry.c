@@ -302,7 +302,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "83e04d900faa2abc7a8120b29d8a01e4fe2300266e182423515cbbf5428ab0ca",
 	  "tcti_source_leaf_classification_test.o" },
 	{ BRANCH_CONTROL_SOURCE,
-	  "a9693d014b7e6ad10b8e988667dfb437b3484b3afd2534c998a11ec30ef07daf",
+	  "cb0896f92dfbfd694e45ee7f6f35f053b476822fafda38d0ad3fa25724d4ba53",
 	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
 	  "bb538a43b2e667be6118a6f457478aad3c03456fa6436879a5da83064dca09cc",
@@ -736,6 +736,9 @@ static const struct operation_requirements operation_requirements[] = {
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_PC |
 		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "SVC", BRANCH_CONTROL_OBLIGATIONS },
+	{ "BRK", BRANCH_CONTROL_OBLIGATIONS },
+	{ "HLT", BRANCH_CONTROL_OBLIGATIONS },
 	{ "B_cond", BRANCH_CONTROL_OBLIGATIONS },
 	{ "BR", BRANCH_CONTROL_OBLIGATIONS },
 	{ "BLR", BRANCH_CONTROL_OBLIGATIONS },
@@ -1561,8 +1564,8 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 10U
-#define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 10U
-#define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 12U
+#define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 13U
+#define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 15U
 
 static struct tcti_target_proof_registry_entry proof_registry_entries[
 	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
@@ -2808,6 +2811,9 @@ struct branch_control_registry_operation {
 };
 
 static struct branch_control_registry_operation branch_control_registry_operations[] = {
+	{ .proof_id = "kunit:branch-control-svc", .operation_id = "SVC" },
+	{ .proof_id = "kunit:branch-control-brk", .operation_id = "BRK" },
+	{ .proof_id = "kunit:branch-control-hlt", .operation_id = "HLT" },
 	{ .proof_id = "kunit:branch-control-b-cond", .operation_id = "B_cond" },
 	{ .proof_id = "kunit:branch-control-br", .operation_id = "BR" },
 	{ .proof_id = "kunit:branch-control-blr", .operation_id = "BLR" },
