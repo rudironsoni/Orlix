@@ -151,6 +151,11 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ADD_SUB_REGISTER_SUITE_SYMBOL \
 	"tcti_add_sub_register_source_bound_test_suite"
 #define ADD_SUB_REGISTER_CASE_ARRAY "asr_cases"
+#define SCALAR_FP_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_scalar_fp_semantics_test.c"
+#define SCALAR_FP_SUITE "orlix-tcti-scalar-fp-semantics"
+#define SCALAR_FP_SUITE_SYMBOL "tcti_scalar_fp_semantics_test_suite"
+#define SCALAR_FP_CASE_ARRAY "tcti_scalar_fp_semantics_test_cases"
 #define SOURCE_LEAF_CLASSIFICATION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_source_leaf_classification_test.c"
 #define SOURCE_LEAF_CLASSIFICATION_SUITE \
@@ -171,6 +176,8 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define LOGICAL_SHIFT_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
 #define SCALAR_CONDITION LOGICAL_SHIFT_CONDITION
+#define SCALAR_FP_CONDITION \
+	"54434e4401070000002c0700000017070000000c010000000101010000000101010000000101020000000b00000007464541545f4650"
 #define LSE_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4c5345"
 #define LSE128_CONDITION \
@@ -182,6 +189,9 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	(LOGICAL_BASE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define SCALAR_BASE_OBLIGATIONS LOGICAL_BASE_OBLIGATIONS
 #define SCALAR_FLAGS_OBLIGATIONS LOGICAL_FLAGS_OBLIGATIONS
+#define SCALAR_FP_CONVERT_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ORDINARY_LOAD_STORE_OBLIGATIONS \
 	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
@@ -231,8 +241,11 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "a6d4768f0458875a667ec8f4dca2a722a5adac831aa0fd9d4cd24f1079d3d25c",
 	  "tcti_source_leaf_classification_test.o" },
 	{ DECODE_SOURCE,
-		"4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",
+	  "4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",
 	  "tcti_decode_test.o" },
+	{ SCALAR_FP_SOURCE,
+	  "c39f31899aa12ff965fe5a10942f87fd918182cc88bf614fdf195d28c107a029",
+	  "tcti_scalar_fp_semantics_test.o" },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -510,6 +523,20 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "tcti_decode_exhaustive_load_store_register_offset_family",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ SCALAR_FP_SOURCE, SCALAR_FP_SUITE, SCALAR_FP_SUITE_SYMBOL,
+	  SCALAR_FP_CASE_ARRAY, "tcti_scalar_fp_convert_resume_source_rows",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ SCALAR_FP_SOURCE, SCALAR_FP_SUITE, SCALAR_FP_SUITE_SYMBOL,
+	  SCALAR_FP_CASE_ARRAY,
+	  "tcti_scalar_fp_convert_reserved_forms_exit_without_state_change",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
@@ -604,6 +631,22 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("ADCS", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SBC", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SBCS", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZU_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTNS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTNU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SCVTF_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UCVTF_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTAS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTAU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTPS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTPU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTMS_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTMU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZS_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCVTZU_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -1104,8 +1147,8 @@ static const struct tcti_target_proof_binding cssc_abs_bindings[] = {
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 19U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 38U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 35U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 54U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
@@ -1417,6 +1460,7 @@ struct scalar_registry_operation {
 	const char *proof_id;
 	const char *source;
 	const char *suite;
+	const char *condition;
 	const struct tcti_target_proof_case *cases;
 	size_t case_count;
 	uint32_t minimum_ordinal;
@@ -1514,10 +1558,28 @@ static const struct tcti_target_proof_case add_sub_register_flags_cases[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
+static const struct tcti_target_proof_case scalar_fp_convert_cases[] = {
+	{ "tcti_scalar_fp_convert_resume_source_rows",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_scalar_fp_convert_reserved_forms_exit_without_state_change",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
 #define SCALAR_OPERATION(operation, proof, source_file, source_suite, case_set, \
 			 minimum, maximum, expected) \
-	{ operation, proof, source_file, source_suite, case_set, ARRAY_COUNT(case_set), \
-	  minimum, maximum, expected, 0, 0 }
+	{ operation, proof, source_file, source_suite, SCALAR_CONDITION, case_set, \
+	  ARRAY_COUNT(case_set), minimum, maximum, expected, 0, 0 }
+#define SCALAR_FP_OPERATION(operation, proof, minimum) \
+	{ operation, proof, SCALAR_FP_SOURCE, SCALAR_FP_SUITE, \
+	  SCALAR_FP_CONDITION, scalar_fp_convert_cases, \
+	  ARRAY_COUNT(scalar_fp_convert_cases), minimum, minimum, 1, 0, 0 }
 
 static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("AND_log_imm", "kunit:logical-immediate-and",
@@ -1574,8 +1636,41 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("SBCS", "kunit:add-sub-register-sbcs",
 		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
 		add_sub_register_flags_cases, 3466U, 3473U, 2),
+	SCALAR_FP_OPERATION("SCVTF_float_fix",
+		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
+	SCALAR_FP_OPERATION("UCVTF_float_fix",
+		"kunit:scalar-fp-convert-ucvtf-fix", 4085U),
+	SCALAR_FP_OPERATION("FCVTZS_float_fix",
+		"kunit:scalar-fp-convert-fcvtzs-fix", 4086U),
+	SCALAR_FP_OPERATION("FCVTZU_float_fix",
+		"kunit:scalar-fp-convert-fcvtzu-fix", 4087U),
+	SCALAR_FP_OPERATION("FCVTNS_float",
+		"kunit:scalar-fp-convert-fcvtns", 4108U),
+	SCALAR_FP_OPERATION("FCVTNU_float",
+		"kunit:scalar-fp-convert-fcvtnu", 4109U),
+	SCALAR_FP_OPERATION("SCVTF_float_int",
+		"kunit:scalar-fp-convert-scvtf-int", 4110U),
+	SCALAR_FP_OPERATION("UCVTF_float_int",
+		"kunit:scalar-fp-convert-ucvtf-int", 4111U),
+	SCALAR_FP_OPERATION("FCVTAS_float",
+		"kunit:scalar-fp-convert-fcvtas", 4112U),
+	SCALAR_FP_OPERATION("FCVTAU_float",
+		"kunit:scalar-fp-convert-fcvtau", 4113U),
+	SCALAR_FP_OPERATION("FCVTPS_float",
+		"kunit:scalar-fp-convert-fcvtps", 4116U),
+	SCALAR_FP_OPERATION("FCVTPU_float",
+		"kunit:scalar-fp-convert-fcvtpu", 4117U),
+	SCALAR_FP_OPERATION("FCVTMS_float",
+		"kunit:scalar-fp-convert-fcvtms", 4118U),
+	SCALAR_FP_OPERATION("FCVTMU_float",
+		"kunit:scalar-fp-convert-fcvtmu", 4119U),
+	SCALAR_FP_OPERATION("FCVTZS_float_int",
+		"kunit:scalar-fp-convert-fcvtzs-int", 4120U),
+	SCALAR_FP_OPERATION("FCVTZU_float_int",
+		"kunit:scalar-fp-convert-fcvtzu-int", 4121U),
 };
 
+#undef SCALAR_FP_OPERATION
 #undef SCALAR_OPERATION
 
 static struct tcti_target_proof_binding scalar_registry_bindings[
@@ -1592,7 +1687,7 @@ scalar_registry_operation_for(const struct source_manifest_binding *source)
 			&scalar_registry_operations[index];
 
 		if (!strcmp(source->operation_id, operation->operation_id) &&
-		    !strcmp(source->condition_tcnd_hex, SCALAR_CONDITION) &&
+		    !strcmp(source->condition_tcnd_hex, operation->condition) &&
 		    source->ordinal >= operation->minimum_ordinal &&
 		    source->ordinal <= operation->maximum_ordinal)
 			return operation;

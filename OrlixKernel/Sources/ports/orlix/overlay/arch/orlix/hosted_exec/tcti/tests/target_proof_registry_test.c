@@ -48,6 +48,9 @@
 #define CSSC_OBLIGATIONS \
 	(BASELINE | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define SCALAR_FP_CONVERT_OBLIGATIONS \
+	(BASELINE | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 
 static const struct tcti_target_proof_binding add_bindings[] = {
 	{ "ADD_32_addsub_imm", "ADD", 0xff800000U, 0x11000000U,
@@ -674,7 +677,101 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 433);
+	EXPECT(binding_count == 449);
+	return 0;
+}
+
+static int scalar_fp_convert_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		uint32_t ordinal;
+		const char *proof_id;
+		const char *leaf_name;
+		const char *mnemonic;
+		const char *operation_id;
+	} expected[] = {
+		{ 4084U, "kunit:scalar-fp-convert-scvtf-fix",
+		  "SCVTF_S32_float2fix", "SCVTF", "SCVTF_float_fix" },
+		{ 4085U, "kunit:scalar-fp-convert-ucvtf-fix",
+		  "UCVTF_S32_float2fix", "UCVTF", "UCVTF_float_fix" },
+		{ 4086U, "kunit:scalar-fp-convert-fcvtzs-fix",
+		  "FCVTZS_32S_float2fix", "FCVTZS", "FCVTZS_float_fix" },
+		{ 4087U, "kunit:scalar-fp-convert-fcvtzu-fix",
+		  "FCVTZU_32S_float2fix", "FCVTZU", "FCVTZU_float_fix" },
+		{ 4108U, "kunit:scalar-fp-convert-fcvtns",
+		  "FCVTNS_32S_float2int", "FCVTNS", "FCVTNS_float" },
+		{ 4109U, "kunit:scalar-fp-convert-fcvtnu",
+		  "FCVTNU_32S_float2int", "FCVTNU", "FCVTNU_float" },
+		{ 4110U, "kunit:scalar-fp-convert-scvtf-int",
+		  "SCVTF_S32_float2int", "SCVTF", "SCVTF_float_int" },
+		{ 4111U, "kunit:scalar-fp-convert-ucvtf-int",
+		  "UCVTF_S32_float2int", "UCVTF", "UCVTF_float_int" },
+		{ 4112U, "kunit:scalar-fp-convert-fcvtas",
+		  "FCVTAS_32S_float2int", "FCVTAS", "FCVTAS_float" },
+		{ 4113U, "kunit:scalar-fp-convert-fcvtau",
+		  "FCVTAU_32S_float2int", "FCVTAU", "FCVTAU_float" },
+		{ 4116U, "kunit:scalar-fp-convert-fcvtps",
+		  "FCVTPS_32S_float2int", "FCVTPS", "FCVTPS_float" },
+		{ 4117U, "kunit:scalar-fp-convert-fcvtpu",
+		  "FCVTPU_32S_float2int", "FCVTPU", "FCVTPU_float" },
+		{ 4118U, "kunit:scalar-fp-convert-fcvtms",
+		  "FCVTMS_32S_float2int", "FCVTMS", "FCVTMS_float" },
+		{ 4119U, "kunit:scalar-fp-convert-fcvtmu",
+		  "FCVTMU_32S_float2int", "FCVTMU", "FCVTMU_float" },
+		{ 4120U, "kunit:scalar-fp-convert-fcvtzs-int",
+		  "FCVTZS_32S_float2int", "FCVTZS", "FCVTZS_float_int" },
+		{ 4121U, "kunit:scalar-fp-convert-fcvtzu-int",
+		  "FCVTZU_32S_float2int", "FCVTZU", "FCVTZU_float_int" },
+	};
+	const struct tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t expected_index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (expected_index = 0; expected_index < sizeof(expected) / sizeof(expected[0]);
+	     expected_index++) {
+		const struct tcti_target_proof_registry_entry *entry = NULL;
+		const struct tcti_target_proof_binding *binding;
+		struct tcti_target_proof_reference reference;
+		uint32_t requirements;
+		size_t entry_index;
+
+		EXPECT(tcti_target_proof_operation_requirements(
+			       expected[expected_index].operation_id, 1,
+			       &requirements) == 0);
+		EXPECT(requirements == SCALAR_FP_CONVERT_OBLIGATIONS);
+		for (entry_index = 0; entry_index < count; entry_index++) {
+			if (!strcmp(entries[entry_index].id,
+				    expected[expected_index].proof_id)) {
+				entry = &entries[entry_index];
+				break;
+			}
+		}
+		EXPECT(entry != NULL);
+		EXPECT(!strcmp(entry->operation_id,
+			       expected[expected_index].operation_id));
+		EXPECT(entry->classification_mask == TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
+		EXPECT(entry->obligations == SCALAR_FP_CONVERT_OBLIGATIONS);
+		EXPECT(entry->unproved_obligations == SCALAR_FP_CONVERT_OBLIGATIONS);
+		EXPECT(entry->binding_count == 1);
+		binding = entry->bindings;
+		EXPECT(binding->source_ordinal == expected[expected_index].ordinal);
+		EXPECT(!strcmp(binding->leaf_name, expected[expected_index].leaf_name));
+		EXPECT(!strcmp(binding->mnemonic, expected[expected_index].mnemonic));
+		reference = (struct tcti_target_proof_reference){
+			.id = expected[expected_index].proof_id,
+			.leaf_name = expected[expected_index].leaf_name,
+			.mnemonic = expected[expected_index].mnemonic,
+			.operation_id = expected[expected_index].operation_id,
+			.encoding_mask = binding->encoding_mask,
+			.encoding_pattern = binding->encoding_pattern,
+			.condition_tcnd_hex = binding->condition_tcnd_hex,
+			.classification = 1,
+		};
+		EXPECT(tcti_target_proof_registry_lookup(entries, count, &reference) ==
+		       TCTI_TARGET_PROOF_REGISTRY_OK);
+	}
 	return 0;
 }
 
@@ -718,6 +815,8 @@ int main(void)
 		  exclusive_registry_binds_exact_baseline_leaves },
 		{ "source_registration_discharges_zero_semantic_obligations",
 		  source_registration_discharges_zero_semantic_obligations },
+		{ "scalar_fp_convert_registry_binds_exact_source_rows",
+		  scalar_fp_convert_registry_binds_exact_source_rows },
 	};
 	size_t index;
 

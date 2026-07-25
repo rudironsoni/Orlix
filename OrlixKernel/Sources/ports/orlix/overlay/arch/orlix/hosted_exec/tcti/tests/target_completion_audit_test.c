@@ -29,13 +29,13 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.source_bound_rows == 57);
-	EXPECT(result.source_unbound_rows == 1044);
+	EXPECT(result.source_bound_rows == 73);
+	EXPECT(result.source_unbound_rows == 1028);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 196);
-	EXPECT(result.unproved_obligation_bindings == 433);
+	EXPECT(result.unproved_obligation_bindings == 449);
 	EXPECT(result.asl_availability_rows == 4350);
 	EXPECT(result.invalid_asl_availability_rows == 0);
 	EXPECT(result.unavailable_asl_rows == 4350);
@@ -1198,8 +1198,8 @@ static int obligation_projection_retains_exact_ereta_delta(void)
 		       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
 	}
 	EXPECT(result.non_el0_rows == 10U);
-	EXPECT(result.source_bound_rows == 57U);
-	EXPECT(result.unproved_obligation_bindings == 433U);
+	EXPECT(result.source_bound_rows == 73U);
+	EXPECT(result.unproved_obligation_bindings == 449U);
 	free(obligations);
 	return 0;
 }
