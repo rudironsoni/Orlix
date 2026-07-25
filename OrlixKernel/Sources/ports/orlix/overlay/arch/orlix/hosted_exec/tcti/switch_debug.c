@@ -7768,15 +7768,18 @@ struct tcti_result tcti_switch_debug_resume_user(struct task_struct *task,
 		return result;
 
 	for (;;) {
-		u32 instruction;
+		u32 instruction = 0;
 
 		ret = tcti_fetch_instruction(mm, regs->pc, &instruction);
 		if (ret) {
-			result.reason = TCTI_EXIT_USER_FAULT;
+			result.reason = ret == -EFAULT &&
+				!IS_ALIGNED(regs->pc, sizeof(u32)) ?
+				TCTI_EXIT_ALIGNMENT_FAULT : TCTI_EXIT_USER_FAULT;
 			result.status = ret;
 			result.fault_address = regs->pc;
 			result.fault_access = TCTI_ACCESS_FETCH;
 			result.pc = regs->pc;
+			result.instruction = instruction;
 			return result;
 		}
 

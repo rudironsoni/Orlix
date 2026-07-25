@@ -20,6 +20,7 @@
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "../switch_debug.h"
 #include "tcti_test_suites.h"
 
 #define BCS_SVC_NOT_TAKEN 0xd4000021U
@@ -286,6 +287,133 @@ static void bcs_x31_semantics_production(struct kunit *test)
 				(cases[index].taken ? 3 : 2) * sizeof(u32), regs.pc);
 		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
 		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
+
+static void bcs_register_branch_unaligned_target_production(struct kunit *test)
+{
+	static const struct {
+		enum bcs_kind kind;
+		u32 instruction;
+	} cases[] = {
+		{ BCS_BR, 0xd61f00a0U },
+		{ BCS_BLR, 0xd63f00a0U },
+		{ BCS_RET, 0xd65f00a0U },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct pt_regs regs = {};
+		struct pt_regs debug_regs;
+		struct pt_regs before;
+		struct tcti_result result;
+		struct tcti_result debug_result;
+		unsigned long address;
+		unsigned long target;
+		unsigned long expected[ARRAY_SIZE(regs.regs)];
+
+		address = bcs_map_program(test, cases[index].instruction);
+		bcs_seed_regs(&regs, address, &bcs_leaves[0], true);
+		target = address + 1;
+		regs.regs[5] = target;
+		before = regs;
+		debug_regs = regs;
+		result = tcti_resume_user(current, &regs, current->mm);
+		debug_result = tcti_switch_debug_resume_user(current, &debug_regs,
+							     current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_ALIGNMENT_FAULT, result.reason,
+				    "kind=%u", cases[index].kind);
+		KUNIT_EXPECT_EQ(test, -EFAULT, result.status);
+		KUNIT_EXPECT_EQ(test, target, result.fault_address);
+		KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+		KUNIT_EXPECT_EQ(test, target, result.pc);
+		KUNIT_EXPECT_EQ(test, target, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0U, result.instruction);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		memcpy(expected, before.regs, sizeof(expected));
+		if (cases[index].kind == BCS_BLR)
+			expected[30] = address + sizeof(u32);
+		KUNIT_EXPECT_MEMEQ(test, expected, regs.regs, sizeof(expected));
+		KUNIT_EXPECT_EQ(test, result.reason, debug_result.reason);
+		KUNIT_EXPECT_EQ(test, result.status, debug_result.status);
+		KUNIT_EXPECT_EQ(test, result.fault_address,
+				debug_result.fault_address);
+		KUNIT_EXPECT_EQ(test, result.fault_access,
+				debug_result.fault_access);
+		KUNIT_EXPECT_EQ(test, result.pc, debug_result.pc);
+		KUNIT_EXPECT_EQ(test, result.instruction, debug_result.instruction);
+		KUNIT_EXPECT_EQ(test, target, debug_regs.pc);
+		KUNIT_EXPECT_MEMEQ(test, expected, debug_regs.regs,
+				   sizeof(expected));
+		KUNIT_EXPECT_EQ(test, before.pstate, debug_regs.pstate);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
+
+static void bcs_register_branch_out_of_range_target_production(struct kunit *test)
+{
+	static const struct {
+		enum bcs_kind kind;
+		u32 instruction;
+	} cases[] = {
+		{ BCS_BR, 0xd61f00a0U },
+		{ BCS_BLR, 0xd63f00a0U },
+		{ BCS_RET, 0xd65f00a0U },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		struct pt_regs regs = {};
+		struct pt_regs debug_regs;
+		struct pt_regs before;
+		struct tcti_result result;
+		struct tcti_result debug_result;
+		unsigned long address;
+		unsigned long expected[ARRAY_SIZE(regs.regs)];
+
+		address = bcs_map_program(test, cases[index].instruction);
+		bcs_seed_regs(&regs, address, &bcs_leaves[0], true);
+		regs.regs[5] = TASK_SIZE;
+		before = regs;
+		debug_regs = regs;
+		result = tcti_resume_user(current, &regs, current->mm);
+		debug_result = tcti_switch_debug_resume_user(current, &debug_regs,
+							     current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_USER_FAULT, result.reason,
+				    "kind=%u", cases[index].kind);
+		KUNIT_EXPECT_EQ(test, -EFAULT, result.status);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, result.fault_address);
+		KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, result.pc);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0U, result.instruction);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		memcpy(expected, before.regs, sizeof(expected));
+		if (cases[index].kind == BCS_BLR)
+			expected[30] = address + sizeof(u32);
+		KUNIT_EXPECT_MEMEQ(test, expected, regs.regs, sizeof(expected));
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_USER_FAULT, debug_result.reason);
+		KUNIT_EXPECT_EQ(test, -EFAULT, debug_result.status);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_result.fault_address);
+		KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH,
+				debug_result.fault_access);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_result.pc);
+		KUNIT_EXPECT_EQ(test, 0U, debug_result.instruction);
+		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_regs.pc);
+		KUNIT_EXPECT_MEMEQ(test, expected, debug_regs.regs,
+				   sizeof(expected));
+		KUNIT_EXPECT_EQ(test, before.pstate, debug_regs.pstate);
+		KUNIT_EXPECT_EQ(test, result.reason, debug_result.reason);
+		KUNIT_EXPECT_EQ(test, result.status, debug_result.status);
+		KUNIT_EXPECT_EQ(test, result.fault_address,
+				debug_result.fault_address);
+		KUNIT_EXPECT_EQ(test, result.fault_access,
+				debug_result.fault_access);
+		KUNIT_EXPECT_EQ(test, result.pc, debug_result.pc);
+		KUNIT_EXPECT_EQ(test, result.instruction, debug_result.instruction);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 	}
 }
@@ -679,6 +807,8 @@ static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_source_decode),
 	KUNIT_CASE(bcs_production_resume),
 	KUNIT_CASE(bcs_x31_semantics_production),
+	KUNIT_CASE(bcs_register_branch_unaligned_target_production),
+	KUNIT_CASE(bcs_register_branch_out_of_range_target_production),
 	KUNIT_CASE(bcs_al_nv_condition_production),
 	KUNIT_CASE(cbe_source_decode),
 	KUNIT_CASE(cbe_production_resume),

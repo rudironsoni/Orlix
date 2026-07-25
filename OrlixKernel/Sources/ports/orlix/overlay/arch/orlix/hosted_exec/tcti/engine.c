@@ -760,7 +760,7 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 		u64 code_generation;
 		size_t word_count = 0;
 		u32 block_instruction_count = 0;
-		u32 instruction;
+		u32 instruction = 0;
 		enum tcti_decode_class first_exit_class =
 			TCTI_DECODE_UNSUPPORTED;
 		bool global_cache_ref = false;
@@ -910,7 +910,10 @@ struct tcti_result tcti_resume_user(struct task_struct *task,
 				pr_info("Orlix TCTI: fetch failed task=%s pid=%d pc=%#llx ret=%d\n",
 					task->comm, task_pid_nr(task), regs->pc,
 					ret);
-				result.reason = TCTI_EXIT_USER_FAULT;
+				result.reason = ret == -EFAULT &&
+					!IS_ALIGNED(regs->pc, sizeof(u32)) ?
+					TCTI_EXIT_ALIGNMENT_FAULT :
+					TCTI_EXIT_USER_FAULT;
 				result.fault_address = regs->pc;
 				result.fault_access = TCTI_ACCESS_FETCH;
 			} else {
