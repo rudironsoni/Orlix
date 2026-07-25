@@ -100,10 +100,14 @@ static void tcti_sve_state_reset_zeroes_full_scalable_register_file(
 		tcti_sve_state_reset(&state, user_simd, TCTI_SVE_MAX_VL_BYTES));
 	KUNIT_EXPECT_TRUE(test, state.valid);
 	KUNIT_EXPECT_EQ(test, (u16)TCTI_SVE_MAX_VL_BYTES, state.vl_bytes);
-	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.z, 0, sizeof(state.z)));
-	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.p, 0, sizeof(state.p)));
-	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.ffr, 0, sizeof(state.ffr)));
-	KUNIT_EXPECT_EQ(test, 0, memchr_inv(user_simd, 0, sizeof(user_simd)));
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
+		memchr_inv(state.z, 0, sizeof(state.z)));
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
+		memchr_inv(state.p, 0, sizeof(state.p)));
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
+		memchr_inv(state.ffr, 0, sizeof(state.ffr)));
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
+		memchr_inv(user_simd, 0, sizeof(user_simd)));
 }
 
 static void tcti_sve_state_copy_preserves_full_scalable_context(
@@ -174,17 +178,18 @@ static void tcti_start_thread_resets_full_scalable_sve_context(
 	KUNIT_EXPECT_TRUE(test, current->thread.user_sve.valid);
 	KUNIT_EXPECT_EQ(test, (u16)TCTI_SVE_DEFAULT_VL_BYTES,
 			current->thread.user_sve.vl_bytes);
-	KUNIT_EXPECT_EQ(test, 0,
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
 		memchr_inv(current->thread.user_sve.z, 0,
 			   sizeof(current->thread.user_sve.z)));
-	KUNIT_EXPECT_EQ(test, 0,
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
 		memchr_inv(current->thread.user_sve.p, 0,
 			   sizeof(current->thread.user_sve.p)));
-	KUNIT_EXPECT_EQ(test, 0,
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
 		memchr_inv(current->thread.user_sve.ffr, 0,
 			   sizeof(current->thread.user_sve.ffr)));
-	KUNIT_EXPECT_EQ(test, 0, memchr_inv(current->thread.user_simd, 0,
-					     sizeof(current->thread.user_simd)));
+	KUNIT_EXPECT_PTR_EQ(test, NULL,
+		memchr_inv(current->thread.user_simd, 0,
+			   sizeof(current->thread.user_simd)));
 }
 
 static void tcti_sve_integer_binary_preserves_predicated_lanes(
