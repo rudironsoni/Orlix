@@ -19,6 +19,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_lse128_resume_test.o \
 	tcti_lse_resume_production_test.o \
 	tcti_lse_scalar_rmw_resume_test.o \
+	tcti_exclusive_resume_production_test.o \
 	tcti_native_observation.o \
 	tcti_native_observation_test.o \
 	tcti_add_sub_immediate_test.o \
