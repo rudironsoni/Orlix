@@ -46,6 +46,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_sve_decode_test.o \
 	tcti_sve_resume_test.o \
 	tcti_advsimd_modified_immediate_regression_test.o \
+	tcti_advsimd_halving_source_bound_test.o \
 	tcti_advsimd_fp_arithmetic_source_bound_test.o \
 	tcti_advsimd_structure_load_store_source_bound_test.o \
 	tcti_pauth_bti_gcs_obligation_test.o \
