@@ -705,3 +705,12 @@ as a legal-domain or feature-union proof. All 4,350 leaves retain the explicit
 incomplete-union blocker, and malformed or null source, classification,
 registry, or instruction-artifact inputs remain transactionally invisible to
 callers.
+## [2026-07-26] fix | Retain typed ASL source provenance
+
+Extended the C-native TCTI inventory to retain each leaf's canonical operation,
+exact operation and decode source locators and spans, raw source digests, and
+typed body, decode, corpus, and helper-availability states. The pinned 2026-06
+source remains fail-closed because every operation body is a placeholder, every
+decode body is null, and no official shared-ASL corpus or helper manifest is
+present. This grants no instruction-semantic, proof, or runtime capability
+credit.
