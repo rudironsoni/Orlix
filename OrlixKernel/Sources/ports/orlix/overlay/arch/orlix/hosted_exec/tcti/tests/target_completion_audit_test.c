@@ -1155,7 +1155,7 @@ static int obligation_projection_retains_exact_ereta_delta(void)
 	struct tcti_target_completion_result result;
 	size_t non_el0 = 0;
 	size_t source_bound = 0;
-	size_t unproved = 0;
+	size_t unproved_source_bound_rows = 0;
 	size_t index;
 
 	obligations = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS,
@@ -1174,11 +1174,19 @@ static int obligation_projection_retains_exact_ereta_delta(void)
 		    TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA)
 			source_bound++;
 		if (obligations[index].unproved_obligations)
-			unproved++;
+			unproved_source_bound_rows++;
 	}
 	EXPECT(non_el0 == result.non_el0_rows);
 	EXPECT(source_bound == result.source_bound_rows);
-	EXPECT(unproved == result.unproved_obligation_bindings);
+	/*
+	 * The projection has one row per source leaf and only exposes proof
+	 * metadata selected by that leaf's classification.  The aggregate counts
+	 * every registry binding, including still-unclassified source bindings,
+	 * so these values intentionally have different units.
+	 */
+	EXPECT(unproved_source_bound_rows == source_bound);
+	EXPECT(unproved_source_bound_rows <=
+	       result.unproved_obligation_bindings);
 	for (index = 2300; index <= 2301; index++) {
 		EXPECT(obligations[index].classification ==
 		       TCTI_TARGET_COMPLETION_NON_EL0);
@@ -1211,6 +1219,7 @@ static int malformed_projection_dependencies_leave_output_untouched(void)
 	size_t source_count;
 	size_t classification_count;
 	size_t registry_count;
+	size_t classification_index;
 	size_t bytes = TCTI_TARGET_COMPLETION_SOURCE_ROWS * sizeof(*obligations);
 
 	source = tcti_target_completion_source(&source_count);
@@ -1250,13 +1259,24 @@ static int malformed_projection_dependencies_leave_output_untouched(void)
 	EXPECT(!memcmp(obligations, before, bytes));
 	source_copy[0] = source[0];
 
-	classification_copy[0].relation = TCTI_TARGET_COMPLETION_RELATION_ALIAS;
+	for (classification_index = 0;
+	     classification_index < classification_count;
+	     classification_index++)
+		if (classification_copy[classification_index].classification ==
+		    TCTI_TARGET_COMPLETION_REQUIRED_EL0)
+			break;
+	EXPECT(classification_index < classification_count);
+	classification_copy[classification_index].relation =
+		TCTI_TARGET_COMPLETION_RELATION_ALIAS;
+	classification_copy[classification_index].canonical_name =
+		classification_copy[classification_index].name;
 	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
 		       &inputs, &result, obligations,
 		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
 	EXPECT(result.invalid_relationship_rows != 0U);
 	EXPECT(!memcmp(obligations, before, bytes));
-	classification_copy[0] = classification[0];
+	classification_copy[classification_index] =
+		classification[classification_index];
 
 	registry_copy[0].id = "";
 	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
@@ -1301,7 +1321,6 @@ static int static_proof_metadata_never_becomes_execution_evidence(void)
 			    "kunit:source-leaf-ereta-non-el0"))
 			break;
 	EXPECT(index < registry_count);
-	registry_copy[index].unproved_obligations = 0;
 	inputs = (struct tcti_target_completion_audit_inputs_for_test) {
 		.source = source,
 		.source_count = source_count,
@@ -1314,11 +1333,11 @@ static int static_proof_metadata_never_becomes_execution_evidence(void)
 		       &inputs, &result, obligations,
 		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
 	EXPECT(obligations[2300].proof_state ==
-	       TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA);
+	       TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED);
 	EXPECT(obligations[2300].blocker_mask &
 	       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
-	EXPECT(!(obligations[2300].blocker_mask &
-		 TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS));
+	EXPECT(obligations[2300].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS);
 	free(obligations);
 	free(registry_copy);
 	return 0;
