@@ -207,15 +207,11 @@ static bool source_condition_matches_artifact(
 	return true;
 }
 
-static void validate_source_feature_domain(
-	const struct tcti_target_completion_source_row *source,
-	size_t source_count, struct tcti_target_completion_result *result,
-	struct tcti_target_completion_obligation *obligations)
+static bool validate_completion_feature_dependencies(
+	const struct tcti_feature_artifact *feature_artifact,
+	const struct tcti_target_instruction_artifact *instruction_artifact,
+	size_t source_count, struct tcti_target_completion_result *result)
 {
-	const struct tcti_feature_artifact *feature_artifact =
-		tcti_feature_artifact_canonical();
-	const struct tcti_target_instruction_artifact *instruction_artifact =
-		tcti_target_instruction_artifact_canonical();
 	struct tcti_feature_artifact_scratch feature_scratch;
 	struct tcti_feature_artifact_diagnostic feature_diagnostic;
 	struct tcti_target_instruction_artifact_validation_result
@@ -226,7 +222,6 @@ static void validate_source_feature_domain(
 		TCTI_FEATURE_ARTIFACT_NODE_COUNT];
 	static tcti_feature_artifact_u8 feature_child_coverage[
 		TCTI_FEATURE_ARTIFACT_CHILD_COUNT];
-	size_t index;
 
 	feature_scratch = (struct tcti_feature_artifact_scratch) {
 		.state = feature_state,
@@ -240,18 +235,29 @@ static void validate_source_feature_domain(
 					  &feature_diagnostic) !=
 		TCTI_FEATURE_ARTIFACT_VALID ||
 	    tcti_target_instruction_artifact_validate(instruction_artifact,
-						      &instruction_diagnostic) ||
+					      &instruction_diagnostic) ||
 	    instruction_artifact->leaf_count != source_count) {
 		result->invalid_feature_artifact++;
 		record_error(result, TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
-		return;
+		return false;
 	}
+	return true;
+}
+
+static void validate_source_feature_domain(
+	const struct tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct tcti_feature_artifact *feature_artifact,
+	const struct tcti_target_instruction_artifact *instruction_artifact,
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations)
+{
+	size_t index;
 	for (index = 0; index < source_count; index++) {
 		struct tcti_feature_domain_tcnd_diagnostic diagnostic;
-		static const struct tcti_feature_domain_tcnd_environment no_assignment;
-		static const struct tcti_feature_domain_tcnd_union_candidate no_candidate = {
-			.environment = &no_assignment,
-		};
+		struct tcti_target_instruction_operand_assignment assignment;
+		struct tcti_feature_domain_tcnd_environment environment;
+		struct tcti_feature_domain_tcnd_union_candidate candidate;
 		struct tcti_feature_domain_tcnd_union_result applicability;
 		const struct tcti_target_instruction_artifact_leaf *leaf =
 			&instruction_artifact->leaves[index];
@@ -278,13 +284,25 @@ static void validate_source_feature_domain(
 		}
 		result->source_condition_domain_bound_rows++;
 		/*
-		 * Run every source row through the exact TCND evaluator. The checked
-		 * target has no generated feature-configuration union or encoding
-		 * operand assignment artifact yet, so each missing binding remains a
-		 * typed completion blocker rather than an implicit all-row placeholder.
+		 * The encoding pattern is a checked source witness, not a legal-domain
+		 * enumeration or runtime capability claim. It supplies only the
+		 * source-declared operand values. The missing feature callback keeps
+		 * the full target union incomplete.
 		 */
+		assignment = (struct tcti_target_instruction_operand_assignment) {
+			.artifact = instruction_artifact,
+			.leaf_index = index,
+			.instruction = leaf->encoding_pattern,
+		};
+		environment = (struct tcti_feature_domain_tcnd_environment) {
+			.context = &assignment,
+			.operand = tcti_target_instruction_operand_assignment,
+		};
+		candidate = (struct tcti_feature_domain_tcnd_union_candidate) {
+			.environment = &environment,
+		};
 		if (tcti_feature_domain_evaluate_tcnd_union(feature_artifact,
-			source[index].condition_tcnd_hex, &no_candidate, 1,
+			source[index].condition_tcnd_hex, &candidate, 1,
 			&applicability)) {
 			result->unresolved_feature_applicability_rows++;
 			result->unsupported_feature_applicability_rows++;
@@ -1511,6 +1529,10 @@ static int completion_audit_internal(
 {
 	const struct tcti_target_proof_registry_entry *registry;
 	const struct tcti_runtime_capability_cohort_artifact *runtime;
+	const struct tcti_feature_artifact *feature_artifact =
+		tcti_feature_artifact_canonical();
+	const struct tcti_target_instruction_artifact *instruction_artifact =
+		tcti_target_instruction_artifact_canonical();
 	struct tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
 	int status;
 	size_t registry_count;
@@ -1537,14 +1559,27 @@ static int completion_audit_internal(
 		classification_count = inputs->classification_count;
 		registry = inputs->registry;
 		registry_count = inputs->registry_count;
+		if (inputs->instruction_artifact)
+			instruction_artifact = inputs->instruction_artifact;
 	}
+	/*
+	 * Reject malformed injected dependencies before constructing staged rows.
+	 * Ordinary completion gaps stay red but remain safe to project.
+	 */
+	status = tcti_target_completion_validate(
+		source, source_count, classification, classification_count,
+		registry, registry_count, result);
+	if (!validate_completion_feature_dependencies(feature_artifact,
+		instruction_artifact, source_count, result))
+		return -1;
+	if (!completion_projection_dependencies_valid(result) ||
+	    source_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    classification_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS)
+		return -1;
 	if (obligations)
 		for (index = 0; index < TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++)
 			completion_project_obligation(index, registry, registry_count,
 					      runtime, &obligations[index]);
-	status = tcti_target_completion_validate(
-		source, source_count, classification, classification_count,
-		registry, registry_count, result);
 	if (tcti_target_completion_validate_source_provenance(
 		    &source_provenance, result))
 		status = -1;
@@ -1566,8 +1601,8 @@ static int completion_audit_internal(
 	if (tcti_target_completion_validate_runtime_capability_cohorts(runtime,
 								 result))
 		status = -1;
-	validate_source_feature_domain(source, source_count, result,
-			       obligations);
+	validate_source_feature_domain(source, source_count, feature_artifact,
+			       instruction_artifact, result, obligations);
 	if (result->invalid_feature_artifact ||
 	    result->invalid_source_condition_rows ||
 	    result->unresolved_feature_applicability_rows)

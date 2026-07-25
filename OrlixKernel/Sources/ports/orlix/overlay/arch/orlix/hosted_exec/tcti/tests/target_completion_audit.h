@@ -329,6 +329,8 @@ struct tcti_target_completion_audit_inputs_for_test {
 	size_t classification_count;
 	const struct tcti_target_proof_registry_entry *registry;
 	size_t registry_count;
+	/* Optional host-only checked artifact injection for atomicity tests. */
+	const struct tcti_target_instruction_artifact *instruction_artifact;
 };
 
 int tcti_target_completion_validate(

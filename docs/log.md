@@ -694,3 +694,13 @@ values on ordinals 203 through 205 and `op21` on 2169 and 2170, then evaluate
 their authoritative source conditions. Adversarial cases reject malformed
 source locators, interior string-pool offsets, duplicate records, and
 variable/fixed name collisions. This grants domain-provenance coverage only.
+
+## [2026-07-25] test | Evaluate checked source-encoding witnesses
+
+Changed the completion audit to resolve each source condition against the
+validated instruction artifact's canonical encoding witness before reporting
+operand gaps. This removes 114 false missing-operand blockers and exposes the
+remaining feature-configuration blockers without treating one encoding witness
+as a legal-domain or feature-union proof. All 4,350 leaves retain the explicit
+incomplete-union blocker, and malformed source, classification, registry, or
+instruction-artifact inputs remain transactionally invisible to callers.

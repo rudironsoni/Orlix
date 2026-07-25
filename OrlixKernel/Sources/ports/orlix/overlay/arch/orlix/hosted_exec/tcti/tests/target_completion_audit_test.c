@@ -36,6 +36,16 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 196);
 	EXPECT(result.unproved_obligation_bindings == 449);
+	EXPECT(result.source_condition_domain_bound_rows == 4350);
+	EXPECT(result.invalid_source_condition_rows == 0);
+	EXPECT(result.unresolved_feature_applicability_rows == 4049);
+	EXPECT(result.evaluated_feature_applicability_rows == 301);
+	EXPECT(result.satisfied_feature_applicability_rows == 301);
+	EXPECT(result.unsatisfied_feature_applicability_rows == 0);
+	EXPECT(result.unsupported_feature_applicability_rows == 4049);
+	EXPECT(result.unresolved_feature_configuration_rows == 4047);
+	EXPECT(result.unresolved_instruction_operand_rows == 2);
+	EXPECT(result.invalid_feature_applicability_rows == 0);
 	EXPECT(result.asl_availability_rows == 4350);
 	EXPECT(result.invalid_asl_availability_rows == 0);
 	EXPECT(result.unavailable_asl_rows == 4350);
@@ -52,7 +62,7 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.runtime_capability_cohort_candidate_membership_rows == 5592);
 	EXPECT(result.unresolved_runtime_capability_cohort_membership_rows == 5592);
 	EXPECT(result.invalid_runtime_capability_cohort_rows == 0);
-	EXPECT(result.errors == 19526);
+	EXPECT(result.errors == 19518);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED);
 	EXPECT(result.error_mask &
@@ -1204,6 +1214,43 @@ static int obligation_projection_retains_exact_ereta_delta(void)
 	return 0;
 }
 
+static int canonical_operand_assignments_clear_missing_operand_only(void)
+{
+	struct tcti_target_completion_obligation *obligations;
+	struct tcti_target_completion_result result;
+
+	obligations = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+			    sizeof(*obligations));
+	EXPECT(obligations != NULL);
+	EXPECT(tcti_target_completion_audit_with_obligations(
+		       &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+
+	/* EXTR_32_extract has source-fixed op21 and needs no runtime operand. */
+	EXPECT(obligations[2169].first_unsupported_error ==
+	       TCTI_FEATURE_DOMAIN_TCND_OK);
+	EXPECT(obligations[2169].feature_union_state ==
+	       TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED);
+	EXPECT(!(obligations[2169].blocker_mask &
+		 TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION));
+	EXPECT(obligations[2169].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE);
+
+	/* STRB's generated variable option is resolved before its feature gap. */
+	EXPECT(obligations[3297].first_unsupported_error ==
+	       TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE);
+	EXPECT(obligations[3297].feature_union_state ==
+	       TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION);
+	EXPECT(obligations[3297].first_unsupported_error !=
+	       TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	EXPECT(obligations[3297].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION);
+	EXPECT(obligations[3297].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE);
+	free(obligations);
+	return 0;
+}
+
 static int malformed_projection_dependencies_leave_output_untouched(void)
 {
 	const struct tcti_target_completion_source_row *source;
@@ -1213,6 +1260,8 @@ static int malformed_projection_dependencies_leave_output_untouched(void)
 	struct tcti_target_completion_classification_row *classification_copy;
 	struct tcti_target_proof_registry_entry *registry_copy;
 	struct tcti_target_completion_audit_inputs_for_test inputs;
+	const struct tcti_target_instruction_artifact *live_instruction;
+	struct tcti_target_instruction_artifact instruction_copy;
 	struct tcti_target_completion_obligation *before;
 	struct tcti_target_completion_obligation *obligations;
 	struct tcti_target_completion_result result;
@@ -1250,6 +1299,34 @@ static int malformed_projection_dependencies_leave_output_untouched(void)
 		.registry = registry_copy,
 		.registry_count = registry_count,
 	};
+
+	inputs.source_count--;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.source_rows != TCTI_TARGET_COMPLETION_SOURCE_ROWS);
+	EXPECT(!memcmp(obligations, before, bytes));
+	inputs.source_count = source_count;
+
+	inputs.classification_count--;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.classification_rows != TCTI_TARGET_COMPLETION_SOURCE_ROWS);
+	EXPECT(!memcmp(obligations, before, bytes));
+	inputs.classification_count = classification_count;
+
+	live_instruction = tcti_target_instruction_artifact_canonical();
+	EXPECT(live_instruction != NULL);
+	instruction_copy = *live_instruction;
+	instruction_copy.version++;
+	inputs.instruction_artifact = &instruction_copy;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.invalid_feature_artifact != 0U);
+	EXPECT(!memcmp(obligations, before, bytes));
+	inputs.instruction_artifact = NULL;
 
 	source_copy[0].name = NULL;
 	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
@@ -1412,6 +1489,8 @@ int main(void)
 		  obligation_projection_matches_canonical_red_audit },
 		{ "obligation_projection_retains_exact_ereta_delta",
 		  obligation_projection_retains_exact_ereta_delta },
+		{ "canonical_operand_assignments_clear_missing_operand_only",
+		  canonical_operand_assignments_clear_missing_operand_only },
 		{ "malformed_projection_dependencies_leave_output_untouched",
 		  malformed_projection_dependencies_leave_output_untouched },
 		{ "static_proof_metadata_never_becomes_execution_evidence",
