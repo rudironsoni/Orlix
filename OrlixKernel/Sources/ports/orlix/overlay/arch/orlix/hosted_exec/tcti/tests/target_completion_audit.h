@@ -55,6 +55,28 @@ enum tcti_target_completion_asl_state {
 	TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE,
 };
 
+enum tcti_target_completion_asl_body_state {
+	TCTI_A64_ASL_BODY_ABSENT,
+	TCTI_A64_ASL_BODY_PLACEHOLDER,
+	TCTI_A64_ASL_BODY_PRESENT,
+};
+
+enum tcti_target_completion_asl_decode_state {
+	TCTI_A64_ASL_DECODE_ABSENT,
+	TCTI_A64_ASL_DECODE_NULL,
+	TCTI_A64_ASL_DECODE_PRESENT,
+};
+
+enum tcti_target_completion_asl_corpus_state {
+	TCTI_A64_ASL_CORPUS_ABSENT,
+	TCTI_A64_ASL_CORPUS_PRESENT,
+};
+
+enum tcti_target_completion_asl_helper_state {
+	TCTI_A64_ASL_HELPERS_UNAVAILABLE,
+	TCTI_A64_ASL_HELPERS_AVAILABLE,
+};
+
 enum tcti_target_completion_feature_union_state {
 	TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID,
 	TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION,
@@ -160,22 +182,31 @@ struct tcti_target_completion_obligation {
 struct tcti_target_completion_asl_provenance {
 	const char *format;
 	const char *source_sha256;
-	const char *availability;
+	enum tcti_target_completion_asl_corpus_state corpus_state;
+	enum tcti_target_completion_asl_helper_state helper_state;
 };
 
 struct tcti_target_completion_asl_row {
 	uint32_t ordinal;
 	const char *name;
 	const char *operation_id;
-	const char *operation_object;
-	uint32_t source_offset;
-	uint32_t source_length;
-	/* Raw AARCHMRS operational_note provenance, never an ASL semantic claim. */
-	const char *operational_note_presence;
-	uint32_t operational_note_source_offset;
-	uint32_t operational_note_source_length;
-	const char *operational_note_sha256;
-	const char *availability;
+	const char *semantic_operation_id;
+	const char *semantic_member_locator;
+	uint32_t semantic_member_source_offset;
+	uint32_t semantic_member_source_length;
+	uint32_t semantic_body_source_offset;
+	uint32_t semantic_body_source_length;
+	const char *semantic_body_sha256;
+	enum tcti_target_completion_asl_body_state semantic_body_state;
+	const char *decode_member_locator;
+	uint32_t decode_member_source_offset;
+	uint32_t decode_member_source_length;
+	uint32_t decode_source_offset;
+	uint32_t decode_source_length;
+	const char *decode_sha256;
+	enum tcti_target_completion_asl_decode_state decode_state;
+	enum tcti_target_completion_asl_corpus_state corpus_state;
+	enum tcti_target_completion_asl_helper_state helper_state;
 };
 
 enum tcti_target_completion_system_accessor_direction {

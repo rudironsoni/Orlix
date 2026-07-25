@@ -23,6 +23,7 @@ static int fixture_strcmp(const char *left, const char *right)
 
 const struct tcti_target_operation *fixture_inventory_operation(
 	const struct tcti_target_inventory *inventory, const char *id);
+void fixture_inventory_sha256(const void *data, size_t length, char digest[65]);
 
 #define tcti_target_inventory_destroy fixture_inventory_destroy
 #define tcti_target_inventory_import fixture_inventory_import
@@ -695,6 +696,47 @@ static int import_pinned_source(const char *path)
 		goto out_json;
 	}
 	EXPECT_EQ(TCTI_A64_TARGET_LEAF_COUNT, inventory.leaf_count);
+	/*
+	 * AARCHMRS 2026-06 embeds only a typed placeholder for every concrete
+	 * operation.  The importer must retain the exact raw members instead of
+	 * allowing the enclosing operation object to masquerade as ASL semantics.
+	 */
+	for (size_t index = 0; index < inventory.operation_count; index++) {
+		const struct tcti_target_operation *operation =
+			&inventory.operations[index];
+
+		if (operation->is_alias)
+			continue;
+		if (operation->semantic_body_state !=
+			    TCTI_TARGET_OPERATION_BODY_PLACEHOLDER ||
+		    operation->decode_state != TCTI_TARGET_OPERATION_DECODE_NULL ||
+		    !operation->semantic_member_source_length ||
+		    !operation->semantic_body_source_length ||
+		    !operation->decode_member_source_length ||
+		    !operation->decode_source_length ||
+		    operation->semantic_body_source_offset >= (size_t)length ||
+		    operation->semantic_body_source_length >
+			(size_t)length - operation->semantic_body_source_offset ||
+		    operation->decode_source_offset >= (size_t)length ||
+		    operation->decode_source_length >
+			(size_t)length - operation->decode_source_offset ||
+		    memcmp(json + operation->semantic_body_source_offset,
+			   "// Not specified", operation->semantic_body_source_length) ||
+		    memcmp(json + operation->decode_source_offset, "null",
+			   operation->decode_source_length) ||
+		    strcmp(operation->semantic_body_sha256,
+			   "28fb16d9885379aa6e05267c659d8b7dab31e819051d85e1dbde8347bc2fdce8") ||
+		    strcmp(operation->decode_sha256,
+			   "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b")) {
+			fprintf(stderr, "operation semantics mismatch: %s body=%u decode=%u "
+				"body-span=%zu decode-span=%zu\n", operation->id,
+				(unsigned int)operation->semantic_body_state,
+				(unsigned int)operation->decode_state,
+				operation->semantic_body_source_length,
+				operation->decode_source_length);
+			goto out_json;
+		}
+	}
 	if (pinned_leaf_source_spans_are_exact(&inventory, json, (size_t)length))
 		goto out_json;
 	if (pinned_instruction_aliases_are_exact(&inventory, json,

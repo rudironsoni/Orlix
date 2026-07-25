@@ -13,6 +13,7 @@
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
 #include "crypto_sve_sme_target_contract.h"
+#include "target_completion_audit.h"
 #include "target_instruction_artifact.h"
 
 static const char *crypto_artifact_string(
@@ -27,15 +28,25 @@ struct crypto_asl_availability_row {
 	u32 source_ordinal;
 	const char *source_id;
 	const char *operation;
-	const char *object;
-	const char *availability;
+	const char *semantic_operation;
+	const char *semantic_member_locator;
+	enum tcti_target_completion_asl_body_state semantic_body_state;
+	const char *decode_member_locator;
+	enum tcti_target_completion_asl_decode_state decode_state;
+	enum tcti_target_completion_asl_corpus_state corpus_state;
+	enum tcti_target_completion_asl_helper_state helper_state;
 };
 
 #define TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
-#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, object, \
-					      offset, length, note_presence, note_offset, \
-					      note_length, note_digest, availability) \
-	{ ordinal, name, operation, object, availability },
+#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
+					      semantic_locator, semantic_member_offset, \
+					      semantic_member_length, semantic_body_offset, \
+					      semantic_body_length, semantic_body_digest, semantic_body_state, \
+					      decode_locator, decode_member_offset, decode_member_length, \
+					      decode_offset, decode_length, decode_digest, decode_state, \
+					      corpus_state, helper_state) \
+	{ ordinal, name, operation, semantic_operation, semantic_locator, \
+	  semantic_body_state, decode_locator, decode_state, corpus_state, helper_state },
 static const struct crypto_asl_availability_row crypto_asl_availability[] = {
 #include "../isa/target_asl_availability.def"
 };
@@ -270,9 +281,17 @@ static void crypto_pmul_source_contract_and_decoder_reachability(
 	KUNIT_ASSERT_NOT_NULL(test, asl);
 	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", asl->source_id);
 	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", asl->operation);
-	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd", asl->object);
-	KUNIT_EXPECT_STREQ(test, "shared_asl_absent_blocking",
-		asl->availability);
+	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", asl->semantic_operation);
+	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd/operation",
+			   asl->semantic_member_locator);
+	KUNIT_EXPECT_EQ(test, TCTI_A64_ASL_BODY_PLACEHOLDER,
+			asl->semantic_body_state);
+	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd/decode",
+			   asl->decode_member_locator);
+	KUNIT_EXPECT_EQ(test, TCTI_A64_ASL_DECODE_NULL, asl->decode_state);
+	KUNIT_EXPECT_EQ(test, TCTI_A64_ASL_CORPUS_ABSENT, asl->corpus_state);
+	KUNIT_EXPECT_EQ(test, TCTI_A64_ASL_HELPERS_UNAVAILABLE,
+			asl->helper_state);
 
 	decoded = tcti_decode_aarch64(0x2e239d31U);
 	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,

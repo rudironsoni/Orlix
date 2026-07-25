@@ -88,6 +88,18 @@ struct tcti_target_fixed_operand {
 };
 
 /* An authoritative inline AARCHMRS operation object, not shared-ASL corpus data. */
+enum tcti_target_operation_body_state {
+	TCTI_TARGET_OPERATION_BODY_ABSENT,
+	TCTI_TARGET_OPERATION_BODY_PLACEHOLDER,
+	TCTI_TARGET_OPERATION_BODY_PRESENT,
+};
+
+enum tcti_target_operation_decode_state {
+	TCTI_TARGET_OPERATION_DECODE_ABSENT,
+	TCTI_TARGET_OPERATION_DECODE_NULL,
+	TCTI_TARGET_OPERATION_DECODE_PRESENT,
+};
+
 struct tcti_target_operation {
 	char *id;
 	/* OperationAlias target before resolution, NULL for a concrete operation. */
@@ -101,6 +113,23 @@ struct tcti_target_operation {
 	bool operational_note_present;
 	size_t operational_note_source_offset;
 	size_t operational_note_source_length;
+	/*
+	 * Exact source witnesses for the operation and decode members.  These are
+	 * availability facts only.  They cannot supply semantic provenance without
+	 * an authoritative shared-ASL corpus and its helper dependencies.
+	 */
+	enum tcti_target_operation_body_state semantic_body_state;
+	size_t semantic_member_source_offset;
+	size_t semantic_member_source_length;
+	size_t semantic_body_source_offset;
+	size_t semantic_body_source_length;
+	char semantic_body_sha256[65];
+	enum tcti_target_operation_decode_state decode_state;
+	size_t decode_member_source_offset;
+	size_t decode_member_source_length;
+	size_t decode_source_offset;
+	size_t decode_source_length;
+	char decode_sha256[65];
 };
 
 /*

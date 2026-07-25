@@ -1519,6 +1519,94 @@ static int object_member(const struct importer *importer, int object_index,
 	return 0;
 }
 
+static int object_find_member(const struct importer *importer, int object_index,
+			      const char *name, int *key, int *value)
+{
+	const struct json_token *object;
+	size_t index;
+
+	if (object_index < 0 || (size_t)object_index >= importer->token_count ||
+	    !name || !key || !value)
+		return -1;
+	object = &importer->tokens[object_index];
+	if (object->kind != JSON_OBJECT)
+		return -1;
+	for (index = 0; index < object->size; index++) {
+		int member_key;
+		int member_value;
+
+		if (object_member(importer, object_index, index, &member_key,
+				  &member_value))
+			return -1;
+		if (token_equals(importer->json, &importer->tokens[member_key], name)) {
+			*key = member_key;
+			*value = member_value;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static int import_operation_semantic_member(struct importer *importer,
+					    int object, const char *name,
+					    bool semantic_body,
+					    struct tcti_target_operation *operation)
+{
+	int key;
+	int value;
+	size_t member_offset;
+	size_t member_length;
+	size_t value_offset;
+	size_t value_length;
+
+	if (object_find_member(importer, object, name, &key, &value))
+		return 0;
+	member_offset = importer->tokens[key].start;
+	member_length = importer->tokens[value].end - member_offset;
+	value_offset = importer->tokens[value].start;
+	value_length = importer->tokens[value].end - value_offset;
+	if (!member_length || !value_length) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  importer->tokens[key].start,
+			  "Instructions.json has an empty operation semantic member");
+		return -1;
+	}
+	if (semantic_body) {
+		if (importer->tokens[value].kind != JSON_STRING) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  importer->tokens[value].start,
+				  "Instructions.json operation member is not a string");
+			return -1;
+		}
+		operation->semantic_member_source_offset = member_offset;
+		operation->semantic_member_source_length = member_length;
+		operation->semantic_body_source_offset = value_offset;
+		operation->semantic_body_source_length = value_length;
+		operation->semantic_body_state =
+			token_equals(importer->json, &importer->tokens[value],
+				     "// Not specified") ?
+			TCTI_TARGET_OPERATION_BODY_PLACEHOLDER :
+			TCTI_TARGET_OPERATION_BODY_PRESENT;
+		tcti_target_inventory_sha256(importer->json + value_offset,
+					      value_length,
+					      operation->semantic_body_sha256);
+	} else {
+		operation->decode_member_source_offset = member_offset;
+		operation->decode_member_source_length = member_length;
+		operation->decode_source_offset = value_offset;
+		operation->decode_source_length = value_length;
+		operation->decode_state =
+			importer->tokens[value].kind == JSON_PRIMITIVE &&
+			value_length == 4U &&
+			!memcmp(importer->json + value_offset, "null", 4U) ?
+			TCTI_TARGET_OPERATION_DECODE_NULL :
+			TCTI_TARGET_OPERATION_DECODE_PRESENT;
+		tcti_target_inventory_sha256(importer->json + value_offset,
+					      value_length, operation->decode_sha256);
+	}
+	return 0;
+}
+
 static int import_operations(struct importer *importer, int root)
 {
 	int operations = object_find(importer, root, "operations");
@@ -1585,6 +1673,14 @@ static int import_operations(struct importer *importer, int root)
 					return -1;
 				}
 			}
+		}
+		if (import_operation_semantic_member(importer, value, "operation", true,
+						     &operation) ||
+		    import_operation_semantic_member(importer, value, "decode", false,
+						     &operation)) {
+			free(operation.id);
+			free(operation.alias_operation_id);
+			return -1;
 		}
 		if (!operation.id || !operation.source_length ||
 		    tcti_target_inventory_operation(importer->inventory, operation.id)) {

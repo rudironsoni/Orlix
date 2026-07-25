@@ -49,8 +49,8 @@ static const struct tcti_target_completion_source_row source_rows[] = {
 #undef TCTI_A64_SOURCE_MANIFEST_SOURCE
 
 static const struct tcti_target_completion_asl_provenance asl_provenance = {
-#define TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, availability) \
-	format, source_sha256, availability
+#define TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, corpus, helpers) \
+	format, source_sha256, corpus, helpers
 #define TCTI_A64_ASL_AVAILABILITY_ROW(...)
 #include "../isa/target_asl_availability.def"
 #undef TCTI_A64_ASL_AVAILABILITY_ROW
@@ -58,11 +58,18 @@ static const struct tcti_target_completion_asl_provenance asl_provenance = {
 };
 
 #define TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
-#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, object, \
-					      offset, length, note_presence, note_offset, \
-					      note_length, note_digest, availability) \
-	{ ordinal, name, operation, object, offset, length, note_presence, \
-	  note_offset, note_length, note_digest, availability },
+#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
+					      semantic_locator, semantic_member_offset, \
+					      semantic_member_length, semantic_body_offset, \
+					      semantic_body_length, semantic_body_digest, semantic_body_state, \
+					      decode_locator, decode_member_offset, decode_member_length, \
+					      decode_offset, decode_length, decode_digest, decode_state, \
+					      corpus_state, helper_state) \
+	{ ordinal, name, operation, semantic_operation, semantic_locator, \
+	  semantic_member_offset, semantic_member_length, semantic_body_offset, \
+	  semantic_body_length, semantic_body_digest, semantic_body_state, \
+	  decode_locator, decode_member_offset, decode_member_length, decode_offset, \
+	  decode_length, decode_digest, decode_state, corpus_state, helper_state },
 static const struct tcti_target_completion_asl_row asl_rows[] = {
 #include "../isa/target_asl_availability.def"
 };
@@ -501,25 +508,23 @@ static bool source_row_matches_canonical(
 		row->source_length == canonical->source_length;
 }
 
-static bool asl_availability_is_valid(const char *availability)
-{
-	/*
-	 * A future available state must add a corpus digest plus an ASL entry and
-	 * body locator to this checked schema.  Do not accept a status-string-only
-	 * claim before that provenance exists.
-	 */
-	return availability && !strcmp(availability, "shared_asl_absent_blocking");
-}
-
-static bool asl_operation_object_is_valid(const char *operation_id,
-					  const char *operation_object)
+static bool asl_member_locator_is_valid(const char *operation_id,
+					const char *semantic_operation_id,
+					const char *locator, const char *member)
 {
 	static const char prefix[] = "operations/";
 	size_t prefix_length = sizeof(prefix) - 1U;
+	size_t operation_length;
+	size_t member_length;
 
-	return !empty(operation_id) && operation_object &&
-		!strncmp(operation_object, prefix, prefix_length) &&
-		!strcmp(operation_object + prefix_length, operation_id);
+	if (empty(operation_id) || empty(semantic_operation_id) || !locator ||
+	    strncmp(locator, prefix, prefix_length))
+		return false;
+	operation_length = strlen(semantic_operation_id);
+	member_length = strlen(member);
+	return !strncmp(locator + prefix_length, semantic_operation_id,
+				operation_length) &&
+		!strcmp(locator + prefix_length + operation_length, member);
 }
 
 static bool sha256_hex_is_valid(const char *value)
@@ -535,25 +540,46 @@ static bool sha256_hex_is_valid(const char *value)
 	return true;
 }
 
-static bool asl_operational_note_provenance_is_valid(
+static bool asl_raw_member_provenance_is_valid(
+	const char *locator, const char *operation_id,
+	const char *semantic_operation_id, const char *member,
+	uint32_t member_offset, uint32_t member_length,
+	uint32_t value_offset, uint32_t value_length, const char *digest)
+{
+	return asl_member_locator_is_valid(operation_id, semantic_operation_id,
+					  locator, member) &&
+		member_length != 0U && value_length != 0U &&
+		member_offset < TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		member_length <= TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+			member_offset &&
+		value_offset < TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		value_length <= TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+			value_offset &&
+		member_offset <= value_offset &&
+		value_offset - member_offset < member_length &&
+		sha256_hex_is_valid(digest);
+}
+
+static bool asl_absence_provenance_is_valid(
 	const struct tcti_target_completion_asl_row *row)
 {
-	if (!row || empty(row->operational_note_presence) ||
-	    !row->operational_note_sha256)
-		return false;
-	if (!strcmp(row->operational_note_presence, "absent"))
-		return row->operational_note_source_offset == 0U &&
-			row->operational_note_source_length == 0U &&
-			row->operational_note_sha256[0] == '\0';
-	if (strcmp(row->operational_note_presence, "present"))
-		return false;
-	return row->operational_note_source_length != 0U &&
-		row->operational_note_source_offset <
-			TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
-		row->operational_note_source_length <=
-			TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
-				row->operational_note_source_offset &&
-		sha256_hex_is_valid(row->operational_note_sha256);
+	return row &&
+		row->semantic_body_state == TCTI_A64_ASL_BODY_PLACEHOLDER &&
+		row->decode_state == TCTI_A64_ASL_DECODE_NULL &&
+		row->corpus_state == TCTI_A64_ASL_CORPUS_ABSENT &&
+		row->helper_state == TCTI_A64_ASL_HELPERS_UNAVAILABLE &&
+		asl_raw_member_provenance_is_valid(row->semantic_member_locator,
+			row->operation_id, row->semantic_operation_id, "/operation",
+			row->semantic_member_source_offset,
+			row->semantic_member_source_length,
+			row->semantic_body_source_offset,
+			row->semantic_body_source_length, row->semantic_body_sha256) &&
+		asl_raw_member_provenance_is_valid(row->decode_member_locator,
+			row->operation_id, row->semantic_operation_id, "/decode",
+			row->decode_member_source_offset,
+			row->decode_member_source_length,
+			row->decode_source_offset, row->decode_source_length,
+			row->decode_sha256);
 }
 
 int tcti_target_completion_validate_asl_availability(
@@ -572,11 +598,12 @@ int tcti_target_completion_validate_asl_availability(
 	    !availability ||
 	    availability_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
 	    !provenance || empty(provenance->format) ||
-	    empty(provenance->source_sha256) || empty(provenance->availability) ||
-	    strcmp(provenance->format, "inline_aarchmrs_operations_v2") ||
+	    empty(provenance->source_sha256) ||
+	    strcmp(provenance->format, "inline_aarchmrs_operations_v3") ||
 	    strcmp(provenance->source_sha256,
 		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
-	    !asl_availability_is_valid(provenance->availability)) {
+	    provenance->corpus_state != TCTI_A64_ASL_CORPUS_ABSENT ||
+	    provenance->helper_state != TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
 		record_error(result, TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
 		if (!source || !availability)
 			return -1;
@@ -598,33 +625,40 @@ int tcti_target_completion_validate_asl_availability(
 		canonical = &asl_rows[index];
 		valid = source_row_well_formed(&source[index], index) &&
 			row->ordinal == index && !empty(row->name) &&
-			asl_operation_object_is_valid(row->operation_id,
-						      row->operation_object) &&
-			row->source_length != 0U &&
-			row->source_offset <
-				TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
-			row->source_length <=
-				TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
-					row->source_offset &&
-			asl_operational_note_provenance_is_valid(row) &&
-			asl_availability_is_valid(row->availability) &&
+			!empty(row->semantic_operation_id) &&
+			asl_absence_provenance_is_valid(row) &&
 			!strcmp(row->name, source[index].name) &&
 			!strcmp(row->operation_id, source[index].operation_id) &&
 			row->ordinal == canonical->ordinal &&
 			!strcmp(row->name, canonical->name) &&
 			!strcmp(row->operation_id, canonical->operation_id) &&
-			!strcmp(row->operation_object, canonical->operation_object) &&
-			row->source_offset == canonical->source_offset &&
-			row->source_length == canonical->source_length &&
-			!strcmp(row->operational_note_presence,
-				canonical->operational_note_presence) &&
-			row->operational_note_source_offset ==
-				canonical->operational_note_source_offset &&
-			row->operational_note_source_length ==
-				canonical->operational_note_source_length &&
-			!strcmp(row->operational_note_sha256,
-				canonical->operational_note_sha256) &&
-			!strcmp(row->availability, canonical->availability);
+			!strcmp(row->semantic_operation_id,
+				canonical->semantic_operation_id) &&
+			!strcmp(row->semantic_member_locator,
+				canonical->semantic_member_locator) &&
+			row->semantic_member_source_offset ==
+				canonical->semantic_member_source_offset &&
+			row->semantic_member_source_length ==
+				canonical->semantic_member_source_length &&
+			row->semantic_body_source_offset ==
+				canonical->semantic_body_source_offset &&
+			row->semantic_body_source_length ==
+				canonical->semantic_body_source_length &&
+			!strcmp(row->semantic_body_sha256,
+				canonical->semantic_body_sha256) &&
+			row->semantic_body_state == canonical->semantic_body_state &&
+			!strcmp(row->decode_member_locator,
+				canonical->decode_member_locator) &&
+			row->decode_member_source_offset ==
+				canonical->decode_member_source_offset &&
+			row->decode_member_source_length ==
+				canonical->decode_member_source_length &&
+			row->decode_source_offset == canonical->decode_source_offset &&
+			row->decode_source_length == canonical->decode_source_length &&
+			!strcmp(row->decode_sha256, canonical->decode_sha256) &&
+			row->decode_state == canonical->decode_state &&
+			row->corpus_state == canonical->corpus_state &&
+			row->helper_state == canonical->helper_state;
 		if (!valid) {
 			result->invalid_asl_availability_rows++;
 			record_error(result,
@@ -632,7 +666,8 @@ int tcti_target_completion_validate_asl_availability(
 			continue;
 		}
 		result->asl_availability_rows++;
-		if (!strcmp(row->availability, "shared_asl_absent_blocking")) {
+		if (row->corpus_state == TCTI_A64_ASL_CORPUS_ABSENT ||
+		    row->helper_state == TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
 			result->unavailable_asl_rows++;
 			record_error(result,
 				     TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);

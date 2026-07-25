@@ -11,9 +11,8 @@ int main(int argc, char **argv)
 	FILE *output;
 	long length;
 	char *source;
-	char line[512];
-	size_t rows = 0;
-	size_t absent_notes = 0;
+	char *artifact = NULL;
+	long artifact_length;
 
 	if (argc != 2)
 		return 2;
@@ -36,23 +35,45 @@ int main(int argc, char **argv)
 			fclose(output);
 		return 1;
 	}
-	if (!fgets(line, sizeof(line), output) ||
-	    !strstr(line, "inline_aarchmrs_operations_v2") ||
-	    !strstr(line, "shared_asl_absent_blocking")) {
+	if (fseek(output, 0, SEEK_END) || (artifact_length = ftell(output)) < 0 ||
+	    fseek(output, 0, SEEK_SET)) {
 		free(source);
 		fclose(output);
 		return 1;
 	}
-	while (fgets(line, sizeof(line), output))
-		if (strstr(line, "TCTI_A64_ASL_AVAILABILITY_ROW(")) {
-			rows++;
-			if (strstr(line, "\"absent\", 0U, 0U, \"\""))
-				absent_notes++;
-		}
+	artifact = malloc((size_t)artifact_length + 1U);
+	if (!artifact || fread(artifact, 1, (size_t)artifact_length, output) !=
+		(size_t)artifact_length) {
+		free(artifact);
+		free(source);
+		fclose(output);
+		return 1;
+	}
+	artifact[artifact_length] = '\0';
+	if (!strstr(artifact, "inline_aarchmrs_operations_v3") ||
+	    !strstr(artifact, "TCTI_A64_ASL_CORPUS_ABSENT") ||
+	    !strstr(artifact, "TCTI_A64_ASL_HELPERS_UNAVAILABLE") ||
+	    !strstr(artifact,
+		"\"operations/ABS/operation\",") ||
+	    !strstr(artifact,
+		"\"28fb16d9885379aa6e05267c659d8b7dab31e819051d85e1dbde8347bc2fdce8\", "
+		"TCTI_A64_ASL_BODY_PLACEHOLDER") ||
+	    !strstr(artifact,
+		"\"operations/ABS/decode\",") ||
+	    !strstr(artifact,
+		"\"74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b\", "
+		"TCTI_A64_ASL_DECODE_NULL") ||
+	    strstr(artifact, "TCTI_A64_ASL_BODY_PRESENT") ||
+	    strstr(artifact, "TCTI_A64_ASL_CORPUS_PRESENT") ||
+	    strstr(artifact, "TCTI_A64_ASL_HELPERS_AVAILABLE")) {
+		free(artifact);
+		free(source);
+		fclose(output);
+		return 1;
+	}
+	free(artifact);
 	free(source);
 	fclose(output);
-	if (rows != 4350U || absent_notes != 4350U)
-		return 1;
-	puts("PASS inline AARCHMRS operation and operational-note provenance remain shared-ASL blocking");
+	puts("PASS inline AARCHMRS operation body and decode provenance remain shared-ASL blocking");
 	return 0;
 }
