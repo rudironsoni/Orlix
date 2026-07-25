@@ -97,10 +97,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
-	memset(&current->thread.user_sve, 0,
-	       sizeof(current->thread.user_sve));
-	current->thread.user_sve.vl_bytes = TCTI_SVE_MIN_VL_BYTES;
-	current->thread.user_sve.valid = true;
+	tcti_sve_state_reset(&current->thread.user_sve,
+			     current->thread.user_simd,
+			     TCTI_SVE_DEFAULT_VL_BYTES);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -123,10 +122,9 @@ void flush_thread(void)
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
-	memset(&current->thread.user_sve, 0,
-	       sizeof(current->thread.user_sve));
-	current->thread.user_sve.vl_bytes = TCTI_SVE_MIN_VL_BYTES;
-	current->thread.user_sve.valid = true;
+	tcti_sve_state_reset(&current->thread.user_sve,
+			     current->thread.user_simd,
+			     TCTI_SVE_DEFAULT_VL_BYTES);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -153,9 +151,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_fpsr = 0;
 	p->thread.user_fpcr = 0;
 	p->thread.user_simd_valid = 0;
-	memset(&p->thread.user_sve, 0, sizeof(p->thread.user_sve));
-	p->thread.user_sve.vl_bytes = TCTI_SVE_MIN_VL_BYTES;
-	p->thread.user_sve.valid = true;
+	tcti_sve_state_reset(&p->thread.user_sve, p->thread.user_simd,
+			     TCTI_SVE_DEFAULT_VL_BYTES);
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
@@ -182,12 +179,12 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		p->thread.user_tls = current->thread.user_tls;
 		if (args->flags & CLONE_SETTLS)
 			p->thread.user_tls = args->tls;
-		memcpy(p->thread.user_simd, current->thread.user_simd,
-		       sizeof(p->thread.user_simd));
 		p->thread.user_fpsr = current->thread.user_fpsr;
 		p->thread.user_fpcr = current->thread.user_fpcr;
 		p->thread.user_simd_valid = current->thread.user_simd_valid;
-		p->thread.user_sve = current->thread.user_sve;
+		tcti_sve_state_copy(&p->thread.user_sve, p->thread.user_simd,
+				    &current->thread.user_sve,
+				    current->thread.user_simd);
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;

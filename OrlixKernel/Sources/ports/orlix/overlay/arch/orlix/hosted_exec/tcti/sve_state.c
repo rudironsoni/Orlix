@@ -100,6 +100,21 @@ int tcti_sve_state_reset(struct tcti_sve_state *state,
 	return 0;
 }
 
+int tcti_sve_state_copy(struct tcti_sve_state *destination,
+			unsigned long *destination_simd,
+			const struct tcti_sve_state *source,
+			const unsigned long *source_simd)
+{
+	if (!destination || !destination_simd || !source || !source_simd ||
+	    !source->valid || !tcti_sve_valid_vl(source->vl_bytes))
+		return -EINVAL;
+
+	memcpy(destination, source, sizeof(*destination));
+	memcpy(destination_simd, source_simd,
+	       TCTI_SVE_ZREG_COUNT * 2 * sizeof(*destination_simd));
+	return 0;
+}
+
 int tcti_sve_predicated_integer_binary(struct tcti_sve_state *state,
 				unsigned long *user_simd,
 				enum tcti_sve_integer_binary_op op,

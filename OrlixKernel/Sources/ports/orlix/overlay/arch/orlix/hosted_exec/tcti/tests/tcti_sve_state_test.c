@@ -7,10 +7,12 @@
 #include <kunit/test.h>
 #include <linux/bitops.h>
 #include <linux/errno.h>
+#include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 
 #include <asm/ptrace.h>
+#include <asm/processor.h>
 
 #include "../sve_state.h"
 
@@ -63,6 +65,77 @@ static void tcti_sve_state_rejects_invalid_vector_lengths(struct kunit *test)
 	     index += TCTI_SVE_MIN_VL_BYTES)
 		KUNIT_EXPECT_EQ(test, 0,
 			tcti_sve_state_reset(&state, user_simd, index));
+}
+
+static void tcti_sve_state_reset_zeroes_full_scalable_register_file(
+	struct kunit *test)
+{
+	struct tcti_sve_state state;
+	unsigned long user_simd[64];
+
+	memset(&state, 0x5a, sizeof(state));
+	memset(user_simd, 0xa5, sizeof(user_simd));
+
+	KUNIT_ASSERT_EQ(test, 0,
+		tcti_sve_state_reset(&state, user_simd, TCTI_SVE_MAX_VL_BYTES));
+	KUNIT_EXPECT_TRUE(test, state.valid);
+	KUNIT_EXPECT_EQ(test, (u16)TCTI_SVE_MAX_VL_BYTES, state.vl_bytes);
+	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.z, 0, sizeof(state.z)));
+	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.p, 0, sizeof(state.p)));
+	KUNIT_EXPECT_EQ(test, 0, memchr_inv(state.ffr, 0, sizeof(state.ffr)));
+	KUNIT_EXPECT_EQ(test, 0, memchr_inv(user_simd, 0, sizeof(user_simd)));
+}
+
+static void tcti_sve_state_copy_preserves_full_scalable_context(
+	struct kunit *test)
+{
+	struct tcti_sve_state source;
+	struct tcti_sve_state destination;
+	unsigned long source_simd[64];
+	unsigned long destination_simd[64];
+
+	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&source, source_simd,
+		TCTI_SVE_MAX_VL_BYTES));
+	source.z[31][TCTI_SVE_MAX_VL_BYTES - 1] = 0x11;
+	source.p[15][TCTI_SVE_PREG_MAX_BYTES - 1] = 0x22;
+	source.ffr[TCTI_SVE_PREG_MAX_BYTES - 1] = 0x44;
+	source_simd[63] = 0x8877665544332211UL;
+	memset(&destination, 0xa5, sizeof(destination));
+	memset(destination_simd, 0x5a, sizeof(destination_simd));
+
+	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_copy(&destination,
+		destination_simd, &source, source_simd));
+	KUNIT_EXPECT_MEMEQ(test, &source, &destination, sizeof(source));
+	KUNIT_EXPECT_MEMEQ(test, source_simd, destination_simd,
+			  sizeof(source_simd));
+}
+
+static void tcti_start_thread_resets_full_scalable_sve_context(
+	struct kunit *test)
+{
+	struct pt_regs regs = {};
+
+	memset(&current->thread.user_sve, 0x5a,
+	       sizeof(current->thread.user_sve));
+	memset(current->thread.user_simd, 0xa5,
+	       sizeof(current->thread.user_simd));
+
+	start_thread(&regs, 0x1000, 0x2000);
+
+	KUNIT_EXPECT_TRUE(test, current->thread.user_sve.valid);
+	KUNIT_EXPECT_EQ(test, (u16)TCTI_SVE_DEFAULT_VL_BYTES,
+			current->thread.user_sve.vl_bytes);
+	KUNIT_EXPECT_EQ(test, 0,
+		memchr_inv(current->thread.user_sve.z, 0,
+			   sizeof(current->thread.user_sve.z)));
+	KUNIT_EXPECT_EQ(test, 0,
+		memchr_inv(current->thread.user_sve.p, 0,
+			   sizeof(current->thread.user_sve.p)));
+	KUNIT_EXPECT_EQ(test, 0,
+		memchr_inv(current->thread.user_sve.ffr, 0,
+			   sizeof(current->thread.user_sve.ffr)));
+	KUNIT_EXPECT_EQ(test, 0, memchr_inv(current->thread.user_simd, 0,
+					     sizeof(current->thread.user_simd)));
 }
 
 static void tcti_sve_integer_binary_preserves_predicated_lanes(
@@ -304,6 +377,9 @@ static void tcti_sve_valid_operation_advances_pc_once(struct kunit *test)
 
 static struct kunit_case tcti_sve_state_test_cases[] = {
 	KUNIT_CASE(tcti_sve_state_rejects_invalid_vector_lengths),
+	KUNIT_CASE(tcti_sve_state_reset_zeroes_full_scalable_register_file),
+	KUNIT_CASE(tcti_sve_state_copy_preserves_full_scalable_context),
+	KUNIT_CASE(tcti_start_thread_resets_full_scalable_sve_context),
 	KUNIT_CASE(tcti_sve_integer_binary_preserves_predicated_lanes),
 	KUNIT_CASE(tcti_sve_integer_binary_zeroes_inactive_lanes),
 	KUNIT_CASE(tcti_sve_integer_binary_covers_all_integer_operations),
