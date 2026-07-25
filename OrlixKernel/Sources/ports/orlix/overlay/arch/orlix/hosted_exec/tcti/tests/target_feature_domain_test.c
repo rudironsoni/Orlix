@@ -837,7 +837,7 @@ static int tcnd_union_evaluates_not_or_and_set_membership(void)
 	return 0;
 }
 
-static const char *ordinal_3297_condition(void)
+static const char *source_ordinal_condition(tcti_feature_artifact_u32 wanted)
 {
 	const char *condition = NULL;
 
@@ -845,13 +845,49 @@ static const char *ordinal_3297_condition(void)
 #define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, \
 	mask, pattern, source_condition, source_offset, source_length) \
 	do { \
-		if ((ordinal) == 3297U) \
+		if ((ordinal) == wanted) \
 			condition = source_condition; \
 	} while (0);
 #include "../isa/source_manifest.def"
 #undef TCTI_A64_SOURCE_MANIFEST_ROW
 #undef TCTI_A64_SOURCE_MANIFEST_SOURCE
 	return condition;
+}
+
+static int source_feature_enabled(void *context, const char *hex, size_t offset,
+	size_t length, tcti_feature_artifact_u8 *enabled)
+{
+	(void)context;
+
+	if (!tcnd_source_equals(hex, offset, length, "FEAT_SVE") &&
+	    !tcnd_source_equals(hex, offset, length, "FEAT_SME"))
+		return -1;
+	*enabled = 1U;
+	return 0;
+}
+
+static int tcnd_find_source_name(const char *hex, const char *name,
+	size_t *offset)
+{
+	size_t name_length;
+	size_t byte_count;
+	size_t index;
+	size_t found = 0;
+
+	if (!hex || !name || !offset || strlen(hex) & 1U)
+		return -1;
+	name_length = strlen(name);
+	byte_count = strlen(hex) / 2U;
+	if (!name_length || name_length > byte_count)
+		return -1;
+	for (index = 0; index <= byte_count - name_length; index++) {
+		if (!tcnd_source_equals(hex, index, name_length, name))
+			continue;
+		if (found++)
+			return -1;
+		*offset = index;
+	}
+	return found == 1U ? 0 : -1;
 }
 
 static int ordinal_3297_option_assignment_uses_generated_operand_metadata(void)
@@ -875,7 +911,7 @@ static int ordinal_3297_option_assignment_uses_generated_operand_metadata(void)
 	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
 	struct tcti_target_instruction_artifact_validation_result validation;
 	tcti_feature_artifact_u8 satisfied;
-	const char *condition = ordinal_3297_condition();
+	const char *condition = source_ordinal_condition(3297U);
 	tcti_feature_artifact_u32 encoded_option_011;
 	tcti_feature_artifact_u32 encoded_option_010;
 	tcti_feature_artifact_u32 fixed_bit;
@@ -936,7 +972,7 @@ static int ordinal_3297_assignment_rejects_malformed_operand_metadata(void)
 	struct tcti_feature_domain_tcnd_environment environment;
 	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
 	tcti_feature_artifact_u8 satisfied;
-	const char *condition = ordinal_3297_condition();
+	const char *condition = source_ordinal_condition(3297U);
 	static const unsigned char unterminated_option[] = {
 		'o', 'p', 't', 'i', 'o', 'n',
 	};
@@ -986,6 +1022,375 @@ static int ordinal_3297_assignment_rejects_malformed_operand_metadata(void)
 		tcti_feature_artifact_canonical(), condition,
 		&environment, &satisfied, &diagnostic));
 	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
+static int fixed_operands_resolve_source_tcnd_names(void)
+{
+	static const struct {
+		tcti_feature_artifact_u32 ordinal;
+		const char *operand_name;
+		const char *expected_value;
+		tcti_feature_artifact_u8 expected_satisfied;
+	} cases[] = {
+		{ 203U, "opc", "'00'", 1U },
+		{ 204U, "opc", "'01'", 1U },
+		{ 205U, "opc", "'10'", 1U },
+		{ 2169U, "op21", "'00'", 1U },
+		{ 2170U, "op21", "'00'", 1U },
+	};
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	size_t index;
+
+	for (index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
+		const struct tcti_target_instruction_artifact_leaf *leaf =
+			&artifact->leaves[cases[index].ordinal];
+		struct tcti_target_instruction_operand_assignment assignment = {
+			.artifact = artifact,
+			.leaf_index = cases[index].ordinal,
+			.instruction = leaf->encoding_pattern,
+		};
+		struct tcti_feature_domain_tcnd_environment environment = {
+			.context = &assignment,
+			.feature = source_feature_enabled,
+			.operand = tcti_target_instruction_operand_assignment,
+		};
+		struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+		tcti_feature_artifact_u8 satisfied;
+		const char *condition = source_ordinal_condition(cases[index].ordinal);
+		const char *value;
+		size_t value_length;
+		size_t operand_offset;
+
+		CHECK(condition);
+		CHECK(!tcnd_find_source_name(condition, cases[index].operand_name,
+			&operand_offset));
+		CHECK(!tcti_target_instruction_operand_assignment(&assignment,
+			condition, operand_offset, strlen(cases[index].operand_name),
+			&value, &value_length));
+		CHECK(value_length == strlen(cases[index].expected_value));
+		CHECK(!memcmp(value, cases[index].expected_value, value_length));
+		CHECK(!tcti_feature_domain_evaluate_tcnd(
+			tcti_feature_artifact_canonical(), condition, &environment,
+			&satisfied, &diagnostic));
+		CHECK(satisfied == cases[index].expected_satisfied);
+	}
+	return 0;
+}
+
+static int fixed_operand_resolution_rejects_malformed_or_ambiguous_records(void)
+{
+	const struct tcti_target_instruction_artifact *source =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *source_leaf =
+		&source->leaves[2169U];
+	struct tcti_target_instruction_artifact_leaf leaf = *source_leaf;
+	const struct tcti_target_instruction_artifact_fixed_operand *source_fixed;
+	struct tcti_target_instruction_artifact_fixed_operand fixed[2];
+	struct tcti_target_instruction_artifact artifact = *source;
+	struct tcti_target_instruction_operand_assignment assignment;
+	struct tcti_feature_domain_tcnd_environment environment;
+	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+	tcti_feature_artifact_u8 satisfied;
+	const char *condition = source_ordinal_condition(2169U);
+	size_t index;
+
+	CHECK(condition);
+	CHECK(source_leaf->fixed_operand_count);
+	for (index = source_leaf->fixed_operand_first;
+	     index < (size_t)source_leaf->fixed_operand_first +
+		source_leaf->fixed_operand_count; index++) {
+		const struct tcti_target_instruction_artifact_fixed_operand *candidate =
+			&source->fixed_operands[index];
+		const char *name = (const char *)source->string_pool +
+			candidate->name_offset;
+
+		if (!strcmp(name, "op21"))
+			break;
+	}
+	CHECK(index < (size_t)source_leaf->fixed_operand_first +
+		source_leaf->fixed_operand_count);
+	source_fixed = &source->fixed_operands[index];
+	fixed[0] = *source_fixed;
+	fixed[1] = fixed[0];
+	leaf.fixed_operand_first = 0U;
+	leaf.fixed_operand_count = 1U;
+	fixed[0].leaf_index = 0U;
+	artifact.leaves = &leaf;
+	artifact.leaf_count = 1U;
+	artifact.fixed_operands = fixed;
+	artifact.fixed_operand_count = 1U;
+	assignment = (struct tcti_target_instruction_operand_assignment) {
+		.artifact = &artifact,
+		.leaf_index = 0U,
+		.instruction = leaf.encoding_pattern,
+	};
+	environment = (struct tcti_feature_domain_tcnd_environment) {
+		.context = &assignment,
+		.operand = tcti_target_instruction_operand_assignment,
+	};
+
+	fixed[0].fixed_mask = 0U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].source_length = 0U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].source_offset = (tcti_feature_artifact_u32)~0U;
+	fixed[0].source_length = 1U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].source_identity_offset = fixed[0].name_offset;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].source_identity_offset++;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].name_offset++;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].condition_length++;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = *source_fixed;
+	fixed[0].leaf_index = 0U;
+	fixed[0].name_offset = (tcti_feature_artifact_u32)artifact.string_pool_size;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	fixed[0] = source->fixed_operands[source_leaf->fixed_operand_first];
+	fixed[0].leaf_index = 0U;
+	fixed[1] = fixed[0];
+	leaf.fixed_operand_count = 2U;
+	artifact.fixed_operand_count = 2U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
+static int cross_plane_same_name_operand_is_rejected(void)
+{
+	const struct tcti_target_instruction_artifact *source =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *source_leaf =
+		&source->leaves[3297U];
+	struct tcti_target_instruction_artifact_leaf leaf = *source_leaf;
+	struct tcti_target_instruction_artifact_operand variable;
+	struct tcti_target_instruction_artifact_fixed_operand fixed;
+	struct tcti_target_instruction_artifact artifact = *source;
+	struct tcti_target_instruction_operand_assignment assignment;
+	const char *condition = source_ordinal_condition(3297U);
+	const char *value;
+	size_t value_length;
+	size_t operand_offset;
+	size_t index;
+
+	CHECK(condition);
+	for (index = source_leaf->operand_first;
+	     index < (size_t)source_leaf->operand_first + source_leaf->operand_count;
+	     index++) {
+		const char *name = (const char *)source->string_pool +
+			source->operands[index].name_offset;
+
+		if (!strcmp(name, "option"))
+			break;
+	}
+	CHECK(index < (size_t)source_leaf->operand_first + source_leaf->operand_count);
+	CHECK(source_leaf->fixed_operand_count);
+	variable = source->operands[index];
+	fixed = source->fixed_operands[source_leaf->fixed_operand_first];
+	leaf.operand_first = 0U;
+	leaf.operand_count = 1U;
+	leaf.fixed_operand_first = 0U;
+	leaf.fixed_operand_count = 1U;
+	variable.leaf_index = 0U;
+	fixed.leaf_index = 0U;
+	fixed.name_offset = variable.name_offset;
+	artifact.leaves = &leaf;
+	artifact.leaf_count = 1U;
+	artifact.operands = &variable;
+	artifact.operand_count = 1U;
+	artifact.fixed_operands = &fixed;
+	artifact.fixed_operand_count = 1U;
+	assignment = (struct tcti_target_instruction_operand_assignment) {
+		.artifact = &artifact,
+		.leaf_index = 0U,
+		.instruction = leaf.encoding_pattern |
+			((tcti_feature_artifact_u32)2U << variable.start),
+	};
+	CHECK(!tcnd_find_source_name(condition, "option", &operand_offset));
+	CHECK(tcti_target_instruction_operand_assignment(&assignment, condition,
+		operand_offset, strlen("option"), &value, &value_length));
+	return 0;
+}
+
+static int fixed_operand_resolution_rejects_interior_pool_offsets(void)
+{
+	const struct tcti_target_instruction_artifact *source =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *source_leaf =
+		&source->leaves[2169U];
+	struct tcti_target_instruction_artifact_leaf leaf = *source_leaf;
+	const struct tcti_target_instruction_artifact_fixed_operand *source_fixed;
+	struct tcti_target_instruction_artifact_fixed_operand fixed;
+	struct tcti_target_instruction_artifact artifact = *source;
+	struct tcti_target_instruction_operand_assignment assignment;
+	struct tcti_feature_domain_tcnd_environment environment;
+	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+	tcti_feature_artifact_u8 satisfied;
+	const char *condition = source_ordinal_condition(2169U);
+	char identity[96];
+	char pool[128];
+	int identity_length;
+	size_t index;
+
+	CHECK(condition);
+	for (index = source_leaf->fixed_operand_first;
+	     index < (size_t)source_leaf->fixed_operand_first +
+		source_leaf->fixed_operand_count; index++) {
+		const struct tcti_target_instruction_artifact_fixed_operand *candidate =
+			&source->fixed_operands[index];
+		const char *name = (const char *)source->string_pool +
+			candidate->name_offset;
+
+		if (!strcmp(name, "op21"))
+			break;
+	}
+	CHECK(index < (size_t)source_leaf->fixed_operand_first +
+		source_leaf->fixed_operand_count);
+	source_fixed = &source->fixed_operands[index];
+	fixed = *source_fixed;
+	identity_length = snprintf(identity, sizeof(identity), "%s:%u:%u",
+		source->source_sha256, fixed.source_offset, fixed.source_length);
+	CHECK(identity_length > 0 && (size_t)identity_length < sizeof(identity));
+	leaf.fixed_operand_first = 0U;
+	leaf.fixed_operand_count = 1U;
+	fixed.leaf_index = 0U;
+	artifact.leaves = &leaf;
+	artifact.leaf_count = 1U;
+	artifact.fixed_operands = &fixed;
+	artifact.fixed_operand_count = 1U;
+	assignment = (struct tcti_target_instruction_operand_assignment) {
+		.artifact = &artifact,
+		.leaf_index = 0U,
+		.instruction = leaf.encoding_pattern,
+	};
+	environment = (struct tcti_feature_domain_tcnd_environment) {
+		.context = &assignment,
+		.operand = tcti_target_instruction_operand_assignment,
+	};
+
+	memset(pool, 0, sizeof(pool));
+	pool[0] = 'x';
+	memcpy(pool + 1U, "op21", sizeof("op21"));
+	memcpy(pool + 6U, identity, (size_t)identity_length + 1U);
+	artifact.string_pool = (const unsigned char *)pool;
+	artifact.string_pool_size = 6U + (size_t)identity_length + 1U;
+	fixed.name_offset = 1U;
+	fixed.source_identity_offset = 6U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+
+	memset(pool, 0, sizeof(pool));
+	memcpy(pool, "op21", sizeof("op21"));
+	pool[5] = 'x';
+	memcpy(pool + 6U, identity, (size_t)identity_length + 1U);
+	artifact.string_pool_size = 6U + (size_t)identity_length + 1U;
+	fixed.name_offset = 0U;
+	fixed.source_identity_offset = 6U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition, &environment,
+		&satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
+static int variable_operand_resolution_rejects_interior_name_offset(void)
+{
+	const struct tcti_target_instruction_artifact *source =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *source_leaf =
+		&source->leaves[3297U];
+	struct tcti_target_instruction_artifact_leaf leaf = *source_leaf;
+	struct tcti_target_instruction_artifact_operand variable;
+	struct tcti_target_instruction_artifact artifact = *source;
+	struct tcti_target_instruction_operand_assignment assignment;
+	const char *condition = source_ordinal_condition(3297U);
+	const char *value;
+	size_t value_length;
+	size_t operand_offset;
+	size_t index;
+	static const unsigned char pool[] = {
+		'x', 'o', 'p', 't', 'i', 'o', 'n', '\0',
+	};
+
+	CHECK(condition);
+	for (index = source_leaf->operand_first;
+	     index < (size_t)source_leaf->operand_first + source_leaf->operand_count;
+	     index++) {
+		const char *name = (const char *)source->string_pool +
+			source->operands[index].name_offset;
+
+		if (!strcmp(name, "option"))
+			break;
+	}
+	CHECK(index < (size_t)source_leaf->operand_first + source_leaf->operand_count);
+	variable = source->operands[index];
+	leaf.operand_first = 0U;
+	leaf.operand_count = 1U;
+	leaf.fixed_operand_first = 0U;
+	leaf.fixed_operand_count = 0U;
+	variable.leaf_index = 0U;
+	variable.name_offset = 1U;
+	artifact.leaves = &leaf;
+	artifact.leaf_count = 1U;
+	artifact.operands = &variable;
+	artifact.operand_count = 1U;
+	artifact.fixed_operands = NULL;
+	artifact.fixed_operand_count = 0U;
+	artifact.string_pool = pool;
+	artifact.string_pool_size = sizeof(pool);
+	assignment = (struct tcti_target_instruction_operand_assignment) {
+		.artifact = &artifact,
+		.leaf_index = 0U,
+		.instruction = leaf.encoding_pattern |
+			((tcti_feature_artifact_u32)2U << variable.start),
+	};
+	CHECK(!tcnd_find_source_name(condition, "option", &operand_offset));
+	CHECK(tcti_target_instruction_operand_assignment(&assignment, condition,
+		operand_offset, strlen("option"), &value, &value_length));
 	return 0;
 }
 
@@ -1055,6 +1460,11 @@ int main(void)
 	    tcnd_union_evaluates_not_or_and_set_membership() ||
 	    ordinal_3297_option_assignment_uses_generated_operand_metadata() ||
 	    ordinal_3297_assignment_rejects_malformed_operand_metadata() ||
+	    fixed_operands_resolve_source_tcnd_names() ||
+	    fixed_operand_resolution_rejects_malformed_or_ambiguous_records() ||
+	    cross_plane_same_name_operand_is_rejected() ||
+	    fixed_operand_resolution_rejects_interior_pool_offsets() ||
+	    variable_operand_resolution_rejects_interior_name_offset() ||
 	    source_ordinals_900_through_1199_are_explicitly_evaluated())
 		return 1;
 	puts("PASS target feature-domain evaluator");

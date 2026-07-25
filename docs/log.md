@@ -685,3 +685,12 @@ the canonical source identity, feature condition, mask and pattern, ASL locator,
 decoder shape, and production executor PC reachability without introducing a
 PMUL result oracle. The KUnit object compiles, while app-hosted execution remains
 unproved because strict `xcode-offload doctor` currently fails its machine checks.
+
+## [2026-07-25] test | Resolve fixed source-condition operands
+
+Extended the C-native feature-domain operand resolver to consume validated fixed
+fields from the generated target artifact. Focused tests resolve exact `opc`
+values on ordinals 203 through 205 and `op21` on 2169 and 2170, then evaluate
+their authoritative source conditions. Adversarial cases reject malformed
+source locators, interior string-pool offsets, duplicate records, and
+variable/fixed name collisions. This grants domain-provenance coverage only.
