@@ -40,6 +40,8 @@ enum tcti_sve_integer_binary_op {
 };
 
 /* `user_simd` is the authoritative shared V0-V31 low-128-bit backing. */
+bool tcti_sve_integer_binary_op_supports_element_bytes(
+	enum tcti_sve_integer_binary_op op, u8 element_bytes);
 int tcti_sve_predicated_integer_binary(struct tcti_sve_state *state,
 				unsigned long *user_simd,
 				enum tcti_sve_integer_binary_op op,

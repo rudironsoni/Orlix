@@ -170,6 +170,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		if (args->stack)
 			childregs->sp = args->stack;
 #if defined(ORLIX_APP_HOSTED_BOOT)
+		int ret;
+
 		/*
 		 * The syscall gate snapshots userspace TLS at the Linux syscall
 		 * boundary.  Deeper kernel code must use that saved value: hosted
@@ -182,9 +184,12 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		p->thread.user_fpsr = current->thread.user_fpsr;
 		p->thread.user_fpcr = current->thread.user_fpcr;
 		p->thread.user_simd_valid = current->thread.user_simd_valid;
-		tcti_sve_state_copy(&p->thread.user_sve, p->thread.user_simd,
-				    &current->thread.user_sve,
-				    current->thread.user_simd);
+		ret = tcti_sve_state_copy(&p->thread.user_sve,
+					  p->thread.user_simd,
+					  &current->thread.user_sve,
+					  current->thread.user_simd);
+		if (ret)
+			return ret;
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;

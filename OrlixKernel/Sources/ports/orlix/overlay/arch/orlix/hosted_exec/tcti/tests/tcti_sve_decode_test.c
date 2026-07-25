@@ -5,6 +5,7 @@
  * production tcti_resume_user evidence are complete.
  */
 #include <kunit/test.h>
+#include <linux/bitops.h>
 #include <linux/errno.h>
 
 #include "../decode_aarch64.h"
@@ -12,30 +13,31 @@
 struct tcti_sve_decode_case {
 	u32 source_ordinal;
 	u8 opcode;
+	u8 legal_sizes;
 	enum tcti_sve_integer_binary_op op;
 };
 
 static const struct tcti_sve_decode_case tcti_sve_decode_cases[] = {
-	{ 0U, 0, TCTI_SVE_INTEGER_ADD },
-	{ 1U, 1, TCTI_SVE_INTEGER_SUB },
-	{ 2U, 3, TCTI_SVE_INTEGER_SUBR },
-	{ 5U, 8, TCTI_SVE_INTEGER_SMAX },
-	{ 6U, 10, TCTI_SVE_INTEGER_SMIN },
-	{ 7U, 12, TCTI_SVE_INTEGER_SABD },
-	{ 8U, 9, TCTI_SVE_INTEGER_UMAX },
-	{ 9U, 11, TCTI_SVE_INTEGER_UMIN },
-	{ 10U, 13, TCTI_SVE_INTEGER_UABD },
-	{ 11U, 16, TCTI_SVE_INTEGER_MUL },
-	{ 12U, 18, TCTI_SVE_INTEGER_SMULH },
-	{ 13U, 19, TCTI_SVE_INTEGER_UMULH },
-	{ 14U, 20, TCTI_SVE_INTEGER_SDIV },
-	{ 15U, 22, TCTI_SVE_INTEGER_SDIVR },
-	{ 16U, 21, TCTI_SVE_INTEGER_UDIV },
-	{ 17U, 23, TCTI_SVE_INTEGER_UDIVR },
-	{ 18U, 24, TCTI_SVE_INTEGER_ORR },
-	{ 19U, 25, TCTI_SVE_INTEGER_EOR },
-	{ 20U, 26, TCTI_SVE_INTEGER_AND },
-	{ 21U, 27, TCTI_SVE_INTEGER_BIC },
+	{ 0U, 0, 0xf, TCTI_SVE_INTEGER_ADD },
+	{ 1U, 1, 0xf, TCTI_SVE_INTEGER_SUB },
+	{ 2U, 3, 0xf, TCTI_SVE_INTEGER_SUBR },
+	{ 5U, 8, 0xf, TCTI_SVE_INTEGER_SMAX },
+	{ 6U, 10, 0xf, TCTI_SVE_INTEGER_SMIN },
+	{ 7U, 12, 0xf, TCTI_SVE_INTEGER_SABD },
+	{ 8U, 9, 0xf, TCTI_SVE_INTEGER_UMAX },
+	{ 9U, 11, 0xf, TCTI_SVE_INTEGER_UMIN },
+	{ 10U, 13, 0xf, TCTI_SVE_INTEGER_UABD },
+	{ 11U, 16, 0xf, TCTI_SVE_INTEGER_MUL },
+	{ 12U, 18, 0xf, TCTI_SVE_INTEGER_SMULH },
+	{ 13U, 19, 0xf, TCTI_SVE_INTEGER_UMULH },
+	{ 14U, 20, 0xc, TCTI_SVE_INTEGER_SDIV },
+	{ 15U, 22, 0xc, TCTI_SVE_INTEGER_SDIVR },
+	{ 16U, 21, 0xc, TCTI_SVE_INTEGER_UDIV },
+	{ 17U, 23, 0xc, TCTI_SVE_INTEGER_UDIVR },
+	{ 18U, 24, 0xf, TCTI_SVE_INTEGER_ORR },
+	{ 19U, 25, 0xf, TCTI_SVE_INTEGER_EOR },
+	{ 20U, 26, 0xf, TCTI_SVE_INTEGER_AND },
+	{ 21U, 27, 0xf, TCTI_SVE_INTEGER_BIC },
 };
 
 static u32 tcti_sve_encode_predicated_integer_binary(u8 opcode,
@@ -59,6 +61,16 @@ static void tcti_sve_decode_exhausts_owned_legal_encodings(struct kunit *test)
 		for (size = 0; size < 4; size++) {
 			u8 pg;
 
+			if (!(test_case->legal_sizes & BIT(size))) {
+				KUNIT_EXPECT_EQ_MSG(test, -EINVAL,
+					tcti_decode_sve_predicated_integer_binary(
+						tcti_sve_encode_predicated_integer_binary(
+							test_case->opcode, size, 0, 0, 0),
+						&(struct tcti_sve_predicated_integer_binary){}),
+					"source ordinal %u size %u",
+					test_case->source_ordinal, size);
+				continue;
+			}
 			for (pg = 0; pg < 8; pg++) {
 				u8 zm;
 

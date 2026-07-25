@@ -43,6 +43,26 @@ static u32 tcti_sve_load_u32(const u8 *vector, u16 offset)
 	       ((u32)vector[offset + 3] << 24);
 }
 
+static void tcti_sve_store_element(u8 *vector, u16 offset,
+				   u8 element_bytes, u64 value)
+{
+	u8 byte;
+
+	for (byte = 0; byte < element_bytes; byte++)
+		vector[offset + byte] = value >> (byte * BITS_PER_BYTE);
+}
+
+static u64 tcti_sve_load_element(const u8 *vector, u16 offset,
+				  u8 element_bytes)
+{
+	u64 value = 0;
+	u8 byte;
+
+	for (byte = 0; byte < element_bytes; byte++)
+		value |= (u64)vector[offset + byte] << (byte * BITS_PER_BYTE);
+	return value;
+}
+
 static void tcti_sve_sync_z_low_to_v(const struct tcti_sve_state *state,
 				     unsigned long *user_simd, u8 reg)
 {
@@ -110,6 +130,35 @@ static void tcti_sve_state_copy_preserves_full_scalable_context(
 			  sizeof(source_simd));
 }
 
+static void tcti_sve_state_copy_rejects_invalid_source_without_writing(
+	struct kunit *test)
+{
+	struct tcti_sve_state source;
+	struct tcti_sve_state destination;
+	struct tcti_sve_state destination_before;
+	unsigned long source_simd[64];
+	unsigned long destination_simd[64];
+	unsigned long destination_simd_before[64];
+
+	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&source, source_simd,
+		TCTI_SVE_DEFAULT_VL_BYTES));
+	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&destination,
+		destination_simd, TCTI_SVE_DEFAULT_VL_BYTES));
+	memset(&destination, 0xa5, sizeof(destination));
+	memset(destination_simd, 0x5a, sizeof(destination_simd));
+	destination_before = destination;
+	memcpy(destination_simd_before, destination_simd,
+	       sizeof(destination_simd_before));
+	source.valid = false;
+
+	KUNIT_EXPECT_EQ(test, -EINVAL, tcti_sve_state_copy(&destination,
+		destination_simd, &source, source_simd));
+	KUNIT_EXPECT_MEMEQ(test, &destination_before, &destination,
+			  sizeof(destination));
+	KUNIT_EXPECT_MEMEQ(test, destination_simd_before, destination_simd,
+			  sizeof(destination_simd));
+}
+
 static void tcti_start_thread_resets_full_scalable_sve_context(
 	struct kunit *test)
 {
@@ -145,8 +194,9 @@ static void tcti_sve_integer_binary_preserves_predicated_lanes(
 	unsigned long user_simd[64];
 	u16 lane;
 
-	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&state, user_simd, 32));
-	for (lane = 0; lane < 8; lane++) {
+	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&state, user_simd,
+		TCTI_SVE_MAX_VL_BYTES));
+	for (lane = 0; lane < TCTI_SVE_MAX_VL_BYTES / sizeof(u32); lane++) {
 		tcti_sve_store_u32(state.z[1], lane * 4, lane + 10);
 		tcti_sve_store_u32(state.z[2], lane * 4, lane + 100);
 		tcti_sve_store_u32(state.z[0], lane * 4, 0xdecafbadU);
@@ -160,7 +210,7 @@ static void tcti_sve_integer_binary_preserves_predicated_lanes(
 		user_simd,
 		TCTI_SVE_INTEGER_ADD, TCTI_SVE_PREDICATE_MERGING,
 		0, 0, 1, 2, 4));
-	for (lane = 0; lane < 8; lane++)
+	for (lane = 0; lane < TCTI_SVE_MAX_VL_BYTES / sizeof(u32); lane++)
 		KUNIT_EXPECT_EQ(test, lane & 1 ? lane + 110 : 0xdecafbadU,
 			tcti_sve_load_u32(state.z[0], lane * 4));
 }
@@ -202,8 +252,6 @@ static void tcti_sve_integer_binary_covers_all_integer_operations(
 		TCTI_SVE_INTEGER_UMAX, TCTI_SVE_INTEGER_UMIN,
 		TCTI_SVE_INTEGER_UABD, TCTI_SVE_INTEGER_MUL,
 		TCTI_SVE_INTEGER_SMULH, TCTI_SVE_INTEGER_UMULH,
-		TCTI_SVE_INTEGER_SDIV, TCTI_SVE_INTEGER_SDIVR,
-		TCTI_SVE_INTEGER_UDIV, TCTI_SVE_INTEGER_UDIVR,
 		TCTI_SVE_INTEGER_AND, TCTI_SVE_INTEGER_ORR,
 		TCTI_SVE_INTEGER_EOR, TCTI_SVE_INTEGER_BIC,
 	};
@@ -273,6 +321,108 @@ static void tcti_sve_integer_binary_covers_all_integer_operations(
 			KUNIT_EXPECT_EQ(test, 0x42, state.z[0][0]);
 			break;
 		}
+	}
+}
+
+static void tcti_sve_integer_binary_proves_signed_and_high_edges(
+	struct kunit *test)
+{
+	static const u8 element_bytes[] = { 1, 2, 4, 8 };
+	struct tcti_sve_state state;
+	unsigned long user_simd[64];
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(element_bytes); index++) {
+		u8 bytes = element_bytes[index];
+		u8 bits = bytes * BITS_PER_BYTE;
+		u64 mask = bytes == sizeof(u64) ? U64_MAX :
+			GENMASK_ULL(bits - 1, 0);
+		u64 minimum = BIT_ULL(bits - 1);
+
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&state, user_simd,
+			TCTI_SVE_MAX_VL_BYTES));
+		tcti_sve_store_element(state.z[1], 0, bytes, minimum);
+		tcti_sve_store_element(state.z[2], 0, bytes, mask);
+		tcti_sve_set_predicate_lane(&state, 0, 0, bytes, true);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SMAX,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, mask, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+
+		tcti_sve_store_element(state.z[1], 0, bytes, mask - 1);
+		tcti_sve_store_element(state.z[2], 0, bytes, 3);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SMULH,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, mask, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_UMULH,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, 2, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+
+		if (bytes < 4)
+			continue;
+		tcti_sve_store_element(state.z[1], 0, bytes, minimum);
+		tcti_sve_store_element(state.z[2], 0, bytes, mask);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SDIV,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, minimum, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+		tcti_sve_store_element(state.z[2], 0, bytes, 0);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SDIV,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, 0, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+
+		tcti_sve_store_element(state.z[1], 0, bytes, mask);
+		tcti_sve_store_element(state.z[2], 0, bytes, minimum);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SDIVR,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, minimum, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+		tcti_sve_store_element(state.z[1], 0, bytes, 0);
+		tcti_sve_store_element(state.z[2], 0, bytes, 7);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_SDIVR,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, 0, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+
+		tcti_sve_store_element(state.z[1], 0, bytes, 7);
+		tcti_sve_store_element(state.z[2], 0, bytes, 0);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_UDIV,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, 0, tcti_sve_load_element(state.z[0], 0,
+			bytes));
+		tcti_sve_store_element(state.z[1], 0, bytes, 0);
+		tcti_sve_store_element(state.z[2], 0, bytes, 7);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 1);
+		tcti_sve_sync_z_low_to_v(&state, user_simd, 2);
+		KUNIT_ASSERT_EQ(test, 0, tcti_sve_predicated_integer_binary(&state,
+			user_simd, TCTI_SVE_INTEGER_UDIVR,
+			TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2, bytes));
+		KUNIT_EXPECT_EQ(test, 0, tcti_sve_load_element(state.z[0], 0,
+			bytes));
 	}
 }
 
@@ -346,7 +496,15 @@ static void tcti_sve_invalid_operation_preserves_state_and_pc(
 	struct tcti_sve_state state;
 	struct tcti_sve_state before;
 	unsigned long user_simd[64];
+	unsigned long simd_before[64];
 	struct pt_regs regs = { .pc = 0x1000, .pstate = 0xa0000000UL };
+	static const enum tcti_sve_integer_binary_op division_ops[] = {
+		TCTI_SVE_INTEGER_SDIV, TCTI_SVE_INTEGER_SDIVR,
+		TCTI_SVE_INTEGER_UDIV, TCTI_SVE_INTEGER_UDIVR,
+	};
+	static const u8 illegal_sizes[] = { 1, 2 };
+	size_t operation_index;
+	size_t size_index;
 
 	KUNIT_ASSERT_EQ(test, 0, tcti_sve_state_reset(&state, user_simd, 16));
 	memset(state.z, 0x5a, sizeof(state.z));
@@ -369,6 +527,23 @@ static void tcti_sve_invalid_operation_preserves_state_and_pc(
 	KUNIT_EXPECT_EQ(test, 0x1000UL, regs.pc);
 	KUNIT_EXPECT_EQ(test, 0xa0000000UL, regs.pstate);
 	KUNIT_EXPECT_EQ(test, 0, memcmp(&before, &state, sizeof(state)));
+	memcpy(simd_before, user_simd, sizeof(simd_before));
+	for (operation_index = 0;
+	     operation_index < ARRAY_SIZE(division_ops); operation_index++) {
+		for (size_index = 0; size_index < ARRAY_SIZE(illegal_sizes);
+		     size_index++) {
+			KUNIT_EXPECT_EQ(test, -EINVAL,
+				tcti_sve_execute_predicated_integer_binary(&state, &regs,
+					user_simd, true, division_ops[operation_index],
+					TCTI_SVE_PREDICATE_MERGING, 0, 0, 1, 2,
+					illegal_sizes[size_index]));
+			KUNIT_EXPECT_EQ(test, 0x1000UL, regs.pc);
+			KUNIT_EXPECT_EQ(test, 0xa0000000UL, regs.pstate);
+			KUNIT_EXPECT_MEMEQ(test, &before, &state, sizeof(state));
+			KUNIT_EXPECT_MEMEQ(test, simd_before, user_simd,
+					  sizeof(simd_before));
+		}
+	}
 }
 
 static void tcti_sve_unavailable_extension_preserves_state_and_pc(
@@ -419,10 +594,12 @@ static struct kunit_case tcti_sve_state_test_cases[] = {
 	KUNIT_CASE(tcti_sve_state_rejects_invalid_vector_lengths),
 	KUNIT_CASE(tcti_sve_state_reset_zeroes_full_scalable_register_file),
 	KUNIT_CASE(tcti_sve_state_copy_preserves_full_scalable_context),
+	KUNIT_CASE(tcti_sve_state_copy_rejects_invalid_source_without_writing),
 	KUNIT_CASE(tcti_start_thread_resets_full_scalable_sve_context),
 	KUNIT_CASE(tcti_sve_integer_binary_preserves_predicated_lanes),
 	KUNIT_CASE(tcti_sve_integer_binary_zeroes_inactive_lanes),
 	KUNIT_CASE(tcti_sve_integer_binary_covers_all_integer_operations),
+	KUNIT_CASE(tcti_sve_integer_binary_proves_signed_and_high_edges),
 	KUNIT_CASE(tcti_sve_integer_binary_honors_destination_source_aliasing),
 	KUNIT_CASE(tcti_sve_execution_updates_advsimd_v_alias),
 	KUNIT_CASE(tcti_sve_execution_reads_advsimd_v_alias),

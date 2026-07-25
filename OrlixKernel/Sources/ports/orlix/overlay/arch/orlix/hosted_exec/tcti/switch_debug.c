@@ -49,7 +49,7 @@ static int tcti_execute_sve_predicated_integer_binary(
 	struct pt_regs *regs, const struct tcti_decoded_instruction *decoded)
 {
 	return tcti_sve_execute_predicated_integer_binary(
-		&current->thread.user_sve, regs, current->thread.user_simd, true,
+		&current->thread.user_sve, regs, current->thread.user_simd, false,
 		decoded->sve_integer_binary_op, decoded->sve_predication,
 		decoded->rd, decoded->sve_pg, decoded->rn, decoded->rm,
 		decoded->sve_element_bytes);

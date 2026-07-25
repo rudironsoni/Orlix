@@ -21,6 +21,23 @@ static bool tcti_sve_valid_element_bytes(u8 element_bytes)
 	       element_bytes == 4 || element_bytes == 8;
 }
 
+bool tcti_sve_integer_binary_op_supports_element_bytes(
+	enum tcti_sve_integer_binary_op op, u8 element_bytes)
+{
+	if (!tcti_sve_valid_element_bytes(element_bytes))
+		return false;
+
+	switch (op) {
+	case TCTI_SVE_INTEGER_SDIV:
+	case TCTI_SVE_INTEGER_SDIVR:
+	case TCTI_SVE_INTEGER_UDIV:
+	case TCTI_SVE_INTEGER_UDIVR:
+		return element_bytes >= sizeof(u32);
+	default:
+		return true;
+	}
+}
+
 static bool tcti_sve_predicate_lane_active(const struct tcti_sve_state *state,
 					   u8 predicate, u16 offset)
 {
@@ -203,7 +220,8 @@ int tcti_sve_predicated_integer_binary(struct tcti_sve_state *state,
 
 	if (!state || !user_simd || !state->valid ||
 	    !tcti_sve_valid_vl(state->vl_bytes) ||
-	    !tcti_sve_valid_element_bytes(element_bytes) ||
+	    !tcti_sve_integer_binary_op_supports_element_bytes(op,
+							 element_bytes) ||
 	    state->vl_bytes % element_bytes || zd >= TCTI_SVE_ZREG_COUNT ||
 	    zn >= TCTI_SVE_ZREG_COUNT || zm >= TCTI_SVE_ZREG_COUNT ||
 	    pg >= TCTI_SVE_PREG_COUNT ||

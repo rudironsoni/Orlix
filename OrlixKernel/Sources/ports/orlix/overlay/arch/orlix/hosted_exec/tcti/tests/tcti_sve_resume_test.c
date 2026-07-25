@@ -79,7 +79,7 @@ static int tcti_sve_write_program(unsigned long address, const u32 *program,
 	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
 }
 
-static void tcti_sve_resume_executes_predicated_integer_family(struct kunit *test)
+static void tcti_sve_resume_rejects_unadvertised_integer_family(struct kunit *test)
 {
 	static const struct {
 		u32 source_ordinal;
@@ -110,13 +110,13 @@ static void tcti_sve_resume_executes_predicated_integer_family(struct kunit *tes
 		u8 size;
 
 		for (size = 0; size < 4; size++) {
-			u8 element_bytes = 1U << size;
-			u64 mask = element_bytes == sizeof(u64) ? U64_MAX :
-				GENMASK_ULL(element_bytes * BITS_PER_BYTE - 1, 0);
 			u32 sve_instruction = tcti_sve_predicated_binary_instruction(
 				leaves[index].opcode, size, 0, 1, 0);
 			const u32 program[] = { sve_instruction, TCTI_SVE_TEST_SVC };
 			struct pt_regs regs = {};
+			struct pt_regs before;
+			struct tcti_sve_state sve_before;
+			unsigned long simd_before[ARRAY_SIZE(current->thread.user_simd)];
 			struct tcti_result result;
 			u16 inactive_offset = 16;
 
@@ -133,18 +133,24 @@ static void tcti_sve_resume_executes_predicated_integer_family(struct kunit *tes
 				PSR_C_BIT | PSR_V_BIT;
 			regs.syscallno = NO_SYSCALL;
 			current->thread.user_sve.p[0][0] = BIT(0);
+			before = regs;
+			memcpy(&sve_before, &current->thread.user_sve,
+			       sizeof(sve_before));
+			memcpy(simd_before, current->thread.user_simd,
+			       sizeof(simd_before));
 
 			result = tcti_resume_user(current, &regs, current->mm);
-			KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason,
 				"source ordinal %u", leaves[index].source_ordinal);
-			KUNIT_EXPECT_EQ(test, 0L, result.status);
-			KUNIT_EXPECT_EQ(test, instructions + sizeof(u32), result.pc);
-			KUNIT_EXPECT_EQ(test, TCTI_SVE_TEST_SVC, result.instruction);
-			KUNIT_EXPECT_EQ(test, leaves[index].masked_expected ?
-				mask - leaves[index].expected : leaves[index].expected,
-				current->thread.user_simd[0] & mask);
-			KUNIT_EXPECT_EQ(test, 0xa5,
-				current->thread.user_sve.z[0][inactive_offset]);
+			KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+			KUNIT_EXPECT_EQ(test, instructions, result.pc);
+			KUNIT_EXPECT_EQ(test, sve_instruction, result.instruction);
+			KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+			KUNIT_EXPECT_MEMEQ(test, &sve_before, &current->thread.user_sve,
+				  sizeof(sve_before));
+			KUNIT_EXPECT_MEMEQ(test, simd_before, current->thread.user_simd,
+				  sizeof(simd_before));
 		}
 	}
 
@@ -152,7 +158,7 @@ static void tcti_sve_resume_executes_predicated_integer_family(struct kunit *tes
 }
 
 static struct kunit_case tcti_sve_resume_test_cases[] = {
-	KUNIT_CASE(tcti_sve_resume_executes_predicated_integer_family),
+	KUNIT_CASE(tcti_sve_resume_rejects_unadvertised_integer_family),
 	{}
 };
 
