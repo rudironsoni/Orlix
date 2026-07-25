@@ -4,35 +4,68 @@
 #include <linux/limits.h>
 #include <linux/string.h>
 #include <asm/ptrace.h>
+#include <asm/tcti.h>
+#include <linux/err.h>
+#include <linux/errno.h>
+#include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/sched.h>
+#include <linux/syscalls.h>
 
+#include "target_instruction_artifact.h"
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
 
 struct source_row {
 	u32 ordinal;
-	const char *leaf;
+	const char *source_id;
+	const char *operation;
 	u32 mask;
 	u32 pattern;
 	enum tcti_decode_class class;
 	enum tcti_bitfield_op op;
 };
 
+struct runtime_row {
+	const char *source_id;
+	const char *operation;
+	u32 mask;
+	u32 pattern;
+	u32 witness;
+};
+
+#define TCTI_A64_PROFILE(...)
+#define TCTI_A64_SOURCE(...)
+#define TCTI_A64_FEATURE(...)
+#define TCTI_A64_CONDITION(...)
+#define TCTI_A64_RUNTIME_ENCODING(name, mnemonic, operation, mask, pattern, \
+					  witness) \
+	{ #name, #operation, mask, pattern, witness },
+static const struct runtime_row runtime_rows[] = {
+#include "../isa/inventory.def"
+};
+#undef TCTI_A64_RUNTIME_ENCODING
+#undef TCTI_A64_CONDITION
+#undef TCTI_A64_FEATURE
+#undef TCTI_A64_SOURCE
+#undef TCTI_A64_PROFILE
+
 static const struct source_row source_rows[] = {
-	{ 2169U, "EXTR_32_extract", 0xffe08000U, 0x13800000U,
+	{ 2169U, "EXTR_32_extract", "EXTR", 0xffe08000U, 0x13800000U,
 	  TCTI_DECODE_EXTRACT, 0 },
-	{ 2170U, "EXTR_64_extract", 0xffe00000U, 0x93c00000U,
+	{ 2170U, "EXTR_64_extract", "EXTR", 0xffe00000U, 0x93c00000U,
 	  TCTI_DECODE_EXTRACT, 0 },
-	{ 2205U, "SBFM_32M_bitfield", 0xffc00000U, 0x13000000U,
+	{ 2205U, "SBFM_32M_bitfield", "SBFM", 0xffc00000U, 0x13000000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
-	{ 2206U, "BFM_32M_bitfield", 0xffc00000U, 0x33000000U,
+	{ 2206U, "BFM_32M_bitfield", "BFM", 0xffc00000U, 0x33000000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
-	{ 2207U, "UBFM_32M_bitfield", 0xffc00000U, 0x53000000U,
+	{ 2207U, "UBFM_32M_bitfield", "UBFM", 0xffc00000U, 0x53000000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
-	{ 2208U, "SBFM_64M_bitfield", 0xffc00000U, 0x93400000U,
+	{ 2208U, "SBFM_64M_bitfield", "SBFM", 0xffc00000U, 0x93400000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_SBFM },
-	{ 2209U, "BFM_64M_bitfield", 0xffc00000U, 0xb3400000U,
+	{ 2209U, "BFM_64M_bitfield", "BFM", 0xffc00000U, 0xb3400000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_BFM },
-	{ 2210U, "UBFM_64M_bitfield", 0xffc00000U, 0xd3400000U,
+	{ 2210U, "UBFM_64M_bitfield", "UBFM", 0xffc00000U, 0xd3400000U,
 	  TCTI_DECODE_BITFIELD, TCTI_BITFIELD_UBFM },
 };
 
@@ -217,25 +250,85 @@ static void expect_state(struct kunit *test, const struct pt_regs *before,
 	KUNIT_EXPECT_EQ(test, before->pc + sizeof(u32), after->pc);
 }
 
+static const char *bitfield_extract_artifact_string(
+	const struct tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+	return (const char *)artifact->string_pool + offset;
+}
+
+static const struct runtime_row *bitfield_extract_runtime_row(
+	const struct source_row *source)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(runtime_rows); index++)
+		if (!strcmp(runtime_rows[index].source_id, source->source_id))
+			return &runtime_rows[index];
+	return NULL;
+}
+
+static void bitfield_extract_target_binding(struct kunit *test,
+	const struct tcti_target_instruction_artifact *artifact,
+	const struct source_row *source)
+{
+	const struct tcti_target_instruction_artifact_leaf *leaf;
+	const struct runtime_row *runtime;
+	const char *source_id;
+	const char *operation;
+
+	KUNIT_ASSERT_LT_MSG(test, source->ordinal, artifact->leaf_count,
+		"source=%s", source->source_id);
+	leaf = &artifact->leaves[source->ordinal];
+	source_id = bitfield_extract_artifact_string(artifact, leaf->name_offset);
+	operation = bitfield_extract_artifact_string(artifact,
+					     leaf->operation_offset);
+	KUNIT_ASSERT_NOT_NULL_MSG(test, source_id, "ordinal=%u", source->ordinal);
+	KUNIT_ASSERT_NOT_NULL_MSG(test, operation, "ordinal=%u", source->ordinal);
+	KUNIT_EXPECT_STREQ_MSG(test, source->source_id, source_id,
+		"ordinal=%u", source->ordinal);
+	KUNIT_EXPECT_STREQ_MSG(test, source->operation, operation,
+		"ordinal=%u", source->ordinal);
+	KUNIT_EXPECT_EQ_MSG(test, source->mask, leaf->encoding_mask,
+		"ordinal=%u", source->ordinal);
+	KUNIT_EXPECT_EQ_MSG(test, source->pattern, leaf->encoding_pattern,
+		"ordinal=%u", source->ordinal);
+
+	runtime = bitfield_extract_runtime_row(source);
+	KUNIT_ASSERT_NOT_NULL_MSG(test, runtime, "source=%s", source->source_id);
+	KUNIT_EXPECT_STREQ(test, source->operation, runtime->operation);
+	KUNIT_EXPECT_EQ(test, source->mask, runtime->mask);
+	KUNIT_EXPECT_EQ(test, source->pattern, runtime->pattern);
+	KUNIT_EXPECT_EQ(test, source->pattern, runtime->witness);
+}
+
 static void source_fingerprints(struct kunit *test)
 {
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	struct tcti_target_instruction_artifact_validation_result validation;
 	size_t i;
 
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		tcti_target_instruction_artifact_validate(artifact, &validation));
 	for (i = 0; i < ARRAY_SIZE(source_rows); i++) {
 		struct tcti_decoded_instruction decoded =
 			tcti_decode_aarch64(source_rows[i].pattern);
 
+		bitfield_extract_target_binding(test, artifact, &source_rows[i]);
 		KUNIT_EXPECT_EQ_MSG(test, source_rows[i].pattern,
 				    source_rows[i].pattern & source_rows[i].mask,
-				    "%s source ordinal %u", source_rows[i].leaf,
+				    "%s source ordinal %u", source_rows[i].source_id,
 				    source_rows[i].ordinal);
 		KUNIT_ASSERT_EQ_MSG(test, source_rows[i].class,
 				    decoded.decode_class, "%s source ordinal %u",
-				    source_rows[i].leaf, source_rows[i].ordinal);
+				    source_rows[i].source_id, source_rows[i].ordinal);
 		if (decoded.decode_class == TCTI_DECODE_BITFIELD)
 			KUNIT_EXPECT_EQ_MSG(test, source_rows[i].op,
 					    decoded.bitfield_op, "%s source ordinal %u",
-					    source_rows[i].leaf,
+					    source_rows[i].source_id,
 					    source_rows[i].ordinal);
 	}
 }
@@ -579,6 +672,242 @@ static void extract_overlap_xzr_state(struct kunit *test)
 	}
 }
 
+#define BITFIELD_EXTRACT_SVC 0xd4000001U
+
+static unsigned long bitfield_extract_map_rx(struct kunit *test, u32 instruction)
+{
+	const u32 program[] = { instruction, BITFIELD_EXTRACT_SVC };
+	unsigned long mapped;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	ret = tcti_write_user_data(current->mm, mapped, program, sizeof(program));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	return mapped;
+}
+
+static void bitfield_extract_seed_resume_regs(struct pt_regs *regs,
+					      unsigned long mapped, u32 instruction)
+{
+	u8 reg;
+
+	memset(regs, 0, sizeof(*regs));
+	for (reg = 0; reg < 31; reg++)
+		regs->regs[reg] = 0xd1b54a32d192ed03ULL ^
+			((u64)instruction << (reg & 7)) ^ reg;
+	regs->sp = 0x1fedcba987654320ULL;
+	regs->pc = mapped;
+	regs->pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT | PSR_D_BIT;
+	regs->orig_x0 = 0x0f1e2d3c4b5a6978ULL;
+	regs->syscallno = NO_SYSCALL;
+	regs->unused = 0x5a5a5a5aU;
+}
+
+static void bitfield_extract_expect_resume_frame(
+	struct kunit *test, const struct pt_regs *before,
+	const struct pt_regs *after, u8 rd, u64 expected,
+	unsigned long mapped)
+{
+	u8 reg;
+
+	for (reg = 0; reg < 31; reg++)
+		KUNIT_EXPECT_EQ(test, reg == rd ? expected : before->regs[reg],
+				after->regs[reg]);
+	KUNIT_EXPECT_EQ(test, before->sp, after->sp);
+	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), after->pc);
+	KUNIT_EXPECT_EQ(test, before->pstate, after->pstate);
+	KUNIT_EXPECT_EQ(test, before->orig_x0, after->orig_x0);
+	KUNIT_EXPECT_EQ(test, before->syscallno, after->syscallno);
+	KUNIT_EXPECT_EQ(test, before->unused, after->unused);
+}
+
+static void bitfield_extract_expect_resume_rejection(
+	struct kunit *test, u32 instruction)
+{
+	struct pt_regs regs, before;
+	struct tcti_result result;
+	unsigned long mapped = bitfield_extract_map_rx(test, instruction);
+
+	bitfield_extract_seed_resume_regs(&regs, mapped, instruction);
+	before = regs;
+	result = tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, 0UL, result.fault_address);
+	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, result.pc);
+	KUNIT_EXPECT_EQ(test, instruction, result.instruction);
+	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void bitfield_extract_resume_one(struct kunit *test,
+					const struct source_row *row, u32 instruction)
+{
+	struct tcti_decoded_instruction decoded = tcti_decode_aarch64(instruction);
+	struct pt_regs regs, before;
+	struct tcti_result result;
+	unsigned long mapped;
+	u64 source, destination, expected;
+	u8 rd = instruction & 31;
+
+	KUNIT_ASSERT_EQ_MSG(test, row->pattern, instruction & row->mask,
+			    "%s source ordinal %u", row->source_id, row->ordinal);
+	KUNIT_ASSERT_EQ_MSG(test, row->class, decoded.decode_class,
+			    "%s (%s)", row->source_id, row->operation);
+	mapped = bitfield_extract_map_rx(test, instruction);
+	bitfield_extract_seed_resume_regs(&regs, mapped, instruction);
+	before = regs;
+	if (decoded.decode_class == TCTI_DECODE_BITFIELD) {
+		source = decoded.rn == 31 ? 0 : before.regs[decoded.rn];
+		destination = decoded.rd == 31 ? 0 : before.regs[decoded.rd];
+		expected = bitfield_expected(&decoded, source, destination);
+	} else {
+		u8 width = decoded.is_64bit ? 64 : 32;
+		u64 high = decoded.rn == 31 ? 0 : before.regs[decoded.rn];
+		u64 low = decoded.rm == 31 ? 0 : before.regs[decoded.rm];
+
+		high &= width_mask(decoded.is_64bit);
+		low &= width_mask(decoded.is_64bit);
+		expected = decoded.shift_amount ?
+			(low >> decoded.shift_amount) |
+			(high << (width - decoded.shift_amount)) : low;
+		expected &= width_mask(decoded.is_64bit);
+	}
+	result = tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			     "%s source ordinal %u", row->source_id, row->ordinal);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, 0UL, result.fault_address);
+	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, BITFIELD_EXTRACT_SVC, result.instruction);
+	bitfield_extract_expect_resume_frame(test, &before, &regs, rd, expected,
+					  mapped);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void bitfield_extract_production_path_leaves(struct kunit *test)
+{
+	static const struct {
+		u8 rn;
+		u8 rm;
+		u8 rd;
+		u8 immr32;
+		u8 imms32;
+		u8 immr64;
+		u8 imms64;
+	} cases[] = {
+		{ 4, 13, 7, 28, 3, 56, 7 },
+		{ 7, 7, 7, 24, 7, 56, 7 },
+		{ 31, 6, 8, 8, 15, 8, 15 },
+		{ 6, 31, 31, 0, 31, 0, 31 },
+	};
+	size_t row, variant;
+
+	for (row = 0; row < ARRAY_SIZE(source_rows); row++) {
+		const struct source_row *source = &source_rows[row];
+
+		for (variant = 0; variant < ARRAY_SIZE(cases); variant++) {
+			u32 instruction;
+			bool sf = source->ordinal == 2170U || source->ordinal >= 2208U;
+			u8 immr = sf ? cases[variant].immr64 :
+				cases[variant].immr32;
+			u8 imms = sf ? cases[variant].imms64 :
+				cases[variant].imms32;
+
+			if (source->class == TCTI_DECODE_BITFIELD)
+				instruction = encode_bitfield(sf, source->op, sf,
+					immr, imms,
+					cases[variant].rn, cases[variant].rd);
+			else
+				instruction = encode_extract(sf, sf, false,
+					cases[variant].rm, immr,
+					cases[variant].rn, cases[variant].rd);
+			bitfield_extract_resume_one(test, source, instruction);
+		}
+	}
+}
+
+static void bitfield_extract_production_path_aliases(struct kunit *test)
+{
+	static const struct {
+		u16 ordinal;
+		u8 immr;
+		u8 imms;
+		u8 rn;
+		u8 rd;
+	} cases[] = {
+		{ 2205U, 5, 31, 4, 7 }, /* ASR */
+		{ 2205U, 0, 7, 4, 7 },  /* SXTB */
+		{ 2206U, 56, 7, 31, 7 }, /* BFC */
+		{ 2206U, 56, 7, 7, 7 },  /* BFI overlap */
+		{ 2207U, 24, 23, 4, 7 }, /* LSL */
+		{ 2207U, 0, 7, 31, 7 },  /* UXTB XZR */
+		{ 2208U, 8, 15, 4, 7 }, /* SBFX */
+		{ 2209U, 8, 15, 4, 7 }, /* BFXIL */
+		{ 2210U, 9, 63, 4, 7 }, /* LSR */
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+		const struct source_row *row = NULL;
+		size_t source;
+
+		for (source = 0; source < ARRAY_SIZE(source_rows); source++)
+			if (source_rows[source].ordinal == cases[index].ordinal)
+				row = &source_rows[source];
+		KUNIT_ASSERT_NOT_NULL(test, row);
+		bitfield_extract_resume_one(test, row,
+			encode_bitfield(cases[index].ordinal >= 2208U, row->op,
+				cases[index].ordinal >= 2208U, cases[index].immr,
+				cases[index].imms, cases[index].rn, cases[index].rd));
+	}
+}
+
+static void bitfield_extract_production_path_extract_overlaps(struct kunit *test)
+{
+	static const struct {
+		u8 rn;
+		u8 rm;
+		u8 rd;
+	} cases[] = {
+		{ 9, 13, 9 },  /* Rd == Rn */
+		{ 9, 13, 13 }, /* Rd == Rm */
+	};
+	size_t row, index;
+
+	for (row = 0; row < 2; row++) {
+		const struct source_row *source = &source_rows[row];
+		bool sf = source->ordinal == 2170U;
+		u8 shift = sf ? 37 : 19;
+
+		for (index = 0; index < ARRAY_SIZE(cases); index++)
+			bitfield_extract_resume_one(test, source,
+				encode_extract(sf, sf, false, cases[index].rm, shift,
+					cases[index].rn, cases[index].rd));
+	}
+}
+
+static void bitfield_extract_production_path_reserved_rejection(struct kunit *test)
+{
+	bitfield_extract_expect_resume_rejection(test,
+		encode_bitfield(false, TCTI_BITFIELD_SBFM, true, 0, 7, 4, 7));
+	bitfield_extract_expect_resume_rejection(test,
+		encode_bitfield(true, TCTI_BITFIELD_BFM, false, 8, 15, 4, 7));
+	bitfield_extract_expect_resume_rejection(test,
+		encode_bitfield(true, 3, true, 8, 15, 4, 7));
+	bitfield_extract_expect_resume_rejection(test,
+		encode_extract(true, true, true, 5, 8, 4, 7));
+	bitfield_extract_expect_resume_rejection(test,
+		encode_extract(false, false, false, 5, 32, 4, 7));
+}
+
 static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(source_fingerprints),
 	KUNIT_CASE(scalar_source_fingerprints),
@@ -588,6 +917,10 @@ static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(bitfield_alias_state),
 	KUNIT_CASE(extract_ror_alias_state),
 	KUNIT_CASE(extract_overlap_xzr_state),
+	KUNIT_CASE(bitfield_extract_production_path_leaves),
+	KUNIT_CASE(bitfield_extract_production_path_aliases),
+	KUNIT_CASE(bitfield_extract_production_path_extract_overlaps),
+	KUNIT_CASE(bitfield_extract_production_path_reserved_rejection),
 	{}
 };
 

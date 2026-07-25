@@ -5,6 +5,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	target_instruction_artifact.o \
 	../mops_provenance.o \
 	../isa/target_ordinal_ledger.o \
+	target_instruction_artifact.o \
 	target_ordinal_ledger_test.o \
 	target_feature_artifact.o \
 	target_instruction_artifact.o \
