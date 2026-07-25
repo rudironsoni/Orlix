@@ -147,7 +147,11 @@ static int completion_audit_internal(
 static bool completion_projection_dependencies_valid(
 	const struct tcti_target_completion_result *result)
 {
-	return result && !result->invalid_source_rows &&
+	return result &&
+		!(result->error_mask &
+		  (TCTI_TARGET_COMPLETION_ERROR_SOURCE_COUNT |
+		   TCTI_TARGET_COMPLETION_ERROR_CLASSIFICATION_COUNT)) &&
+		!result->invalid_source_rows &&
 		!result->absent_rows && !result->stale_rows &&
 		!result->invalid_relationship_rows &&
 		!result->invalid_source_provenance &&
@@ -1569,6 +1573,8 @@ static int completion_audit_internal(
 	status = tcti_target_completion_validate(
 		source, source_count, classification, classification_count,
 		registry, registry_count, result);
+	if (!source || !classification)
+		return -1;
 	if (!validate_completion_feature_dependencies(feature_artifact,
 		instruction_artifact, source_count, result))
 		return -1;

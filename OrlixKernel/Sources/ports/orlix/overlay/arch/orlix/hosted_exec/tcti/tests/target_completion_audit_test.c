@@ -1316,6 +1316,20 @@ static int malformed_projection_dependencies_leave_output_untouched(void)
 	EXPECT(!memcmp(obligations, before, bytes));
 	inputs.classification_count = classification_count;
 
+	inputs.source = NULL;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(!memcmp(obligations, before, bytes));
+	inputs.source = source_copy;
+
+	inputs.classification = NULL;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(!memcmp(obligations, before, bytes));
+	inputs.classification = classification_copy;
+
 	live_instruction = tcti_target_instruction_artifact_canonical();
 	EXPECT(live_instruction != NULL);
 	instruction_copy = *live_instruction;

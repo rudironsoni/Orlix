@@ -702,5 +702,6 @@ validated instruction artifact's canonical encoding witness before reporting
 operand gaps. This removes 114 false missing-operand blockers and exposes the
 remaining feature-configuration blockers without treating one encoding witness
 as a legal-domain or feature-union proof. All 4,350 leaves retain the explicit
-incomplete-union blocker, and malformed source, classification, registry, or
-instruction-artifact inputs remain transactionally invisible to callers.
+incomplete-union blocker, and malformed or null source, classification,
+registry, or instruction-artifact inputs remain transactionally invisible to
+callers.
