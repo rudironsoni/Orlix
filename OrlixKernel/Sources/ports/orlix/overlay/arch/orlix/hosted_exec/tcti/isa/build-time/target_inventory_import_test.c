@@ -1,9 +1,42 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "target_inventory_import.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/*
+ * The production importer deliberately accepts only the pinned source.  This
+ * test-local compilation uses the same C parser with only its final digest
+ * comparison redirected, so a minimal in-memory source can exercise field
+ * classification without weakening the production entry point.
+ */
+static const char *fixture_pinned_hash;
+
+static int fixture_strcmp(const char *left, const char *right)
+{
+	if (right == fixture_pinned_hash)
+		return 0;
+	return strcmp(left, right);
+}
+
+const struct tcti_target_operation *fixture_inventory_operation(
+	const struct tcti_target_inventory *inventory, const char *id);
+
+#define tcti_target_inventory_destroy fixture_inventory_destroy
+#define tcti_target_inventory_import fixture_inventory_import
+#define tcti_target_inventory_operation fixture_inventory_operation
+#define tcti_target_inventory_sha256 fixture_inventory_sha256
+#define source_sha256 fixture_source_sha256
+#define strcmp fixture_strcmp
+#include "target_inventory_import.c"
+#undef strcmp
+#undef source_sha256
+#undef tcti_target_inventory_sha256
+#undef tcti_target_inventory_operation
+#undef tcti_target_inventory_import
+#undef tcti_target_inventory_destroy
 
 #define EXPECT_EQ(expected, actual)                                            \
 	do {                                                                      \
@@ -146,6 +179,167 @@ static const struct tcti_target_operand *find_operand(
 	return NULL;
 }
 
+static const struct tcti_target_fixed_operand *find_fixed_operand(
+	const struct tcti_target_inventory *inventory, size_t leaf_index,
+	const char *name)
+{
+	size_t cursor;
+
+	for (cursor = 0; cursor < inventory->fixed_operand_count; cursor++)
+		if (inventory->fixed_operands[cursor].leaf_index == leaf_index &&
+		    !strcmp(inventory->fixed_operands[cursor].name, name))
+			return &inventory->fixed_operands[cursor];
+	return NULL;
+}
+
+static int source_span_contains(const char *json, size_t offset, size_t length,
+				const char *needle)
+{
+	size_t needle_length = strlen(needle);
+	size_t cursor;
+
+	if (needle_length > length)
+		return 0;
+	for (cursor = 0; cursor <= length - needle_length; cursor++)
+		if (!memcmp(json + offset + cursor, needle, needle_length))
+			return 1;
+	return 0;
+}
+
+static int source_span_is_exact_object(const char *json, size_t offset,
+				       size_t length)
+{
+	size_t cursor;
+	unsigned int depth = 0;
+	int in_string = 0;
+	int escaped = 0;
+
+	if (!length || json[offset] != '{')
+		return 0;
+	for (cursor = 0; cursor < length; cursor++) {
+		char byte = json[offset + cursor];
+
+		if (in_string) {
+			if (escaped)
+				escaped = 0;
+			else if (byte == '\\')
+				escaped = 1;
+			else if (byte == '"')
+				in_string = 0;
+			continue;
+		}
+		if (byte == '"') {
+			in_string = 1;
+			continue;
+		}
+		if (byte == '{')
+			depth++;
+		else if (byte == '}') {
+			if (!depth || --depth == 0)
+				return !depth && cursor + 1 == length;
+		}
+	}
+	return 0;
+}
+
+static int append_fixture(char **cursor, size_t *remaining, const char *format,
+			  ...)
+{
+	va_list args;
+	int written;
+
+	va_start(args, format);
+	written = vsnprintf(*cursor, *remaining, format, args);
+	va_end(args);
+	if (written < 0 || (size_t)written >= *remaining)
+		return -1;
+	*cursor += written;
+	*remaining -= (size_t)written;
+	return 0;
+}
+
+static int named_fixed_and_partial_fields_use_distinct_planes(void)
+{
+	static const char prefix[] =
+		"{\"_meta\":{\"version\":{\"architecture\":\"vFATAp1-A\","
+		"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\","
+		"\"timestamp\":\"2026-06-24 17:12:14\"}},"
+		"\"instructions\":[{\"name\":\"A64\","
+		"\"_type\":\"Instruction.InstructionSet\","
+		"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
+		"\"children\":[";
+	static const char first_values[] =
+		"[{\"_type\":\"Instruction.Encodeset.Field\",\"name\":\"fixed\","
+		"\"range\":{\"start\":22,\"width\":2},"
+		"\"value\":{\"value\":\"'10'\"}},"
+		"{\"_type\":\"Instruction.Encodeset.Field\",\"name\":\"mixed\","
+		"\"range\":{\"start\":5,\"width\":3},"
+		"\"value\":{\"value\":\"'x0x'\"}}]";
+	static const char other_values[] =
+		"[{\"_type\":\"Instruction.Encodeset.Bits\","
+		"\"range\":{\"start\":0,\"width\":1},"
+		"\"value\":{\"value\":\"'0'\"}}]";
+	static const char suffix[] =
+		"]}],\"operations\":{\"fixture_op\":{"
+		"\"_type\":\"Instruction.Operation\"}}}";
+	struct tcti_target_inventory inventory = { 0 };
+	struct tcti_target_import_error error = { 0 };
+	const struct tcti_target_leaf *leaf;
+	const struct tcti_target_fixed_operand *fixed;
+	const struct tcti_target_operand *mixed;
+	char *json;
+	char *cursor;
+	size_t remaining;
+	size_t leaf_index;
+	uint32_t index;
+	int status = -1;
+
+	json = malloc(2U * 1024U * 1024U);
+	if (!json)
+		return -1;
+	cursor = json;
+	remaining = 2U * 1024U * 1024U;
+	if (append_fixture(&cursor, &remaining, "%s", prefix))
+		goto out;
+	for (index = 0; index < TCTI_A64_TARGET_LEAF_COUNT; index++) {
+		if (append_fixture(&cursor, &remaining,
+			"%s{\"_type\":\"Instruction.Instruction\","
+			"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
+			"\"name\":\"fixture_leaf_%u\",\"operation_id\":\"fixture_op\","
+			"\"preferred\":null,"
+			"\"assembly\":{\"symbols\":[{\"_type\":"
+			"\"Instruction.Symbols.Literal\",\"value\":\"OP\"}]},"
+			"\"encoding\":{\"width\":32,\"values\":%s}}",
+			index ? "," : "", index,
+			index ? other_values : first_values))
+			goto out;
+	}
+	if (append_fixture(&cursor, &remaining, "%s", suffix))
+		goto out;
+	fixture_pinned_hash = fixture_source_sha256;
+	if (fixture_inventory_import(json, (size_t)(cursor - json), &inventory,
+				     &error))
+		goto out;
+	leaf = find_leaf(&inventory, "fixture_leaf_0", &leaf_index);
+	fixed = leaf ? find_fixed_operand(&inventory, leaf_index, "fixed") : NULL;
+	mixed = leaf ? find_operand(&inventory, leaf_index, "mixed") : NULL;
+	if (!leaf || !fixed || !mixed ||
+	    fixed->start != 22U || fixed->width != 2U ||
+	    fixed->fixed_mask != 0x00c00000U ||
+	    fixed->fixed_value != 0x00800000U ||
+	    mixed->start != 5U || mixed->width != 3U ||
+	    mixed->variable_mask != 0x000000a0U ||
+	    find_operand(&inventory, leaf_index, "fixed") ||
+	    find_fixed_operand(&inventory, leaf_index, "mixed"))
+		goto out;
+	status = 0;
+out:
+	fixture_pinned_hash = NULL;
+	fixture_inventory_destroy(&inventory);
+	free(json);
+	return status;
+}
+
 static int expect_operand(const struct tcti_target_inventory *inventory,
 			  size_t leaf_index, uint32_t condition, const char *name,
 			  uint8_t start, uint8_t width, uint32_t variable_mask)
@@ -186,6 +380,102 @@ static int pinned_operand_provenance_is_exact(
 			   0x0000001fU))
 		return -1;
 	return 0;
+}
+
+/*
+ * sve_int_log_imm declares opc in the shared parent encodeset.  Its three
+ * terminal encodings bind the field to a fixed value, while their inherited
+ * condition excludes the fourth value.  This is source provenance, not a
+ * runtime operand domain.
+ */
+static int pinned_inherited_fixed_operand_provenance_is_exact(
+	const struct tcti_target_inventory *inventory, const char *json,
+	size_t json_length)
+{
+	static const struct {
+		const char *leaf_name;
+		uint32_t value;
+		const char *literal;
+	} cases[] = {
+		{ "orr_z_zi_", 0U, "'00'" },
+		{ "eor_z_zi_", 1U, "'01'" },
+		{ "and_z_zi_", 2U, "'10'" },
+	};
+	size_t case_index;
+
+	for (case_index = 0; case_index < sizeof(cases) / sizeof(cases[0]);
+	     case_index++) {
+		const struct tcti_target_leaf *leaf;
+		size_t leaf_index;
+		const struct tcti_target_fixed_operand *fixed;
+		size_t leaf_end;
+
+		leaf = find_leaf(inventory, cases[case_index].leaf_name, &leaf_index);
+		if (!leaf)
+			return -1;
+		fixed = find_fixed_operand(inventory, leaf_index, "opc");
+		if (!fixed || fixed->condition != leaf->condition ||
+		    fixed->start != 22U || fixed->width != 2U ||
+		    fixed->fixed_mask != 0x00c00000U ||
+		    fixed->fixed_value != cases[case_index].value << 22 ||
+		    !fixed->source_length)
+			return -1;
+		leaf_end = leaf->source_offset + leaf->source_length;
+		if (leaf->source_offset >= json_length ||
+		    leaf->source_length > json_length - leaf->source_offset ||
+		    fixed->source_offset < leaf->source_offset ||
+		    fixed->source_offset >= leaf_end ||
+		    fixed->source_length > leaf_end - fixed->source_offset ||
+		    !source_span_is_exact_object(json, fixed->source_offset,
+						 fixed->source_length) ||
+		    !source_span_contains(json, fixed->source_offset,
+					  fixed->source_length,
+					  "\"_type\": \"Instruction.Encodeset.Field\"") ||
+		    !source_span_contains(json, fixed->source_offset,
+					  fixed->source_length, "\"name\": \"opc\"") ||
+		    !source_span_contains(json, fixed->source_offset,
+					  fixed->source_length, "\"start\": 22") ||
+		    !source_span_contains(json, fixed->source_offset,
+					  fixed->source_length, "\"width\": 2") ||
+		    !source_span_contains(json, fixed->source_offset,
+					  fixed->source_length, cases[case_index].literal))
+			return -1;
+		if (find_operand(inventory, leaf_index, "opc"))
+			return -1;
+	}
+	return 0;
+}
+
+/*
+ * A named field is represented in exactly one provenance plane.  The pinned
+ * source contains both fixed fields and fields with a mix of x and literal
+ * bits, so this is a negative fixture for the old conflated representation.
+ */
+static int fixed_and_partially_variable_fields_are_disjoint(
+	const struct tcti_target_inventory *inventory)
+{
+	size_t index;
+	int saw_partial_variable = 0;
+
+	for (index = 0; index < inventory->fixed_operand_count; index++) {
+		const struct tcti_target_fixed_operand *fixed =
+			&inventory->fixed_operands[index];
+
+		if (find_operand(inventory, fixed->leaf_index, fixed->name))
+			return -1;
+	}
+	for (index = 0; index < inventory->operand_count; index++) {
+		const struct tcti_target_operand *operand =
+			&inventory->operands[index];
+		uint32_t field_mask = operand->width == 32 ? UINT32_MAX :
+			((1U << operand->width) - 1U) << operand->start;
+
+		if (find_fixed_operand(inventory, operand->leaf_index, operand->name))
+			return -1;
+		if (operand->variable_mask != field_mask)
+			saw_partial_variable = 1;
+	}
+	return saw_partial_variable ? 0 : -1;
 }
 
 static int pinned_leaf_source_spans_are_exact(
@@ -419,6 +709,13 @@ static int import_pinned_source(const char *path)
 						     &inventory))
 		goto out_json;
 	if (pinned_operand_provenance_is_exact(&inventory))
+		goto out_json;
+	if (pinned_inherited_fixed_operand_provenance_is_exact(
+		    &inventory, json, (size_t)length))
+		goto out_json;
+	if (named_fixed_and_partial_fields_use_distinct_planes())
+		goto out_json;
+	if (fixed_and_partially_variable_fields_are_disjoint(&inventory))
 		goto out_json;
 	tcti_target_inventory_destroy(&inventory);
 	memset(&error, 0, sizeof(error));

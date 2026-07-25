@@ -952,6 +952,18 @@ static void discard_operands_from(struct tcti_target_inventory *inventory,
 	}
 }
 
+static void discard_fixed_operands_from(struct tcti_target_inventory *inventory,
+					size_t first)
+{
+	while (inventory->fixed_operand_count > first) {
+		struct tcti_target_fixed_operand *operand =
+			&inventory->fixed_operands[--inventory->fixed_operand_count];
+
+		inventory->fixed_operand_name_bytes -= strlen(operand->name) + 1;
+		free(operand->name);
+	}
+}
+
 static int add_operand(struct importer *importer, int name_token,
 		       uint32_t leaf_index, uint32_t condition,
 		       unsigned int start, unsigned int width,
@@ -1015,6 +1027,73 @@ static int add_operand(struct importer *importer, int name_token,
 	return 0;
 }
 
+static int add_fixed_operand(struct importer *importer, int name_token,
+			     uint32_t leaf_index, uint32_t condition,
+			     unsigned int start, unsigned int width,
+			     uint32_t fixed_mask, uint32_t fixed_value,
+			     size_t source_offset, size_t source_length)
+{
+	struct tcti_target_inventory *inventory = importer->inventory;
+	char *name;
+	size_t name_bytes;
+	size_t index;
+
+	name = copy_token(importer, name_token);
+	if (!name || !name[0]) {
+		free(name);
+		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  importer->tokens[name_token].start,
+			  "fixed A64 encoding field lacks a name");
+		return -1;
+	}
+	name_bytes = strlen(name) + 1;
+	if (name_bytes > TCTI_TARGET_MAX_OPERAND_NAME_BYTES ||
+	    inventory->fixed_operand_name_bytes >
+	    TCTI_TARGET_MAX_OPERAND_NAME_BYTES - name_bytes ||
+	    inventory->fixed_operand_count >= TCTI_TARGET_MAX_OPERANDS) {
+		free(name);
+		set_error(importer->error, TCTI_TARGET_IMPORT_INPUT_LIMIT,
+			  importer->tokens[name_token].start,
+			  "fixed A64 encoding field resource limit exceeded");
+		return -1;
+	}
+	for (index = 0; index < inventory->fixed_operand_count; index++) {
+		const struct tcti_target_fixed_operand *prior =
+			&inventory->fixed_operands[index];
+
+		if (prior->leaf_index == leaf_index && !strcmp(prior->name, name)) {
+			free(name);
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  importer->tokens[name_token].start,
+				  "duplicate fixed A64 encoding field");
+			return -1;
+		}
+	}
+	if (reserve((void **)&inventory->fixed_operands,
+		    &inventory->fixed_operand_capacity,
+		    inventory->fixed_operand_count + 1,
+		    sizeof(*inventory->fixed_operands))) {
+		free(name);
+		set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+			  "cannot allocate fixed A64 encoding fields");
+		return -1;
+	}
+	inventory->fixed_operands[inventory->fixed_operand_count++] =
+		(struct tcti_target_fixed_operand) {
+			.name = name,
+			.leaf_index = leaf_index,
+			.condition = condition,
+			.fixed_mask = fixed_mask,
+			.fixed_value = fixed_value,
+			.start = (uint8_t)start,
+			.width = (uint8_t)width,
+			.source_offset = source_offset,
+			.source_length = source_length,
+		};
+	inventory->fixed_operand_name_bytes += name_bytes;
+	return 0;
+}
+
 static int decode_encoding(struct importer *importer, int node_index,
 			   uint32_t leaf_index, uint32_t condition,
 			   uint32_t *mask, uint32_t *pattern)
@@ -1025,6 +1104,7 @@ static int decode_encoding(struct importer *importer, int node_index,
 	unsigned int bits;
 	size_t i;
 	size_t first_operand = importer->inventory->operand_count;
+	size_t first_fixed_operand = importer->inventory->fixed_operand_count;
 	uint32_t occupied = 0;
 
 	*mask = 0;
@@ -1116,11 +1196,23 @@ static int decode_encoding(struct importer *importer, int node_index,
 			if (add_operand(importer, name_token, leaf_index, condition,
 					start, field_width, variable_mask))
 				goto fail;
+		} else if (type >= 0 && name_token >= 0 &&
+			   token_equals(importer->json, &importer->tokens[type],
+					"Instruction.Encodeset.Field") &&
+			   importer->tokens[name_token].kind == JSON_STRING &&
+			   add_fixed_operand(importer, name_token, leaf_index, condition,
+					     start, field_width, field_mask,
+					     *pattern & field_mask,
+					     importer->tokens[field].start,
+					     importer->tokens[field].end -
+					     importer->tokens[field].start)) {
+			goto fail;
 		}
 	}
 	return 0;
 fail:
 	discard_operands_from(importer->inventory, first_operand);
+	discard_fixed_operands_from(importer->inventory, first_fixed_operand);
 	return -1;
 }
 
@@ -1155,6 +1247,7 @@ static int add_leaf(struct importer *importer, int node_index,
 	int condition_object = object_find(importer, node_index, "condition");
 	int preferred = object_find(importer, node_index, "preferred");
 	size_t first_operand = inventory->operand_count;
+	size_t first_fixed_operand = inventory->fixed_operand_count;
 	size_t i;
 
 	leaf.name = copy_token(importer, name);
@@ -1216,6 +1309,7 @@ static int add_leaf(struct importer *importer, int node_index,
 	return 0;
 fail:
 	discard_operands_from(inventory, first_operand);
+	discard_fixed_operands_from(inventory, first_fixed_operand);
 	free(leaf.name);
 	free(leaf.mnemonic);
 	free(leaf.operation_id);
@@ -1799,10 +1893,13 @@ void tcti_target_inventory_destroy(struct tcti_target_inventory *inventory)
 		free(inventory->expressions[i].text);
 	for (i = 0; i < inventory->operand_count; i++)
 		free(inventory->operands[i].name);
+	for (i = 0; i < inventory->fixed_operand_count; i++)
+		free(inventory->fixed_operands[i].name);
 	free(inventory->leaves);
 	free(inventory->expressions);
 	free(inventory->set_items);
 	free(inventory->operands);
+	free(inventory->fixed_operands);
 	for (i = 0; i < inventory->operation_count; i++) {
 		free(inventory->operations[i].id);
 		free(inventory->operations[i].alias_operation_id);

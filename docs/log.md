@@ -638,3 +638,12 @@ with the generated leaf mask and pattern. This is applicability infrastructure
 only. It grants no instruction-semantic or proof credit, and the complete-target
 audit remains blocked by 116 unresolved operand conditions, 3,941 missing
 feature configurations, and 4,350 unavailable official shared-ASL bodies.
+
+## [2026-07-25] test | Retain fixed instruction-field provenance
+
+Extended the pinned AARCHMRS importer with a separate C-native fixed-operand
+provenance plane for named all-fixed encoding fields. Focused tests bind inherited
+`opc` values for `orr_z_zi_`, `eor_z_zi_`, and `and_z_zi_` to exact leaf-local
+source objects, and prove fixed and partially variable fields remain disjoint.
+This checkpoint records source provenance only. It grants no feature-applicability,
+semantic, implementation, KUnit, kselftest, or runtime-advertisement credit.

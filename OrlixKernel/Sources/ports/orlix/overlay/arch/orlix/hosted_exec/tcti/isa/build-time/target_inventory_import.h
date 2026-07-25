@@ -70,6 +70,23 @@ struct tcti_target_operand {
 	uint8_t width;
 };
 
+/*
+ * A named encoding field whose complete bit range is fixed by one source
+ * leaf.  It is retained for source-to-condition provenance, but is never a
+ * runtime-variable operand.
+ */
+struct tcti_target_fixed_operand {
+	char *name;
+	uint32_t leaf_index;
+	uint32_t condition;
+	uint32_t fixed_mask;
+	uint32_t fixed_value;
+	uint8_t start;
+	uint8_t width;
+	size_t source_offset;
+	size_t source_length;
+};
+
 /* An authoritative inline AARCHMRS operation object, not shared-ASL corpus data. */
 struct tcti_target_operation {
 	char *id;
@@ -120,6 +137,10 @@ struct tcti_target_inventory {
 	size_t operand_count;
 	size_t operand_capacity;
 	size_t operand_name_bytes;
+	struct tcti_target_fixed_operand *fixed_operands;
+	size_t fixed_operand_count;
+	size_t fixed_operand_capacity;
+	size_t fixed_operand_name_bytes;
 	struct tcti_target_operation *operations;
 	size_t operation_count;
 	size_t operation_capacity;
