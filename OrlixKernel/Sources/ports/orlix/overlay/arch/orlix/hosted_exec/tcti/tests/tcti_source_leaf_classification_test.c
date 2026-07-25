@@ -3,6 +3,7 @@
 #include <asm/ptrace.h>
 #include <asm/tcti.h>
 #include <kunit/test.h>
+#include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
@@ -92,15 +93,10 @@ static void tcti_system_leaf_catalog_tracks_authoritative_fanout(
 		KUNIT_EXPECT_NOT_NULL(test, leaf->proof_id);
 	}
 
-	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_NON_EL0_REJECTION,
+	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_EL0_VARIANT_REQUIRED,
 			system_leaf_classifications[1].el0_classification);
-	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
-			system_leaf_classifications[1].implementation_status);
-	KUNIT_EXPECT_EQ(test, TCTI_SYSTEM_LEAF_PROVED,
-			system_leaf_classifications[1].proof_status);
 
-	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++)
-		if (index != 1) {
+	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++) {
 			KUNIT_EXPECT_EQ_MSG(test, TCTI_SYSTEM_LEAF_PENDING,
 					    system_leaf_classifications[index].implementation_status,
 					    "source ordinal %u",
@@ -109,7 +105,7 @@ static void tcti_system_leaf_catalog_tracks_authoritative_fanout(
 					    system_leaf_classifications[index].proof_status,
 					    "source ordinal %u",
 					    system_leaf_classifications[index].ordinal);
-		}
+	}
 }
 
 static unsigned long source_leaf_map(struct kunit *test, u32 instruction)
@@ -139,7 +135,10 @@ static void tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *test)
 		struct tcti_source_leaf_rejection entry;
 		const struct tcti_source_leaf_rejection *leaf =
 			tcti_source_leaf_rejection_at(index, &entry);
-		struct tcti_decoded_instruction decoded;
+		u32 variable_mask;
+		u32 variable_fields = 0;
+		u32 variable_count = 0;
+		unsigned int variable_width;
 
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
 
@@ -147,11 +146,33 @@ static void tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *test)
 				    leaf->pattern & leaf->mask,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
-		decoded = tcti_decode_aarch64(leaf->pattern);
-		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
-				    decoded.decode_class,
-				    "%s (%s) source ordinal %u was accepted at EL0",
-				    leaf->name, leaf->operation, leaf->ordinal);
+		variable_mask = ~leaf->mask;
+		variable_width = hweight32(variable_mask);
+		KUNIT_ASSERT_LE_MSG(test, variable_width, 16U,
+				    "%s source ordinal %u has %u variable bits",
+				    leaf->name, leaf->ordinal, variable_width);
+		do {
+			u32 instruction = leaf->pattern | variable_fields;
+			struct tcti_decoded_instruction decoded =
+				tcti_decode_aarch64(instruction);
+
+			KUNIT_ASSERT_EQ_MSG(test, leaf->pattern,
+					    instruction & leaf->mask,
+					    "%s source ordinal %u variable fields %#x",
+					    leaf->name, leaf->ordinal,
+					    variable_fields);
+			KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+					    decoded.decode_class,
+					    "%s (%s) source ordinal %u accepted encoding %#x",
+					    leaf->name, leaf->operation,
+					    leaf->ordinal, instruction);
+			variable_count++;
+			variable_fields =
+				(variable_fields - variable_mask) & variable_mask;
+		} while (variable_fields);
+		KUNIT_EXPECT_EQ_MSG(test, 1U << variable_width, variable_count,
+				    "%s source ordinal %u variable-field coverage",
+				    leaf->name, leaf->ordinal);
 	}
 }
 
@@ -188,11 +209,10 @@ static void tcti_source_leaf_rejections_are_structured_el0_exits(
 		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, result.instruction,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
-		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs,
-				   sizeof(regs.regs));
-		KUNIT_EXPECT_EQ_MSG(test, before.pc, regs.pc,
+		KUNIT_EXPECT_EQ_MSG(test, before.pc, result.pc,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 }

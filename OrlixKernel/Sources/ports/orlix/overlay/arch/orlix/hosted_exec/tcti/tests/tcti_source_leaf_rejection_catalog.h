@@ -54,10 +54,28 @@ static const struct tcti_source_leaf_proof_binding
 };
 #undef TCTI_A64_SOURCE_BOUND_PROOF
 
-static inline bool tcti_source_leaf_is_rejection_proof(const char *proof_id)
+static inline bool
+tcti_source_leaf_is_unconditional_el0_rejection(const char *proof_id)
 {
-	return !strncmp(proof_id, "kunit:source-leaf-",
-			strlen("kunit:source-leaf-"));
+	/* Selector-dependent generic encodings have separate partition tests. */
+	static const char * const proof_ids[] = {
+		"kunit:source-leaf-udf-undefined",
+		"kunit:source-leaf-hvc-non-el0",
+		"kunit:source-leaf-smc-non-el0",
+		"kunit:source-leaf-dcps1-non-el0",
+		"kunit:source-leaf-dcps2-non-el0",
+		"kunit:source-leaf-dcps3-non-el0",
+		"kunit:source-leaf-eret-non-el0",
+		"kunit:source-leaf-ereta-non-el0",
+		"kunit:source-leaf-drps-non-el0",
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(proof_ids); index++)
+		if (!strcmp(proof_id, proof_ids[index]))
+			return true;
+
+	return false;
 }
 
 static inline const struct tcti_source_leaf_manifest_row *
@@ -80,7 +98,7 @@ static inline size_t tcti_source_leaf_rejection_count(void)
 
 	for (index = 0; index < ARRAY_SIZE(tcti_source_leaf_proof_bindings);
 	     index++)
-		if (tcti_source_leaf_is_rejection_proof(
+		if (tcti_source_leaf_is_unconditional_el0_rejection(
 			tcti_source_leaf_proof_bindings[index].proof_id))
 			count++;
 
@@ -100,7 +118,8 @@ tcti_source_leaf_rejection_at(size_t rejection_index,
 		const struct tcti_source_leaf_proof_binding *binding =
 			&tcti_source_leaf_proof_bindings[index];
 
-		if (!tcti_source_leaf_is_rejection_proof(binding->proof_id))
+		if (!tcti_source_leaf_is_unconditional_el0_rejection(
+			binding->proof_id))
 			continue;
 		if (count++ != rejection_index)
 			continue;

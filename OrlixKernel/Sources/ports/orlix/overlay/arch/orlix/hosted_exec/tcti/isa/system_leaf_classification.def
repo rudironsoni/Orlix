@@ -20,11 +20,11 @@ TCTI_SYSTEM_LEAF_CLASSIFICATION(2281U, "SYS_CR_systeminstrs", "SYS", "true",
 	"kunit:system-leaf-accessor-partition", TCTI_SYSTEM_LEAF_PENDING,
 	TCTI_SYSTEM_LEAF_UNPROVED)
 TCTI_SYSTEM_LEAF_CLASSIFICATION(2282U, "SYSL_RC_systeminstrs", "SYSL", "true",
-	TCTI_SYSTEM_LEAF_NON_EL0_REJECTION,
+	TCTI_SYSTEM_LEAF_EL0_VARIANT_REQUIRED,
 	TCTI_SYSTEM_LEAF_RELATION_NONE, "operations/SYSL",
-	"arch/orlix:tcti-source-leaf-classification",
-	"kunit:source-leaf-sysl-non-el0", TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
-	TCTI_SYSTEM_LEAF_PROVED)
+	"arch/orlix:tcti-system-accessor-dispatch",
+	"kunit:system-leaf-accessor-partition", TCTI_SYSTEM_LEAF_PENDING,
+	TCTI_SYSTEM_LEAF_UNPROVED)
 TCTI_SYSTEM_LEAF_CLASSIFICATION(2283U, "MSR_SR_systemmove", "MSR_reg", "true",
 	TCTI_SYSTEM_LEAF_EL0_VARIANT_REQUIRED,
 	TCTI_SYSTEM_LEAF_RELATION_NONE, "operations/MSR_reg",

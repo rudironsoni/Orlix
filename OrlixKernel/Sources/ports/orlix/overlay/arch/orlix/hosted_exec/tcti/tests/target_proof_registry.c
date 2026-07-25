@@ -34,6 +34,7 @@
 	 TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
 #define UNDEFINED_REJECTION_OBLIGATIONS \
 	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_MEMORY | TCTI_TARGET_PROOF_OBLIGATION_PC | \
@@ -279,7 +280,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "ac6c5af06d59ba16130aee4dd83593148a0b4ef15d5fd14e32c531161fa6ec29",
 	  "tcti_add_sub_register_source_bound_test.o" },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "a6d4768f0458875a667ec8f4dca2a722a5adac831aa0fd9d4cd24f1079d3d25c",
+	  "83e04d900faa2abc7a8120b29d8a01e4fe2300266e182423515cbbf5428ab0ca",
 	  "tcti_source_leaf_classification_test.o" },
 	{ BRANCH_CONTROL_SOURCE,
 	  "e3c49a1eb3dac876250db1806581b7da1fe1654717bd7eaa698d488f67ceb9b0",
@@ -564,8 +565,7 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY,
 	  "tcti_source_leaf_rejections_are_structured_el0_exits",
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-	  TCTI_TARGET_PROOF_OBLIGATION_PC |
-	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
 	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
 	  "bcs_source_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1461,8 +1461,8 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 #define SCALAR_PROOF_REGISTRY_BINDING_COUNT 65U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 11U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 10U
 #define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 10U
 #define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 12U
 
@@ -2525,8 +2525,6 @@ source_leaf_rejection_registry_operations[] = {
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-dcps3-non-el0",
 	  .classification = 2 },
-	{ .proof_id = "kunit:source-leaf-sysl-non-el0",
-	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-ereta-non-el0",
@@ -2544,18 +2542,17 @@ static const struct tcti_target_proof_case source_leaf_rejection_cases[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "tcti_source_leaf_rejections_are_structured_el0_exits",
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-	  TCTI_TARGET_PROOF_OBLIGATION_PC |
-	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 static const struct tcti_target_proof_case source_leaf_undefined_cases[] = {
 	{ "tcti_source_leaf_rejections_match_pinned_tuples",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "tcti_source_leaf_rejections_are_structured_el0_exits",
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  TCTI_TARGET_PROOF_OBLIGATION_PC |
-		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 static bool source_leaf_rejection_registry_ready;
 

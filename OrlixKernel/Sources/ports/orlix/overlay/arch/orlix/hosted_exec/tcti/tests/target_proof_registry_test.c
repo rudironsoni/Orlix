@@ -310,7 +310,7 @@ static int privileged_profiles_and_count_caps_fail_closed(void)
 	EXPECT(tcti_target_proof_operation_requirements("UDF_perm_undef", 3,
 						       &requirements) == 0);
 	EXPECT((requirements & TCTI_TARGET_PROOF_OBLIGATION_FAULTS) != 0);
-	EXPECT((requirements & TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS) == 0);
+	EXPECT((requirements & TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS) != 0);
 	EXPECT(tcti_target_proof_operation_requirements("not-mapped", 1,
 						       &requirements) == -1);
 	EXPECT(tcti_target_proof_registry_validate(&add_entry, 4351,
