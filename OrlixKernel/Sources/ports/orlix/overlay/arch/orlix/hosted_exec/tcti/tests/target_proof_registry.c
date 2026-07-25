@@ -171,6 +171,12 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"tcti_source_leaf_classification_test_suite"
 #define SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY \
 	"tcti_source_leaf_classification_test_cases"
+#define BRANCH_CONTROL_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_branch_control_source_bound_test.c"
+#define BRANCH_CONTROL_SUITE "orlix-tcti-branch-control-source-bound"
+#define BRANCH_CONTROL_SUITE_SYMBOL \
+	"tcti_branch_control_source_bound_test_suite"
+#define BRANCH_CONTROL_CASE_ARRAY "bcs_cases"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c"
 #define DECODE_SUITE "orlix-tcti-decode"
@@ -208,6 +214,9 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ORDINARY_LOAD_STORE_OBLIGATIONS \
 	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
+#define BRANCH_CONTROL_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
@@ -253,6 +262,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  "a6d4768f0458875a667ec8f4dca2a722a5adac831aa0fd9d4cd24f1079d3d25c",
 	  "tcti_source_leaf_classification_test.o" },
+	{ BRANCH_CONTROL_SOURCE,
+	  "588e4bf1730a045805bec9f77846de2afb2f72226fbb708ea9c92f0838122c00",
+	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
 	  "4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",
 	  "tcti_decode_test.o" },
@@ -527,6 +539,14 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  TCTI_TARGET_PROOF_OBLIGATION_PC |
 	  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
+	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
+	  "bcs_source_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
+	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
+	  "bcs_production_resume", TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "tcti_decode_exhaustive_load_store_unsigned_immediate_family",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -608,6 +628,16 @@ static const struct operation_requirements operation_requirements[] = {
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_PC |
 		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "B_cond", BRANCH_CONTROL_OBLIGATIONS },
+	{ "BR", BRANCH_CONTROL_OBLIGATIONS },
+	{ "BLR", BRANCH_CONTROL_OBLIGATIONS },
+	{ "RET", BRANCH_CONTROL_OBLIGATIONS },
+	{ "B_uncond", BRANCH_CONTROL_OBLIGATIONS },
+	{ "BL", BRANCH_CONTROL_OBLIGATIONS },
+	{ "CBZ", BRANCH_CONTROL_OBLIGATIONS },
+	{ "CBNZ", BRANCH_CONTROL_OBLIGATIONS },
+	{ "TBZ", BRANCH_CONTROL_OBLIGATIONS },
+	{ "TBNZ", BRANCH_CONTROL_OBLIGATIONS },
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -1333,13 +1363,16 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 11U
+#define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 10U
+#define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 12U
 
 static struct tcti_target_proof_registry_entry proof_registry_entries[
 	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
 	ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT +
 	SCALAR_PROOF_REGISTRY_ENTRY_COUNT +
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
-	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT] = {
+	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
+	BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -2196,7 +2229,8 @@ static bool build_ordinary_load_store_registry(void)
 	size_t binding_offset = 0;
 	size_t index;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT;
+		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
+		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -2412,7 +2446,8 @@ static bool build_source_leaf_rejection_registry(void)
 	size_t binding_offset = 0;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
-		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT;
+		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
+		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -2502,6 +2537,135 @@ static bool build_source_leaf_rejection_registry(void)
 			};
 	}
 	source_leaf_rejection_registry_ready = true;
+	return true;
+}
+
+struct branch_control_registry_operation {
+	const char *proof_id;
+	const char *operation_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static struct branch_control_registry_operation branch_control_registry_operations[] = {
+	{ .proof_id = "kunit:branch-control-b-cond", .operation_id = "B_cond" },
+	{ .proof_id = "kunit:branch-control-br", .operation_id = "BR" },
+	{ .proof_id = "kunit:branch-control-blr", .operation_id = "BLR" },
+	{ .proof_id = "kunit:branch-control-ret", .operation_id = "RET" },
+	{ .proof_id = "kunit:branch-control-b-uncond", .operation_id = "B_uncond" },
+	{ .proof_id = "kunit:branch-control-bl", .operation_id = "BL" },
+	{ .proof_id = "kunit:branch-control-cbz", .operation_id = "CBZ" },
+	{ .proof_id = "kunit:branch-control-cbnz", .operation_id = "CBNZ" },
+	{ .proof_id = "kunit:branch-control-tbz", .operation_id = "TBZ" },
+	{ .proof_id = "kunit:branch-control-tbnz", .operation_id = "TBNZ" },
+};
+
+static struct tcti_target_proof_binding branch_control_registry_bindings[
+	BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT];
+static const struct tcti_target_proof_case branch_control_cases[] = {
+	{ "bcs_source_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "bcs_production_resume", TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+static bool branch_control_registry_ready;
+
+static struct branch_control_registry_operation *
+branch_control_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	     index++)
+		if (!strcmp(proof_id, branch_control_registry_operations[index].proof_id))
+			return &branch_control_registry_operations[index];
+	return NULL;
+}
+
+static bool build_branch_control_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t index;
+
+	if (branch_control_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct branch_control_registry_operation *operation =
+			branch_control_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	     index++) {
+		struct branch_control_registry_operation *operation =
+			&branch_control_registry_operations[index];
+
+		if (!operation->binding_count ||
+		    binding_offset + operation->binding_count >
+		    ARRAY_COUNT(branch_control_registry_bindings))
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct branch_control_registry_operation *operation =
+			branch_control_registry_operation_for(
+				source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (!source || strcmp(operation->operation_id, source->operation_id))
+			return false;
+		binding = &branch_control_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		*binding = (struct tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask = UINT64_C(0x3),
+			.source_ordinal = source->ordinal,
+		};
+	}
+	if (binding_offset != ARRAY_COUNT(branch_control_registry_bindings))
+		return false;
+	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	     index++) {
+		const struct branch_control_registry_operation *operation =
+			&branch_control_registry_operations[index];
+
+		if (!operation->binding_count)
+			return false;
+		proof_registry_entries[entry_base + index] =
+			(struct tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask =
+					TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+				.obligations = BRANCH_CONTROL_OBLIGATIONS,
+				.linux_interface =
+					TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = BRANCH_CONTROL_SOURCE,
+				.kunit_suite = BRANCH_CONTROL_SUITE,
+				.kunit_cases = branch_control_cases,
+				.kunit_case_count = ARRAY_COUNT(branch_control_cases),
+				.bindings = &branch_control_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations = BRANCH_CONTROL_OBLIGATIONS,
+			};
+	}
+	branch_control_registry_ready = true;
 	return true;
 }
 
@@ -3166,7 +3330,8 @@ tcti_target_proof_registry_entries(size_t *count)
 	if (!build_lse_registry() || !build_scalar_registry() ||
 	    !build_exclusive_registry() ||
 	    !build_ordinary_load_store_registry() ||
-	    !build_source_leaf_rejection_registry()) {
+	    !build_source_leaf_rejection_registry() ||
+	    !build_branch_control_registry()) {
 		if (count)
 			*count = 0;
 		return NULL;

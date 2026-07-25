@@ -666,6 +666,99 @@ static int exclusive_registry_binds_exact_baseline_leaves(void)
 	return 0;
 }
 
+static int branch_control_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		uint32_t ordinal;
+		const char *proof_id;
+		const char *leaf_name;
+		const char *mnemonic;
+		const char *operation_id;
+	} expected[] = {
+		{ 2211U, "kunit:branch-control-b-cond", "B_only_condbranch",
+		  "B", "B_cond" },
+		{ 2288U, "kunit:branch-control-br", "BR_64_branch_reg",
+		  "BR", "BR" },
+		{ 2291U, "kunit:branch-control-blr", "BLR_64_branch_reg",
+		  "BLR", "BLR" },
+		{ 2294U, "kunit:branch-control-ret", "RET_64R_branch_reg",
+		  "RET", "RET" },
+		{ 2312U, "kunit:branch-control-b-uncond",
+		  "B_only_branch_imm", "B", "B_uncond" },
+		{ 2313U, "kunit:branch-control-bl", "BL_only_branch_imm",
+		  "BL", "BL" },
+		{ 2314U, "kunit:branch-control-cbz", "CBZ_32_compbranch",
+		  "CBZ", "CBZ" },
+		{ 2315U, "kunit:branch-control-cbnz", "CBNZ_32_compbranch",
+		  "CBNZ", "CBNZ" },
+		{ 2316U, "kunit:branch-control-cbz", "CBZ_64_compbranch",
+		  "CBZ", "CBZ" },
+		{ 2317U, "kunit:branch-control-cbnz", "CBNZ_64_compbranch",
+		  "CBNZ", "CBNZ" },
+		{ 2342U, "kunit:branch-control-tbz", "TBZ_only_testbranch",
+		  "TBZ", "TBZ" },
+		{ 2343U, "kunit:branch-control-tbnz", "TBNZ_only_testbranch",
+		  "TBNZ", "TBNZ" },
+	};
+	const struct tcti_target_proof_registry_entry *entries;
+	enum tcti_target_proof_registry_error error;
+	size_t binding_count = 0;
+	size_t entry_count = 0;
+	size_t count;
+	size_t index;
+	size_t expected_index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
+		       entries, count, &error) == 0);
+	for (index = 0; index < count; index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[index];
+		size_t binding;
+
+		if (strncmp(entry->id, "kunit:branch-control-", 21))
+			continue;
+		EXPECT(entry->classification_mask ==
+		       TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
+		EXPECT(entry->obligations ==
+		       (TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+			TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+			TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			TCTI_TARGET_PROOF_OBLIGATION_PC));
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->linux_interface ==
+		       TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		entry_count++;
+		binding_count += entry->binding_count;
+		for (binding = 0; binding < entry->binding_count; binding++) {
+			const struct tcti_target_proof_binding *item =
+				&entry->bindings[binding];
+
+			for (expected_index = 0;
+			     expected_index < sizeof(expected) / sizeof(expected[0]);
+			     expected_index++)
+				if (expected[expected_index].ordinal == item->source_ordinal)
+					break;
+			EXPECT(expected_index < sizeof(expected) / sizeof(expected[0]));
+			if (expected_index == sizeof(expected) / sizeof(expected[0]))
+				continue;
+			EXPECT(!strcmp(entry->id, expected[expected_index].proof_id));
+			EXPECT(!strcmp(item->leaf_name,
+				       expected[expected_index].leaf_name));
+			EXPECT(!strcmp(item->mnemonic,
+				       expected[expected_index].mnemonic));
+			EXPECT(!strcmp(entry->operation_id,
+				       expected[expected_index].operation_id));
+		}
+	}
+	EXPECT(entry_count == 10);
+	EXPECT(binding_count == 12);
+	return 0;
+}
+
 static int source_registration_discharges_zero_semantic_obligations(void)
 {
 	const struct tcti_target_proof_registry_entry *entries;
@@ -684,7 +777,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 479);
+	EXPECT(binding_count == 491);
 	return 0;
 }
 
@@ -888,6 +981,8 @@ int main(void)
 		  scalar_source_bindings_are_complete_and_fail_closed },
 		{ "exclusive_registry_binds_exact_baseline_leaves",
 		  exclusive_registry_binds_exact_baseline_leaves },
+		{ "branch_control_registry_binds_exact_source_rows",
+		  branch_control_registry_binds_exact_source_rows },
 		{ "source_registration_discharges_zero_semantic_obligations",
 		  source_registration_discharges_zero_semantic_obligations },
 		{ "scalar_fp_convert_registry_binds_exact_source_rows",
