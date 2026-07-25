@@ -5,7 +5,7 @@ tags:
   - orlix-tcti
 updated: 2026-07-25
 status: doing
-summary: "Classify and implement the complete pinned AArch64 ISA target through Orlix TCTI."
+summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through Orlix TCTI."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 blocks:

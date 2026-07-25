@@ -625,4 +625,5 @@ unclassified leaves, with 4,350 missing official shared-ASL provenance edges,
 proof bindings, and 417 bindings with unproved obligations. Strict
 `xcode-offload doctor` failed on six legacy system-mount conditions, so
 app-hosted KUnit and kselftest execution were not attempted and no runtime
-capability was promoted.
+capability was promoted. The generated knowledge index was refreshed with the
+checkpoint.
