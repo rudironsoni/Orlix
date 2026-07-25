@@ -714,3 +714,13 @@ source remains fail-closed because every operation body is a placeholder, every
 decode body is null, and no official shared-ASL corpus or helper manifest is
 present. This grants no instruction-semantic, proof, or runtime capability
 credit.
+
+## [2026-07-26] test | Expand production-path TCTI source coverage
+
+Added mapped-RX `tcti_resume_user` coverage for the unprivileged load/store,
+baseline exclusive, AdvSIMD table and permute, and AdvSIMD integer-halving
+families. The exclusive suite binds all 24 baseline leaves to the checked Arm
+source artifact and asserts acquire and release classification. Branch-target
+fetch faults now report deterministic structured results in both production and
+switch-debug execution. These checkpoints expand owning KUnit evidence without
+advertising a capability or claiming complete target-ISA proof.
