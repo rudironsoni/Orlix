@@ -384,6 +384,34 @@ static int cssc_min_max_immediate_registry_is_source_bound(void)
 		  "SMIN_64_minmax_imm", "SMIN", 0x91c80000U },
 		{ "kunit:cssc-min-max-immediate-umin", "UMIN_imm",
 		  "UMIN_64U_minmax_imm", "UMIN", 0x91cc0000U },
+		{ "kunit:cssc-data-processing-smax", "SMAX_reg",
+		  "SMAX_32_dp_2src", "SMAX", 0x1ac06000U },
+		{ "kunit:cssc-data-processing-umax", "UMAX_reg",
+		  "UMAX_32_dp_2src", "UMAX", 0x1ac06400U },
+		{ "kunit:cssc-data-processing-smin", "SMIN_reg",
+		  "SMIN_32_dp_2src", "SMIN", 0x1ac06800U },
+		{ "kunit:cssc-data-processing-umin", "UMIN_reg",
+		  "UMIN_32_dp_2src", "UMIN", 0x1ac06c00U },
+		{ "kunit:cssc-data-processing-smax", "SMAX_reg",
+		  "SMAX_64_dp_2src", "SMAX", 0x9ac06000U },
+		{ "kunit:cssc-data-processing-umax", "UMAX_reg",
+		  "UMAX_64_dp_2src", "UMAX", 0x9ac06400U },
+		{ "kunit:cssc-data-processing-smin", "SMIN_reg",
+		  "SMIN_64_dp_2src", "SMIN", 0x9ac06800U },
+		{ "kunit:cssc-data-processing-umin", "UMIN_reg",
+		  "UMIN_64_dp_2src", "UMIN", 0x9ac06c00U },
+		{ "kunit:cssc-data-processing-ctz", "CTZ",
+		  "CTZ_32_dp_1src", "CTZ", 0x5ac01800U },
+		{ "kunit:cssc-data-processing-cnt", "CNT",
+		  "CNT_32_dp_1src", "CNT", 0x5ac01c00U },
+		{ "kunit:cssc-data-processing-abs", "ABS",
+		  "ABS_32_dp_1src", "ABS", 0x5ac02000U },
+		{ "kunit:cssc-data-processing-ctz", "CTZ",
+		  "CTZ_64_dp_1src", "CTZ", 0xdac01800U },
+		{ "kunit:cssc-data-processing-cnt", "CNT",
+		  "CNT_64_dp_1src", "CNT", 0xdac01c00U },
+		{ "kunit:cssc-data-processing-abs", "ABS",
+		  "ABS_64_dp_1src", "ABS", 0xdac02000U },
 	};
 	const struct tcti_target_proof_registry_entry *entries;
 	enum tcti_target_proof_registry_error error;
@@ -399,7 +427,11 @@ static int cssc_min_max_immediate_registry_is_source_bound(void)
 		struct tcti_target_proof_reference reference = {
 			bindings[index].proof_id, bindings[index].leaf,
 			bindings[index].mnemonic, bindings[index].operation,
-			0xfffc0000U, bindings[index].pattern, CSSC_CONDITION, 1,
+			strstr(bindings[index].leaf, "_minmax_imm") ?
+				0xfffc0000U :
+				(strstr(bindings[index].leaf, "_dp_1src") ?
+				 0xfffffc00U : 0xffe0fc00U),
+			bindings[index].pattern, CSSC_CONDITION, 1,
 		};
 		uint32_t requirements;
 
@@ -642,7 +674,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 419);
+	EXPECT(binding_count == 433);
 	return 0;
 }
 

@@ -360,6 +360,27 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
 	  "tcti_cssc_min_max_immediate_rejects_non_cssc_encodings",
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_data_processing_source_fingerprints",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_data_processing_all_legal_register_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_data_processing_execute_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_data_processing_zero_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_data_processing_rejects_reserved_opcodes",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
 	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
 	  "tcti_add_sub_immediate_source_bindings",
@@ -535,6 +556,34 @@ static const struct operation_requirements operation_requirements[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "SMAX_reg", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "UMAX_reg", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "SMIN_reg", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "UMIN_reg", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "CTZ", BASELINE_OBLIGATIONS |
+		 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		 TCTI_TARGET_PROOF_OBLIGATION_PC |
+		 TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "CNT", BASELINE_OBLIGATIONS |
+		 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		 TCTI_TARGET_PROOF_OBLIGATION_PC |
+		 TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "ABS", BASELINE_OBLIGATIONS |
+		 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		 TCTI_TARGET_PROOF_OBLIGATION_PC |
+		 TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 #define SCALAR_REQUIREMENT(operation, obligations) { operation, obligations }
 	SCALAR_REQUIREMENT("AND_log_imm", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ORR_log_imm", SCALAR_BASE_OBLIGATIONS),
@@ -807,6 +856,25 @@ static const struct tcti_target_proof_case cssc_cases[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct tcti_target_proof_case cssc_data_processing_cases[] = {
+	{ "tcti_cssc_data_processing_source_fingerprints",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_cssc_data_processing_all_legal_register_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_cssc_data_processing_execute_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_cssc_data_processing_zero_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_cssc_data_processing_rejects_reserved_opcodes",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
 #define ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS \
 	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
@@ -963,6 +1031,49 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 
 #undef CSSC_BINDING
 
+#define CSSC_DP2_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+#define CSSC_DP1_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+
+static const struct tcti_target_proof_binding cssc_smax_reg_bindings[] = {
+	CSSC_DP2_BINDING(3368U, "SMAX_32_dp_2src", "SMAX", 0x1ac06000U),
+	CSSC_DP2_BINDING(3384U, "SMAX_64_dp_2src", "SMAX", 0x9ac06000U),
+};
+
+static const struct tcti_target_proof_binding cssc_umax_reg_bindings[] = {
+	CSSC_DP2_BINDING(3369U, "UMAX_32_dp_2src", "UMAX", 0x1ac06400U),
+	CSSC_DP2_BINDING(3385U, "UMAX_64_dp_2src", "UMAX", 0x9ac06400U),
+};
+
+static const struct tcti_target_proof_binding cssc_smin_reg_bindings[] = {
+	CSSC_DP2_BINDING(3370U, "SMIN_32_dp_2src", "SMIN", 0x1ac06800U),
+	CSSC_DP2_BINDING(3386U, "SMIN_64_dp_2src", "SMIN", 0x9ac06800U),
+};
+
+static const struct tcti_target_proof_binding cssc_umin_reg_bindings[] = {
+	CSSC_DP2_BINDING(3371U, "UMIN_32_dp_2src", "UMIN", 0x1ac06c00U),
+	CSSC_DP2_BINDING(3387U, "UMIN_64_dp_2src", "UMIN", 0x9ac06c00U),
+};
+
+static const struct tcti_target_proof_binding cssc_ctz_bindings[] = {
+	CSSC_DP1_BINDING(3394U, "CTZ_32_dp_1src", "CTZ", 0x5ac01800U),
+	CSSC_DP1_BINDING(3403U, "CTZ_64_dp_1src", "CTZ", 0xdac01800U),
+};
+
+static const struct tcti_target_proof_binding cssc_cnt_bindings[] = {
+	CSSC_DP1_BINDING(3395U, "CNT_32_dp_1src", "CNT", 0x5ac01c00U),
+	CSSC_DP1_BINDING(3404U, "CNT_64_dp_1src", "CNT", 0xdac01c00U),
+};
+
+static const struct tcti_target_proof_binding cssc_abs_bindings[] = {
+	CSSC_DP1_BINDING(3396U, "ABS_32_dp_1src", "ABS", 0x5ac02000U),
+	CSSC_DP1_BINDING(3405U, "ABS_64_dp_1src", "ABS", 0xdac02000U),
+};
+
+#undef CSSC_DP1_BINDING
+#undef CSSC_DP2_BINDING
+
 #define LOGICAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
@@ -975,13 +1086,20 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 	  CSSC_SOURCE, CSSC_SUITE, cssc_cases, ARRAY_COUNT(cssc_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, CSSC_OBLIGATIONS }
 
+#define CSSC_DATA_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  CSSC_OBLIGATIONS, TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  CSSC_SOURCE, CSSC_SUITE, cssc_data_processing_cases, \
+	  ARRAY_COUNT(cssc_data_processing_cases), bindings, ARRAY_COUNT(bindings), \
+	  NULL, CSSC_OBLIGATIONS }
+
 #define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
 	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 16U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 23U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -1031,6 +1149,20 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 		   cssc_smin_bindings),
 	CSSC_ENTRY("kunit:cssc-min-max-immediate-umin", "UMIN_imm",
 		   cssc_umin_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-smax", "SMAX_reg",
+			cssc_smax_reg_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-umax", "UMAX_reg",
+			cssc_umax_reg_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-smin", "SMIN_reg",
+			cssc_smin_reg_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-umin", "UMIN_reg",
+			cssc_umin_reg_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-ctz", "CTZ",
+			cssc_ctz_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-cnt", "CNT",
+			cssc_cnt_bindings),
+	CSSC_DATA_ENTRY("kunit:cssc-data-processing-abs", "ABS",
+			cssc_abs_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-add", "ADD_addsub_imm",
 				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
 				add_sub_immediate_base_cases,
@@ -1050,6 +1182,7 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 };
 
 #undef LOGICAL_ENTRY
+#undef CSSC_DATA_ENTRY
 #undef CSSC_ENTRY
 #undef ADD_SUB_IMMEDIATE_ENTRY
 #undef CSSC_OBLIGATIONS

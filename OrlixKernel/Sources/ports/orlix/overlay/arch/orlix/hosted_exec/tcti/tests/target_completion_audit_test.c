@@ -21,21 +21,21 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(tcti_target_completion_audit(&result) == -1);
 	EXPECT(result.source_rows == 4350);
 	EXPECT(result.classification_rows == 4350);
-	EXPECT(result.classified_rows == 1087);
-	EXPECT(result.unclassified_rows == 3263);
-	EXPECT(result.required_el0_rows == 1076);
+	EXPECT(result.classified_rows == 1101);
+	EXPECT(result.unclassified_rows == 3249);
+	EXPECT(result.required_el0_rows == 1090);
 	EXPECT(result.non_el0_rows == 10);
 	EXPECT(result.undefined_or_unallocated_rows == 1);
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.source_bound_rows == 43);
+	EXPECT(result.source_bound_rows == 57);
 	EXPECT(result.source_unbound_rows == 1044);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 196);
-	EXPECT(result.unproved_obligation_bindings == 419);
+	EXPECT(result.unproved_obligation_bindings == 433);
 	EXPECT(result.asl_availability_rows == 4350);
 	EXPECT(result.invalid_asl_availability_rows == 0);
 	EXPECT(result.unavailable_asl_rows == 4350);
@@ -1198,8 +1198,8 @@ static int obligation_projection_retains_exact_ereta_delta(void)
 		       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
 	}
 	EXPECT(result.non_el0_rows == 10U);
-	EXPECT(result.source_bound_rows == 43U);
-	EXPECT(result.unproved_obligation_bindings == 419U);
+	EXPECT(result.source_bound_rows == 57U);
+	EXPECT(result.unproved_obligation_bindings == 433U);
 	free(obligations);
 	return 0;
 }
