@@ -98,6 +98,13 @@ static int emit_provenance(FILE *output,
 		       provenance->length) < 0 ? -1 : 0;
 }
 
+static int emit_field_qualifier(FILE *output,
+	const struct tcti_feature_field_qualifier *qualifier)
+{
+	return fprintf(output, "%uU, ", (unsigned int)qualifier->kind) < 0 ||
+		emit_provenance(output, &qualifier->provenance);
+}
+
 static int emit_node(FILE *output, size_t index,
 	const struct tcti_feature_node *node)
 {
@@ -116,6 +123,10 @@ static int emit_node(FILE *output, size_t index,
 	    emit_c_string(output, node->field.selector ? node->field.selector : "") ||
 	    fputs(", ", output) == EOF ||
 	    emit_provenance(output, &node->field.provenance) ||
+	    fputs(", ", output) == EOF ||
+	    emit_field_qualifier(output, &node->field.instance) ||
+	    fputs(", ", output) == EOF ||
+	    emit_field_qualifier(output, &node->field.slices) ||
 	    fputs(", ", output) == EOF ||
 	    emit_provenance(output, &node->provenance) ||
 	    fputs(")\n", output) == EOF)

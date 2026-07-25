@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
+#include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
@@ -12,6 +13,7 @@
 #include "../decode_aarch64.h"
 
 #define TCTI_LSE128_SVC 0xd4000001U
+#define TCTI_LSE128_OPERATION_MASK (0xfU << 12)
 
 struct tcti_lse128_value {
 	u64 low;
@@ -36,6 +38,14 @@ static const struct tcti_lse128_leaf tcti_lse128_leaves[] = {
 	{ TCTI_LSE_ATOMIC_CLR, 0x19e01000U },
 	{ TCTI_LSE_ATOMIC_SET, 0x19e03000U },
 	{ TCTI_LSE_ATOMIC_SWP, 0x19e08000U },
+};
+
+static const u8 tcti_lse128_reserved_operations[] = {
+	0, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15,
+};
+
+static const u32 tcti_lse128_fixed_bit_near_misses[] = {
+	BIT(21), BIT(10),
 };
 
 static int tcti_lse128_resume_test_init(struct kunit *test)
@@ -111,6 +121,50 @@ static int tcti_lse128_write_program(unsigned long address,
 	if (ret)
 		return ret;
 	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
+}
+
+static void tcti_lse128_resume_rejects_instruction(
+	struct kunit *test, unsigned long instructions, unsigned long data,
+	u32 instruction, size_t leaf_index, const char *kind, u32 value)
+{
+	const struct tcti_lse128_value initial = {
+		.low = 0x0123456789abcdefULL,
+		.high = 0xfedcba9876543210ULL,
+	};
+	const u32 program[] = { instruction, TCTI_LSE128_SVC };
+	struct tcti_lse128_value observed = {};
+	struct pt_regs regs = {};
+	struct pt_regs before;
+	struct tcti_result result;
+	int ret;
+
+	ret = tcti_lse128_write_program(instructions, program,
+					ARRAY_SIZE(program));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = tcti_write_user_data(current->mm, data, &initial, sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	regs.regs[8] = 0x0f0f55ffaa5500ffULL;
+	regs.regs[6] = 0x33cc0ff0f00f5aa5ULL;
+	regs.regs[10] = data;
+	regs.pc = instructions;
+	regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+		PSR_C_BIT | PSR_V_BIT;
+	regs.syscallno = NO_SYSCALL;
+	before = regs;
+
+	result = tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "leaf=%zu %s=%#x", leaf_index, kind, value);
+	KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+			"leaf=%zu %s=%#x", leaf_index, kind, value);
+	KUNIT_EXPECT_EQ_MSG(test, instructions, result.pc,
+			"leaf=%zu %s=%#x", leaf_index, kind, value);
+	KUNIT_EXPECT_EQ_MSG(test, instruction, result.instruction,
+			"leaf=%zu %s=%#x", leaf_index, kind, value);
+	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	ret = tcti_read_user_data(current->mm, data, &observed, sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, &initial, &observed, sizeof(observed));
 }
 
 static void tcti_lse128_resume_all_current_leaves(struct kunit *test)
@@ -232,9 +286,73 @@ static void tcti_lse128_resume_fault_does_not_mutate(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
 }
 
+static void tcti_lse128_resume_rejects_reserved_operations(struct kunit *test)
+{
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	size_t leaf_index;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(tcti_lse128_leaves);
+	     leaf_index++) {
+		const struct tcti_lse128_leaf *leaf =
+			&tcti_lse128_leaves[leaf_index];
+		size_t operation_index;
+
+		for (operation_index = 0;
+		     operation_index < ARRAY_SIZE(tcti_lse128_reserved_operations);
+		     operation_index++) {
+			u32 instruction = tcti_lse128_instruction(leaf, 6, 10, 8);
+			u8 operation = tcti_lse128_reserved_operations[operation_index];
+
+			instruction &= ~TCTI_LSE128_OPERATION_MASK;
+			instruction |= (u32)operation << 12;
+			tcti_lse128_resume_rejects_instruction(
+				test, instructions, data, instruction, leaf_index,
+				"reserved-operation", operation);
+		}
+	}
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse128_resume_rejects_fixed_bit_near_misses(
+	struct kunit *test)
+{
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	size_t leaf_index;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(tcti_lse128_leaves);
+	     leaf_index++) {
+		const struct tcti_lse128_leaf *leaf =
+			&tcti_lse128_leaves[leaf_index];
+		size_t mutation_index;
+
+		for (mutation_index = 0;
+		     mutation_index < ARRAY_SIZE(tcti_lse128_fixed_bit_near_misses);
+		     mutation_index++) {
+			u32 mutation = tcti_lse128_fixed_bit_near_misses[mutation_index];
+			u32 instruction =
+			tcti_lse128_instruction(leaf, 6, 10, 8) ^ mutation;
+
+			tcti_lse128_resume_rejects_instruction(
+				test, instructions, data, instruction, leaf_index,
+				"fixed-bit-near-miss", mutation);
+		}
+	}
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
 static struct kunit_case tcti_lse128_resume_test_cases[] = {
 	KUNIT_CASE(tcti_lse128_resume_all_current_leaves),
 	KUNIT_CASE(tcti_lse128_resume_fault_does_not_mutate),
+	KUNIT_CASE(tcti_lse128_resume_rejects_reserved_operations),
+	KUNIT_CASE(tcti_lse128_resume_rejects_fixed_bit_near_misses),
 	{}
 };
 

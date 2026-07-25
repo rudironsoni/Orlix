@@ -138,3 +138,15 @@ until a typed result binds each source ordinal and individual obligation to
 an executed production-path case. Runtime HWCAP and HWCAP2 projection
 requires the complete 4,350-leaf provider and remains disabled for every
 unproved extension.
+
+The current checkpoint preserves all 605 feature-field qualifier occurrences
+in the checked feature artifact. The maintainer binding core derives 362
+identity groups, maps 604 occurrences to an explicit field-domain relation,
+and retains one ambiguous occurrence as a blocking audit failure. The runtime
+projection rejects a stale zero-profile mapping,
+and archive-freshness regression coverage rejects a kernel archive that is
+older than durable `arch/orlix` inputs. A narrow typed native-observation
+comparator now records result, register, and bounded-memory observations, but
+it discharges no proof obligation without owning production-path KUnit run
+evidence. LSE128 reserved-selector and near-miss coverage remains pending
+owning run evidence and its remaining architectural obligations stay blocking.

@@ -63,6 +63,8 @@ static int canonical_artifact_is_exact_and_valid(void)
 {
 	const struct tcti_feature_artifact *artifact =
 		tcti_feature_artifact_canonical();
+	tcti_feature_artifact_u32 index;
+	tcti_feature_artifact_u32 field_count = 0;
 
 	CHECK(artifact != NULL);
 	CHECK(artifact->source.length ==
@@ -77,8 +79,52 @@ static int canonical_artifact_is_exact_and_valid(void)
 	      TCTI_FEATURE_ARTIFACT_GLOBAL_CONSTRAINT_COUNT);
 	CHECK(artifact->counts.node_count == TCTI_FEATURE_ARTIFACT_NODE_COUNT);
 	CHECK(artifact->counts.child_count == TCTI_FEATURE_ARTIFACT_CHILD_COUNT);
+	for (index = 0; index < artifact->counts.node_count; index++) {
+		const struct tcti_feature_artifact_node *node = &artifact->nodes[index];
+
+		if (node->kind != TCTI_FEATURE_ARTIFACT_FIELD)
+			continue;
+		field_count++;
+		CHECK(node->field_instance.kind ==
+		      TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL);
+		CHECK(node->field_slices.kind ==
+		      TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL);
+		CHECK(node->field_instance.source.length == 4U);
+		CHECK(node->field_slices.source.length == 4U);
+		CHECK(node->field_instance.source.offset <
+		      node->field_slices.source.offset);
+		CHECK(node->field_slices.source.offset <
+		      node->field_source.offset + node->field_source.length);
+	}
+	CHECK(field_count == TCTI_FEATURE_ARTIFACT_FIELD_NODE_COUNT);
 	CHECK(tcti_feature_artifact_validate(artifact, &scratch, NULL) ==
 	      TCTI_FEATURE_ARTIFACT_VALID);
+	return 0;
+}
+
+static int rejects_field_qualifier_mutations(void)
+{
+	struct tcti_feature_artifact artifact = mutable_artifact();
+	tcti_feature_artifact_u32 index;
+
+	for (index = 0; index < TCTI_FEATURE_ARTIFACT_NODE_COUNT; index++)
+		if (mutable_nodes[index].kind == TCTI_FEATURE_ARTIFACT_FIELD)
+			break;
+	CHECK(index != TCTI_FEATURE_ARTIFACT_NODE_COUNT);
+	mutable_nodes[index].field_instance.kind =
+		TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NONE;
+	CHECK(expect_error(&artifact, TCTI_FEATURE_ARTIFACT_NODE_INVALID) == 0);
+
+	artifact = mutable_artifact();
+	mutable_nodes[index].field_slices.kind =
+		TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_KIND_COUNT;
+	CHECK(expect_error(&artifact, TCTI_FEATURE_ARTIFACT_NODE_INVALID) == 0);
+
+	artifact = mutable_artifact();
+	mutable_nodes[index].field_instance.source.offset =
+		TCTI_FEATURE_ARTIFACT_PINNED_SOURCE_LENGTH;
+	CHECK(expect_error(&artifact,
+		   TCTI_FEATURE_ARTIFACT_SOURCE_SPAN_INVALID) == 0);
 	return 0;
 }
 
@@ -229,6 +275,7 @@ static int rejects_overlapping_child_spans(void)
 int main(void)
 {
 	if (canonical_artifact_is_exact_and_valid() ||
+	    rejects_field_qualifier_mutations() ||
 	    rejects_pin_count_span_and_provenance_mutations() ||
 	    rejects_orphan_node() ||
 	    rejects_overlapping_child_spans())

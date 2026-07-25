@@ -26,6 +26,7 @@ struct tcti_feature_provenance { size_t offset; size_t length; };
  * model extension before it can enter the target inventory.
  */
 enum tcti_feature_field_qualifier_kind {
+	TCTI_FEATURE_FIELD_QUALIFIER_NONE,
 	TCTI_FEATURE_FIELD_QUALIFIER_NULL,
 };
 struct tcti_feature_field_qualifier {

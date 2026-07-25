@@ -47,9 +47,11 @@ static const struct tcti_feature_artifact_constraint canonical_constraints[] = {
 #define TCTI_A64_FEATURE_PARAMETER(...)
 #define TCTI_A64_FEATURE_CONSTRAINT(...)
 #define TCTI_A64_FEATURE_NODE(i, k, left, right, first, count, integer, text, \
-	state, reg, selector, field_o, field_l, o, l) \
+	state, reg, selector, field_o, field_l, instance_k, instance_o, instance_l, \
+	slices_k, slices_o, slices_l, o, l) \
 	[i] = { k, left, right, first, count, integer, text, state, reg, selector, \
-		{ field_o, field_l }, { o, l } },
+		{ field_o, field_l }, { instance_k, { instance_o, instance_l } }, \
+		{ slices_k, { slices_o, slices_l } }, { o, l } },
 #define TCTI_A64_FEATURE_CHILD(...)
 static const struct tcti_feature_artifact_node canonical_nodes[] = {
 #include TCTI_FEATURE_CANONICAL_DEF
@@ -194,7 +196,13 @@ static int node_payload_is_valid(const struct tcti_feature_artifact_node *node)
 	int fields_empty = text_is_empty(node->field_state) &&
 		text_is_empty(node->field_register_name) &&
 		text_is_empty(node->field_selector) && !node->field_source.offset &&
-		!node->field_source.length;
+		!node->field_source.length &&
+		node->field_instance.kind == TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NONE &&
+		!node->field_instance.source.offset &&
+		!node->field_instance.source.length &&
+		node->field_slices.kind == TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NONE &&
+		!node->field_slices.source.offset &&
+		!node->field_slices.source.length;
 
 	if (node->kind >= TCTI_FEATURE_ARTIFACT_NODE_KIND_COUNT)
 		return 0;
@@ -245,7 +253,11 @@ static int node_payload_is_valid(const struct tcti_feature_artifact_node *node)
 		return no_refs_or_children(node) && text_is_empty(node->text) &&
 			!text_is_empty(node->field_state) &&
 			!text_is_empty(node->field_register_name) &&
-			!text_is_empty(node->field_selector) && !node->integer;
+			!text_is_empty(node->field_selector) && !node->integer &&
+			node->field_instance.kind ==
+				TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL &&
+			node->field_slices.kind ==
+				TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL;
 	case TCTI_FEATURE_ARTIFACT_NODE_KIND_COUNT:
 		break;
 	}
@@ -396,6 +408,12 @@ enum tcti_feature_artifact_error tcti_feature_artifact_validate(
 
 		if (!span_is_valid(&node->source, artifact->source.length, 1) ||
 		    !span_is_valid(&node->field_source, artifact->source.length,
+				node->kind == TCTI_FEATURE_ARTIFACT_FIELD) ||
+		    !span_is_valid(&node->field_instance.source,
+				artifact->source.length,
+				node->kind == TCTI_FEATURE_ARTIFACT_FIELD) ||
+		    !span_is_valid(&node->field_slices.source,
+				artifact->source.length,
 				node->kind == TCTI_FEATURE_ARTIFACT_FIELD))
 			return fail(diagnostic, TCTI_FEATURE_ARTIFACT_SOURCE_SPAN_INVALID,
 				index);
@@ -407,7 +425,11 @@ enum tcti_feature_artifact_error tcti_feature_artifact_validate(
 		if (!node_payload_is_valid(node))
 			return fail(diagnostic, TCTI_FEATURE_ARTIFACT_NODE_INVALID, index);
 		if (node->kind == TCTI_FEATURE_ARTIFACT_FIELD &&
-		    !span_contains(&node->source, &node->field_source))
+		    (!span_contains(&node->source, &node->field_source) ||
+		     !span_contains(&node->field_source,
+			     &node->field_instance.source) ||
+		     !span_contains(&node->field_source,
+			     &node->field_slices.source)))
 			return fail(diagnostic,
 				TCTI_FEATURE_ARTIFACT_PROVENANCE_INVALID, index);
 		for (child = 0; child < node->child_count; child++) {

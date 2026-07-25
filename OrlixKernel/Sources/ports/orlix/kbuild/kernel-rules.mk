@@ -1052,6 +1052,8 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_resume_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_bitfield_extract_source_bound_test.c \
@@ -1890,6 +1892,7 @@ __kernel-archive: __prepare-kbuild
 		archive_tmp="$$output_dir/.$(ORLIX_KERNEL_ARCHIVE_NAME).tmp.$$$$"; \
 		symbols_tmp="$$output_dir/.symbols.txt.tmp.$$$$"; \
 		strings_tmp="$$output_dir/.strings.txt.tmp.$$$$"; \
+		archive_cache="$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.sh"; \
 		mkdir -p "$$obj_dir"; \
 		object_dependencies_current() { \
 			object="$$1"; depfile="$$2"; \
@@ -1897,15 +1900,14 @@ __kernel-archive: __prepare-kbuild
 			while IFS= read -r dependency; do \
 				[ -n "$$dependency" ] || continue; \
 				[ -e "$$dependency" ] && [ "$$object" -nt "$$dependency" ] || return 1; \
-			done < <(perl -0pe 's/\\\n/ /g; s/^[^:]*:\\s*//' "$$depfile" | tr ' ' '\n'); \
+			done < <(perl -0pe 's/\\\n/ /g; s/^[^:]*:\s*//' "$$depfile" | tr ' ' '\n'); \
 		}; \
-		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ] && \
-			grep -q '_arch_boot_entry' "$$output_dir/symbols.txt" && \
-			grep -q '_arch_boot_params' "$$output_dir/symbols.txt"; then \
-			archive_ready=1; \
+		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ]; then \
+			archive_cache_args=(--archive "$$archive" --symbols "$$output_dir/symbols.txt" --symbol _arch_boot_entry --symbol _arch_boot_params); \
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
+				"$$archive_cache" \
 				"$$inventory_generator" \
 				"$$inventory_definition" \
 				"$$target_inventory_generator" \
@@ -1913,21 +1915,15 @@ __kernel-archive: __prepare-kbuild
 				"$$target_inventory_source_manifest" \
 				"$$target_inventory_classification" \
 				"$$target_inventory_system_accessors" \
-				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
-				if [ ! -e "$$cache_dep" ] || [ ! "$$archive" -nt "$$cache_dep" ]; then archive_ready=0; break; fi; \
+				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do archive_cache_args+=(--cache-dep "$$cache_dep"); done; \
+			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
+				src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
+				obj_name="$${src_rel//\//_}.o"; \
+				obj="$$obj_dir/$$obj_name"; \
+				dep="$$obj_dir/$${obj_name%.o}.d"; \
+				archive_cache_args+=(--source "$$src" --object "$$obj" --depfile "$$dep"); \
 			done; \
-			if [ "$$archive_ready" -eq 1 ]; then \
-				for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
-					src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
-					if [ ! -s "$$src" ] || [ ! "$$archive" -nt "$$src" ]; then archive_ready=0; break; fi; \
-					obj_name="$${src_rel//\//_}.o"; \
-					obj="$$obj_dir/$$obj_name"; \
-					if [ -e "$$obj" ] && [ ! "$$archive" -nt "$$obj" ]; then archive_ready=0; break; fi; \
-					dep="$$obj_dir/$${obj_name%.o}.d"; \
-					if ! object_dependencies_current "$$archive" "$$dep"; then archive_ready=0; break; fi; \
-				done; \
-			fi; \
-			if [ "$$archive_ready" -eq 1 ]; then \
+			if "$$archive_cache" "$${archive_cache_args[@]}"; then \
 				echo "reusing OrlixKernel archive: $$archive ($$target)"; \
 				return 0; \
 			fi; \

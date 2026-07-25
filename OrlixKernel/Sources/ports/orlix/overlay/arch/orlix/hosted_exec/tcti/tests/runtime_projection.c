@@ -135,7 +135,6 @@ int tcti_runtime_projection_audit_provider(
 	size_t capability_count,
 	struct tcti_runtime_projection_result *result)
 {
-	bool advertised_feature_missing = false;
 	size_t i;
 
 	if (!result || !provider || !provider->read_leaf || !profile ||
@@ -208,20 +207,19 @@ int tcti_runtime_projection_audit_provider(
 		feature_proved = tcti_runtime_feature_is_proved(provider,
 						       mapping->feature,
 						       &feature_present);
+		/*
+		 * The capability table is an authoritative projection contract, even
+		 * while the corresponding HWCAP bit is intentionally zero. A stale
+		 * mapping must therefore fail before a later profile change can expose it.
+		 */
+		if (!feature_present)
+			result->missing_feature_mapping_count++;
 		if (feature_proved)
 			*proved |= mapping->bit;
 		if (!(advertised & mapping->bit)) {
 			result->unadvertised_mapping_count++;
 			if (!feature_proved)
 				result->unadvertised_incomplete_feature_count++;
-		} else if (!feature_present) {
-			/*
-			 * Keep auditing every advertised bit so the result records the
-			 * complete failure mask. A mapped capability without a generated
-			 * feature cohort is no more eligible for advertisement than an
-			 * incomplete cohort.
-			 */
-			advertised_feature_missing = true;
 		}
 		result->mapping_count++;
 	}
@@ -239,7 +237,7 @@ int tcti_runtime_projection_audit_provider(
 	    result->unmapped_advertised_hwcap2 ||
 	    result->advertised_without_proof_hwcap ||
 	    result->advertised_without_proof_hwcap2 ||
-	    advertised_feature_missing)
+	    result->missing_feature_mapping_count)
 		return -EINVAL;
 	return 0;
 }

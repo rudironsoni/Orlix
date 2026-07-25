@@ -83,6 +83,8 @@ struct tcti_runtime_projection_result {
 	unsigned long advertised_without_proof_hwcap;
 	unsigned long advertised_without_proof_hwcap2;
 	size_t mapping_count;
+	/* Mappings whose authoritative feature cohort is absent from the target. */
+	size_t missing_feature_mapping_count;
 	size_t unadvertised_mapping_count;
 	size_t target_leaf_count;
 	size_t classified_leaf_count;

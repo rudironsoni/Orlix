@@ -12,6 +12,8 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_lse_source_bound_test.o \
 	tcti_lse128_noncas_test.o \
 	tcti_lse128_resume_test.o \
+	tcti_native_observation.o \
+	tcti_native_observation_test.o \
 	tcti_add_sub_immediate_test.o \
 	tcti_logical_shifted_register_test.o \
 	tcti_bitfield_extract_source_bound_test.o \

@@ -48,6 +48,11 @@ source-check:
 	@$(CC) $(CFLAGS) target_feature_model.c target_feature_model_test.c \
 		-o '$(OUT)/target_feature_model_test'
 	@'$(OUT)/target_feature_model_test' '$(FEATURES)'
+	@$(CC) $(CFLAGS) target_feature_model.c target_register_model.c \
+		target_feature_field_domain_binding.c \
+		target_feature_field_domain_binding_test.c \
+		-o '$(OUT)/target_feature_field_domain_binding_test'
+	@'$(OUT)/target_feature_field_domain_binding_test' '$(FEATURES)' '$(REGISTERS)'
 	@$(CC) $(CFLAGS) target_register_model.c target_register_model_test.c \
 		-o '$(OUT)/target_register_model_test'
 	@'$(OUT)/target_register_model_test' '$(REGISTERS)'

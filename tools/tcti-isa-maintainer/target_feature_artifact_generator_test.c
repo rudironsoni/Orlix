@@ -109,6 +109,7 @@ static int pinned_source_is_structural_and_deterministic(const char *source,
 	size_t first_length;
 	size_t second_length;
 	size_t index;
+	size_t field_count = 0;
 
 	CHECK(first && second);
 	CHECK(tcti_target_feature_artifact_emit(source, source_length, first) ==
@@ -157,6 +158,36 @@ static int pinned_source_is_structural_and_deterministic(const char *source,
 			(unsigned int)model.nodes[index].kind) > 0);
 		CHECK(strstr(first_text, marker) != NULL);
 	}
+	for (index = 0; index < model.node_count; index++) {
+		const struct tcti_feature_node *node = &model.nodes[index];
+		char marker[512];
+
+		if (node->kind != TCTI_FEATURE_FIELD)
+			continue;
+		field_count++;
+		CHECK(node->field.instance.kind ==
+		      TCTI_FEATURE_FIELD_QUALIFIER_NULL);
+		CHECK(node->field.slices.kind == TCTI_FEATURE_FIELD_QUALIFIER_NULL);
+		CHECK(snprintf(marker, sizeof(marker),
+			"TCTI_A64_FEATURE_NODE(%zuU, %uU,", index,
+			(unsigned int)node->kind) > 0);
+		CHECK(strstr(first_text, marker) != NULL);
+		CHECK(node->field.instance.provenance.length == 4U);
+		CHECK(node->field.slices.provenance.length == 4U);
+		CHECK(snprintf(marker, sizeof(marker),
+			"\"%s\", \"%s\", %zuU, %zuU, %uU, %zuU, %zuU, "
+			"%uU, %zuU, %zuU,",
+			node->field.register_name, node->field.selector,
+			node->field.provenance.offset, node->field.provenance.length,
+			(unsigned int)node->field.instance.kind,
+			node->field.instance.provenance.offset,
+			node->field.instance.provenance.length,
+			(unsigned int)node->field.slices.kind,
+			node->field.slices.provenance.offset,
+			node->field.slices.provenance.length) > 0);
+		CHECK(strstr(first_text, marker) != NULL);
+	}
+	CHECK(field_count == 605U);
 	for (index = 0; index < model.child_count; index++) {
 		char marker[80];
 

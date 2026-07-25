@@ -55,7 +55,7 @@ ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/ta
 ORLIX_TCTI_COMPLETION_AUDIT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_completion_audit_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
 ORLIX_APP_LEGACY_BUNDLE_IDS ?= com.rudironsoni.OrlixTerminal org.orlix.OrlixTerminal
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests tcti-isa-host-tests tcti-isa-audit tcti-isa-maintainer tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests kernel-archive-cache-tests tcti-isa-host-tests tcti-isa-audit tcti-isa-maintainer tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
 
 all: build
 
@@ -73,6 +73,7 @@ help:
 	@printf '%s\n' '  tcti-isa-host-tests    run deterministic TCTI inventory contract tests'
 	@printf '%s\n' '  tcti-isa-audit         audit the canonical C target inventory and proof ledger'
 	@printf '%s\n' '  tcti-isa-maintainer    run the explicit raw Arm-source maintainer checks'
+	@printf '%s\n' '  kernel-archive-cache-tests run deterministic archive cache freshness tests'
 	@printf '%s\n' '  tcti-kernel-tests run TCTI KUnit and app-hosted Linux kselftests'
 	@printf '%s\n' '  mlibc-tests         run the upstream mlibc suite through OrlixOS'
 	@printf '%s\n' '  coreutils-tests     run the upstream Coreutils suite through OrlixOS'
@@ -281,6 +282,9 @@ beta-simulator-gate: beta-prerequisites
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
 		-only-testing:OrlixRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
+
+kernel-archive-cache-tests:
+	@bash OrlixKernel/Sources/ports/orlix/kbuild/archive-cache-test.sh
 
 tcti-isa-host-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'

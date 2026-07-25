@@ -30,6 +30,7 @@ typedef int64_t tcti_feature_artifact_s64;
 #define TCTI_FEATURE_ARTIFACT_GLOBAL_CONSTRAINT_COUNT 11U
 #define TCTI_FEATURE_ARTIFACT_NODE_COUNT 8955U
 #define TCTI_FEATURE_ARTIFACT_CHILD_COUNT 654U
+#define TCTI_FEATURE_ARTIFACT_FIELD_NODE_COUNT 605U
 #define TCTI_FEATURE_ARTIFACT_NODE_NONE ((tcti_feature_artifact_u32)-1)
 
 #define TCTI_FEATURE_ARTIFACT_ARCHITECTURE "vFATAp1-A"
@@ -62,6 +63,12 @@ enum tcti_feature_artifact_node_kind {
 	TCTI_FEATURE_ARTIFACT_FIELD,
 	TCTI_FEATURE_ARTIFACT_VALUE,
 	TCTI_FEATURE_ARTIFACT_NODE_KIND_COUNT,
+};
+
+enum tcti_feature_artifact_field_qualifier_kind {
+	TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NONE,
+	TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
+	TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_KIND_COUNT,
 };
 
 struct tcti_feature_artifact_span {
@@ -99,6 +106,11 @@ struct tcti_feature_artifact_constraint {
 	struct tcti_feature_artifact_span source;
 };
 
+struct tcti_feature_artifact_field_qualifier {
+	tcti_feature_artifact_u32 kind;
+	struct tcti_feature_artifact_span source;
+};
+
 struct tcti_feature_artifact_node {
 	tcti_feature_artifact_u32 kind;
 	tcti_feature_artifact_u32 left;
@@ -111,6 +123,8 @@ struct tcti_feature_artifact_node {
 	const char *field_register_name;
 	const char *field_selector;
 	struct tcti_feature_artifact_span field_source;
+	struct tcti_feature_artifact_field_qualifier field_instance;
+	struct tcti_feature_artifact_field_qualifier field_slices;
 	struct tcti_feature_artifact_span source;
 };
 

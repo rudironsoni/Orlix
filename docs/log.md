@@ -568,3 +568,16 @@ Bound every direct instruction leaf to its raw pinned source span, made the main
 ## [2026-07-25] harden | Authenticate TCTI source-derived semantic edges
 
 Made the completion audit reject one-byte direct-source span drift, authenticated the selector payload and condition identity of all 2,014 supplemental system accessors, and retained exact operational-note presence, span, and digest state for every shared-ASL absence witness. Removed an unconditional skipped KUnit placeholder and kept that semantic gap in the authoritative provenance audit until official shared ASL is separately pinned.
+
+## [2026-07-25] harden | Preserve typed feature qualifiers and proof boundaries
+
+Recorded the current complete-target checkpoint without reducing the
+4,350-leaf target: the checked feature artifact retains 605 field qualifier
+occurrences, while the maintainer binding core derives 362 identity groups,
+maps 604 occurrences, and leaves one ambiguity as a blocking audit failure.
+Runtime projection now rejects
+stale zero-profile mappings and archive validation rejects stale kernel output.
+A narrow native observation comparator records typed execution observations but
+cannot close an obligation without owning production-path KUnit evidence.
+LSE128 reserved-selector and near-miss coverage remains pending owning run
+evidence and does not change completion status.

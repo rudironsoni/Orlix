@@ -310,6 +310,34 @@ static void invalid_capability_mappings_fail(void)
 			    &result) == -EINVAL);
 }
 
+static void zero_profile_rejects_stale_feature_mapping(void)
+{
+	struct tcti_runtime_projection_leaf leaves[TARGET_LEAF_COUNT];
+	const struct tcti_runtime_projection_ledger ledger = {
+		.leaves = leaves,
+		.leaf_count = TARGET_LEAF_COUNT,
+		.target_leaf_count = TARGET_LEAF_COUNT,
+	};
+	const struct tcti_runtime_projection_profile zero_profile = { 0 };
+	const struct tcti_runtime_projection_capability stale_mapping[] = {
+		{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_ALPHA,
+		  "FEAT_RETIRED_OR_UNKNOWN" },
+	};
+	struct tcti_runtime_projection_result result;
+
+	initialize_complete_ledger(leaves);
+
+	EXPECT(audit_custom(&ledger, &zero_profile, stale_mapping,
+			    sizeof(stale_mapping) / sizeof(stale_mapping[0]),
+			    &result) == -EINVAL);
+	EXPECT(result.advertised_hwcap == 0);
+	EXPECT(result.advertised_hwcap2 == 0);
+	EXPECT(result.missing_feature_mapping_count == 1);
+	EXPECT(result.unadvertised_mapping_count == 1);
+	EXPECT(result.unadvertised_incomplete_feature_count == 1);
+	EXPECT(result.proved_hwcap == 0);
+}
+
 static void unadvertised_gap_cannot_authorize_or_block_proved_bit(void)
 {
 	struct tcti_runtime_projection_leaf leaves[TARGET_LEAF_COUNT];
@@ -428,6 +456,7 @@ int main(void)
 	reduced_and_oversized_counts_fail_before_iteration();
 	malformed_leaf_feature_sets_fail();
 	invalid_capability_mappings_fail();
+	zero_profile_rejects_stale_feature_mapping();
 	unadvertised_gap_cannot_authorize_or_block_proved_bit();
 	unmapped_advertised_capability_is_reported();
 	live_provider_retains_full_target_and_fails_closed();
@@ -436,6 +465,6 @@ int main(void)
 		fprintf(stderr, "runtime projection tests: %d failed\n", failures);
 		return 1;
 	}
-	puts("runtime projection tests: 12 passed");
+	puts("runtime projection tests: 13 passed");
 	return 0;
 }
