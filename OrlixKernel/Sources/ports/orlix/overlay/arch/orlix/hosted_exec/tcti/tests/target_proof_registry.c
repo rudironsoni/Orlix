@@ -304,7 +304,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "aab93c4152202c7347882f2dc77aeef666a63a2d409f5ab8c0aa7ebe453ebd9f",
 	  "tcti_advsimd_fp_arithmetic_source_bound_test.o" },
 	{ ADVSIMD_HALVING_SOURCE,
-	  "6ab6ba3e20964278ca6c86c4e8b9ec47578b224225902fdddcb3ce4978f3e043",
+	  "32cd8f2d7635390a943e3e0cc9cd8cda108e1c69eebed83d6d3781cf9e5650cb",
 	  "tcti_advsimd_halving_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "324578ba782bab9e0aa95aa8783a7a4dbf04ebc47e2ca5d1485831f7e68acac1",
