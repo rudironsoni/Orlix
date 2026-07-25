@@ -13,6 +13,8 @@
 #include <asm/tcti.h>
 #include <asm/unistd.h>
 
+#include "target_instruction_artifact.h"
+
 #include "../decode_aarch64.h"
 #include "../fixed_fp.h"
 #include "../switch_debug.h"
@@ -819,6 +821,247 @@ static void tcti_scalar_fp_convert_reserved_forms_exit_without_state_change(
 	}
 }
 
+/*
+ * These rows bind every currently implemented scalar two-source S and D
+ * encoding to the same mapped-RX resume path used by guest EL0 text.  The
+ * direct executor tests above retain their focused rounding and NaN cases;
+ * this table proves that the decoder, register-bank selection, FP context,
+ * and resume loop preserve those semantics for the pinned source leaves.
+ */
+struct tcti_scalar_fp_binary_source_row {
+	u16 ordinal;
+	const char *source_id;
+	const char *operation_id;
+	u32 source_mask;
+	u32 source_pattern;
+	u32 instruction;
+	enum tcti_fp_scalar_2source_op operation;
+	u8 width;
+	u64 left;
+	u64 right;
+	unsigned long fpcr;
+	unsigned long initial_fpsr;
+	u64 expected;
+	unsigned long expected_fpsr;
+};
+
+#define TCTI_SCALAR_FP_BINARY_S(base) ((base) + 0x00020020U)
+#define TCTI_SCALAR_FP_BINARY_SOURCE_MASK 0xffe0fc00U
+
+static const char *tcti_scalar_fp_binary_artifact_string(
+	const struct tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+
+	return (const char *)artifact->string_pool + offset;
+}
+
+static const struct tcti_scalar_fp_binary_source_row
+tcti_scalar_fp_binary_source_rows[] = {
+	{ 4308U, "FMUL_S_floatdp2", "FMUL_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e200800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e200800U),
+	  TCTI_FP2_FMUL, sizeof(u32), 0x3fc00000U, 0x40000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0x40400000U, TCTI_SCALAR_FP_QC },
+	{ 4309U, "FDIV_S_floatdp2", "FDIV_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e201800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e201800U),
+	  TCTI_FP2_FDIV, sizeof(u32), 0x3f800000U, 0, 0,
+	  TCTI_SCALAR_FP_QC, 0x7f800000U, TCTI_SCALAR_FP_QC | TCTI_FPSR_DZC },
+	{ 4310U, "FADD_S_floatdp2", "FADD_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e202800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e202800U),
+	  TCTI_FP2_FADD, sizeof(u32), 0x3ffc0000U, 0x4b000000U,
+	  TCTI_FPCR_RMODE_NEGINF, TCTI_SCALAR_FP_QC, 0x4b000001U,
+	  TCTI_SCALAR_FP_QC | TCTI_FPSR_IXC },
+	{ 4311U, "FSUB_S_floatdp2", "FSUB_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e203800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e203800U),
+	  TCTI_FP2_FSUB, sizeof(u32), 0x80000000U, 0, 0,
+	  TCTI_SCALAR_FP_QC, 0x80000000U, TCTI_SCALAR_FP_QC },
+	{ 4312U, "FMAX_S_floatdp2", "FMAX_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e204800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e204800U),
+	  TCTI_FP2_FMAX, sizeof(u32), 0, 0x80000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0, TCTI_SCALAR_FP_QC },
+	{ 4313U, "FMIN_S_floatdp2", "FMIN_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e205800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e205800U),
+	  TCTI_FP2_FMIN, sizeof(u32), 0, 0x80000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0x80000000U, TCTI_SCALAR_FP_QC },
+	{ 4314U, "FMAXNM_S_floatdp2", "FMAXNM_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e206800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e206800U),
+	  TCTI_FP2_FMAXNM, sizeof(u32), 0x7fc00001U, 0x40000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0x40000000U, TCTI_SCALAR_FP_QC },
+	{ 4315U, "FMINNM_S_floatdp2", "FMINNM_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e207800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e207800U),
+	  TCTI_FP2_FMINNM, sizeof(u32), 0x7fc00001U, 0x40000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0x40000000U, TCTI_SCALAR_FP_QC },
+	{ 4316U, "FNMUL_S_floatdp2", "FNMUL_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e208800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e208800U),
+	  TCTI_FP2_FNMUL, sizeof(u32), 0x3fc00000U, 0x40000000U, 0,
+	  TCTI_SCALAR_FP_QC, 0xc0400000U, TCTI_SCALAR_FP_QC },
+	{ 4317U, "FMUL_D_floatdp2", "FMUL_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e600800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e600800U),
+	  TCTI_FP2_FMUL, sizeof(u64), 0x3ff8000000000000ULL,
+	  0x4000000000000000ULL, 0, TCTI_SCALAR_FP_QC,
+	  0x4008000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4318U, "FDIV_D_floatdp2", "FDIV_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e601800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e601800U),
+	  TCTI_FP2_FDIV, sizeof(u64), 0x3ff0000000000000ULL, 0, 0,
+	  TCTI_SCALAR_FP_QC, 0x7ff0000000000000ULL,
+	  TCTI_SCALAR_FP_QC | TCTI_FPSR_DZC },
+	{ 4319U, "FADD_D_floatdp2", "FADD_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e602800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e602800U),
+	  TCTI_FP2_FADD, sizeof(u64), 0x3ff8000000000000ULL,
+	  0x4000000000000000ULL, TCTI_FPCR_RMODE_NEGINF,
+	  TCTI_SCALAR_FP_QC, 0x400c000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4320U, "FSUB_D_floatdp2", "FSUB_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e603800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e603800U),
+	  TCTI_FP2_FSUB, sizeof(u64), 0x8000000000000000ULL, 0, 0,
+	  TCTI_SCALAR_FP_QC, 0x8000000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4321U, "FMAX_D_floatdp2", "FMAX_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e604800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e604800U),
+	  TCTI_FP2_FMAX, sizeof(u64), 0, 0x8000000000000000ULL, 0,
+	  TCTI_SCALAR_FP_QC, 0, TCTI_SCALAR_FP_QC },
+	{ 4322U, "FMIN_D_floatdp2", "FMIN_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e605800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e605800U),
+	  TCTI_FP2_FMIN, sizeof(u64), 0, 0x8000000000000000ULL, 0,
+	  TCTI_SCALAR_FP_QC, 0x8000000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4323U, "FMAXNM_D_floatdp2", "FMAXNM_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e606800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e606800U),
+	  TCTI_FP2_FMAXNM, sizeof(u64), 0x7ff8000000000001ULL,
+	  0x4000000000000000ULL, 0, TCTI_SCALAR_FP_QC,
+	  0x4000000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4324U, "FMINNM_D_floatdp2", "FMINNM_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e607800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e607800U),
+	  TCTI_FP2_FMINNM, sizeof(u64), 0x7ff8000000000001ULL,
+	  0x4000000000000000ULL, 0, TCTI_SCALAR_FP_QC,
+	  0x4000000000000000ULL, TCTI_SCALAR_FP_QC },
+	{ 4325U, "FNMUL_D_floatdp2", "FNMUL_float",
+	  TCTI_SCALAR_FP_BINARY_SOURCE_MASK, 0x1e608800U,
+	  TCTI_SCALAR_FP_BINARY_S(0x1e608800U),
+	  TCTI_FP2_FNMUL, sizeof(u64), 0x3ff8000000000000ULL,
+	  0x4000000000000000ULL, 0, TCTI_SCALAR_FP_QC,
+	  0xc008000000000000ULL, TCTI_SCALAR_FP_QC },
+};
+
+static void tcti_scalar_fp_binary_resume_source_rows(struct kunit *test)
+{
+	static const u32 svc = 0xd4000001U;
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	struct tcti_target_instruction_artifact_validation_result validation;
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		tcti_target_instruction_artifact_validate(artifact, &validation));
+	KUNIT_ASSERT_GT(test, artifact->leaf_count, 4325U);
+	for (index = 0; index < ARRAY_SIZE(tcti_scalar_fp_binary_source_rows);
+	     index++) {
+		const struct tcti_scalar_fp_binary_source_row *row =
+			&tcti_scalar_fp_binary_source_rows[index];
+		const struct tcti_target_instruction_artifact_leaf *source =
+			&artifact->leaves[row->ordinal];
+		const char *source_id = tcti_scalar_fp_binary_artifact_string(
+			artifact, source->name_offset);
+		const char *operation_id = tcti_scalar_fp_binary_artifact_string(
+			artifact, source->operation_offset);
+		const u32 instructions[] = { row->instruction, svc };
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(row->instruction);
+		struct tcti_result result;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		unsigned long mapped;
+		int ret;
+
+		KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_FP_SCALAR_2SOURCE,
+				    decoded.decode_class, "%s source ordinal %u",
+				    row->source_id, row->ordinal);
+		KUNIT_ASSERT_EQ_MSG(test, row->operation, decoded.fp2_op,
+				    "%s source ordinal %u", row->source_id,
+				    row->ordinal);
+		KUNIT_ASSERT_EQ(test, row->width, decoded.access_size);
+		KUNIT_ASSERT_EQ(test, row->width, decoded.result_size);
+		KUNIT_ASSERT_EQ(test, 0U, decoded.rd);
+		KUNIT_ASSERT_EQ(test, 1U, decoded.rn);
+		KUNIT_ASSERT_EQ(test, 2U, decoded.rm);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, source_id, "ordinal=%u",
+				      row->ordinal);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, operation_id, "ordinal=%u",
+				      row->ordinal);
+		KUNIT_EXPECT_STREQ(test, row->source_id, source_id);
+		KUNIT_EXPECT_STREQ(test, row->operation_id, operation_id);
+		KUNIT_EXPECT_EQ(test, row->source_mask, source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, row->source_pattern,
+				source->encoding_pattern);
+		KUNIT_EXPECT_EQ(test, row->source_pattern,
+				row->instruction & row->source_mask);
+		KUNIT_EXPECT_EQ(test, source->encoding_pattern,
+				row->instruction & source->encoding_mask);
+
+		mapped = tcti_scalar_fp16_map_instructions(test, instructions,
+						     ARRAY_SIZE(instructions));
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[6] = 0x0123456789abcdefULL;
+		regs.regs[19] = 0xfedcba9876543210ULL;
+		current->thread.user_simd[0] = 0xaaaaaaaaaaaaaaaaULL;
+		current->thread.user_simd[1] = 0xbbbbbbbbbbbbbbbbULL;
+		current->thread.user_simd[2] = row->left;
+		current->thread.user_simd[3] = 0x0123456789abcdefULL;
+		current->thread.user_simd[4] = row->right;
+		current->thread.user_simd[5] = 0xfedcba9876543210ULL;
+		current->thread.user_fpcr = row->fpcr;
+		current->thread.user_fpsr = row->initial_fpsr;
+		before = regs;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+				    "%s source ordinal %u", row->source_id,
+				    row->ordinal);
+		KUNIT_EXPECT_EQ(test, 0L, result.status);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+		KUNIT_EXPECT_EQ(test, svc, result.instruction);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), regs.pc);
+		before.pc += sizeof(u32);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, row->expected, current->thread.user_simd[0]);
+		KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+		KUNIT_EXPECT_EQ(test, row->left, current->thread.user_simd[2]);
+		KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL,
+				current->thread.user_simd[3]);
+		KUNIT_EXPECT_EQ(test, row->right, current->thread.user_simd[4]);
+		KUNIT_EXPECT_EQ(test, 0xfedcba9876543210ULL,
+				current->thread.user_simd[5]);
+		KUNIT_EXPECT_EQ(test, row->fpcr, current->thread.user_fpcr);
+		KUNIT_EXPECT_EQ(test, row->expected_fpsr,
+				current->thread.user_fpsr);
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+	}
+}
+
+#undef TCTI_SCALAR_FP_BINARY_S
+
 static struct kunit_case tcti_scalar_fp_semantics_test_cases[] = {
 	KUNIT_CASE(tcti_scalar_fp16_decode_pinned_legal_and_reserved),
 	KUNIT_CASE(tcti_scalar_fp16_resume_user_is_runtime_gated),
@@ -840,6 +1083,7 @@ static struct kunit_case tcti_scalar_fp_semantics_test_cases[] = {
 	KUNIT_CASE(tcti_scalar_fp16_reserved_width_is_rejected),
 	KUNIT_CASE(tcti_scalar_fp_convert_resume_source_rows),
 	KUNIT_CASE(tcti_scalar_fp_convert_reserved_forms_exit_without_state_change),
+	KUNIT_CASE(tcti_scalar_fp_binary_resume_source_rows),
 	{}
 };
 
