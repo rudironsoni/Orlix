@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
 #include <linux/bitops.h>
+#include <linux/err.h>
+#include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/sched/mm.h>
+#include <linux/string.h>
+#include <linux/syscalls.h>
 #include <asm/ptrace.h>
+#include <asm/tcti.h>
 
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
@@ -330,6 +337,8 @@ static void crypto_decode_rejects_fixed_neighbours(struct kunit *test)
 }
 
 enum crypto_vector_family { CRYPTO_SHA512, CRYPTO_SHA3, CRYPTO_SM3, CRYPTO_SM4 };
+#define CRYPTO_RESUME_SVC 0xd4000001U
+
 struct crypto_vector {
 	u32 instruction;
 	u64 low;
@@ -464,6 +473,154 @@ static void crypto_executor_aliasing(struct kunit *test)
 	}
 }
 
+static int crypto_resume_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void crypto_resume_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
+static int crypto_resume_map_text(unsigned long *text)
+{
+	unsigned long mapped;
+
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+				  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (IS_ERR_VALUE(mapped))
+		return (long)mapped;
+	*text = mapped;
+	return 0;
+}
+
+static int crypto_resume_write_program(unsigned long text, u32 instruction)
+{
+	const u32 program[] = { instruction, CRYPTO_RESUME_SVC };
+	int ret;
+
+	ret = tcti_write_user_data(current->mm, text, program, sizeof(program));
+	if (ret)
+		return ret;
+	return sys_mprotect(text, PAGE_SIZE, PROT_READ | PROT_EXEC);
+}
+
+/*
+ * Production-path regression coverage only. The pinned public AARCHMRS
+ * package does not provide the shared ASL bodies required for authoritative
+ * semantic proof. These vectors must not discharge source-bound proof or
+ * enable runtime capability advertisement, and every exercised leaf remains
+ * TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED.
+ */
+static void crypto_resume_production_path_regression(struct kunit *test)
+{
+	unsigned long text = 0;
+	u32 seen = 0;
+	unsigned int i;
+	int ret;
+
+	ret = crypto_resume_map_text(&text);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	if (ret)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(crypto_vectors); i++) {
+		const struct crypto_vector *vector = &crypto_vectors[i];
+		const struct crypto_leaf *leaf = crypto_leaf_for(vector->instruction);
+		const struct tcti_crypto_target_contract_row *contract;
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(vector->instruction);
+		struct pt_regs regs = {
+			.sp = 0x12345000,
+			.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT,
+			.syscallno = NO_SYSCALL,
+		};
+		struct pt_regs expected;
+		struct tcti_result result;
+		u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u64 expected_fpcr = 0x04000000ULL;
+		u64 expected_fpsr = BIT(5);
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		KUNIT_ASSERT_GE(test, leaf->source_ordinal, 4067U);
+		KUNIT_ASSERT_LE(test, leaf->source_ordinal, 4083U);
+		seen |= BIT(leaf->source_ordinal - 4067U);
+		contract = crypto_target_contract_row(leaf->source_ordinal);
+		KUNIT_ASSERT_NOT_NULL(test, contract);
+		KUNIT_EXPECT_EQ_MSG(test,
+				    TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED,
+				    contract->status, "%s source=%u must remain ASL-blocked",
+				    leaf->name, leaf->source_ordinal);
+		KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+				decoded.decode_class);
+
+		ret = crypto_resume_write_program(text, vector->instruction);
+		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s source=%u", leaf->name,
+				    leaf->source_ordinal);
+		if (ret)
+			goto unmap;
+		regs.regs[0] = 0x0123456789abcdefULL;
+		regs.regs[8] = 0xfedcba9876543210ULL;
+		regs.regs[30] = 0x8877665544332211ULL;
+		regs.orig_x0 = 0xfeedfaceULL;
+		regs.pc = text;
+		crypto_vector_state(vector, &decoded);
+		current->thread.user_simd[62] = 0x1122334455667788ULL;
+		current->thread.user_simd[63] = 0x8877665544332211ULL;
+		current->thread.user_simd_valid = 0;
+		current->thread.user_fpcr = expected_fpcr;
+		current->thread.user_fpsr = expected_fpsr;
+		memcpy(expected_simd, current->thread.user_simd,
+		       sizeof(expected_simd));
+		expected_simd[0] = vector->low;
+		expected_simd[1] = vector->high;
+		expected = regs;
+		expected.pc = text + sizeof(u32);
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 0L, result.status, "%s source=%u",
+				    leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, text + sizeof(u32), result.pc,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, CRYPTO_RESUME_SVC, result.instruction,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ_MSG(test, &expected, &regs, sizeof(regs),
+				       "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_MEMEQ_MSG(test, expected_simd, current->thread.user_simd,
+				       sizeof(expected_simd), "%s source=%u", leaf->name,
+				       leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 1UL, current->thread.user_simd_valid,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, expected_fpcr, current->thread.user_fpcr,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+				    "%s source=%u", leaf->name, leaf->source_ordinal);
+		ret = sys_mprotect(text, PAGE_SIZE, PROT_READ | PROT_WRITE);
+		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s source=%u", leaf->name,
+				    leaf->source_ordinal);
+		if (ret)
+			goto unmap;
+	}
+	KUNIT_EXPECT_EQ(test, GENMASK(16, 0), seen);
+
+unmap:
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
+}
+
 static struct kunit_case crypto_extension_cases[] = {
 	KUNIT_CASE(crypto_source_leaf_provenance_is_complete),
 	KUNIT_CASE(crypto_sve_sme_target_contract_is_source_bound),
@@ -472,11 +629,14 @@ static struct kunit_case crypto_extension_cases[] = {
 	KUNIT_CASE(crypto_decode_rejects_fixed_neighbours),
 	KUNIT_CASE(crypto_executor_known_vectors),
 	KUNIT_CASE(crypto_executor_aliasing),
+	KUNIT_CASE(crypto_resume_production_path_regression),
 	{}
 };
 
 struct kunit_suite tcti_crypto_extension_decode_boundary_test_suite = {
 	.name = "orlix-tcti-crypto-extension-decode-boundary",
+	.init = crypto_resume_test_init,
+	.exit = crypto_resume_test_exit,
 	.test_cases = crypto_extension_cases,
 };
 
