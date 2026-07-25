@@ -29,13 +29,13 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.source_bound_rows == 73);
-	EXPECT(result.source_unbound_rows == 1028);
+	EXPECT(result.source_bound_rows == 103);
+	EXPECT(result.source_unbound_rows == 998);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 196);
-	EXPECT(result.unproved_obligation_bindings == 449);
+	EXPECT(result.unproved_obligation_bindings == 479);
 	EXPECT(result.source_condition_domain_bound_rows == 4350);
 	EXPECT(result.invalid_source_condition_rows == 0);
 	EXPECT(result.unresolved_feature_applicability_rows == 4049);

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -38,6 +39,12 @@
 	 TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define ADD_FLAGS_OBLIGATIONS \
 	(ADD_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define INTEGER_CONDITIONAL_OBLIGATIONS \
+	(BASELINE | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS \
+	(INTEGER_CONDITIONAL_OBLIGATIONS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define LSE_OBLIGATIONS \
 	(BASELINE | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
@@ -677,7 +684,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 449);
+	EXPECT(binding_count == 479);
 	return 0;
 }
 
@@ -775,6 +782,74 @@ static int scalar_fp_convert_registry_binds_exact_source_rows(void)
 	return 0;
 }
 
+static int integer_conditional_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		uint32_t ordinal;
+		const char *proof_id;
+		const char *leaf_name;
+		const char *mnemonic;
+		const char *operation_id;
+		uint32_t mask;
+		uint32_t pattern;
+		bool flags;
+	} expected[] = {
+		{ 3356U, "kunit:integer-conditional-udiv", "UDIV_32_dp_2src", "UDIV", "UDIV", 0xffe0fc00U, 0x1ac00800U, 0 },
+		{ 3357U, "kunit:integer-conditional-sdiv", "SDIV_32_dp_2src", "SDIV", "SDIV", 0xffe0fc00U, 0x1ac00c00U, 0 },
+		{ 3373U, "kunit:integer-conditional-udiv", "UDIV_64_dp_2src", "UDIV", "UDIV", 0xffe0fc00U, 0x9ac00800U, 0 },
+		{ 3374U, "kunit:integer-conditional-sdiv", "SDIV_64_dp_2src", "SDIV", "SDIV", 0xffe0fc00U, 0x9ac00c00U, 0 },
+		{ 3479U, "kunit:integer-conditional-ccmn-reg", "CCMN_32_condcmp_reg", "CCMN", "CCMN_reg", 0xffe00c10U, 0x3a400000U, true },
+		{ 3480U, "kunit:integer-conditional-ccmp-reg", "CCMP_32_condcmp_reg", "CCMP", "CCMP_reg", 0xffe00c10U, 0x7a400000U, true },
+		{ 3481U, "kunit:integer-conditional-ccmn-reg", "CCMN_64_condcmp_reg", "CCMN", "CCMN_reg", 0xffe00c10U, 0xba400000U, true },
+		{ 3482U, "kunit:integer-conditional-ccmp-reg", "CCMP_64_condcmp_reg", "CCMP", "CCMP_reg", 0xffe00c10U, 0xfa400000U, true },
+		{ 3483U, "kunit:integer-conditional-ccmn-imm", "CCMN_32_condcmp_imm", "CCMN", "CCMN_imm", 0xffe00c10U, 0x3a400800U, true },
+		{ 3484U, "kunit:integer-conditional-ccmp-imm", "CCMP_32_condcmp_imm", "CCMP", "CCMP_imm", 0xffe00c10U, 0x7a400800U, true },
+		{ 3485U, "kunit:integer-conditional-ccmn-imm", "CCMN_64_condcmp_imm", "CCMN", "CCMN_imm", 0xffe00c10U, 0xba400800U, true },
+		{ 3486U, "kunit:integer-conditional-ccmp-imm", "CCMP_64_condcmp_imm", "CCMP", "CCMP_imm", 0xffe00c10U, 0xfa400800U, true },
+		{ 3487U, "kunit:integer-conditional-csel", "CSEL_32_condsel", "CSEL", "CSEL", 0xffe00c00U, 0x1a800000U, false },
+		{ 3488U, "kunit:integer-conditional-csinc", "CSINC_32_condsel", "CSINC", "CSINC", 0xffe00c00U, 0x1a800400U, false },
+		{ 3489U, "kunit:integer-conditional-csinv", "CSINV_32_condsel", "CSINV", "CSINV", 0xffe00c00U, 0x5a800000U, false },
+		{ 3490U, "kunit:integer-conditional-csneg", "CSNEG_32_condsel", "CSNEG", "CSNEG", 0xffe00c00U, 0x5a800400U, false },
+		{ 3491U, "kunit:integer-conditional-csel", "CSEL_64_condsel", "CSEL", "CSEL", 0xffe00c00U, 0x9a800000U, false },
+		{ 3492U, "kunit:integer-conditional-csinc", "CSINC_64_condsel", "CSINC", "CSINC", 0xffe00c00U, 0x9a800400U, false },
+		{ 3493U, "kunit:integer-conditional-csinv", "CSINV_64_condsel", "CSINV", "CSINV", 0xffe00c00U, 0xda800000U, false },
+		{ 3494U, "kunit:integer-conditional-csneg", "CSNEG_64_condsel", "CSNEG", "CSNEG", 0xffe00c00U, 0xda800400U, false },
+		{ 3495U, "kunit:integer-conditional-madd", "MADD_32A_dp_3src", "MADD", "MADD", 0xffe08000U, 0x1b000000U, false },
+		{ 3496U, "kunit:integer-conditional-msub", "MSUB_32A_dp_3src", "MSUB", "MSUB", 0xffe08000U, 0x1b008000U, false },
+		{ 3497U, "kunit:integer-conditional-madd", "MADD_64A_dp_3src", "MADD", "MADD", 0xffe08000U, 0x9b000000U, false },
+		{ 3498U, "kunit:integer-conditional-msub", "MSUB_64A_dp_3src", "MSUB", "MSUB", 0xffe08000U, 0x9b008000U, false },
+		{ 3499U, "kunit:integer-conditional-smaddl", "SMADDL_64WA_dp_3src", "SMADDL", "SMADDL", 0xffe08000U, 0x9b200000U, false },
+		{ 3500U, "kunit:integer-conditional-smsubl", "SMSUBL_64WA_dp_3src", "SMSUBL", "SMSUBL", 0xffe08000U, 0x9b208000U, false },
+		{ 3501U, "kunit:integer-conditional-smulh", "SMULH_64_dp_3src", "SMULH", "SMULH", 0xffe0fc00U, 0x9b407c00U, false },
+		{ 3504U, "kunit:integer-conditional-umaddl", "UMADDL_64WA_dp_3src", "UMADDL", "UMADDL", 0xffe08000U, 0x9ba00000U, false },
+		{ 3505U, "kunit:integer-conditional-umsubl", "UMSUBL_64WA_dp_3src", "UMSUBL", "UMSUBL", 0xffe08000U, 0x9ba08000U, false },
+		{ 3506U, "kunit:integer-conditional-umulh", "UMULH_64_dp_3src", "UMULH", "UMULH", 0xffe0fc00U, 0x9bc07c00U, false },
+	};
+	const struct tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < sizeof(expected) / sizeof(expected[0]); index++) {
+		struct tcti_target_proof_reference reference = {
+			expected[index].proof_id, expected[index].leaf_name,
+			expected[index].mnemonic, expected[index].operation_id,
+			expected[index].mask, expected[index].pattern, TRUE_CONDITION, 1,
+		};
+		uint32_t requirements;
+
+		EXPECT(tcti_target_proof_operation_requirements(
+			expected[index].operation_id, 1, &requirements) == 0);
+		EXPECT(requirements == (expected[index].flags ?
+			INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS :
+			INTEGER_CONDITIONAL_OBLIGATIONS));
+		EXPECT(tcti_target_proof_registry_lookup(entries, count, &reference) ==
+			TCTI_TARGET_PROOF_REGISTRY_OK);
+	}
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -817,6 +892,8 @@ int main(void)
 		  source_registration_discharges_zero_semantic_obligations },
 		{ "scalar_fp_convert_registry_binds_exact_source_rows",
 		  scalar_fp_convert_registry_binds_exact_source_rows },
+		{ "integer_conditional_registry_binds_exact_source_rows",
+		  integer_conditional_registry_binds_exact_source_rows },
 	};
 	size_t index;
 

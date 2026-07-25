@@ -156,6 +156,13 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define SCALAR_FP_SUITE "orlix-tcti-scalar-fp-semantics"
 #define SCALAR_FP_SUITE_SYMBOL "tcti_scalar_fp_semantics_test_suite"
 #define SCALAR_FP_CASE_ARRAY "tcti_scalar_fp_semantics_test_cases"
+#define INTEGER_CONDITIONAL_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_integer_conditional_source_bound_test.c"
+#define INTEGER_CONDITIONAL_SUITE "orlix-tcti-integer-conditional-source-bound"
+#define INTEGER_CONDITIONAL_SUITE_SYMBOL \
+	"tcti_integer_conditional_source_bound_test_suite"
+#define INTEGER_CONDITIONAL_CASE_ARRAY \
+	"tcti_integer_conditional_source_bound_test_cases"
 #define SOURCE_LEAF_CLASSIFICATION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_source_leaf_classification_test.c"
 #define SOURCE_LEAF_CLASSIFICATION_SUITE \
@@ -192,6 +199,12 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define SCALAR_FP_CONVERT_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define INTEGER_CONDITIONAL_BASE_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS \
+	(INTEGER_CONDITIONAL_BASE_OBLIGATIONS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ORDINARY_LOAD_STORE_OBLIGATIONS \
 	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
@@ -246,6 +259,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ SCALAR_FP_SOURCE,
 	  "c39f31899aa12ff965fe5a10942f87fd918182cc88bf614fdf195d28c107a029",
 	  "tcti_scalar_fp_semantics_test.o" },
+	{ INTEGER_CONDITIONAL_SOURCE,
+	  "324578ba782bab9e0aa95aa8783a7a4dbf04ebc47e2ca5d1485831f7e68acac1",
+	  "tcti_integer_conditional_source_bound_test.o" },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -537,6 +553,39 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_all_divide_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_compare_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_select_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_multiply_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE,
+	  INTEGER_CONDITIONAL_SUITE_SYMBOL, INTEGER_CONDITIONAL_CASE_ARRAY,
+	  "tcti_integer_conditional_reserved_encodings_fail_before_state",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
@@ -608,9 +657,27 @@ static const struct operation_requirements operation_requirements[] = {
 		 TCTI_TARGET_PROOF_OBLIGATION_PC |
 		 TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ "ABS", BASELINE_OBLIGATIONS |
-		 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		 TCTI_TARGET_PROOF_OBLIGATION_PC |
-		 TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		TCTI_TARGET_PROOF_OBLIGATION_PC |
+		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "UDIV", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "SDIV", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "CCMN_reg", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "CCMP_reg", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "CCMN_imm", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "CCMP_imm", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "CSEL", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "CSINC", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "CSINV", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "CSNEG", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "MADD", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "MSUB", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "SMADDL", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "SMSUBL", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "SMULH", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "UMADDL", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "UMSUBL", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
+	{ "UMULH", INTEGER_CONDITIONAL_BASE_OBLIGATIONS },
 #define SCALAR_REQUIREMENT(operation, obligations) { operation, obligations }
 	SCALAR_REQUIREMENT("AND_log_imm", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ORR_log_imm", SCALAR_BASE_OBLIGATIONS),
@@ -1117,6 +1184,113 @@ static const struct tcti_target_proof_binding cssc_abs_bindings[] = {
 #undef CSSC_DP1_BINDING
 #undef CSSC_DP2_BINDING
 
+static const struct tcti_target_proof_case integer_conditional_base_cases[] = {
+	{ "tcti_integer_conditional_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_integer_conditional_all_divide_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_integer_conditional_select_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_integer_conditional_multiply_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_integer_conditional_reserved_encodings_fail_before_state",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct tcti_target_proof_case integer_conditional_flags_cases[] = {
+	{ "tcti_integer_conditional_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_integer_conditional_compare_leaves_production_path",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_integer_conditional_reserved_encodings_fail_before_state",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+#define INTEGER_CONDITIONAL_BINDING(ordinal, leaf, mnemonic, mask, pattern, cases) \
+	{ leaf, mnemonic, mask, pattern, ADD_SUB_IMMEDIATE_CONDITION, cases, ordinal }
+#define INTEGER_CONDITIONAL_PAIR_BINDINGS(name, ordinal32, leaf32, ordinal64, leaf64, \
+					  mnemonic, mask, pattern32, pattern64, cases) \
+	static const struct tcti_target_proof_binding name[] = { \
+		INTEGER_CONDITIONAL_BINDING(ordinal32, leaf32, mnemonic, mask, pattern32, cases), \
+		INTEGER_CONDITIONAL_BINDING(ordinal64, leaf64, mnemonic, mask, pattern64, cases), \
+	}
+
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_udiv_bindings, 3356U,
+	"UDIV_32_dp_2src", 3373U, "UDIV_64_dp_2src", "UDIV", 0xffe0fc00U,
+	0x1ac00800U, 0x9ac00800U, UINT64_C(0x13));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_sdiv_bindings, 3357U,
+	"SDIV_32_dp_2src", 3374U, "SDIV_64_dp_2src", "SDIV", 0xffe0fc00U,
+	0x1ac00c00U, 0x9ac00c00U, UINT64_C(0x13));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmn_reg_bindings, 3479U,
+	"CCMN_32_condcmp_reg", 3481U, "CCMN_64_condcmp_reg", "CCMN", 0xffe00c10U,
+	0x3a400000U, 0xba400000U, UINT64_C(0x7));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmp_reg_bindings, 3480U,
+	"CCMP_32_condcmp_reg", 3482U, "CCMP_64_condcmp_reg", "CCMP", 0xffe00c10U,
+	0x7a400000U, 0xfa400000U, UINT64_C(0x7));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmn_imm_bindings, 3483U,
+	"CCMN_32_condcmp_imm", 3485U, "CCMN_64_condcmp_imm", "CCMN", 0xffe00c10U,
+	0x3a400800U, 0xba400800U, UINT64_C(0x7));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmp_imm_bindings, 3484U,
+	"CCMP_32_condcmp_imm", 3486U, "CCMP_64_condcmp_imm", "CCMP", 0xffe00c10U,
+	0x7a400800U, 0xfa400800U, UINT64_C(0x7));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csel_bindings, 3487U,
+	"CSEL_32_condsel", 3491U, "CSEL_64_condsel", "CSEL", 0xffe00c00U,
+	0x1a800000U, 0x9a800000U, UINT64_C(0x15));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csinc_bindings, 3488U,
+	"CSINC_32_condsel", 3492U, "CSINC_64_condsel", "CSINC", 0xffe00c00U,
+	0x1a800400U, 0x9a800400U, UINT64_C(0x15));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csinv_bindings, 3489U,
+	"CSINV_32_condsel", 3493U, "CSINV_64_condsel", "CSINV", 0xffe00c00U,
+	0x5a800000U, 0xda800000U, UINT64_C(0x15));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csneg_bindings, 3490U,
+	"CSNEG_32_condsel", 3494U, "CSNEG_64_condsel", "CSNEG", 0xffe00c00U,
+	0x5a800400U, 0xda800400U, UINT64_C(0x15));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_madd_bindings, 3495U,
+	"MADD_32A_dp_3src", 3497U, "MADD_64A_dp_3src", "MADD", 0xffe08000U,
+	0x1b000000U, 0x9b000000U, UINT64_C(0x19));
+INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_msub_bindings, 3496U,
+	"MSUB_32A_dp_3src", 3498U, "MSUB_64A_dp_3src", "MSUB", 0xffe08000U,
+	0x1b008000U, 0x9b008000U, UINT64_C(0x19));
+static const struct tcti_target_proof_binding integer_smaddl_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3499U, "SMADDL_64WA_dp_3src", "SMADDL",
+		0xffe08000U, 0x9b200000U, UINT64_C(0x19)),
+};
+static const struct tcti_target_proof_binding integer_smsubl_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3500U, "SMSUBL_64WA_dp_3src", "SMSUBL",
+		0xffe08000U, 0x9b208000U, UINT64_C(0x19)),
+};
+static const struct tcti_target_proof_binding integer_smulh_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3501U, "SMULH_64_dp_3src", "SMULH",
+		0xffe0fc00U, 0x9b407c00U, UINT64_C(0x19)),
+};
+static const struct tcti_target_proof_binding integer_umaddl_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3504U, "UMADDL_64WA_dp_3src", "UMADDL",
+		0xffe08000U, 0x9ba00000U, UINT64_C(0x19)),
+};
+static const struct tcti_target_proof_binding integer_umsubl_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3505U, "UMSUBL_64WA_dp_3src", "UMSUBL",
+		0xffe08000U, 0x9ba08000U, UINT64_C(0x19)),
+};
+static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
+	INTEGER_CONDITIONAL_BINDING(3506U, "UMULH_64_dp_3src", "UMULH",
+		0xffe0fc00U, 0x9bc07c00U, UINT64_C(0x19)),
+};
+#undef INTEGER_CONDITIONAL_PAIR_BINDINGS
+#undef INTEGER_CONDITIONAL_BINDING
+
 #define LOGICAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
@@ -1135,6 +1309,12 @@ static const struct tcti_target_proof_binding cssc_abs_bindings[] = {
 	  CSSC_SOURCE, CSSC_SUITE, cssc_data_processing_cases, \
 	  ARRAY_COUNT(cssc_data_processing_cases), bindings, ARRAY_COUNT(bindings), \
 	  NULL, CSSC_OBLIGATIONS }
+#define INTEGER_CONDITIONAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  obligations, TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE, \
+	  cases, ARRAY_COUNT(cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
 #define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
@@ -1142,7 +1322,7 @@ static const struct tcti_target_proof_binding cssc_abs_bindings[] = {
 	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 23U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 41U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -1206,6 +1386,60 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 			cssc_cnt_bindings),
 	CSSC_DATA_ENTRY("kunit:cssc-data-processing-abs", "ABS",
 			cssc_abs_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_udiv_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-sdiv", "SDIV",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_sdiv_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-ccmn-reg", "CCMN_reg",
+		INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, integer_conditional_flags_cases,
+		integer_ccmn_reg_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-ccmp-reg", "CCMP_reg",
+		INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, integer_conditional_flags_cases,
+		integer_ccmp_reg_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-ccmn-imm", "CCMN_imm",
+		INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, integer_conditional_flags_cases,
+		integer_ccmn_imm_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-ccmp-imm", "CCMP_imm",
+		INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, integer_conditional_flags_cases,
+		integer_ccmp_imm_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-csel", "CSEL",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_csel_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-csinc", "CSINC",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_csinc_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-csinv", "CSINV",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_csinv_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-csneg", "CSNEG",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_csneg_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-madd", "MADD",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_madd_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-msub", "MSUB",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_msub_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smaddl", "SMADDL",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_smaddl_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smsubl", "SMSUBL",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_smsubl_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smulh", "SMULH",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_smulh_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umaddl", "UMADDL",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_umaddl_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umsubl", "UMSUBL",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_umsubl_bindings),
+	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umulh", "UMULH",
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		integer_umulh_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-add", "ADD_addsub_imm",
 				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
 				add_sub_immediate_base_cases,
@@ -1225,6 +1459,7 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 };
 
 #undef LOGICAL_ENTRY
+#undef INTEGER_CONDITIONAL_ENTRY
 #undef CSSC_DATA_ENTRY
 #undef CSSC_ENTRY
 #undef ADD_SUB_IMMEDIATE_ENTRY
