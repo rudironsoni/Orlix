@@ -2,6 +2,7 @@
 
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
+	target_instruction_artifact.o \
 	../mops_provenance.o \
 	../isa/target_ordinal_ledger.o \
 	target_ordinal_ledger_test.o \
