@@ -463,6 +463,16 @@ orlix_product_adapter_source_for() { \
 };
 endef
 
+define orlix_product_adapter_source_cflags
+orlix_product_adapter_source_cflags_for() { \
+	src_rel="$$1"; \
+	case "$$src_rel" in \
+		arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c|arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/fixed_fp.c) printf '%s\n' '-march=armv8.2-a+fp16' ;; \
+		*) ;; \
+	esac; \
+};
+endef
+
 define orlix_product_adapter_generate_payloads
 orlix_product_adapter_generate_payloads() { \
 	platform="$$1"; \
