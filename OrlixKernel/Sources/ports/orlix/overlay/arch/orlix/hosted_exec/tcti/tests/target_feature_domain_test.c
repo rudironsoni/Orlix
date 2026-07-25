@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_feature_domain.h"
+#include "target_instruction_artifact.h"
+
+#include "../isa/target_instruction_artifact_generated.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -834,6 +837,158 @@ static int tcnd_union_evaluates_not_or_and_set_membership(void)
 	return 0;
 }
 
+static const char *ordinal_3297_condition(void)
+{
+	const char *condition = NULL;
+
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(...) do { } while (0);
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, \
+	mask, pattern, source_condition, source_offset, source_length) \
+	do { \
+		if ((ordinal) == 3297U) \
+			condition = source_condition; \
+	} while (0);
+#include "../isa/source_manifest.def"
+#undef TCTI_A64_SOURCE_MANIFEST_ROW
+#undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+	return condition;
+}
+
+static int ordinal_3297_option_assignment_uses_generated_operand_metadata(void)
+{
+	const struct tcti_target_instruction_artifact *artifact =
+		&tcti_a64_instruction_artifact;
+	const struct tcti_target_instruction_artifact_leaf *leaf =
+		&artifact->leaves[3297U];
+	const struct tcti_target_instruction_artifact_operand *option =
+		&artifact->operands[leaf->operand_first + 1U];
+	struct tcti_target_instruction_operand_assignment assignment = {
+		.artifact = artifact,
+		.leaf_index = 3297U,
+		.instruction = leaf->encoding_pattern,
+	};
+	struct tcti_feature_domain_tcnd_environment missing = { 0 };
+	struct tcti_feature_domain_tcnd_environment environment = {
+		.context = &assignment,
+		.operand = tcti_target_instruction_operand_assignment,
+	};
+	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+	struct tcti_target_instruction_artifact_validation_result validation;
+	tcti_feature_artifact_u8 satisfied;
+	const char *condition = ordinal_3297_condition();
+	tcti_feature_artifact_u32 encoded_option_011;
+	tcti_feature_artifact_u32 encoded_option_010;
+	tcti_feature_artifact_u32 fixed_bit;
+
+	CHECK(condition);
+	CHECK(!tcti_target_instruction_artifact_validate(artifact, &validation));
+	CHECK(!strcmp((const char *)artifact->string_pool + leaf->name_offset,
+		"STRB_32B_ldst_regoff"));
+	CHECK(leaf->operand_count == 5U);
+	CHECK(!strcmp((const char *)artifact->string_pool + option->name_offset,
+		"option"));
+	CHECK(option->start == 13U);
+	CHECK(option->width == 3U);
+	CHECK(option->variable_mask == 0x0000e000U);
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&missing, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+
+	encoded_option_011 = leaf->encoding_pattern |
+		((tcti_feature_artifact_u32)3U << option->start);
+	encoded_option_010 = leaf->encoding_pattern |
+		((tcti_feature_artifact_u32)2U << option->start);
+	assignment.instruction = encoded_option_011;
+	CHECK(!tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(satisfied == 0U);
+
+	assignment.instruction = encoded_option_010;
+	CHECK(!tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(satisfied == 1U);
+
+	fixed_bit = leaf->encoding_mask & (0U - leaf->encoding_mask);
+	CHECK(fixed_bit);
+	assignment.instruction = encoded_option_010 ^ fixed_bit;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
+static int ordinal_3297_assignment_rejects_malformed_operand_metadata(void)
+{
+	const struct tcti_target_instruction_artifact *source =
+		&tcti_a64_instruction_artifact;
+	const struct tcti_target_instruction_artifact_leaf *source_leaf =
+		&source->leaves[3297U];
+	const struct tcti_target_instruction_artifact_operand *source_option =
+		&source->operands[source_leaf->operand_first + 1U];
+	struct tcti_target_instruction_artifact_leaf leaf = *source_leaf;
+	struct tcti_target_instruction_artifact_operand operand = *source_option;
+	struct tcti_target_instruction_artifact artifact = *source;
+	struct tcti_target_instruction_operand_assignment assignment;
+	struct tcti_feature_domain_tcnd_environment environment;
+	struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+	tcti_feature_artifact_u8 satisfied;
+	const char *condition = ordinal_3297_condition();
+	static const unsigned char unterminated_option[] = {
+		'o', 'p', 't', 'i', 'o', 'n',
+	};
+
+	CHECK(condition);
+	leaf.operand_first = 0U;
+	leaf.operand_count = 1U;
+	operand.leaf_index = 0U;
+	artifact.leaves = &leaf;
+	artifact.leaf_count = 1U;
+	artifact.operands = &operand;
+	artifact.operand_count = 1U;
+	assignment = (struct tcti_target_instruction_operand_assignment) {
+		.artifact = &artifact,
+		.leaf_index = 0U,
+		.instruction = leaf.encoding_pattern |
+			((tcti_feature_artifact_u32)2U << operand.start),
+	};
+	environment = (struct tcti_feature_domain_tcnd_environment) {
+		.context = &assignment,
+		.operand = tcti_target_instruction_operand_assignment,
+	};
+
+	operand.width = 0U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	operand = *source_option;
+	operand.leaf_index = 0U;
+	operand.variable_mask = 0U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	operand.variable_mask = 1U;
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	operand = *source_option;
+	operand.leaf_index = 0U;
+	operand.name_offset = 0U;
+	artifact.string_pool = unterminated_option;
+	artifact.string_pool_size = sizeof(unterminated_option);
+	CHECK(tcti_feature_domain_evaluate_tcnd(
+		tcti_feature_artifact_canonical(), condition,
+		&environment, &satisfied, &diagnostic));
+	CHECK(diagnostic.error == TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND);
+	return 0;
+}
+
 static int source_ordinals_900_through_1199_are_explicitly_evaluated(void)
 {
 	const struct tcti_feature_artifact *artifact =
@@ -898,6 +1053,8 @@ int main(void)
 	    tcnd_union_evaluates_features_and_operand_alternatives() ||
 	    tcnd_union_fails_loudly_on_unbound_operands() ||
 	    tcnd_union_evaluates_not_or_and_set_membership() ||
+	    ordinal_3297_option_assignment_uses_generated_operand_metadata() ||
+	    ordinal_3297_assignment_rejects_malformed_operand_metadata() ||
 	    source_ordinals_900_through_1199_are_explicitly_evaluated())
 		return 1;
 	puts("PASS target feature-domain evaluator");

@@ -9,6 +9,7 @@
 #define ORLIX_TCTI_TARGET_FEATURE_DOMAIN_H
 
 #include "target_feature_artifact.h"
+#include "target_instruction_artifact.h"
 
 enum tcti_feature_domain_value_kind {
 	TCTI_FEATURE_DOMAIN_VALUE_INVALID,
@@ -149,6 +150,23 @@ struct tcti_feature_domain_tcnd_environment {
 		       size_t byte_offset, size_t byte_length,
 		       const char **value, size_t *value_length);
 };
+
+/*
+ * Generated-instruction operand source for one concrete encoded instruction.
+ * The callback below resolves only operand names and bit ranges emitted by the
+ * checked instruction artifact. It does not classify, execute, or prove the
+ * selected leaf.
+ */
+struct tcti_target_instruction_operand_assignment {
+	const struct tcti_target_instruction_artifact *artifact;
+	tcti_feature_artifact_u32 leaf_index;
+	tcti_feature_artifact_u32 instruction;
+	char value[35];
+};
+
+int tcti_target_instruction_operand_assignment(void *context,
+	const char *tcnd_hex, size_t byte_offset, size_t byte_length,
+	const char **value, size_t *value_length);
 
 int tcti_feature_domain_evaluate_tcnd(
 	const struct tcti_feature_artifact *artifact, const char *tcnd_hex,

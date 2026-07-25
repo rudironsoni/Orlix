@@ -358,7 +358,9 @@ tcti-isa-host-tests:
 	@'$(ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain_test.c \
 		-o '$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'

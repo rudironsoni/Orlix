@@ -627,3 +627,14 @@ proof bindings, and 417 bindings with unproved obligations. Strict
 app-hosted KUnit and kselftest execution were not attempted and no runtime
 capability was promoted. The generated knowledge index was refreshed with the
 checkpoint.
+
+## [2026-07-25] test | Bind TCTI conditions to generated operand metadata
+
+Added a C-native, fail-closed operand assignment seam for source-condition
+evaluation. The focused ordinal 3297 regression validates the canonical
+instruction artifact, derives `STRB_32B_ldst_regoff` option bits from generated
+operand metadata, and rejects malformed metadata or encodings that disagree
+with the generated leaf mask and pattern. This is applicability infrastructure
+only. It grants no instruction-semantic or proof credit, and the complete-target
+audit remains blocked by 116 unresolved operand conditions, 3,941 missing
+feature configurations, and 4,350 unavailable official shared-ASL bodies.

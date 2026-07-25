@@ -28,6 +28,150 @@ static int present(const char *text)
 	return text && text[0];
 }
 
+static int tcnd_hex_nibble(char byte, unsigned int *value)
+{
+	if (byte >= '0' && byte <= '9') {
+		*value = (unsigned int)(byte - '0');
+		return 0;
+	}
+	if (byte >= 'a' && byte <= 'f') {
+		*value = (unsigned int)(byte - 'a' + 10);
+		return 0;
+	}
+	if (byte >= 'A' && byte <= 'F') {
+		*value = (unsigned int)(byte - 'A' + 10);
+		return 0;
+	}
+	return -1;
+}
+
+static int tcnd_hex_byte(const char *hex, size_t byte_index,
+	unsigned char *value)
+{
+	unsigned int high;
+	unsigned int low;
+
+	if (!hex || tcnd_hex_nibble(hex[byte_index * 2U], &high) ||
+	    tcnd_hex_nibble(hex[byte_index * 2U + 1U], &low))
+		return -1;
+	*value = (unsigned char)((high << 4) | low);
+	return 0;
+}
+
+static int tcnd_hex_equals_bytes(const char *hex, size_t byte_offset,
+	size_t byte_length, const char *text, size_t text_length)
+{
+	size_t index;
+
+	if (!hex || !text || text_length != byte_length)
+		return 0;
+	for (index = 0; index < byte_length; index++) {
+		unsigned char byte;
+
+		if (tcnd_hex_byte(hex, byte_offset + index, &byte) ||
+		    byte != (unsigned char)text[index])
+			return 0;
+	}
+	return 1;
+}
+
+static int operand_shape_valid(
+	const struct tcti_target_instruction_artifact_leaf *leaf,
+	const struct tcti_target_instruction_artifact_operand *operand)
+{
+	tcti_feature_artifact_u32 field_mask;
+
+	if (!leaf || !operand || !operand->width || operand->start >= 32U ||
+	    operand->width > 32U - operand->start || !operand->variable_mask)
+		return 0;
+	field_mask = operand->width == 32U ?
+		(tcti_feature_artifact_u32)~0U :
+		(((tcti_feature_artifact_u32)1U << operand->width) - 1U) <<
+			operand->start;
+	return !(operand->variable_mask & ~field_mask) &&
+		!(operand->variable_mask & leaf->encoding_mask);
+}
+
+static int tcnd_hex_matches_leaf_condition(
+	const struct tcti_target_instruction_artifact *artifact,
+	const struct tcti_target_instruction_artifact_leaf *leaf,
+	const char *hex)
+{
+	size_t index;
+
+	if (!artifact || !leaf || !hex ||
+	    strlen(hex) != (size_t)leaf->condition_length * 2U ||
+	    leaf->condition_offset > artifact->condition_pool_size ||
+	    leaf->condition_length > artifact->condition_pool_size -
+			leaf->condition_offset)
+		return 0;
+	for (index = 0; index < leaf->condition_length; index++) {
+		unsigned char byte;
+
+		if (tcnd_hex_byte(hex, index, &byte) ||
+		    byte != artifact->condition_pool[leaf->condition_offset + index])
+			return 0;
+	}
+	return 1;
+}
+
+int tcti_target_instruction_operand_assignment(void *context,
+	const char *tcnd_hex, size_t byte_offset, size_t byte_length,
+	const char **value, size_t *value_length)
+{
+	struct tcti_target_instruction_operand_assignment *assignment = context;
+	const struct tcti_target_instruction_artifact *artifact;
+	const struct tcti_target_instruction_artifact_leaf *leaf;
+	size_t index;
+
+	if (!assignment || !value || !value_length ||
+	    !(artifact = assignment->artifact) ||
+	    assignment->leaf_index >= artifact->leaf_count)
+		return -1;
+	leaf = &artifact->leaves[assignment->leaf_index];
+	if (!tcnd_hex_matches_leaf_condition(artifact, leaf, tcnd_hex) ||
+	    leaf->operand_first > artifact->operand_count ||
+	    leaf->operand_count > artifact->operand_count - leaf->operand_first ||
+	    (assignment->instruction & leaf->encoding_mask) !=
+		leaf->encoding_pattern)
+		return -1;
+	for (index = leaf->operand_first;
+	     index < leaf->operand_first + leaf->operand_count; index++) {
+		const struct tcti_target_instruction_artifact_operand *operand =
+			&artifact->operands[index];
+		const char *name;
+		const char *name_end;
+		size_t name_length;
+		tcti_feature_artifact_u8 bit;
+
+		if (operand->leaf_index != assignment->leaf_index ||
+		    operand->name_offset >= artifact->string_pool_size ||
+		    !operand_shape_valid(leaf, operand))
+			return -1;
+		name = (const char *)artifact->string_pool + operand->name_offset;
+		name_end = memchr(name, '\0',
+			artifact->string_pool_size - operand->name_offset);
+		if (!name_end)
+			return -1;
+		name_length = (size_t)(name_end - name);
+		if (!tcnd_hex_equals_bytes(tcnd_hex, byte_offset, byte_length, name,
+			name_length))
+			continue;
+		assignment->value[0] = '\'';
+		for (bit = 0; bit < operand->width; bit++)
+			assignment->value[bit + 1U] =
+				(assignment->instruction >>
+				 (operand->start + operand->width - bit - 1U)) & 1U ?
+				'1' : '0';
+		assignment->value[operand->width + 1U] = '\'';
+		assignment->value[operand->width + 2U] = '\0';
+		*value = assignment->value;
+		*value_length = operand->width + 2U;
+		return 0;
+	}
+	return -1;
+}
+
 static int reference_valid(const struct tcti_feature_artifact *artifact,
 			   tcti_feature_artifact_u32 reference)
 {
