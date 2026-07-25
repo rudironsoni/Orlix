@@ -597,6 +597,7 @@ static int scalar_source_bindings_are_complete_and_fail_closed(void)
 
 		if (strncmp(candidate->id, "kunit:logical-immediate-", 24) &&
 		    strncmp(candidate->id, "kunit:move-wide-", 16) &&
+		    strncmp(candidate->id, "kunit:scalar-bitops-", 20) &&
 		    strncmp(candidate->id, "kunit:add-sub-register-", 23))
 			continue;
 		EXPECT(candidate->unproved_obligations == candidate->obligations);
@@ -607,8 +608,8 @@ static int scalar_source_bindings_are_complete_and_fail_closed(void)
 		entry_count++;
 		binding_count += candidate->binding_count;
 	}
-	EXPECT(entry_count == 19);
-	EXPECT(binding_count == 38);
+	EXPECT(entry_count == 25);
+	EXPECT(binding_count == 49);
 
 	/* A missing binding must leave its source-bound proof row unmatched. */
 	memcpy(copied, entries, count * sizeof(copied[0]));
@@ -777,7 +778,89 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 491);
+	EXPECT(binding_count == 502);
+	return 0;
+}
+
+static int scalar_bitops_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		uint32_t ordinal;
+		const char *proof_id;
+		const char *leaf_name;
+		const char *mnemonic;
+		const char *operation_id;
+	} expected[] = {
+		{ 3389U, "kunit:scalar-bitops-rbit", "RBIT_32_dp_1src",
+		  "RBIT", "RBIT_int" },
+		{ 3390U, "kunit:scalar-bitops-rev16", "REV16_32_dp_1src",
+		  "REV16", "REV16_int" },
+		{ 3391U, "kunit:scalar-bitops-rev", "REV_32_dp_1src",
+		  "REV", "REV" },
+		{ 3392U, "kunit:scalar-bitops-clz", "CLZ_32_dp_1src",
+		  "CLZ", "CLZ_int" },
+		{ 3393U, "kunit:scalar-bitops-cls", "CLS_32_dp_1src",
+		  "CLS", "CLS_int" },
+		{ 3397U, "kunit:scalar-bitops-rbit", "RBIT_64_dp_1src",
+		  "RBIT", "RBIT_int" },
+		{ 3398U, "kunit:scalar-bitops-rev16", "REV16_64_dp_1src",
+		  "REV16", "REV16_int" },
+		{ 3399U, "kunit:scalar-bitops-rev32", "REV32_64_dp_1src",
+		  "REV32", "REV32_int" },
+		{ 3400U, "kunit:scalar-bitops-rev", "REV_64_dp_1src",
+		  "REV", "REV" },
+		{ 3401U, "kunit:scalar-bitops-clz", "CLZ_64_dp_1src",
+		  "CLZ", "CLZ_int" },
+		{ 3402U, "kunit:scalar-bitops-cls", "CLS_64_dp_1src",
+		  "CLS", "CLS_int" },
+	};
+	const struct tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < sizeof(expected) / sizeof(expected[0]); index++) {
+		const struct tcti_target_proof_registry_entry *entry = NULL;
+		const struct tcti_target_proof_binding *binding = NULL;
+		size_t entry_index;
+		size_t binding_index;
+
+		for (entry_index = 0; entry_index < count; entry_index++) {
+			if (!strcmp(entries[entry_index].id, expected[index].proof_id)) {
+				entry = &entries[entry_index];
+				break;
+			}
+		}
+		EXPECT(entry != NULL);
+		EXPECT(!strcmp(entry->operation_id, expected[index].operation_id));
+		EXPECT(!strcmp(entry->kunit_source,
+			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_scalar_bitops_source_bound_test.c"));
+		EXPECT(!strcmp(entry->kunit_suite,
+			"orlix-tcti-scalar-bitops-source-bound"));
+		EXPECT(entry->kunit_case_count == 1);
+		EXPECT(!strcmp(entry->kunit_cases[0].name,
+			"tcti_scalar_bitops_source_bindings"));
+		EXPECT(entry->kunit_cases[0].obligations ==
+			(TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+			 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS));
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->obligations &
+		       TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS);
+		EXPECT(entry->unproved_obligations &
+		       TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS);
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++) {
+			if (entry->bindings[binding_index].source_ordinal ==
+			    expected[index].ordinal) {
+				binding = &entry->bindings[binding_index];
+				break;
+			}
+		}
+		EXPECT(binding != NULL);
+		EXPECT(!strcmp(binding->leaf_name, expected[index].leaf_name));
+		EXPECT(!strcmp(binding->mnemonic, expected[index].mnemonic));
+	}
 	return 0;
 }
 
@@ -979,6 +1062,8 @@ int main(void)
 		  lse_registry_cannot_clear_unproved_duties_statically },
 		{ "scalar_source_bindings_are_complete_and_fail_closed",
 		  scalar_source_bindings_are_complete_and_fail_closed },
+		{ "scalar_bitops_registry_binds_exact_source_rows",
+		  scalar_bitops_registry_binds_exact_source_rows },
 		{ "exclusive_registry_binds_exact_baseline_leaves",
 		  exclusive_registry_binds_exact_baseline_leaves },
 		{ "branch_control_registry_binds_exact_source_rows",

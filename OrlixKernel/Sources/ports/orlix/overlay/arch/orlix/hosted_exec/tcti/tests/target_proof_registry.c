@@ -145,6 +145,11 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define MOVE_WIDE_SUITE "orlix-tcti-move-wide-source-bound"
 #define MOVE_WIDE_SUITE_SYMBOL "tcti_move_wide_source_bound_test_suite"
 #define MOVE_WIDE_CASE_ARRAY "tcti_move_wide_source_bound_test_cases"
+#define SCALAR_BITOPS_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_scalar_bitops_source_bound_test.c"
+#define SCALAR_BITOPS_SUITE "orlix-tcti-scalar-bitops-source-bound"
+#define SCALAR_BITOPS_SUITE_SYMBOL "tcti_scalar_bitops_source_bound_test_suite"
+#define SCALAR_BITOPS_CASE_ARRAY "tcti_scalar_bitops_source_bound_test_cases"
 #define ADD_SUB_REGISTER_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_add_sub_register_source_bound_test.c"
 #define ADD_SUB_REGISTER_SUITE "orlix-tcti-add-sub-register-source-bound"
@@ -256,6 +261,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ MOVE_WIDE_SOURCE,
 	  "96bcc43f38b5e0e79d62ff6f9ef17100ba5b58e9e4f64dfae2d8c35eb4911323",
 	  "tcti_move_wide_source_bound_test.o" },
+	{ SCALAR_BITOPS_SOURCE,
+	  "aa183cc4ca76a9efa5d985d67063cc22de8f16b5c18be6814915060422613210",
+	  "tcti_scalar_bitops_source_bound_test.o" },
 	{ ADD_SUB_REGISTER_SOURCE,
 	  "ac6c5af06d59ba16130aee4dd83593148a0b4ef15d5fd14e32c531161fa6ec29",
 	  "tcti_add_sub_register_source_bound_test.o" },
@@ -507,6 +515,11 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  MOVE_WIDE_CASE_ARRAY, "tcti_move_wide_fixed_bit_neighbours_and_reserved",
 	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+	  SCALAR_BITOPS_SUITE_SYMBOL, SCALAR_BITOPS_CASE_ARRAY,
+	  "tcti_scalar_bitops_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
 	{ ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
 	  ADD_SUB_REGISTER_SUITE_SYMBOL, ADD_SUB_REGISTER_CASE_ARRAY,
 	  "asr_source_and_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -716,6 +729,12 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("MOVN", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("MOVZ", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("MOVK", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("RBIT_int", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV16_int", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV32_int", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CLZ_int", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CLS_int", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADD_addsub_shift", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADDS_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SUB_addsub_shift", SCALAR_BASE_OBLIGATIONS),
@@ -1357,8 +1376,8 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 35U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 54U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 41U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 65U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
@@ -1801,6 +1820,12 @@ static const struct tcti_target_proof_case move_wide_cases[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct tcti_target_proof_case scalar_bitops_cases[] = {
+	{ "tcti_scalar_bitops_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+};
+
 static const struct tcti_target_proof_case add_sub_register_base_cases[] = {
 	{ "asr_source_and_decode", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -1868,6 +1893,24 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
 	SCALAR_OPERATION("MOVK", "kunit:move-wide-movk", MOVE_WIDE_SOURCE,
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	SCALAR_OPERATION("RBIT_int", "kunit:scalar-bitops-rbit",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3389U, 3397U, 2),
+	SCALAR_OPERATION("REV16_int", "kunit:scalar-bitops-rev16",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3390U, 3398U, 2),
+	SCALAR_OPERATION("REV", "kunit:scalar-bitops-rev",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3391U, 3400U, 2),
+	SCALAR_OPERATION("CLZ_int", "kunit:scalar-bitops-clz",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3392U, 3401U, 2),
+	SCALAR_OPERATION("CLS_int", "kunit:scalar-bitops-cls",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3393U, 3402U, 2),
+	SCALAR_OPERATION("REV32_int", "kunit:scalar-bitops-rev32",
+		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
+		scalar_bitops_cases, 3399U, 3399U, 1),
 	SCALAR_OPERATION("ADD_addsub_shift", "kunit:add-sub-register-add-shift",
 		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
 		add_sub_register_base_cases, 3450U, 3457U, 2),
