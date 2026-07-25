@@ -1045,6 +1045,7 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_ordinal_ledger.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_ordinal_ledger_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_feature_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_instruction_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_memory_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_decode_test.c \
@@ -1060,10 +1061,12 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_resume_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_resume_production_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_scalar_rmw_resume_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_exclusive_resume_production_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_variable_shift_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_immediate_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_move_wide_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_register_source_bound_test.c \
@@ -1088,6 +1091,8 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_modified_immediate_regression_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/mops_provenance.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_fp_arithmetic_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_halving_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_shift_right_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_structure_load_store_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pauth_bti_gcs_obligation_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sme_state_contract_test.c \
