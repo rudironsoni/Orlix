@@ -32,6 +32,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_variable_shift_source_bound_test.o \
 	tcti_advsimd_narrow_widen_source_bound_test.o \
 	tcti_ordinary_single_load_store_source_bound_test.o \
+	tcti_pair_load_store_source_bound_test.o \
 	tcti_load_literal_resume_regression_test.o \
 	tcti_branch_control_source_bound_test.o \
 	tcti_source_leaf_classification_test.o \
