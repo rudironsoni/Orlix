@@ -657,3 +657,12 @@ unsupported result, and verifies unchanged architectural state. The registry
 now supports multiple exact source bindings for one operation while rejecting
 mixed-operation bindings. Both leaves remain ASL-blocked with all semantic
 obligations unproved.
+
+## [2026-07-25] build | Publish fixed instruction-field artifact
+
+Published 16,675 imported all-fixed instruction fields in the versioned
+C-native target instruction artifact. Each leaf now has a validated contiguous
+fixed-field span with exact condition, bit range, mask, value, source span, and
+pinned-source locator. Canonical tests cover `opc` on ordinals 203 through 205
+and `op21` on ordinals 2169 and 2170, plus adversarial artifact mutations. This
+remains provenance infrastructure and grants no semantic or proof credit.

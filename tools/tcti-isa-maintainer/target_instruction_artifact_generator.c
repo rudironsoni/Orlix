@@ -48,6 +48,8 @@ struct artifact_leaf {
 	uint32_t condition_length;
 	uint32_t operand_first;
 	uint32_t operand_count;
+	uint32_t fixed_operand_first;
+	uint32_t fixed_operand_count;
 };
 
 struct artifact_operand {
@@ -56,6 +58,20 @@ struct artifact_operand {
 	uint32_t condition_offset;
 	uint32_t condition_length;
 	uint32_t variable_mask;
+	uint8_t start;
+	uint8_t width;
+};
+
+struct artifact_fixed_operand {
+	uint32_t name_offset;
+	uint32_t leaf_index;
+	uint32_t condition_offset;
+	uint32_t condition_length;
+	uint32_t fixed_mask;
+	uint32_t fixed_value;
+	uint32_t source_offset;
+	uint32_t source_length;
+	uint32_t source_identity_offset;
 	uint8_t start;
 	uint8_t width;
 };
@@ -95,6 +111,8 @@ struct artifact_model {
 	struct artifact_leaf *leaves;
 	struct artifact_operand *operands;
 	size_t operand_count;
+	struct artifact_fixed_operand *fixed_operands;
+	size_t fixed_operand_count;
 	struct artifact_instruction_alias *instruction_aliases;
 	size_t instruction_alias_count;
 	struct artifact_operation_alias *operation_aliases;
@@ -289,6 +307,7 @@ static void artifact_model_destroy(struct artifact_model *model)
 	free(model->condition_map);
 	free(model->leaves);
 	free(model->operands);
+	free(model->fixed_operands);
 	free(model->instruction_aliases);
 	free(model->operation_aliases);
 	memset(model, 0, sizeof(*model));
@@ -454,20 +473,31 @@ static enum tcti_target_instruction_artifact_error build_model(
 {
 	uint32_t *counts = NULL;
 	uint32_t *cursors = NULL;
+	uint32_t *fixed_counts = NULL;
+	uint32_t *fixed_cursors = NULL;
 	size_t index;
 	size_t total_operands = inventory->operand_count;
+	size_t total_fixed_operands = inventory->fixed_operand_count;
 	enum tcti_target_instruction_artifact_error result;
 
 	if (inventory->leaf_count != TCTI_A64_TARGET_LEAF_COUNT ||
 	    inventory->leaf_count > UINT32_MAX || total_operands > UINT32_MAX ||
+	    total_fixed_operands > UINT32_MAX ||
 	    inventory->leaf_count > SIZE_MAX / sizeof(*model->leaves) ||
-	    total_operands > SIZE_MAX / sizeof(*model->operands))
+	    total_operands > SIZE_MAX / sizeof(*model->operands) ||
+	    total_fixed_operands > SIZE_MAX / sizeof(*model->fixed_operands))
 		return TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
 	model->leaves = calloc(inventory->leaf_count, sizeof(*model->leaves));
 	model->operands = calloc(total_operands, sizeof(*model->operands));
+	model->fixed_operands = calloc(total_fixed_operands,
+					 sizeof(*model->fixed_operands));
 	counts = calloc(inventory->leaf_count, sizeof(*counts));
 	cursors = calloc(inventory->leaf_count, sizeof(*cursors));
-	if (!model->leaves || (total_operands && !model->operands) || !counts || !cursors) {
+	fixed_counts = calloc(inventory->leaf_count, sizeof(*fixed_counts));
+	fixed_cursors = calloc(inventory->leaf_count, sizeof(*fixed_cursors));
+	if (!model->leaves || (total_operands && !model->operands) ||
+	    (total_fixed_operands && !model->fixed_operands) || !counts || !cursors ||
+	    !fixed_counts || !fixed_cursors) {
 		result = TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
 		goto out;
 	}
@@ -482,13 +512,27 @@ static enum tcti_target_instruction_artifact_error build_model(
 		}
 		counts[operand->leaf_index]++;
 	}
+	for (index = 0; index < total_fixed_operands; index++) {
+		const struct tcti_target_fixed_operand *operand =
+			&inventory->fixed_operands[index];
+
+		if (operand->leaf_index >= inventory->leaf_count ||
+		    operand->condition >= inventory->expression_count ||
+		    fixed_counts[operand->leaf_index] == UINT32_MAX) {
+			result = TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			goto out;
+		}
+		fixed_counts[operand->leaf_index]++;
+	}
 	for (index = 0; index < inventory->leaf_count; index++) {
 		struct artifact_leaf *leaf = &model->leaves[index];
 		const struct tcti_target_leaf *source = &inventory->leaves[index];
 
 		if (source->condition >= inventory->expression_count ||
-		    (index && model->leaves[index - 1].operand_first > UINT32_MAX -
-			model->leaves[index - 1].operand_count)) {
+		    (index && (model->leaves[index - 1].operand_first > UINT32_MAX -
+			model->leaves[index - 1].operand_count ||
+		     model->leaves[index - 1].fixed_operand_first > UINT32_MAX -
+			model->leaves[index - 1].fixed_operand_count))) {
 			result = TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
 			goto out;
 		}
@@ -496,6 +540,11 @@ static enum tcti_target_instruction_artifact_error build_model(
 			model->leaves[index - 1].operand_count : 0;
 		leaf->operand_count = counts[index];
 		cursors[index] = leaf->operand_first;
+		leaf->fixed_operand_first = index ?
+			model->leaves[index - 1].fixed_operand_first +
+			model->leaves[index - 1].fixed_operand_count : 0;
+		leaf->fixed_operand_count = fixed_counts[index];
+		fixed_cursors[index] = leaf->fixed_operand_first;
 		leaf->encoding_mask = source->encoding_mask;
 		leaf->encoding_pattern = source->encoding_pattern;
 		if (bytes_append_string(&model->strings, source->name, &leaf->name_offset) ||
@@ -540,11 +589,44 @@ static enum tcti_target_instruction_artifact_error build_model(
 			goto out;
 		}
 	}
+	for (index = 0; index < total_fixed_operands; index++) {
+		const struct tcti_target_fixed_operand *source =
+			&inventory->fixed_operands[index];
+		struct artifact_fixed_operand *operand;
+		uint32_t slot = fixed_cursors[source->leaf_index]++;
+
+		if (slot >= total_fixed_operands ||
+		    source->source_offset > UINT32_MAX ||
+		    source->source_length > UINT32_MAX ||
+		    append_span_identity(&model->strings, source->source_offset,
+			 source->source_length, &model->fixed_operands[slot].source_identity_offset)) {
+			result = TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			goto out;
+		}
+		operand = &model->fixed_operands[slot];
+		operand->leaf_index = source->leaf_index;
+		operand->fixed_mask = source->fixed_mask;
+		operand->fixed_value = source->fixed_value;
+		operand->start = source->start;
+		operand->width = source->width;
+		operand->source_offset = (uint32_t)source->source_offset;
+		operand->source_length = (uint32_t)source->source_length;
+		operand->condition_offset = model->condition_map[source->condition].offset;
+		operand->condition_length = model->condition_map[source->condition].length;
+		if (bytes_append_string(&model->strings, source->name,
+			&operand->name_offset)) {
+			result = TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			goto out;
+		}
+	}
 	model->operand_count = total_operands;
+	model->fixed_operand_count = total_fixed_operands;
 	result = TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
 out:
 	free(counts);
 	free(cursors);
+	free(fixed_counts);
+	free(fixed_cursors);
 	return result;
 }
 
@@ -602,16 +684,18 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#include \"target_instruction_artifact.h\"\n\n"
-		"#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 2U\n"
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 3U\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_ARCHITECTURE \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_BUILD \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_REFERENCE \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_SCHEMA \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_SOURCE_SHA256 \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT %uU\n"
-		"#define TCTI_A64_INSTRUCTION_ARTIFACT_OPERAND_COUNT %zuU\n\n",
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_OPERAND_COUNT %zuU\n"
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_FIXED_OPERAND_COUNT %zuU\n\n",
 		source_architecture, source_build, source_reference, source_schema,
-		source_sha256, TCTI_A64_TARGET_LEAF_COUNT, model->operand_count))
+		source_sha256, TCTI_A64_TARGET_LEAF_COUNT, model->operand_count,
+		model->fixed_operand_count))
 		return -1;
 	if (outputf(output,
 		"static const struct tcti_target_instruction_artifact_leaf "
@@ -621,10 +705,11 @@ static int emit_artifact(struct artifact_bytes *output,
 	for (index = 0; index < TCTI_A64_TARGET_LEAF_COUNT; index++) {
 		const struct artifact_leaf *leaf = &model->leaves[index];
 		if (outputf(output,
-			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, 0x%08" PRIx32 "U, 0x%08" PRIx32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U },\n",
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, 0x%08" PRIx32 "U, 0x%08" PRIx32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U },\n",
 			leaf->name_offset, leaf->mnemonic_offset, leaf->operation_offset,
 			leaf->encoding_mask, leaf->encoding_pattern, leaf->condition_offset,
-			leaf->condition_length, leaf->operand_first, leaf->operand_count))
+			leaf->condition_length, leaf->operand_first, leaf->operand_count,
+			leaf->fixed_operand_first, leaf->fixed_operand_count))
 			return -1;
 	}
 	if (outputf(output, "};\n\nstatic const struct tcti_target_instruction_artifact_operand "
@@ -637,6 +722,27 @@ static int emit_artifact(struct artifact_bytes *output,
 			operand->name_offset, operand->leaf_index, operand->condition_offset,
 			operand->condition_length, operand->variable_mask,
 			(unsigned int)operand->start, (unsigned int)operand->width))
+			return -1;
+	}
+	if (outputf(output, "};\n\n"))
+		return -1;
+	if (outputf(output,
+		"static const struct tcti_target_instruction_artifact_fixed_operand "
+		"tcti_a64_instruction_artifact_fixed_operands[%zu] = {\n",
+		model->fixed_operand_count))
+		return -1;
+	for (index = 0; index < model->fixed_operand_count; index++) {
+		const struct artifact_fixed_operand *operand =
+			&model->fixed_operands[index];
+
+		if (outputf(output,
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, 0x%08" PRIx32 "U, 0x%08" PRIx32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU },\n",
+			operand->name_offset, operand->leaf_index,
+			operand->condition_offset, operand->condition_length,
+			operand->fixed_mask, operand->fixed_value,
+			operand->source_offset, operand->source_length,
+			operand->source_identity_offset, (unsigned int)operand->start,
+			(unsigned int)operand->width))
 			return -1;
 	}
 	if (outputf(output, "};\n\n"))
@@ -703,6 +809,8 @@ static int emit_artifact(struct artifact_bytes *output,
 		"    .leaf_count = TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT,\n"
 		"    .operands = tcti_a64_instruction_artifact_operands,\n"
 		"    .operand_count = TCTI_A64_INSTRUCTION_ARTIFACT_OPERAND_COUNT,\n"
+		"    .fixed_operands = tcti_a64_instruction_artifact_fixed_operands,\n"
+		"    .fixed_operand_count = TCTI_A64_INSTRUCTION_ARTIFACT_FIXED_OPERAND_COUNT,\n"
 		"    .instruction_aliases = tcti_a64_instruction_artifact_instruction_aliases,\n"
 		"    .instruction_alias_count = TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT,\n"
 		"    .operation_aliases = tcti_a64_instruction_artifact_operation_aliases,\n"

@@ -244,6 +244,23 @@ static bool valid_operand_shape(
 		!(operand->variable_mask & leaf->encoding_mask);
 }
 
+static bool valid_fixed_operand_shape(
+	const struct tcti_target_instruction_artifact_leaf *leaf,
+	const struct tcti_target_instruction_artifact_fixed_operand *operand)
+{
+	u32 field_mask;
+
+	if (!operand->width || operand->start >= 32U ||
+	    operand->width > 32U - operand->start)
+		return false;
+	field_mask = operand->width == 32U ? TCTI_U32_NONE :
+		((1U << operand->width) - 1U) << operand->start;
+	return operand->fixed_mask == field_mask &&
+		!(operand->fixed_value & ~field_mask) &&
+		(leaf->encoding_mask & field_mask) == field_mask &&
+		(leaf->encoding_pattern & field_mask) == operand->fixed_value;
+}
+
 static int fail_alias(
 	struct tcti_target_instruction_artifact_validation_result *result,
 	enum tcti_target_instruction_artifact_validation_error error,
@@ -464,6 +481,7 @@ int tcti_target_instruction_artifact_validate(
 	struct tcti_target_instruction_artifact_validation_result *result)
 {
 	u32 expected_operand = 0;
+	u32 expected_fixed_operand = 0;
 	size_t leaf_index;
 
 	if (result)
@@ -487,12 +505,16 @@ int tcti_target_instruction_artifact_validate(
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_PROVENANCE_MISMATCH,
 				    TCTI_U32_NONE, TCTI_U32_NONE);
 	if (artifact->leaf_count != TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT ||
-	    artifact->operand_count > TCTI_U32_NONE)
+	    artifact->operand_count > TCTI_U32_NONE ||
+	    artifact->fixed_operand_count !=
+		TCTI_A64_INSTRUCTION_ARTIFACT_EXPECTED_FIXED_OPERAND_COUNT ||
+	    artifact->fixed_operand_count > TCTI_U32_NONE)
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH,
 				    TCTI_U32_NONE, TCTI_U32_NONE);
 	if (!artifact->leaves || !artifact->string_pool || !artifact->condition_pool ||
 	    !artifact->string_pool_size || !artifact->condition_pool_size ||
-	    (artifact->operand_count && !artifact->operands))
+	    (artifact->operand_count && !artifact->operands) ||
+	    (artifact->fixed_operand_count && !artifact->fixed_operands))
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_POOL_INVALID,
 				    TCTI_U32_NONE, TCTI_U32_NONE);
 
@@ -502,6 +524,7 @@ int tcti_target_instruction_artifact_validate(
 		const char *name;
 		size_t previous;
 		u32 operand_mask = 0;
+		u32 fixed_mask = 0;
 
 		if (leaf_index > TCTI_U32_NONE ||
 		    leaf->encoding_pattern & ~leaf->encoding_mask)
@@ -521,7 +544,10 @@ int tcti_target_instruction_artifact_validate(
 			return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_CONDITION_INVALID,
 					    (u32)leaf_index, TCTI_U32_NONE);
 		if (leaf->operand_first != expected_operand ||
-		    leaf->operand_count > artifact->operand_count - expected_operand)
+		    leaf->operand_count > artifact->operand_count - expected_operand ||
+		    leaf->fixed_operand_first != expected_fixed_operand ||
+		    leaf->fixed_operand_count >
+			artifact->fixed_operand_count - expected_fixed_operand)
 			return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
 					    (u32)leaf_index, TCTI_U32_NONE);
 		/* The imported source rejects duplicate leaf identities. */
@@ -543,10 +569,13 @@ int tcti_target_instruction_artifact_validate(
 		while (expected_operand < leaf->operand_first + leaf->operand_count) {
 			const struct tcti_target_instruction_artifact_operand *operand =
 				&artifact->operands[expected_operand];
+			const char *operand_name;
+			size_t prior;
 
 			if (operand->leaf_index != leaf_index ||
 			    !pool_string(artifact->string_pool,
-					 artifact->string_pool_size, operand->name_offset, NULL))
+					 artifact->string_pool_size, operand->name_offset,
+					 &operand_name))
 				return fail(result,
 						TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID,
 						(u32)leaf_index, expected_operand);
@@ -570,13 +599,70 @@ int tcti_target_instruction_artifact_validate(
 				return fail(result,
 						TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID,
 						(u32)leaf_index, expected_operand);
+			for (prior = leaf->operand_first; prior < expected_operand; prior++) {
+				const char *prior_name;
+
+				if (!pool_string(artifact->string_pool,
+					artifact->string_pool_size,
+					artifact->operands[prior].name_offset, &prior_name) ||
+				    !strcmp(operand_name, prior_name))
+					return fail(result,
+						TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID,
+						(u32)leaf_index, expected_operand);
+			}
 			operand_mask |= operand->variable_mask;
 			expected_operand++;
+		}
+		while (expected_fixed_operand < leaf->fixed_operand_first +
+			leaf->fixed_operand_count) {
+			const struct tcti_target_instruction_artifact_fixed_operand *operand =
+				&artifact->fixed_operands[expected_fixed_operand];
+			const char *fixed_name;
+			size_t prior;
+
+			if (operand->leaf_index != leaf_index ||
+			    !pool_string(artifact->string_pool, artifact->string_pool_size,
+				operand->name_offset, &fixed_name) ||
+			    !valid_condition(artifact->condition_pool,
+				artifact->condition_pool_size, operand->condition_offset,
+				operand->condition_length) ||
+			    operand->condition_offset != leaf->condition_offset ||
+			    operand->condition_length != leaf->condition_length ||
+			    !valid_source_span(operand->source_offset,
+				operand->source_length) ||
+			    !span_identity_matches(artifact->string_pool,
+				artifact->string_pool_size, operand->source_identity_offset,
+				operand->source_offset, operand->source_length) ||
+			    !valid_fixed_operand_shape(leaf, operand) ||
+			    (fixed_mask & operand->fixed_mask) ||
+			    (operand_mask & operand->fixed_mask))
+				return fail(result,
+					TCTI_TARGET_INSTRUCTION_ARTIFACT_FIXED_OPERAND_INVALID,
+					(u32)leaf_index, expected_fixed_operand);
+			for (prior = leaf->fixed_operand_first;
+			     prior < expected_fixed_operand; prior++) {
+				const struct tcti_target_instruction_artifact_fixed_operand *prior_operand =
+					&artifact->fixed_operands[prior];
+				const char *prior_name;
+
+				if (!pool_string(artifact->string_pool,
+					artifact->string_pool_size,
+					prior_operand->name_offset, &prior_name) ||
+				    !strcmp(fixed_name, prior_name))
+					return fail(result,
+						TCTI_TARGET_INSTRUCTION_ARTIFACT_FIXED_OPERAND_INVALID,
+						(u32)leaf_index, expected_fixed_operand);
+			}
+			fixed_mask |= operand->fixed_mask;
+			expected_fixed_operand++;
 		}
 	}
 	if (expected_operand != artifact->operand_count)
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
-				    TCTI_U32_NONE, expected_operand);
+			    TCTI_U32_NONE, expected_operand);
+	if (expected_fixed_operand != artifact->fixed_operand_count)
+		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
+			    TCTI_U32_NONE, expected_fixed_operand);
 	if (validate_aliases(artifact, result))
 		return -1;
 	return 0;
@@ -596,6 +682,8 @@ const char *tcti_target_instruction_artifact_validation_error_name(
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_CONDITION_INVALID: return "invalid condition";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_LEAF_INVALID: return "invalid leaf";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID: return "invalid operand";
+	case TCTI_TARGET_INSTRUCTION_ARTIFACT_FIXED_OPERAND_INVALID:
+		return "invalid fixed operand";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID: return "invalid span";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID: return "invalid alias";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID:

@@ -107,6 +107,8 @@ static int model_is_lossless(const char *source, size_t source_length)
 	error = build_model(&inventory, &model);
 	CHECK(error == TCTI_TARGET_INSTRUCTION_ARTIFACT_OK);
 	CHECK(model.operand_count == inventory.operand_count);
+	CHECK(model.fixed_operand_count == inventory.fixed_operand_count);
+	CHECK(model.fixed_operand_count == 16675U);
 	CHECK(model.strings.length != 0);
 	CHECK(model.conditions.length != 0);
 	for (index = 0; index < inventory.leaf_count; index++) {
@@ -131,6 +133,9 @@ static int model_is_lossless(const char *source, size_t source_length)
 		CHECK(!memcmp(model.conditions.data + leaf->condition_offset, "TCND\1", 5U));
 		CHECK(leaf->operand_first <= model.operand_count);
 		CHECK(leaf->operand_count <= model.operand_count - leaf->operand_first);
+		CHECK(leaf->fixed_operand_first <= model.fixed_operand_count);
+		CHECK(leaf->fixed_operand_count <=
+			model.fixed_operand_count - leaf->fixed_operand_first);
 		for (operand = leaf->operand_first;
 		     operand < (size_t)leaf->operand_first + leaf->operand_count;
 		     operand++) {
@@ -145,11 +150,91 @@ static int model_is_lossless(const char *source, size_t source_length)
 			CHECK(!memcmp(model.conditions.data + entry->condition_offset,
 				      "TCND\1", 5U));
 		}
+		for (operand = leaf->fixed_operand_first;
+		     operand < (size_t)leaf->fixed_operand_first +
+			leaf->fixed_operand_count; operand++) {
+			const struct artifact_fixed_operand *entry =
+				&model.fixed_operands[operand];
+			const struct tcti_target_fixed_operand *source_entry = NULL;
+			size_t source_index;
+			char source_identity[sizeof(source_sha256) + 2U + 20U + 20U];
+
+			for (source_index = 0;
+			     source_index < inventory.fixed_operand_count; source_index++)
+				if (inventory.fixed_operands[source_index].leaf_index == index &&
+				    !strcmp(inventory.fixed_operands[source_index].name,
+					(char *)model.strings.data + entry->name_offset)) {
+					source_entry = &inventory.fixed_operands[source_index];
+					break;
+				}
+			CHECK(source_entry != NULL);
+			CHECK(entry->leaf_index == index);
+			CHECK(entry->condition_offset ==
+				model.condition_map[source_entry->condition].offset);
+			CHECK(entry->condition_length ==
+				model.condition_map[source_entry->condition].length);
+			CHECK(entry->fixed_mask == source_entry->fixed_mask);
+			CHECK(entry->fixed_value == source_entry->fixed_value);
+			CHECK(entry->start == source_entry->start);
+			CHECK(entry->width == source_entry->width);
+			CHECK(entry->source_offset == source_entry->source_offset);
+			CHECK(entry->source_length == source_entry->source_length);
+			CHECK(snprintf(source_identity, sizeof(source_identity), "%s:%zu:%zu",
+				source_sha256, source_entry->source_offset,
+				source_entry->source_length) > 0);
+			CHECK(!strcmp((char *)model.strings.data +
+				entry->source_identity_offset, source_identity));
+		}
 	}
 	CHECK(model.instruction_alias_count ==
 		TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT);
 	CHECK(model.operation_alias_count ==
 		TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT);
+	{
+		static const struct {
+			uint32_t ordinal;
+			const char *name;
+			uint8_t start;
+			uint8_t width;
+			uint32_t value;
+		} expected[] = {
+			{ 203U, "opc", 22U, 2U, 0U },
+			{ 204U, "opc", 22U, 2U, 0x00400000U },
+			{ 205U, "opc", 22U, 2U, 0x00800000U },
+			{ 2169U, "op21", 29U, 2U, 0U },
+			{ 2170U, "op21", 29U, 2U, 0U },
+		};
+		size_t expected_index;
+
+		for (expected_index = 0; expected_index <
+		     sizeof(expected) / sizeof(expected[0]); expected_index++) {
+			const struct artifact_leaf *leaf =
+				&model.leaves[expected[expected_index].ordinal];
+			const struct artifact_fixed_operand *entry = NULL;
+			size_t fixed_index;
+
+			for (fixed_index = leaf->fixed_operand_first;
+			     fixed_index < (size_t)leaf->fixed_operand_first +
+				leaf->fixed_operand_count; fixed_index++) {
+				const struct artifact_fixed_operand *candidate =
+					&model.fixed_operands[fixed_index];
+
+				if (!strcmp((char *)model.strings.data +
+					candidate->name_offset, expected[expected_index].name)) {
+					entry = candidate;
+					break;
+				}
+			}
+			CHECK(entry != NULL);
+			CHECK(entry->leaf_index == expected[expected_index].ordinal);
+			CHECK(entry->start == expected[expected_index].start);
+			CHECK(entry->width == expected[expected_index].width);
+			CHECK(entry->fixed_mask == ((UINT32_C(3) << entry->start)));
+			CHECK(entry->fixed_value == expected[expected_index].value);
+			CHECK(entry->source_length != 0U);
+			CHECK(entry->source_identity_offset < model.strings.length);
+		}
+	}
 	for (index = 0; index < inventory.instruction_alias_count; index++) {
 		const struct tcti_target_instruction_alias *source_alias =
 			&inventory.instruction_aliases[index];

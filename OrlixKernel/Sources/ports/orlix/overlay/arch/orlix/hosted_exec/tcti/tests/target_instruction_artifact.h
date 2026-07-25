@@ -21,10 +21,11 @@ typedef uint8_t u8;
  * untrusted C pointers, because C cannot validate pointer provenance before
  * dereferencing the fixed-width view.
  */
-#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 2U
+#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 3U
 #define TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT 4350U
 #define TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT 292U
 #define TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT 171U
+#define TCTI_A64_INSTRUCTION_ARTIFACT_EXPECTED_FIXED_OPERAND_COUNT 16675U
 
 struct tcti_target_instruction_artifact_leaf {
 	u32 name_offset;
@@ -36,6 +37,8 @@ struct tcti_target_instruction_artifact_leaf {
 	u32 condition_length;
 	u32 operand_first;
 	u32 operand_count;
+	u32 fixed_operand_first;
+	u32 fixed_operand_count;
 };
 
 struct tcti_target_instruction_artifact_operand {
@@ -44,6 +47,24 @@ struct tcti_target_instruction_artifact_operand {
 	u32 condition_offset;
 	u32 condition_length;
 	u32 variable_mask;
+	u8 start;
+	u8 width;
+};
+
+/*
+ * A source-declared, complete fixed encoding field.  This is provenance for
+ * source conditions, distinct from the runtime-variable operand plane.
+ */
+struct tcti_target_instruction_artifact_fixed_operand {
+	u32 name_offset;
+	u32 leaf_index;
+	u32 condition_offset;
+	u32 condition_length;
+	u32 fixed_mask;
+	u32 fixed_value;
+	u32 source_offset;
+	u32 source_length;
+	u32 source_identity_offset;
 	u8 start;
 	u8 width;
 };
@@ -101,6 +122,8 @@ struct tcti_target_instruction_artifact {
 	size_t leaf_count;
 	const struct tcti_target_instruction_artifact_operand *operands;
 	size_t operand_count;
+	const struct tcti_target_instruction_artifact_fixed_operand *fixed_operands;
+	size_t fixed_operand_count;
 	const struct tcti_target_instruction_artifact_instruction_alias
 		*instruction_aliases;
 	size_t instruction_alias_count;
@@ -124,6 +147,7 @@ enum tcti_target_instruction_artifact_validation_error {
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_CONDITION_INVALID,
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_LEAF_INVALID,
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID,
+	TCTI_TARGET_INSTRUCTION_ARTIFACT_FIXED_OPERAND_INVALID,
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
 	TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID,
@@ -140,7 +164,11 @@ struct tcti_target_instruction_artifact_validation_result {
  * Validates the complete generated artifact, including exact pinned
  * provenance and every offset, string, condition, operand ownership, and
  * fixed/variable encoding bit relationship.  The leaf ordinal is its array
- * index, and the operands of ordinal N must occupy its contiguous span.
+ * index, and the operands of ordinal N must occupy its contiguous span.  For
+ * fixed fields, this validates the pinned-SHA:offset:length locator format
+ * and its internal relationship to the generated record.  It deliberately
+ * does not read raw Instructions.json bytes.  Raw source-span containment and
+ * byte identity are importer and maintainer source-check responsibilities.
  */
 int tcti_target_instruction_artifact_validate(
 	const struct tcti_target_instruction_artifact *artifact,
