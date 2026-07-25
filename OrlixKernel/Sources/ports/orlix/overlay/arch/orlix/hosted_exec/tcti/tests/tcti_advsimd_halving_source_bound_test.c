@@ -28,7 +28,7 @@ struct tcti_advsimd_halving_leaf {
   const char *source_name;
   u32 source_mask;
   u32 source_pattern;
-  enum tcti_simd_arithmetic_op operation;
+	enum tcti_simd_vector_arithmetic_op operation;
 };
 
 struct tcti_advsimd_source_manifest_leaf {
@@ -111,7 +111,8 @@ static s64 tcti_advsimd_floor_div2(s64 value) {
   return value >= 0 ? value / 2 : -(((-value) + 1) / 2);
 }
 
-static u64 tcti_advsimd_halving_expected(enum tcti_simd_arithmetic_op operation,
+static u64 tcti_advsimd_halving_expected(
+	enum tcti_simd_vector_arithmetic_op operation,
                                          u64 left, u64 right, u8 bits) {
   u64 mask = GENMASK_ULL(bits - 1, 0);
 
@@ -173,7 +174,7 @@ static void tcti_advsimd_halving_fill_register(u64 register_words[2], u8 bytes,
 }
 
 static void tcti_advsimd_halving_expected_register(
-    u64 expected_words[2], enum tcti_simd_arithmetic_op operation,
+	u64 expected_words[2], enum tcti_simd_vector_arithmetic_op operation,
     const u64 left[2], const u64 right[2], u8 bytes, u8 result_bytes) {
   u8 lane;
   u8 lane_count = result_bytes / bytes;
