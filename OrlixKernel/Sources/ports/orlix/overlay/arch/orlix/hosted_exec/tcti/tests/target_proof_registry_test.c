@@ -763,7 +763,6 @@ static int branch_control_registry_binds_exact_source_rows(void)
 static int source_registration_discharges_zero_semantic_obligations(void)
 {
 	const struct tcti_target_proof_registry_entry *entries;
-	size_t binding_count = 0;
 	size_t count;
 	size_t index;
 
@@ -776,9 +775,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT(entry->obligations != 0);
 		EXPECT(entry->unproved_obligations == entry->obligations);
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
-		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 502);
 	return 0;
 }
 

@@ -247,33 +247,51 @@ static void tcti_advsimd_fp_execute_2d(struct kunit *test, u32 pattern,
 	tcti_advsimd_fp_expect_resume_success(test, &result, &before_regs, &regs);
 }
 
-static void tcti_advsimd_fp_required_source_leaves_execute_exact_bits(
-	struct kunit *test)
+static void tcti_advsimd_fp_required_source_leaf_execute_exact_bits(
+	struct kunit *test, u32 pattern,
+	enum tcti_simd_vector_arithmetic_op operation, u32 expected0,
+	u32 expected1)
 {
-	struct tcti_advsimd_fp_case {
-		u32 pattern;
-		enum tcti_simd_vector_arithmetic_op operation;
-		u32 expected0;
-		u32 expected1;
-	};
-	static const struct tcti_advsimd_fp_case cases[] = {
-		{ 0x0e20cc00U, TCTI_SIMD_ARITH_FMLA, 0x41400000U, 0x40e00000U },
-		{ 0x0e20d400U, TCTI_SIMD_ARITH_FADD, 0x40400000U, 0x40000000U },
-		{ 0x0e20e400U, TCTI_SIMD_ARITH_FCMEQ, 0, 0 },
-		{ 0x0e20f400U, TCTI_SIMD_ARITH_FMAX, 0x40000000U, 0x40400000U },
-		{ 0x0ea0d400U, TCTI_SIMD_ARITH_FSUB, 0xbf800000U, 0x40800000U },
-		{ 0x0ea0f400U, TCTI_SIMD_ARITH_FMIN, 0x3f800000U, 0xbf800000U },
-		{ 0x2e20dc00U, TCTI_SIMD_ARITH_FMUL, 0x40000000U, 0xc0400000U },
-		{ 0x2e20fc00U, TCTI_SIMD_ARITH_FDIV, 0x3f000000U, 0xc0400000U },
-	};
-	size_t index;
+	tcti_advsimd_fp_execute_2s(test, pattern, operation, 0x3f800000U,
+		0x40400000U, 0x40000000U, 0xbf800000U, 0x41200000U,
+		0x41200000U, expected0, expected1, 0, TCTI_FPSR_QC,
+		TCTI_FPSR_QC);
+}
 
-	for (index = 0; index < ARRAY_SIZE(cases); index++)
-		tcti_advsimd_fp_execute_2s(test, cases[index].pattern,
-			cases[index].operation, 0x3f800000U, 0x40400000U,
-			0x40000000U, 0xbf800000U, 0x41200000U, 0x41200000U,
-			cases[index].expected0, cases[index].expected1,
-			0, TCTI_FPSR_QC, TCTI_FPSR_QC);
+#define TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(name, pattern, operation, expected0, \
+					 expected1) \
+static void name(struct kunit *test) \
+{ \
+	tcti_advsimd_fp_required_source_leaf_execute_exact_bits(test, pattern, \
+		operation, expected0, expected1); \
+}
+
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits, 0x0e20cc00U,
+	TCTI_SIMD_ARITH_FMLA, 0x41400000U, 0x40e00000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits, 0x0e20d400U,
+	TCTI_SIMD_ARITH_FADD, 0x40400000U, 0x40000000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits, 0x0e20e400U,
+	TCTI_SIMD_ARITH_FCMEQ, 0, 0)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits, 0x0e20f400U,
+	TCTI_SIMD_ARITH_FMAX, 0x40000000U, 0x40400000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits, 0x0ea0d400U,
+	TCTI_SIMD_ARITH_FSUB, 0xbf800000U, 0x40800000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits, 0x0ea0f400U,
+	TCTI_SIMD_ARITH_FMIN, 0x3f800000U, 0xbf800000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits, 0x2e20dc00U,
+	TCTI_SIMD_ARITH_FMUL, 0x40000000U, 0xc0400000U)
+TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
+	tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits, 0x2e20fc00U,
+	TCTI_SIMD_ARITH_FDIV, 0x3f000000U, 0xc0400000U)
+
+#undef TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE
 }
 
 static void tcti_advsimd_fp_2d_required_variants_execute_exact_bits(
@@ -405,7 +423,14 @@ static void tcti_advsimd_fp_reserved_form_is_rejected_without_state_change(
 }
 
 static struct kunit_case tcti_advsimd_fp_arithmetic_test_cases[] = {
-	KUNIT_CASE(tcti_advsimd_fp_required_source_leaves_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits),
+	KUNIT_CASE(tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits),
 	KUNIT_CASE(tcti_advsimd_fp_2d_required_variants_execute_exact_bits),
 	KUNIT_CASE(tcti_advsimd_fp_special_values_update_fpsr_exactly),
 	KUNIT_CASE(tcti_advsimd_fp_fmla_register_alias_reads_accumulator_first),

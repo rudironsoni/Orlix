@@ -161,6 +161,14 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define SCALAR_FP_SUITE "orlix-tcti-scalar-fp-semantics"
 #define SCALAR_FP_SUITE_SYMBOL "tcti_scalar_fp_semantics_test_suite"
 #define SCALAR_FP_CASE_ARRAY "tcti_scalar_fp_semantics_test_cases"
+#define ADVSIMD_FP_ARITHMETIC_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_advsimd_fp_arithmetic_source_bound_test.c"
+#define ADVSIMD_FP_ARITHMETIC_SUITE \
+	"orlix-tcti-advsimd-fp-arithmetic-source-bound"
+#define ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL \
+	"tcti_advsimd_fp_arithmetic_test_suite"
+#define ADVSIMD_FP_ARITHMETIC_CASE_ARRAY \
+	"tcti_advsimd_fp_arithmetic_test_cases"
 #define INTEGER_CONDITIONAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_integer_conditional_source_bound_test.c"
 #define INTEGER_CONDITIONAL_SUITE "orlix-tcti-integer-conditional-source-bound"
@@ -208,6 +216,9 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define SCALAR_BASE_OBLIGATIONS LOGICAL_BASE_OBLIGATIONS
 #define SCALAR_FLAGS_OBLIGATIONS LOGICAL_FLAGS_OBLIGATIONS
 #define SCALAR_FP_CONVERT_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define ADVSIMD_FP_ARITHMETIC_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define INTEGER_CONDITIONAL_BASE_OBLIGATIONS \
@@ -279,6 +290,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ SCALAR_FP_SOURCE,
 	  "c39f31899aa12ff965fe5a10942f87fd918182cc88bf614fdf195d28c107a029",
 	  "tcti_scalar_fp_semantics_test.o" },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
+	  "03dfe8feb6f678c09560fe1e7ad1e040c6e7698f27db401f4cc0c361f13ea8f3",
+	  "tcti_advsimd_fp_arithmetic_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "324578ba782bab9e0aa95aa8783a7a4dbf04ebc47e2ca5d1485831f7e68acac1",
 	  "tcti_integer_conditional_source_bound_test.o" },
@@ -619,6 +633,39 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE,
+	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
+	  "tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits",
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
@@ -763,6 +810,14 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("FCVTMU_float", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZS_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZU_float_int", SCALAR_FP_CONVERT_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMLA_advsimd_vec", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FADD_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FCMEQ_advsimd_reg", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMAX_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FSUB_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMIN_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FMUL_advsimd_vec", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("FDIV_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -946,6 +1001,25 @@ static const struct tcti_target_proof_case logical_flags_alias_cases[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
+
+#define ADVSIMD_FP_ARITHMETIC_PROOF(name, ordinal, leaf, mnemonic, pattern) \
+	static const struct tcti_target_proof_case name##_cases[] = { \
+		{ #name, ADVSIMD_FP_ARITHMETIC_OBLIGATIONS }, \
+	}; \
+	static const struct tcti_target_proof_binding name##_bindings[] = { \
+		{ leaf, mnemonic, 0xbfa0fc00U, pattern, \
+		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
+		  UINT64_C(1), ordinal }, \
+	}
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits, 3919U, "FMLA_asimdsame_only", "FMLA", 0x0e20cc00U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits, 3920U, "FADD_asimdsame_only", "FADD", 0x0e20d400U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits, 3922U, "FCMEQ_asimdsame_only", "FCMEQ", 0x0e20e400U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits, 3923U, "FMAX_asimdsame_only", "FMAX", 0x0e20f400U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits, 3930U, "FSUB_asimdsame_only", "FSUB", 0x0ea0d400U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits, 3932U, "FMIN_asimdsame_only", "FMIN", 0x0ea0f400U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits, 3961U, "FMUL_asimdsame_only", "FMUL", 0x2e20dc00U);
+ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits, 3965U, "FDIV_asimdsame_only", "FDIV", 0x2e20fc00U);
+#undef ADVSIMD_FP_ARITHMETIC_PROOF
 
 #define LOGICAL_BINDING(ordinal, leaf, mnemonic, pattern, cases) \
 	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
@@ -1371,7 +1445,14 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 41U
+#define ADVSIMD_FP_ARITHMETIC_ENTRY(proof_id, operation, cases, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS, \
+	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE, cases, \
+	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, \
+	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS }
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 49U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -1508,6 +1589,14 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 				ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS,
 				add_sub_immediate_flags_cases,
 				add_sub_immediate_subs_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmla-source-leaf", "FMLA_advsimd_vec", tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fadd-source-leaf", "FADD_advsimd", tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fcmeq-source-leaf", "FCMEQ_advsimd_reg", tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fcmeq_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmax-source-leaf", "FMAX_advsimd", tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmax_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fsub-source-leaf", "FSUB_advsimd", tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fsub_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmin-source-leaf", "FMIN_advsimd", tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmul-source-leaf", "FMUL_advsimd_vec", tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fdiv-source-leaf", "FDIV_advsimd", tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_bindings),
 };
 
 #undef LOGICAL_ENTRY
