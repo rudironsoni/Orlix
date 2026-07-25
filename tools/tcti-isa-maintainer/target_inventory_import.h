@@ -7,6 +7,8 @@
 #include <stdint.h>
 
 #define TCTI_A64_TARGET_LEAF_COUNT 4350U
+#define TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT 292U
+#define TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT 171U
 #define TCTI_TARGET_EXPR_NONE UINT32_MAX
 
 enum tcti_target_expr_kind {
@@ -31,6 +33,9 @@ struct tcti_target_expr {
 	uint32_t item_count;
 	char *text;
 	bool boolean;
+	/* Exact raw AST object span, retained for source-to-proof bindings. */
+	size_t source_offset;
+	size_t source_length;
 };
 
 struct tcti_target_leaf {
@@ -43,6 +48,11 @@ struct tcti_target_leaf {
 	/* Raw byte span of this Instruction.Instruction object in Instructions.json. */
 	size_t source_offset;
 	size_t source_length;
+	size_t condition_source_offset;
+	size_t condition_source_length;
+	bool preferred_present;
+	size_t preferred_source_offset;
+	size_t preferred_source_length;
 };
 
 /*
@@ -63,12 +73,37 @@ struct tcti_target_operand {
 /* An authoritative inline AARCHMRS operation object, not shared-ASL corpus data. */
 struct tcti_target_operation {
 	char *id;
+	/* OperationAlias target before resolution, NULL for a concrete operation. */
+	char *alias_operation_id;
+	/* Canonical concrete operation after bounded alias-chain resolution. */
+	char *canonical_operation_id;
+	bool is_alias;
 	size_t source_offset;
 	size_t source_length;
 	/* Raw source provenance of the operation's optional operational_note. */
 	bool operational_note_present;
 	size_t operational_note_source_offset;
 	size_t operational_note_source_length;
+};
+
+/*
+ * A source-declared InstructionAlias. It is not a direct A64 target leaf and
+ * therefore never changes TCTI_A64_TARGET_LEAF_COUNT. The ordinal records
+ * source traversal order because alias display names are not globally unique.
+ */
+struct tcti_target_instruction_alias {
+	char *name;
+	char *operation_id;
+	char *canonical_operation_id;
+	uint32_t condition;
+	uint32_t ordinal;
+	bool preferred_present;
+	size_t source_offset;
+	size_t source_length;
+	size_t condition_source_offset;
+	size_t condition_source_length;
+	size_t preferred_source_offset;
+	size_t preferred_source_length;
 };
 
 struct tcti_target_inventory {
@@ -88,6 +123,10 @@ struct tcti_target_inventory {
 	struct tcti_target_operation *operations;
 	size_t operation_count;
 	size_t operation_capacity;
+	struct tcti_target_instruction_alias *instruction_aliases;
+	size_t instruction_alias_count;
+	size_t instruction_alias_capacity;
+	size_t reachable_operation_alias_count;
 };
 
 enum tcti_target_import_error_code {

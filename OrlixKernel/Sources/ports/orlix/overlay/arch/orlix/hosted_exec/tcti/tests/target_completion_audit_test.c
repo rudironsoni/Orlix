@@ -43,6 +43,16 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(result.mapped_system_accessor_rows == 2014);
 	EXPECT(result.nonmapped_system_accessor_rows == 0);
 	EXPECT(result.invalid_system_accessor_rows == 0);
+	EXPECT(result.feature_field_domain_rows == 605);
+	EXPECT(result.mapped_feature_field_domain_rows == 604);
+	EXPECT(result.unresolved_feature_field_domain_rows == 604);
+	EXPECT(result.ambiguous_feature_field_domain_rows == 1);
+	EXPECT(result.invalid_feature_field_domain_rows == 0);
+	EXPECT(result.runtime_capability_cohort_leaf_rows == 4350);
+	EXPECT(result.runtime_capability_cohort_candidate_membership_rows == 5592);
+	EXPECT(result.unresolved_runtime_capability_cohort_membership_rows == 5592);
+	EXPECT(result.invalid_runtime_capability_cohort_rows == 0);
+	EXPECT(result.errors == 19427);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED);
 	EXPECT(result.error_mask &
@@ -51,6 +61,116 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	       TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+	return 0;
+}
+
+static int runtime_capability_cohorts_remain_explicitly_blocking(void)
+{
+	const struct tcti_runtime_capability_cohort_artifact *artifact;
+	struct tcti_target_completion_result result = { 0 };
+
+	artifact = tcti_runtime_capability_cohort_artifact_canonical();
+	EXPECT(tcti_target_completion_validate_runtime_capability_cohorts(
+		       artifact, &result) == -1);
+	EXPECT(result.runtime_capability_cohort_leaf_rows == 4350);
+	EXPECT(result.runtime_capability_cohort_candidate_membership_rows == 5592);
+	EXPECT(result.unresolved_runtime_capability_cohort_membership_rows == 5592);
+	EXPECT(result.invalid_runtime_capability_cohort_rows == 0);
+	EXPECT(result.errors == 5592);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+	return 0;
+}
+
+static int mutated_runtime_capability_cohort_fails_before_counting(void)
+{
+	const struct tcti_runtime_capability_cohort_artifact *live;
+	struct tcti_runtime_capability_cohort_artifact artifact;
+	struct tcti_runtime_capability_cohort_membership *memberships;
+	struct tcti_target_completion_result result = { 0 };
+
+	live = tcti_runtime_capability_cohort_artifact_canonical();
+	memberships = malloc(live->counts.membership_count * sizeof(*memberships));
+	EXPECT(memberships != NULL);
+	memcpy(memberships, live->memberships,
+	       live->counts.membership_count * sizeof(*memberships));
+	artifact = *live;
+	artifact.memberships = memberships;
+	memberships[0].source_offset++;
+	EXPECT(tcti_target_completion_validate_runtime_capability_cohorts(
+		       &artifact, &result) == -1);
+	EXPECT(result.runtime_capability_cohort_leaf_rows == 0);
+	EXPECT(result.runtime_capability_cohort_candidate_membership_rows == 0);
+	EXPECT(result.unresolved_runtime_capability_cohort_membership_rows == 0);
+	EXPECT(result.invalid_runtime_capability_cohort_rows == 1);
+	EXPECT(result.errors == 1);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+	free(memberships);
+	return 0;
+}
+
+static int canonical_feature_field_domains_remain_explicitly_blocking(void)
+{
+	const struct tcti_feature_artifact *feature_artifact;
+	const struct tcti_feature_field_domain_binding_artifact *artifact;
+	struct tcti_target_completion_result result = { 0 };
+
+	feature_artifact = tcti_feature_artifact_canonical();
+	artifact = tcti_feature_field_domain_binding_artifact_canonical();
+	EXPECT(tcti_target_completion_validate_feature_field_domains(
+		       feature_artifact, artifact, &result) == -1);
+	EXPECT(result.feature_field_domain_rows == 605);
+	EXPECT(result.mapped_feature_field_domain_rows == 604);
+	EXPECT(result.unresolved_feature_field_domain_rows == 604);
+	EXPECT(result.ambiguous_feature_field_domain_rows == 1);
+	EXPECT(result.invalid_feature_field_domain_rows == 0);
+	EXPECT(result.errors == 605);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+	return 0;
+}
+
+static int mutated_feature_field_domain_artifact_fails_before_counting(void)
+{
+	const struct tcti_feature_artifact *feature_artifact;
+	const struct tcti_feature_field_domain_binding_artifact *live;
+	struct tcti_feature_field_domain_binding_artifact artifact;
+	struct tcti_feature_field_domain_binding *bindings;
+	struct tcti_target_completion_result result = { 0 };
+
+	feature_artifact = tcti_feature_artifact_canonical();
+	live = tcti_feature_field_domain_binding_artifact_canonical();
+	bindings = malloc(live->occurrence_count * sizeof(*bindings));
+	EXPECT(bindings != NULL);
+	memcpy(bindings, live->bindings, live->occurrence_count * sizeof(*bindings));
+	artifact = *live;
+	artifact.bindings = bindings;
+	/* Keep the aggregate identity current so the node provenance check owns it. */
+	bindings[0].feature_source.offset++;
+	artifact.identity = tcti_feature_field_domain_binding_identity(
+		artifact.bindings, artifact.occurrence_count);
+	EXPECT(tcti_target_completion_validate_feature_field_domains(
+		       feature_artifact, &artifact, &result) == -1);
+	EXPECT(result.feature_field_domain_rows == 0);
+	EXPECT(result.invalid_feature_field_domain_rows == 1);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+	free(bindings);
+
+	artifact = *live;
+	artifact.identity++;
+	memset(&result, 0, sizeof(result));
+	EXPECT(tcti_target_completion_validate_feature_field_domains(
+		       feature_artifact, &artifact, &result) == -1);
+	EXPECT(result.feature_field_domain_rows == 0);
+	EXPECT(result.invalid_feature_field_domain_rows == 1);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
 	return 0;
 }
 
@@ -859,6 +979,14 @@ int main(void)
 	} tests[] = {
 		{ "current_inventory_fails_with_exact_incomplete_counts",
 		  current_inventory_fails_with_exact_incomplete_counts },
+		{ "runtime_capability_cohorts_remain_explicitly_blocking",
+		  runtime_capability_cohorts_remain_explicitly_blocking },
+		{ "mutated_runtime_capability_cohort_fails_before_counting",
+		  mutated_runtime_capability_cohort_fails_before_counting },
+		{ "canonical_feature_field_domains_remain_explicitly_blocking",
+		  canonical_feature_field_domains_remain_explicitly_blocking },
+		{ "mutated_feature_field_domain_artifact_fails_before_counting",
+		  mutated_feature_field_domain_artifact_fails_before_counting },
 		{ "canonical_system_accessors_are_supplemental",
 		  canonical_system_accessors_are_supplemental },
 		{ "missing_and_drifted_system_accessors_fail_hard",

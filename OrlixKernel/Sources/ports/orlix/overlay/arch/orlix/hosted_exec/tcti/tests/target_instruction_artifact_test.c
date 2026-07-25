@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FIXTURE_STRING_BYTES (TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT * 16U + 16U)
+#define FIXTURE_STRING_BYTES (256U * 1024U)
 
 static unsigned int failures;
 
@@ -23,6 +23,10 @@ struct fixture {
 		TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT];
 	struct tcti_target_instruction_artifact_operand operands[
 		TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT + 1U];
+	struct tcti_target_instruction_artifact_instruction_alias instruction_aliases[
+		TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT];
+	struct tcti_target_instruction_artifact_operation_alias operation_aliases[
+		TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT];
 	uint8_t strings[FIXTURE_STRING_BYTES];
 	uint8_t conditions[2048];
 	size_t strings_used;
@@ -39,6 +43,18 @@ static uint32_t add_string(struct fixture *fixture, const char *text)
 	memcpy(fixture->strings + fixture->strings_used, text, length);
 	fixture->strings_used += length;
 	return offset;
+}
+
+static uint32_t add_span_identity(struct fixture *fixture, uint32_t offset,
+	uint32_t length)
+{
+	char identity[96];
+
+	if (snprintf(identity, sizeof(identity),
+		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe:%u:%u",
+		offset, length) < 0)
+		abort();
+	return add_string(fixture, identity);
 }
 
 static void fixture_set_condition(struct fixture *fixture, const uint8_t *data,
@@ -58,6 +74,12 @@ static void fixture_set_condition(struct fixture *fixture, const uint8_t *data,
 		fixture->leaves[index].condition_length = length;
 		fixture->operands[index].condition_offset = 0;
 		fixture->operands[index].condition_length = length;
+	}
+	for (index = 0;
+	     index < TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT;
+	     index++) {
+		fixture->instruction_aliases[index].condition_offset = 0;
+		fixture->instruction_aliases[index].condition_length = length;
 	}
 }
 
@@ -83,24 +105,28 @@ static void fixture_add_overlapping_operand(struct fixture *fixture,
 static void fixture_initialize(struct fixture *fixture)
 {
 	uint32_t mnemonic_offset;
-	uint32_t operation_offset;
 	uint32_t operand_name_offset;
 	unsigned int index;
 
 	memset(fixture, 0, sizeof(*fixture));
 	mnemonic_offset = add_string(fixture, "mn");
-	operation_offset = add_string(fixture, "op");
 	operand_name_offset = add_string(fixture, "rd");
 	for (index = 0; index < TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT;
 	     index++) {
 		char name[16];
 
 		(void)snprintf(name, sizeof(name), "leaf%u", index);
+		char operation[24];
+
+		if (index < TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT)
+			(void)snprintf(operation, sizeof(operation), "opAlias%u", index);
+		else
+			(void)snprintf(operation, sizeof(operation), "op");
 		fixture->leaves[index] =
 			(struct tcti_target_instruction_artifact_leaf) {
 				.name_offset = add_string(fixture, name),
 				.mnemonic_offset = mnemonic_offset,
-				.operation_offset = operation_offset,
+				.operation_offset = add_string(fixture, operation),
 				.encoding_mask = UINT32_MAX & ~UINT32_C(1),
 				.encoding_pattern = 0,
 				.condition_offset = 0,
@@ -118,6 +144,59 @@ static void fixture_initialize(struct fixture *fixture)
 				.start = 0,
 				.width = 1,
 			};
+	}
+	for (index = 0; index <
+		TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT; index++) {
+		char name[24];
+		char operation[24];
+
+		(void)snprintf(name, sizeof(name), "instructionAlias%u", index);
+		if (index < TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT)
+			(void)snprintf(operation, sizeof(operation), "opAlias%u", index);
+		else
+			(void)snprintf(operation, sizeof(operation), "op");
+		fixture->instruction_aliases[index] =
+			(struct tcti_target_instruction_artifact_instruction_alias) {
+				.ordinal = index,
+				.name_offset = add_string(fixture, name),
+				.declared_operation_offset = add_string(fixture, operation),
+				.resolved_operation_offset = add_string(fixture, "op"),
+				.condition_offset = 0,
+				.condition_length = 11,
+				.source_offset = 1000U + index * 10U,
+				.source_length = 1,
+				.condition_source_offset = 2000U + index * 10U,
+				.condition_source_length = 1,
+				.preferred_source_offset = 3000U + index * 10U,
+				.preferred_source_length = 1,
+				.preferred_present = index & 1U,
+			};
+		fixture->instruction_aliases[index].source_identity_offset =
+			add_span_identity(fixture,
+				fixture->instruction_aliases[index].source_offset, 1);
+		fixture->instruction_aliases[index].condition_identity_offset =
+			add_span_identity(fixture,
+				fixture->instruction_aliases[index].condition_source_offset, 1);
+		fixture->instruction_aliases[index].preferred_identity_offset =
+			add_span_identity(fixture,
+				fixture->instruction_aliases[index].preferred_source_offset, 1);
+	}
+	for (index = 0; index <
+		TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT; index++) {
+		char declared[24];
+
+		(void)snprintf(declared, sizeof(declared), "opAlias%u", index);
+		fixture->operation_aliases[index] =
+			(struct tcti_target_instruction_artifact_operation_alias) {
+				.declared_operation_offset = add_string(fixture, declared),
+				.target_operation_offset = add_string(fixture, "op"),
+				.resolved_operation_offset = add_string(fixture, "op"),
+				.source_offset = 6000U + index * 10U,
+				.source_length = 1,
+			};
+		fixture->operation_aliases[index].source_identity_offset =
+			add_span_identity(fixture,
+				fixture->operation_aliases[index].source_offset, 1);
 	}
 	{
 		static const uint8_t condition[] = {
@@ -139,6 +218,12 @@ static void fixture_initialize(struct fixture *fixture)
 		.leaf_count = TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT,
 		.operands = fixture->operands,
 		.operand_count = TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT,
+		.instruction_aliases = fixture->instruction_aliases,
+		.instruction_alias_count =
+			TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT,
+		.operation_aliases = fixture->operation_aliases,
+		.operation_alias_count =
+			TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT,
 		.string_pool = fixture->strings,
 		.string_pool_size = fixture->strings_used,
 		.condition_pool = fixture->conditions,
@@ -154,6 +239,18 @@ static void expect_error(const struct fixture *fixture,
 	EXPECT(tcti_target_instruction_artifact_validate(&fixture->artifact,
 							&result) == -1);
 	EXPECT(result.error == expected);
+}
+
+static void expect_alias_error(const struct fixture *fixture,
+	enum tcti_target_instruction_artifact_validation_error expected,
+	uint32_t alias_index)
+{
+	struct tcti_target_instruction_artifact_validation_result result;
+
+	EXPECT(tcti_target_instruction_artifact_validate(&fixture->artifact,
+							&result) == -1);
+	EXPECT(result.error == expected);
+	EXPECT(result.alias_index == alias_index);
 }
 
 static void test_valid_complete_artifact(void)
@@ -400,6 +497,96 @@ static void test_operand_rejections(void)
 	expect_error(&fixture, TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID);
 }
 
+static void test_alias_rejections_and_denominator(void)
+{
+	struct fixture fixture;
+	uint32_t saved_u32;
+	u8 saved_u8;
+
+	fixture_initialize(&fixture);
+	EXPECT(fixture.artifact.leaf_count ==
+		TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT);
+	fixture.artifact.instruction_alias_count--;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH, UINT32_MAX);
+	EXPECT(fixture.artifact.leaf_count ==
+		TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT);
+
+	fixture_initialize(&fixture);
+	fixture.artifact.operation_alias_count--;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH, UINT32_MAX);
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[7].ordinal++;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 7);
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[0].resolved_operation_offset =
+		fixture.instruction_aliases[0].declared_operation_offset;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
+	fixture_initialize(&fixture);
+	fixture.operation_aliases[0].target_operation_offset =
+		add_string(&fixture, "missingOperation");
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
+	/* OA[0] remains internally well-formed but no source edge reaches it. */
+	fixture_initialize(&fixture);
+	fixture.leaves[0].operation_offset = fixture.leaves[
+		TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT].operation_offset;
+	fixture.instruction_aliases[0].declared_operation_offset =
+		fixture.instruction_aliases[
+			TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT].declared_operation_offset;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
+	fixture_initialize(&fixture);
+	fixture.operation_aliases[0].target_operation_offset =
+		fixture.operation_aliases[0].declared_operation_offset;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+
+	fixture_initialize(&fixture);
+	saved_u32 = fixture.operation_aliases[0].target_operation_offset;
+	fixture.operation_aliases[0].target_operation_offset =
+		fixture.operation_aliases[1].declared_operation_offset;
+	fixture.operation_aliases[1].target_operation_offset =
+		fixture.operation_aliases[0].declared_operation_offset;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 0);
+	fixture.operation_aliases[0].target_operation_offset = saved_u32;
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[3].source_length++;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID, 3);
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[3].preferred_source_length++;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID, 3);
+
+	fixture_initialize(&fixture);
+	fixture.instruction_aliases[3].preferred_present = 2U;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 3);
+
+	fixture_initialize(&fixture);
+	memcpy(fixture.conditions + fixture.condition_length, fixture.conditions,
+		fixture.condition_length);
+	fixture.instruction_aliases[3].condition_offset = fixture.condition_length;
+	fixture.artifact.condition_pool_size += fixture.condition_length;
+	saved_u8 = fixture.conditions[fixture.condition_length + 5U];
+	fixture.conditions[fixture.condition_length + 5U] = 0xffU;
+	expect_alias_error(&fixture,
+		TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID, 3);
+	fixture.conditions[fixture.condition_length + 5U] = saved_u8;
+}
+
 int main(void)
 {
 	struct tcti_target_instruction_artifact_validation_result result;
@@ -413,6 +600,7 @@ int main(void)
 	test_condition_bytecode_depth_limit();
 	test_leaf_and_span_rejections();
 	test_operand_rejections();
+	test_alias_rejections_and_denominator();
 	if (failures) {
 		fprintf(stderr, "%u target instruction artifact test(s) failed\n",
 			failures);

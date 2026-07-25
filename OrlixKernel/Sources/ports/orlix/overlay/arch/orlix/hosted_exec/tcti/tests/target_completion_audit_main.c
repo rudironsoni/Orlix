@@ -26,6 +26,14 @@ int main(void)
 	       "system_accessors=%zu mapped_system_accessors=%zu "
 	       "nonmapped_system_accessors=%zu "
 	       "invalid_system_accessors=%zu "
+	       "feature_field_domains=%zu mapped_feature_field_domains=%zu "
+	       "unresolved_feature_field_domains=%zu "
+	       "ambiguous_feature_field_domains=%zu "
+	       "invalid_feature_field_domains=%zu "
+	       "runtime_capability_cohort_leaves=%zu "
+	       "runtime_capability_cohort_candidates=%zu "
+	       "unresolved_runtime_capability_cohorts=%zu "
+	       "invalid_runtime_capability_cohorts=%zu "
 	       "errors=%zu error_mask=0x%08x\n",
 	       result.source_rows, result.classification_rows,
 	       result.classified_rows, result.unclassified_rows,
@@ -48,7 +56,17 @@ int main(void)
 	       result.system_accessor_rows,
 	       result.mapped_system_accessor_rows,
 	       result.nonmapped_system_accessor_rows,
-	       result.invalid_system_accessor_rows, result.errors,
+	       result.invalid_system_accessor_rows,
+	       result.feature_field_domain_rows,
+	       result.mapped_feature_field_domain_rows,
+	       result.unresolved_feature_field_domain_rows,
+	       result.ambiguous_feature_field_domain_rows,
+	       result.invalid_feature_field_domain_rows,
+	       result.runtime_capability_cohort_leaf_rows,
+	       result.runtime_capability_cohort_candidate_membership_rows,
+	       result.unresolved_runtime_capability_cohort_membership_rows,
+	       result.invalid_runtime_capability_cohort_rows,
+	       result.errors,
 	       result.error_mask);
 	return status ? 1 : 0;
 }

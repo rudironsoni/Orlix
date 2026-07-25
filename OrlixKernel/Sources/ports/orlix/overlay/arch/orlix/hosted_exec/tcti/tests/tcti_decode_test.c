@@ -4,6 +4,7 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched/mm.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/hosted_exec.h>
@@ -68,7 +69,7 @@ static void tcti_complete_target_inventory_is_kernel_visible(
 static void tcti_runtime_profile_uses_full_target_without_promotion(
 	struct kunit *test)
 {
-	struct tcti_runtime_projection_result projection;
+	struct tcti_runtime_projection_result projection = { };
 
 	KUNIT_EXPECT_EQ(test, 0,
 			tcti_runtime_projection_audit(&projection));
@@ -77,6 +78,42 @@ static void tcti_runtime_profile_uses_full_target_without_promotion(
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.unproved_leaf_count);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap2);
+	KUNIT_EXPECT_EQ(test, (size_t)11, projection.mapping_count);
+	KUNIT_EXPECT_EQ(test, (size_t)0,
+			projection.missing_feature_mapping_count);
+	KUNIT_EXPECT_EQ(test, (size_t)11,
+			projection.unadvertised_mapping_count);
+	KUNIT_EXPECT_EQ(test, (size_t)11,
+			projection.unadvertised_incomplete_feature_count);
+}
+
+static struct tcti_runtime_projection_leaf *
+tcti_runtime_projection_complete_test_ledger(struct kunit *test,
+	const char *const *first_feature, const char *const *second_feature)
+{
+	struct tcti_runtime_projection_leaf *leaves;
+	size_t index;
+
+	leaves = kunit_kcalloc(test, TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+			       sizeof(*leaves), GFP_KERNEL);
+	if (!leaves)
+		return NULL;
+	for (index = 0; index < TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES;
+	     index++) {
+		leaves[index].name = "PINNED_SOURCE_LEAF";
+		leaves[index].classification =
+			TCTI_RUNTIME_LEAF_REQUIRED_EL0;
+		leaves[index].proof = "resolved-proof";
+		leaves[index].source_bound = true;
+		leaves[index].proved = true;
+	}
+	leaves[0].features = first_feature;
+	leaves[0].feature_count = 1;
+	leaves[1].features = first_feature;
+	leaves[1].feature_count = 1;
+	leaves[2].features = second_feature;
+	leaves[2].feature_count = 1;
+	return leaves;
 }
 
 static void tcti_runtime_projection_rejects_advertised_incomplete_feature(
@@ -84,44 +121,37 @@ static void tcti_runtime_projection_rejects_advertised_incomplete_feature(
 {
 	static const char *const first_feature[] = { "FEAT_FIRST" };
 	static const char *const second_feature[] = { "FEAT_SECOND" };
-	static const struct tcti_runtime_projection_leaf leaves[] = {
-		{
-			.name = "FIRST_LEAF",
-			.features = first_feature,
-			.feature_count = ARRAY_SIZE(first_feature),
-			.classification = TCTI_RUNTIME_LEAF_REQUIRED_EL0,
-			.proof = "first_kunit",
-			.proved = true,
-		},
-		{
-			.name = "SECOND_LEAF",
-			.features = second_feature,
-			.feature_count = ARRAY_SIZE(second_feature),
-			.classification = TCTI_RUNTIME_LEAF_REQUIRED_EL0,
-			.proof = "second_kunit",
-			.proved = false,
-		},
-	};
 	static const struct tcti_runtime_projection_capability capabilities[] = {
 		{ TCTI_RUNTIME_CAPABILITY_HWCAP, BIT(0), "FEAT_FIRST" },
 		{ TCTI_RUNTIME_CAPABILITY_HWCAP, BIT(1), "FEAT_SECOND" },
 	};
-	const struct tcti_runtime_projection_ledger ledger = {
-		.leaves = leaves,
-		.leaf_count = ARRAY_SIZE(leaves),
-		.target_leaf_count = ARRAY_SIZE(leaves),
-	};
+	struct tcti_runtime_projection_leaf *leaves;
+	struct tcti_runtime_projection_ledger ledger;
 	const struct tcti_runtime_projection_profile profile = {
 		.hwcap = BIT(1),
 	};
-	struct tcti_runtime_projection_result projection;
+	struct tcti_runtime_projection_result projection = { };
+
+	leaves = tcti_runtime_projection_complete_test_ledger(test,
+			first_feature, second_feature);
+	KUNIT_ASSERT_NOT_NULL(test, leaves);
+	leaves[2].source_bound = false;
+	ledger = (struct tcti_runtime_projection_ledger) {
+		.leaves = leaves,
+		.leaf_count = TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+		.target_leaf_count = TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+	};
 
 	KUNIT_EXPECT_EQ(test, -EINVAL, tcti_runtime_projection_audit_ledger(
 			&ledger, &profile, capabilities, ARRAY_SIZE(capabilities),
 			&projection));
 	KUNIT_EXPECT_EQ(test, BIT(1), projection.advertised_without_proof_hwcap);
-	KUNIT_EXPECT_EQ(test, (size_t)2, projection.target_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+			projection.target_leaf_count);
 	KUNIT_EXPECT_EQ(test, (size_t)1, projection.unproved_leaf_count);
+	KUNIT_EXPECT_EQ(test,
+			(size_t)TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES - 1,
+			projection.source_bound_leaf_count);
 }
 
 static void tcti_runtime_projection_keeps_unadvertised_gap_in_target(
@@ -129,44 +159,78 @@ static void tcti_runtime_projection_keeps_unadvertised_gap_in_target(
 {
 	static const char *const first_feature[] = { "FEAT_FIRST" };
 	static const char *const second_feature[] = { "FEAT_SECOND" };
-	static const struct tcti_runtime_projection_leaf leaves[] = {
-		{
-			.name = "FIRST_LEAF",
-			.features = first_feature,
-			.feature_count = ARRAY_SIZE(first_feature),
-			.classification = TCTI_RUNTIME_LEAF_REQUIRED_EL0,
-			.proof = "first_kunit",
-			.proved = true,
-		},
-		{
-			.name = "SECOND_LEAF",
-			.features = second_feature,
-			.feature_count = ARRAY_SIZE(second_feature),
-			.classification = TCTI_RUNTIME_LEAF_UNCLASSIFIED,
-		},
-	};
 	static const struct tcti_runtime_projection_capability capabilities[] = {
 		{ TCTI_RUNTIME_CAPABILITY_HWCAP, BIT(0), "FEAT_FIRST" },
 		{ TCTI_RUNTIME_CAPABILITY_HWCAP, BIT(1), "FEAT_SECOND" },
 	};
-	const struct tcti_runtime_projection_ledger ledger = {
+	struct tcti_runtime_projection_leaf *leaves;
+	struct tcti_runtime_projection_ledger ledger;
+	const struct tcti_runtime_projection_profile profile = {
+		.hwcap = BIT(0),
+	};
+	struct tcti_runtime_projection_result projection = { };
+
+	leaves = tcti_runtime_projection_complete_test_ledger(test,
+			first_feature, second_feature);
+	KUNIT_ASSERT_NOT_NULL(test, leaves);
+	leaves[2].classification = TCTI_RUNTIME_LEAF_UNCLASSIFIED;
+	leaves[2].proof = NULL;
+	leaves[2].source_bound = false;
+	leaves[2].proved = false;
+	ledger = (struct tcti_runtime_projection_ledger) {
 		.leaves = leaves,
-		.leaf_count = ARRAY_SIZE(leaves),
-		.target_leaf_count = ARRAY_SIZE(leaves),
+		.leaf_count = TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+		.target_leaf_count = TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+	};
+
+	KUNIT_ASSERT_EQ(test, 0, tcti_runtime_projection_audit_ledger(
+			&ledger, &profile, capabilities, ARRAY_SIZE(capabilities),
+			&projection));
+	KUNIT_EXPECT_EQ(test, (size_t)TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES,
+			projection.target_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1, projection.unproved_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1,
+			projection.unadvertised_incomplete_feature_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1, projection.unadvertised_mapping_count);
+}
+
+static void tcti_runtime_projection_initializes_rejected_ledger_result(
+	struct kunit *test)
+{
+	static const char *const first_feature[] = { "FEAT_FIRST" };
+	static const struct tcti_runtime_projection_leaf leaf = {
+		.name = "REDUCED_SOURCE_LEAF",
+		.features = first_feature,
+		.feature_count = ARRAY_SIZE(first_feature),
+		.classification = TCTI_RUNTIME_LEAF_REQUIRED_EL0,
+		.proof = "resolved-proof",
+		.source_bound = true,
+		.proved = true,
+	};
+	static const struct tcti_runtime_projection_capability capability = {
+		.word = TCTI_RUNTIME_CAPABILITY_HWCAP,
+		.bit = BIT(0),
+		.feature = "FEAT_FIRST",
+	};
+	const struct tcti_runtime_projection_ledger ledger = {
+		.leaves = &leaf,
+		.leaf_count = 1,
+		.target_leaf_count = 1,
 	};
 	const struct tcti_runtime_projection_profile profile = {
 		.hwcap = BIT(0),
 	};
 	struct tcti_runtime_projection_result projection;
 
-	KUNIT_ASSERT_EQ(test, 0, tcti_runtime_projection_audit_ledger(
-			&ledger, &profile, capabilities, ARRAY_SIZE(capabilities),
-			&projection));
-	KUNIT_EXPECT_EQ(test, (size_t)2, projection.target_leaf_count);
-	KUNIT_EXPECT_EQ(test, (size_t)1, projection.unproved_leaf_count);
-	KUNIT_EXPECT_EQ(test, (size_t)1,
-			projection.unadvertised_incomplete_feature_count);
-	KUNIT_EXPECT_EQ(test, (size_t)1, projection.unadvertised_mapping_count);
+	memset(&projection, 0xff, sizeof(projection));
+	KUNIT_EXPECT_EQ(test, -EINVAL, tcti_runtime_projection_audit_ledger(
+			&ledger, &profile, &capability, 1, &projection));
+	KUNIT_EXPECT_EQ(test, BIT(0), projection.advertised_hwcap);
+	KUNIT_EXPECT_EQ(test, 0UL, projection.advertised_hwcap2);
+	KUNIT_EXPECT_EQ(test, (size_t)1, projection.target_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)0, projection.mapping_count);
+	KUNIT_EXPECT_EQ(test, (size_t)0, projection.unproved_leaf_count);
+	KUNIT_EXPECT_EQ(test, 0UL, projection.advertised_without_proof_hwcap);
 }
 
 static unsigned long tcti_isa_extension_hwcap(
@@ -30566,6 +30630,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_runtime_profile_uses_full_target_without_promotion),
 	KUNIT_CASE(tcti_runtime_projection_rejects_advertised_incomplete_feature),
 	KUNIT_CASE(tcti_runtime_projection_keeps_unadvertised_gap_in_target),
+	KUNIT_CASE(tcti_runtime_projection_initializes_rejected_ledger_result),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_configured_profile_encodings_are_decoded),
 	KUNIT_CASE(tcti_configured_profile_leaf_conditions_are_exact),

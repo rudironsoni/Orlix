@@ -146,6 +146,70 @@ static int model_is_lossless(const char *source, size_t source_length)
 				      "TCND\1", 5U));
 		}
 	}
+	CHECK(model.instruction_alias_count ==
+		TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT);
+	CHECK(model.operation_alias_count ==
+		TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT);
+	for (index = 0; index < inventory.instruction_alias_count; index++) {
+		const struct tcti_target_instruction_alias *source_alias =
+			&inventory.instruction_aliases[index];
+		const struct artifact_instruction_alias *alias =
+			&model.instruction_aliases[index];
+		char source_identity[sizeof(source_sha256) + 2U + 20U + 20U];
+
+		CHECK(alias->ordinal == source_alias->ordinal);
+		CHECK(!strcmp((char *)model.strings.data + alias->name_offset,
+			source_alias->name));
+		CHECK(!strcmp((char *)model.strings.data +
+			alias->declared_operation_offset, source_alias->operation_id));
+		CHECK(!strcmp((char *)model.strings.data +
+			alias->resolved_operation_offset,
+			source_alias->canonical_operation_id));
+		CHECK(alias->condition_offset ==
+			model.condition_map[source_alias->condition].offset);
+		CHECK(alias->condition_length ==
+			model.condition_map[source_alias->condition].length);
+		CHECK(!memcmp(model.conditions.data + alias->condition_offset, "TCND\1", 5U));
+		CHECK(alias->source_offset == source_alias->source_offset);
+		CHECK(alias->source_length == source_alias->source_length);
+		CHECK(alias->condition_source_offset == source_alias->condition_source_offset);
+		CHECK(alias->condition_source_length == source_alias->condition_source_length);
+		CHECK(alias->preferred_source_offset == source_alias->preferred_source_offset);
+		CHECK(alias->preferred_source_length == source_alias->preferred_source_length);
+		CHECK(alias->preferred_present == source_alias->preferred_present);
+		CHECK(snprintf(source_identity, sizeof(source_identity), "%s:%zu:%zu",
+			source_sha256, source_alias->source_offset,
+			source_alias->source_length) > 0);
+		CHECK(!strcmp((char *)model.strings.data + alias->source_identity_offset,
+			source_identity));
+	}
+	{
+		size_t operation_alias_index = 0;
+
+		for (index = 0; index < inventory.operation_count; index++) {
+			const struct tcti_target_operation *source_operation =
+				&inventory.operations[index];
+			const struct artifact_operation_alias *alias;
+
+			if (!source_operation->is_alias ||
+			    !source_operation->canonical_operation_id)
+				continue;
+			CHECK(operation_alias_index < model.operation_alias_count);
+			alias = &model.operation_aliases[operation_alias_index];
+			CHECK(!strcmp((char *)model.strings.data +
+				alias->declared_operation_offset, source_operation->id));
+			CHECK(!strcmp((char *)model.strings.data +
+				alias->target_operation_offset,
+				source_operation->alias_operation_id));
+			CHECK(!strcmp((char *)model.strings.data +
+				alias->resolved_operation_offset,
+				source_operation->canonical_operation_id));
+			CHECK(alias->source_offset == source_operation->source_offset);
+			CHECK(alias->source_length == source_operation->source_length);
+			operation_alias_index++;
+		}
+		CHECK(operation_alias_index == model.operation_alias_count);
+	}
 	artifact_model_destroy(&model);
 	tcti_target_inventory_destroy(&inventory);
 	return 0;

@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "target_asl_availability.h"
 #include "target_feature_artifact_generator.h"
+#include "target_feature_field_domain_binding_artifact_generator.h"
+#include "target_runtime_capability_cohort_artifact_generator.h"
 #include "target_instruction_artifact_generator.h"
 #include "target_manifest_generator.h"
 #include "target_refresh.h"
@@ -26,8 +28,8 @@
 #endif
 
 #define TCTI_TARGET_REFRESH_MAX_SOURCE (128U * 1024U * 1024U)
-#define TCTI_TARGET_REFRESH_PUBLISH_NAME "aarchmrs-2026-06"
-#define TCTI_TARGET_REFRESH_SCHEMA "tcti-aarchmrs-source-v1"
+#define TCTI_TARGET_REFRESH_PUBLISH_NAME "aarchmrs-2026-06-v2"
+#define TCTI_TARGET_REFRESH_SCHEMA "tcti-aarchmrs-source-v2"
 #define TCTI_TARGET_REFRESH_GENERATOR "tcti-isa-maintainer"
 
 struct source_bytes {
@@ -58,6 +60,10 @@ const char *tcti_target_refresh_error_name(enum tcti_target_refresh_error error)
 	case TCTI_TARGET_REFRESH_ASL_AVAILABILITY: return "ASL availability generation failed";
 	case TCTI_TARGET_REFRESH_INSTRUCTIONS: return "instruction artifact generation failed";
 	case TCTI_TARGET_REFRESH_FEATURES: return "feature artifact generation failed";
+	case TCTI_TARGET_REFRESH_FEATURE_FIELD_DOMAINS:
+		return "feature field-domain binding artifact generation failed";
+	case TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT:
+		return "runtime capability cohort artifact generation failed";
 	case TCTI_TARGET_REFRESH_REGISTERS: return "register artifact generation failed";
 	case TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS: return "system accessor reconciliation failed";
 	case TCTI_TARGET_REFRESH_CAPTURE: return "generated artifact capture failed";
@@ -211,6 +217,40 @@ static int emit_registers(const struct source_bytes *source,
 	return result;
 }
 
+static int emit_feature_field_domains(const struct source_bytes *features,
+				      const struct source_bytes *registers,
+				      struct artifact_bytes *artifact)
+{
+	FILE *output = tmpfile();
+	int result;
+
+	if (!output)
+		return -1;
+	result = tcti_target_feature_field_domain_binding_artifact_emit(
+		features->data, features->length, registers->data, registers->length,
+		output) == TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_OK &&
+		!capture(output, artifact) ? 0 : -1;
+	fclose(output);
+	return result;
+}
+
+static int emit_runtime_capability_cohort(const struct source_bytes *instructions,
+	const struct source_bytes *features, struct artifact_bytes *artifact)
+{
+	FILE *output = tmpfile();
+	int result;
+
+	if (!output)
+		return -1;
+	result = tcti_runtime_capability_cohort_artifact_emit(
+		instructions->data, instructions->length, features->data,
+		features->length, output) ==
+		TCTI_RUNTIME_CAPABILITY_COHORT_ARTIFACT_GENERATOR_OK &&
+		!capture(output, artifact) ? 0 : -1;
+	fclose(output);
+	return result;
+}
+
 static int emit_system_accessors(const struct source_bytes *source,
 				 struct artifact_bytes *artifact)
 {
@@ -288,8 +328,10 @@ int tcti_target_refresh(int build_root_fd, int canonical_root_fd,
 	struct artifact_bytes manifest = { 0 }, asl_availability = { 0 };
 	struct artifact_bytes instruction_artifact = { 0 };
 	struct artifact_bytes feature_artifact = { 0 }, register_artifact = { 0 };
+	struct artifact_bytes feature_field_domains = { 0 };
+	struct artifact_bytes runtime_capability_cohort = { 0 };
 	struct artifact_bytes system_accessors = { 0 };
-	struct tcti_target_artifact artifacts[6];
+	struct tcti_target_artifact artifacts[8];
 	struct tcti_target_artifact_provenance provenance = {
 		.schema = TCTI_TARGET_REFRESH_SCHEMA,
 		.generator = TCTI_TARGET_REFRESH_GENERATOR,
@@ -338,6 +380,16 @@ int tcti_target_refresh(int build_root_fd, int canonical_root_fd,
 		error = TCTI_TARGET_REFRESH_FEATURES;
 		goto out;
 	}
+	if (emit_feature_field_domains(&features, &registers,
+				       &feature_field_domains)) {
+		error = TCTI_TARGET_REFRESH_FEATURE_FIELD_DOMAINS;
+		goto out;
+	}
+	if (emit_runtime_capability_cohort(&instructions, &features,
+					 &runtime_capability_cohort)) {
+		error = TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT;
+		goto out;
+	}
 	if (emit_registers(&registers, &register_artifact)) {
 		error = TCTI_TARGET_REFRESH_REGISTERS;
 		goto out;
@@ -346,7 +398,7 @@ int tcti_target_refresh(int build_root_fd, int canonical_root_fd,
 		error = TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS;
 		goto out;
 	}
-	if (snprintf(generation, sizeof(generation), "aarchmrs-2026-06-%.12s-%.12s-%.12s",
+	if (snprintf(generation, sizeof(generation), "aarchmrs-2026-06-v2-%.12s-%.12s-%.12s",
 		     instruction_digest, feature_digest, register_digest) >=
 	    (int)sizeof(generation)) {
 		error = TCTI_TARGET_REFRESH_CAPTURE;
@@ -364,14 +416,24 @@ int tcti_target_refresh(int build_root_fd, int canonical_root_fd,
 		.length = feature_artifact.length,
 	};
 	artifacts[3] = (struct tcti_target_artifact) {
+		.name = "target_feature_field_domain_binding.def",
+		.data = feature_field_domains.data,
+		.length = feature_field_domains.length,
+	};
+	artifacts[4] = (struct tcti_target_artifact) {
 		.name = "target_instruction_artifact_generated.h",
 		.data = instruction_artifact.data, .length = instruction_artifact.length,
 	};
-	artifacts[4] = (struct tcti_target_artifact) {
+	artifacts[5] = (struct tcti_target_artifact) {
 		.name = "target_register_artifact.def", .data = register_artifact.data,
 		.length = register_artifact.length,
 	};
-	artifacts[5] = (struct tcti_target_artifact) {
+	artifacts[6] = (struct tcti_target_artifact) {
+		.name = "target_runtime_capability_cohort_artifact.def",
+		.data = runtime_capability_cohort.data,
+		.length = runtime_capability_cohort.length,
+	};
+	artifacts[7] = (struct tcti_target_artifact) {
 		.name = "target_system_accessor_reconciliation.def",
 		.data = system_accessors.data, .length = system_accessors.length,
 	};
@@ -406,6 +468,8 @@ out:
 	free(asl_availability.data);
 	free(instruction_artifact.data);
 	free(feature_artifact.data);
+	free(feature_field_domains.data);
+	free(runtime_capability_cohort.data);
 	free(register_artifact.data);
 	free(system_accessors.data);
 	set_result(result, error);

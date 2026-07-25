@@ -56,13 +56,118 @@ static int scalar(const struct tcti_feature_domain_value *value)
 		value->kind == TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM;
 }
 
+static int integer_valid(const struct tcti_feature_domain_integer *integer);
+static int integer_negative(const struct tcti_feature_domain_integer *integer);
+
 static int callback_value_valid(const struct tcti_feature_domain_value *value)
 {
-	return value && (value->kind == TCTI_FEATURE_DOMAIN_VALUE_BOOL ||
-		value->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
-		value->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED ||
+	return value && ((value->kind == TCTI_FEATURE_DOMAIN_VALUE_BOOL &&
+		 value->boolean <= 1U) ||
+		((value->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+		  value->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) &&
+		 integer_valid(&value->integer)) ||
 		(value->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM &&
 		 present(value->text)));
+}
+
+static tcti_feature_artifact_u64 width_mask(tcti_feature_artifact_u8 width)
+{
+	if (width >= 64U)
+		return ~(tcti_feature_artifact_u64)0;
+	return ((tcti_feature_artifact_u64)1U << width) - 1U;
+}
+
+static int integer_valid(const struct tcti_feature_domain_integer *integer)
+{
+	if (!integer || !integer->width || integer->width > 128U)
+		return 0;
+	if (integer->width <= 64U)
+		return !integer->high && !(integer->low & ~width_mask(integer->width));
+	return !(integer->high & ~width_mask(integer->width - 64U));
+}
+
+static int integer_unsigned_order(const struct tcti_feature_domain_integer *left,
+	const struct tcti_feature_domain_integer *right)
+{
+	if (left->high != right->high)
+		return left->high < right->high ? -1 : 1;
+	if (left->low != right->low)
+		return left->low < right->low ? -1 : 1;
+	return 0;
+}
+
+static void integer_extend(const struct tcti_feature_domain_integer *source,
+	tcti_feature_artifact_u8 width, int sign_extend,
+	struct tcti_feature_domain_integer *result)
+{
+	*result = *source;
+	result->width = width;
+	if (sign_extend && integer_negative(source) && width != source->width &&
+	    source->width <= 64U) {
+		result->low |= ~width_mask(source->width);
+		if (width > 64U)
+			result->high = ~(tcti_feature_artifact_u64)0;
+	} else if (sign_extend && integer_negative(source) &&
+		   width != source->width) {
+		result->high |= ~width_mask(source->width - 64U);
+	}
+	if (width <= 64U) {
+		result->low &= width_mask(width);
+		result->high = 0;
+	} else {
+		result->high &= width_mask(width - 64U);
+	}
+}
+
+static int integer_negative(const struct tcti_feature_domain_integer *integer)
+{
+	tcti_feature_artifact_u8 bit = integer->width - 1U;
+
+	if (bit >= 64U)
+		return !!(integer->high & ((tcti_feature_artifact_u64)1U <<
+			(bit - 64U)));
+	return !!(integer->low & ((tcti_feature_artifact_u64)1U << bit));
+}
+
+static int parse_integer_literal(const char *text,
+	enum tcti_feature_domain_value_kind kind,
+	struct tcti_feature_domain_value *value)
+{
+	struct tcti_feature_domain_integer integer = { 0 };
+	size_t index;
+
+	if (!text || !value || text[0] != '\'' || text[1] == '\0')
+		return -1;
+	for (index = 1; text[index] && text[index] != '\''; index++) {
+		if (index > 128U || (text[index] != '0' && text[index] != '1'))
+			return -1;
+		integer.high = (integer.high << 1) | (integer.low >> 63);
+		integer.low = (integer.low << 1) | (text[index] - '0');
+	}
+	if (index == 1U || index - 1U > 128U || text[index] != '\'' ||
+	    text[index + 1U])
+		return -1;
+	integer.width = (tcti_feature_artifact_u8)(index - 1U);
+	if (!integer_valid(&integer))
+		return -1;
+	*value = (struct tcti_feature_domain_value) {
+		.kind = kind, .integer = integer,
+	};
+	return 0;
+}
+
+int tcti_feature_domain_parse_uint_literal(const char *text,
+	struct tcti_feature_domain_value *value)
+{
+	return parse_integer_literal(text, TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED,
+		value);
+}
+
+int tcti_feature_domain_parse_sint_literal(const char *text,
+	struct tcti_feature_domain_value *value)
+{
+	return parse_integer_literal(text, TCTI_FEATURE_DOMAIN_VALUE_SIGNED,
+		value);
 }
 
 static int atom_node_length(const struct tcti_feature_artifact *artifact,
@@ -235,32 +340,52 @@ static int values_equal(const struct tcti_feature_artifact *artifact,
 		*equal = left->boolean == right->boolean;
 		return 0;
 	case TCTI_FEATURE_DOMAIN_VALUE_SIGNED:
-		*equal = left->signed_value == right->signed_value;
-		return 0;
 	case TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED:
-		*equal = left->unsigned_value == right->unsigned_value;
+		if (!integer_valid(&left->integer) || !integer_valid(&right->integer) ||
+		    left->kind != right->kind)
+			return -1;
+		if (tcti_feature_domain_compare_numeric(left, right, equal))
+			return -1;
+		*equal = !*equal;
 		return 0;
 	default:
 		return -1;
 	}
 }
 
-static int numeric_order(const struct tcti_feature_domain_value *left,
-			 const struct tcti_feature_domain_value *right, int *order)
+int tcti_feature_domain_compare_numeric(
+	const struct tcti_feature_domain_value *left,
+	const struct tcti_feature_domain_value *right, int *order)
 {
-	if (left->kind != right->kind)
+	int left_negative;
+	int right_negative;
+	tcti_feature_artifact_u8 width;
+	struct tcti_feature_domain_integer normalized_left;
+	struct tcti_feature_domain_integer normalized_right;
+
+	if (!left || !right || !order || left->kind != right->kind ||
+	    (left->kind != TCTI_FEATURE_DOMAIN_VALUE_SIGNED &&
+	     left->kind != TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) ||
+	    !integer_valid(&left->integer) || !integer_valid(&right->integer))
 		return -1;
-	if (left->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED) {
-		*order = left->signed_value < right->signed_value ? -1 :
-			left->signed_value > right->signed_value;
-		return 0;
-	}
+	width = left->integer.width > right->integer.width ?
+		left->integer.width : right->integer.width;
 	if (left->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) {
-		*order = left->unsigned_value < right->unsigned_value ? -1 :
-			left->unsigned_value > right->unsigned_value;
+		integer_extend(&left->integer, width, 0, &normalized_left);
+		integer_extend(&right->integer, width, 0, &normalized_right);
+		*order = integer_unsigned_order(&normalized_left, &normalized_right);
 		return 0;
 	}
-	return -1;
+	left_negative = integer_negative(&left->integer);
+	right_negative = integer_negative(&right->integer);
+	if (left_negative != right_negative)
+		*order = left_negative ? -1 : 1;
+	else {
+		integer_extend(&left->integer, width, 1, &normalized_left);
+		integer_extend(&right->integer, width, 1, &normalized_right);
+		*order = integer_unsigned_order(&normalized_left, &normalized_right);
+	}
+	return 0;
 }
 
 static int evaluate_node(const struct tcti_feature_artifact *artifact,
@@ -302,7 +427,10 @@ static int evaluate_node(const struct tcti_feature_artifact *artifact,
 		break;
 	case TCTI_FEATURE_ARTIFACT_INTEGER:
 		value->kind = TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
-		value->signed_value = node->integer;
+		value->integer = (struct tcti_feature_domain_integer) {
+			.low = (tcti_feature_artifact_u64)node->integer,
+			.width = 64U,
+		};
 		break;
 	case TCTI_FEATURE_ARTIFACT_VALUE:
 		if (!present(node->text))
@@ -315,7 +443,7 @@ static int evaluate_node(const struct tcti_feature_artifact *artifact,
 			goto node_error;
 		value->kind = TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM;
 		value->node_index = index;
-		if (atom_length(artifact, value, &value->unsigned_value))
+		if (atom_length(artifact, value, &value->integer.low))
 			goto node_error;
 		break;
 	case TCTI_FEATURE_ARTIFACT_SET:
@@ -349,30 +477,35 @@ static int evaluate_node(const struct tcti_feature_artifact *artifact,
 	case TCTI_FEATURE_ARTIFACT_SINT:
 		if (node->child_count != 1 || !child_valid(artifact, node, 0) ||
 		    evaluate_node(artifact, artifact->children[node->first_child],
-				  environment, scratch, depth + 1U, &left, diagnostic))
+			  environment, scratch, depth + 1U, &left, diagnostic))
 			goto reference_or_child_error;
+		if ((left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+		     left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) &&
+		    !integer_valid(&left.integer))
+			goto type_error;
 		if (node->kind == TCTI_FEATURE_ARTIFACT_UINT) {
 			if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)
 				*value = left;
 			else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED &&
-				 left.signed_value >= 0) {
+				 !integer_negative(&left.integer)) {
 				value->kind = TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED;
-				value->unsigned_value =
-					(tcti_feature_artifact_u64)left.signed_value;
+				value->integer = left.integer;
+			} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM &&
+				   !tcti_feature_domain_parse_uint_literal(left.text, value)) {
+				break;
 			} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED)
 				goto overflow;
 			else
 				goto type_error;
 		} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED)
 			*value = left;
-		else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED &&
-			 left.unsigned_value <= (tcti_feature_artifact_u64)INT64_MAX) {
+		else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) {
 			value->kind = TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
-			value->signed_value =
-				(tcti_feature_artifact_s64)left.unsigned_value;
-		} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)
-			goto overflow;
-		else
+			value->integer = left.integer;
+		} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM &&
+			   !tcti_feature_domain_parse_sint_literal(left.text, value)) {
+			break;
+		} else
 			goto type_error;
 		break;
 	case TCTI_FEATURE_ARTIFACT_AND:
@@ -418,7 +551,7 @@ static int evaluate_node(const struct tcti_feature_artifact *artifact,
 			if (node->kind == TCTI_FEATURE_ARTIFACT_NE)
 				relation = !relation;
 		} else {
-			if (numeric_order(&left, &right, &relation))
+			if (tcti_feature_domain_compare_numeric(&left, &right, &relation))
 				goto type_error;
 			if (node->kind == TCTI_FEATURE_ARTIFACT_LT)
 				relation = relation < 0;

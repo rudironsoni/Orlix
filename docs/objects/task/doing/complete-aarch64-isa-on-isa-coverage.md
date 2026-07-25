@@ -150,3 +150,25 @@ comparator now records result, register, and bounded-memory observations, but
 it discharges no proof obligation without owning production-path KUnit run
 evidence. LSE128 reserved-selector and near-miss coverage remains pending
 owning run evidence and its remaining architectural obligations stay blocking.
+
+The current typed feature evaluation retains fixed-width values from 1 through
+128 bits. The checked field-domain artifact keeps all 605 occurrences, its 604
+structural mappings remain semantically unresolved, and the `MPAM` ambiguity
+remains a hard blocker. The direct denominator remains 4,350 leaves while the
+supplemental alias graph records 292 instruction aliases and 171 reachable
+operation aliases without using aliases as proof or denominator substitutions.
+The pinned 2026-06 package has no separately pin-able official shared-ASL
+corpus, so all 4,350 shared-ASL provenance edges remain blocking. The LSE128
+production resume fault matrix has expanded its fault coverage, but it makes no
+atomicity or ordering claim. Runtime HWCAP and HWCAP2 promotion remains zero.
+
+The checked runtime-capability cohort artifact now covers all 4,350 direct
+instruction leaves and retains 5,592 source-derived candidate memberships over
+the 409 typed feature parameters, including each candidate's exact source
+condition span. Every membership remains explicitly unresolved. The completion
+audit counts those 5,592 unresolved memberships as blocking obligations, and
+the runtime projection cannot use them to authorize HWCAP or HWCAP2 promotion.
+This structural binding does not establish feature applicability,
+satisfiability, implementation, or proof. Those obligations, the 605
+feature-field qualifier semantics, the missing shared-ASL provenance edges,
+and the per-family KUnit and applicable kselftest evidence remain open.

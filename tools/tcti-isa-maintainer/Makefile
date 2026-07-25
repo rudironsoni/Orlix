@@ -7,18 +7,23 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
 
-BUILD_ROOT ?= ../../Build
-OUT := $(abspath $(BUILD_ROOT)/Tools/tcti-isa-maintainer)
+ORLIX_BUILD_ROOT ?= ../../Build
+OUT := $(abspath $(ORLIX_BUILD_ROOT)/Tools/tcti-isa-maintainer)
 CONDITION_INCLUDE := -I../../OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests
 REFRESH_DEFINES := -DTARGET_MANIFEST_GENERATOR_NO_MAIN \
 	-DTARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_FEATURE_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_RUNTIME_CAPABILITY_COHORT_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN
 REFRESH_TEST_DEFINES := $(REFRESH_DEFINES) -DTCTI_TARGET_REFRESH_NO_MAIN
 REFRESH_SOURCES := target_refresh.c target_artifact_publisher.c \
 	target_manifest_generator.c target_inventory_import.c \
 	target_condition_serialization.c target_instruction_artifact_generator.c \
 	target_feature_model.c target_feature_artifact_generator.c \
+	target_feature_field_domain_binding.c \
+	target_feature_field_domain_binding_artifact_generator.c \
+	target_runtime_capability_cohort_artifact_generator.c \
 	target_register_model.c target_register_artifact_generator.c \
 	target_asl_availability.c target_system_accessor_reconciliation.c
 
@@ -53,6 +58,17 @@ source-check:
 		target_feature_field_domain_binding_test.c \
 		-o '$(OUT)/target_feature_field_domain_binding_test'
 	@'$(OUT)/target_feature_field_domain_binding_test' '$(FEATURES)' '$(REGISTERS)'
+	@$(CC) $(CFLAGS) -DTARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_GENERATOR_NO_MAIN \
+		target_feature_model.c target_register_model.c \
+		target_feature_field_domain_binding.c \
+		target_feature_field_domain_binding_artifact_generator.c \
+		target_feature_field_domain_binding_artifact_generator_test.c \
+		-o '$(OUT)/target_feature_field_domain_binding_artifact_generator_test'
+	@'$(OUT)/target_feature_field_domain_binding_artifact_generator_test' '$(FEATURES)' '$(REGISTERS)'
+	@$(CC) $(CFLAGS) target_inventory_import.c target_feature_model.c \
+		target_runtime_capability_cohort_artifact_generator_test.c \
+		-o '$(OUT)/target_runtime_capability_cohort_artifact_generator_test'
+	@'$(OUT)/target_runtime_capability_cohort_artifact_generator_test' '$(INSTRUCTIONS)' '$(FEATURES)'
 	@$(CC) $(CFLAGS) target_register_model.c target_register_model_test.c \
 		-o '$(OUT)/target_register_model_test'
 	@'$(OUT)/target_register_model_test' '$(REGISTERS)'
@@ -78,8 +94,8 @@ source-check:
 	@'$(OUT)/target_refresh_test' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
 
 refresh: source-check
-	@mkdir -p '$(BUILD_ROOT)'
+	@mkdir -p '$(ORLIX_BUILD_ROOT)'
 	@$(CC) $(CFLAGS) $(CONDITION_INCLUDE) $(REFRESH_DEFINES) \
 		target_refresh.c $(filter-out target_refresh.c,$(REFRESH_SOURCES)) \
 		-o '$(OUT)/target_refresh'
-	@'$(OUT)/target_refresh' '$(BUILD_ROOT)' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
+	@'$(OUT)/target_refresh' '$(ORLIX_BUILD_ROOT)' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'

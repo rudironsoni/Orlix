@@ -150,7 +150,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"5c518636cae24660659c2b5e33ce45ca4dc08f879c6d8586f352a94b91c29142"
+	"d6e7cfcab85143310ef2fe1688ead3a157244650f376cc3101e44b6473b65627"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \

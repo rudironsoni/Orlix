@@ -60,6 +60,34 @@ struct artifact_operand {
 	uint8_t width;
 };
 
+struct artifact_instruction_alias {
+	uint32_t ordinal;
+	uint32_t name_offset;
+	uint32_t declared_operation_offset;
+	uint32_t resolved_operation_offset;
+	uint32_t condition_offset;
+	uint32_t condition_length;
+	uint32_t source_offset;
+	uint32_t source_length;
+	uint32_t source_identity_offset;
+	uint32_t condition_source_offset;
+	uint32_t condition_source_length;
+	uint32_t condition_identity_offset;
+	uint32_t preferred_source_offset;
+	uint32_t preferred_source_length;
+	uint32_t preferred_identity_offset;
+	uint8_t preferred_present;
+};
+
+struct artifact_operation_alias {
+	uint32_t declared_operation_offset;
+	uint32_t target_operation_offset;
+	uint32_t resolved_operation_offset;
+	uint32_t source_offset;
+	uint32_t source_length;
+	uint32_t source_identity_offset;
+};
+
 struct artifact_model {
 	struct artifact_bytes strings;
 	struct artifact_bytes conditions;
@@ -67,6 +95,10 @@ struct artifact_model {
 	struct artifact_leaf *leaves;
 	struct artifact_operand *operands;
 	size_t operand_count;
+	struct artifact_instruction_alias *instruction_aliases;
+	size_t instruction_alias_count;
+	struct artifact_operation_alias *operation_aliases;
+	size_t operation_alias_count;
 };
 
 struct sha256_state {
@@ -257,6 +289,8 @@ static void artifact_model_destroy(struct artifact_model *model)
 	free(model->condition_map);
 	free(model->leaves);
 	free(model->operands);
+	free(model->instruction_aliases);
+	free(model->operation_aliases);
 	memset(model, 0, sizeof(*model));
 }
 
@@ -321,6 +355,100 @@ static enum tcti_target_instruction_artifact_error build_conditions(
 	return TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
 }
 
+static int append_span_identity(struct artifact_bytes *strings,
+				 size_t offset, size_t length, uint32_t *identity_offset)
+{
+	char identity[sizeof(source_sha256) + 2U + 20U + 20U];
+	int count;
+
+	if (!length || offset > UINT32_MAX || length > UINT32_MAX)
+		return -1;
+	count = snprintf(identity, sizeof(identity), "%s:%zu:%zu", source_sha256,
+			 offset, length);
+	if (count < 0 || (size_t)count >= sizeof(identity))
+		return -1;
+	return bytes_append_string(strings, identity, identity_offset);
+}
+
+static enum tcti_target_instruction_artifact_error build_aliases(
+	const struct tcti_target_inventory *inventory, struct artifact_model *model)
+{
+	size_t index;
+	size_t operation_alias_index = 0;
+
+	if (inventory->instruction_alias_count !=
+		TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT ||
+	    inventory->reachable_operation_alias_count !=
+		TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT)
+		return TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+	model->instruction_aliases = calloc(inventory->instruction_alias_count,
+					  sizeof(*model->instruction_aliases));
+	model->operation_aliases = calloc(inventory->reachable_operation_alias_count,
+					 sizeof(*model->operation_aliases));
+	if (!model->instruction_aliases || !model->operation_aliases)
+		return TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+	for (index = 0; index < inventory->instruction_alias_count; index++) {
+		const struct tcti_target_instruction_alias *source =
+			&inventory->instruction_aliases[index];
+		struct artifact_instruction_alias *alias =
+			&model->instruction_aliases[index];
+
+		if (source->ordinal != index ||
+		    source->condition >= inventory->expression_count ||
+		    append_span_identity(&model->strings, source->source_offset,
+				source->source_length, &alias->source_identity_offset) ||
+		    append_span_identity(&model->strings, source->condition_source_offset,
+				source->condition_source_length,
+				&alias->condition_identity_offset) ||
+		    append_span_identity(&model->strings, source->preferred_source_offset,
+				source->preferred_source_length,
+				&alias->preferred_identity_offset) ||
+		    bytes_append_string(&model->strings, source->name, &alias->name_offset) ||
+		    bytes_append_string(&model->strings, source->operation_id,
+				&alias->declared_operation_offset) ||
+		    bytes_append_string(&model->strings, source->canonical_operation_id,
+				&alias->resolved_operation_offset))
+			return TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		alias->ordinal = source->ordinal;
+		alias->condition_offset = model->condition_map[source->condition].offset;
+		alias->condition_length = model->condition_map[source->condition].length;
+		alias->source_offset = (uint32_t)source->source_offset;
+		alias->source_length = (uint32_t)source->source_length;
+		alias->condition_source_offset = (uint32_t)source->condition_source_offset;
+		alias->condition_source_length = (uint32_t)source->condition_source_length;
+		alias->preferred_source_offset = (uint32_t)source->preferred_source_offset;
+		alias->preferred_source_length = (uint32_t)source->preferred_source_length;
+		alias->preferred_present = source->preferred_present;
+	}
+	for (index = 0; index < inventory->operation_count; index++) {
+		const struct tcti_target_operation *source = &inventory->operations[index];
+		struct artifact_operation_alias *alias;
+
+		if (!source->is_alias || !source->canonical_operation_id)
+			continue;
+		if (operation_alias_index >= inventory->reachable_operation_alias_count)
+			return TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+		alias = &model->operation_aliases[operation_alias_index];
+		if (append_span_identity(&model->strings, source->source_offset,
+				source->source_length, &alias->source_identity_offset) ||
+		    bytes_append_string(&model->strings, source->id,
+				&alias->declared_operation_offset) ||
+		    bytes_append_string(&model->strings, source->alias_operation_id,
+				&alias->target_operation_offset) ||
+		    bytes_append_string(&model->strings, source->canonical_operation_id,
+				&alias->resolved_operation_offset))
+			return TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		alias->source_offset = (uint32_t)source->source_offset;
+		alias->source_length = (uint32_t)source->source_length;
+		operation_alias_index++;
+	}
+	if (operation_alias_index != inventory->reachable_operation_alias_count)
+		return TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+	model->instruction_alias_count = inventory->instruction_alias_count;
+	model->operation_alias_count = operation_alias_index;
+	return TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
+}
+
 static enum tcti_target_instruction_artifact_error build_model(
 	const struct tcti_target_inventory *inventory, struct artifact_model *model)
 {
@@ -378,6 +506,9 @@ static enum tcti_target_instruction_artifact_error build_model(
 		}
 	}
 	result = build_conditions(inventory, model);
+	if (result != TCTI_TARGET_INSTRUCTION_ARTIFACT_OK)
+		goto out;
+	result = build_aliases(inventory, model);
 	if (result != TCTI_TARGET_INSTRUCTION_ARTIFACT_OK)
 		goto out;
 	for (index = 0; index < inventory->leaf_count; index++) {
@@ -471,7 +602,7 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#include \"target_instruction_artifact.h\"\n\n"
-		"#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 1U\n"
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 2U\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_ARCHITECTURE \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_BUILD \"%s\"\n"
 		"#define TCTI_A64_INSTRUCTION_ARTIFACT_REFERENCE \"%s\"\n"
@@ -510,6 +641,50 @@ static int emit_artifact(struct artifact_bytes *output,
 	}
 	if (outputf(output, "};\n\n"))
 		return -1;
+	if (outputf(output,
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT %zuU\n"
+		"#define TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT %zuU\n\n"
+		"static const struct tcti_target_instruction_artifact_instruction_alias "
+		"tcti_a64_instruction_artifact_instruction_aliases[%zu] = {\n",
+		model->instruction_alias_count, model->operation_alias_count,
+		model->instruction_alias_count))
+		return -1;
+	for (index = 0; index < model->instruction_alias_count; index++) {
+		const struct artifact_instruction_alias *alias =
+			&model->instruction_aliases[index];
+
+		if (outputf(output,
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU },\n",
+			alias->ordinal, alias->name_offset,
+			alias->declared_operation_offset, alias->resolved_operation_offset,
+			alias->condition_offset, alias->condition_length,
+			alias->source_offset, alias->source_length,
+			alias->source_identity_offset, alias->condition_source_offset,
+			alias->condition_source_length, alias->condition_identity_offset,
+			alias->preferred_source_offset, alias->preferred_source_length,
+			alias->preferred_identity_offset,
+			(unsigned int)alias->preferred_present))
+			return -1;
+	}
+	if (outputf(output,
+		"};\n\nstatic const struct tcti_target_instruction_artifact_operation_alias "
+		"tcti_a64_instruction_artifact_operation_aliases[%zu] = {\n",
+		model->operation_alias_count))
+		return -1;
+	for (index = 0; index < model->operation_alias_count; index++) {
+		const struct artifact_operation_alias *alias =
+			&model->operation_aliases[index];
+
+		if (outputf(output,
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U },\n",
+			alias->declared_operation_offset,
+			alias->target_operation_offset, alias->resolved_operation_offset,
+			alias->source_offset, alias->source_length,
+			alias->source_identity_offset))
+			return -1;
+	}
+	if (outputf(output, "};\n\n"))
+		return -1;
 	if (emit_u8_array(output, "tcti_a64_instruction_artifact_string_pool",
 			  &model->strings) ||
 	    emit_u8_array(output, "tcti_a64_instruction_artifact_condition_pool",
@@ -528,6 +703,10 @@ static int emit_artifact(struct artifact_bytes *output,
 		"    .leaf_count = TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT,\n"
 		"    .operands = tcti_a64_instruction_artifact_operands,\n"
 		"    .operand_count = TCTI_A64_INSTRUCTION_ARTIFACT_OPERAND_COUNT,\n"
+		"    .instruction_aliases = tcti_a64_instruction_artifact_instruction_aliases,\n"
+		"    .instruction_alias_count = TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT,\n"
+		"    .operation_aliases = tcti_a64_instruction_artifact_operation_aliases,\n"
+		"    .operation_alias_count = TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT,\n"
 		"    .string_pool = tcti_a64_instruction_artifact_string_pool,\n"
 		"    .string_pool_size = sizeof(tcti_a64_instruction_artifact_string_pool),\n"
 		"    .condition_pool = tcti_a64_instruction_artifact_condition_pool,\n"

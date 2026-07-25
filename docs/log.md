@@ -581,3 +581,26 @@ A narrow native observation comparator records typed execution observations but
 cannot close an obligation without owning production-path KUnit evidence.
 LSE128 reserved-selector and near-miss coverage remains pending owning run
 evidence and does not change completion status.
+
+## [2026-07-25] harden | Retain field and alias obligations in the complete target
+
+Extended the checkpoint with typed 1 through 128-bit feature values and a
+checked 605-occurrence feature-field artifact. Its 604 structural mappings
+remain semantically unresolved, while the one `MPAM` ambiguity remains an
+explicit audit blocker. Preserved 292 instruction aliases and 171 reachable
+operation aliases as supplemental source relationships without changing the
+4,350 direct-leaf denominator or treating aliases as proof. The pinned 2026-06
+Arm package still has no separately pin-able official shared-ASL corpus, so all
+4,350 semantic provenance edges remain blocking. Expanded the LSE128
+production resume fault matrix without making an atomicity or ordering claim,
+and kept runtime HWCAP and HWCAP2 promotion at zero.
+
+## [2026-07-25] harden | Bind runtime capability candidates without promotion
+
+Added a checked C-native cohort artifact for all 4,350 direct instruction
+leaves, retaining 5,592 source-derived candidate memberships over 409 typed
+feature parameters with exact condition spans. Every candidate remains
+unresolved and blocks the complete-target audit. Runtime projection validates
+the artifact but cannot use structural membership to promote HWCAP or HWCAP2,
+so feature applicability, satisfiability, implementation, and owning proof
+remain explicit open obligations.

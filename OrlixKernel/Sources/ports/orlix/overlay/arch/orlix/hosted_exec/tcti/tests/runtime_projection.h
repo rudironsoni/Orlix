@@ -36,6 +36,11 @@ struct tcti_runtime_projection_leaf {
 	const char *name;
 	const char *const *features;
 	size_t feature_count;
+	/*
+	 * Structural feature candidates do not authorize a capability until the
+	 * complete typed feature-domain audit resolves their semantic regions.
+	 */
+	bool unresolved_feature_semantics;
 	enum tcti_runtime_leaf_classification classification;
 	const char *proof;
 	bool source_bound;

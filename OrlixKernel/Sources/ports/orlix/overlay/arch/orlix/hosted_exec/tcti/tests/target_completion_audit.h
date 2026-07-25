@@ -6,6 +6,8 @@
 #include <stdint.h>
 
 #include "target_proof_registry.h"
+#include "target_feature_field_domain_binding_artifact.h"
+#include "target_runtime_capability_cohort_artifact.h"
 
 #define TCTI_TARGET_COMPLETION_SOURCE_ROWS 4350U
 #define TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH UINT64_C(115441429)
@@ -157,6 +159,14 @@ enum tcti_target_completion_error {
 	TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS = 1U << 13,
 	TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY = 1U << 14,
 	TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR = 1U << 15,
+	/*
+	 * Every checked AST.FIELD occurrence must bind to an authoritative
+	 * Registers.json domain. Mapped rows remain blocking until their domain
+	 * semantics are evaluated, and ambiguity is never silently resolved.
+	 */
+	TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN = 1U << 16,
+	/* Feature-conditioned leaves remain blocking until each cohort is proved. */
+	TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT = 1U << 17,
 };
 
 struct tcti_target_completion_result {
@@ -197,6 +207,19 @@ struct tcti_target_completion_result {
 	size_t mapped_system_accessor_rows;
 	size_t nonmapped_system_accessor_rows;
 	size_t invalid_system_accessor_rows;
+	/* Checked feature AST.FIELD-to-register-domain relationships. */
+	size_t feature_field_domain_rows;
+	size_t mapped_feature_field_domain_rows;
+	/* Structurally mapped rows whose value-domain semantics are not proved. */
+	size_t unresolved_feature_field_domain_rows;
+	/* Authoritative ambiguity remains distinct from unresolved mapping. */
+	size_t ambiguous_feature_field_domain_rows;
+	size_t invalid_feature_field_domain_rows;
+	/* Checked feature-conditioned runtime capability candidates. */
+	size_t runtime_capability_cohort_leaf_rows;
+	size_t runtime_capability_cohort_candidate_membership_rows;
+	size_t unresolved_runtime_capability_cohort_membership_rows;
+	size_t invalid_runtime_capability_cohort_rows;
 };
 
 int tcti_target_completion_validate(
@@ -228,6 +251,15 @@ int tcti_target_completion_validate_system_accessors(
 	const struct tcti_target_completion_system_accessor_provenance *provenance,
 	const struct tcti_target_completion_system_accessor_row *accessors,
 	size_t accessor_count,
+	struct tcti_target_completion_result *result);
+
+int tcti_target_completion_validate_feature_field_domains(
+	const struct tcti_feature_artifact *feature_artifact,
+	const struct tcti_feature_field_domain_binding_artifact *artifact,
+	struct tcti_target_completion_result *result);
+
+int tcti_target_completion_validate_runtime_capability_cohorts(
+	const struct tcti_runtime_capability_cohort_artifact *artifact,
 	struct tcti_target_completion_result *result);
 
 const struct tcti_target_completion_source_provenance *

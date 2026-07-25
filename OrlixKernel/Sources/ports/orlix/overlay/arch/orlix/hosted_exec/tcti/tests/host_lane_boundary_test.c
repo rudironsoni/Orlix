@@ -604,7 +604,10 @@ static void check_generated_artifacts(const char *tcti_root)
 		"isa/target_classification.def",
 		"isa/target_instruction_artifact_generated.h",
 		"isa/target_feature_artifact.def",
+		"isa/target_feature_field_domain_binding.def",
 		"isa/target_register_artifact.def",
+		"isa/target_runtime_capability_cohort_artifact.def",
+		"isa/target_system_accessor_reconciliation.def",
 	};
 	size_t index;
 

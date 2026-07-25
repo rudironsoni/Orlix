@@ -51,6 +51,8 @@ ORLIX_TCTI_INSTRUCTION_ARTIFACT_ROUNDTRIP_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_instruction_artifact_generated_mutation_test
 ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_artifact_generated_test
 ORLIX_TCTI_FEATURE_DOMAIN_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_domain_test
+ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_field_domain_binding_artifact_test
+ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_runtime_capability_cohort_artifact_test
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_COMPLETION_AUDIT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_completion_audit_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
@@ -364,7 +366,23 @@ tcti-isa-host-tests:
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_field_domain_binding_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_field_domain_binding_artifact_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST)'
+	@'$(ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact_test.c \
+		-o '$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
+	@'$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_field_domain_binding_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit.c \
@@ -378,6 +396,8 @@ tcti-isa-audit: tcti-isa-host-tests
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_field_domain_binding_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit.c \
@@ -386,11 +406,10 @@ tcti-isa-audit: tcti-isa-host-tests
 	@'$(ORLIX_TCTI_INVENTORY_AUDITOR)'
 
 tcti-isa-maintainer:
-	@$(MAKE) -C tools/tcti-isa-maintainer BUILD_ROOT='$(ORLIX_BUILD_ROOT)' check
+	@$(MAKE) -C tools/tcti-isa-maintainer ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)' check
 
-# Retained only while the explicit maintainer tool is introduced.  It is not a
-# normal build, audit, or test dependency and will be removed with the next
-# coherent maintainer-tool checkpoint.
+# The explicit maintainer tool verifies pinned Arm inputs against checked C
+# artifacts. It is intentionally separate from normal kernel builds and audits.
 tcti-kernel-tests:
 tcti-kernel-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

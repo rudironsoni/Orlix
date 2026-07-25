@@ -2,6 +2,8 @@
 
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
+	target_feature_artifact.o \
+	target_runtime_capability_cohort_artifact.o \
 	tcti_atomic_memory_test.o tcti_lse_decode_test.o tcti_uaccess_test.o \
 	tcti_cssc_min_max_immediate_test.o \
 	tcti_crypto_decode_boundary_test.o \
@@ -48,6 +50,11 @@ $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 	$(call if_changed,tcti_target_inventory)
 
 $(obj)/tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
-$(obj)/runtime_projection.o: $(obj)/target_inventory.h
+$(obj)/runtime_projection.o: $(obj)/target_inventory.h \
+	$(src)/../isa/target_runtime_capability_cohort_artifact.def
+$(obj)/target_runtime_capability_cohort_artifact.o: \
+	$(src)/../isa/target_runtime_capability_cohort_artifact.def \
+	$(src)/../isa/target_feature_artifact.def
+$(obj)/target_feature_artifact.o: $(src)/../isa/target_feature_artifact.def
 
 ccflags-y += -I$(obj)

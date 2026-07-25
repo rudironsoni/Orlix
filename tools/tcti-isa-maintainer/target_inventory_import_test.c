@@ -207,6 +207,179 @@ static int pinned_leaf_source_spans_are_exact(
 	return 0;
 }
 
+static int pinned_instruction_aliases_are_exact(
+	const struct tcti_target_inventory *inventory, const char *json,
+	size_t json_length)
+{
+	size_t index;
+	size_t other;
+	bool duplicate_name = false;
+
+	EXPECT_EQ(TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT,
+		  inventory->instruction_alias_count);
+	EXPECT_EQ(TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT,
+		  inventory->reachable_operation_alias_count);
+	for (index = 0; index < inventory->instruction_alias_count; index++) {
+		const struct tcti_target_instruction_alias *alias =
+			&inventory->instruction_aliases[index];
+
+		if (alias->ordinal != index || !alias->name || !alias->operation_id ||
+		    !alias->canonical_operation_id || !alias->source_length ||
+		    !alias->condition_source_length || !alias->preferred_source_length ||
+		    alias->source_offset >= json_length ||
+		    alias->source_length > json_length - alias->source_offset ||
+		    alias->condition_source_offset >= json_length ||
+		    alias->condition_source_length >
+			json_length - alias->condition_source_offset ||
+		    alias->preferred_source_offset >= json_length ||
+		    alias->preferred_source_length >
+			json_length - alias->preferred_source_offset ||
+		    json[alias->source_offset] != '{' ||
+		    json[alias->condition_source_offset] != '{')
+			return -1;
+		for (other = 0; other < index; other++)
+			if (!strcmp(alias->name,
+				    inventory->instruction_aliases[other].name)) {
+				duplicate_name = true;
+				if (alias->ordinal ==
+				    inventory->instruction_aliases[other].ordinal)
+					return -1;
+			}
+	}
+	return duplicate_name ? 0 : -1;
+}
+
+static int alias_effective_condition_inherits_parent(
+	const struct tcti_target_inventory *inventory)
+{
+	size_t index;
+
+	for (index = 0; index < inventory->instruction_alias_count; index++) {
+		const struct tcti_target_instruction_alias *alias =
+			&inventory->instruction_aliases[index];
+		const struct tcti_target_expr *combined;
+		const struct tcti_target_expr *parent;
+		const struct tcti_target_expr *local;
+
+		if (alias->condition >= inventory->expression_count)
+			return -1;
+		combined = &inventory->expressions[alias->condition];
+		if (combined->kind != TCTI_TARGET_EXPR_AND ||
+		    combined->left >= inventory->expression_count ||
+		    combined->right >= inventory->expression_count)
+			continue;
+		parent = &inventory->expressions[combined->left];
+		local = &inventory->expressions[combined->right];
+		/* A local true alias condition must still retain its non-true parent. */
+		if (parent->kind != TCTI_TARGET_EXPR_BOOL &&
+		    local->kind == TCTI_TARGET_EXPR_BOOL && local->boolean)
+			return 0;
+	}
+	fprintf(stderr, "no alias retained a nontrivial parent condition\n");
+	return -1;
+}
+
+static char *operation_alias_target(char *json, size_t json_length,
+	const struct tcti_target_operation *operation)
+{
+	static const char prefix[] = "\"operation_id\": \"";
+	char *start;
+	char *end;
+
+	if (!operation || !operation->is_alias ||
+	    operation->source_offset >= json_length ||
+	    operation->source_length > json_length - operation->source_offset)
+		return NULL;
+	start = strstr(json + operation->source_offset, prefix);
+	if (!start || (size_t)(start - json) >= operation->source_offset +
+		operation->source_length)
+		return NULL;
+	start += sizeof(prefix) - 1;
+	end = strchr(start, '"');
+	if (!end || (size_t)(end - json) >= operation->source_offset +
+		operation->source_length)
+		return NULL;
+	return start;
+}
+
+static int reachable_operation_alias_rejection_is_bounded(
+	char *json, size_t json_length,
+	const struct tcti_target_inventory *inventory)
+{
+	struct tcti_target_import_error error = {0};
+	struct tcti_target_inventory mutated = {0};
+	size_t index;
+
+	for (index = 0; index < inventory->operation_count; index++) {
+		const struct tcti_target_operation *operation =
+			&inventory->operations[index];
+		char *target;
+		char original;
+
+		if (!operation->is_alias || !operation->canonical_operation_id)
+			continue;
+		target = operation_alias_target(json, json_length, operation);
+		if (!target)
+			return -1;
+		original = *target;
+		*target = original == 'Z' ? 'Y' : 'Z';
+		if (tcti_target_inventory_import(json, json_length, &mutated,
+						 &error) != -1 ||
+		    error.code != TCTI_TARGET_IMPORT_INVALID_SOURCE) {
+			*target = original;
+			tcti_target_inventory_destroy(&mutated);
+			return -1;
+		}
+		*target = original;
+		tcti_target_inventory_destroy(&mutated);
+		return 0;
+	}
+	return -1;
+}
+
+static int reachable_operation_alias_cycle_is_rejected(
+	char *json, size_t json_length,
+	const struct tcti_target_inventory *inventory)
+{
+	struct tcti_target_import_error error = {0};
+	struct tcti_target_inventory mutated = {0};
+	size_t index;
+
+	for (index = 0; index < inventory->operation_count; index++) {
+		const struct tcti_target_operation *operation =
+			&inventory->operations[index];
+		char *target;
+		char *saved;
+		size_t target_length;
+
+		if (!operation->is_alias || !operation->canonical_operation_id ||
+		    strlen(operation->id) != strlen(operation->alias_operation_id))
+			continue;
+		target = operation_alias_target(json, json_length, operation);
+		if (!target)
+			return -1;
+		target_length = strlen(operation->alias_operation_id);
+		saved = malloc(target_length + 1);
+		if (!saved)
+			return -1;
+		memcpy(saved, target, target_length + 1);
+		memcpy(target, operation->id, target_length);
+		if (tcti_target_inventory_import(json, json_length, &mutated,
+						 &error) != -1 ||
+		    error.code != TCTI_TARGET_IMPORT_INVALID_SOURCE) {
+			memcpy(target, saved, target_length + 1);
+			free(saved);
+			tcti_target_inventory_destroy(&mutated);
+			return -1;
+		}
+		memcpy(target, saved, target_length + 1);
+		free(saved);
+		tcti_target_inventory_destroy(&mutated);
+		return 0;
+	}
+	return -1;
+}
+
 static int import_pinned_source(const char *path)
 {
 	FILE *file;
@@ -225,10 +398,25 @@ static int import_pinned_source(const char *path)
 	json = malloc((size_t)length + 1);
 	if (!json || fread(json, 1, (size_t)length, file) != (size_t)length)
 		goto out_json;
-	EXPECT_EQ(0, tcti_target_inventory_import(json, (size_t)length,
-			&inventory, &error));
+	if (tcti_target_inventory_import(json, (size_t)length, &inventory,
+					 &error)) {
+		fprintf(stderr, "pinned import failed: %u at %zu: %s\n",
+			error.code, error.offset, error.message);
+		goto out_json;
+	}
 	EXPECT_EQ(TCTI_A64_TARGET_LEAF_COUNT, inventory.leaf_count);
 	if (pinned_leaf_source_spans_are_exact(&inventory, json, (size_t)length))
+		goto out_json;
+	if (pinned_instruction_aliases_are_exact(&inventory, json,
+					       (size_t)length))
+		goto out_json;
+	if (alias_effective_condition_inherits_parent(&inventory))
+		goto out_json;
+	if (reachable_operation_alias_rejection_is_bounded(json, (size_t)length,
+						   &inventory))
+		goto out_json;
+	if (reachable_operation_alias_cycle_is_rejected(json, (size_t)length,
+						     &inventory))
 		goto out_json;
 	if (pinned_operand_provenance_is_exact(&inventory))
 		goto out_json;

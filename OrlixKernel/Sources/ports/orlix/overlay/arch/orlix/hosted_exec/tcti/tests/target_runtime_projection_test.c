@@ -22,6 +22,7 @@ static int failures;
 
 static const char *const alpha_feature[] = { "FEAT_ALPHA" };
 static const char *const beta_feature[] = { "FEAT_BETA" };
+static const char *const aes_feature[] = { "FEAT_AES" };
 
 static const struct tcti_runtime_projection_capability capabilities[] = {
 	{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_ALPHA, "FEAT_ALPHA" },
@@ -174,6 +175,46 @@ static void proved_cohort_cannot_authorize_another_bit(void)
 	EXPECT(result.target_leaf_count == TARGET_LEAF_COUNT);
 	EXPECT(result.proved_hwcap == HWCAP_ALPHA);
 	EXPECT(result.advertised_without_proof_hwcap == HWCAP_BETA);
+}
+
+static void shared_feature_proves_or_rejects_every_mapped_bit(void)
+{
+	struct tcti_runtime_projection_leaf leaves[TARGET_LEAF_COUNT];
+	const struct tcti_runtime_projection_ledger ledger = {
+		.leaves = leaves,
+		.leaf_count = TARGET_LEAF_COUNT,
+		.target_leaf_count = TARGET_LEAF_COUNT,
+	};
+	const struct tcti_runtime_projection_profile profile = {
+		.hwcap = HWCAP_ALPHA | HWCAP_BETA,
+	};
+	static const struct tcti_runtime_projection_capability aes_capabilities[] = {
+		{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_ALPHA, "FEAT_AES" },
+		{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_BETA, "FEAT_AES" },
+	};
+	struct tcti_runtime_projection_result result;
+
+	initialize_complete_ledger(leaves);
+	leaves[0].features = aes_feature;
+	leaves[1].features = aes_feature;
+	leaves[2].features = NULL;
+	leaves[2].feature_count = 0;
+
+	EXPECT(audit_custom(&ledger, &profile, aes_capabilities,
+			    sizeof(aes_capabilities) / sizeof(aes_capabilities[0]),
+			    &result) == 0);
+	EXPECT(result.proved_hwcap == (HWCAP_ALPHA | HWCAP_BETA));
+	EXPECT(result.advertised_without_proof_hwcap == 0);
+	EXPECT(result.unproved_leaf_count == 0);
+
+	leaves[1].unresolved_feature_semantics = true;
+	EXPECT(audit_custom(&ledger, &profile, aes_capabilities,
+			    sizeof(aes_capabilities) / sizeof(aes_capabilities[0]),
+			    &result) == -EINVAL);
+	EXPECT(result.proved_hwcap == 0);
+	EXPECT(result.advertised_without_proof_hwcap ==
+	       (HWCAP_ALPHA | HWCAP_BETA));
+	EXPECT(result.unproved_leaf_count == 1);
 }
 
 static void zero_advertised_bits_preserves_complete_target(void)
@@ -452,6 +493,7 @@ int main(void)
 	advertised_feature_rejects_unproved_leaf();
 	advertised_feature_rejects_source_unbound_leaf();
 	proved_cohort_cannot_authorize_another_bit();
+	shared_feature_proves_or_rejects_every_mapped_bit();
 	zero_advertised_bits_preserves_complete_target();
 	reduced_and_oversized_counts_fail_before_iteration();
 	malformed_leaf_feature_sets_fail();

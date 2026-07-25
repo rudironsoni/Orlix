@@ -4,10 +4,12 @@
 #include "../isa/target_instruction_artifact_generated.h"
 
 #ifdef __KERNEL__
+#include <linux/kernel.h>
 #include <linux/string.h>
 #else
 #include <limits.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #endif
 
@@ -35,8 +37,14 @@ static int fail(struct tcti_target_instruction_artifact_validation_result *resul
 			.error = error,
 			.leaf_index = leaf_index,
 			.operand_index = operand_index,
+			.alias_index = TCTI_U32_NONE,
 		};
 	return -1;
+}
+
+static bool valid_source_span(u32 offset, u32 length)
+{
+	return length && offset <= TCTI_U32_NONE - length;
 }
 
 static bool exact_string(const char *actual, const char *expected)
@@ -62,6 +70,23 @@ static bool pool_string(const u8 *pool, size_t pool_size, u32 offset,
 	if (text)
 		*text = (const char *)pool + offset;
 	return true;
+}
+
+static bool span_identity_matches(const u8 *pool, size_t pool_size,
+				  u32 identity_offset, u32 source_offset,
+				  u32 source_length)
+{
+	char expected[sizeof(pinned_source_sha256) + 2U + 20U + 20U];
+	const char *actual;
+	int count;
+
+	if (!valid_source_span(source_offset, source_length) ||
+	    !pool_string(pool, pool_size, identity_offset, &actual))
+		return false;
+	count = snprintf(expected, sizeof(expected), "%s:%u:%u",
+		pinned_source_sha256, source_offset, source_length);
+	return count > 0 && (size_t)count < sizeof(expected) &&
+		!strcmp(actual, expected);
 }
 
 static bool read_u32be(const u8 *data, u32 length, u32 *offset, u32 *value)
@@ -219,6 +244,193 @@ static bool valid_operand_shape(
 		!(operand->variable_mask & leaf->encoding_mask);
 }
 
+static int fail_alias(
+	struct tcti_target_instruction_artifact_validation_result *result,
+	enum tcti_target_instruction_artifact_validation_error error,
+	u32 alias_index)
+{
+	if (result)
+		*result = (struct tcti_target_instruction_artifact_validation_result) {
+			.error = error,
+			.leaf_index = TCTI_U32_NONE,
+			.operand_index = TCTI_U32_NONE,
+			.alias_index = alias_index,
+		};
+	return -1;
+}
+
+static bool artifact_string(const struct tcti_target_instruction_artifact *artifact,
+			    u32 offset, const char **text)
+{
+	return pool_string(artifact->string_pool, artifact->string_pool_size,
+		offset, text);
+}
+
+static int operation_alias_index(const struct tcti_target_instruction_artifact *artifact,
+				 const char *declared_operation)
+{
+	size_t index;
+
+	for (index = 0; index < artifact->operation_alias_count; index++) {
+		const struct tcti_target_instruction_artifact_operation_alias *alias =
+			&artifact->operation_aliases[index];
+		const char *declared;
+
+		if (!artifact_string(artifact, alias->declared_operation_offset,
+				&declared))
+			return -2;
+		if (!strcmp(declared, declared_operation))
+			return (int)index;
+	}
+	return -1;
+}
+
+static bool operation_resolves(const struct tcti_target_instruction_artifact *artifact,
+			       const char *declared_operation, const char *resolved_operation)
+{
+	const char *current = declared_operation;
+	size_t steps;
+
+	for (steps = 0; steps <= artifact->operation_alias_count; steps++) {
+		int index = operation_alias_index(artifact, current);
+		const char *target;
+
+		if (index == -2)
+			return false;
+		if (index < 0)
+			return !strcmp(current, resolved_operation);
+		if (!artifact_string(artifact,
+			artifact->operation_aliases[index].target_operation_offset,
+			&target))
+			return false;
+		current = target;
+	}
+	return false;
+}
+
+static bool mark_operation_alias_reachability(
+	const struct tcti_target_instruction_artifact *artifact,
+	const char *operation, bool reachable[
+		TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT])
+{
+	const char *current = operation;
+	size_t steps;
+
+	for (steps = 0; steps <= artifact->operation_alias_count; steps++) {
+		int index = operation_alias_index(artifact, current);
+		const char *target;
+
+		if (index == -2)
+			return false;
+		if (index < 0)
+			return true;
+		reachable[index] = true;
+		if (!artifact_string(artifact,
+			artifact->operation_aliases[index].target_operation_offset,
+			&target))
+			return false;
+		current = target;
+	}
+	return false;
+}
+
+static int validate_aliases(const struct tcti_target_instruction_artifact *artifact,
+			    struct tcti_target_instruction_artifact_validation_result *result)
+{
+	bool reachable[TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT] = { 0 };
+	size_t index;
+
+	if (artifact->instruction_alias_count !=
+		TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT ||
+	    artifact->operation_alias_count !=
+		TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT ||
+	    !artifact->instruction_aliases || !artifact->operation_aliases)
+		return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH,
+			TCTI_U32_NONE);
+	for (index = 0; index < artifact->instruction_alias_count; index++) {
+		const struct tcti_target_instruction_artifact_instruction_alias *alias =
+			&artifact->instruction_aliases[index];
+		const char *declared;
+		const char *resolved;
+
+		if (alias->ordinal != index || alias->preferred_present > 1U ||
+		    !artifact_string(artifact, alias->name_offset, NULL) ||
+		    !artifact_string(artifact, alias->declared_operation_offset, &declared) ||
+		    !artifact_string(artifact, alias->resolved_operation_offset, &resolved) ||
+		    !valid_condition(artifact->condition_pool,
+			artifact->condition_pool_size, alias->condition_offset,
+			alias->condition_length))
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+				(u32)index);
+		if (!span_identity_matches(artifact->string_pool,
+			artifact->string_pool_size, alias->source_identity_offset,
+			alias->source_offset, alias->source_length) ||
+		    !span_identity_matches(artifact->string_pool,
+			artifact->string_pool_size, alias->condition_identity_offset,
+			alias->condition_source_offset, alias->condition_source_length) ||
+		    !span_identity_matches(artifact->string_pool,
+			artifact->string_pool_size, alias->preferred_identity_offset,
+			alias->preferred_source_offset, alias->preferred_source_length))
+			return fail_alias(result,
+				TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID,
+				(u32)index);
+		if (!operation_resolves(artifact, declared, resolved))
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+				(u32)index);
+	}
+	for (index = 0; index < artifact->operation_alias_count; index++) {
+		const struct tcti_target_instruction_artifact_operation_alias *alias =
+			&artifact->operation_aliases[index];
+		const char *declared;
+		const char *resolved;
+		size_t previous;
+
+		if (!artifact_string(artifact, alias->declared_operation_offset, &declared) ||
+		    !artifact_string(artifact, alias->target_operation_offset, NULL) ||
+		    !artifact_string(artifact, alias->resolved_operation_offset, &resolved) ||
+		    !span_identity_matches(artifact->string_pool,
+			artifact->string_pool_size, alias->source_identity_offset,
+			alias->source_offset, alias->source_length) ||
+		    !operation_resolves(artifact, declared, resolved))
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+				(u32)index);
+		for (previous = 0; previous < index; previous++) {
+			const char *prior;
+
+			if (!artifact_string(artifact,
+				artifact->operation_aliases[previous].declared_operation_offset,
+				&prior) || !strcmp(prior, declared))
+				return fail_alias(result,
+					TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+					(u32)index);
+		}
+	}
+	for (index = 0; index < artifact->leaf_count; index++) {
+		const char *operation;
+
+		if (!artifact_string(artifact, artifact->leaves[index].operation_offset,
+			&operation) || !mark_operation_alias_reachability(artifact,
+			operation, reachable))
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+			TCTI_U32_NONE);
+	}
+	for (index = 0; index < artifact->instruction_alias_count; index++) {
+		const char *operation;
+
+		if (!artifact_string(artifact,
+			artifact->instruction_aliases[index].declared_operation_offset,
+			&operation) || !mark_operation_alias_reachability(artifact,
+			operation, reachable))
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+			(u32)index);
+	}
+	for (index = 0; index < artifact->operation_alias_count; index++)
+		if (!reachable[index])
+			return fail_alias(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
+			(u32)index);
+	return 0;
+}
+
 int tcti_target_instruction_artifact_validate(
 	const struct tcti_target_instruction_artifact *artifact,
 	struct tcti_target_instruction_artifact_validation_result *result)
@@ -231,6 +443,7 @@ int tcti_target_instruction_artifact_validate(
 			.error = TCTI_TARGET_INSTRUCTION_ARTIFACT_VALID,
 			.leaf_index = TCTI_U32_NONE,
 			.operand_index = TCTI_U32_NONE,
+			.alias_index = TCTI_U32_NONE,
 		};
 	if (!artifact)
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_INVALID_ARGUMENT,
@@ -336,6 +549,8 @@ int tcti_target_instruction_artifact_validate(
 	if (expected_operand != artifact->operand_count)
 		return fail(result, TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
 				    TCTI_U32_NONE, expected_operand);
+	if (validate_aliases(artifact, result))
+		return -1;
 	return 0;
 }
 
@@ -354,6 +569,9 @@ const char *tcti_target_instruction_artifact_validation_error_name(
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_LEAF_INVALID: return "invalid leaf";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID: return "invalid operand";
 	case TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID: return "invalid span";
+	case TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID: return "invalid alias";
+	case TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID:
+		return "invalid alias identity";
 	}
 	return "unknown validation error";
 }

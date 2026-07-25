@@ -904,6 +904,13 @@ static int parse_expression(struct importer *importer, int object_index,
 		return -1;
 	}
 	status = parse_expression_inner(importer, object_index, result);
+	if (!status && *result < importer->inventory->expression_count) {
+		const struct json_token *token = &importer->tokens[object_index];
+
+		importer->inventory->expressions[*result].source_offset = token->start;
+		importer->inventory->expressions[*result].source_length =
+			token->end - token->start;
+	}
 	importer->expression_depth--;
 	return status;
 }
@@ -1145,6 +1152,8 @@ static int add_leaf(struct importer *importer, int node_index,
 	int name = object_find(importer, node_index, "name");
 	int mnemonic = source_mnemonic(importer, node_index);
 	int operation = object_find(importer, node_index, "operation_id");
+	int condition_object = object_find(importer, node_index, "condition");
+	int preferred = object_find(importer, node_index, "preferred");
 	size_t first_operand = inventory->operand_count;
 	size_t i;
 
@@ -1155,8 +1164,30 @@ static int add_leaf(struct importer *importer, int node_index,
 	leaf.source_offset = importer->tokens[node_index].start;
 	leaf.source_length = importer->tokens[node_index].end -
 		leaf.source_offset;
+	if (condition_object >= 0) {
+		leaf.condition_source_offset = importer->tokens[condition_object].start;
+		leaf.condition_source_length = importer->tokens[condition_object].end -
+			leaf.condition_source_offset;
+	}
+	if (preferred >= 0) {
+		leaf.preferred_source_offset = importer->tokens[preferred].start;
+		leaf.preferred_source_length = importer->tokens[preferred].end -
+			leaf.preferred_source_offset;
+		if (importer->tokens[preferred].kind != JSON_PRIMITIVE) {
+			leaf.preferred_present = true;
+		} else if (leaf.preferred_source_length != 4 ||
+			   memcmp(importer->json + leaf.preferred_source_offset,
+				  "null", 4)) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  importer->tokens[preferred].start,
+				  "A64 leaf preferred declaration is invalid");
+			goto fail;
+		}
+	}
 	if (!leaf.name || !leaf.mnemonic || !leaf.operation_id ||
-	    !leaf.source_length) {
+	    !leaf.source_length || condition_object < 0 ||
+	    !leaf.condition_source_length || preferred < 0 ||
+	    !leaf.preferred_source_length) {
 		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
 			  importer->tokens[node_index].start,
 			  "A64 leaf lacks a complete identity");
@@ -1188,6 +1219,66 @@ fail:
 	free(leaf.name);
 	free(leaf.mnemonic);
 	free(leaf.operation_id);
+	return -1;
+}
+
+static int add_instruction_alias(struct importer *importer, int node_index,
+				 uint32_t condition)
+{
+	struct tcti_target_inventory *inventory = importer->inventory;
+	struct tcti_target_instruction_alias alias = {0};
+	int name = object_find(importer, node_index, "name");
+	int operation = object_find(importer, node_index, "operation_id");
+	int condition_object = object_find(importer, node_index, "condition");
+	int preferred = object_find(importer, node_index, "preferred");
+
+	if (name < 0 || operation < 0 || condition_object < 0 || preferred < 0 ||
+	    inventory->instruction_alias_count >= UINT32_MAX) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  importer->tokens[node_index].start,
+			  "InstructionAlias lacks a complete identity or source condition");
+		return -1;
+	}
+	alias.name = copy_token(importer, name);
+	alias.operation_id = copy_token(importer, operation);
+	alias.condition = condition;
+	alias.ordinal = (uint32_t)inventory->instruction_alias_count;
+	alias.source_offset = importer->tokens[node_index].start;
+	alias.source_length = importer->tokens[node_index].end - alias.source_offset;
+	alias.condition_source_offset = importer->tokens[condition_object].start;
+	alias.condition_source_length = importer->tokens[condition_object].end -
+		alias.condition_source_offset;
+	alias.preferred_source_offset = importer->tokens[preferred].start;
+	alias.preferred_source_length = importer->tokens[preferred].end -
+		alias.preferred_source_offset;
+	if (!alias.name || !alias.operation_id || !alias.source_length ||
+	    !alias.condition_source_length || !alias.preferred_source_length)
+		goto invalid;
+	if (importer->tokens[preferred].kind == JSON_PRIMITIVE) {
+		const struct json_token *token = &importer->tokens[preferred];
+
+		if (token->end - token->start != 4 ||
+		    memcmp(importer->json + token->start, "null", 4))
+			goto invalid;
+	} else
+		alias.preferred_present = true;
+	if (reserve((void **)&inventory->instruction_aliases,
+		    &inventory->instruction_alias_capacity,
+		    inventory->instruction_alias_count + 1,
+		    sizeof(*inventory->instruction_aliases))) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+			  "cannot allocate InstructionAlias provenance");
+		goto fail;
+	}
+	inventory->instruction_aliases[inventory->instruction_alias_count++] = alias;
+	return 0;
+invalid:
+	set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+		  importer->tokens[node_index].start,
+		  "InstructionAlias has an invalid identity or preferred declaration");
+fail:
+	free(alias.name);
+	free(alias.operation_id);
 	return -1;
 }
 
@@ -1223,8 +1314,27 @@ static int import_node_inner(struct importer *importer, int node_index,
 		return -1;
 	}
 	if (token_equals(importer->json, &importer->tokens[type],
-			 "Instruction.Instruction"))
-		return add_leaf(importer, node_index, combined);
+			 "Instruction.Instruction")) {
+		children = object_find(importer, node_index, "children");
+		if (add_leaf(importer, node_index, combined))
+			return -1;
+		if (children < 0)
+			return 0;
+		if (importer->tokens[children].kind != JSON_ARRAY) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  importer->tokens[children].start,
+				  "A64 Instruction children is not an array");
+			return -1;
+		}
+		for (i = 0; i < importer->tokens[children].size; i++)
+			if (import_node(importer,
+					array_element(importer, children, i), combined))
+				return -1;
+		return 0;
+	}
+	if (token_equals(importer->json, &importer->tokens[type],
+			 "Instruction.InstructionAlias"))
+		return add_instruction_alias(importer, node_index, combined);
 	if (!token_equals(importer->json, &importer->tokens[type],
 			  "Instruction.InstructionSet") &&
 	    !token_equals(importer->json, &importer->tokens[type],
@@ -1344,6 +1454,21 @@ static int import_operations(struct importer *importer, int root)
 			return -1;
 		}
 		operation.id = copy_token(importer, key);
+		operation.is_alias = token_equals(importer->json,
+			&importer->tokens[type], "Instruction.OperationAlias");
+		if (operation.is_alias) {
+			int target = object_find(importer, value, "operation_id");
+
+			operation.alias_operation_id = copy_token(importer, target);
+			if (!operation.alias_operation_id) {
+				free(operation.id);
+				set_error(importer->error,
+					  TCTI_TARGET_IMPORT_INVALID_SOURCE,
+					  importer->tokens[value].start,
+					  "Instruction.OperationAlias lacks operation_id");
+				return -1;
+			}
+		}
 		operation.source_offset = importer->tokens[value].start;
 		operation.source_length = importer->tokens[value].end -
 			operation.source_offset;
@@ -1370,6 +1495,7 @@ static int import_operations(struct importer *importer, int root)
 		if (!operation.id || !operation.source_length ||
 		    tcti_target_inventory_operation(importer->inventory, operation.id)) {
 			free(operation.id);
+			free(operation.alias_operation_id);
 			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
 				  importer->tokens[key].start,
 				  "Instructions.json has a duplicate or empty operation");
@@ -1380,6 +1506,7 @@ static int import_operations(struct importer *importer, int root)
 			    importer->inventory->operation_count + 1,
 			    sizeof(*importer->inventory->operations))) {
 			free(operation.id);
+			free(operation.alias_operation_id);
 			set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
 				  "cannot allocate operation provenance");
 			return -1;
@@ -1390,13 +1517,12 @@ static int import_operations(struct importer *importer, int root)
 	return 0;
 }
 
-const struct tcti_target_operation *
-tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
-				       const char *id)
+static struct tcti_target_operation *mutable_operation(
+	struct tcti_target_inventory *inventory, const char *id)
 {
 	size_t index;
 
-	if (!inventory || !id)
+	if (!id)
 		return NULL;
 	for (index = 0; index < inventory->operation_count; index++)
 		if (!strcmp(inventory->operations[index].id, id))
@@ -1404,18 +1530,128 @@ tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
 	return NULL;
 }
 
-static int validate_leaf_operations(struct importer *importer)
+const struct tcti_target_operation *
+tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
+					 const char *id)
 {
+	if (!inventory)
+		return NULL;
+	return mutable_operation((struct tcti_target_inventory *)inventory, id);
+}
+
+/*
+ * Resolve a source operation through its alias chain. The imported operation
+ * table is complete before this pass, so no forward declaration is treated as
+ * absent. Bounded traversal rejects cycles and unresolved aliases explicitly.
+ */
+static int resolve_operation_alias(struct importer *importer, const char *id)
+{
+	struct tcti_target_inventory *inventory = importer->inventory;
+	struct tcti_target_operation *operation;
+	struct tcti_target_operation **path;
+	size_t steps = 0;
+	size_t index;
+	const char *canonical;
+
+	path = calloc(inventory->operation_count, sizeof(*path));
+	if (!path) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+			  "cannot allocate OperationAlias resolution path");
+		return -1;
+	}
+	operation = mutable_operation(inventory, id);
+	while (operation && operation->is_alias) {
+		if (operation->canonical_operation_id) {
+			canonical = operation->canonical_operation_id;
+			goto resolve;
+		}
+		if (steps == inventory->operation_count) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  operation->source_offset,
+				  "Instruction.OperationAlias cycle for %s", id);
+			goto fail;
+		}
+		path[steps++] = operation;
+		operation = mutable_operation(inventory, operation->alias_operation_id);
+	}
+	if (!operation) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE, 0,
+			  "Instruction.OperationAlias target is absent for %s", id);
+		goto fail;
+	}
+	canonical = operation->id;
+resolve:
+	for (index = 0; index < steps; index++) {
+		path[index]->canonical_operation_id = strdup(canonical);
+		if (!path[index]->canonical_operation_id) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+				  "cannot retain canonical operation identity");
+			while (index)
+				free(path[--index]->canonical_operation_id),
+				path[index]->canonical_operation_id = NULL;
+			goto fail;
+		}
+		inventory->reachable_operation_alias_count++;
+	}
+	free(path);
+	return 0;
+fail:
+	free(path);
+	return -1;
+}
+
+static int resolve_reachable_operation_aliases(struct importer *importer)
+{
+	struct tcti_target_inventory *inventory = importer->inventory;
 	size_t index;
 
-	for (index = 0; index < importer->inventory->leaf_count; index++)
-		if (!tcti_target_inventory_operation(importer->inventory,
-						     importer->inventory->leaves[index].operation_id)) {
+	for (index = 0; index < inventory->leaf_count; index++) {
+		struct tcti_target_operation *operation = mutable_operation(
+			inventory, inventory->leaves[index].operation_id);
+
+		if (!operation) {
 			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE, 0,
 				  "A64 leaf references an operation absent from Instructions.json");
 			return -1;
 		}
+		if (operation->is_alias && !operation->canonical_operation_id) {
+			if (resolve_operation_alias(importer, operation->id))
+				return -1;
+		}
+	}
+	for (index = 0; index < inventory->instruction_alias_count; index++) {
+		struct tcti_target_instruction_alias *alias =
+			&inventory->instruction_aliases[index];
+		struct tcti_target_operation *operation = mutable_operation(
+			inventory, alias->operation_id);
+
+		if (!operation) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  alias->source_offset,
+				  "InstructionAlias references an operation absent from Instructions.json");
+			return -1;
+		}
+		if (operation->is_alias) {
+			if (!operation->canonical_operation_id) {
+				if (resolve_operation_alias(importer, operation->id))
+					return -1;
+			}
+			alias->canonical_operation_id = strdup(operation->canonical_operation_id);
+		} else {
+			alias->canonical_operation_id = strdup(operation->id);
+		}
+		if (!alias->canonical_operation_id) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+				  "cannot retain InstructionAlias canonical operation identity");
+			return -1;
+		}
+	}
 	return 0;
+}
+
+static int validate_leaf_operations(struct importer *importer)
+{
+	return resolve_reachable_operation_aliases(importer);
 }
 
 static int validate_source_metadata(struct importer *importer, int root)
@@ -1567,9 +1803,18 @@ void tcti_target_inventory_destroy(struct tcti_target_inventory *inventory)
 	free(inventory->expressions);
 	free(inventory->set_items);
 	free(inventory->operands);
-	for (i = 0; i < inventory->operation_count; i++)
+	for (i = 0; i < inventory->operation_count; i++) {
 		free(inventory->operations[i].id);
+		free(inventory->operations[i].alias_operation_id);
+		free(inventory->operations[i].canonical_operation_id);
+	}
 	free(inventory->operations);
+	for (i = 0; i < inventory->instruction_alias_count; i++) {
+		free(inventory->instruction_aliases[i].name);
+		free(inventory->instruction_aliases[i].operation_id);
+		free(inventory->instruction_aliases[i].canonical_operation_id);
+	}
+	free(inventory->instruction_aliases);
 	memset(inventory, 0, sizeof(*inventory));
 }
 

@@ -108,6 +108,16 @@ static unsigned long tcti_lse128_map(struct kunit *test, int prot)
 	return mapped;
 }
 
+static unsigned long tcti_lse128_map_two_pages(struct kunit *test, int prot)
+{
+	unsigned long mapped;
+
+	mapped = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, prot,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_EXPECT_FALSE(test, IS_ERR_VALUE(mapped));
+	return mapped;
+}
+
 static int tcti_lse128_write_program(unsigned long address,
 				    const u32 *program, size_t count)
 {
@@ -121,6 +131,65 @@ static int tcti_lse128_write_program(unsigned long address,
 	if (ret)
 		return ret;
 	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
+}
+
+static void tcti_lse128_resume_expect_fault_for_all_leaves(
+	struct kunit *test, unsigned long instructions, unsigned long target,
+	enum tcti_exit_reason reason, long status,
+	const void *expected_memory, unsigned long observed_address,
+	size_t observed_size, const char *kind)
+{
+	const struct tcti_lse128_value operand = {
+		.low = 0x0f0f55ffaa5500ffULL,
+		.high = 0x33cc0ff0f00f5aa5ULL,
+	};
+	u8 observed[sizeof(struct tcti_lse128_value)] = {};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_lse128_leaves); index++) {
+		const struct tcti_lse128_leaf *leaf = &tcti_lse128_leaves[index];
+		const u32 program[] = {
+			tcti_lse128_instruction(leaf, 6, 10, 8), TCTI_LSE128_SVC,
+		};
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		struct tcti_result result;
+		int ret;
+
+		ret = tcti_lse128_write_program(instructions, program,
+						ARRAY_SIZE(program));
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "leaf=%zu %s", index, kind);
+		regs.regs[8] = operand.low;
+		regs.regs[6] = operand.high;
+		regs.regs[10] = target;
+		regs.pc = instructions;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+			PSR_C_BIT | PSR_V_BIT;
+		regs.syscallno = NO_SYSCALL;
+		before = regs;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, reason, result.reason,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_EQ_MSG(test, status, result.status,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_EQ_MSG(test, target, result.fault_address,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_ACCESS_WRITE, result.fault_access,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_EQ_MSG(test, instructions, result.pc,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_EQ_MSG(test, program[0], result.instruction,
+			"leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		if (!observed_size)
+			continue;
+		KUNIT_ASSERT_LE(test, observed_size, sizeof(observed));
+		ret = tcti_read_user_data(current->mm, observed_address, observed,
+					  observed_size);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "leaf=%zu %s", index, kind);
+		KUNIT_EXPECT_MEMEQ(test, expected_memory, observed, observed_size);
+	}
 }
 
 static void tcti_lse128_resume_rejects_instruction(
@@ -286,6 +355,120 @@ static void tcti_lse128_resume_fault_does_not_mutate(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
 }
 
+static void tcti_lse128_resume_alignment_faults_all_leaves(
+	struct kunit *test)
+{
+	const struct tcti_lse128_value initial = {
+		.low = 0x1111222233334444ULL,
+		.high = 0xaaaabbbbccccddddULL,
+	};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long target;
+	int ret;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	target = data + sizeof(u64);
+	ret = tcti_write_user_data(current->mm, target, &initial,
+				   sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	tcti_lse128_resume_expect_fault_for_all_leaves(
+		test, instructions, target, TCTI_EXIT_ALIGNMENT_FAULT, -EFAULT,
+		&initial, target, sizeof(initial), "unaligned");
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse128_resume_readonly_faults_all_leaves(
+	struct kunit *test)
+{
+	const struct tcti_lse128_value initial = {
+		.low = 0x5555666677778888ULL,
+		.high = 0x9999aaaabbbbccccULL,
+	};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	int ret;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	ret = tcti_write_user_data(current->mm, data, &initial, sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(data, PAGE_SIZE, PROT_READ));
+	tcti_lse128_resume_expect_fault_for_all_leaves(
+		test, instructions, data, TCTI_EXIT_USER_FAULT, -EACCES,
+		&initial, data, sizeof(initial), "readonly");
+	KUNIT_EXPECT_EQ(test, 0,
+			sys_mprotect(data, PAGE_SIZE, PROT_READ | PROT_WRITE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse128_resume_unmapped_faults_all_leaves(struct kunit *test)
+{
+	const struct tcti_lse128_value initial = {
+		.low = 0x123456789abcdef0ULL,
+		.high = 0x0fedcba987654321ULL,
+	};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map_two_pages(test,
+							   PROT_READ | PROT_WRITE);
+	unsigned long target;
+	int ret;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	ret = tcti_write_user_data(current->mm, data, &initial, sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	target = data + PAGE_SIZE;
+	KUNIT_ASSERT_EQ(test, 0, vm_munmap(target, PAGE_SIZE));
+	tcti_lse128_resume_expect_fault_for_all_leaves(
+		test, instructions, target, TCTI_EXIT_USER_FAULT, -EFAULT,
+		&initial, data, sizeof(initial), "unmapped");
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static void tcti_lse128_resume_alignment_precedes_second_page_permission(
+	struct kunit *test)
+{
+	const struct tcti_lse128_value initial = {
+		.low = 0x0102030405060708ULL,
+		.high = 0x8899aabbccddeeffULL,
+	};
+	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
+	unsigned long data = tcti_lse128_map_two_pages(test,
+							   PROT_READ | PROT_WRITE);
+	unsigned long target;
+	struct tcti_lse128_value observed = {};
+	int ret;
+
+	if (IS_ERR_VALUE(instructions) || IS_ERR_VALUE(data))
+		return;
+	/*
+	 * PAGE_SIZE is divisible by 16, so a valid aligned 16-byte LSE128 access
+	 * cannot straddle pages. This target proves alignment rejection precedes
+	 * any second-page permission check. It does not execute a spanning access.
+	 */
+	target = data + PAGE_SIZE - sizeof(u64);
+	ret = tcti_write_user_data(current->mm, target, &initial, sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_ASSERT_EQ(test, 0,
+			sys_mprotect(data + PAGE_SIZE, PAGE_SIZE, PROT_NONE));
+	tcti_lse128_resume_expect_fault_for_all_leaves(
+		test, instructions, target, TCTI_EXIT_ALIGNMENT_FAULT, -EFAULT,
+		&initial, target, sizeof(u64), "alignment-before-second-page");
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(data + PAGE_SIZE, PAGE_SIZE,
+						 PROT_READ | PROT_WRITE));
+	ret = tcti_read_user_data(current->mm, target, &observed,
+				  sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_MEMEQ(test, &initial, &observed, sizeof(observed));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, 2 * PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
 static void tcti_lse128_resume_rejects_reserved_operations(struct kunit *test)
 {
 	unsigned long instructions = tcti_lse128_map(test, PROT_READ | PROT_WRITE);
@@ -351,6 +534,10 @@ static void tcti_lse128_resume_rejects_fixed_bit_near_misses(
 static struct kunit_case tcti_lse128_resume_test_cases[] = {
 	KUNIT_CASE(tcti_lse128_resume_all_current_leaves),
 	KUNIT_CASE(tcti_lse128_resume_fault_does_not_mutate),
+	KUNIT_CASE(tcti_lse128_resume_alignment_faults_all_leaves),
+	KUNIT_CASE(tcti_lse128_resume_readonly_faults_all_leaves),
+	KUNIT_CASE(tcti_lse128_resume_unmapped_faults_all_leaves),
+	KUNIT_CASE(tcti_lse128_resume_alignment_precedes_second_page_permission),
 	KUNIT_CASE(tcti_lse128_resume_rejects_reserved_operations),
 	KUNIT_CASE(tcti_lse128_resume_rejects_fixed_bit_near_misses),
 	{}

@@ -20,11 +20,22 @@ enum tcti_feature_domain_value_kind {
 	TCTI_FEATURE_DOMAIN_VALUE_SET,
 };
 
+/*
+ * The Arm feature source permits UInt and SInt over Values.Value bit strings.
+ * Keep the source width and both limbs explicitly.  Do not depend on a host
+ * compiler's optional __int128 extension, and do not silently widen a source
+ * literal beyond the 128-bit form this evaluator currently owns.
+ */
+struct tcti_feature_domain_integer {
+	tcti_feature_artifact_u64 low;
+	tcti_feature_artifact_u64 high;
+	tcti_feature_artifact_u8 width;
+};
+
 struct tcti_feature_domain_value {
 	enum tcti_feature_domain_value_kind kind;
 	tcti_feature_artifact_u8 boolean;
-	tcti_feature_artifact_s64 signed_value;
-	tcti_feature_artifact_u64 unsigned_value;
+	struct tcti_feature_domain_integer integer;
 	const char *text;
 	tcti_feature_artifact_u32 node_index;
 };
@@ -62,6 +73,26 @@ struct tcti_feature_domain_diagnostic {
 	enum tcti_feature_domain_error error;
 	tcti_feature_artifact_u32 node_index;
 };
+
+/*
+ * Parse the exact quoted-binary Values.Value representation used by Arm
+ * feature expressions, for example "'011'".  The result retains its source
+ * width, accepts one through 128 bits, and rejects every other text form.
+ */
+int tcti_feature_domain_parse_uint_literal(const char *text,
+	struct tcti_feature_domain_value *value);
+int tcti_feature_domain_parse_sint_literal(const char *text,
+	struct tcti_feature_domain_value *value);
+
+/*
+ * Compare same-kind exact integers after normalizing both values to the wider
+ * source width. Signed values sign-extend and unsigned values zero-extend.
+ * `order` receives -1, 0, or +1. Mixed signedness, absent widths, values
+ * wider than 128 bits, and all non-numeric forms fail closed.
+ */
+int tcti_feature_domain_compare_numeric(
+	const struct tcti_feature_domain_value *left,
+	const struct tcti_feature_domain_value *right, int *order);
 
 struct tcti_feature_domain_scratch {
 	tcti_feature_artifact_u8 *active;

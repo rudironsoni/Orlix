@@ -251,6 +251,102 @@ static void validate_source_feature_domain(
 	}
 }
 
+int tcti_target_completion_validate_feature_field_domains(
+	const struct tcti_feature_artifact *feature_artifact,
+	const struct tcti_feature_field_domain_binding_artifact *artifact,
+	struct tcti_target_completion_result *result)
+{
+	struct tcti_feature_field_domain_binding_scratch scratch;
+	struct tcti_feature_field_domain_binding_diagnostic diagnostic;
+	static tcti_feature_artifact_u8 feature_node_coverage[
+		TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static tcti_feature_artifact_u32 identity_group_coverage[
+		TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
+	tcti_feature_artifact_u32 index;
+
+	if (!result)
+		return -1;
+	scratch = (struct tcti_feature_field_domain_binding_scratch) {
+		.feature_node_coverage = feature_node_coverage,
+		.feature_node_coverage_count = sizeof(feature_node_coverage),
+		.identity_group_coverage = identity_group_coverage,
+		.identity_group_coverage_count =
+			sizeof(identity_group_coverage) /
+			sizeof(identity_group_coverage[0]),
+	};
+	if (tcti_feature_field_domain_binding_validate(feature_artifact, artifact,
+						       &scratch, &diagnostic) !=
+		TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID) {
+		result->invalid_feature_field_domain_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+		return -1;
+	}
+	for (index = 0; index < artifact->occurrence_count; index++) {
+		const struct tcti_feature_field_domain_binding *binding =
+			&artifact->bindings[index];
+
+		result->feature_field_domain_rows++;
+		if (binding->disposition == TCTI_FEATURE_FIELD_DOMAIN_MAPPED) {
+			result->mapped_feature_field_domain_rows++;
+			/*
+			 * A source span and a Registers.json value-relation index are
+			 * ownership, not satisfiability or execution proof. Keep the
+			 * entire mapped domain blocking until the typed evaluator owns
+			 * every relation.
+			 */
+			result->unresolved_feature_field_domain_rows++;
+		} else {
+			result->ambiguous_feature_field_domain_rows++;
+		}
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+	}
+	return -1;
+}
+
+int tcti_target_completion_validate_runtime_capability_cohorts(
+	const struct tcti_runtime_capability_cohort_artifact *artifact,
+	struct tcti_target_completion_result *result)
+{
+	struct tcti_runtime_capability_cohort_validation_result diagnostic;
+	size_t leaf_index;
+
+	if (!result)
+		return -1;
+	if (tcti_runtime_capability_cohort_artifact_validate(artifact,
+						     &diagnostic)) {
+		result->invalid_runtime_capability_cohort_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+		return -1;
+	}
+	for (leaf_index = 0; leaf_index < artifact->counts.leaf_count;
+	     leaf_index++) {
+		const struct tcti_runtime_capability_cohort_leaf *leaf =
+			&artifact->leaves[leaf_index];
+		size_t membership_index;
+
+		result->runtime_capability_cohort_leaf_rows++;
+		for (membership_index = leaf->first_membership;
+		     membership_index < leaf->first_membership + leaf->membership_count;
+		     membership_index++) {
+			const struct tcti_runtime_capability_cohort_membership *member =
+				&artifact->memberships[membership_index];
+
+			result->runtime_capability_cohort_candidate_membership_rows++;
+			if (member->disposition ==
+			    TCTI_RUNTIME_CAPABILITY_COHORT_UNRESOLVED) {
+				result->unresolved_runtime_capability_cohort_membership_rows++;
+				record_error(result,
+					     TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+			}
+		}
+	}
+	return result->unresolved_runtime_capability_cohort_membership_rows ?
+		-1 : 0;
+}
+
 static bool source_row_well_formed(
 	const struct tcti_target_completion_source_row *row, size_t ordinal)
 {
@@ -1134,6 +1230,13 @@ int tcti_target_completion_audit(struct tcti_target_completion_result *result)
 		    &system_accessor_provenance, system_accessor_rows,
 		    sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]),
 		    result))
+		status = -1;
+	if (tcti_target_completion_validate_feature_field_domains(
+		    tcti_feature_artifact_canonical(),
+		    tcti_feature_field_domain_binding_artifact_canonical(), result))
+		status = -1;
+	if (tcti_target_completion_validate_runtime_capability_cohorts(
+		    tcti_runtime_capability_cohort_artifact_canonical(), result))
 		status = -1;
 	validate_source_feature_domain(source_rows,
 			       sizeof(source_rows) / sizeof(source_rows[0]), result);

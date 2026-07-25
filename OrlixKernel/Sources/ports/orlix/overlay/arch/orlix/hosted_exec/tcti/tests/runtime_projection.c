@@ -8,6 +8,7 @@
 #include <linux/string.h>
 #include <asm/isa.h>
 #include <target_inventory.h>
+#include "target_runtime_capability_cohort_artifact.h"
 #endif
 
 #include "runtime_projection.h"
@@ -109,7 +110,8 @@ static bool tcti_runtime_feature_is_proved(
 		if (!tcti_runtime_leaf_has_feature(&leaf, feature))
 			continue;
 		*present = true;
-		if (!tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
+		if (leaf.unresolved_feature_semantics ||
+		    !tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
 		    !leaf.proof[0] || !leaf.source_bound || !leaf.proved)
 			complete = false;
 	}
@@ -128,6 +130,30 @@ static unsigned long *tcti_runtime_result_word(
 	return NULL;
 }
 
+/*
+ * Callers inspect this record to diagnose a rejected projection.  Initialize
+ * it before validating the rest of the request so an early -EINVAL never
+ * exposes prior stack contents as audit state.  The values below are merely
+ * request metadata.  They do not discharge a target, feature, or proof
+ * obligation.
+ */
+static void tcti_runtime_projection_result_init(
+	struct tcti_runtime_projection_result *result,
+	const struct tcti_runtime_projection_provider *provider,
+	const struct tcti_runtime_projection_profile *profile)
+{
+	if (!result)
+		return;
+
+	memset(result, 0, sizeof(*result));
+	if (profile) {
+		result->advertised_hwcap = profile->hwcap;
+		result->advertised_hwcap2 = profile->hwcap2;
+	}
+	if (provider)
+		result->target_leaf_count = provider->leaf_count;
+}
+
 int tcti_runtime_projection_audit_provider(
 	const struct tcti_runtime_projection_provider *provider,
 	const struct tcti_runtime_projection_profile *profile,
@@ -137,14 +163,11 @@ int tcti_runtime_projection_audit_provider(
 {
 	size_t i;
 
+	tcti_runtime_projection_result_init(result, provider, profile);
 	if (!result || !provider || !provider->read_leaf || !profile ||
 	    (!capabilities && capability_count) ||
 	    !provider->leaf_count)
 		return -EINVAL;
-	memset(result, 0, sizeof(*result));
-	result->advertised_hwcap = profile->hwcap;
-	result->advertised_hwcap2 = profile->hwcap2;
-	result->target_leaf_count = provider->leaf_count;
 	if (provider->leaf_count != TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES ||
 	    !capability_count ||
 	    capability_count >
@@ -177,7 +200,8 @@ int tcti_runtime_projection_audit_provider(
 			result->classified_leaf_count++;
 		if (leaf.source_bound)
 			result->source_bound_leaf_count++;
-		if (!tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
+		if (leaf.unresolved_feature_semantics ||
+		    !tcti_runtime_leaf_is_classified(&leaf) || !leaf.proof ||
 		    !leaf.proof[0] || !leaf.source_bound || !leaf.proved)
 			result->unproved_leaf_count++;
 	}
@@ -255,6 +279,7 @@ int tcti_runtime_projection_audit_ledger(
 		.read_leaf = tcti_runtime_ledger_read_leaf,
 	};
 
+	tcti_runtime_projection_result_init(result, &provider, profile);
 	if (!ledger || !ledger->leaves ||
 	    ledger->leaf_count != TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES ||
 	    ledger->target_leaf_count !=
@@ -285,6 +310,9 @@ static int tcti_runtime_generated_read_leaf(const void *context, size_t index,
 	const char *name;
 	const char *condition;
 	const char *proof;
+	const char *const *features;
+	size_t feature_count;
+	bool unresolved_feature_semantics;
 	enum tcti_runtime_leaf_classification classification;
 
 	if (!context || !leaf || index >= TCTI_A64_GENERATED_SOURCE_COUNT ||
@@ -296,6 +324,8 @@ static int tcti_runtime_generated_read_leaf(const void *context, size_t index,
 	    tcti_runtime_generated_string(row->name, &name) ||
 	    tcti_runtime_generated_string(row->condition, &condition) ||
 	    tcti_runtime_generated_string(row->proof, &proof) ||
+	    tcti_runtime_capability_cohort_leaf_features(row->ordinal,
+		    &features, &feature_count, &unresolved_feature_semantics) ||
 	    !condition[0])
 		return -EINVAL;
 	switch (row->classification) {
@@ -321,6 +351,9 @@ static int tcti_runtime_generated_read_leaf(const void *context, size_t index,
 	/* Source binding is necessary for promotion, but it is not execution proof. */
 	*leaf = (struct tcti_runtime_projection_leaf) {
 		.name = name,
+		.features = features,
+		.feature_count = feature_count,
+		.unresolved_feature_semantics = unresolved_feature_semantics,
 		.proof = proof,
 		.classification = classification,
 		.source_bound = tcti_runtime_leaf_is_source_bound(row->ordinal,
@@ -342,6 +375,14 @@ int tcti_runtime_projection_audit(
 		.hwcap = ORLIX_EL0_HWCAP,
 		.hwcap2 = ORLIX_EL0_HWCAP2,
 	};
+	struct tcti_runtime_capability_cohort_validation_result cohort_result;
+
+	if (tcti_runtime_capability_cohort_artifact_validate(
+		    tcti_runtime_capability_cohort_artifact_canonical(),
+		    &cohort_result)) {
+		tcti_runtime_projection_result_init(result, &provider, &profile);
+		return -EINVAL;
+	}
 
 	return tcti_runtime_projection_audit_provider(
 		&provider, &profile, tcti_runtime_capability_mappings,
