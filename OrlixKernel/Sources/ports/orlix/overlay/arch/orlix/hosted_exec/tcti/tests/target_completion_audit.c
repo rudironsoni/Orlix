@@ -145,7 +145,7 @@ static bool empty(const char *text)
 }
 
 static void record_error(struct tcti_target_completion_result *result,
-			 uint32_t error);
+			 tcti_completion_u32 error);
 static int completion_audit_internal(
 	const struct tcti_target_completion_audit_inputs_for_test *inputs,
 	struct tcti_target_completion_result *result,
@@ -543,8 +543,8 @@ static bool sha256_hex_is_valid(const char *value)
 static bool asl_raw_member_provenance_is_valid(
 	const char *locator, const char *operation_id,
 	const char *semantic_operation_id, const char *member,
-	uint32_t member_offset, uint32_t member_length,
-	uint32_t value_offset, uint32_t value_length, const char *digest)
+	tcti_completion_u32 member_offset, tcti_completion_u32 member_length,
+	tcti_completion_u32 value_offset, tcti_completion_u32 value_length, const char *digest)
 {
 	return asl_member_locator_is_valid(operation_id, semantic_operation_id,
 					  locator, member) &&
@@ -678,7 +678,7 @@ int tcti_target_completion_validate_asl_availability(
 }
 
 static void record_error(struct tcti_target_completion_result *result,
-			 uint32_t error)
+			 tcti_completion_u32 error)
 {
 	result->error_mask |= error;
 	result->errors++;
@@ -699,18 +699,18 @@ static size_t find_source(
 	return source_count;
 }
 
-static bool register_source_span_valid(uint64_t offset, uint64_t length)
+static bool register_source_span_valid(tcti_completion_u64 offset, tcti_completion_u64 length)
 {
 	return length && offset < TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH &&
 	       length <= TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH - offset;
 }
 
-static uint64_t accessor_identity_byte(uint64_t identity, unsigned char byte)
+static tcti_completion_u64 accessor_identity_byte(tcti_completion_u64 identity, unsigned char byte)
 {
-	return (identity ^ byte) * UINT64_C(1099511628211);
+	return (identity ^ byte) * TCTI_COMPLETION_U64_C(1099511628211);
 }
 
-static uint64_t accessor_identity_u64(uint64_t identity, uint64_t value)
+static tcti_completion_u64 accessor_identity_u64(tcti_completion_u64 identity, tcti_completion_u64 value)
 {
 	unsigned int index;
 
@@ -720,7 +720,7 @@ static uint64_t accessor_identity_u64(uint64_t identity, uint64_t value)
 	return identity;
 }
 
-static uint64_t accessor_identity_text(uint64_t identity, const char *text)
+static tcti_completion_u64 accessor_identity_text(tcti_completion_u64 identity, const char *text)
 {
 	size_t length = strlen(text);
 	size_t index;
@@ -731,11 +731,11 @@ static uint64_t accessor_identity_text(uint64_t identity, const char *text)
 	return identity;
 }
 
-static uint64_t system_accessor_identity(
+static tcti_completion_u64 system_accessor_identity(
 	const struct tcti_target_completion_system_accessor_row *accessors,
 	size_t accessor_count)
 {
-	uint64_t identity = UINT64_C(1469598103934665603);
+	tcti_completion_u64 identity = TCTI_COMPLETION_U64_C(1469598103934665603);
 	size_t index;
 
 	identity = accessor_identity_u64(identity, accessor_count);

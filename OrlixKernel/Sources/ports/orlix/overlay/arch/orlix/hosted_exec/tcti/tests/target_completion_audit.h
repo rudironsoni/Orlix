@@ -2,8 +2,19 @@
 #ifndef ORLIX_TCTI_TARGET_COMPLETION_AUDIT_H
 #define ORLIX_TCTI_TARGET_COMPLETION_AUDIT_H
 
+#ifdef __KERNEL__
+#include <linux/stddef.h>
+#include <linux/types.h>
+typedef u32 tcti_completion_u32;
+typedef u64 tcti_completion_u64;
+#define TCTI_COMPLETION_U64_C(value) value##ULL
+#else
 #include <stddef.h>
 #include <stdint.h>
+typedef uint32_t tcti_completion_u32;
+typedef uint64_t tcti_completion_u64;
+#define TCTI_COMPLETION_U64_C(value) UINT64_C(value)
+#endif
 
 #include "target_proof_registry.h"
 #include "target_feature_domain.h"
@@ -11,9 +22,9 @@
 #include "target_runtime_capability_cohort_artifact.h"
 
 #define TCTI_TARGET_COMPLETION_SOURCE_ROWS 4350U
-#define TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH UINT64_C(115441429)
+#define TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH TCTI_COMPLETION_U64_C(115441429)
 #define TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS 2014U
-#define TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH UINT64_C(96016602)
+#define TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH TCTI_COMPLETION_U64_C(96016602)
 
 enum tcti_target_completion_class {
 	TCTI_TARGET_COMPLETION_UNCLASSIFIED,
@@ -108,15 +119,15 @@ enum tcti_target_completion_runtime_candidate_state {
 };
 
 struct tcti_target_completion_source_row {
-	uint32_t ordinal;
+	tcti_completion_u32 ordinal;
 	const char *name;
 	const char *mnemonic;
 	const char *operation_id;
-	uint32_t mask;
-	uint32_t pattern;
+	tcti_completion_u32 mask;
+	tcti_completion_u32 pattern;
 	const char *condition_tcnd_hex;
-	uint64_t source_offset;
-	uint64_t source_length;
+	tcti_completion_u64 source_offset;
+	tcti_completion_u64 source_length;
 };
 
 /* Pinned Arm-source identity carried by the canonical C manifest. */
@@ -127,7 +138,7 @@ struct tcti_target_completion_source_provenance {
 	const char *schema;
 	const char *timestamp;
 	const char *source_sha256;
-	uint64_t source_byte_length;
+	tcti_completion_u64 source_byte_length;
 	size_t leaf_count;
 };
 
@@ -147,8 +158,8 @@ struct tcti_target_completion_classification_row {
  * per-leaf implementation assignment.
  */
 struct tcti_target_completion_obligation {
-	uint32_t ordinal;
-	uint32_t blocker_mask;
+	tcti_completion_u32 ordinal;
+	tcti_completion_u32 blocker_mask;
 	const char *name;
 	const char *mnemonic;
 	const char *operation_id;
@@ -161,17 +172,17 @@ struct tcti_target_completion_obligation {
 	/* Diagnostic order is retained only as a first-failure locator. */
 	enum tcti_feature_domain_tcnd_error first_unsupported_error;
 	/* First failure plus incompleteness only. This is not an exhaustive cause set. */
-	uint32_t known_feature_union_reason_mask;
+	tcti_completion_u32 known_feature_union_reason_mask;
 	const char *proof_id;
 	enum tcti_target_completion_proof_state proof_state;
-	uint32_t required_obligations;
-	uint32_t unproved_obligations;
+	tcti_completion_u32 required_obligations;
+	tcti_completion_u32 unproved_obligations;
 	const char *kunit_source;
 	const char *kunit_suite;
 	const struct tcti_target_kselftest_provenance *kselftest;
 	enum tcti_target_completion_runtime_candidate_state runtime_candidate_state;
-	uint32_t runtime_candidate_first;
-	uint32_t runtime_candidate_count;
+	tcti_completion_u32 runtime_candidate_first;
+	tcti_completion_u32 runtime_candidate_count;
 };
 
 /*
@@ -187,22 +198,22 @@ struct tcti_target_completion_asl_provenance {
 };
 
 struct tcti_target_completion_asl_row {
-	uint32_t ordinal;
+	tcti_completion_u32 ordinal;
 	const char *name;
 	const char *operation_id;
 	const char *semantic_operation_id;
 	const char *semantic_member_locator;
-	uint32_t semantic_member_source_offset;
-	uint32_t semantic_member_source_length;
-	uint32_t semantic_body_source_offset;
-	uint32_t semantic_body_source_length;
+	tcti_completion_u32 semantic_member_source_offset;
+	tcti_completion_u32 semantic_member_source_length;
+	tcti_completion_u32 semantic_body_source_offset;
+	tcti_completion_u32 semantic_body_source_length;
 	const char *semantic_body_sha256;
 	enum tcti_target_completion_asl_body_state semantic_body_state;
 	const char *decode_member_locator;
-	uint32_t decode_member_source_offset;
-	uint32_t decode_member_source_length;
-	uint32_t decode_source_offset;
-	uint32_t decode_source_length;
+	tcti_completion_u32 decode_member_source_offset;
+	tcti_completion_u32 decode_member_source_length;
+	tcti_completion_u32 decode_source_offset;
+	tcti_completion_u32 decode_source_length;
 	const char *decode_sha256;
 	enum tcti_target_completion_asl_decode_state decode_state;
 	enum tcti_target_completion_asl_corpus_state corpus_state;
@@ -241,26 +252,26 @@ struct tcti_target_completion_system_accessor_provenance {
 	size_t ambiguous_count;
 	size_t contradictory_count;
 	size_t invalid_count;
-	uint64_t reconciliation_identity;
+	tcti_completion_u64 reconciliation_identity;
 };
 
 struct tcti_target_completion_system_accessor_row {
-	uint32_t accessor_index;
-	uint32_t encoding_index;
+	tcti_completion_u32 accessor_index;
+	tcti_completion_u32 encoding_index;
 	const char *name;
 	const char *generic_leaf;
 	enum tcti_target_completion_system_accessor_direction direction;
 	enum tcti_target_completion_system_accessor_disposition disposition;
-	uint32_t selector_count;
-	uint32_t condition_expression;
-	uint64_t selector_identity;
-	uint64_t condition_identity;
-	uint64_t accessor_source_offset;
-	uint64_t accessor_source_length;
-	uint64_t encoding_source_offset;
-	uint64_t encoding_source_length;
-	uint64_t condition_source_offset;
-	uint64_t condition_source_length;
+	tcti_completion_u32 selector_count;
+	tcti_completion_u32 condition_expression;
+	tcti_completion_u64 selector_identity;
+	tcti_completion_u64 condition_identity;
+	tcti_completion_u64 accessor_source_offset;
+	tcti_completion_u64 accessor_source_length;
+	tcti_completion_u64 encoding_source_offset;
+	tcti_completion_u64 encoding_source_length;
+	tcti_completion_u64 condition_source_offset;
+	tcti_completion_u64 condition_source_length;
 };
 
 enum tcti_target_completion_error {
@@ -292,7 +303,7 @@ enum tcti_target_completion_error {
 };
 
 struct tcti_target_completion_result {
-	uint32_t error_mask;
+	tcti_completion_u32 error_mask;
 	size_t errors;
 	size_t source_rows;
 	size_t classification_rows;

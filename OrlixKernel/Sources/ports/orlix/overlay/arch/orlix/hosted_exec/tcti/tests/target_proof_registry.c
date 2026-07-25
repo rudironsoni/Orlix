@@ -46,7 +46,7 @@
 
 struct operation_requirements {
 	const char *operation_id;
-	uint32_t obligations;
+	tcti_proof_u32 obligations;
 };
 
 #define LSE_REQUIRED_OBLIGATIONS \
@@ -70,22 +70,22 @@ struct kunit_case_provenance {
 	const char *suite_symbol;
 	const char *case_array;
 	const char *name;
-	uint32_t maximum_obligations;
+	tcti_proof_u32 maximum_obligations;
 };
 
 /* Immutable identity and decode tuple from the pinned AARCHMRS source. */
 struct source_manifest_binding {
-	uint32_t ordinal;
+	tcti_proof_u32 ordinal;
 	const char *leaf_name;
 	const char *mnemonic;
 	const char *operation_id;
-	uint32_t encoding_mask;
-	uint32_t encoding_pattern;
+	tcti_proof_u32 encoding_mask;
+	tcti_proof_u32 encoding_pattern;
 	const char *condition_tcnd_hex;
 };
 
 struct source_bound_proof {
-	uint32_t ordinal;
+	tcti_proof_u32 ordinal;
 	const char *proof_id;
 };
 
@@ -1009,7 +1009,7 @@ static const struct tcti_target_proof_case logical_flags_alias_cases[] = {
 	static const struct tcti_target_proof_binding name##_bindings[] = { \
 		{ leaf, mnemonic, 0xbfa0fc00U, pattern, \
 		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
-		  UINT64_C(1), ordinal }, \
+		  TCTI_PROOF_U64_C(1), ordinal }, \
 	}
 ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits, 3919U, "FMLA_asimdsame_only", "FMLA", 0x0e20cc00U);
 ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits, 3920U, "FADD_asimdsame_only", "FADD", 0x0e20d400U);
@@ -1025,43 +1025,43 @@ ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits,
 	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
 
 static const struct tcti_target_proof_binding logical_and_bindings[] = {
-	LOGICAL_BINDING(3434U, "AND_32_log_shift", "AND", 0x0a000000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING(3442U, "AND_64_log_shift", "AND", 0x8a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3434U, "AND_32_log_shift", "AND", 0x0a000000U, TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3442U, "AND_64_log_shift", "AND", 0x8a000000U, TCTI_PROOF_U64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_bic_bindings[] = {
-	LOGICAL_BINDING(3435U, "BIC_32_log_shift", "BIC", 0x0a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING(3443U, "BIC_64_log_shift", "BIC", 0x8a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3435U, "BIC_32_log_shift", "BIC", 0x0a200000U, TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3443U, "BIC_64_log_shift", "BIC", 0x8a200000U, TCTI_PROOF_U64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_orr_bindings[] = {
-	LOGICAL_BINDING(3436U, "ORR_32_log_shift", "ORR", 0x2a000000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING(3444U, "ORR_64_log_shift", "ORR", 0xaa000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3436U, "ORR_32_log_shift", "ORR", 0x2a000000U, TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3444U, "ORR_64_log_shift", "ORR", 0xaa000000U, TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_orn_bindings[] = {
-	LOGICAL_BINDING(3437U, "ORN_32_log_shift", "ORN", 0x2a200000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING(3445U, "ORN_64_log_shift", "ORN", 0xaa200000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3437U, "ORN_32_log_shift", "ORN", 0x2a200000U, TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3445U, "ORN_64_log_shift", "ORN", 0xaa200000U, TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_eor_bindings[] = {
-	LOGICAL_BINDING(3438U, "EOR_32_log_shift", "EOR", 0x4a000000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING(3446U, "EOR_64_log_shift", "EOR", 0xca000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3438U, "EOR_32_log_shift", "EOR", 0x4a000000U, TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3446U, "EOR_64_log_shift", "EOR", 0xca000000U, TCTI_PROOF_U64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_eon_bindings[] = {
-	LOGICAL_BINDING(3439U, "EON_32_log_shift", "EON", 0x4a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING(3447U, "EON_64_log_shift", "EON", 0xca200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3439U, "EON_32_log_shift", "EON", 0x4a200000U, TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3447U, "EON_64_log_shift", "EON", 0xca200000U, TCTI_PROOF_U64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_ands_bindings[] = {
-	LOGICAL_BINDING(3440U, "ANDS_32_log_shift", "ANDS", 0x6a000000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING(3448U, "ANDS_64_log_shift", "ANDS", 0xea000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3440U, "ANDS_32_log_shift", "ANDS", 0x6a000000U, TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3448U, "ANDS_64_log_shift", "ANDS", 0xea000000U, TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_bics_bindings[] = {
-	LOGICAL_BINDING(3441U, "BICS_32_log_shift", "BICS", 0x6a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING(3449U, "BICS_64_log_shift", "BICS", 0xea200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3441U, "BICS_32_log_shift", "BICS", 0x6a200000U, TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3449U, "BICS_64_log_shift", "BICS", 0xea200000U, TCTI_PROOF_U64_C(0x1f)),
 };
 
 #undef LOGICAL_BINDING
@@ -1211,10 +1211,10 @@ static const struct tcti_target_proof_case exclusive_source_bound_cases[] = {
 
 #define ADD_SUB_IMMEDIATE_BASE_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
-	  UINT64_C(0x1f), ordinal }
+	  TCTI_PROOF_U64_C(0x1f), ordinal }
 #define ADD_SUB_IMMEDIATE_FLAGS_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
-	  UINT64_C(0x3f), ordinal }
+	  TCTI_PROOF_U64_C(0x3f), ordinal }
 
 static const struct tcti_target_proof_binding add_sub_immediate_add_bindings[] = {
 	ADD_SUB_IMMEDIATE_BASE_BINDING(2173U, "ADD_32_addsub_imm", "ADD", 0x11000000U),
@@ -1240,7 +1240,7 @@ static const struct tcti_target_proof_binding add_sub_immediate_subs_bindings[] 
 #undef ADD_SUB_IMMEDIATE_BASE_BINDING
 
 #define CSSC_BINDING(ordinal, leaf, mnemonic, pattern) \
-	{ leaf, mnemonic, 0xfffc0000U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+	{ leaf, mnemonic, 0xfffc0000U, pattern, CSSC_CONDITION, TCTI_PROOF_U64_C(0x1f), ordinal }
 
 static const struct tcti_target_proof_binding cssc_smax_bindings[] = {
 	CSSC_BINDING(2183U, "SMAX_32_minmax_imm", "SMAX", 0x11c00000U),
@@ -1265,9 +1265,9 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 #undef CSSC_BINDING
 
 #define CSSC_DP2_BINDING(ordinal, leaf, mnemonic, pattern) \
-	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, TCTI_PROOF_U64_C(0x1f), ordinal }
 #define CSSC_DP1_BINDING(ordinal, leaf, mnemonic, pattern) \
-	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, TCTI_PROOF_U64_C(0x1f), ordinal }
 
 static const struct tcti_target_proof_binding cssc_smax_reg_bindings[] = {
 	CSSC_DP2_BINDING(3368U, "SMAX_32_dp_2src", "SMAX", 0x1ac06000U),
@@ -1353,63 +1353,63 @@ static const struct tcti_target_proof_case integer_conditional_flags_cases[] = {
 
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_udiv_bindings, 3356U,
 	"UDIV_32_dp_2src", 3373U, "UDIV_64_dp_2src", "UDIV", 0xffe0fc00U,
-	0x1ac00800U, 0x9ac00800U, UINT64_C(0x13));
+	0x1ac00800U, 0x9ac00800U, TCTI_PROOF_U64_C(0x13));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_sdiv_bindings, 3357U,
 	"SDIV_32_dp_2src", 3374U, "SDIV_64_dp_2src", "SDIV", 0xffe0fc00U,
-	0x1ac00c00U, 0x9ac00c00U, UINT64_C(0x13));
+	0x1ac00c00U, 0x9ac00c00U, TCTI_PROOF_U64_C(0x13));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmn_reg_bindings, 3479U,
 	"CCMN_32_condcmp_reg", 3481U, "CCMN_64_condcmp_reg", "CCMN", 0xffe00c10U,
-	0x3a400000U, 0xba400000U, UINT64_C(0x7));
+	0x3a400000U, 0xba400000U, TCTI_PROOF_U64_C(0x7));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmp_reg_bindings, 3480U,
 	"CCMP_32_condcmp_reg", 3482U, "CCMP_64_condcmp_reg", "CCMP", 0xffe00c10U,
-	0x7a400000U, 0xfa400000U, UINT64_C(0x7));
+	0x7a400000U, 0xfa400000U, TCTI_PROOF_U64_C(0x7));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmn_imm_bindings, 3483U,
 	"CCMN_32_condcmp_imm", 3485U, "CCMN_64_condcmp_imm", "CCMN", 0xffe00c10U,
-	0x3a400800U, 0xba400800U, UINT64_C(0x7));
+	0x3a400800U, 0xba400800U, TCTI_PROOF_U64_C(0x7));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmp_imm_bindings, 3484U,
 	"CCMP_32_condcmp_imm", 3486U, "CCMP_64_condcmp_imm", "CCMP", 0xffe00c10U,
-	0x7a400800U, 0xfa400800U, UINT64_C(0x7));
+	0x7a400800U, 0xfa400800U, TCTI_PROOF_U64_C(0x7));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csel_bindings, 3487U,
 	"CSEL_32_condsel", 3491U, "CSEL_64_condsel", "CSEL", 0xffe00c00U,
-	0x1a800000U, 0x9a800000U, UINT64_C(0x15));
+	0x1a800000U, 0x9a800000U, TCTI_PROOF_U64_C(0x15));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csinc_bindings, 3488U,
 	"CSINC_32_condsel", 3492U, "CSINC_64_condsel", "CSINC", 0xffe00c00U,
-	0x1a800400U, 0x9a800400U, UINT64_C(0x15));
+	0x1a800400U, 0x9a800400U, TCTI_PROOF_U64_C(0x15));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csinv_bindings, 3489U,
 	"CSINV_32_condsel", 3493U, "CSINV_64_condsel", "CSINV", 0xffe00c00U,
-	0x5a800000U, 0xda800000U, UINT64_C(0x15));
+	0x5a800000U, 0xda800000U, TCTI_PROOF_U64_C(0x15));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csneg_bindings, 3490U,
 	"CSNEG_32_condsel", 3494U, "CSNEG_64_condsel", "CSNEG", 0xffe00c00U,
-	0x5a800400U, 0xda800400U, UINT64_C(0x15));
+	0x5a800400U, 0xda800400U, TCTI_PROOF_U64_C(0x15));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_madd_bindings, 3495U,
 	"MADD_32A_dp_3src", 3497U, "MADD_64A_dp_3src", "MADD", 0xffe08000U,
-	0x1b000000U, 0x9b000000U, UINT64_C(0x19));
+	0x1b000000U, 0x9b000000U, TCTI_PROOF_U64_C(0x19));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_msub_bindings, 3496U,
 	"MSUB_32A_dp_3src", 3498U, "MSUB_64A_dp_3src", "MSUB", 0xffe08000U,
-	0x1b008000U, 0x9b008000U, UINT64_C(0x19));
+	0x1b008000U, 0x9b008000U, TCTI_PROOF_U64_C(0x19));
 static const struct tcti_target_proof_binding integer_smaddl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3499U, "SMADDL_64WA_dp_3src", "SMADDL",
-		0xffe08000U, 0x9b200000U, UINT64_C(0x19)),
+		0xffe08000U, 0x9b200000U, TCTI_PROOF_U64_C(0x19)),
 };
 static const struct tcti_target_proof_binding integer_smsubl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3500U, "SMSUBL_64WA_dp_3src", "SMSUBL",
-		0xffe08000U, 0x9b208000U, UINT64_C(0x19)),
+		0xffe08000U, 0x9b208000U, TCTI_PROOF_U64_C(0x19)),
 };
 static const struct tcti_target_proof_binding integer_smulh_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3501U, "SMULH_64_dp_3src", "SMULH",
-		0xffe0fc00U, 0x9b407c00U, UINT64_C(0x19)),
+		0xffe0fc00U, 0x9b407c00U, TCTI_PROOF_U64_C(0x19)),
 };
 static const struct tcti_target_proof_binding integer_umaddl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3504U, "UMADDL_64WA_dp_3src", "UMADDL",
-		0xffe08000U, 0x9ba00000U, UINT64_C(0x19)),
+		0xffe08000U, 0x9ba00000U, TCTI_PROOF_U64_C(0x19)),
 };
 static const struct tcti_target_proof_binding integer_umsubl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3505U, "UMSUBL_64WA_dp_3src", "UMSUBL",
-		0xffe08000U, 0x9ba08000U, UINT64_C(0x19)),
+		0xffe08000U, 0x9ba08000U, TCTI_PROOF_U64_C(0x19)),
 };
 static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3506U, "UMULH_64_dp_3src", "UMULH",
-		0xffe0fc00U, 0x9bc07c00U, UINT64_C(0x19)),
+		0xffe0fc00U, 0x9bc07c00U, TCTI_PROOF_U64_C(0x19)),
 };
 #undef INTEGER_CONDITIONAL_PAIR_BINDINGS
 #undef INTEGER_CONDITIONAL_BINDING
@@ -1792,7 +1792,7 @@ static bool build_lse_registry(void)
 		binding->encoding_pattern = source->encoding_pattern;
 		binding->condition_tcnd_hex = source->condition_tcnd_hex;
 		binding->kunit_case_mask =
-			(UINT64_C(1) << operation->case_count) - 1;
+			(TCTI_PROOF_U64_C(1) << operation->case_count) - 1;
 		binding->source_ordinal = source->ordinal;
 	}
 	for (index = 0; index < ARRAY_COUNT(lse_registry_operations); index++) {
@@ -1839,8 +1839,8 @@ struct scalar_registry_operation {
 	const char *condition;
 	const struct tcti_target_proof_case *cases;
 	size_t case_count;
-	uint32_t minimum_ordinal;
-	uint32_t maximum_ordinal;
+	tcti_proof_u32 minimum_ordinal;
+	tcti_proof_u32 maximum_ordinal;
 	size_t expected_bindings;
 	size_t binding_offset;
 	size_t binding_count;
@@ -2141,7 +2141,7 @@ static bool build_scalar_registry(void)
 		binding->encoding_pattern = source->encoding_pattern;
 		binding->condition_tcnd_hex = source->condition_tcnd_hex;
 		binding->kunit_case_mask =
-			(UINT64_C(1) << operation->case_count) - 1;
+			(TCTI_PROOF_U64_C(1) << operation->case_count) - 1;
 		binding->source_ordinal = source->ordinal;
 	}
 	for (index = 0; index < ARRAY_COUNT(scalar_registry_operations); index++) {
@@ -2150,7 +2150,7 @@ static bool build_scalar_registry(void)
 		struct tcti_target_proof_registry_entry *entry =
 			&proof_registry_entries[CORE_PROOF_REGISTRY_ENTRY_COUNT +
 				LSE_PROOF_REGISTRY_ENTRY_COUNT + index];
-		uint32_t obligations;
+		tcti_proof_u32 obligations;
 
 		if (operation->binding_count != operation->expected_bindings ||
 		    tcti_target_proof_operation_requirements(operation->operation_id, 1,
@@ -2265,7 +2265,7 @@ static bool build_exclusive_registry(void)
 		binding->encoding_pattern = source->encoding_pattern;
 		binding->condition_tcnd_hex = source->condition_tcnd_hex;
 		binding->kunit_case_mask =
-			(UINT64_C(1) << ARRAY_COUNT(exclusive_source_bound_cases)) - 1;
+			(TCTI_PROOF_U64_C(1) << ARRAY_COUNT(exclusive_source_bound_cases)) - 1;
 		binding->source_ordinal = source->ordinal;
 	}
 	for (index = 0; index < ARRAY_COUNT(exclusive_registry_operations); index++) {
@@ -2305,13 +2305,13 @@ static bool empty(const char *text)
 	return !text || !text[0];
 }
 
-static bool one_bit(uint32_t value)
+static bool one_bit(tcti_proof_u32 value)
 {
 	return value && !(value & (value - 1));
 }
 
 static const struct source_manifest_binding *
-source_manifest_binding(uint32_t ordinal)
+source_manifest_binding(tcti_proof_u32 ordinal)
 {
 	size_t index;
 
@@ -2344,15 +2344,15 @@ ordinary_load_store_registry_operation_for(const char *proof_id)
 	return NULL;
 }
 
-static uint64_t ordinary_load_store_case_mask(
+static tcti_proof_u64 ordinary_load_store_case_mask(
 	const struct source_manifest_binding *source)
 {
 	if ((source->encoding_pattern & 0x3b000000U) == 0x39000000U)
-		return UINT64_C(1);
+		return TCTI_PROOF_U64_C(1);
 	if ((source->encoding_pattern & 0x3b200000U) == 0x38000000U)
-		return UINT64_C(2);
+		return TCTI_PROOF_U64_C(2);
 	if ((source->encoding_pattern & 0x3b200c00U) == 0x38200800U)
-		return UINT64_C(4);
+		return TCTI_PROOF_U64_C(4);
 	return 0;
 }
 
@@ -2623,7 +2623,7 @@ static bool build_source_leaf_rejection_registry(void)
 			.encoding_mask = source->encoding_mask,
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
-			.kunit_case_mask = UINT64_C(0x3),
+			.kunit_case_mask = TCTI_PROOF_U64_C(0x3),
 			.source_ordinal = source->ordinal,
 		};
 		if (operation->operation_id &&
@@ -2636,7 +2636,7 @@ static bool build_source_leaf_rejection_registry(void)
 	     index++) {
 		const struct source_leaf_rejection_registry_operation *operation =
 			&source_leaf_rejection_registry_operations[index];
-		uint32_t obligations = operation->classification == 2 ?
+		tcti_proof_u32 obligations = operation->classification == 2 ?
 			NON_EL0_REJECTION_OBLIGATIONS :
 			UNDEFINED_REJECTION_OBLIGATIONS;
 
@@ -2761,7 +2761,7 @@ static bool build_branch_control_registry(void)
 			.encoding_mask = source->encoding_mask,
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
-			.kunit_case_mask = UINT64_C(0x3),
+			.kunit_case_mask = TCTI_PROOF_U64_C(0x3),
 			.source_ordinal = source->ordinal,
 		};
 	}
@@ -2800,7 +2800,7 @@ static bool build_branch_control_registry(void)
 
 int tcti_target_proof_operation_requirements(
 	const char *operation_id, unsigned int classification,
-	uint32_t *requirements)
+	tcti_proof_u32 *requirements)
 {
 	size_t index;
 
@@ -2827,20 +2827,20 @@ int tcti_target_proof_operation_requirements(
 }
 
 struct sha256_state {
-	uint32_t hash[8];
-	uint64_t bytes;
-	uint8_t block[64];
+	tcti_proof_u32 hash[8];
+	tcti_proof_u64 bytes;
+	tcti_proof_u8 block[64];
 	size_t used;
 };
 
-static uint32_t rotate_right(uint32_t value, unsigned int shift)
+static tcti_proof_u32 rotate_right(tcti_proof_u32 value, unsigned int shift)
 {
 	return (value >> shift) | (value << (32 - shift));
 }
 
-static void sha256_transform(struct sha256_state *state, const uint8_t *block)
+static void sha256_transform(struct sha256_state *state, const tcti_proof_u8 *block)
 {
-	static const uint32_t constants[64] = {
+	static const tcti_proof_u32 constants[64] = {
 		0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U,
 		0x3956c25bU, 0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U,
 		0xd807aa98U, 0x12835b01U, 0x243185beU, 0x550c7dc3U,
@@ -2858,20 +2858,20 @@ static void sha256_transform(struct sha256_state *state, const uint8_t *block)
 		0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U,
 		0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U,
 	};
-	uint32_t words[64];
-	uint32_t a, b, c, d, e, f, g, h;
+	tcti_proof_u32 words[64];
+	tcti_proof_u32 a, b, c, d, e, f, g, h;
 	size_t index;
 
 	for (index = 0; index < 16; index++)
-		words[index] = ((uint32_t)block[index * 4] << 24) |
-			((uint32_t)block[index * 4 + 1] << 16) |
-			((uint32_t)block[index * 4 + 2] << 8) |
+		words[index] = ((tcti_proof_u32)block[index * 4] << 24) |
+			((tcti_proof_u32)block[index * 4 + 1] << 16) |
+			((tcti_proof_u32)block[index * 4 + 2] << 8) |
 			block[index * 4 + 3];
 	for (index = 16; index < 64; index++) {
-		uint32_t s0 = rotate_right(words[index - 15], 7) ^
+		tcti_proof_u32 s0 = rotate_right(words[index - 15], 7) ^
 			rotate_right(words[index - 15], 18) ^
 			(words[index - 15] >> 3);
-		uint32_t s1 = rotate_right(words[index - 2], 17) ^
+		tcti_proof_u32 s1 = rotate_right(words[index - 2], 17) ^
 			rotate_right(words[index - 2], 19) ^
 			(words[index - 2] >> 10);
 
@@ -2881,15 +2881,15 @@ static void sha256_transform(struct sha256_state *state, const uint8_t *block)
 	d = state->hash[3]; e = state->hash[4]; f = state->hash[5];
 	g = state->hash[6]; h = state->hash[7];
 	for (index = 0; index < 64; index++) {
-		uint32_t sum1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^
+		tcti_proof_u32 sum1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^
 			rotate_right(e, 25);
-		uint32_t choice = (e & f) ^ (~e & g);
-		uint32_t temporary1 = h + sum1 + choice + constants[index] +
+		tcti_proof_u32 choice = (e & f) ^ (~e & g);
+		tcti_proof_u32 temporary1 = h + sum1 + choice + constants[index] +
 			words[index];
-		uint32_t sum0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^
+		tcti_proof_u32 sum0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^
 			rotate_right(a, 22);
-		uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-		uint32_t temporary2 = sum0 + majority;
+		tcti_proof_u32 majority = (a & b) ^ (a & c) ^ (b & c);
+		tcti_proof_u32 temporary2 = sum0 + majority;
 
 		h = g; g = f; f = e; e = d + temporary1;
 		d = c; c = b; b = a; a = temporary1 + temporary2;
@@ -2899,7 +2899,7 @@ static void sha256_transform(struct sha256_state *state, const uint8_t *block)
 	state->hash[6] += g; state->hash[7] += h;
 }
 
-static void sha256_update(struct sha256_state *state, const uint8_t *data,
+static void sha256_update(struct sha256_state *state, const tcti_proof_u8 *data,
 			  size_t length)
 {
 	state->bytes += length;
@@ -2918,14 +2918,14 @@ static void sha256_update(struct sha256_state *state, const uint8_t *data,
 	}
 }
 
-static void sha256_digest(const uint8_t *data, size_t length, uint8_t out[32])
+static void sha256_digest(const tcti_proof_u8 *data, size_t length, tcti_proof_u8 out[32])
 {
 	struct sha256_state state = {
 		.hash = { 0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U,
 			  0xa54ff53aU, 0x510e527fU, 0x9b05688cU,
 			  0x1f83d9abU, 0x5be0cd19U },
 	};
-	uint64_t bits;
+	tcti_proof_u64 bits;
 	size_t index;
 
 	sha256_update(&state, data, length);
@@ -2938,20 +2938,20 @@ static void sha256_digest(const uint8_t *data, size_t length, uint8_t out[32])
 	}
 	memset(state.block + state.used, 0, 56 - state.used);
 	for (index = 0; index < 8; index++)
-		state.block[63 - index] = (uint8_t)(bits >> (index * 8));
+		state.block[63 - index] = (tcti_proof_u8)(bits >> (index * 8));
 	sha256_transform(&state, state.block);
 	for (index = 0; index < 8; index++) {
-		out[index * 4] = (uint8_t)(state.hash[index] >> 24);
-		out[index * 4 + 1] = (uint8_t)(state.hash[index] >> 16);
-		out[index * 4 + 2] = (uint8_t)(state.hash[index] >> 8);
-		out[index * 4 + 3] = (uint8_t)state.hash[index];
+		out[index * 4] = (tcti_proof_u8)(state.hash[index] >> 24);
+		out[index * 4 + 1] = (tcti_proof_u8)(state.hash[index] >> 16);
+		out[index * 4 + 2] = (tcti_proof_u8)(state.hash[index] >> 8);
+		out[index * 4 + 3] = (tcti_proof_u8)state.hash[index];
 	}
 }
 
-static bool sha256_matches(const uint8_t *data, size_t length, const char *hex)
+static bool sha256_matches(const tcti_proof_u8 *data, size_t length, const char *hex)
 {
 	static const char digits[] = "0123456789abcdef";
-	uint8_t digest[32];
+	tcti_proof_u8 digest[32];
 	size_t index;
 
 	if (!hex || strlen(hex) != 64)
@@ -2964,10 +2964,10 @@ static bool sha256_matches(const uint8_t *data, size_t length, const char *hex)
 	return true;
 }
 
-int tcti_target_proof_source_size_allowed(uint64_t size)
+int tcti_target_proof_source_size_allowed(tcti_proof_u64 size)
 {
 	return size <= TCTI_TARGET_PROOF_MAX_SOURCE_BYTES &&
-		size < (uint64_t)SIZE_MAX;
+		size < (tcti_proof_u64)SIZE_MAX;
 }
 
 static char *read_source(const char *path, size_t *length)
@@ -2979,7 +2979,7 @@ static char *read_source(const char *path, size_t *length)
 	file = fopen(path, "rb");
 	if (!length || !file || fseek(file, 0, SEEK_END) ||
 	    (size = ftell(file)) < 0 ||
-	    !tcti_target_proof_source_size_allowed((uint64_t)size) ||
+	    !tcti_target_proof_source_size_allowed((tcti_proof_u64)size) ||
 	    fseek(file, 0, SEEK_SET))
 		goto fail;
 	data = malloc((size_t)size + 1);
@@ -3125,7 +3125,7 @@ static bool valid_kunit_provenance(
 	build_source = read_source(KUNIT_BUILD_SOURCE, &build_length);
 	if (!build_source)
 		return false;
-	if (!sha256_matches((const uint8_t *)build_source, build_length,
+	if (!sha256_matches((const tcti_proof_u8 *)build_source, build_length,
 			    KUNIT_BUILD_SOURCE_SHA256) ||
 	    !strstr(build_source, source_metadata->object)) {
 		free(build_source);
@@ -3136,7 +3136,7 @@ static bool valid_kunit_provenance(
 	if (!source)
 		return false;
 	if (memchr(source, '\0', source_length) ||
-	    !sha256_matches((const uint8_t *)source, source_length,
+	    !sha256_matches((const tcti_proof_u8 *)source, source_length,
 			    source_metadata->sha256) ||
 	    !source_registers_suite(source, entry->kunit_suite))
 		goto out;
@@ -3189,9 +3189,9 @@ int tcti_target_kselftest_provenance_validate(
 	}
 	valid = !memchr(build_source, '\0', build_length) &&
 		!memchr(source, '\0', source_length) &&
-		sha256_matches((const uint8_t *)build_source, build_length,
+		sha256_matches((const tcti_proof_u8 *)build_source, build_length,
 			       provenance->build_source_sha256) &&
-		sha256_matches((const uint8_t *)source, source_length,
+		sha256_matches((const tcti_proof_u8 *)source, source_length,
 			       provenance->source_sha256) &&
 		strstr(build_source, provenance->program) &&
 		strstr(source, "int main(void)");
@@ -3213,7 +3213,7 @@ int tcti_target_proof_source_evidence_validate(
 	if (!source)
 		return -1;
 	valid = !memchr(source, '\0', source_length) &&
-		sha256_matches((const uint8_t *)source, source_length,
+		sha256_matches((const tcti_proof_u8 *)source, source_length,
 			       source_sha256) && strstr(source, assertion);
 	free(source);
 	return valid ? 0 : -1;
@@ -3232,8 +3232,8 @@ int tcti_target_proof_registry_validate(
 		goto invalid;
 	for (index = 0; index < count; index++) {
 		const struct tcti_target_proof_registry_entry *entry = &entries[index];
-		uint32_t case_obligations = 0;
-		uint32_t required;
+		tcti_proof_u32 case_obligations = 0;
+		tcti_proof_u32 required;
 		unsigned int classification;
 		size_t binding;
 		size_t proof_case;
@@ -3328,7 +3328,7 @@ int tcti_target_proof_registry_validate(
 		for (binding = 0; binding < entry->binding_count; binding++) {
 			const struct tcti_target_proof_binding *item =
 				&entry->bindings[binding];
-			uint32_t binding_obligations = 0;
+			tcti_proof_u32 binding_obligations = 0;
 			size_t case_index;
 
 			if (empty(item->leaf_name) || empty(item->mnemonic) ||
@@ -3345,7 +3345,7 @@ int tcti_target_proof_registry_validate(
 			}
 			for (case_index = 0; case_index < entry->kunit_case_count;
 			     case_index++)
-				if (item->kunit_case_mask & (UINT64_C(1) << case_index))
+				if (item->kunit_case_mask & (TCTI_PROOF_U64_C(1) << case_index))
 					binding_obligations |=
 						entry->kunit_cases[case_index].obligations;
 			if (binding_obligations & ~required)
@@ -3418,7 +3418,7 @@ enum tcti_target_proof_registry_error tcti_target_proof_registry_lookup(
 	const struct tcti_target_proof_registry_entry *entry = NULL;
 	size_t binding;
 	size_t index;
-	uint32_t class_bit;
+	tcti_proof_u32 class_bit;
 
 	if (!reference || empty(reference->id) || empty(reference->leaf_name) ||
 	    empty(reference->mnemonic) || empty(reference->operation_id) ||

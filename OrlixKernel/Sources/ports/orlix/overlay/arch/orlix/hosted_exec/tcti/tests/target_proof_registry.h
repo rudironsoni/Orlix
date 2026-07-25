@@ -2,8 +2,21 @@
 #ifndef ORLIX_TCTI_TARGET_PROOF_REGISTRY_H
 #define ORLIX_TCTI_TARGET_PROOF_REGISTRY_H
 
+#ifdef __KERNEL__
+#include <linux/stddef.h>
+#include <linux/types.h>
+typedef u8 tcti_proof_u8;
+typedef u32 tcti_proof_u32;
+typedef u64 tcti_proof_u64;
+#define TCTI_PROOF_U64_C(value) value##ULL
+#else
 #include <stddef.h>
 #include <stdint.h>
+typedef uint8_t tcti_proof_u8;
+typedef uint32_t tcti_proof_u32;
+typedef uint64_t tcti_proof_u64;
+#define TCTI_PROOF_U64_C(value) UINT64_C(value)
+#endif
 
 #define TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0 (1U << 1)
 #define TCTI_TARGET_PROOF_CLASS_NON_EL0 (1U << 2)
@@ -32,16 +45,16 @@ enum tcti_target_proof_linux_interface {
 struct tcti_target_proof_binding {
 	const char *leaf_name;
 	const char *mnemonic;
-	uint32_t encoding_mask;
-	uint32_t encoding_pattern;
+	tcti_proof_u32 encoding_mask;
+	tcti_proof_u32 encoding_pattern;
 	const char *condition_tcnd_hex;
-	uint64_t kunit_case_mask;
-	uint32_t source_ordinal;
+	tcti_proof_u64 kunit_case_mask;
+	tcti_proof_u32 source_ordinal;
 };
 
 struct tcti_target_proof_case {
 	const char *name;
-	uint32_t obligations;
+	tcti_proof_u32 obligations;
 };
 
 struct tcti_target_kselftest_provenance {
@@ -56,8 +69,8 @@ struct tcti_target_kselftest_provenance {
 struct tcti_target_proof_registry_entry {
 	const char *id;
 	const char *operation_id;
-	uint32_t classification_mask;
-	uint32_t obligations;
+	tcti_proof_u32 classification_mask;
+	tcti_proof_u32 obligations;
 	enum tcti_target_proof_linux_interface linux_interface;
 	const char *kunit_source;
 	const char *kunit_suite;
@@ -71,7 +84,7 @@ struct tcti_target_proof_registry_entry {
 	 * Static source ownership remains valid, but completion must fail closed
 	 * until native execution evidence clears every bit.
 	 */
-	uint32_t unproved_obligations;
+	tcti_proof_u32 unproved_obligations;
 };
 
 struct tcti_target_proof_reference {
@@ -79,8 +92,8 @@ struct tcti_target_proof_reference {
 	const char *leaf_name;
 	const char *mnemonic;
 	const char *operation_id;
-	uint32_t encoding_mask;
-	uint32_t encoding_pattern;
+	tcti_proof_u32 encoding_mask;
+	tcti_proof_u32 encoding_pattern;
 	const char *condition_tcnd_hex;
 	unsigned int classification;
 };
@@ -110,10 +123,10 @@ int tcti_target_kselftest_provenance_validate(
 	const struct tcti_target_kselftest_provenance *provenance);
 int tcti_target_proof_source_evidence_validate(
 	const char *source, const char *source_sha256, const char *assertion);
-int tcti_target_proof_source_size_allowed(uint64_t size);
+int tcti_target_proof_source_size_allowed(tcti_proof_u64 size);
 int tcti_target_proof_operation_requirements(
 	const char *operation_id, unsigned int classification,
-	uint32_t *requirements);
+	tcti_proof_u32 *requirements);
 enum tcti_target_proof_registry_error tcti_target_proof_registry_lookup(
 	const struct tcti_target_proof_registry_entry *entries, size_t count,
 	const struct tcti_target_proof_reference *reference);
