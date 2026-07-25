@@ -556,3 +556,7 @@ Published the pinned Arm register topology as durable C-native source under `arc
 ## [2026-07-24] define | Require authoritative semantic provenance for every TCTI leaf
 
 Made the pinned Arm AARCHMRS 2026-06 package authoritative for the 4,350-leaf target and pinned official Arm ASL authoritative for per-leaf semantics. Every leaf now requires a machine-checkable source, feature, semantic, classification, implementation, KUnit, applicable kselftest, runtime-advertisement, implementation-status, and proof-status chain. Missing or ambiguous edges fail closed. Linux remains authoritative only for Linux integration, while external implementations and formal-method references may inform investigation or proof design without becoming semantic or runtime dependencies.
+
+## [2026-07-25] implement | Bind authoritative TCTI inventory gaps into the audit
+
+Extended the C-native TCTI inventory and completion audit with exact source ordinals, static proof bindings, runtime-advertisement separation, feature-condition validation, immutable six-artifact refresh publication, complete A64 system-accessor reconciliation, and explicit shared-ASL availability failure. The checkpoint keeps all 4,350 leaves visible, reports exact feature applicability and semantic provenance as unresolved blockers, preserves zero unproved HWCAP advertisement, and adds focused kernel-owned regressions without treating static source ownership or terminal output as executed proof.

@@ -41,6 +41,7 @@
 #define TCTI_TARGET_PROOF_MAX_ENTRIES 4350U
 #define TCTI_TARGET_PROOF_MAX_BINDINGS 4350U
 #define TCTI_TARGET_PROOF_MAX_SOURCE_BYTES (2U * 1024U * 1024U)
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 struct operation_requirements {
 	const char *operation_id;
@@ -62,17 +63,79 @@ struct kunit_case_provenance {
 	uint32_t maximum_obligations;
 };
 
+/* Immutable identity and decode tuple from the pinned AARCHMRS source. */
+struct source_manifest_binding {
+	uint32_t ordinal;
+	const char *leaf_name;
+	const char *mnemonic;
+	const char *operation_id;
+	uint32_t encoding_mask;
+	uint32_t encoding_pattern;
+	const char *condition_tcnd_hex;
+};
+
+struct source_bound_proof {
+	uint32_t ordinal;
+	const char *proof_id;
+};
+
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(...) \
+	/* The source provenance header is consumed by the owning audit. */
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, leaf, mnemonic, operation, \
+					     mask, pattern, condition) \
+	{ ordinal, leaf, mnemonic, operation, mask, pattern, condition },
+static const struct source_manifest_binding source_manifest_bindings[] = {
+#include "../isa/source_manifest.def"
+};
+#undef TCTI_A64_SOURCE_MANIFEST_ROW
+#undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+#define TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
+	{ ordinal, proof_id },
+static const struct source_bound_proof source_bound_proofs[] = {
+#include "../isa/source_bound_proof.def"
+};
+#undef TCTI_A64_SOURCE_BOUND_PROOF
+
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c"
 #define LSE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse_decode_test.c"
+#define LSE_SOURCE_BOUND_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c"
+#define LSE_SOURCE_BOUND_SUITE "orlix-tcti-lse-source-bound"
+#define LSE_SOURCE_BOUND_SUITE_SYMBOL "lse_source_bound_test_suite"
+#define LSE_SOURCE_BOUND_CASE_ARRAY "lse_source_bound_test_cases"
+#define LSE128_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c"
+#define LSE128_SUITE "orlix_tcti_lse128_noncas"
+#define LSE128_SUITE_SYMBOL "tcti_lse128_noncas_test_suite"
+#define LSE128_CASE_ARRAY "tcti_lse128_noncas_test_cases"
 #define LOGICAL_SHIFT_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c"
 #define LOGICAL_SHIFT_SUITE "orlix-tcti-logical-shifted-register"
 #define LOGICAL_SHIFT_SUITE_SYMBOL "tcti_logical_shifted_register_test_suite"
 #define LOGICAL_SHIFT_CASE_ARRAY "tcti_logical_shifted_register_test_cases"
+#define CSSC_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_cssc_min_max_immediate_test.c"
+#define CSSC_SUITE "orlix-tcti-cssc-min-max-immediate"
+#define CSSC_SUITE_SYMBOL "tcti_cssc_min_max_immediate_test_suite"
+#define CSSC_CASE_ARRAY "tcti_cssc_min_max_immediate_test_cases"
+#define ADD_SUB_IMMEDIATE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c"
+#define ADD_SUB_IMMEDIATE_SUITE "orlix-tcti-add-sub-immediate"
+#define ADD_SUB_IMMEDIATE_SUITE_SYMBOL "tcti_add_sub_immediate_test_suite"
+#define ADD_SUB_IMMEDIATE_CASE_ARRAY "tcti_add_sub_immediate_test_cases"
+#define CSSC_CONDITION \
+	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
+#define ADD_SUB_IMMEDIATE_CONDITION \
+	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
 #define LOGICAL_SHIFT_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
+#define LSE_CONDITION \
+	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4c5345"
+#define LSE128_CONDITION \
+	"54434e440107000000300700000017070000000c010000000101010000000101010000000101020000000f0000000b464541545f4c5345313238"
 #define LOGICAL_BASE_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -81,7 +144,7 @@ struct kunit_case_provenance {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"08f3b4aaec38c5f71f69eb93ef250011b8c7d19e0806ab5097e7f1dc83b50884"
+	"b655c7ac26531b827202e28db8bf5510902cd31f997cf4c07d11391d16e67dce"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -94,24 +157,30 @@ struct kunit_case_provenance {
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ DECODE_SOURCE,
-	"0baac30bf4df50437d090b3e9ac04921568852c50d418280ff35f2039fa9f6fe",
+	  "74d5a3ca065d376e33cf0d9929a192583fa61522dc69a831c2970506f1632e2c",
 	  "tcti_decode_test.o" },
 	{ LSE_SOURCE,
 	  "49e3d4cc6b7db58162bead19c795d51197c3186d0c4cd0f1bd0b9c475180b997",
 	  "tcti_lse_decode_test.o" },
+	{ LSE_SOURCE_BOUND_SOURCE,
+	  "11dd4385bf91b6a933cc0bd3ca88d757305da1a8d860655ce02f338b5a1349f1",
+	  "tcti_lse_source_bound_test.o" },
+	{ LSE128_SOURCE,
+	  "5e770479521fd09e7eb75eb2611d70e65d9284748e1ad7762c70552ac983057f",
+	  "tcti_lse128_noncas_test.o" },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "f35b94be9f9baeb31ce504e0513c53eb83f483e528585e998d79005f3e9c7e6f",
 	  "tcti_logical_shifted_register_test.o" },
+	{ CSSC_SOURCE,
+	  "4df4f19290967bbe34a478bced0216f74e6be2e9c9ce343280c66f907d72ffca",
+	  "tcti_cssc_min_max_immediate_test.o" },
+	{ ADD_SUB_IMMEDIATE_SOURCE,
+	  "b04ec5608b426884e4963af565aea7a59309225711bf6811f8acbdb16538b3ba",
+	  "tcti_add_sub_immediate_test.o" },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
-	{ DECODE_SOURCE, "orlix-tcti-decode",
-	  "tcti_decode_test_suite", "tcti_decode_test_cases",
-	  "tcti_gadget_executes_complete_add_sub_immediate_family",
-	  BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  TCTI_TARGET_PROOF_OBLIGATION_PC |
-		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ LSE_SOURCE, "orlix-tcti-lse-decode",
 	  "tcti_lse_decode_test_suite", "tcti_lse_decode_test_cases",
 	  "tcti_lse_execute_rmw_matrix",
@@ -121,6 +190,46 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ LSE_SOURCE_BOUND_SOURCE, LSE_SOURCE_BOUND_SUITE,
+	  LSE_SOURCE_BOUND_SUITE_SYMBOL, LSE_SOURCE_BOUND_CASE_ARRAY,
+	  "lse_source_bound_decodes_every_base_leaf",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ LSE_SOURCE_BOUND_SOURCE, LSE_SOURCE_BOUND_SUITE,
+	  LSE_SOURCE_BOUND_SUITE_SYMBOL, LSE_SOURCE_BOUND_CASE_ARRAY,
+	  "lse_source_bound_executes_every_base_leaf",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ LSE_SOURCE_BOUND_SOURCE, LSE_SOURCE_BOUND_SUITE,
+	  LSE_SOURCE_BOUND_SUITE_SYMBOL, LSE_SOURCE_BOUND_CASE_ARRAY,
+	  "lse_source_bound_rejects_reserved_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_decode_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_rejects_reserved_operations",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_accepts_independent_odd_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_execute_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY, "tcti_lse128_rejects_overlapping_result_lanes",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ LSE128_SOURCE, LSE128_SUITE, LSE128_SUITE_SYMBOL,
+	  LSE128_CASE_ARRAY,
+	  "tcti_lse128_fixed_bit_near_misses_are_not_decoded",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
 	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
 	  "tcti_logical_shifted_register_source_bindings",
@@ -154,14 +263,78 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_min_max_immediate_source_fingerprints",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_min_max_immediate_all_legal_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_min_max_immediate_execute_all_immediates",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_min_max_immediate_zero_registers_and_pstate",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
+	  "tcti_cssc_min_max_immediate_rejects_non_cssc_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_all_legal_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_production_path_arithmetic",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_special_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_cmn_cmp_nzcv_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
+	  ADD_SUB_IMMEDIATE_SUITE_SYMBOL, ADD_SUB_IMMEDIATE_CASE_ARRAY,
+	  "tcti_add_sub_immediate_source_mask_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
 static const struct operation_requirements operation_requirements[] = {
-	{ "ADD_addsub_imm", BASELINE_OBLIGATIONS |
+	{ "ADD_addsub_imm", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "ADDS_addsub_imm", BASELINE_OBLIGATIONS |
+	{ "ADDS_addsub_imm", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		TCTI_TARGET_PROOF_OBLIGATION_PC |
+		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "SUB_addsub_imm", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "SUBS_addsub_imm", TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_PC |
 		TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
@@ -173,6 +346,22 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "EON", LOGICAL_BASE_OBLIGATIONS },
 	{ "ANDS_log_shift", LOGICAL_FLAGS_OBLIGATIONS },
 	{ "BICS", LOGICAL_FLAGS_OBLIGATIONS },
+	{ "SMAX_imm", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "UMAX_imm", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "SMIN_imm", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "UMIN_imm", BASELINE_OBLIGATIONS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ "LDADD", BASELINE_OBLIGATIONS |
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
@@ -272,57 +461,195 @@ static const struct tcti_target_proof_case logical_flags_alias_cases[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
-#define LOGICAL_BINDING(leaf, mnemonic, pattern, cases) \
-	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases }
+#define LOGICAL_BINDING(ordinal, leaf, mnemonic, pattern, cases) \
+	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
 
 static const struct tcti_target_proof_binding logical_and_bindings[] = {
-	LOGICAL_BINDING("AND_32_log_shift", "AND", 0x0a000000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING("AND_64_log_shift", "AND", 0x8a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3434U, "AND_32_log_shift", "AND", 0x0a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3442U, "AND_64_log_shift", "AND", 0x8a000000U, UINT64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_bic_bindings[] = {
-	LOGICAL_BINDING("BIC_32_log_shift", "BIC", 0x0a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING("BIC_64_log_shift", "BIC", 0x8a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3435U, "BIC_32_log_shift", "BIC", 0x0a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3443U, "BIC_64_log_shift", "BIC", 0x8a200000U, UINT64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_orr_bindings[] = {
-	LOGICAL_BINDING("ORR_32_log_shift", "ORR", 0x2a000000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING("ORR_64_log_shift", "ORR", 0xaa000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3436U, "ORR_32_log_shift", "ORR", 0x2a000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3444U, "ORR_64_log_shift", "ORR", 0xaa000000U, UINT64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_orn_bindings[] = {
-	LOGICAL_BINDING("ORN_32_log_shift", "ORN", 0x2a200000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING("ORN_64_log_shift", "ORN", 0xaa200000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3437U, "ORN_32_log_shift", "ORN", 0x2a200000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3445U, "ORN_64_log_shift", "ORN", 0xaa200000U, UINT64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_eor_bindings[] = {
-	LOGICAL_BINDING("EOR_32_log_shift", "EOR", 0x4a000000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING("EOR_64_log_shift", "EOR", 0xca000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3438U, "EOR_32_log_shift", "EOR", 0x4a000000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3446U, "EOR_64_log_shift", "EOR", 0xca000000U, UINT64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_eon_bindings[] = {
-	LOGICAL_BINDING("EON_32_log_shift", "EON", 0x4a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING("EON_64_log_shift", "EON", 0xca200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3439U, "EON_32_log_shift", "EON", 0x4a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3447U, "EON_64_log_shift", "EON", 0xca200000U, UINT64_C(0x1f)),
 };
 
 static const struct tcti_target_proof_binding logical_ands_bindings[] = {
-	LOGICAL_BINDING("ANDS_32_log_shift", "ANDS", 0x6a000000U, UINT64_C(0x3f)),
-	LOGICAL_BINDING("ANDS_64_log_shift", "ANDS", 0xea000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3440U, "ANDS_32_log_shift", "ANDS", 0x6a000000U, UINT64_C(0x3f)),
+	LOGICAL_BINDING(3448U, "ANDS_64_log_shift", "ANDS", 0xea000000U, UINT64_C(0x3f)),
 };
 
 static const struct tcti_target_proof_binding logical_bics_bindings[] = {
-	LOGICAL_BINDING("BICS_32_log_shift", "BICS", 0x6a200000U, UINT64_C(0x1f)),
-	LOGICAL_BINDING("BICS_64_log_shift", "BICS", 0xea200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3441U, "BICS_32_log_shift", "BICS", 0x6a200000U, UINT64_C(0x1f)),
+	LOGICAL_BINDING(3449U, "BICS_64_log_shift", "BICS", 0xea200000U, UINT64_C(0x1f)),
 };
 
 #undef LOGICAL_BINDING
 
-#define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
+#define CSSC_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+
+static const struct tcti_target_proof_case cssc_cases[] = {
+	{ "tcti_cssc_min_max_immediate_source_fingerprints",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_cssc_min_max_immediate_all_legal_fields",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_cssc_min_max_immediate_execute_all_immediates",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_cssc_min_max_immediate_zero_registers_and_pstate",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_cssc_min_max_immediate_rejects_non_cssc_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+#define ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS \
+	(TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+	 TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS \
+	(ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+
+static const struct tcti_target_proof_case add_sub_immediate_base_cases[] = {
+	{ "tcti_add_sub_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_add_sub_immediate_all_legal_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_add_sub_immediate_production_path_arithmetic",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_add_sub_immediate_special_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_add_sub_immediate_source_mask_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+};
+
+static const struct tcti_target_proof_case add_sub_immediate_flags_cases[] = {
+	{ "tcti_add_sub_immediate_source_bindings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_add_sub_immediate_all_legal_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_add_sub_immediate_production_path_arithmetic",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_add_sub_immediate_special_register_aliases",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_add_sub_immediate_cmn_cmp_nzcv_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "tcti_add_sub_immediate_source_mask_boundaries",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+};
+
+#define ADD_SUB_IMMEDIATE_BASE_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
+	  UINT64_C(0x1f), ordinal }
+#define ADD_SUB_IMMEDIATE_FLAGS_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
+	  UINT64_C(0x3f), ordinal }
+
+static const struct tcti_target_proof_binding add_sub_immediate_add_bindings[] = {
+	ADD_SUB_IMMEDIATE_BASE_BINDING(2173U, "ADD_32_addsub_imm", "ADD", 0x11000000U),
+	ADD_SUB_IMMEDIATE_BASE_BINDING(2177U, "ADD_64_addsub_imm", "ADD", 0x91000000U),
+};
+
+static const struct tcti_target_proof_binding add_sub_immediate_adds_bindings[] = {
+	ADD_SUB_IMMEDIATE_FLAGS_BINDING(2174U, "ADDS_32S_addsub_imm", "ADDS", 0x31000000U),
+	ADD_SUB_IMMEDIATE_FLAGS_BINDING(2178U, "ADDS_64S_addsub_imm", "ADDS", 0xb1000000U),
+};
+
+static const struct tcti_target_proof_binding add_sub_immediate_sub_bindings[] = {
+	ADD_SUB_IMMEDIATE_BASE_BINDING(2175U, "SUB_32_addsub_imm", "SUB", 0x51000000U),
+	ADD_SUB_IMMEDIATE_BASE_BINDING(2179U, "SUB_64_addsub_imm", "SUB", 0xd1000000U),
+};
+
+static const struct tcti_target_proof_binding add_sub_immediate_subs_bindings[] = {
+	ADD_SUB_IMMEDIATE_FLAGS_BINDING(2176U, "SUBS_32S_addsub_imm", "SUBS", 0x71000000U),
+	ADD_SUB_IMMEDIATE_FLAGS_BINDING(2180U, "SUBS_64S_addsub_imm", "SUBS", 0xf1000000U),
+};
+
+#undef ADD_SUB_IMMEDIATE_FLAGS_BINDING
+#undef ADD_SUB_IMMEDIATE_BASE_BINDING
+
+#define CSSC_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xfffc0000U, pattern, CSSC_CONDITION, UINT64_C(0x1f), ordinal }
+
+static const struct tcti_target_proof_binding cssc_smax_bindings[] = {
+	CSSC_BINDING(2183U, "SMAX_32_minmax_imm", "SMAX", 0x11c00000U),
+	CSSC_BINDING(2187U, "SMAX_64_minmax_imm", "SMAX", 0x91c00000U),
+};
+
+static const struct tcti_target_proof_binding cssc_umax_bindings[] = {
+	CSSC_BINDING(2184U, "UMAX_32U_minmax_imm", "UMAX", 0x11c40000U),
+	CSSC_BINDING(2188U, "UMAX_64U_minmax_imm", "UMAX", 0x91c40000U),
+};
+
+static const struct tcti_target_proof_binding cssc_smin_bindings[] = {
+	CSSC_BINDING(2185U, "SMIN_32_minmax_imm", "SMIN", 0x11c80000U),
+	CSSC_BINDING(2189U, "SMIN_64_minmax_imm", "SMIN", 0x91c80000U),
+};
+
+static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
+	CSSC_BINDING(2186U, "UMIN_32U_minmax_imm", "UMIN", 0x11cc0000U),
+	CSSC_BINDING(2190U, "UMIN_64U_minmax_imm", "UMIN", 0x91cc0000U),
+};
+
+#undef CSSC_BINDING
+
 #define LOGICAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
 	  LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE, cases, ARRAY_COUNT(cases), \
-	  bindings, ARRAY_COUNT(bindings), NULL }
+	  bindings, ARRAY_COUNT(bindings), NULL, 0 }
+
+#define CSSC_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  CSSC_OBLIGATIONS, TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  CSSC_SOURCE, CSSC_SUITE, cssc_cases, ARRAY_COUNT(cssc_cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL, 0 }
+
+#define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
+	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
+	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, 0 }
 
 static const struct tcti_target_proof_registry_entry proof_registry_entries[] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
@@ -349,9 +676,38 @@ static const struct tcti_target_proof_registry_entry proof_registry_entries[] = 
 	LOGICAL_ENTRY("kunit:logical-shifted-register-bics", "BICS",
 		      LOGICAL_FLAGS_OBLIGATIONS, logical_flags_cases,
 		      logical_bics_bindings),
+	CSSC_ENTRY("kunit:cssc-min-max-immediate-smax", "SMAX_imm",
+		   cssc_smax_bindings),
+	CSSC_ENTRY("kunit:cssc-min-max-immediate-umax", "UMAX_imm",
+		   cssc_umax_bindings),
+	CSSC_ENTRY("kunit:cssc-min-max-immediate-smin", "SMIN_imm",
+		   cssc_smin_bindings),
+	CSSC_ENTRY("kunit:cssc-min-max-immediate-umin", "UMIN_imm",
+		   cssc_umin_bindings),
+	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-add", "ADD_addsub_imm",
+				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
+				add_sub_immediate_base_cases,
+				add_sub_immediate_add_bindings),
+	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-adds", "ADDS_addsub_imm",
+				ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS,
+				add_sub_immediate_flags_cases,
+				add_sub_immediate_adds_bindings),
+	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-sub", "SUB_addsub_imm",
+				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
+				add_sub_immediate_base_cases,
+				add_sub_immediate_sub_bindings),
+	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-subs", "SUBS_addsub_imm",
+				ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS,
+				add_sub_immediate_flags_cases,
+				add_sub_immediate_subs_bindings),
 };
 
 #undef LOGICAL_ENTRY
+#undef CSSC_ENTRY
+#undef ADD_SUB_IMMEDIATE_ENTRY
+#undef CSSC_OBLIGATIONS
+#undef ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS
+#undef ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS
 #undef ARRAY_COUNT
 
 static bool empty(const char *text)
@@ -362,6 +718,71 @@ static bool empty(const char *text)
 static bool one_bit(uint32_t value)
 {
 	return value && !(value & (value - 1));
+}
+
+static const struct source_manifest_binding *
+source_manifest_binding(uint32_t ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < sizeof(source_manifest_bindings) /
+				      sizeof(source_manifest_bindings[0]); index++)
+		if (source_manifest_bindings[index].ordinal == ordinal)
+			return &source_manifest_bindings[index];
+	return NULL;
+}
+
+static bool proof_binding_matches_source_manifest(
+	const struct tcti_target_proof_registry_entry *entry,
+	const struct tcti_target_proof_binding *binding)
+{
+	const struct source_manifest_binding *source =
+		source_manifest_binding(binding->source_ordinal);
+
+	return source && !strcmp(binding->leaf_name, source->leaf_name) &&
+		!strcmp(binding->mnemonic, source->mnemonic) &&
+		!strcmp(entry->operation_id, source->operation_id) &&
+		binding->encoding_mask == source->encoding_mask &&
+		binding->encoding_pattern == source->encoding_pattern &&
+		!strcmp(binding->condition_tcnd_hex,
+			source->condition_tcnd_hex);
+}
+
+static size_t source_bound_proof_matches_binding(
+	const struct tcti_target_proof_registry_entry *entry,
+	const struct tcti_target_proof_binding *binding)
+{
+	size_t index;
+	size_t matches = 0;
+
+	for (index = 0; index < sizeof(source_bound_proofs) /
+				      sizeof(source_bound_proofs[0]); index++)
+		if (source_bound_proofs[index].ordinal == binding->source_ordinal &&
+		    !strcmp(source_bound_proofs[index].proof_id, entry->id))
+			matches++;
+	return matches;
+}
+
+static size_t source_bound_proof_matches_registry(
+	const struct tcti_target_proof_registry_entry *entries, size_t count,
+	const struct source_bound_proof *source_bound)
+{
+	size_t entry_index;
+	size_t matches = 0;
+
+	for (entry_index = 0; entry_index < count; entry_index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[entry_index];
+		size_t binding_index;
+
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++)
+			if (entries[entry_index].bindings[binding_index].source_ordinal ==
+					source_bound->ordinal &&
+			    !strcmp(entry->id, source_bound->proof_id))
+				matches++;
+	}
+	return matches;
 }
 
 int tcti_target_proof_operation_requirements(
@@ -833,7 +1254,6 @@ int tcti_target_proof_registry_validate(
 					TCTI_TARGET_PROOF_REGISTRY_UNKNOWN_FAMILY_REQUIREMENTS;
 			return -1;
 		}
-		kunit_obligations = required;
 		if (entry->linux_interface ==
 		    TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED)
 			required |= TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
@@ -843,6 +1263,11 @@ int tcti_target_proof_registry_validate(
 					TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS;
 			return -1;
 		}
+		if (entry->unproved_obligations & ~required)
+			goto invalid;
+		kunit_obligations =
+			required & ~entry->unproved_obligations &
+			~TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
 		if (entry->linux_interface ==
 		    TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED) {
 			/* KUnit cannot satisfy Linux-visible interface proof. */
@@ -898,6 +1323,12 @@ int tcti_target_proof_registry_validate(
 			    (entry->kunit_case_count < 64 &&
 			     (item->kunit_case_mask >> entry->kunit_case_count)))
 				goto invalid;
+			if (!proof_binding_matches_source_manifest(entry, item)) {
+				if (error)
+					*error =
+						TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
+				return -1;
+			}
 			for (case_index = 0; case_index < entry->kunit_case_count;
 			     case_index++)
 				if (item->kunit_case_mask & (UINT64_C(1) << case_index))
@@ -933,6 +1364,41 @@ invalid:
 	if (error)
 		*error = TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY;
 	return -1;
+}
+
+int tcti_target_proof_registry_source_bound_projection_validate(
+	const struct tcti_target_proof_registry_entry *entries, size_t count,
+	enum tcti_target_proof_registry_error *error)
+{
+	size_t entry_index;
+	size_t index;
+
+	if (tcti_target_proof_registry_validate(entries, count, error))
+		return -1;
+	for (entry_index = 0; entry_index < count; entry_index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[entry_index];
+		size_t binding_index;
+
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++)
+			if (source_bound_proof_matches_binding(
+				    entry, &entry->bindings[binding_index]) != 1) {
+				if (error)
+					*error =
+						TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
+				return -1;
+			}
+	}
+	for (index = 0; index < sizeof(source_bound_proofs) /
+			     sizeof(source_bound_proofs[0]); index++)
+		if (source_bound_proof_matches_registry(entries, count,
+						 &source_bound_proofs[index]) != 1) {
+			if (error)
+				*error = TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
+			return -1;
+		}
+	return 0;
 }
 
 enum tcti_target_proof_registry_error tcti_target_proof_registry_lookup(

@@ -65,7 +65,55 @@ static int boolean_union(void)
 	EXPECT(audit.leaves[1] == TCTI_TARGET_FEATURE_SAT_APPLICABLE);
 	EXPECT(audit.leaves[2] == TCTI_TARGET_FEATURE_SAT_APPLICABLE);
 	EXPECT(audit.leaves[3] == TCTI_TARGET_FEATURE_SAT_IMPOSSIBLE);
+	EXPECT(audit.parameter_count == 2);
+	EXPECT(tcti_target_feature_sat_witness(&audit, 0));
+	EXPECT(tcti_target_feature_sat_witness(&audit, 3) == NULL);
 	tcti_target_feature_sat_audit_destroy(&audit);
+	return 0;
+}
+
+static int deterministic_boolean_witnesses(void)
+{
+	static char a[] = "A", b[] = "B", c[] = "C";
+	static struct tcti_feature_parameter parameters[] = {
+		{ .name = a }, { .name = b }, { .name = c },
+	};
+	static struct tcti_target_expr expressions[] = {
+		{ .kind = TCTI_TARGET_EXPR_FEATURE, .text = a },
+		{ .kind = TCTI_TARGET_EXPR_FEATURE, .text = b },
+		{ .kind = TCTI_TARGET_EXPR_OR, .left = 0, .right = 1 },
+		{ .kind = TCTI_TARGET_EXPR_NOT, .left = 0 },
+		{ .kind = TCTI_TARGET_EXPR_BOOL, .boolean = false },
+	};
+	static struct tcti_target_leaf leaves[] = {
+		{ .condition = 2 }, { .condition = 3 }, { .condition = 4 },
+	};
+	struct tcti_feature_model model = {
+		.parameters = parameters, .parameter_count = 3,
+	};
+	struct tcti_target_inventory inventory = {
+		.leaves = leaves, .leaf_count = 3,
+		.expressions = expressions, .expression_count = 5,
+	};
+	struct tcti_target_feature_sat_audit first, second;
+	struct tcti_target_feature_sat_error error;
+	const signed char *witness;
+
+	EXPECT(!run(&model, &inventory, &first, &error));
+	EXPECT(!run(&model, &inventory, &second, &error));
+	EXPECT(first.parameter_count == 3 && second.parameter_count == 3);
+	EXPECT(!memcmp(first.witnesses, second.witnesses,
+		first.leaf_count * first.parameter_count * sizeof(*first.witnesses)));
+	witness = tcti_target_feature_sat_witness(&first, 0);
+	EXPECT(witness && witness[0] == 1 && witness[1] == 1 && witness[2] == 1);
+	witness = tcti_target_feature_sat_witness(&first, 1);
+	EXPECT(witness && witness[0] == -1 && witness[1] == 1 && witness[2] == 1);
+	EXPECT(tcti_target_feature_sat_witness(&first, 2) == NULL);
+	EXPECT(!first.witnesses[2 * first.parameter_count]);
+	EXPECT(!first.witnesses[2 * first.parameter_count + 1]);
+	EXPECT(!first.witnesses[2 * first.parameter_count + 2]);
+	tcti_target_feature_sat_audit_destroy(&second);
+	tcti_target_feature_sat_audit_destroy(&first);
 	return 0;
 }
 
@@ -402,6 +450,7 @@ static int pinned_integration(const char *features_path, const char *instruction
 int main(int argc, char **argv)
 {
 	EXPECT(!boolean_union());
+	EXPECT(!deterministic_boolean_witnesses());
 	EXPECT(!rejects_unsatisfiable_base());
 	EXPECT(!rejects_unsupported_semantics());
 	EXPECT(!supports_409_boolean_parameters());

@@ -34,6 +34,27 @@ static const struct tcti_target_artifact_provenance provenance = {
 	.registers_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 };
 
+static int sha256_known_answers(void)
+{
+	static const struct {
+		const char *input;
+		const char *digest;
+	} vectors[] = {
+		{ "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+		{ "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
+		{ "The quick brown fox jumps over the lazy dog", "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592" },
+	};
+	char digest[65];
+	size_t index;
+
+	for (index = 0; index < sizeof(vectors) / sizeof(vectors[0]); index++) {
+		tcti_target_artifact_sha256(vectors[index].input,
+			strlen(vectors[index].input), digest);
+		EXPECT(!strcmp(digest, vectors[index].digest));
+	}
+	return 0;
+}
+
 static int remove_tree(const char *path)
 {
 	DIR *directory;
@@ -287,6 +308,9 @@ static int deterministic_immutable_publication(void)
 	EXPECT(publish(left, "2026-06-a1", TCTI_TARGET_ARTIFACT_STAGE_NONE,
 		       &result) < 0);
 	EXPECT(result.error == TCTI_TARGET_ARTIFACT_PUBLISH_ALREADY_EXISTS);
+	for (index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++)
+		EXPECT(!file_matches(left, "2026-06-a1", &artifacts[index]));
+	EXPECT(!selector_is(left, "2026-06-a1"));
 	EXPECT(!remove_tree(left));
 	EXPECT(!remove_tree(right));
 	free(left);
@@ -655,6 +679,7 @@ int main(void)
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
+		{ "sha256_known_answers", sha256_known_answers },
 		{ "deterministic_immutable_publication", deterministic_immutable_publication },
 		{ "failures_preserve_prior_selector", failures_preserve_prior_selector },
 		{ "short_writes_publish_complete_generation", short_writes_publish_complete_generation },

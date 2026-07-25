@@ -2,12 +2,328 @@
 #include "target_typed_expression.h"
 #include <stdlib.h>
 #include <string.h>
-#if defined(__clang__)
-#pragma clang diagnostic ignored "-Wunused-parameter"
-#endif
-#define MAX 65536U
-static int bad(enum tcti_typed_error *e,enum tcti_typed_error v){if(e)*e=v;return -1;}
-static int grow(void **p,size_t *c,size_t n,size_t z){size_t q=*c?*c:32;void *r;while(q<n){if(q>SIZE_MAX/2)return -1;q*=2;}r=realloc(*p,q*z);if(!r)return -1;*p=r;*c=q;return 0;}
-int tcti_typed_literal(struct tcti_typed_expression *x,enum tcti_typed_type t,uint8_t w,uint64_t v,enum tcti_typed_type et,uint8_t ew,struct tcti_typed_provenance p,uint32_t *o,enum tcti_typed_error *e){struct tcti_typed_node n={.type=t,.element_type=et,.op=TCTI_TYPED_LITERAL,.width=w,.element_width=ew,.first_child=TCTI_TYPED_NONE,.parent=TCTI_TYPED_NONE,.provenance=p};if(!x||!o||x->node_count==MAX||(t==TCTI_TYPED_BOOL&&w)||(t==TCTI_TYPED_SET&&(ew==0||ew>64))||(t!=TCTI_TYPED_BOOL&&t!=TCTI_TYPED_SET&&(w==0||w>64)))return bad(e,TCTI_TYPED_ARGUMENT);if(grow((void **)&x->nodes,&x->node_capacity,x->node_count+1,sizeof(*x->nodes)))return bad(e,TCTI_TYPED_MEMORY);*o=(uint32_t)x->node_count;x->nodes[x->node_count++]=n;if(e)*e=TCTI_TYPED_OK;return 0;}
-int tcti_typed_apply(struct tcti_typed_expression *x,enum tcti_typed_op op,const uint32_t *c,size_t n,struct tcti_typed_provenance p,uint32_t *o,enum tcti_typed_error *e){struct tcti_typed_node q={.op=op,.first_child=(uint32_t)x->child_count,.child_count=(uint32_t)n,.parent=TCTI_TYPED_NONE,.provenance=p};struct tcti_typed_node *a,*b;if(!x||!c||!o||n==0||n>2||x->node_count==MAX)return bad(e,TCTI_TYPED_ARGUMENT);for(size_t i=0;i<n;i++){if(c[i]>=x->node_count)return bad(e,TCTI_TYPED_ARGUMENT);if(x->nodes[c[i]].parent!=TCTI_TYPED_NONE)return bad(e,TCTI_TYPED_OWNED);if(i&&c[i]==c[0])return bad(e,TCTI_TYPED_OWNED);}a=&x->nodes[c[0]];b=n==2?&x->nodes[c[1]]:0;if(a->depth>=TCTI_TYPED_MAX_DEPTH)return bad(e,TCTI_TYPED_LIMIT);q.depth=a->depth+1;if(op==TCTI_TYPED_NOT||op==TCTI_TYPED_UINT||op==TCTI_TYPED_SINT){if(n!=1)return bad(e,TCTI_TYPED_ARITY);if(op==TCTI_TYPED_NOT){if(a->type!=TCTI_TYPED_BOOL)return bad(e,TCTI_TYPED_TYPE);q.type=TCTI_TYPED_BOOL;}else{if(a->type!=TCTI_TYPED_UNSIGNED&&a->type!=TCTI_TYPED_SIGNED)return bad(e,TCTI_TYPED_TYPE);q.type=op==TCTI_TYPED_UINT?TCTI_TYPED_UNSIGNED:TCTI_TYPED_SIGNED;q.width=a->width;}}else{if(n!=2)return bad(e,TCTI_TYPED_ARITY);if(b->depth>=TCTI_TYPED_MAX_DEPTH)return bad(e,TCTI_TYPED_LIMIT);if(b->depth+1>q.depth)q.depth=b->depth+1;if(op==TCTI_TYPED_IN){if(b->type!=TCTI_TYPED_SET||a->type!=b->element_type||a->width!=b->element_width)return bad(e,TCTI_TYPED_TYPE);}else if(op==TCTI_TYPED_AND||op==TCTI_TYPED_OR||op==TCTI_TYPED_IMPLIES||op==TCTI_TYPED_IFF){if(a->type!=TCTI_TYPED_BOOL||b->type!=TCTI_TYPED_BOOL)return bad(e,TCTI_TYPED_TYPE);}else if(a->type!=b->type||a->width!=b->width||(a->type!=TCTI_TYPED_UNSIGNED&&a->type!=TCTI_TYPED_SIGNED))return bad(e,TCTI_TYPED_TYPE);q.type=TCTI_TYPED_BOOL;}if(grow((void **)&x->children,&x->child_capacity,x->child_count+n,sizeof(*x->children))||grow((void **)&x->nodes,&x->node_capacity,x->node_count+1,sizeof(*x->nodes)))return bad(e,TCTI_TYPED_MEMORY);memcpy(x->children+x->child_count,c,n*sizeof(*c));for(size_t i=0;i<n;i++)x->nodes[c[i]].parent=(uint32_t)x->node_count;x->child_count+=n;*o=(uint32_t)x->node_count;x->nodes[x->node_count++]=q;if(e)*e=TCTI_TYPED_OK;return 0;}
-void tcti_typed_destroy(struct tcti_typed_expression *x){if(!x)return;free(x->nodes);free(x->children);memset(x,0,sizeof(*x));}
+
+#define TCTI_TYPED_MAX_NODES 65536U
+
+static int fail(enum tcti_typed_error *error, enum tcti_typed_error value)
+{
+	if (error)
+		*error = value;
+	return -1;
+}
+
+static int grow(void **pointer, size_t *capacity, size_t needed, size_t size)
+{
+	size_t next = *capacity ? *capacity : 32;
+	void *replacement;
+
+	while (next < needed) {
+		if (next > SIZE_MAX / 2)
+			return -1;
+		next *= 2;
+	}
+	replacement = realloc(*pointer, next * size);
+	if (!replacement)
+		return -1;
+	*pointer = replacement;
+	*capacity = next;
+	return 0;
+}
+
+static char *copy_text(const char *text)
+{
+	char *copy;
+	size_t length;
+
+	if (!text)
+		return NULL;
+	length = strlen(text) + 1;
+	copy = malloc(length);
+	if (copy)
+		memcpy(copy, text, length);
+	return copy;
+}
+
+static void destroy_identity(struct tcti_typed_identity *identity)
+{
+	free(identity->text);
+	free(identity->state);
+	free(identity->register_name);
+	free(identity->selector);
+	memset(identity, 0, sizeof(*identity));
+}
+
+static int copy_identity(struct tcti_typed_identity *identity,
+			 const char *text, const char *state,
+			 const char *register_name, const char *selector)
+{
+	identity->text = copy_text(text);
+	identity->state = copy_text(state);
+	identity->register_name = copy_text(register_name);
+	identity->selector = copy_text(selector);
+	if ((text && !identity->text) || (state && !identity->state) ||
+	    (register_name && !identity->register_name) ||
+	    (selector && !identity->selector)) {
+		destroy_identity(identity);
+		return -1;
+	}
+	return 0;
+}
+
+static int add_node(struct tcti_typed_expression *expression,
+			    struct tcti_typed_node *node, uint32_t *out,
+			    enum tcti_typed_error *error)
+{
+	if (!expression || !out ||
+	    expression->node_count == TCTI_TYPED_MAX_NODES)
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	if (grow((void **)&expression->nodes, &expression->node_capacity,
+		 expression->node_count + 1, sizeof(*expression->nodes)))
+		return fail(error, TCTI_TYPED_MEMORY);
+	*out = (uint32_t)expression->node_count;
+	expression->nodes[expression->node_count++] = *node;
+	if (error)
+		*error = TCTI_TYPED_OK;
+	return 0;
+}
+
+static int scalar_type(enum tcti_typed_type type)
+{
+	return type == TCTI_TYPED_UNSIGNED || type == TCTI_TYPED_SIGNED ||
+	       type == TCTI_TYPED_IDENTIFIER || type == TCTI_TYPED_FIELD ||
+	       type == TCTI_TYPED_VALUE || type == TCTI_TYPED_DOT_ATOM ||
+	       type == TCTI_TYPED_OPERAND;
+}
+
+static int opaque_type(enum tcti_typed_type type)
+{
+	return type == TCTI_TYPED_IDENTIFIER || type == TCTI_TYPED_FIELD ||
+	       type == TCTI_TYPED_VALUE || type == TCTI_TYPED_DOT_ATOM ||
+	       type == TCTI_TYPED_OPERAND;
+}
+
+static int compatible_equality(const struct tcti_typed_node *left,
+			       const struct tcti_typed_node *right)
+{
+	if (left->type == right->type) {
+		if ((left->type == TCTI_TYPED_UNSIGNED ||
+		     left->type == TCTI_TYPED_SIGNED) && left->width != right->width)
+			return 0;
+		return 1;
+	}
+	return opaque_type(left->type) && opaque_type(right->type);
+}
+
+int tcti_typed_literal(struct tcti_typed_expression *expression,
+			       enum tcti_typed_type type, uint8_t width,
+			       uint64_t value, enum tcti_typed_type element_type,
+			       uint8_t element_width,
+			       struct tcti_typed_provenance provenance,
+			       uint32_t *out, enum tcti_typed_error *error)
+{
+	struct tcti_typed_node node = {
+		.type = type, .element_type = element_type,
+		.op = TCTI_TYPED_LITERAL, .width = width,
+		.element_width = element_width, .first_child = TCTI_TYPED_NONE,
+		.parent = TCTI_TYPED_NONE, .value = value,
+		.provenance = provenance,
+	};
+
+	if (type == TCTI_TYPED_BOOL && width)
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	if (type == TCTI_TYPED_SET && (element_width == 0 || element_width > 64))
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	if (type != TCTI_TYPED_BOOL && type != TCTI_TYPED_SET &&
+	    (width == 0 || width > 64))
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	return add_node(expression, &node, out, error);
+}
+
+int tcti_typed_atom(struct tcti_typed_expression *expression,
+		    enum tcti_typed_type type, const char *text,
+		    const char *state, const char *register_name, const char *selector,
+		    struct tcti_typed_provenance provenance, uint32_t *out,
+		    enum tcti_typed_error *error)
+{
+	struct tcti_typed_node node = {
+		.type = type, .op = TCTI_TYPED_LITERAL,
+		.first_child = TCTI_TYPED_NONE, .parent = TCTI_TYPED_NONE,
+		.provenance = provenance,
+	};
+
+	if (!expression || !out ||
+	    (type != TCTI_TYPED_BOOL && type != TCTI_TYPED_IDENTIFIER && type != TCTI_TYPED_FIELD &&
+	     type != TCTI_TYPED_VALUE && type != TCTI_TYPED_OPERAND) ||
+	    (type == TCTI_TYPED_FIELD && (!state || !register_name || !selector)) ||
+	    (type != TCTI_TYPED_FIELD && !text))
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	if (copy_identity(&node.identity, text, state, register_name, selector))
+		return fail(error, TCTI_TYPED_MEMORY);
+	if (add_node(expression, &node, out, error)) {
+		destroy_identity(&node.identity);
+		return -1;
+	}
+	return 0;
+}
+
+int tcti_typed_compound(struct tcti_typed_expression *expression,
+			enum tcti_typed_type type, const uint32_t *children,
+			size_t child_count, struct tcti_typed_provenance provenance,
+			uint32_t *out, enum tcti_typed_error *error)
+{
+	struct tcti_typed_node node;
+	const struct tcti_typed_node *first;
+	size_t index;
+
+	if (!expression || !children || !out || child_count == 0 ||
+	    (type != TCTI_TYPED_SET && type != TCTI_TYPED_DOT_ATOM) ||
+	    expression->node_count == TCTI_TYPED_MAX_NODES)
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	for (index = 0; index < child_count; index++) {
+		if (children[index] >= expression->node_count ||
+		    expression->nodes[children[index]].parent != TCTI_TYPED_NONE)
+			return fail(error, TCTI_TYPED_OWNED);
+		if (index && children[index] == children[0])
+			return fail(error, TCTI_TYPED_OWNED);
+	}
+	first = &expression->nodes[children[0]];
+	memset(&node, 0, sizeof(node));
+	node.type = type;
+	node.op = type == TCTI_TYPED_SET ? TCTI_TYPED_SET_LITERAL :
+			TCTI_TYPED_DOT_ATOM_LITERAL;
+	node.first_child = (uint32_t)expression->child_count;
+	node.child_count = (uint32_t)child_count;
+	node.parent = TCTI_TYPED_NONE;
+	node.provenance = provenance;
+	if (type == TCTI_TYPED_SET) {
+		if (!scalar_type(first->type))
+			return fail(error, TCTI_TYPED_TYPE);
+		node.element_type = first->type;
+		node.element_width = first->width;
+		for (index = 1; index < child_count; index++) {
+			const struct tcti_typed_node *child =
+				&expression->nodes[children[index]];
+			if (child->type != node.element_type ||
+			    child->width != node.element_width)
+				return fail(error, TCTI_TYPED_TYPE);
+		}
+	} else {
+		for (index = 0; index < child_count; index++)
+			if (expression->nodes[children[index]].type != TCTI_TYPED_IDENTIFIER)
+				return fail(error, TCTI_TYPED_TYPE);
+	}
+	if (grow((void **)&expression->children, &expression->child_capacity,
+		 expression->child_count + child_count, sizeof(*expression->children)) ||
+	    grow((void **)&expression->nodes, &expression->node_capacity,
+		 expression->node_count + 1, sizeof(*expression->nodes)))
+		return fail(error, TCTI_TYPED_MEMORY);
+	memcpy(expression->children + expression->child_count, children,
+	       child_count * sizeof(*children));
+	for (index = 0; index < child_count; index++)
+		expression->nodes[children[index]].parent =
+			(uint32_t)expression->node_count;
+	expression->child_count += child_count;
+	return add_node(expression, &node, out, error);
+}
+
+int tcti_typed_apply(struct tcti_typed_expression *expression,
+		     enum tcti_typed_op op, const uint32_t *children,
+		     size_t child_count, struct tcti_typed_provenance provenance,
+		     uint32_t *out, enum tcti_typed_error *error)
+{
+	struct tcti_typed_node node;
+	struct tcti_typed_node *left, *right;
+	size_t index;
+
+	if (!expression || !children || !out || child_count == 0 ||
+	    child_count > 2 || expression->node_count == TCTI_TYPED_MAX_NODES)
+		return fail(error, TCTI_TYPED_ARGUMENT);
+	for (index = 0; index < child_count; index++) {
+		if (children[index] >= expression->node_count ||
+		    expression->nodes[children[index]].parent != TCTI_TYPED_NONE)
+			return fail(error, TCTI_TYPED_OWNED);
+		if (index && children[index] == children[0])
+			return fail(error, TCTI_TYPED_OWNED);
+	}
+	left = &expression->nodes[children[0]];
+	right = child_count == 2 ? &expression->nodes[children[1]] : NULL;
+	if (left->depth >= TCTI_TYPED_MAX_DEPTH)
+		return fail(error, TCTI_TYPED_LIMIT);
+	memset(&node, 0, sizeof(node));
+	node.op = op;
+	node.first_child = (uint32_t)expression->child_count;
+	node.child_count = (uint32_t)child_count;
+	node.parent = TCTI_TYPED_NONE;
+	node.provenance = provenance;
+	node.depth = left->depth + 1;
+	if (op == TCTI_TYPED_NOT || op == TCTI_TYPED_UINT || op == TCTI_TYPED_SINT) {
+		if (child_count != 1)
+			return fail(error, TCTI_TYPED_ARITY);
+		if (op == TCTI_TYPED_NOT) {
+			if (left->type != TCTI_TYPED_BOOL)
+				return fail(error, TCTI_TYPED_TYPE);
+			node.type = TCTI_TYPED_BOOL;
+		} else {
+			if (!scalar_type(left->type))
+				return fail(error, TCTI_TYPED_TYPE);
+			node.type = op == TCTI_TYPED_UINT ? TCTI_TYPED_UNSIGNED :
+				TCTI_TYPED_SIGNED;
+			node.width = left->width ? left->width : 64;
+		}
+	} else {
+		if (child_count != 2)
+			return fail(error, TCTI_TYPED_ARITY);
+		if (right->depth >= TCTI_TYPED_MAX_DEPTH)
+			return fail(error, TCTI_TYPED_LIMIT);
+		if (right->depth + 1 > node.depth)
+			node.depth = right->depth + 1;
+		if (op == TCTI_TYPED_IN) {
+			if (right->type != TCTI_TYPED_SET ||
+			    left->type != right->element_type ||
+			    left->width != right->element_width)
+				return fail(error, TCTI_TYPED_TYPE);
+		} else if (op == TCTI_TYPED_AND || op == TCTI_TYPED_OR ||
+			   op == TCTI_TYPED_IMPLIES || op == TCTI_TYPED_IFF) {
+			if (left->type != TCTI_TYPED_BOOL || right->type != TCTI_TYPED_BOOL)
+				return fail(error, TCTI_TYPED_TYPE);
+		} else if (op == TCTI_TYPED_EQ || op == TCTI_TYPED_NE) {
+			if (!compatible_equality(left, right))
+				return fail(error, TCTI_TYPED_TYPE);
+		} else if ((op == TCTI_TYPED_LT || op == TCTI_TYPED_GT ||
+			    op == TCTI_TYPED_GE) &&
+			   (left->type != right->type || left->width != right->width ||
+			    (left->type != TCTI_TYPED_UNSIGNED &&
+			     left->type != TCTI_TYPED_SIGNED))) {
+			return fail(error, TCTI_TYPED_TYPE);
+		} else if (op != TCTI_TYPED_LT && op != TCTI_TYPED_GT &&
+			   op != TCTI_TYPED_GE) {
+			return fail(error, TCTI_TYPED_ARGUMENT);
+		}
+		node.type = TCTI_TYPED_BOOL;
+	}
+	if (grow((void **)&expression->children, &expression->child_capacity,
+		 expression->child_count + child_count, sizeof(*expression->children)) ||
+	    grow((void **)&expression->nodes, &expression->node_capacity,
+		 expression->node_count + 1, sizeof(*expression->nodes)))
+		return fail(error, TCTI_TYPED_MEMORY);
+	memcpy(expression->children + expression->child_count, children,
+	       child_count * sizeof(*children));
+	for (index = 0; index < child_count; index++)
+		expression->nodes[children[index]].parent =
+			(uint32_t)expression->node_count;
+	expression->child_count += child_count;
+	return add_node(expression, &node, out, error);
+}
+
+void tcti_typed_destroy(struct tcti_typed_expression *expression)
+{
+	size_t index;
+
+	if (!expression)
+		return;
+	for (index = 0; index < expression->node_count; index++)
+		destroy_identity(&expression->nodes[index].identity);
+	free(expression->nodes);
+	free(expression->children);
+	memset(expression, 0, sizeof(*expression));
+}

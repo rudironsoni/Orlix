@@ -3464,7 +3464,7 @@ simd_two_register_misc_unclaimed:
 				continue;
 			if ((instruction & BIT(28)) &&
 			    (!(instruction & BIT(30)) ||
-			     ((instruction >> 22) & 0x3U) != 2))
+			     ((instruction >> 22) & 0x3U) < 2))
 				return decoded;
 			if (!(instruction & BIT(28)) &&
 			    (instruction & BIT(22)) && !(instruction & BIT(30)))
@@ -3472,12 +3472,14 @@ simd_two_register_misc_unclaimed:
 			decoded.decode_class = TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 			decoded.rd = instruction & 0x1fU;
 			decoded.rn = (instruction >> 5) & 0x1fU;
-			decoded.access_size = instruction & BIT(28) ? sizeof(u64) :
-				instruction & BIT(22) ? sizeof(u64) : sizeof(u32);
-			decoded.result_size = instruction & BIT(28) ? sizeof(u64) :
-				instruction & BIT(30) ? 2 * sizeof(u64) : sizeof(u64);
+			decoded.access_size = instruction & BIT(22) ? sizeof(u64) :
+				sizeof(u32);
 			decoded.simd_fp = true;
 			decoded.simd_scalar = !!(instruction & BIT(28));
+			decoded.result_size = decoded.simd_scalar ?
+				decoded.access_size :
+				instruction & BIT(30) ?
+					2 * sizeof(u64) : sizeof(u64);
 			decoded.simd_arithmetic_op = operations[index].operation;
 			return decoded;
 		}

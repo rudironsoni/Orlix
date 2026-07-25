@@ -60,11 +60,14 @@ enum tcti_target_completion_error {
 	TCTI_TARGET_COMPLETION_ERROR_ABSENT = 1U << 3,
 	TCTI_TARGET_COMPLETION_ERROR_STALE = 1U << 4,
 	TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED = 1U << 5,
-	TCTI_TARGET_COMPLETION_ERROR_UNPROVED = 1U << 6,
+	TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING = 1U << 6,
 	TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP = 1U << 7,
 	TCTI_TARGET_COMPLETION_ERROR_PROOF_REGISTRY = 1U << 8,
 	TCTI_TARGET_COMPLETION_ERROR_STALE_PROOF_BINDING = 1U << 9,
 	TCTI_TARGET_COMPLETION_ERROR_SOURCE_PROVENANCE = 1U << 10,
+	TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN = 1U << 11,
+	TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY = 1U << 12,
+	TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS = 1U << 13,
 };
 
 struct tcti_target_completion_result {
@@ -80,13 +83,22 @@ struct tcti_target_completion_result {
 	size_t alias_or_duplicate_rows;
 	size_t absent_rows;
 	size_t stale_rows;
-	size_t proved_rows;
-	size_t unproved_rows;
+	/* Static registry bindings only. Native test execution owns proof status. */
+	size_t source_bound_rows;
+	size_t source_unbound_rows;
 	size_t invalid_relationship_rows;
 	size_t invalid_source_rows;
 	size_t invalid_source_provenance;
 	size_t invalid_registry_entries;
 	size_t stale_proof_bindings;
+	/* Required duties still lacking native execution evidence. */
+	size_t unproved_obligation_bindings;
+	/* Source conditions that bind to the checked Arm feature-domain artifact. */
+	size_t source_condition_domain_bound_rows;
+	size_t invalid_source_condition_rows;
+	/* No leaf may be treated as applicable without an exact union result. */
+	size_t unresolved_feature_applicability_rows;
+	size_t invalid_feature_artifact;
 };
 
 int tcti_target_completion_validate(

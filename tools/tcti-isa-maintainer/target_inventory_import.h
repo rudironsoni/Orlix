@@ -57,6 +57,13 @@ struct tcti_target_operand {
 	uint8_t width;
 };
 
+/* An authoritative inline AARCHMRS operation object, not shared-ASL corpus data. */
+struct tcti_target_operation {
+	char *id;
+	size_t source_offset;
+	size_t source_length;
+};
+
 struct tcti_target_inventory {
 	struct tcti_target_leaf *leaves;
 	size_t leaf_count;
@@ -71,6 +78,9 @@ struct tcti_target_inventory {
 	size_t operand_count;
 	size_t operand_capacity;
 	size_t operand_name_bytes;
+	struct tcti_target_operation *operations;
+	size_t operation_count;
+	size_t operation_capacity;
 };
 
 enum tcti_target_import_error_code {
@@ -98,5 +108,9 @@ int tcti_target_inventory_import(const char *json, size_t length,
 				 struct tcti_target_import_error *error);
 
 void tcti_target_inventory_destroy(struct tcti_target_inventory *inventory);
+
+const struct tcti_target_operation *
+tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
+				       const char *id);
 
 #endif

@@ -21,23 +21,24 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(tcti_target_completion_audit(&result) == -1);
 	EXPECT(result.source_rows == 4350);
 	EXPECT(result.classification_rows == 4350);
-	EXPECT(result.classified_rows == 1078);
-	EXPECT(result.unclassified_rows == 3272);
-	EXPECT(result.required_el0_rows == 1068);
+	EXPECT(result.classified_rows == 1086);
+	EXPECT(result.unclassified_rows == 3264);
+	EXPECT(result.required_el0_rows == 1076);
 	EXPECT(result.non_el0_rows == 9);
 	EXPECT(result.undefined_or_unallocated_rows == 1);
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.proved_rows == 16);
-	EXPECT(result.unproved_rows == 1062);
+	EXPECT(result.source_bound_rows == 32);
+	EXPECT(result.source_unbound_rows == 1054);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 0);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED);
-	EXPECT(result.error_mask & TCTI_TARGET_COMPLETION_ERROR_UNPROVED);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 	return 0;
 }
 
@@ -160,8 +161,41 @@ static int stale_proof_binding_fails_hard(void)
 	EXPECT(result.stale_proof_bindings == 1);
 	EXPECT(result.error_mask &
 	       TCTI_TARGET_COMPLETION_ERROR_STALE_PROOF_BINDING);
-	EXPECT(result.proved_rows == 15);
-	EXPECT(result.unproved_rows == 1063);
+	EXPECT(result.source_bound_rows == 31);
+	EXPECT(result.source_unbound_rows == 1055);
+	free(copy);
+	return 0;
+}
+
+static int missing_source_binding_fails_hard(void)
+{
+	const struct tcti_target_completion_classification_row *live;
+	const struct tcti_target_completion_source_row *source;
+	const struct tcti_target_proof_registry_entry *registry;
+	struct tcti_target_completion_classification_row *copy;
+	struct tcti_target_completion_result baseline;
+	struct tcti_target_completion_result result;
+	size_t classification_count;
+	size_t registry_count;
+	size_t source_count;
+
+	source = tcti_target_completion_source(&source_count);
+	live = tcti_target_completion_classification(&classification_count);
+	registry = tcti_target_proof_registry_entries(&registry_count);
+	EXPECT(tcti_target_completion_audit(&baseline) == -1);
+	EXPECT(live[3434].proof_id != NULL);
+	EXPECT(live[3434].proof_id[0] != '\0');
+	copy = malloc(classification_count * sizeof(*copy));
+	EXPECT(copy != NULL);
+	memcpy(copy, live, classification_count * sizeof(*copy));
+	copy[3434].proof_id = "";
+	EXPECT(tcti_target_completion_validate(
+		       source, source_count, copy, classification_count,
+		       registry, registry_count, &result) == -1);
+	EXPECT(result.source_bound_rows + 1 == baseline.source_bound_rows);
+	EXPECT(result.source_unbound_rows == baseline.source_unbound_rows + 1);
+	EXPECT(result.error_mask &
+	       TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 	free(copy);
 	return 0;
 }
@@ -359,6 +393,8 @@ int main(void)
 		{ "wrong_counts_fail_hard", wrong_counts_fail_hard },
 		{ "stale_proof_binding_fails_hard",
 		  stale_proof_binding_fails_hard },
+		{ "missing_source_binding_fails_hard",
+		  missing_source_binding_fails_hard },
 		{ "malformed_inputs_fail_without_crashing",
 		  malformed_inputs_fail_without_crashing },
 		{ "malformed_source_name_never_reaches_strcmp",

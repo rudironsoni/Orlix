@@ -1,0 +1,785 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include "target_feature_domain.h"
+#include "target_condition_format.h"
+
+#ifdef __KERNEL__
+#include <linux/limits.h>
+#include <linux/string.h>
+#else
+#include <limits.h>
+#include <string.h>
+#endif
+
+#define TCTI_FEATURE_DOMAIN_MAX_ATOM_DEPTH 256U
+
+static int fail(struct tcti_feature_domain_diagnostic *diagnostic,
+			enum tcti_feature_domain_error error,
+			tcti_feature_artifact_u32 node_index)
+{
+	if (diagnostic) {
+		diagnostic->error = error;
+		diagnostic->node_index = node_index;
+	}
+	return -1;
+}
+
+static int present(const char *text)
+{
+	return text && text[0];
+}
+
+static int reference_valid(const struct tcti_feature_artifact *artifact,
+			   tcti_feature_artifact_u32 reference)
+{
+	return reference != TCTI_FEATURE_ARTIFACT_NODE_NONE &&
+		reference < artifact->counts.node_count;
+}
+
+static int child_valid(const struct tcti_feature_artifact *artifact,
+		       const struct tcti_feature_artifact_node *node,
+		       tcti_feature_artifact_u32 child)
+{
+	return child < node->child_count &&
+		node->first_child != TCTI_FEATURE_ARTIFACT_NODE_NONE &&
+		node->first_child <= artifact->counts.child_count &&
+		node->child_count <= artifact->counts.child_count - node->first_child &&
+		artifact->children[node->first_child + child] <
+		artifact->counts.node_count;
+}
+
+static int scalar(const struct tcti_feature_domain_value *value)
+{
+	return value->kind == TCTI_FEATURE_DOMAIN_VALUE_BOOL ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM;
+}
+
+static int callback_value_valid(const struct tcti_feature_domain_value *value)
+{
+	return value && (value->kind == TCTI_FEATURE_DOMAIN_VALUE_BOOL ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+		value->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED ||
+		(value->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM &&
+		 present(value->text)));
+}
+
+static int atom_node_length(const struct tcti_feature_artifact *artifact,
+			    tcti_feature_artifact_u32 index,
+			    tcti_feature_artifact_u32 depth,
+			    tcti_feature_artifact_u64 *length)
+{
+	const struct tcti_feature_artifact_node *node;
+	tcti_feature_artifact_u32 child;
+
+	if (depth >= TCTI_FEATURE_DOMAIN_MAX_ATOM_DEPTH ||
+	    index >= artifact->counts.node_count)
+		return -1;
+	node = &artifact->nodes[index];
+	if (node->kind == TCTI_FEATURE_ARTIFACT_VALUE) {
+		if (!present(node->text))
+			return -1;
+		*length = strlen(node->text);
+		return 0;
+	}
+	if (node->kind != TCTI_FEATURE_ARTIFACT_DOT_ATOM || !node->child_count)
+		return -1;
+	*length = 0;
+	for (child = 0; child < node->child_count; child++) {
+		tcti_feature_artifact_u64 part;
+		tcti_feature_artifact_u32 target;
+
+		if (!child_valid(artifact, node, child))
+			return -1;
+		target = artifact->children[node->first_child + child];
+		if (atom_node_length(artifact, target, depth + 1U, &part) ||
+		    (child && *length == ~(tcti_feature_artifact_u64)0) ||
+		    *length > ~(tcti_feature_artifact_u64)0 - part - (child ? 1U : 0U))
+			return -1;
+		*length += part + (child ? 1U : 0U);
+	}
+	return 0;
+}
+
+static int atom_node_byte(const struct tcti_feature_artifact *artifact,
+			  tcti_feature_artifact_u32 index,
+			  tcti_feature_artifact_u64 offset,
+			  tcti_feature_artifact_u32 depth, unsigned char *byte)
+{
+	const struct tcti_feature_artifact_node *node;
+	tcti_feature_artifact_u32 child;
+
+	if (depth >= TCTI_FEATURE_DOMAIN_MAX_ATOM_DEPTH ||
+	    index >= artifact->counts.node_count || !byte)
+		return -1;
+	node = &artifact->nodes[index];
+	if (node->kind == TCTI_FEATURE_ARTIFACT_VALUE) {
+		size_t length;
+
+		if (!present(node->text))
+			return -1;
+		length = strlen(node->text);
+		if (offset >= length)
+			return -1;
+		*byte = (unsigned char)node->text[offset];
+		return 0;
+	}
+	if (node->kind != TCTI_FEATURE_ARTIFACT_DOT_ATOM || !node->child_count)
+		return -1;
+	for (child = 0; child < node->child_count; child++) {
+		tcti_feature_artifact_u64 length;
+		tcti_feature_artifact_u32 target;
+
+		if (!child_valid(artifact, node, child))
+			return -1;
+		if (child) {
+			if (!offset) {
+				*byte = '.';
+				return 0;
+			}
+			offset--;
+		}
+		target = artifact->children[node->first_child + child];
+		if (atom_node_length(artifact, target, depth + 1U, &length))
+			return -1;
+		if (offset < length)
+			return atom_node_byte(artifact, target, offset, depth + 1U,
+					      byte);
+		offset -= length;
+	}
+	return -1;
+}
+
+static int atom_length(const struct tcti_feature_artifact *artifact,
+		       const struct tcti_feature_domain_value *value,
+		       tcti_feature_artifact_u64 *length)
+{
+	if (value->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM) {
+		if (!present(value->text))
+			return -1;
+		*length = strlen(value->text);
+		return 0;
+	}
+	if (value->kind != TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM)
+		return -1;
+	return atom_node_length(artifact, value->node_index, 0, length);
+}
+
+static int atom_byte(const struct tcti_feature_artifact *artifact,
+		     const struct tcti_feature_domain_value *value,
+		     tcti_feature_artifact_u64 offset, unsigned char *byte)
+{
+	if (value->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM) {
+		size_t length;
+
+		if (!present(value->text))
+			return -1;
+		length = strlen(value->text);
+		if (offset >= length)
+			return -1;
+		*byte = (unsigned char)value->text[offset];
+		return 0;
+	}
+	if (value->kind != TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM)
+		return -1;
+	return atom_node_byte(artifact, value->node_index, offset, 0, byte);
+}
+
+static int atom_equal(const struct tcti_feature_artifact *artifact,
+		      const struct tcti_feature_domain_value *left,
+		      const struct tcti_feature_domain_value *right, int *equal)
+{
+	tcti_feature_artifact_u64 left_length;
+	tcti_feature_artifact_u64 right_length;
+	tcti_feature_artifact_u64 index;
+
+	if (atom_length(artifact, left, &left_length) ||
+	    atom_length(artifact, right, &right_length))
+		return -1;
+	if (left_length != right_length) {
+		*equal = 0;
+		return 0;
+	}
+	for (index = 0; index < left_length; index++) {
+		unsigned char left_byte;
+		unsigned char right_byte;
+
+		if (atom_byte(artifact, left, index, &left_byte) ||
+		    atom_byte(artifact, right, index, &right_byte))
+			return -1;
+		if (left_byte != right_byte) {
+			*equal = 0;
+			return 0;
+		}
+	}
+	*equal = 1;
+	return 0;
+}
+
+static int values_equal(const struct tcti_feature_artifact *artifact,
+			const struct tcti_feature_domain_value *left,
+			const struct tcti_feature_domain_value *right, int *equal)
+{
+	if (!scalar(left) || !scalar(right))
+		return -1;
+	if ((left->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM ||
+	     left->kind == TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM) &&
+	    (right->kind == TCTI_FEATURE_DOMAIN_VALUE_ATOM ||
+	     right->kind == TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM))
+		return atom_equal(artifact, left, right, equal);
+	if (left->kind != right->kind)
+		return -1;
+	switch (left->kind) {
+	case TCTI_FEATURE_DOMAIN_VALUE_BOOL:
+		*equal = left->boolean == right->boolean;
+		return 0;
+	case TCTI_FEATURE_DOMAIN_VALUE_SIGNED:
+		*equal = left->signed_value == right->signed_value;
+		return 0;
+	case TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED:
+		*equal = left->unsigned_value == right->unsigned_value;
+		return 0;
+	default:
+		return -1;
+	}
+}
+
+static int numeric_order(const struct tcti_feature_domain_value *left,
+			 const struct tcti_feature_domain_value *right, int *order)
+{
+	if (left->kind != right->kind)
+		return -1;
+	if (left->kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED) {
+		*order = left->signed_value < right->signed_value ? -1 :
+			left->signed_value > right->signed_value;
+		return 0;
+	}
+	if (left->kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) {
+		*order = left->unsigned_value < right->unsigned_value ? -1 :
+			left->unsigned_value > right->unsigned_value;
+		return 0;
+	}
+	return -1;
+}
+
+static int evaluate_node(const struct tcti_feature_artifact *artifact,
+			 tcti_feature_artifact_u32 index,
+			 const struct tcti_feature_domain_environment *environment,
+			 struct tcti_feature_domain_scratch *scratch,
+			 tcti_feature_artifact_u32 depth,
+			 struct tcti_feature_domain_value *value,
+			 struct tcti_feature_domain_diagnostic *diagnostic)
+{
+	const struct tcti_feature_artifact_node *node;
+	struct tcti_feature_domain_value left;
+	struct tcti_feature_domain_value right;
+	int relation;
+
+	if (index >= artifact->counts.node_count)
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_REFERENCE, index);
+	if (depth >= scratch->max_depth)
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_DEPTH, index);
+	if (scratch->active[index])
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_CYCLE, index);
+	scratch->active[index] = 1;
+	node = &artifact->nodes[index];
+	*value = (struct tcti_feature_domain_value) { 0 };
+	switch (node->kind) {
+	case TCTI_FEATURE_ARTIFACT_BOOL:
+		if (node->integer != 0 && node->integer != 1)
+			goto node_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL;
+		value->boolean = (tcti_feature_artifact_u8)node->integer;
+		break;
+	case TCTI_FEATURE_ARTIFACT_IDENTIFIER:
+		if (!present(node->text) || !environment->feature ||
+		    environment->feature(environment->context, node->text, value))
+			goto missing_feature;
+		if (!callback_value_valid(value) ||
+		    value->kind != TCTI_FEATURE_DOMAIN_VALUE_BOOL)
+			goto callback_value;
+		break;
+	case TCTI_FEATURE_ARTIFACT_INTEGER:
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
+		value->signed_value = node->integer;
+		break;
+	case TCTI_FEATURE_ARTIFACT_VALUE:
+		if (!present(node->text))
+			goto node_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_ATOM;
+		value->text = node->text;
+		break;
+	case TCTI_FEATURE_ARTIFACT_DOT_ATOM:
+		if (!node->child_count)
+			goto node_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM;
+		value->node_index = index;
+		if (atom_length(artifact, value, &value->unsigned_value))
+			goto node_error;
+		break;
+	case TCTI_FEATURE_ARTIFACT_SET:
+		if (!node->child_count)
+			goto node_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_SET;
+		value->node_index = index;
+		break;
+	case TCTI_FEATURE_ARTIFACT_FIELD:
+		if (!present(node->field_state) || !present(node->field_register_name) ||
+		    !present(node->field_selector) || !environment->field ||
+		    environment->field(environment->context, node->field_state,
+				       node->field_register_name, node->field_selector,
+				       value))
+			goto missing_field;
+		if (!callback_value_valid(value))
+			goto callback_value;
+		break;
+	case TCTI_FEATURE_ARTIFACT_NOT:
+		if (!reference_valid(artifact, node->left) || node->right !=
+		    TCTI_FEATURE_ARTIFACT_NODE_NONE || node->child_count ||
+		    evaluate_node(artifact, node->left, environment, scratch,
+				  depth + 1U, &left, diagnostic))
+			goto reference_or_child_error;
+		if (left.kind != TCTI_FEATURE_DOMAIN_VALUE_BOOL)
+			goto type_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL;
+		value->boolean = !left.boolean;
+		break;
+	case TCTI_FEATURE_ARTIFACT_UINT:
+	case TCTI_FEATURE_ARTIFACT_SINT:
+		if (node->child_count != 1 || !child_valid(artifact, node, 0) ||
+		    evaluate_node(artifact, artifact->children[node->first_child],
+				  environment, scratch, depth + 1U, &left, diagnostic))
+			goto reference_or_child_error;
+		if (node->kind == TCTI_FEATURE_ARTIFACT_UINT) {
+			if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)
+				*value = left;
+			else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED &&
+				 left.signed_value >= 0) {
+				value->kind = TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED;
+				value->unsigned_value =
+					(tcti_feature_artifact_u64)left.signed_value;
+			} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED)
+				goto overflow;
+			else
+				goto type_error;
+		} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_SIGNED)
+			*value = left;
+		else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED &&
+			 left.unsigned_value <= (tcti_feature_artifact_u64)INT64_MAX) {
+			value->kind = TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
+			value->signed_value =
+				(tcti_feature_artifact_s64)left.unsigned_value;
+		} else if (left.kind == TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)
+			goto overflow;
+		else
+			goto type_error;
+		break;
+	case TCTI_FEATURE_ARTIFACT_AND:
+	case TCTI_FEATURE_ARTIFACT_OR:
+	case TCTI_FEATURE_ARTIFACT_IMPLIES:
+	case TCTI_FEATURE_ARTIFACT_IFF:
+		if (!reference_valid(artifact, node->left) ||
+		    !reference_valid(artifact, node->right) || node->child_count ||
+		    evaluate_node(artifact, node->left, environment, scratch,
+				  depth + 1U, &left, diagnostic) ||
+		    evaluate_node(artifact, node->right, environment, scratch,
+				  depth + 1U, &right, diagnostic))
+			goto reference_or_child_error;
+		if (left.kind != TCTI_FEATURE_DOMAIN_VALUE_BOOL ||
+		    right.kind != TCTI_FEATURE_DOMAIN_VALUE_BOOL)
+			goto type_error;
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL;
+		if (node->kind == TCTI_FEATURE_ARTIFACT_AND)
+			value->boolean = left.boolean && right.boolean;
+		else if (node->kind == TCTI_FEATURE_ARTIFACT_OR)
+			value->boolean = left.boolean || right.boolean;
+		else if (node->kind == TCTI_FEATURE_ARTIFACT_IMPLIES)
+			value->boolean = !left.boolean || right.boolean;
+		else
+			value->boolean = left.boolean == right.boolean;
+		break;
+	case TCTI_FEATURE_ARTIFACT_EQ:
+	case TCTI_FEATURE_ARTIFACT_NE:
+	case TCTI_FEATURE_ARTIFACT_LT:
+	case TCTI_FEATURE_ARTIFACT_GT:
+	case TCTI_FEATURE_ARTIFACT_GE:
+		if (!reference_valid(artifact, node->left) ||
+		    !reference_valid(artifact, node->right) || node->child_count ||
+		    evaluate_node(artifact, node->left, environment, scratch,
+				  depth + 1U, &left, diagnostic) ||
+		    evaluate_node(artifact, node->right, environment, scratch,
+				  depth + 1U, &right, diagnostic))
+			goto reference_or_child_error;
+		if (node->kind == TCTI_FEATURE_ARTIFACT_EQ ||
+		    node->kind == TCTI_FEATURE_ARTIFACT_NE) {
+			if (values_equal(artifact, &left, &right, &relation))
+				goto type_error;
+			if (node->kind == TCTI_FEATURE_ARTIFACT_NE)
+				relation = !relation;
+		} else {
+			if (numeric_order(&left, &right, &relation))
+				goto type_error;
+			if (node->kind == TCTI_FEATURE_ARTIFACT_LT)
+				relation = relation < 0;
+			else if (node->kind == TCTI_FEATURE_ARTIFACT_GT)
+				relation = relation > 0;
+			else
+				relation = relation >= 0;
+		}
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL;
+		value->boolean = (tcti_feature_artifact_u8)relation;
+		break;
+	case TCTI_FEATURE_ARTIFACT_IN: {
+		tcti_feature_artifact_u32 child;
+		int matched = 0;
+
+		if (!reference_valid(artifact, node->left) ||
+		    !reference_valid(artifact, node->right) || node->child_count ||
+		    evaluate_node(artifact, node->left, environment, scratch,
+				  depth + 1U, &left, diagnostic) ||
+		    evaluate_node(artifact, node->right, environment, scratch,
+				  depth + 1U, &right, diagnostic))
+			goto reference_or_child_error;
+		if (!scalar(&left) || right.kind != TCTI_FEATURE_DOMAIN_VALUE_SET ||
+		    right.node_index >= artifact->counts.node_count)
+			goto type_error;
+		node = &artifact->nodes[right.node_index];
+		for (child = 0; child < node->child_count; child++) {
+			if (!child_valid(artifact, node, child) ||
+			    evaluate_node(artifact,
+				 artifact->children[node->first_child + child], environment,
+				 scratch, depth + 1U, &right, diagnostic))
+				goto reference_or_child_error;
+			if (values_equal(artifact, &left, &right, &relation))
+				goto type_error;
+			matched |= relation;
+		}
+		value->kind = TCTI_FEATURE_DOMAIN_VALUE_BOOL;
+		value->boolean = (tcti_feature_artifact_u8)matched;
+		break;
+	}
+	default:
+		goto node_error;
+	}
+	scratch->active[index] = 0;
+	return 0;
+
+missing_feature:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_MISSING_FEATURE, index);
+missing_field:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_MISSING_FIELD, index);
+callback_value:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_CALLBACK_VALUE, index);
+overflow:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_OVERFLOW, index);
+type_error:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_TYPE, index);
+reference_or_child_error:
+	if (diagnostic && diagnostic->error != TCTI_FEATURE_DOMAIN_OK) {
+		scratch->active[index] = 0;
+		return -1;
+	}
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_REFERENCE, index);
+node_error:
+	scratch->active[index] = 0;
+	return fail(diagnostic, TCTI_FEATURE_DOMAIN_NODE, index);
+}
+
+int tcti_feature_domain_evaluate(
+	const struct tcti_feature_artifact *artifact,
+	tcti_feature_artifact_u32 root,
+	const struct tcti_feature_domain_environment *environment,
+	struct tcti_feature_domain_scratch *scratch,
+	struct tcti_feature_domain_value *value,
+	struct tcti_feature_domain_diagnostic *diagnostic)
+{
+	if (diagnostic)
+		*diagnostic = (struct tcti_feature_domain_diagnostic) {
+			.error = TCTI_FEATURE_DOMAIN_OK,
+			.node_index = TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		};
+	if (!artifact || !environment || !scratch || !value || !scratch->active ||
+	    scratch->active_count < artifact->counts.node_count ||
+	    !scratch->max_depth)
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_INVALID_ARGUMENT,
+			    TCTI_FEATURE_ARTIFACT_NODE_NONE);
+	if (!artifact->nodes || !artifact->children ||
+	    root >= artifact->counts.node_count)
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_REFERENCE, root);
+	memset(scratch->active, 0, artifact->counts.node_count);
+	return evaluate_node(artifact, root, environment, scratch, 0, value,
+			     diagnostic);
+}
+
+int tcti_feature_domain_evaluate_constraints(
+	const struct tcti_feature_artifact *artifact,
+	const struct tcti_feature_domain_environment *environment,
+	struct tcti_feature_domain_scratch *scratch,
+	tcti_feature_artifact_u8 *satisfied,
+	struct tcti_feature_domain_diagnostic *diagnostic)
+{
+	tcti_feature_artifact_u32 index;
+
+	if (!artifact || !satisfied || !artifact->constraints)
+		return fail(diagnostic, TCTI_FEATURE_DOMAIN_INVALID_ARGUMENT,
+			    TCTI_FEATURE_ARTIFACT_NODE_NONE);
+	*satisfied = 1;
+	for (index = 0; index < artifact->counts.constraint_count; index++) {
+		struct tcti_feature_domain_value value;
+
+		if (tcti_feature_domain_evaluate(artifact,
+				artifact->constraints[index].node_index, environment,
+				scratch, &value, diagnostic))
+			return -1;
+		if (value.kind != TCTI_FEATURE_DOMAIN_VALUE_BOOL)
+			return fail(diagnostic, TCTI_FEATURE_DOMAIN_TYPE,
+				    artifact->constraints[index].node_index);
+		*satisfied &= value.boolean;
+	}
+	return 0;
+}
+
+struct tcnd_reader {
+	const char *hex;
+	size_t byte_count;
+	struct tcti_feature_domain_tcnd_diagnostic *diagnostic;
+	const struct tcti_feature_artifact *artifact;
+};
+
+static int tcnd_fail(struct tcnd_reader *reader,
+			enum tcti_feature_domain_tcnd_error error, size_t offset)
+{
+	if (reader->diagnostic) {
+		reader->diagnostic->error = error;
+		reader->diagnostic->byte_offset = offset;
+	}
+	return -1;
+}
+
+static int tcnd_nibble(char character, unsigned int *value)
+{
+	if (character >= '0' && character <= '9') {
+		*value = (unsigned int)(character - '0');
+		return 0;
+	}
+	if (character >= 'a' && character <= 'f') {
+		*value = (unsigned int)(character - 'a' + 10);
+		return 0;
+	}
+	if (character >= 'A' && character <= 'F') {
+		*value = (unsigned int)(character - 'A' + 10);
+		return 0;
+	}
+	return -1;
+}
+
+static int tcnd_byte(struct tcnd_reader *reader, size_t offset,
+		     unsigned char *value)
+{
+	unsigned int high;
+	unsigned int low;
+
+	if (offset >= reader->byte_count ||
+	    tcnd_nibble(reader->hex[offset * 2U], &high) ||
+	    tcnd_nibble(reader->hex[offset * 2U + 1U], &low))
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING, offset);
+	*value = (unsigned char)((high << 4) | low);
+	return 0;
+}
+
+static int tcnd_u32be(struct tcnd_reader *reader, size_t *offset,
+		      size_t limit, tcti_feature_artifact_u32 *value)
+{
+	unsigned char bytes[4];
+	size_t index;
+
+	if (*offset > limit || limit - *offset < sizeof(bytes))
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING,
+				 *offset);
+	for (index = 0; index < sizeof(bytes); index++)
+		if (tcnd_byte(reader, *offset + index, &bytes[index]))
+			return -1;
+	*offset += sizeof(bytes);
+	*value = ((tcti_feature_artifact_u32)bytes[0] << 24) |
+		 ((tcti_feature_artifact_u32)bytes[1] << 16) |
+		 ((tcti_feature_artifact_u32)bytes[2] << 8) |
+		 (tcti_feature_artifact_u32)bytes[3];
+	return 0;
+}
+
+static int tcnd_parameter_matches(struct tcnd_reader *reader, size_t offset,
+			  size_t length)
+{
+	tcti_feature_artifact_u32 index;
+
+	if (!length)
+		return 0;
+	for (index = 0; index < reader->artifact->counts.parameter_count;
+	     index++) {
+		const char *name = reader->artifact->parameters[index].name;
+		size_t name_length;
+		size_t byte;
+
+		if (!name)
+			continue;
+		name_length = strlen(name);
+		if (name_length != length)
+			continue;
+		for (byte = 0; byte < length; byte++) {
+			unsigned char actual;
+
+			if (tcnd_byte(reader, offset + byte, &actual))
+				return -1;
+			if (actual != (unsigned char)name[byte])
+				break;
+		}
+		if (byte == length)
+			return 1;
+	}
+	return 0;
+}
+
+static int tcnd_text(struct tcnd_reader *reader, size_t *offset,
+		     size_t limit, int require_feature)
+{
+	tcti_feature_artifact_u32 length;
+	size_t start;
+
+	if (tcnd_u32be(reader, offset, limit, &length) || !length ||
+	    (size_t)length > limit - *offset)
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING, *offset);
+	start = *offset;
+	*offset += (size_t)length;
+	if (!require_feature)
+		return 0;
+	{
+		int match = tcnd_parameter_matches(reader, start, length);
+
+		if (match < 0)
+			return -1;
+		if (!match)
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_UNKNOWN_FEATURE,
+				 start);
+	}
+	if (reader->diagnostic)
+		reader->diagnostic->feature_terminals++;
+	return 0;
+}
+
+static int tcnd_record(struct tcnd_reader *reader, size_t *offset,
+		       size_t limit, unsigned int depth)
+{
+	unsigned char tag;
+	tcti_feature_artifact_u32 payload_length;
+	size_t payload_end;
+	tcti_feature_artifact_u32 count;
+	tcti_feature_artifact_u32 index;
+
+	if (depth >= TCTI_TARGET_CONDITION_MAX_DEPTH || *offset >= limit ||
+	    tcnd_byte(reader, (*offset)++, &tag) ||
+	    tcnd_u32be(reader, offset, limit, &payload_length) ||
+	    (size_t)payload_length > limit - *offset)
+		return tcnd_fail(reader, depth >= TCTI_TARGET_CONDITION_MAX_DEPTH ?
+				 TCTI_FEATURE_DOMAIN_TCND_DEPTH :
+				 TCTI_FEATURE_DOMAIN_TCND_ENCODING, *offset);
+	payload_end = *offset + (size_t)payload_length;
+	switch (tag) {
+	case TCTI_TARGET_CONDITION_BOOL: {
+		unsigned char value;
+
+		if (payload_length != 1U || tcnd_byte(reader, *offset, &value) ||
+		    value > 1U)
+			return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING,
+					 *offset);
+		*offset = payload_end;
+		return 0;
+	}
+	case TCTI_TARGET_CONDITION_FEATURE:
+		if (tcnd_text(reader, offset, payload_end, 1) ||
+		    *offset != payload_end)
+			return -1;
+		return 0;
+	case TCTI_TARGET_CONDITION_OPERAND:
+	case TCTI_TARGET_CONDITION_VALUE:
+		if (tcnd_text(reader, offset, payload_end, 0) ||
+		    *offset != payload_end)
+			return -1;
+		return 0;
+	case TCTI_TARGET_CONDITION_SET:
+		if (tcnd_u32be(reader, offset, payload_end, &count))
+			return -1;
+		for (index = 0; index < count; index++)
+			if (tcnd_record(reader, offset, payload_end, depth + 1U))
+				return -1;
+		break;
+	case TCTI_TARGET_CONDITION_NOT:
+		if (tcnd_record(reader, offset, payload_end, depth + 1U))
+			return -1;
+		break;
+	case TCTI_TARGET_CONDITION_AND:
+	case TCTI_TARGET_CONDITION_OR:
+	case TCTI_TARGET_CONDITION_EQ:
+	case TCTI_TARGET_CONDITION_NE:
+	case TCTI_TARGET_CONDITION_IN:
+		if (tcnd_record(reader, offset, payload_end, depth + 1U) ||
+		    tcnd_record(reader, offset, payload_end, depth + 1U))
+			return -1;
+		break;
+	default:
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING,
+				 *offset - 5U);
+	}
+	if (*offset != payload_end)
+		return tcnd_fail(reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING, *offset);
+	return 0;
+}
+
+int tcti_feature_domain_validate_tcnd_features(
+	const struct tcti_feature_artifact *artifact, const char *tcnd_hex,
+	struct tcti_feature_domain_tcnd_diagnostic *diagnostic)
+{
+	struct tcnd_reader reader;
+	size_t hex_length;
+	size_t offset = 0;
+	static const unsigned char header[] = { 'T', 'C', 'N', 'D', 1U };
+	size_t index;
+
+	if (diagnostic)
+		*diagnostic = (struct tcti_feature_domain_tcnd_diagnostic) {
+			.error = TCTI_FEATURE_DOMAIN_TCND_OK,
+		};
+	if (!artifact || !artifact->parameters || !tcnd_hex)
+		return tcnd_fail(&(struct tcnd_reader) { .diagnostic = diagnostic },
+				 TCTI_FEATURE_DOMAIN_TCND_INVALID_ARGUMENT, 0);
+	hex_length = strlen(tcnd_hex);
+	if (!hex_length || (hex_length & 1U) || hex_length / 2U < sizeof(header) ||
+	    hex_length / 2U > TCTI_TARGET_CONDITION_MAX_SERIALIZED_BYTES)
+		return tcnd_fail(&(struct tcnd_reader) { .diagnostic = diagnostic },
+				 TCTI_FEATURE_DOMAIN_TCND_ENCODING, 0);
+	reader = (struct tcnd_reader) {
+		.hex = tcnd_hex,
+		.byte_count = hex_length / 2U,
+		.diagnostic = diagnostic,
+		.artifact = artifact,
+	};
+	for (index = 0; index < sizeof(header); index++) {
+		unsigned char actual;
+
+		if (tcnd_byte(&reader, index, &actual))
+			return -1;
+		if (actual != header[index])
+			return tcnd_fail(&reader, TCTI_FEATURE_DOMAIN_TCND_ENCODING, index);
+	}
+	offset = sizeof(header);
+	if (tcnd_record(&reader, &offset, reader.byte_count, 0) ||
+	    offset != reader.byte_count)
+		return -1;
+	return 0;
+}

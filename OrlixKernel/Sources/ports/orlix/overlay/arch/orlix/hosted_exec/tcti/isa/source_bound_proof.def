@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Runtime projection of immutable source-to-registry bindings.
+ *
+ * The complete binding tuple remains in target_proof_registry.c. Its host
+ * validation requires this projection to be a bijection with those bindings.
+ * This file carries no KUnit or kselftest execution result.
+ */
+TCTI_A64_SOURCE_BOUND_PROOF(3434U, "kunit:logical-shifted-register-and")
+TCTI_A64_SOURCE_BOUND_PROOF(3442U, "kunit:logical-shifted-register-and")
+TCTI_A64_SOURCE_BOUND_PROOF(3435U, "kunit:logical-shifted-register-bic")
+TCTI_A64_SOURCE_BOUND_PROOF(3443U, "kunit:logical-shifted-register-bic")
+TCTI_A64_SOURCE_BOUND_PROOF(3436U, "kunit:logical-shifted-register-orr")
+TCTI_A64_SOURCE_BOUND_PROOF(3444U, "kunit:logical-shifted-register-orr")
+TCTI_A64_SOURCE_BOUND_PROOF(3437U, "kunit:logical-shifted-register-orn")
+TCTI_A64_SOURCE_BOUND_PROOF(3445U, "kunit:logical-shifted-register-orn")
+TCTI_A64_SOURCE_BOUND_PROOF(3438U, "kunit:logical-shifted-register-eor")
+TCTI_A64_SOURCE_BOUND_PROOF(3446U, "kunit:logical-shifted-register-eor")
+TCTI_A64_SOURCE_BOUND_PROOF(3439U, "kunit:logical-shifted-register-eon")
+TCTI_A64_SOURCE_BOUND_PROOF(3447U, "kunit:logical-shifted-register-eon")
+TCTI_A64_SOURCE_BOUND_PROOF(3440U, "kunit:logical-shifted-register-ands")
+TCTI_A64_SOURCE_BOUND_PROOF(3448U, "kunit:logical-shifted-register-ands")
+TCTI_A64_SOURCE_BOUND_PROOF(3441U, "kunit:logical-shifted-register-bics")
+TCTI_A64_SOURCE_BOUND_PROOF(3449U, "kunit:logical-shifted-register-bics")
+TCTI_A64_SOURCE_BOUND_PROOF(2183U, "kunit:cssc-min-max-immediate-smax")
+TCTI_A64_SOURCE_BOUND_PROOF(2187U, "kunit:cssc-min-max-immediate-smax")
+TCTI_A64_SOURCE_BOUND_PROOF(2184U, "kunit:cssc-min-max-immediate-umax")
+TCTI_A64_SOURCE_BOUND_PROOF(2188U, "kunit:cssc-min-max-immediate-umax")
+TCTI_A64_SOURCE_BOUND_PROOF(2185U, "kunit:cssc-min-max-immediate-smin")
+TCTI_A64_SOURCE_BOUND_PROOF(2189U, "kunit:cssc-min-max-immediate-smin")
+TCTI_A64_SOURCE_BOUND_PROOF(2186U, "kunit:cssc-min-max-immediate-umin")
+TCTI_A64_SOURCE_BOUND_PROOF(2190U, "kunit:cssc-min-max-immediate-umin")
+TCTI_A64_SOURCE_BOUND_PROOF(2173U, "kunit:add-sub-immediate-add")
+TCTI_A64_SOURCE_BOUND_PROOF(2177U, "kunit:add-sub-immediate-add")
+TCTI_A64_SOURCE_BOUND_PROOF(2174U, "kunit:add-sub-immediate-adds")
+TCTI_A64_SOURCE_BOUND_PROOF(2178U, "kunit:add-sub-immediate-adds")
+TCTI_A64_SOURCE_BOUND_PROOF(2175U, "kunit:add-sub-immediate-sub")
+TCTI_A64_SOURCE_BOUND_PROOF(2179U, "kunit:add-sub-immediate-sub")
+TCTI_A64_SOURCE_BOUND_PROOF(2176U, "kunit:add-sub-immediate-subs")
+TCTI_A64_SOURCE_BOUND_PROOF(2180U, "kunit:add-sub-immediate-subs")

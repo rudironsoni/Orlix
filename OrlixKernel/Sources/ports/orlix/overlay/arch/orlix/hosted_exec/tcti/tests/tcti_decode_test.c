@@ -46,7 +46,7 @@ static void tcti_complete_target_inventory_is_kernel_visible(
 	struct kunit *test)
 {
 	KUNIT_EXPECT_EQ(test, 4350U, TCTI_A64_GENERATED_SOURCE_COUNT);
-	KUNIT_EXPECT_EQ(test, 3272U,
+	KUNIT_EXPECT_EQ(test, 3264U,
 			TCTI_A64_GENERATED_UNCLASSIFIED_COUNT);
 	KUNIT_EXPECT_EQ(test, 0U,
 			TCTI_A64_GENERATED_CLASSIFICATION_COMPLETE);
@@ -65,14 +65,18 @@ static void tcti_complete_target_inventory_is_kernel_visible(
 			  TCTI_A64_GENERATED_INSTRUCTIONS_SHA256);
 }
 
-static void tcti_runtime_profile_rejects_coarse_family_status(
+static void tcti_runtime_profile_uses_full_target_without_promotion(
 	struct kunit *test)
 {
 	struct tcti_runtime_projection_result projection;
 
-	KUNIT_EXPECT_EQ(test, -EINVAL,
+	KUNIT_EXPECT_EQ(test, 0,
 			tcti_runtime_projection_audit(&projection));
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.target_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1086, projection.classified_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.unproved_leaf_count);
+	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap);
+	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap2);
 }
 
 static void tcti_runtime_projection_rejects_advertised_incomplete_feature(
@@ -1564,12 +1568,14 @@ static void tcti_decode_load_store_pair_all_register_fields(struct kunit *test)
 
 	for (reg = 0; reg < 32; reg++) {
 		struct tcti_decoded_instruction decoded;
+		u8 companion = reg == 2 ? 3 : 2;
 
 		decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
-			false, 2, 2, true, 0, reg, 2, 1));
+			false, 2, 2, true, 0, reg, companion, 1));
 		KUNIT_EXPECT_EQ(test, reg, decoded.rt);
+		companion = reg == 0 ? 1 : 0;
 		decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
-			false, 2, 2, true, 0, 0, reg, 1));
+			false, 2, 2, true, 0, companion, reg, 1));
 		KUNIT_EXPECT_EQ(test, reg, decoded.rt2);
 		decoded = tcti_decode_aarch64(tcti_test_encode_load_store_pair(
 			false, 2, 2, true, 0, 0, 2, reg));
@@ -3336,6 +3342,13 @@ static void tcti_expect_load_store_exclusive_control_shape(
 					size, o2, load, o1, rs, o0, rt2, 9, 10);
 				decoded = tcti_decode_aarch64(instruction);
 				if (!legal) {
+					if (decoded.decode_class ==
+					    TCTI_DECODE_LSE_ATOMIC) {
+						KUNIT_EXPECT_EQ(test,
+							TCTI_LSE_ATOMIC_CAS,
+							decoded.lse_atomic_op);
+						continue;
+					}
 					KUNIT_ASSERT_EQ_MSG(test,
 						TCTI_DECODE_UNSUPPORTED,
 						decoded.decode_class,
@@ -10810,7 +10823,7 @@ static void tcti_gadget_executes_complete_add_sub_immediate_family(
 
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 		tcti_decode_aarch64(0x11800000U).decode_class);
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_MIN_MAX_IMMEDIATE,
 		tcti_decode_aarch64(0x11c00000U).decode_class);
 }
 
@@ -30306,24 +30319,48 @@ static void tcti_switch_executes_simd_scalar_fp_compare_zero(
 		u64 source;
 		u64 expected;
 		enum tcti_simd_vector_arithmetic_op operation;
+		u8 access_size;
 	} cases[] = {
-		{ 0x5ea0c820U, 0x3ff0000000000000ULL, U64_MAX,
-		  TCTI_SIMD_ARITH_FCMGT_ZERO },
-		{ 0x5ea0c820U, 0xbff0000000000000ULL, 0,
-		  TCTI_SIMD_ARITH_FCMGT_ZERO },
-		{ 0x5ea0d820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMEQ_ZERO },
-		{ 0x5ea0d820U, 0x8000000000000000ULL, U64_MAX,
-		  TCTI_SIMD_ARITH_FCMEQ_ZERO },
-		{ 0x5ea0e820U, 0xbff0000000000000ULL, U64_MAX,
-		  TCTI_SIMD_ARITH_FCMLT_ZERO },
-		{ 0x5ea0e820U, 0x3ff0000000000000ULL, 0,
-		  TCTI_SIMD_ARITH_FCMLT_ZERO },
-		{ 0x7ea0c820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMGE_ZERO },
-		{ 0x7ea0c820U, 0xbff0000000000000ULL, 0,
-		  TCTI_SIMD_ARITH_FCMGE_ZERO },
-		{ 0x7ea0d820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMLE_ZERO },
-		{ 0x7ea0d820U, 0x3ff0000000000000ULL, 0,
-		  TCTI_SIMD_ARITH_FCMLE_ZERO },
+		{ 0x5ea0c820U, 0x3f800000U, U32_MAX,
+		  TCTI_SIMD_ARITH_FCMGT_ZERO, sizeof(u32) },
+		{ 0x5ea0c820U, 0xbf800000U, 0,
+		  TCTI_SIMD_ARITH_FCMGT_ZERO, sizeof(u32) },
+		{ 0x5ea0d820U, 0, U32_MAX, TCTI_SIMD_ARITH_FCMEQ_ZERO,
+		  sizeof(u32) },
+		{ 0x5ea0d820U, 0x80000000U, U32_MAX,
+		  TCTI_SIMD_ARITH_FCMEQ_ZERO, sizeof(u32) },
+		{ 0x5ea0e820U, 0xbf800000U, U32_MAX,
+		  TCTI_SIMD_ARITH_FCMLT_ZERO, sizeof(u32) },
+		{ 0x5ea0e820U, 0x3f800000U, 0,
+		  TCTI_SIMD_ARITH_FCMLT_ZERO, sizeof(u32) },
+		{ 0x7ea0c820U, 0, U32_MAX, TCTI_SIMD_ARITH_FCMGE_ZERO,
+		  sizeof(u32) },
+		{ 0x7ea0c820U, 0xbf800000U, 0,
+		  TCTI_SIMD_ARITH_FCMGE_ZERO, sizeof(u32) },
+		{ 0x7ea0d820U, 0, U32_MAX, TCTI_SIMD_ARITH_FCMLE_ZERO,
+		  sizeof(u32) },
+		{ 0x7ea0d820U, 0x3f800000U, 0,
+		  TCTI_SIMD_ARITH_FCMLE_ZERO, sizeof(u32) },
+		{ 0x5ee0c820U, 0x3ff0000000000000ULL, U64_MAX,
+		  TCTI_SIMD_ARITH_FCMGT_ZERO, sizeof(u64) },
+		{ 0x5ee0c820U, 0xbff0000000000000ULL, 0,
+		  TCTI_SIMD_ARITH_FCMGT_ZERO, sizeof(u64) },
+		{ 0x5ee0d820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMEQ_ZERO,
+		  sizeof(u64) },
+		{ 0x5ee0d820U, 0x8000000000000000ULL, U64_MAX,
+		  TCTI_SIMD_ARITH_FCMEQ_ZERO, sizeof(u64) },
+		{ 0x5ee0e820U, 0xbff0000000000000ULL, U64_MAX,
+		  TCTI_SIMD_ARITH_FCMLT_ZERO, sizeof(u64) },
+		{ 0x5ee0e820U, 0x3ff0000000000000ULL, 0,
+		  TCTI_SIMD_ARITH_FCMLT_ZERO, sizeof(u64) },
+		{ 0x7ee0c820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMGE_ZERO,
+		  sizeof(u64) },
+		{ 0x7ee0c820U, 0xbff0000000000000ULL, 0,
+		  TCTI_SIMD_ARITH_FCMGE_ZERO, sizeof(u64) },
+		{ 0x7ee0d820U, 0, U64_MAX, TCTI_SIMD_ARITH_FCMLE_ZERO,
+		  sizeof(u64) },
+		{ 0x7ee0d820U, 0x3ff0000000000000ULL, 0,
+		  TCTI_SIMD_ARITH_FCMLE_ZERO, sizeof(u64) },
 	};
 	unsigned int index;
 
@@ -30338,8 +30375,10 @@ static void tcti_switch_executes_simd_scalar_fp_compare_zero(
 		KUNIT_ASSERT_EQ(test, cases[index].operation,
 				decoded.simd_arithmetic_op);
 		KUNIT_ASSERT_TRUE(test, decoded.simd_scalar);
-		KUNIT_ASSERT_EQ(test, sizeof(u64), decoded.access_size);
-		KUNIT_ASSERT_EQ(test, sizeof(u64), decoded.result_size);
+		KUNIT_ASSERT_EQ(test, cases[index].access_size,
+				decoded.access_size);
+		KUNIT_ASSERT_EQ(test, cases[index].access_size,
+				decoded.result_size);
 
 		current->thread.user_simd[0] = 0xaaaaaaaaaaaaaaaaULL;
 		current->thread.user_simd[1] = 0xbbbbbbbbbbbbbbbbULL;
@@ -30524,7 +30563,7 @@ static void tcti_switch_executes_simd_shll_family(struct kunit *test)
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_complete_target_inventory_is_kernel_visible),
-	KUNIT_CASE(tcti_runtime_profile_rejects_coarse_family_status),
+	KUNIT_CASE(tcti_runtime_profile_uses_full_target_without_promotion),
 	KUNIT_CASE(tcti_runtime_projection_rejects_advertised_incomplete_feature),
 	KUNIT_CASE(tcti_runtime_projection_keeps_unadvertised_gap_in_target),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),

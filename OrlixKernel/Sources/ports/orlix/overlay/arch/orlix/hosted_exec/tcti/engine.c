@@ -1043,10 +1043,30 @@ static bool tcti_syscall_changes_user_mappings(unsigned long nr)
 	}
 }
 
+/*
+ * The syscall dispatcher returns after Linux has changed a user mapping.  The
+ * block cache alone is not an authorization boundary: the per-mm mapping
+ * sequence also invalidates task-local TLB entries that retain host-page
+ * references.  Keep that transition in the arch/mm owner.
+ */
+static void tcti_invalidate_changed_user_mappings(struct mm_struct *mm,
+					  unsigned long nr, long status)
+{
+	if (mm && !IS_ERR_VALUE(status) && tcti_syscall_changes_user_mappings(nr))
+		tcti_invalidate_mm(mm);
+}
+
 #if IS_ENABLED(CONFIG_ORLIX_TCTI_KUNIT_TEST)
 bool tcti_syscall_changes_user_mappings_for_tests(unsigned long nr)
 {
 	return tcti_syscall_changes_user_mappings(nr);
+}
+
+void tcti_invalidate_changed_user_mappings_for_tests(struct mm_struct *mm,
+						      unsigned long nr,
+						      long status)
+{
+	tcti_invalidate_changed_user_mappings(mm, nr, status);
 }
 #endif
 
@@ -1123,9 +1143,7 @@ static void orlix_tcti_handle_syscall(struct pt_regs *regs)
 			task_regs ? task_regs->syscallno : NO_SYSCALL,
 			regs->sp, task_regs ? task_regs->sp : 0,
 			regs->regs[30], task_regs ? task_regs->regs[30] : 0);
-	if (current->mm && !IS_ERR_VALUE(regs->regs[0]) &&
-	    tcti_syscall_changes_user_mappings(nr))
-		tcti_block_cache_invalidate_mm(current->mm);
+	tcti_invalidate_changed_user_mappings(current->mm, nr, regs->regs[0]);
 	tcti_sync_syscall_user_ranges(regs, nr);
 	tcti_report_syscall_return(current, regs, nr, pc);
 }

@@ -14,14 +14,12 @@ static int tcti_gadget_execute_decoded(struct mm_struct *mm,
 				       const struct tcti_gadget_word **cursor,
 				       unsigned long *fault_address)
 {
-	const struct tcti_decoded_instruction *decoded;
+	struct tcti_decoded_instruction decoded;
 
-	BUILD_BUG_ON(__alignof__(struct tcti_decoded_instruction) >
-		     __alignof__(struct tcti_gadget_word));
-	decoded = (const struct tcti_decoded_instruction *)*cursor;
+	memcpy(&decoded, *cursor, sizeof(decoded));
 	*cursor += TCTI_DECODED_INSTRUCTION_WORDS;
 
-	return tcti_execute_decoded_semantics(mm, regs, decoded,
+	return tcti_execute_decoded_semantics(mm, regs, &decoded,
 					      fault_address);
 }
 

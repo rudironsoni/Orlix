@@ -8,10 +8,19 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_crc32_decode_boundary_test.o \
 	tcti_crypto_extension_decode_boundary_test.o \
 	tcti_atomic_128_rmw_test.o \
+	target_lse_operation_catalog.o \
 	tcti_lse_source_bound_test.o \
 	tcti_lse128_noncas_test.o \
+	tcti_add_sub_immediate_test.o \
 	tcti_logical_shifted_register_test.o \
-	tcti_bitfield_extract_source_bound_test.o
+	tcti_bitfield_extract_source_bound_test.o \
+	tcti_scalar_fp_semantics_test.o \
+	tcti_baseline_decoder_regression_test.o \
+	tcti_gadget_program_boundary_test.o \
+	tcti_lse_caspal_atomicity_test.o \
+	tcti_kthread_handoff_test.o \
+	tcti_mapping_invalidation_test.o \
+	tcti_pmull_semantic_test.o
 
 hostprogs := gen_inventory target_isa_kbuild_generator
 
@@ -35,5 +44,6 @@ $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 	$(call if_changed,tcti_target_inventory)
 
 $(obj)/tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
+$(obj)/runtime_projection.o: $(obj)/target_inventory.h
 
 ccflags-y += -I$(obj)

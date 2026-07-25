@@ -34,8 +34,18 @@ struct tcti_target_feature_sat_error {
 
 struct tcti_target_feature_sat_audit {
 	enum tcti_target_feature_sat_result *leaves;
-	size_t leaf_count;
+	/*
+	 * Canonical SAT assignments, stored leaf-major. Each applicable leaf owns
+	 * parameter_count signed values: -1 false, +1 true. Impossible leaves are
+	 * all zero. Parameter ordering is exactly Features.json parameter order.
+	 */
+	signed char *witnesses;
+	size_t leaf_count, parameter_count;
 };
+
+/* Returns an applicable leaf's canonical parameter assignment, or NULL. */
+const signed char *tcti_target_feature_sat_witness(
+	const struct tcti_target_feature_sat_audit *audit, size_t leaf_index);
 
 /*
  * Computes SAT(Features.json constraints && leaf condition) for every leaf.
@@ -43,6 +53,8 @@ struct tcti_target_feature_sat_audit {
  * unsatisfiable base model, malformed graph, or resource exhaustion returns
  * nonzero and leaves no usable audit result. Both limits are cumulative across
  * the complete base-model and leaf audit, rather than per solver invocation.
+ * For every applicable Boolean leaf, the audit also returns the first
+ * deterministic assignment produced by the fixed variable and branch order.
  */
 int tcti_target_feature_sat_audit(const struct tcti_feature_model *model,
 	const struct tcti_target_inventory *inventory, size_t branch_limit,

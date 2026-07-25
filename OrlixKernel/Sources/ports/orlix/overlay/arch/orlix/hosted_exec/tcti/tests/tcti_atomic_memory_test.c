@@ -18,13 +18,40 @@
 
 #define TCTI_ATOMIC_PAIR_ITERATIONS 1024
 
+static int tcti_atomic_memory_test_init(struct kunit *test)
+{
+	struct mm_struct *mm;
+
+	test->priv = NULL;
+	mm = mm_alloc();
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void tcti_atomic_memory_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static unsigned long tcti_atomic_test_map(struct kunit *test, int prot)
 {
 	unsigned long mapped;
 
 	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, prot,
 				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	KUNIT_EXPECT_FALSE(test, IS_ERR_VALUE(mapped));
+	if (IS_ERR_VALUE(mapped)) {
+		KUNIT_FAIL(test, "could not map atomic test memory: %ld",
+			   (long)mapped);
+		return 0;
+	}
 	return mapped;
 }
 
@@ -70,6 +97,8 @@ static void tcti_atomic_memory_cas_all_scalar_widths(struct kunit *test)
 	const size_t sizes[] = { sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64) };
 	size_t i;
 
+	if (!mapped)
+		return;
 	for (i = 0; i < ARRAY_SIZE(sizes); i++) {
 		u64 initial = 0x1122334455667788ULL & tcti_atomic_mask(sizes[i]);
 		u64 replacement = 0x8877665544332211ULL & tcti_atomic_mask(sizes[i]);
@@ -118,6 +147,8 @@ static void tcti_atomic_memory_rmw_all_scalar_ops_and_widths(struct kunit *test)
 	const size_t sizes[] = { sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64) };
 	size_t i, j;
 
+	if (!mapped)
+		return;
 	for (i = 0; i < ARRAY_SIZE(sizes); i++) {
 		for (j = 0; j < ARRAY_SIZE(operations); j++) {
 			u64 initial = 0x12 & tcti_atomic_mask(sizes[i]);
@@ -154,6 +185,8 @@ static void tcti_atomic_memory_signed_extrema_all_scalar_widths(struct kunit *te
 	const size_t sizes[] = { sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64) };
 	size_t i;
 
+	if (!mapped)
+		return;
 	for (i = 0; i < ARRAY_SIZE(sizes); i++) {
 		u64 mask = tcti_atomic_mask(sizes[i]);
 		u64 min = 1ULL << (sizes[i] * 8 - 1);
@@ -237,6 +270,17 @@ struct tcti_atomic_pair_reader {
 	bool torn;
 };
 
+static void tcti_atomic_pair_wait_for_stop(void)
+{
+	for (;;) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (kthread_should_stop())
+			break;
+		schedule();
+	}
+	__set_current_state(TASK_RUNNING);
+}
+
 static int tcti_atomic_pair_writer(void *data)
 {
 	struct tcti_atomic_pair_worker *worker = data;
@@ -250,15 +294,19 @@ static int tcti_atomic_pair_writer(void *data)
 		const u8 *replacement = i & 1 ? worker->first : worker->second;
 		bool exchanged = false;
 
+		if (kthread_should_stop())
+			break;
 		worker->ret = tcti_atomic_user_data(worker->mm, worker->mapped,
 				TCTI_ATOMIC_MEMORY_CAS, TCTI_ATOMIC_MEMORY_ACQ_REL,
 				expected, replacement, old, worker->size, &exchanged);
 		if (worker->ret)
 			break;
+		cond_resched();
 	}
 	atomic_dec(worker->writers_running);
-	kthread_unuse_mm(worker->mm);
 	complete(&worker->done);
+	tcti_atomic_pair_wait_for_stop();
+	kthread_unuse_mm(worker->mm);
 	return 0;
 }
 
@@ -271,6 +319,8 @@ static int tcti_atomic_pair_reader(void *data)
 	complete(reader->ready);
 	wait_for_completion(reader->start);
 	while (atomic_read(reader->writers_running)) {
+		if (kthread_should_stop())
+			break;
 		reader->ret = tcti_read_user_data(reader->mm, reader->mapped,
 						  observed, reader->size);
 		if (reader->ret ||
@@ -280,9 +330,11 @@ static int tcti_atomic_pair_reader(void *data)
 			break;
 		}
 		cpu_relax();
+		cond_resched();
 	}
-	kthread_unuse_mm(reader->mm);
 	complete(&reader->done);
+	tcti_atomic_pair_wait_for_stop();
+	kthread_unuse_mm(reader->mm);
 	return 0;
 }
 
@@ -293,6 +345,8 @@ static void tcti_atomic_memory_casp_no_tear_under_coordinated_threads(
 	const size_t sizes[] = { sizeof(u64), 2 * sizeof(u64) };
 	size_t i;
 
+	if (!mapped)
+		return;
 	for (i = 0; i < ARRAY_SIZE(sizes); i++) {
 		u8 first[16];
 		u8 second[16];
@@ -300,19 +354,25 @@ static void tcti_atomic_memory_casp_no_tear_under_coordinated_threads(
 		struct completion reader_ready;
 		struct tcti_atomic_pair_worker writers[2];
 		struct tcti_atomic_pair_reader reader;
-		struct task_struct *writer_tasks[2];
-		struct task_struct *reader_task;
+		struct task_struct *writer_tasks[2] = {};
+		struct task_struct *reader_task = NULL;
 		atomic_t writers_running;
 		unsigned int j;
+		unsigned int writer_count = 0;
+		bool exercise_completed = false;
 		int ret;
 
 		memset(first, 0x11, sizeof(first));
 		memset(second, 0xaa, sizeof(second));
-		ret = tcti_write_user_data(current->mm, mapped, first, sizes[i]);
-		KUNIT_ASSERT_EQ(test, 0, ret);
 		init_completion(&start);
 		init_completion(&reader_ready);
 		atomic_set(&writers_running, ARRAY_SIZE(writers));
+		ret = tcti_write_user_data(current->mm, mapped, first, sizes[i]);
+		if (ret) {
+			KUNIT_FAIL(test, "could not initialize CASP test memory: %d",
+				   ret);
+			goto out_unmap;
+		}
 		for (j = 0; j < ARRAY_SIZE(writers); j++) {
 			writers[j] = (struct tcti_atomic_pair_worker) {
 				.mm = current->mm, .mapped = mapped, .size = sizes[i],
@@ -322,7 +382,12 @@ static void tcti_atomic_memory_casp_no_tear_under_coordinated_threads(
 			init_completion(&writers[j].done);
 			writer_tasks[j] = kthread_run(tcti_atomic_pair_writer,
 						      &writers[j], "tcti-atomic-pair");
-			KUNIT_ASSERT_FALSE(test, IS_ERR(writer_tasks[j]));
+			if (IS_ERR_OR_NULL(writer_tasks[j])) {
+				KUNIT_FAIL(test, "could not create CASP writer %u", j);
+				writer_tasks[j] = NULL;
+				goto out_stop_threads;
+			}
+			writer_count++;
 		}
 		reader = (struct tcti_atomic_pair_reader) {
 			.mm = current->mm, .mapped = mapped, .size = sizes[i],
@@ -332,37 +397,72 @@ static void tcti_atomic_memory_casp_no_tear_under_coordinated_threads(
 		};
 		init_completion(&reader.done);
 		reader_task = kthread_run(tcti_atomic_pair_reader, &reader,
-						  "tcti-atomic-read");
-		KUNIT_ASSERT_FALSE(test, IS_ERR(reader_task));
-		KUNIT_ASSERT_NE(test, 0UL,
-			wait_for_completion_timeout(&reader_ready, msecs_to_jiffies(5000)));
+					  "tcti-atomic-read");
+		if (IS_ERR_OR_NULL(reader_task)) {
+			KUNIT_FAIL(test, "could not create CASP reader");
+			reader_task = NULL;
+			goto out_stop_threads;
+		}
+		if (!wait_for_completion_timeout(&reader_ready,
+					 msecs_to_jiffies(5000))) {
+			KUNIT_FAIL(test, "CASP reader did not become ready");
+			goto out_stop_threads;
+		}
 		complete_all(&start);
 		for (j = 0; j < ARRAY_SIZE(writers); j++) {
-			KUNIT_ASSERT_NE(test, 0UL,
-				wait_for_completion_timeout(&writers[j].done,
-					msecs_to_jiffies(5000)));
-			KUNIT_EXPECT_EQ(test, 0, writers[j].ret);
+			if (!wait_for_completion_timeout(&writers[j].done,
+						 msecs_to_jiffies(5000))) {
+				KUNIT_FAIL(test, "CASP writer %u timed out", j);
+				goto out_stop_threads;
+			}
 		}
-		KUNIT_ASSERT_NE(test, 0UL,
-			wait_for_completion_timeout(&reader.done, msecs_to_jiffies(5000)));
+		if (!wait_for_completion_timeout(&reader.done,
+					 msecs_to_jiffies(5000))) {
+			KUNIT_FAIL(test, "CASP reader timed out");
+			goto out_stop_threads;
+		}
+		exercise_completed = true;
+
+out_stop_threads:
+		/* Every created task retains this function's stack and current->mm. */
+		complete_all(&start);
+		if (reader_task)
+			kthread_stop(reader_task);
+		for (j = 0; j < writer_count; j++)
+			kthread_stop(writer_tasks[j]);
+		if (!exercise_completed)
+			goto out_unmap;
+
+		for (j = 0; j < ARRAY_SIZE(writers); j++)
+			KUNIT_EXPECT_EQ(test, 0, writers[j].ret);
 		KUNIT_EXPECT_EQ(test, 0, reader.ret);
 		KUNIT_EXPECT_FALSE(test, reader.torn);
 	}
 
+out_unmap:
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
 static void tcti_atomic_memory_validates_inputs_and_permissions(
 	struct kunit *test)
 {
-	unsigned long mapped = tcti_atomic_test_map(test, PROT_READ | PROT_WRITE);
-	unsigned long readonly = tcti_atomic_test_map(test, PROT_READ);
-	unsigned long inaccessible = tcti_atomic_test_map(test, PROT_NONE);
+	unsigned long mapped;
+	unsigned long readonly;
+	unsigned long inaccessible;
 	u32 value = 1;
 	u32 old = 0;
 	bool exchanged = false;
 	int ret;
 
+	mapped = tcti_atomic_test_map(test, PROT_READ | PROT_WRITE);
+	if (!mapped)
+		return;
+	readonly = tcti_atomic_test_map(test, PROT_READ);
+	if (!readonly)
+		goto out_mapped;
+	inaccessible = tcti_atomic_test_map(test, PROT_NONE);
+	if (!inaccessible)
+		goto out_readonly;
 	ret = tcti_atomic_user_data(current->mm, mapped + 1,
 			TCTI_ATOMIC_MEMORY_ADD, TCTI_ATOMIC_MEMORY_RELAXED, NULL,
 			&value, &old, sizeof(value), &exchanged);
@@ -397,7 +497,9 @@ static void tcti_atomic_memory_validates_inputs_and_permissions(
 			&value, &old, 2 * sizeof(value), &exchanged);
 	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(inaccessible, PAGE_SIZE));
+out_readonly:
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(readonly, PAGE_SIZE));
+out_mapped:
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
@@ -415,6 +517,8 @@ static void tcti_exclusive_reservation_rejects_same_value_writes(
 	bool stored;
 	int ret;
 
+	if (!mapped)
+		return;
 	ret = tcti_write_user_data(current->mm, mapped, &initial, sizeof(initial));
 	KUNIT_ASSERT_EQ(test, 0, ret);
 	ret = tcti_load_exclusive_user_data(current->mm, mapped, &old,
@@ -478,6 +582,8 @@ static void tcti_exclusive_reservation_rejects_restored_mapping_generation(
 	bool stored;
 	int ret;
 
+	if (!mapped)
+		return;
 	ret = tcti_write_user_data(current->mm, mapped, &initial,
 				   sizeof(initial));
 	KUNIT_ASSERT_EQ(test, 0, ret);
@@ -586,6 +692,8 @@ static struct kunit_case tcti_atomic_memory_test_cases[] = {
 
 struct kunit_suite tcti_atomic_memory_test_suite = {
 	.name = "orlix-tcti-atomic-memory",
+	.init = tcti_atomic_memory_test_init,
+	.exit = tcti_atomic_memory_test_exit,
 	.test_cases = tcti_atomic_memory_test_cases,
 };
 kunit_test_suite(tcti_atomic_memory_test_suite);

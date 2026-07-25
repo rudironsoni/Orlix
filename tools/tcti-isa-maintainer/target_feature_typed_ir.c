@@ -2,181 +2,318 @@
 #include "target_feature_typed_ir.h"
 #include <stdlib.h>
 #include <string.h>
-#define LOWER_DEPTH 256U
-static int reserve(void **p, size_t *c, size_t n, size_t z) {
-  size_t q = *c ? *c : 32;
-  void *v;
-  while (q < n) {
-    if (q > SIZE_MAX / 2)
-      return -1;
-    q *= 2;
-  }
-  v = realloc(*p, q * z);
-  if (!v)
-    return -1;
-  *p = v;
-  *c = q;
-  return 0;
-}
-static int parameter(const struct tcti_feature_model *m, const char *name) {
-  size_t i;
-  if (!name)
-    return -1;
-  for (i = 0; i < m->parameter_count; i++)
-    if (!strcmp(m->parameters[i].name, name))
-      return (int)i;
-  return -1;
-}
-static int diagnostic(struct tcti_feature_typed_result *r,
-                      const struct tcti_feature_node *n,
-                      enum tcti_feature_typed_error code) {
-  if (reserve((void **)&r->diagnostics, &r->diagnostic_capacity,
-              r->diagnostic_count + 1, sizeof(*r->diagnostics)))
-    return -1;
-  r->diagnostics[r->diagnostic_count++] =
-      (struct tcti_feature_typed_diagnostic){code, n->kind, n->provenance};
-  return 0;
-}
-static enum tcti_typed_op operation(enum tcti_feature_node_kind k) {
-  switch (k) {
-  case TCTI_FEATURE_NOT:
-    return TCTI_TYPED_NOT;
-  case TCTI_FEATURE_AND:
-    return TCTI_TYPED_AND;
-  case TCTI_FEATURE_OR:
-    return TCTI_TYPED_OR;
-  case TCTI_FEATURE_EQ:
-    return TCTI_TYPED_EQ;
-  case TCTI_FEATURE_NE:
-    return TCTI_TYPED_NE;
-  case TCTI_FEATURE_LT:
-    return TCTI_TYPED_LT;
-  case TCTI_FEATURE_GT:
-    return TCTI_TYPED_GT;
-  case TCTI_FEATURE_GE:
-    return TCTI_TYPED_GE;
-  case TCTI_FEATURE_IN:
-    return TCTI_TYPED_IN;
-  case TCTI_FEATURE_IMPLIES:
-    return TCTI_TYPED_IMPLIES;
-  case TCTI_FEATURE_IFF:
-    return TCTI_TYPED_IFF;
-  case TCTI_FEATURE_UINT:
-    return TCTI_TYPED_UINT;
-  default:
-    return TCTI_TYPED_SINT;
-  }
-}
-static int lower(const struct tcti_feature_model *m, uint32_t index,
-                 unsigned depth, struct tcti_typed_expression *x,
-                 struct tcti_feature_typed_result *r, uint32_t *out) {
-  const struct tcti_feature_node *n;
-  uint32_t child[2];
-  size_t count = 0;
-  enum tcti_typed_error error;
-  if (index >= m->node_count || depth > LOWER_DEPTH)
-    return -1;
-  n = &m->nodes[index];
-  if (n->kind == TCTI_FEATURE_BOOL)
-    return tcti_typed_literal(x, TCTI_TYPED_BOOL, 0, (uint64_t)n->integer, 0, 0,
-                              (struct tcti_typed_provenance){
-                                  n->provenance.offset, n->provenance.length},
-                              out, &error);
-  if (n->kind == TCTI_FEATURE_IDENTIFIER) {
-    if (parameter(m, n->text) < 0) {
-      diagnostic(r, n, TCTI_FEATURE_TYPED_UNBOUND_IDENTIFIER);
-      return 1;
-    }
-    return tcti_typed_literal(x, TCTI_TYPED_BOOL, 0, 0, 0, 0,
-                              (struct tcti_typed_provenance){
-                                  n->provenance.offset, n->provenance.length},
-                              out, &error);
-  }
-  if (n->kind == TCTI_FEATURE_INTEGER || n->kind == TCTI_FEATURE_DOT_ATOM ||
-      n->kind == TCTI_FEATURE_SET || n->kind == TCTI_FEATURE_VALUE) {
-    diagnostic(r, n, TCTI_FEATURE_TYPED_SCALAR_BLOCKER);
-    return 1;
-  }
-  if (n->kind == TCTI_FEATURE_FIELD) {
-    diagnostic(r, n, TCTI_FEATURE_TYPED_FIELD_BLOCKER);
-    return 1;
-  }
-	if (n->kind == TCTI_FEATURE_NOT || n->kind == TCTI_FEATURE_UINT ||
-	    n->kind == TCTI_FEATURE_SINT) {
-		uint32_t source_child = n->left;
-		int s;
 
-		if (n->kind != TCTI_FEATURE_NOT) {
-			if (n->child_count != 1 ||
-			    n->first_child >= m->child_count)
-				return -1;
-			source_child = m->children[n->first_child];
+#define TCTI_FEATURE_TYPED_MAX_DEPTH 256U
+
+static int reserve(void **pointer, size_t *capacity, size_t needed, size_t size)
+{
+	size_t next = *capacity ? *capacity : 32;
+	void *replacement;
+
+	while (next < needed) {
+		if (next > SIZE_MAX / 2)
+			return -1;
+		next *= 2;
+	}
+	replacement = realloc(*pointer, next * size);
+	if (!replacement)
+		return -1;
+	*pointer = replacement;
+	*capacity = next;
+	return 0;
+}
+
+static int parameter(const struct tcti_feature_model *model, const char *name)
+{
+	size_t index;
+
+	if (!name)
+		return -1;
+	for (index = 0; index < model->parameter_count; index++)
+		if (!strcmp(model->parameters[index].name, name))
+			return (int)index;
+	return -1;
+}
+
+static int diagnostic(struct tcti_feature_typed_result *result,
+			      const struct tcti_feature_node *node,
+			      enum tcti_feature_typed_error code)
+{
+	if (reserve((void **)&result->diagnostics, &result->diagnostic_capacity,
+		    result->diagnostic_count + 1, sizeof(*result->diagnostics)))
+		return -1;
+	result->diagnostics[result->diagnostic_count++] =
+		(struct tcti_feature_typed_diagnostic){
+			.code = code, .source_kind = node->kind,
+			.provenance = node->provenance,
+		};
+	return 0;
+}
+
+static int hard_error(struct tcti_feature_typed_result *result,
+		      const struct tcti_feature_node *node,
+		      enum tcti_feature_typed_error code)
+{
+	diagnostic(result, node, code);
+	return -1;
+}
+
+static struct tcti_typed_provenance provenance(const struct tcti_feature_node *node)
+{
+	return (struct tcti_typed_provenance){
+		node->provenance.offset, node->provenance.length,
+	};
+}
+
+static enum tcti_typed_op operation(enum tcti_feature_node_kind kind)
+{
+	switch (kind) {
+	case TCTI_FEATURE_NOT:
+		return TCTI_TYPED_NOT;
+	case TCTI_FEATURE_AND:
+		return TCTI_TYPED_AND;
+	case TCTI_FEATURE_OR:
+		return TCTI_TYPED_OR;
+	case TCTI_FEATURE_EQ:
+		return TCTI_TYPED_EQ;
+	case TCTI_FEATURE_NE:
+		return TCTI_TYPED_NE;
+	case TCTI_FEATURE_LT:
+		return TCTI_TYPED_LT;
+	case TCTI_FEATURE_GT:
+		return TCTI_TYPED_GT;
+	case TCTI_FEATURE_GE:
+		return TCTI_TYPED_GE;
+	case TCTI_FEATURE_IN:
+		return TCTI_TYPED_IN;
+	case TCTI_FEATURE_IMPLIES:
+		return TCTI_TYPED_IMPLIES;
+	case TCTI_FEATURE_IFF:
+		return TCTI_TYPED_IFF;
+	case TCTI_FEATURE_UINT:
+		return TCTI_TYPED_UINT;
+	case TCTI_FEATURE_SINT:
+		return TCTI_TYPED_SINT;
+	default:
+		return TCTI_TYPED_LITERAL;
+	}
+}
+
+static int lower(const struct tcti_feature_model *model, uint32_t index,
+		 unsigned depth, struct tcti_typed_expression *expression,
+		 struct tcti_feature_typed_result *result, uint32_t *out);
+
+static int lower_children(const struct tcti_feature_model *model,
+			  const struct tcti_feature_node *node, unsigned depth,
+			  struct tcti_typed_expression *expression,
+			  struct tcti_feature_typed_result *result,
+			  uint32_t **out_children)
+{
+	uint32_t *children;
+	size_t index;
+
+	if (!node->child_count || node->first_child == TCTI_FEATURE_NODE_NONE ||
+	    node->first_child > model->child_count - node->child_count)
+		return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+	children = calloc(node->child_count, sizeof(*children));
+	if (!children)
+		return hard_error(result, node, TCTI_FEATURE_TYPED_MEMORY);
+	for (index = 0; index < node->child_count; index++) {
+		if (lower(model, model->children[node->first_child + index], depth + 1,
+			  expression, result, &children[index])) {
+			free(children);
+			return -1;
 		}
-		s = lower(m, source_child, depth + 1, x, r, &child[0]);
-    count = 1;
-    if (s)
-      return s;
-  } else {
-    int a = lower(m, n->left, depth + 1, x, r, &child[0]);
-    int b = lower(m, n->right, depth + 1, x, r, &child[1]);
-    count = 2;
-    if (a || b)
-      return a < 0 || b < 0 ? -1 : 1;
-  }
-  if (tcti_typed_apply(x, operation(n->kind), child, count,
-                       (struct tcti_typed_provenance){n->provenance.offset,
-                                                      n->provenance.length},
-                       out, &error)) {
-    diagnostic(r, n, TCTI_FEATURE_TYPED_TYPE);
-    return 1;
-  }
-  return 0;
-}
-int tcti_feature_typed_lower(const struct tcti_feature_model *m,
-                             struct tcti_typed_expression *x,
-                             struct tcti_feature_typed_result *r) {
-  size_t i;
-  if (!m || !x || !r)
-    return -1;
-  memset(r, 0, sizeof(*r));
-  r->parameters = calloc(m->parameter_count, sizeof(*r->parameters));
-  r->constraints = malloc(m->constraint_count * sizeof(*r->constraints));
-  if ((m->parameter_count && !r->parameters) ||
-      (m->constraint_count && !r->constraints))
-    goto fail;
-	for (i = 0; i < m->parameter_count; i++) {
-    enum tcti_typed_error e;
-    if (tcti_typed_literal(
-            x, TCTI_TYPED_BOOL, 0, 0, 0, 0,
-            (struct tcti_typed_provenance){m->parameters[i].provenance.offset,
-                                           m->parameters[i].provenance.length},
-            &r->parameters[i], &e))
-      goto fail;
-		r->parameter_count++;
 	}
-	for (i = 0; i < m->node_count; i++) {
-		if (m->nodes[i].kind > TCTI_FEATURE_VALUE)
+	*out_children = children;
+	return 0;
+}
+
+static int lower_dot_atom(const struct tcti_feature_model *model,
+			  const struct tcti_feature_node *node,
+			  struct tcti_typed_expression *expression,
+			  struct tcti_feature_typed_result *result, uint32_t *out)
+{
+	uint32_t *children;
+	enum tcti_typed_error error;
+	size_t index;
+
+	if (!node->child_count || node->first_child == TCTI_FEATURE_NODE_NONE ||
+	    node->first_child > model->child_count - node->child_count)
+		return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+	children = calloc(node->child_count, sizeof(*children));
+	if (!children)
+		return hard_error(result, node, TCTI_FEATURE_TYPED_MEMORY);
+	for (index = 0; index < node->child_count; index++) {
+		const struct tcti_feature_node *part =
+			&model->nodes[model->children[node->first_child + index]];
+
+		if (part->kind != TCTI_FEATURE_IDENTIFIER || !part->text ||
+		    tcti_typed_atom(expression, TCTI_TYPED_IDENTIFIER, part->text,
+				    NULL, NULL, NULL, provenance(part), &children[index],
+				    &error)) {
+			free(children);
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		}
+	}
+	if (tcti_typed_compound(expression, TCTI_TYPED_DOT_ATOM, children,
+				 node->child_count, provenance(node), out, &error)) {
+		free(children);
+		return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+	}
+	free(children);
+	return 0;
+}
+
+static int lower(const struct tcti_feature_model *model, uint32_t index,
+		 unsigned depth, struct tcti_typed_expression *expression,
+		 struct tcti_feature_typed_result *result, uint32_t *out)
+{
+	const struct tcti_feature_node *node;
+	uint32_t children[2];
+	uint32_t *compound_children = NULL;
+	enum tcti_typed_error error;
+	size_t child_count;
+	int parameter_index;
+
+	if (index >= model->node_count || depth > TCTI_FEATURE_TYPED_MAX_DEPTH)
+		return -1;
+	node = &model->nodes[index];
+	switch (node->kind) {
+	case TCTI_FEATURE_BOOL:
+		return tcti_typed_literal(expression, TCTI_TYPED_BOOL, 0,
+				   (uint64_t)node->integer, 0, 0, provenance(node),
+				   out, &error);
+	case TCTI_FEATURE_IDENTIFIER:
+		parameter_index = parameter(model, node->text);
+		if (parameter_index < 0)
+			return hard_error(result, node,
+					  TCTI_FEATURE_TYPED_UNBOUND_IDENTIFIER);
+		return tcti_typed_atom(expression, TCTI_TYPED_BOOL, node->text,
+				       NULL, NULL, NULL, provenance(node), out, &error);
+	case TCTI_FEATURE_INTEGER:
+		return tcti_typed_literal(expression, TCTI_TYPED_SIGNED, 64,
+				   (uint64_t)node->integer, 0, 0, provenance(node),
+				   out, &error);
+	case TCTI_FEATURE_VALUE:
+		if (!node->text)
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		return tcti_typed_atom(expression, TCTI_TYPED_VALUE, node->text,
+				       NULL, NULL, NULL, provenance(node), out, &error);
+	case TCTI_FEATURE_FIELD:
+		return tcti_typed_atom(expression, TCTI_TYPED_FIELD, NULL,
+				       node->field.state, node->field.register_name,
+				       node->field.selector, provenance(node), out, &error);
+	case TCTI_FEATURE_DOT_ATOM:
+		return lower_dot_atom(model, node, expression, result, out);
+	case TCTI_FEATURE_SET:
+		if (lower_children(model, node, depth, expression, result,
+				   &compound_children))
+			return -1;
+		if (tcti_typed_compound(expression, TCTI_TYPED_SET,
+					 compound_children, node->child_count,
+					 provenance(node), out, &error)) {
+			free(compound_children);
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		}
+		free(compound_children);
+		return 0;
+	case TCTI_FEATURE_NOT:
+		if (node->left == TCTI_FEATURE_NODE_NONE ||
+		    lower(model, node->left, depth + 1, expression, result,
+			  &children[0]))
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		child_count = 1;
+		break;
+	case TCTI_FEATURE_UINT:
+	case TCTI_FEATURE_SINT:
+		if (node->child_count != 1 ||
+		    node->first_child == TCTI_FEATURE_NODE_NONE ||
+		    node->first_child >= model->child_count ||
+		    lower(model, model->children[node->first_child], depth + 1,
+			  expression, result, &children[0]))
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		child_count = 1;
+		break;
+	case TCTI_FEATURE_AND:
+	case TCTI_FEATURE_OR:
+	case TCTI_FEATURE_EQ:
+	case TCTI_FEATURE_NE:
+	case TCTI_FEATURE_LT:
+	case TCTI_FEATURE_GT:
+	case TCTI_FEATURE_GE:
+	case TCTI_FEATURE_IN:
+	case TCTI_FEATURE_IMPLIES:
+	case TCTI_FEATURE_IFF:
+		if (node->left == TCTI_FEATURE_NODE_NONE ||
+		    node->right == TCTI_FEATURE_NODE_NONE ||
+		    lower(model, node->left, depth + 1, expression, result,
+			  &children[0]) ||
+		    lower(model, node->right, depth + 1, expression, result,
+			  &children[1]))
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		child_count = 2;
+		break;
+	default:
+		return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+	}
+	if (tcti_typed_apply(expression, operation(node->kind), children,
+			     child_count, provenance(node), out, &error))
+		return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+	return 0;
+}
+
+int tcti_feature_typed_lower(const struct tcti_feature_model *model,
+			     struct tcti_typed_expression *expression,
+			     struct tcti_feature_typed_result *result)
+{
+	size_t index;
+
+	if (!model || !expression || !result)
+		return -1;
+	memset(result, 0, sizeof(*result));
+	result->parameters = calloc(model->parameter_count, sizeof(*result->parameters));
+	result->constraints = calloc(model->constraint_count, sizeof(*result->constraints));
+	if ((model->parameter_count && !result->parameters) ||
+	    (model->constraint_count && !result->constraints))
+		goto fail;
+	for (index = 0; index < model->parameter_count; index++) {
+		enum tcti_typed_error error;
+		const struct tcti_feature_parameter *parameter = &model->parameters[index];
+
+		if (!parameter->name ||
+		    tcti_typed_atom(expression, TCTI_TYPED_BOOL, parameter->name,
+				    NULL, NULL, NULL,
+				    (struct tcti_typed_provenance){
+					parameter->provenance.offset,
+					parameter->provenance.length,
+				    }, &result->parameters[index], &error))
 			goto fail;
-		r->grammar_counts[m->nodes[i].kind]++;
+		result->parameter_count++;
 	}
-  for (i = 0; i < m->constraint_count; i++) {
-    int status = lower(m, m->constraints[i], 0, x, r,
-                       &r->constraints[r->constraint_count]);
-    if (status < 0)
-      goto fail;
-    if (!status)
-      r->constraint_count++;
-  }
-  return 0;
+	for (index = 0; index < model->node_count; index++) {
+		if (model->nodes[index].kind > TCTI_FEATURE_VALUE)
+			goto fail;
+		result->grammar_counts[model->nodes[index].kind]++;
+	}
+	for (index = 0; index < model->constraint_count; index++) {
+		if (lower(model, model->constraints[index], 0, expression, result,
+			  &result->constraints[index]))
+			goto fail;
+		result->constraint_count++;
+	}
+	return 0;
 fail:
-  tcti_feature_typed_result_destroy(r);
-  return -1;
+	tcti_feature_typed_result_destroy(result);
+	return -1;
 }
-void tcti_feature_typed_result_destroy(struct tcti_feature_typed_result *r) {
-  if (!r)
-    return;
-  free(r->constraints);
-  free(r->parameters);
-  free(r->diagnostics);
-  memset(r, 0, sizeof(*r));
+
+void tcti_feature_typed_result_destroy(struct tcti_feature_typed_result *result)
+{
+	if (!result)
+		return;
+	free(result->constraints);
+	free(result->parameters);
+	free(result->diagnostics);
+	memset(result, 0, sizeof(*result));
 }

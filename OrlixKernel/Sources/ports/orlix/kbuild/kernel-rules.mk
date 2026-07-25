@@ -1019,6 +1019,22 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	lib/fdt_empty_tree.c \
 	lib/fdt_addresses.c
 
+# Keep this list aligned with upstream lib/kunit/Makefile's kunit-objs.
+# The product archive compiles its sources directly, so it must preserve the
+# composite Kbuild module identity separately from the source basename.
+ORLIX_KERNEL_KUNIT_COMPOSITE_SOURCES := \
+	lib/kunit/test.c \
+	lib/kunit/resource.c \
+	lib/kunit/user_alloc.c \
+	lib/kunit/static_stub.c \
+	lib/kunit/string-stream.c \
+	lib/kunit/assert.c \
+	lib/kunit/try-catch.c \
+	lib/kunit/executor.c \
+	lib/kunit/attributes.c \
+	lib/kunit/device.c \
+	lib/kunit/platform.c
+
 ifeq ($(ORLIX_KERNEL_KUNIT),1)
 ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/boot/boot_test.c \
@@ -1026,6 +1042,26 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/runtime_projection.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_memory_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_decode_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_uaccess_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_cssc_min_max_immediate_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crypto_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crc32_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crypto_extension_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_128_rmw_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_lse_operation_catalog.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_bitfield_extract_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_scalar_fp_semantics_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_baseline_decoder_regression_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_gadget_program_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_load_store_writeback_overlap_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_caspal_atomicity_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_kthread_handoff_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_mapping_invalidation_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pmull_semantic_test.c \
 	lib/kunit/assert.c \
 	lib/kunit/attributes.c \
 	lib/kunit/device.c \
@@ -1767,6 +1803,8 @@ __kernel-archive: __prepare-kbuild
 	command -v "$$ar_cmd" >/dev/null 2>&1 || { echo "llvm-ar is required for OrlixKernel archives; set ORLIX_KERNEL_AR=/path/to/llvm-ar" >&2; exit 1; }; \
 	command -v "$$nm_cmd" >/dev/null 2>&1 || { echo "nm is required to verify OrlixKernel archive symbols; set ORLIX_KERNEL_NM=/path/to/nm" >&2; exit 1; }; \
 	command -v "$$otool_cmd" >/dev/null 2>&1 || { echo "otool is required to verify OrlixKernel archive contracts; set ORLIX_KERNEL_OTOOL=/path/to/otool" >&2; exit 1; }; \
+	strings_cmd="$$(command -v strings || true)"; \
+	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then [ -n "$$strings_cmd" ] || { echo "strings is required to verify the Orlix KUnit archive contract" >&2; exit 1; }; fi; \
 	root="$(ORLIX_KERNEL_ARCHIVE_ROOT)"; \
 	case "$$root" in "$(ORLIX_BUILD_ROOT)"/OrlixKernel/$(PROFILE)) ;; *) echo "refusing to write OrlixKernel archive outside configured OrlixKernel archive root: $$root" >&2; exit 1 ;; esac; \
 	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$$root"; do \
@@ -1780,6 +1818,12 @@ __kernel-archive: __prepare-kbuild
 	inventory_dir="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests"; \
 	inventory_tool="$$inventory_dir/gen_inventory"; \
 	inventory_header="$$inventory_dir/inventory.h"; \
+	target_inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_isa_kbuild_generator.c"; \
+	target_inventory_generator_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_isa_kbuild_generator.h"; \
+	target_inventory_source_manifest="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/source_manifest.def"; \
+	target_inventory_classification="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_classification.def"; \
+	target_inventory_tool="$$inventory_dir/target_isa_kbuild_generator"; \
+	target_inventory_header="$$inventory_dir/target_inventory.h"; \
 	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
 		mkdir -p "$$inventory_dir"; \
 		if [ ! -x "$$inventory_tool" ] || [ "$$inventory_generator" -nt "$$inventory_tool" ] || [ "$$inventory_definition" -nt "$$inventory_tool" ]; then \
@@ -1791,6 +1835,30 @@ __kernel-archive: __prepare-kbuild
 		fi; \
 		if [ ! -s "$$inventory_header" ] || [ "$$inventory_tool" -nt "$$inventory_header" ] || [ "$$inventory_definition" -nt "$$inventory_header" ]; then \
 			"$$inventory_tool" "$$inventory_header"; \
+		fi; \
+		if [ ! -x "$$target_inventory_tool" ] || \
+			[ "$$target_inventory_generator" -nt "$$target_inventory_tool" ] || \
+			[ "$$target_inventory_generator_header" -nt "$$target_inventory_tool" ] || \
+			[ "$$target_inventory_source_manifest" -nt "$$target_inventory_tool" ] || \
+			[ "$$target_inventory_classification" -nt "$$target_inventory_tool" ]; then \
+			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
+				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
+				"$$hostcc" -std=c11 -Wall -Wextra -Werror \
+				"$$target_inventory_generator" \
+				-o "$$target_inventory_tool"; \
+		fi; \
+		if [ ! -s "$$target_inventory_header" ] || \
+			[ "$$target_inventory_tool" -nt "$$target_inventory_header" ] || \
+			[ "$$target_inventory_source_manifest" -nt "$$target_inventory_header" ] || \
+			[ "$$target_inventory_classification" -nt "$$target_inventory_header" ]; then \
+			target_inventory_header_tmp="$$target_inventory_header.tmp.$$$$"; \
+			rm -f "$$target_inventory_header_tmp"; \
+			if ! "$$target_inventory_tool" > "$$target_inventory_header_tmp"; then \
+				rm -f "$$target_inventory_header_tmp"; \
+				exit 1; \
+			fi; \
+			mv "$$target_inventory_header_tmp" "$$target_inventory_header"; \
 		fi; \
 	fi; \
 	build_version="$${KBUILD_BUILD_VERSION:-$$(cd "$(ORLIX_KERNEL_BUILD_DIR)" && "$(ORLIX_KERNEL_PORT_ABS)/scripts/build-version")}"; \
@@ -1836,6 +1904,10 @@ __kernel-archive: __prepare-kbuild
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$$inventory_generator" \
 				"$$inventory_definition" \
+				"$$target_inventory_generator" \
+				"$$target_inventory_generator_header" \
+				"$$target_inventory_source_manifest" \
+				"$$target_inventory_classification" \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$archive" -nt "$$cache_dep" ]; then archive_ready=0; break; fi; \
 			done; \
@@ -1887,6 +1959,8 @@ __kernel-archive: __prepare-kbuild
 			kbuild_name="$${src_rel##*/}"; \
 			kbuild_name="$${kbuild_name%.c}"; \
 			kbuild_name="$${kbuild_name//-/_}"; \
+			kbuild_modname="$$kbuild_name"; \
+			case " $(ORLIX_KERNEL_KUNIT_COMPOSITE_SOURCES) " in *" $$src_rel "*) kbuild_modname=kunit ;; esac; \
 			obj_name="$${src_rel//\//_}.o"; \
 			obj="$$obj_dir/$$obj_name"; \
 			verified="$$obj.verified"; \
@@ -1918,7 +1992,7 @@ __kernel-archive: __prepare-kbuild
 			fi; \
 			if [ "$$needs_build" -eq 1 ]; then \
 				printf '  ORLIXCC %s %s\n' "$$platform" "$$src_rel" >&2; \
-			/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_name\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
+			/usr/bin/env -u SDKROOT CCACHE_EXTRAFILES="$(ORLIX_KERNEL_BUILD_DIR)/include/generated/autoconf.h" $$launcher "$$cc" -target "$$target" -isysroot / -x c -ffreestanding $(ORLIX_PRODUCT_ADAPTER_CFLAGS) -fno-builtin -fno-stack-protector -fno-objc-arc -fno-common -nostdinc -D__KERNEL__ -DORLIX_APP_HOSTED_BOOT=1 -DORLIX_BUILD_CONFIG_FINGERPRINT=0x$$config_fingerprint -DKBUILD_MODNAME=\"$$kbuild_modname\" -DKBUILD_BASENAME=\"$$kbuild_name\" -DKBUILD_MODFILE=\"$$src_rel\" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/compiler-version.h" -include "$(ORLIX_KERNEL_PORT_ABS)/include/linux/kconfig.h" $$local_cflags $$extra_cflags -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated" -I"$(ORLIX_KERNEL_PORT_ABS)/include" -I"$(ORLIX_KERNEL_BUILD_DIR)/include" -I"$$inventory_dir" -I"$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/include/generated/uapi" -I"$(ORLIX_KERNEL_PORT_ABS)/include/uapi" -I"$(ORLIX_KERNEL_BUILD_DIR)/include/generated/uapi" -MMD -MF "$$dep" -c "$$src" -o "$$obj"; \
 				if grep -E '(/Applications/|/Library/Developer/CommandLineTools/SDKs/|/System/Library/Frameworks|/usr/include)' "$$dep"; then \
 					echo "Linux object included a host SDK or libc header: $$dep" >&2; \
 					exit 1; \
@@ -1946,6 +2020,10 @@ __kernel-archive: __prepare-kbuild
 		"$$nm_cmd" -gU "$$archive_tmp" > "$$symbols_tmp"; \
 		grep -q '_arch_boot_entry' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_entry: $$archive_tmp" >&2; exit 1; }; \
 		grep -q '_arch_boot_params' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_params: $$archive_tmp" >&2; exit 1; }; \
+		if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
+			"$$strings_cmd" "$$archive_tmp" | grep -Fxq 'kunit.filter_glob' || { echo "Orlix KUnit archive missing canonical kunit.filter_glob parameter: $$archive_tmp" >&2; exit 1; }; \
+			if "$$strings_cmd" "$$archive_tmp" | grep -Fxq 'executor.filter_glob'; then echo "Orlix KUnit archive retains noncanonical executor.filter_glob parameter: $$archive_tmp" >&2; exit 1; fi; \
+		fi; \
 		mv -f "$$archive_tmp" "$$archive"; \
 		mv -f "$$symbols_tmp" "$$output_dir/symbols.txt"; \
 		echo "built OrlixKernel archive: $$archive ($$target)"; \

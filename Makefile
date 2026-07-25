@@ -50,6 +50,7 @@ ORLIX_TCTI_PROOF_CANDIDATE_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_pro
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_ROUNDTRIP_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_instruction_artifact_roundtrip_test
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_instruction_artifact_generated_mutation_test
 ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_artifact_generated_test
+ORLIX_TCTI_FEATURE_DOMAIN_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_feature_domain_test
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_COMPLETION_AUDIT_TEST := $(ORLIX_BUILD_ROOT)/Tests/tcti-isa/target_completion_audit_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
@@ -344,11 +345,23 @@ tcti-isa-host-tests:
 		-o '$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST)'
 	@'$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact_test.c \
 		-o '$(ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST)'
 	@'$(ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'
+	@'$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit_test.c \
@@ -358,6 +371,10 @@ tcti-isa-host-tests:
 tcti-isa-audit: tcti-isa-host-tests
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/target_completion_audit_main.c \

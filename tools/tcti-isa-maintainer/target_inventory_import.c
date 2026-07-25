@@ -1280,6 +1280,120 @@ static int find_a64(const struct importer *importer, int root)
 	return -1;
 }
 
+static int object_member(const struct importer *importer, int object_index,
+			 size_t member, int *key, int *value)
+{
+	const struct json_token *object;
+	size_t cursor;
+	size_t index;
+
+	if (object_index < 0 || (size_t)object_index >= importer->token_count ||
+	    !key || !value)
+		return -1;
+	object = &importer->tokens[object_index];
+	if (object->kind != JSON_OBJECT || member >= object->size)
+		return -1;
+	cursor = (size_t)object_index + 1;
+	for (index = 0; index < member; index++) {
+		if (cursor >= importer->token_count)
+			return -1;
+		cursor = importer->tokens[cursor].next;
+		if (cursor >= importer->token_count)
+			return -1;
+		cursor = importer->tokens[cursor].next;
+	}
+	if (cursor >= importer->token_count ||
+	    importer->tokens[cursor].kind != JSON_STRING ||
+	    importer->tokens[cursor].next >= importer->token_count)
+		return -1;
+	*key = (int)cursor;
+	*value = (int)importer->tokens[cursor].next;
+	return 0;
+}
+
+static int import_operations(struct importer *importer, int root)
+{
+	int operations = object_find(importer, root, "operations");
+	size_t index;
+
+	if (operations < 0 || importer->tokens[operations].kind != JSON_OBJECT) {
+		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE, 0,
+			"Instructions.json lacks its authoritative operations object");
+		return -1;
+	}
+	for (index = 0; index < importer->tokens[operations].size; index++) {
+		int key;
+		int value;
+		struct tcti_target_operation operation = { 0 };
+		int type;
+
+		if (object_member(importer, operations, index, &key, &value) ||
+		    importer->tokens[value].kind != JSON_OBJECT ||
+		    (type = object_find(importer, value, "_type")) < 0 ||
+		    (!token_equals(importer->json, &importer->tokens[type],
+				   "Instruction.Operation") &&
+		     !token_equals(importer->json, &importer->tokens[type],
+				   "Instruction.OperationAlias"))) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  key < 0 ? 0 : importer->tokens[key].start,
+				  "Instructions.json has an invalid operation object");
+			return -1;
+		}
+		operation.id = copy_token(importer, key);
+		operation.source_offset = importer->tokens[value].start;
+		operation.source_length = importer->tokens[value].end -
+			operation.source_offset;
+		if (!operation.id || !operation.source_length ||
+		    tcti_target_inventory_operation(importer->inventory, operation.id)) {
+			free(operation.id);
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
+				  importer->tokens[key].start,
+				  "Instructions.json has a duplicate or empty operation");
+			return -1;
+		}
+		if (reserve((void **)&importer->inventory->operations,
+			    &importer->inventory->operation_capacity,
+			    importer->inventory->operation_count + 1,
+			    sizeof(*importer->inventory->operations))) {
+			free(operation.id);
+			set_error(importer->error, TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+				  "cannot allocate operation provenance");
+			return -1;
+		}
+		importer->inventory->operations[importer->inventory->operation_count++] =
+			operation;
+	}
+	return 0;
+}
+
+const struct tcti_target_operation *
+tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
+				       const char *id)
+{
+	size_t index;
+
+	if (!inventory || !id)
+		return NULL;
+	for (index = 0; index < inventory->operation_count; index++)
+		if (!strcmp(inventory->operations[index].id, id))
+			return &inventory->operations[index];
+	return NULL;
+}
+
+static int validate_leaf_operations(struct importer *importer)
+{
+	size_t index;
+
+	for (index = 0; index < importer->inventory->leaf_count; index++)
+		if (!tcti_target_inventory_operation(importer->inventory,
+						     importer->inventory->leaves[index].operation_id)) {
+			set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE, 0,
+				  "A64 leaf references an operation absent from Instructions.json");
+			return -1;
+		}
+	return 0;
+}
+
 static int validate_source_metadata(struct importer *importer, int root)
 {
 	int metadata = object_find(importer, root, "_meta");
@@ -1424,6 +1538,9 @@ void tcti_target_inventory_destroy(struct tcti_target_inventory *inventory)
 	free(inventory->expressions);
 	free(inventory->set_items);
 	free(inventory->operands);
+	for (i = 0; i < inventory->operation_count; i++)
+		free(inventory->operations[i].id);
+	free(inventory->operations);
 	memset(inventory, 0, sizeof(*inventory));
 }
 
@@ -1488,6 +1605,9 @@ int tcti_target_inventory_import(const char *json, size_t length,
 			  inventory->leaf_count, TCTI_A64_TARGET_LEAF_COUNT);
 		goto out_inventory;
 	}
+	if (import_operations(&importer, root) ||
+	    validate_leaf_operations(&importer))
+		goto out_inventory;
 	sha256_hex(json, length, digest);
 	if (strcmp(digest, source_sha256)) {
 		set_error(error, TCTI_TARGET_IMPORT_HASH_MISMATCH, 0,

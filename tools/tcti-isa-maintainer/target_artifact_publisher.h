@@ -31,6 +31,10 @@ struct tcti_target_artifact_provenance {
 	const char *registers_sha256;
 };
 
+/* Compute the standard SHA-256 used by immutable generation manifests. */
+void tcti_target_artifact_sha256(const void *data, size_t length,
+				 char digest[65]);
+
 enum tcti_target_artifact_publish_error {
 	TCTI_TARGET_ARTIFACT_PUBLISH_OK = 0,
 	TCTI_TARGET_ARTIFACT_PUBLISH_INVALID_ARGUMENT,

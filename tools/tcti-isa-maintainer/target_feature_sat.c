@@ -698,7 +698,8 @@ static int solve(struct solver *solver)
 	return 0;
 }
 
-static int solve_with(struct compiler *compiler, int assumption)
+static int solve_with(struct compiler *compiler, int assumption,
+		signed char *witness, size_t witness_count)
 {
 	struct solver solver = { .cnf = &compiler->cnf, .budget = &compiler->budget };
 	int status;
@@ -708,6 +709,14 @@ static int solve_with(struct compiler *compiler, int assumption)
 	if (!solver.values) return -1;
 	if (assumption && assign_literal(&solver, assumption)) status = 0;
 	else status = solve(&solver);
+	if (status > 0 && witness) {
+		if (witness_count > compiler->model->parameter_count) {
+			free(solver.values);
+			return -1;
+		}
+		memcpy(witness, solver.values + 1U,
+			witness_count * sizeof(*witness));
+	}
 	free(solver.values);
 	return status;
 }
@@ -731,7 +740,10 @@ int tcti_target_feature_sat_audit(const struct tcti_feature_model *model,
 			(struct tcti_feature_provenance) { 0 });
 		return -1;
 	}
-	*audit = (struct tcti_target_feature_sat_audit) { .leaf_count = inventory->leaf_count };
+	*audit = (struct tcti_target_feature_sat_audit) {
+		.leaf_count = inventory->leaf_count,
+		.parameter_count = model->parameter_count,
+	};
 	if (model->parameter_count > INT_MAX || model->node_count > UINT32_MAX ||
 	    inventory->expression_count > UINT32_MAX) goto malformed;
 	if (validate_input_graphs(&compiler)) {
@@ -750,7 +762,7 @@ int tcti_target_feature_sat_audit(const struct tcti_feature_model *model,
 		if (cnf_clause(&compiler, unit, 1)) goto memory;
 		compiler.cnf.clauses[compiler.cnf.count - 1U].literals[0] = literal;
 	}
-	status = solve_with(&compiler, 0);
+	status = solve_with(&compiler, 0, NULL, 0);
 	if (status < 0) goto limit;
 	if (!status) { fail(error, TCTI_TARGET_FEATURE_SAT_UNSAT_BASE, 0,
 		(struct tcti_feature_provenance) { 0 }); goto out; }
@@ -758,13 +770,25 @@ int tcti_target_feature_sat_audit(const struct tcti_feature_model *model,
 		audit->leaves = budget_calloc(&compiler.budget, inventory->leaf_count,
 					      sizeof(*audit->leaves));
 		if (!audit->leaves) goto memory;
+		if (model->parameter_count) {
+			size_t witness_count;
+
+			if (multiply(inventory->leaf_count, model->parameter_count,
+				     &witness_count)) goto memory;
+			audit->witnesses = budget_calloc(&compiler.budget, witness_count,
+						 sizeof(*audit->witnesses));
+			if (!audit->witnesses) goto memory;
+		}
 	}
 	for (index = 0; index < inventory->leaf_count; index++) {
 		if (target_boolean(&compiler, inventory->leaves[index].condition, &literal)) {
 			if (error) error->leaf_index = index;
 			goto out;
 		}
-		status = solve_with(&compiler, literal);
+		status = solve_with(&compiler, literal,
+			audit->witnesses ? audit->witnesses +
+				index * audit->parameter_count : NULL,
+			audit->parameter_count);
 		if (status < 0) { if (error) error->leaf_index = index; goto limit; }
 		audit->leaves[index] = status ? TCTI_TARGET_FEATURE_SAT_APPLICABLE :
 			TCTI_TARGET_FEATURE_SAT_IMPOSSIBLE;
@@ -792,6 +816,18 @@ out:
 void tcti_target_feature_sat_audit_destroy(struct tcti_target_feature_sat_audit *audit)
 {
 	if (!audit) return;
+	free(audit->witnesses);
 	free(audit->leaves);
 	*audit = (struct tcti_target_feature_sat_audit) { 0 };
+}
+
+const signed char *tcti_target_feature_sat_witness(
+	const struct tcti_target_feature_sat_audit *audit, size_t leaf_index)
+{
+	if (!audit || leaf_index >= audit->leaf_count ||
+	    !audit->leaves ||
+	    audit->leaves[leaf_index] != TCTI_TARGET_FEATURE_SAT_APPLICABLE ||
+	    !audit->parameter_count || !audit->witnesses)
+		return NULL;
+	return audit->witnesses + leaf_index * audit->parameter_count;
 }

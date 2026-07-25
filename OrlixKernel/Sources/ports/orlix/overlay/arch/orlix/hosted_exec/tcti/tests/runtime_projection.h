@@ -38,6 +38,7 @@ struct tcti_runtime_projection_leaf {
 	size_t feature_count;
 	enum tcti_runtime_leaf_classification classification;
 	const char *proof;
+	bool source_bound;
 	bool proved;
 };
 
@@ -45,6 +46,18 @@ struct tcti_runtime_projection_ledger {
 	const struct tcti_runtime_projection_leaf *leaves;
 	size_t leaf_count;
 	size_t target_leaf_count;
+};
+
+/*
+ * A provider keeps the live kernel audit allocation-free: the canonical
+ * generated target inventory has 4,350 rows and need not be copied onto a
+ * kernel stack merely to project a runtime capability policy.
+ */
+struct tcti_runtime_projection_provider {
+	const void *context;
+	size_t leaf_count;
+	int (*read_leaf)(const void *context, size_t index,
+			 struct tcti_runtime_projection_leaf *leaf);
 };
 
 struct tcti_runtime_projection_profile {
@@ -73,6 +86,7 @@ struct tcti_runtime_projection_result {
 	size_t unadvertised_mapping_count;
 	size_t target_leaf_count;
 	size_t classified_leaf_count;
+	size_t source_bound_leaf_count;
 	size_t unproved_leaf_count;
 	size_t unadvertised_incomplete_feature_count;
 };
@@ -85,6 +99,14 @@ struct tcti_runtime_projection_result {
  */
 int tcti_runtime_projection_audit_ledger(
 	const struct tcti_runtime_projection_ledger *ledger,
+	const struct tcti_runtime_projection_profile *profile,
+	const struct tcti_runtime_projection_capability *capabilities,
+	size_t capability_count,
+	struct tcti_runtime_projection_result *result);
+
+/* Audit a complete source-leaf provider without requiring a copied ledger. */
+int tcti_runtime_projection_audit_provider(
+	const struct tcti_runtime_projection_provider *provider,
 	const struct tcti_runtime_projection_profile *profile,
 	const struct tcti_runtime_projection_capability *capabilities,
 	size_t capability_count,

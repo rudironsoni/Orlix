@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_completion_audit.h"
+#include "target_feature_artifact.h"
+#include "target_feature_domain.h"
+#include "target_instruction_artifact.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -60,6 +63,121 @@ _Static_assert(sizeof(classification_rows) / sizeof(classification_rows[0]) ==
 static bool empty(const char *text)
 {
 	return !text || !text[0];
+}
+
+static void record_error(struct tcti_target_completion_result *result,
+			 uint32_t error);
+
+static int hex_nibble(char character, unsigned int *value)
+{
+	if (character >= '0' && character <= '9') {
+		*value = (unsigned int)(character - '0');
+		return 0;
+	}
+	if (character >= 'a' && character <= 'f') {
+		*value = (unsigned int)(character - 'a' + 10);
+		return 0;
+	}
+	if (character >= 'A' && character <= 'F') {
+		*value = (unsigned int)(character - 'A' + 10);
+		return 0;
+	}
+	return -1;
+}
+
+static bool source_condition_matches_artifact(
+	const struct tcti_target_completion_source_row *source,
+	const struct tcti_target_instruction_artifact_leaf *leaf,
+	const struct tcti_target_instruction_artifact *artifact)
+{
+	const char *hex;
+	size_t index;
+
+	if (!source || !leaf || !artifact || !artifact->condition_pool ||
+	    !source->condition_tcnd_hex ||
+	    leaf->condition_offset > artifact->condition_pool_size ||
+	    leaf->condition_length > artifact->condition_pool_size -
+		leaf->condition_offset)
+		return false;
+	hex = source->condition_tcnd_hex;
+	if (strlen(hex) != (size_t)leaf->condition_length * 2U)
+		return false;
+	for (index = 0; index < leaf->condition_length; index++) {
+		unsigned int high;
+		unsigned int low;
+
+		if (hex_nibble(hex[index * 2U], &high) ||
+		    hex_nibble(hex[index * 2U + 1U], &low) ||
+		artifact->condition_pool[leaf->condition_offset + index] !=
+			(unsigned char)((high << 4) | low))
+			return false;
+	}
+	return true;
+}
+
+static void validate_source_feature_domain(
+	const struct tcti_target_completion_source_row *source,
+	size_t source_count, struct tcti_target_completion_result *result)
+{
+	const struct tcti_feature_artifact *feature_artifact =
+		tcti_feature_artifact_canonical();
+	const struct tcti_target_instruction_artifact *instruction_artifact =
+		tcti_target_instruction_artifact_canonical();
+	struct tcti_feature_artifact_scratch feature_scratch;
+	struct tcti_feature_artifact_diagnostic feature_diagnostic;
+	struct tcti_target_instruction_artifact_validation_result
+		instruction_diagnostic;
+	static tcti_feature_artifact_u8 feature_state[
+		TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static struct tcti_feature_artifact_frame feature_frames[
+		TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static tcti_feature_artifact_u8 feature_child_coverage[
+		TCTI_FEATURE_ARTIFACT_CHILD_COUNT];
+	size_t index;
+
+	feature_scratch = (struct tcti_feature_artifact_scratch) {
+		.state = feature_state,
+		.state_count = sizeof(feature_state),
+		.frames = feature_frames,
+		.frame_count = sizeof(feature_frames) / sizeof(feature_frames[0]),
+		.child_coverage = feature_child_coverage,
+		.child_coverage_count = sizeof(feature_child_coverage),
+	};
+	if (tcti_feature_artifact_validate(feature_artifact, &feature_scratch,
+					  &feature_diagnostic) !=
+		TCTI_FEATURE_ARTIFACT_VALID ||
+	    tcti_target_instruction_artifact_validate(instruction_artifact,
+						      &instruction_diagnostic) ||
+	    instruction_artifact->leaf_count != source_count) {
+		result->invalid_feature_artifact++;
+		record_error(result, TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
+		return;
+	}
+	for (index = 0; index < source_count; index++) {
+		struct tcti_feature_domain_tcnd_diagnostic diagnostic;
+		const struct tcti_target_instruction_artifact_leaf *leaf =
+			&instruction_artifact->leaves[index];
+
+		if (!source_condition_matches_artifact(&source[index], leaf,
+						      instruction_artifact) ||
+		    tcti_feature_domain_validate_tcnd_features(
+				feature_artifact, source[index].condition_tcnd_hex,
+				&diagnostic)) {
+			result->invalid_source_condition_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
+			continue;
+		}
+		result->source_condition_domain_bound_rows++;
+		/*
+		 * Structural binding is deliberately not treated as a SAT witness.
+		 * This must remain a hard blocker until the build-time C-native
+		 * feature/operand union artifact supplies one exact result per leaf.
+		 */
+		result->unresolved_feature_applicability_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
+	}
 }
 
 static bool source_row_well_formed(
@@ -213,7 +331,11 @@ static bool classification_row_well_formed(
 	return row && !empty(row->name);
 }
 
-static bool proof_resolves(
+/*
+ * This validates immutable source-to-test provenance. It does not observe a
+ * KUnit or kselftest result and therefore must not be described as proof.
+ */
+static bool source_proof_binding_resolves(
 	const struct tcti_target_completion_source_row *source,
 	const struct tcti_target_completion_classification_row *row,
 	const struct tcti_target_proof_registry_entry *registry,
@@ -295,6 +417,29 @@ static void validate_registry_bindings(
 	}
 }
 
+static void validate_unproved_obligations(
+	const struct tcti_target_proof_registry_entry *registry,
+	size_t registry_count, struct tcti_target_completion_result *result)
+{
+	size_t entry_index;
+
+	for (entry_index = 0; entry_index < registry_count; entry_index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&registry[entry_index];
+		size_t binding_index;
+
+		if (!entry->unproved_obligations)
+			continue;
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++) {
+			result->unproved_obligation_bindings++;
+			record_error(
+				result,
+				TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS);
+		}
+	}
+}
+
 int tcti_target_completion_validate(
 	const struct tcti_target_completion_source_row *source,
 	size_t source_count,
@@ -369,6 +514,8 @@ int tcti_target_completion_validate(
 		validate_registry_bindings(source, source_count, classification,
 					   classification_count, registry,
 					   registry_count, result);
+	if (registry_valid)
+		validate_unproved_obligations(registry, registry_count, result);
 
 	for (index = 0; index < classification_count; index++) {
 		const struct tcti_target_completion_classification_row *row =
@@ -444,9 +591,9 @@ int tcti_target_completion_validate(
 		}
 
 		if (empty(row->evidence) || empty(row->proof_id)) {
-			result->unproved_rows++;
+			result->source_unbound_rows++;
 			record_error(result,
-				     TCTI_TARGET_COMPLETION_ERROR_UNPROVED);
+				     TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 			continue;
 		}
 		if (row->classification ==
@@ -470,7 +617,7 @@ int tcti_target_completion_validate(
 			    canonical_classification ==
 				    classification_count ||
 			    !registry_valid ||
-			    !proof_resolves(
+			    !source_proof_binding_resolves(
 				    &source[canonical_index],
 				    &classification[
 					    canonical_classification],
@@ -483,21 +630,21 @@ int tcti_target_completion_validate(
 						result,
 						TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP);
 				}
-				result->unproved_rows++;
+				result->source_unbound_rows++;
 				record_error(
 					result,
-					TCTI_TARGET_COMPLETION_ERROR_UNPROVED);
+					TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 			} else {
-				result->proved_rows++;
+				result->source_bound_rows++;
 			}
 		} else if (registry_valid &&
-			   proof_resolves(&source[source_index], row,
+			   source_proof_binding_resolves(&source[source_index], row,
 					  registry, registry_count)) {
-			result->proved_rows++;
+			result->source_bound_rows++;
 		} else {
-			result->unproved_rows++;
+			result->source_unbound_rows++;
 			record_error(result,
-				     TCTI_TARGET_COMPLETION_ERROR_UNPROVED);
+				     TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
 		}
 	}
 	return result->errors ? -1 : 0;
@@ -544,6 +691,12 @@ int tcti_target_completion_audit(struct tcti_target_completion_result *result)
 		registry, registry_count, result);
 	if (tcti_target_completion_validate_source_provenance(
 		    &source_provenance, result))
+		status = -1;
+	validate_source_feature_domain(source_rows,
+			       sizeof(source_rows) / sizeof(source_rows[0]), result);
+	if (result->invalid_feature_artifact ||
+	    result->invalid_source_condition_rows ||
+	    result->unresolved_feature_applicability_rows)
 		status = -1;
 	return status;
 }

@@ -9,6 +9,18 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
 
 BUILD_ROOT ?= ../../Build
 OUT := $(abspath $(BUILD_ROOT)/Tools/tcti-isa-maintainer)
+CONDITION_INCLUDE := -I../../OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests
+REFRESH_DEFINES := -DTARGET_MANIFEST_GENERATOR_NO_MAIN \
+	-DTARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_FEATURE_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN
+REFRESH_TEST_DEFINES := $(REFRESH_DEFINES) -DTCTI_TARGET_REFRESH_NO_MAIN
+REFRESH_SOURCES := target_refresh.c target_artifact_publisher.c \
+	target_manifest_generator.c target_inventory_import.c \
+	target_condition_serialization.c target_instruction_artifact_generator.c \
+	target_feature_model.c target_feature_artifact_generator.c \
+	target_register_model.c target_register_artifact_generator.c \
+	target_asl_availability.c target_system_accessor_reconciliation.c
 
 INSTRUCTIONS ?= $(ORLIX_AARCHMRS_INSTRUCTIONS)
 FEATURES ?= $(ORLIX_AARCHMRS_FEATURES)
@@ -29,6 +41,9 @@ source-check:
 	@$(CC) $(CFLAGS) target_inventory_import.c target_inventory_import_test.c \
 		-o '$(OUT)/target_inventory_import_test'
 	@'$(OUT)/target_inventory_import_test' '$(INSTRUCTIONS)'
+	@$(CC) $(CFLAGS) target_inventory_import.c target_asl_availability.c \
+		target_asl_availability_test.c -o '$(OUT)/target_asl_availability_test'
+	@'$(OUT)/target_asl_availability_test' '$(INSTRUCTIONS)'
 	@$(CC) $(CFLAGS) target_feature_model.c target_feature_model_test.c \
 		-o '$(OUT)/target_feature_model_test'
 	@'$(OUT)/target_feature_model_test' '$(FEATURES)'
@@ -39,9 +54,22 @@ source-check:
 		target_register_artifact_generator_test.c \
 		-o '$(OUT)/target_register_artifact_generator_test'
 	@'$(OUT)/target_register_artifact_generator_test' '$(REGISTERS)'
+	@$(CC) $(CFLAGS) target_register_model.c \
+		target_system_accessor_reconciliation.c \
+		target_system_accessor_reconciliation_test.c \
+		-o '$(OUT)/target_system_accessor_reconciliation_test'
+	@'$(OUT)/target_system_accessor_reconciliation_test' '$(REGISTERS)'
+	@$(CC) $(CFLAGS) target_artifact_publisher_test.c \
+		-o '$(OUT)/target_artifact_publisher_test'
+	@'$(OUT)/target_artifact_publisher_test'
+	@$(CC) $(CFLAGS) $(CONDITION_INCLUDE) $(REFRESH_TEST_DEFINES) \
+		target_refresh_test.c $(REFRESH_SOURCES) \
+		-o '$(OUT)/target_refresh_test'
+	@'$(OUT)/target_refresh_test' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
 
-# Refresh is intentionally unavailable until all three source importers produce
-# one transactionally validated C artifact set, including registers.
-refresh:
-	@echo "tcti ISA refresh is unavailable until the register C artifact generator is complete" >&2
-	@exit 2
+refresh: source-check
+	@mkdir -p '$(BUILD_ROOT)'
+	@$(CC) $(CFLAGS) $(CONDITION_INCLUDE) $(REFRESH_DEFINES) \
+		target_refresh.c $(filter-out target_refresh.c,$(REFRESH_SOURCES)) \
+		-o '$(OUT)/target_refresh'
+	@'$(OUT)/target_refresh' '$(BUILD_ROOT)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'

@@ -283,8 +283,6 @@ static void publisher_sha256_transform(struct publisher_sha256 *state,
 				       const unsigned char block[64]);
 static void publisher_sha256_update(struct publisher_sha256 *state,
 				    const unsigned char *data, size_t length);
-static void publisher_sha256_hex(const void *data, size_t length,
-				 char digest[65]);
 
 struct verified_artifact {
 	char name[TCTI_TARGET_ARTIFACT_MAX_NAME + 1];
@@ -778,8 +776,8 @@ int tcti_target_artifact_verify(
 			if ((size_t)(line + line_length - recorded_digest) != 64 ||
 			    cursor.offset != cursor.length)
 				goto manifest_format;
-			publisher_sha256_hex(manifest, line_offset,
-					     calculated_digest);
+			tcti_target_artifact_sha256(manifest, line_offset,
+					      calculated_digest);
 			if (memcmp(recorded_digest, calculated_digest, 64)) {
 				set_verify_result(result,
 					TCTI_TARGET_ARTIFACT_VERIFY_BUNDLE_DIGEST,
@@ -928,16 +926,19 @@ static void publisher_sha256_transform(struct publisher_sha256 *state,
 		0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U,
 		0x3956c25bU, 0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U,
 		0xd807aa98U, 0x12835b01U, 0x243185beU, 0x550c7dc3U,
-		0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U, 0x06ca6351U,
-		0x14292967U, 0x27b70a85U, 0x2e1b2138U, 0x4d2c6dfcU,
-		0x53380d13U, 0x650a7354U, 0x766a0abbU, 0x81c2c92eU,
-		0x92722c85U, 0xa2bfe8a1U, 0xa81a664bU, 0xc24b8b70U,
-		0xc76c513U, 0xd192e819U, 0xd6990624U, 0xf40e3585U,
-		0x106aa070U, 0x19a4c116U, 0x1e376c08U, 0x2748774cU,
-		0x34b0bcb5U, 0x391c0cb3U, 0x4ed8aa4aU, 0x5b9cca4fU,
-		0x682e6ff3U, 0x748f82eeU, 0x78a5636fU, 0x84c87814U,
-		0x8cc70208U, 0x90befffaU, 0xa4506cebU, 0xbef9a3f7U,
-		0xc67178f2U,
+		0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U, 0xc19bf174U,
+		0xe49b69c1U, 0xefbe4786U, 0x0fc19dc6U, 0x240ca1ccU,
+		0x2de92c6fU, 0x4a7484aaU, 0x5cb0a9dcU, 0x76f988daU,
+		0x983e5152U, 0xa831c66dU, 0xb00327c8U, 0xbf597fc7U,
+		0xc6e00bf3U, 0xd5a79147U, 0x06ca6351U, 0x14292967U,
+		0x27b70a85U, 0x2e1b2138U, 0x4d2c6dfcU, 0x53380d13U,
+		0x650a7354U, 0x766a0abbU, 0x81c2c92eU, 0x92722c85U,
+		0xa2bfe8a1U, 0xa81a664bU, 0xc24b8b70U, 0xc76c51a3U,
+		0xd192e819U, 0xd6990624U, 0xf40e3585U, 0x106aa070U,
+		0x19a4c116U, 0x1e376c08U, 0x2748774cU, 0x34b0bcb5U,
+		0x391c0cb3U, 0x4ed8aa4aU, 0x5b9cca4fU, 0x682e6ff3U,
+		0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U,
+		0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U,
 	};
 	uint32_t schedule[64];
 	uint32_t a, b, c, d, e, f, g, h;
@@ -1018,7 +1019,7 @@ static void publisher_sha256_update(struct publisher_sha256 *state,
 	}
 }
 
-static void publisher_sha256_hex(const void *data, size_t length,
+void tcti_target_artifact_sha256(const void *data, size_t length,
 				 char digest[65])
 {
 	static const char hex[] = "0123456789abcdef";
@@ -1031,6 +1032,10 @@ static void publisher_sha256_hex(const void *data, size_t length,
 	unsigned char output[32];
 	size_t index;
 
+	if (!data && length) {
+		digest[0] = '\0';
+		return;
+	}
 	publisher_sha256_update(&state, data, length);
 	bits = state.byte_count * 8U;
 	state.block[state.used++] = 0x80;
@@ -1079,8 +1084,8 @@ static int build_manifest(const char *generation,
 	for (index = 0; index < artifact_count; index++) {
 		char digest[65];
 
-		publisher_sha256_hex(artifacts[index].data, artifacts[index].length,
-				     digest);
+		tcti_target_artifact_sha256(artifacts[index].data,
+					     artifacts[index].length, digest);
 		if (appendf(&buffer, &length, &capacity,
 			    "artifact=%s %zu sha256=%s\n", artifacts[index].name,
 			    artifacts[index].length, digest))
@@ -1089,7 +1094,7 @@ static int build_manifest(const char *generation,
 	{
 		char bundle_digest[65];
 
-		publisher_sha256_hex(buffer, length, bundle_digest);
+		tcti_target_artifact_sha256(buffer, length, bundle_digest);
 		if (appendf(&buffer, &length, &capacity, "bundle_sha256=%s\n",
 			    bundle_digest))
 			goto fail;
@@ -1173,6 +1178,7 @@ int tcti_target_artifact_publish(
 	int selector_length;
 	size_t index;
 	int saved_errno = 0;
+	bool generation_created = false;
 	bool selector_published = false;
 	enum tcti_target_artifact_publish_error validation;
 
@@ -1217,6 +1223,7 @@ int tcti_target_artifact_publish(
 				   TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
 		goto fail;
 	}
+	generation_created = true;
 	publisher.generation_fd = openat(publisher.root_fd, generation,
 		O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (publisher.generation_fd < 0) {
@@ -1322,7 +1329,7 @@ fail:
 	    publisher.generation_fd != publisher.root_fd)
 		close(publisher.generation_fd);
 	if (publisher.root_fd >= 0) {
-		if (!selector_published)
+		if (generation_created && !selector_published)
 			discard_generation(publisher.root_fd, generation, artifacts,
 					   artifact_count);
 		close(publisher.root_fd);

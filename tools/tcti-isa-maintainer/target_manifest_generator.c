@@ -6,6 +6,7 @@
  */
 #include "target_condition_serialization.h"
 #include "target_inventory_import.h"
+#include "target_manifest_generator.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -24,16 +25,6 @@ static const char source_sha256[] =
 struct source_bytes {
 	char *data;
 	size_t length;
-};
-
-enum target_manifest_generator_error {
-	TCTI_TARGET_MANIFEST_GENERATOR_OK,
-	TCTI_TARGET_MANIFEST_GENERATOR_PARSE,
-	TCTI_TARGET_MANIFEST_GENERATOR_METADATA,
-	TCTI_TARGET_MANIFEST_GENERATOR_COUNT,
-	TCTI_TARGET_MANIFEST_GENERATOR_DIGEST,
-	TCTI_TARGET_MANIFEST_GENERATOR_IO,
-	TCTI_TARGET_MANIFEST_GENERATOR_MANIFEST_MISMATCH,
 };
 
 #ifndef TARGET_MANIFEST_GENERATOR_NO_MAIN

@@ -12,6 +12,7 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
     let completionMarker: String
     let timeout: TimeInterval
     let kernelCommandLineSuffix: String?
+    let expectedKUnitSuite: String?
     let hostDirectoryFixture: Bool
 
     var selectedKernelTest: String? {
@@ -30,12 +31,14 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: String,
         timeout: TimeInterval,
         kernelCommandLineSuffix: String?,
+        expectedKUnitSuite: String? = nil,
         hostDirectoryFixture: Bool = false
     ) {
         self.suite = suite
         self.completionMarker = completionMarker
         self.timeout = timeout
         self.kernelCommandLineSuffix = kernelCommandLineSuffix
+        self.expectedKUnitSuite = expectedKUnitSuite
         self.hostDirectoryFixture = hostDirectoryFixture
     }
 
@@ -86,6 +89,16 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
         kernelCommandLineSuffix: nil,
+        hostDirectoryFixture: true
+    )
+
+    static let kernelTCTIAtomicMemoryDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-atomic-memory",
+        expectedKUnitSuite: "orlix-tcti-atomic-memory",
         hostDirectoryFixture: true
     )
 
@@ -475,6 +488,12 @@ final class OrlixUpstreamTestOutputParser {
         if let marker = Self.firstMarker(in: output, markers: Self.oomMarkers) {
             throw OrlixUpstreamTestRunError.oom(marker)
         }
+        if let expectedKUnitSuite = spec.expectedKUnitSuite,
+           Self.kunitSuiteResult(named: expectedKUnitSuite, in: output) == .failed {
+            throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                "missing passing KTAP result for selected KUnit suite \(expectedKUnitSuite)"
+            )
+        }
         if let failure = Self.firstUpstreamFailureLine(in: output) {
             throw OrlixUpstreamTestRunError.upstreamFailure(
                 failure,
@@ -503,6 +522,12 @@ final class OrlixUpstreamTestOutputParser {
                !Self.containsPassingTAPResult(named: selectedKernelTest, in: output) {
                 throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
                     "missing passing TAP result for selected kernel test \(selectedKernelTest)"
+                )
+            }
+            if let expectedKUnitSuite = spec.expectedKUnitSuite,
+               Self.kunitSuiteResult(named: expectedKUnitSuite, in: output) != .passed {
+                throw OrlixUpstreamTestRunError.malformedUpstreamOutput(
+                    "missing passing KTAP result for selected KUnit suite \(expectedKUnitSuite)"
                 )
             }
         case .mlibc:
@@ -669,6 +694,62 @@ final class OrlixUpstreamTestOutputParser {
                 }
                 return fields.last == Substring(expectedName)
             }
+    }
+
+    private enum KUnitSuiteResult: Equatable {
+        case absent
+        case failed
+        case passed
+    }
+
+    private static func kunitSuiteResult(
+        named expectedName: String,
+        in output: String
+    ) -> KUnitSuiteResult {
+        let lines = output
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        let subtest = "    # Subtest: \(expectedName)"
+
+        for index in lines.indices where lines[index] == "    KTAP version 1" {
+            guard index + 1 < lines.endIndex, lines[index + 1] == subtest else {
+                continue
+            }
+
+            for resultIndex in lines.index(after: index + 1)..<lines.endIndex {
+                let line = lines[resultIndex]
+
+                guard !line.hasPrefix(" ") else {
+                    continue
+                }
+                if line.hasPrefix("ok ") {
+                    let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+
+                    guard fields.count == 3,
+                          fields[0] == "ok",
+                          Int(fields[1]) != nil,
+                          fields[2] == Substring(expectedName) else {
+                        return .failed
+                    }
+                    return .passed
+                }
+                if line.hasPrefix("not ok ") {
+                    let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+
+                    guard fields.count >= 4,
+                          fields[0] == "not",
+                          fields[1] == "ok",
+                          Int(fields[2]) != nil,
+                          fields[3] == Substring(expectedName) else {
+                        return .failed
+                    }
+                    return .failed
+                }
+            }
+            return .failed
+        }
+
+        return .absent
     }
 
     private static func value(

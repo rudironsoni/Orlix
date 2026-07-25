@@ -176,4 +176,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testKselftestRootfsCompletesThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernel)
     }
+
+    func testTCTIAtomicMemoryKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIAtomicMemoryDiagnostic)
+    }
 }

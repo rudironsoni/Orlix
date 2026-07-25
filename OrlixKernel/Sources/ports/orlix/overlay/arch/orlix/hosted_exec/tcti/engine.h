@@ -12,5 +12,8 @@ bool tcti_static_pie_initial_tls(unsigned long base, const Elf64_Phdr *phdr,
 				 unsigned long *initial_tls);
 #if IS_ENABLED(CONFIG_ORLIX_TCTI_KUNIT_TEST)
 bool tcti_syscall_changes_user_mappings_for_tests(unsigned long nr);
+void tcti_invalidate_changed_user_mappings_for_tests(struct mm_struct *mm,
+						      unsigned long nr,
+						      long status);
 #endif
 #endif /* ORLIX_TCTI_ENGINE_H */

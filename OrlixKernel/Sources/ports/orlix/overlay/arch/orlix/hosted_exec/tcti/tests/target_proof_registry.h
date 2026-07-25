@@ -36,6 +36,7 @@ struct tcti_target_proof_binding {
 	uint32_t encoding_pattern;
 	const char *condition_tcnd_hex;
 	uint64_t kunit_case_mask;
+	uint32_t source_ordinal;
 };
 
 struct tcti_target_proof_case {
@@ -65,6 +66,12 @@ struct tcti_target_proof_registry_entry {
 	const struct tcti_target_proof_binding *bindings;
 	size_t binding_count;
 	const struct tcti_target_kselftest_provenance *kselftest;
+	/*
+	 * Required duties not discharged by the registered KUnit cases.
+	 * Static source ownership remains valid, but completion must fail closed
+	 * until native execution evidence clears every bit.
+	 */
+	uint32_t unproved_obligations;
 };
 
 struct tcti_target_proof_reference {
@@ -94,6 +101,9 @@ enum tcti_target_proof_registry_error {
 };
 
 int tcti_target_proof_registry_validate(
+	const struct tcti_target_proof_registry_entry *entries, size_t count,
+	enum tcti_target_proof_registry_error *error);
+int tcti_target_proof_registry_source_bound_projection_validate(
 	const struct tcti_target_proof_registry_entry *entries, size_t count,
 	enum tcti_target_proof_registry_error *error);
 int tcti_target_kselftest_provenance_validate(
