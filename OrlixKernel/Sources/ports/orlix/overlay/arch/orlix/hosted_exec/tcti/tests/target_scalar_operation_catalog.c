@@ -42,7 +42,7 @@ struct source_row {
 
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define TCTI_A64_SOURCE_MANIFEST_ROW(index, leaf, mnemonic, operation, mask, \
-				     pattern, condition) \
+					  pattern, condition, ...) \
 	{ leaf, mnemonic, operation, mask, pattern, condition },
 static const struct source_row source_rows[] = {
 #include "../isa/source_manifest.def"

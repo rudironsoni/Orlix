@@ -92,10 +92,10 @@ struct tcti_runtime_projection_result {
 };
 
 /*
- * Audit a complete pinned-source ledger against a runtime capability profile.
- * The target count is supplied by the ledger and must exactly match the leaves
- * supplied. Unadvertised gaps remain visible in the result but do not make
- * Linux advertise a capability or erase target leaves.
+ * Audit the complete pinned 4,350-leaf source ledger against a runtime
+ * capability profile. Both ledger counts must exactly equal the authoritative
+ * target count. Unadvertised gaps remain visible in the result but do not
+ * make Linux advertise a capability or erase target leaves.
  */
 int tcti_runtime_projection_audit_ledger(
 	const struct tcti_runtime_projection_ledger *ledger,
@@ -104,7 +104,7 @@ int tcti_runtime_projection_audit_ledger(
 	size_t capability_count,
 	struct tcti_runtime_projection_result *result);
 
-/* Audit a complete source-leaf provider without requiring a copied ledger. */
+/* Audit the complete pinned 4,350-leaf provider without copying its ledger. */
 int tcti_runtime_projection_audit_provider(
 	const struct tcti_runtime_projection_provider *provider,
 	const struct tcti_runtime_projection_profile *profile,

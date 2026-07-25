@@ -40,6 +40,9 @@ struct tcti_target_leaf {
 	uint32_t encoding_mask;
 	uint32_t encoding_pattern;
 	uint32_t condition;
+	/* Raw byte span of this Instruction.Instruction object in Instructions.json. */
+	size_t source_offset;
+	size_t source_length;
 };
 
 /*
@@ -62,6 +65,10 @@ struct tcti_target_operation {
 	char *id;
 	size_t source_offset;
 	size_t source_length;
+	/* Raw source provenance of the operation's optional operational_note. */
+	bool operational_note_present;
+	size_t operational_note_source_offset;
+	size_t operational_note_source_length;
 };
 
 struct tcti_target_inventory {
@@ -112,5 +119,9 @@ void tcti_target_inventory_destroy(struct tcti_target_inventory *inventory);
 const struct tcti_target_operation *
 tcti_target_inventory_operation(const struct tcti_target_inventory *inventory,
 				       const char *id);
+
+/* SHA-256 used to bind a raw authoritative source span into a C artifact. */
+void tcti_target_inventory_sha256(const void *data, size_t length,
+					 char digest[65]);
 
 #endif

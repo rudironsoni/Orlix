@@ -146,7 +146,7 @@ int tcti_runtime_projection_audit_provider(
 	result->advertised_hwcap = profile->hwcap;
 	result->advertised_hwcap2 = profile->hwcap2;
 	result->target_leaf_count = provider->leaf_count;
-	if (provider->leaf_count > TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES ||
+	if (provider->leaf_count != TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES ||
 	    !capability_count ||
 	    capability_count >
 		    TCTI_RUNTIME_PROJECTION_MAX_CAPABILITY_MAPPINGS)
@@ -258,7 +258,9 @@ int tcti_runtime_projection_audit_ledger(
 	};
 
 	if (!ledger || !ledger->leaves ||
-	    ledger->leaf_count != ledger->target_leaf_count)
+	    ledger->leaf_count != TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES ||
+	    ledger->target_leaf_count !=
+		TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES)
 		return -EINVAL;
 	return tcti_runtime_projection_audit_provider(
 		&provider, profile, capabilities, capability_count, result);

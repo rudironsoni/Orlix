@@ -118,6 +118,133 @@ static uint32_t selector_count_for_encoding(const struct tcti_register_model *mo
 	return count;
 }
 
+/* FNV-1a fingerprints exact source bytes with unambiguous scalar boundaries. */
+static uint64_t identity_byte(uint64_t identity, unsigned char byte)
+{
+	return (identity ^ byte) * UINT64_C(1099511628211);
+}
+
+static uint64_t identity_u64(uint64_t identity, uint64_t value)
+{
+	unsigned int index;
+
+	for (index = 0; index < 8U; index++)
+		identity = identity_byte(identity,
+			(unsigned char)(value >> (index * 8U)));
+	return identity;
+}
+
+static uint64_t identity_bytes(uint64_t identity, const char *bytes,
+				       size_t length)
+{
+	size_t index;
+
+	identity = identity_u64(identity, length);
+	for (index = 0; index < length; index++)
+		identity = identity_byte(identity, (unsigned char)bytes[index]);
+	return identity;
+}
+
+static int model_source_span_valid(const struct tcti_register_model *model,
+				  size_t offset, size_t length)
+{
+	return model && model->source && length && offset < model->source_length &&
+		length <= model->source_length - offset;
+}
+
+static int selector_identity_for_encoding(const struct tcti_register_model *model,
+					 uint32_t encoding_index,
+					 uint64_t *identity_out)
+{
+	uint64_t identity = UINT64_C(1469598103934665603);
+	size_t index;
+	uint32_t count = 0;
+
+	if (!model || !identity_out)
+		return -1;
+	identity = identity_u64(identity, encoding_index);
+	for (index = 0; index < model->system_selector_count; index++) {
+		const struct tcti_register_system_selector *selector =
+			&model->system_selectors[index];
+
+		if (selector->encoding_index != encoding_index)
+			continue;
+		if (!model_source_span_valid(model, selector->source_offset,
+					     selector->source_length))
+			return -1;
+		identity = identity_u64(identity, index);
+		identity = identity_bytes(identity,
+			model->source + selector->source_offset,
+			selector->source_length);
+		count++;
+	}
+	if (!count)
+		return -1;
+	*identity_out = identity;
+	return 0;
+}
+
+static int condition_identity_for_accessor(const struct tcti_register_model *model,
+					  const struct tcti_register_accessor *accessor,
+					  uint64_t *identity_out)
+{
+	uint64_t identity = UINT64_C(1469598103934665603);
+
+	if (!model || !accessor || !identity_out)
+		return -1;
+	identity = identity_u64(identity, accessor->condition_expression);
+	if (accessor->condition_expression == UINT32_MAX) {
+		if (accessor->condition_offset || accessor->condition_length)
+			return -1;
+		*identity_out = identity;
+		return 0;
+	}
+	if (accessor->condition_expression >= model->expression_count ||
+	    !model_source_span_valid(model, accessor->condition_offset,
+				     accessor->condition_length))
+		return -1;
+	*identity_out = identity_bytes(identity,
+		model->source + accessor->condition_offset,
+		accessor->condition_length);
+	return 0;
+}
+
+static uint64_t reconciliation_identity(
+	const struct tcti_system_accessor_reconciliation_result *result)
+{
+	uint64_t identity = UINT64_C(1469598103934665603);
+	size_t index;
+
+	if (!result)
+		return 0;
+	identity = identity_u64(identity, result->entry_count);
+	for (index = 0; index < result->entry_count; index++) {
+		const struct tcti_system_accessor_reconciliation_entry *entry =
+			&result->entries[index];
+
+		identity = identity_u64(identity, entry->accessor_index);
+		identity = identity_u64(identity, entry->encoding_index);
+		identity = identity_bytes(identity, entry->accessor_name,
+			strlen(entry->accessor_name));
+		identity = identity_bytes(identity,
+			tcti_system_accessor_generic_leaf_name(entry->generic_leaf),
+			strlen(tcti_system_accessor_generic_leaf_name(entry->generic_leaf)));
+		identity = identity_u64(identity, entry->direction);
+		identity = identity_u64(identity, entry->disposition);
+		identity = identity_u64(identity, entry->selector_count);
+		identity = identity_u64(identity, entry->condition_expression);
+		identity = identity_u64(identity, entry->selector_identity);
+		identity = identity_u64(identity, entry->condition_identity);
+		identity = identity_u64(identity, entry->accessor_source_offset);
+		identity = identity_u64(identity, entry->accessor_source_length);
+		identity = identity_u64(identity, entry->encoding_source_offset);
+		identity = identity_u64(identity, entry->encoding_source_length);
+		identity = identity_u64(identity, entry->condition_source_offset);
+		identity = identity_u64(identity, entry->condition_source_length);
+	}
+	return identity;
+}
+
 static void count_disposition(struct tcti_system_accessor_reconciliation_result *result,
 				      enum tcti_system_accessor_disposition disposition)
 {
@@ -125,11 +252,20 @@ static void count_disposition(struct tcti_system_accessor_reconciliation_result 
 	case TCTI_SYSTEM_ACCESSOR_MAPPED:
 		result->census.mapped++;
 		break;
+	case TCTI_SYSTEM_ACCESSOR_RESERVED:
+		result->census.reserved++;
+		break;
+	case TCTI_SYSTEM_ACCESSOR_PRIVILEGED:
+		result->census.privileged++;
+		break;
 	case TCTI_SYSTEM_ACCESSOR_UNSUPPORTED:
 		result->census.unsupported++;
 		break;
 	case TCTI_SYSTEM_ACCESSOR_AMBIGUOUS:
 		result->census.ambiguous++;
+		break;
+	case TCTI_SYSTEM_ACCESSOR_CONTRADICTORY:
+		result->census.contradictory++;
 		break;
 	case TCTI_SYSTEM_ACCESSOR_INVALID:
 		result->census.invalid++;
@@ -180,6 +316,8 @@ tcti_system_accessor_reconcile(
 		entry->accessor_name = accessor->name;
 		entry->accessor_source_offset = accessor->source_offset;
 		entry->accessor_source_length = accessor->source_length;
+		entry->condition_source_offset = accessor->condition_offset;
+		entry->condition_source_length = accessor->condition_length;
 
 		if (accessor->first_system_encoding == UINT32_MAX ||
 		    accessor->system_encoding_count != 1U ||
@@ -210,6 +348,14 @@ tcti_system_accessor_reconcile(
 			count_disposition(result, entry->disposition);
 			continue;
 		}
+		if (selector_identity_for_encoding(model, entry->encoding_index,
+						 &entry->selector_identity) ||
+		    condition_identity_for_accessor(model, accessor,
+						  &entry->condition_identity)) {
+			entry->disposition = TCTI_SYSTEM_ACCESSOR_INVALID;
+			count_disposition(result, entry->disposition);
+			continue;
+		}
 		entry->generic_leaf = mapping->leaf;
 		entry->direction = mapping->direction;
 		entry->disposition = TCTI_SYSTEM_ACCESSOR_MAPPED;
@@ -224,15 +370,23 @@ tcti_system_accessor_reconciliation_validate(
 {
 	if (!result || (!result->entries && result->entry_count) ||
 	    result->census.aarch64_accessors != result->entry_count ||
-	    result->census.mapped + result->census.unsupported +
-		result->census.ambiguous + result->census.invalid != result->entry_count)
+	    result->census.mapped + result->census.reserved +
+		result->census.privileged + result->census.unsupported +
+		result->census.ambiguous + result->census.contradictory +
+		result->census.invalid != result->entry_count)
 		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID_ARGUMENT;
+	if (result->census.contradictory)
+		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_CONTRADICTORY;
 	if (result->census.ambiguous)
 		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_AMBIGUOUS;
 	if (result->census.invalid)
 		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID;
 	if (result->census.unsupported)
 		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_UNSUPPORTED;
+	if (result->census.privileged)
+		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_PRIVILEGED;
+	if (result->census.reserved)
+		return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_RESERVED;
 	return TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK;
 }
 
@@ -271,15 +425,20 @@ tcti_system_accessor_reconciliation_emit(
 	if (error)
 		return error;
 	if (fputs("/* SPDX-License-Identifier: BSD-3-Clause */\n"
-		  "/* Generated from pinned Arm Registers.json. Do not edit. */\n"
+		  "/* Generated from the pinned Arm AARCHMRS 2026-06 register source. Do not edit. */\n"
 		  "TCTI_A64_SYSTEM_ACCESSOR_SOURCE(\"vFATAp1-A\", \"818\", "
 		  "\"2026-06_rel\", \"2.9.5\", \"2026-06-24 17:12:14\", "
 		  "\"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874\")\n",
 		  output) == EOF ||
 	    fprintf(output, "TCTI_A64_SYSTEM_ACCESSOR_COUNTS(%zuU, %zuU, %zuU, "
-		    "%zuU, %zuU)\n", result.census.aarch64_accessors,
-		    result.census.mapped, result.census.unsupported,
-		    result.census.ambiguous, result.census.invalid) < 0)
+		    "%zuU, %zuU, %zuU, %zuU, %zuU)\n",
+		    result.census.aarch64_accessors, result.census.mapped,
+		    result.census.reserved, result.census.privileged,
+		    result.census.unsupported, result.census.ambiguous,
+		    result.census.contradictory, result.census.invalid) < 0)
+		goto io;
+	if (fprintf(output, "TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(UINT64_C(0x%016" PRIx64 "))\n",
+		    reconciliation_identity(&result)) < 0)
 		goto io;
 	for (index = 0; index < result.entry_count; index++) {
 		const struct tcti_system_accessor_reconciliation_entry *entry =
@@ -293,12 +452,15 @@ tcti_system_accessor_reconciliation_emit(
 		    emit_c_string(output,
 			 tcti_system_accessor_generic_leaf_name(entry->generic_leaf)) ||
 		    fprintf(output, ", %uU, %uU, %uU, %" PRIu32 "U, "
-		    "%zuU, %zuU, %zuU, %zuU)\n",
+		    "UINT64_C(0x%016" PRIx64 "), UINT64_C(0x%016" PRIx64 "), "
+		    "%zuU, %zuU, %zuU, %zuU, %zuU, %zuU)\n",
 		    (unsigned int)entry->direction,
 		    (unsigned int)entry->disposition, entry->selector_count,
-		    entry->condition_expression, entry->accessor_source_offset,
+		    entry->condition_expression, entry->selector_identity,
+		    entry->condition_identity, entry->accessor_source_offset,
 		    entry->accessor_source_length, entry->encoding_source_offset,
-		    entry->encoding_source_length) < 0)
+		    entry->encoding_source_length, entry->condition_source_offset,
+		    entry->condition_source_length) < 0)
 			goto io;
 	}
 	tcti_system_accessor_reconciliation_destroy(&result);
@@ -353,10 +515,16 @@ const char *tcti_system_accessor_reconciliation_error_name(
 		return "invalid argument";
 	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_NO_MEMORY:
 		return "out of memory";
+	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_RESERVED:
+		return "reserved accessor";
+	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_PRIVILEGED:
+		return "privileged accessor";
 	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_UNSUPPORTED:
 		return "unsupported accessor form";
 	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_AMBIGUOUS:
 		return "ambiguous accessor encoding";
+	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_CONTRADICTORY:
+		return "contradictory accessor metadata";
 	case TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID:
 		return "invalid accessor encoding";
 	default:

@@ -17,7 +17,7 @@
 #define ALIAS_OR_DUPLICATE TCTI_TARGET_LEDGER_ALIAS_OR_DUPLICATE
 
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
-#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, pattern, condition) \
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, pattern, condition, ...) \
 	{ ordinal, name, mnemonic, operation, mask, pattern, condition },
 static const struct tcti_target_ledger_source_row source_rows[] = {
 #include "../isa/source_manifest.def"

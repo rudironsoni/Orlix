@@ -560,3 +560,11 @@ Made the pinned Arm AARCHMRS 2026-06 package authoritative for the 4,350-leaf ta
 ## [2026-07-25] implement | Bind authoritative TCTI inventory gaps into the audit
 
 Extended the C-native TCTI inventory and completion audit with exact source ordinals, static proof bindings, runtime-advertisement separation, feature-condition validation, immutable six-artifact refresh publication, complete A64 system-accessor reconciliation, and explicit shared-ASL availability failure. The checkpoint keeps all 4,350 leaves visible, reports exact feature applicability and semantic provenance as unresolved blockers, preserves zero unproved HWCAP advertisement, and adds focused kernel-owned regressions without treating static source ownership or terminal output as executed proof.
+
+## [2026-07-25] harden | Separate TCTI provenance from execution proof
+
+Bound every direct instruction leaf to its raw pinned source span, made the maintainer refresh reject drift from checked C artifacts, integrated all supplemental system-accessor rows and the missing shared-ASL witness into the canonical audit, and required the runtime projection to retain the complete 4,350-leaf denominator. Expanded static ownership for the implemented LSE families while keeping every architectural duty unresolved until typed native KUnit and applicable kselftest results exist.
+
+## [2026-07-25] harden | Authenticate TCTI source-derived semantic edges
+
+Made the completion audit reject one-byte direct-source span drift, authenticated the selector payload and condition identity of all 2,014 supplemental system accessors, and retained exact operational-note presence, span, and digest state for every shared-ASL absence witness. Removed an unconditional skipped KUnit placeholder and kept that semantic gap in the authoritative provenance audit until official shared ASL is separately pinned.

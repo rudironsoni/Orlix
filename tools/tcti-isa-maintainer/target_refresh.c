@@ -61,6 +61,9 @@ const char *tcti_target_refresh_error_name(enum tcti_target_refresh_error error)
 	case TCTI_TARGET_REFRESH_REGISTERS: return "register artifact generation failed";
 	case TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS: return "system accessor reconciliation failed";
 	case TCTI_TARGET_REFRESH_CAPTURE: return "generated artifact capture failed";
+	case TCTI_TARGET_REFRESH_CANONICAL_MISSING: return "checked canonical artifact is missing";
+	case TCTI_TARGET_REFRESH_CANONICAL_IO: return "checked canonical artifact cannot be read";
+	case TCTI_TARGET_REFRESH_CANONICAL_MISMATCH: return "generated artifact differs from checked canonical artifact";
 	case TCTI_TARGET_REFRESH_PUBLISH: return "transactional publication failed";
 	case TCTI_TARGET_REFRESH_VERIFY: return "published generation verification failed";
 	}
@@ -228,7 +231,56 @@ static int emit_system_accessors(const struct source_bytes *source,
 	return result;
 }
 
-int tcti_target_refresh(int build_root_fd, const char *instructions_path,
+static int compare_canonical_artifact(int canonical_root_fd,
+				      const struct tcti_target_artifact *artifact,
+				      enum tcti_target_refresh_error *error)
+{
+	char buffer[4096];
+	struct stat status;
+	size_t offset = 0;
+	int fd;
+
+	fd = openat(canonical_root_fd, artifact->name,
+		    O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0) {
+		*error = errno == ENOENT ? TCTI_TARGET_REFRESH_CANONICAL_MISSING :
+			TCTI_TARGET_REFRESH_CANONICAL_IO;
+		return -1;
+	}
+	if (fstat(fd, &status) || !S_ISREG(status.st_mode) || status.st_size < 0 ||
+	    (uintmax_t)status.st_size != artifact->length) {
+		close(fd);
+		*error = TCTI_TARGET_REFRESH_CANONICAL_MISMATCH;
+		return -1;
+	}
+	while (offset < artifact->length) {
+		size_t remaining = artifact->length - offset;
+		size_t wanted = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+		ssize_t count = read(fd, buffer, wanted);
+
+		if (count < 0) {
+			close(fd);
+			*error = TCTI_TARGET_REFRESH_CANONICAL_IO;
+			return -1;
+		}
+		if (!count ||
+		    memcmp(buffer, (const unsigned char *)artifact->data + offset,
+			   (size_t)count)) {
+			close(fd);
+			*error = TCTI_TARGET_REFRESH_CANONICAL_MISMATCH;
+			return -1;
+		}
+		offset += (size_t)count;
+	}
+	if (close(fd)) {
+		*error = TCTI_TARGET_REFRESH_CANONICAL_IO;
+		return -1;
+	}
+	return 0;
+}
+
+int tcti_target_refresh(int build_root_fd, int canonical_root_fd,
+			const char *instructions_path,
 			const char *features_path, const char *registers_path,
 			struct tcti_target_refresh_result *result)
 {
@@ -253,7 +305,7 @@ int tcti_target_refresh(int build_root_fd, const char *instructions_path,
 
 	if (result)
 		*result = (struct tcti_target_refresh_result) { 0 };
-	if (build_root_fd < 0 || !instructions_path || !features_path ||
+	if (build_root_fd < 0 || canonical_root_fd < 0 || !instructions_path || !features_path ||
 	    !registers_path) {
 		set_result(result, TCTI_TARGET_REFRESH_INVALID_ARGUMENT);
 		errno = EINVAL;
@@ -323,6 +375,14 @@ int tcti_target_refresh(int build_root_fd, const char *instructions_path,
 		.name = "target_system_accessor_reconciliation.def",
 		.data = system_accessors.data, .length = system_accessors.length,
 	};
+	for (size_t index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++) {
+		if (compare_canonical_artifact(canonical_root_fd, &artifacts[index],
+					       &error)) {
+			if (result)
+				result->canonical_artifact = artifacts[index].name;
+			goto out;
+		}
+	}
 	published = tcti_target_artifact_publish(build_root_fd,
 		TCTI_TARGET_REFRESH_PUBLISH_NAME, generation, artifacts,
 		sizeof(artifacts) / sizeof(artifacts[0]), &provenance, NULL,
@@ -359,8 +419,8 @@ int main(int argc, char **argv)
 	int root_fd;
 	int status;
 
-	if (argc != 5) {
-		fprintf(stderr, "usage: %s BUILD_ROOT Instructions.json Features.json Registers.json\n",
+	if (argc != 6) {
+		fprintf(stderr, "usage: %s BUILD_ROOT CANONICAL_DIR Instructions.json Features.json Registers.json\n",
 			argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -369,11 +429,23 @@ int main(int argc, char **argv)
 		fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
 		return EXIT_FAILURE;
 	}
-	status = tcti_target_refresh(root_fd, argv[2], argv[3], argv[4], &result);
+	int canonical_fd = open(argv[2], O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (canonical_fd < 0) {
+		fprintf(stderr, "%s: %s\n", argv[2], strerror(errno));
+		close(root_fd);
+		return EXIT_FAILURE;
+	}
+	status = tcti_target_refresh(root_fd, canonical_fd, argv[3], argv[4], argv[5],
+				     &result);
+	close(canonical_fd);
 	close(root_fd);
-	if (status)
-		fprintf(stderr, "tcti ISA refresh: %s\n",
+	if (status) {
+		fprintf(stderr, "tcti ISA refresh: %s",
 			tcti_target_refresh_error_name(result.error));
+		if (result.canonical_artifact)
+			fprintf(stderr, ": %s", result.canonical_artifact);
+		fputc('\n', stderr);
+	}
 	return status ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 #endif

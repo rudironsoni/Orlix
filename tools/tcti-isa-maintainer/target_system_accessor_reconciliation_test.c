@@ -19,7 +19,8 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 		{ .type = "Accessors.SystemAccessor", .name = "A64.MRS",
 		  .first_system_encoding = 0U, .system_encoding_count = 1U,
 		  .condition_expression = 7U, .source_offset = 10U,
-		  .source_length = 11U },
+		  .source_length = 11U, .condition_offset = 9U,
+		  .condition_length = 9U },
 		{ .type = "Accessors.SystemAccessor", .name = "A64.Unknown",
 		  .first_system_encoding = 1U, .system_encoding_count = 1U },
 		{ .type = "Accessors.SystemAccessor", .name = "A64.MSRregister",
@@ -34,9 +35,11 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 		{ .accessor_index = 2U },
 	};
 	static const struct tcti_register_system_selector selectors[] = {
-		{ .encoding_index = 0U }, { .encoding_index = 1U },
+		{ .encoding_index = 0U, .source_offset = 0U, .source_length = 8U },
+		{ .encoding_index = 1U },
 		{ .encoding_index = 2U }, { .encoding_index = 3U },
 	};
+	static const char source[] = "selector condition";
 	const struct tcti_register_model model = {
 		.accessors = (struct tcti_register_accessor *)accessors,
 		.accessor_count = sizeof(accessors) / sizeof(accessors[0]),
@@ -44,6 +47,9 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 		.system_encoding_count = sizeof(encodings) / sizeof(encodings[0]),
 		.system_selectors = (struct tcti_register_system_selector *)selectors,
 		.system_selector_count = sizeof(selectors) / sizeof(selectors[0]),
+		.source = (char *)source,
+		.source_length = sizeof(source) - 1U,
+		.expression_count = 8U,
 	};
 	struct tcti_system_accessor_reconciliation_result result = { 0 };
 	FILE *artifact;
@@ -54,12 +60,17 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 	CHECK(result.entry_count == 4U);
 	CHECK(result.census.aarch64_accessors == 4U);
 	CHECK(result.census.mapped == 1U);
+	CHECK(result.census.reserved == 0U);
+	CHECK(result.census.privileged == 0U);
 	CHECK(result.census.unsupported == 1U);
 	CHECK(result.census.ambiguous == 1U);
+	CHECK(result.census.contradictory == 0U);
 	CHECK(result.census.invalid == 1U);
 	CHECK(result.entries[0].accessor_index == 0U);
 	CHECK(result.entries[0].encoding_index == 0U);
 	CHECK(result.entries[0].condition_expression == 7U);
+	CHECK(result.entries[0].selector_identity != 0U);
+	CHECK(result.entries[0].condition_identity != 0U);
 	CHECK(result.entries[0].selector_count == 1U);
 	CHECK(result.entries[0].generic_leaf ==
 	      TCTI_SYSTEM_ACCESSOR_LEAF_MRS_RS_SYSTEMMOVE);
@@ -80,11 +91,35 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 	CHECK(!fseek(artifact, 0, SEEK_SET));
 	CHECK(fread(artifact_text, 1, sizeof(artifact_text) - 1U, artifact) > 0U);
 	CHECK(strstr(artifact_text,
-	      "TCTI_A64_SYSTEM_ACCESSOR_COUNTS(4U, 1U, 1U, 1U, 1U)") != NULL);
+	      "TCTI_A64_SYSTEM_ACCESSOR_COUNTS(4U, 1U, 0U, 0U, 1U, 1U, "
+	      "0U, 1U)") != NULL);
 	CHECK(strstr(artifact_text,
 	      "TCTI_A64_SYSTEM_ACCESSOR(0U, 0U, \"A64.MRS\", "
-	      "\"MRS_RS_systemmove\", 1U, 0U, 1U, 7U") != NULL);
+	      "\"MRS_RS_systemmove\", 1U, 0U, 1U, 7U, UINT64_C(") != NULL);
 	fclose(artifact);
+	return 0;
+}
+
+static int explicit_blocking_dispositions(void)
+{
+	struct tcti_system_accessor_reconciliation_entry entry = { 0 };
+	struct tcti_system_accessor_reconciliation_result result = {
+		.entries = &entry,
+		.entry_count = 1U,
+		.census.aarch64_accessors = 1U,
+	};
+
+	result.census.reserved = 1U;
+	CHECK(tcti_system_accessor_reconciliation_validate(&result) ==
+	      TCTI_SYSTEM_ACCESSOR_RECONCILIATION_RESERVED);
+	result.census.reserved = 0U;
+	result.census.privileged = 1U;
+	CHECK(tcti_system_accessor_reconciliation_validate(&result) ==
+	      TCTI_SYSTEM_ACCESSOR_RECONCILIATION_PRIVILEGED);
+	result.census.privileged = 0U;
+	result.census.contradictory = 1U;
+	CHECK(tcti_system_accessor_reconciliation_validate(&result) ==
+	      TCTI_SYSTEM_ACCESSOR_RECONCILIATION_CONTRADICTORY);
 	return 0;
 }
 
@@ -129,8 +164,11 @@ static int pinned_aarch64_census(const char *path)
 	CHECK(result.entry_count == 2014U);
 	CHECK(result.census.aarch64_accessors == 2014U);
 	CHECK(result.census.mapped == 2014U);
+	CHECK(result.census.reserved == 0U);
+	CHECK(result.census.privileged == 0U);
 	CHECK(result.census.unsupported == 0U);
 	CHECK(result.census.ambiguous == 0U);
+	CHECK(result.census.contradictory == 0U);
 	CHECK(result.census.invalid == 0U);
 	CHECK(tcti_system_accessor_reconciliation_validate(&result) ==
 	      TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK);
@@ -177,13 +215,15 @@ static int pinned_aarch64_census(const char *path)
 int main(int argc, char **argv)
 {
 	if (argc == 2 && !strcmp(argv[1], "--synthetic"))
-		return synthetic_mapping_and_fail_closed_dispositions() ?
+		return (synthetic_mapping_and_fail_closed_dispositions() ||
+			explicit_blocking_dispositions()) ?
 			EXIT_FAILURE : EXIT_SUCCESS;
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s Registers.json\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 	if (synthetic_mapping_and_fail_closed_dispositions() ||
+	    explicit_blocking_dispositions() ||
 	    pinned_aarch64_census(argv[1]))
 		return EXIT_FAILURE;
 	return EXIT_SUCCESS;

@@ -25,10 +25,17 @@ struct classification_string_offsets {
 	uint32_t proof;
 };
 
+struct system_accessor_string_offsets {
+	uint32_t name;
+	uint32_t generic_leaf;
+};
+
 struct generated_offsets {
-	uint32_t metadata[5];
+	uint32_t metadata[6];
+	uint32_t accessor_metadata[6];
 	struct source_string_offsets *source;
 	struct classification_string_offsets *classification;
+	struct system_accessor_string_offsets *accessors;
 	uint32_t pool_size;
 };
 
@@ -68,17 +75,85 @@ static int valid_condition(const char *text)
 	return 1;
 }
 
+static uint64_t accessor_identity_byte(uint64_t identity, unsigned char byte)
+{
+	return (identity ^ byte) * UINT64_C(1099511628211);
+}
+
+static uint64_t accessor_identity_u64(uint64_t identity, uint64_t value)
+{
+	unsigned int index;
+
+	for (index = 0; index < 8U; index++)
+		identity = accessor_identity_byte(identity,
+			(unsigned char)(value >> (index * 8U)));
+	return identity;
+}
+
+static uint64_t accessor_identity_text(uint64_t identity, const char *text)
+{
+	size_t length = strlen(text);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, length);
+	for (index = 0; index < length; index++)
+		identity = accessor_identity_byte(identity, (unsigned char)text[index]);
+	return identity;
+}
+
+uint64_t tcti_a64_kbuild_system_accessor_identity(
+	const struct tcti_a64_kbuild_system_accessor_row *accessors,
+	size_t accessor_count)
+{
+	uint64_t identity = UINT64_C(1469598103934665603);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, accessor_count);
+	for (index = 0; index < accessor_count; index++) {
+		const struct tcti_a64_kbuild_system_accessor_row *row =
+			&accessors[index];
+
+		identity = accessor_identity_u64(identity, row->accessor_index);
+		identity = accessor_identity_u64(identity, row->encoding_index);
+		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->generic_leaf);
+		identity = accessor_identity_u64(identity, row->direction);
+		identity = accessor_identity_u64(identity, row->disposition);
+		identity = accessor_identity_u64(identity, row->selector_count);
+		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->selector_identity);
+		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_length);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_length);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_length);
+	}
+	return identity;
+}
+
 static enum tcti_a64_kbuild_generator_error validate_inputs(
 	const struct tcti_a64_kbuild_metadata *metadata,
 	const struct tcti_a64_kbuild_source_row *source,
 	size_t source_count,
 	const struct tcti_a64_kbuild_classification_row *classification,
-	size_t classification_count)
+	size_t classification_count,
+	const struct tcti_a64_kbuild_system_accessor_metadata *accessor_metadata,
+	const struct tcti_a64_kbuild_system_accessor_row *accessors,
+	size_t accessor_count)
 {
 	size_t index;
 	size_t prior;
 
-	if (!metadata || !source || !classification)
+	if (!metadata || !source || !classification || !accessor_metadata ||
+	    !accessors)
 		return TCTI_A64_KBUILD_GENERATOR_INVALID_ARGUMENT;
 	if (!fixed_text(metadata->architecture,
 			TCTI_A64_KBUILD_ARCHITECTURE) ||
@@ -87,7 +162,11 @@ static enum tcti_a64_kbuild_generator_error validate_inputs(
 	    !fixed_text(metadata->schema, TCTI_A64_KBUILD_SCHEMA) ||
 	    !fixed_text(metadata->instructions_sha256,
 			TCTI_A64_KBUILD_INSTRUCTIONS_SHA256) ||
+	    !fixed_text(metadata->timestamp,
+			TCTI_A64_KBUILD_INSTRUCTIONS_TIMESTAMP) ||
 	    !valid_sha256(metadata->instructions_sha256) ||
+	    metadata->source_byte_length !=
+			TCTI_A64_KBUILD_INSTRUCTIONS_SOURCE_BYTES ||
 	    metadata->source_count != TCTI_A64_KBUILD_SOURCE_COUNT)
 		return TCTI_A64_KBUILD_GENERATOR_METADATA_MISMATCH;
 	if (source_count != TCTI_A64_KBUILD_SOURCE_COUNT ||
@@ -105,6 +184,11 @@ static enum tcti_a64_kbuild_generator_error validate_inputs(
 		    !source_row->mnemonic || !source_row->mnemonic[0] ||
 		    !source_row->operation || !source_row->operation[0] ||
 		    !valid_condition(source_row->condition_tcnd_hex) ||
+		    !source_row->source_length ||
+		    source_row->source_offset >= metadata->source_byte_length ||
+		    source_row->source_length >
+			    metadata->source_byte_length -
+				    source_row->source_offset ||
 		    (source_row->pattern & ~source_row->mask))
 			return TCTI_A64_KBUILD_GENERATOR_BAD_SOURCE_ROW;
 		if (!class_row->name ||
@@ -151,6 +235,71 @@ static enum tcti_a64_kbuild_generator_error validate_inputs(
 			if (!strcmp(source[prior].name, source_row->name))
 				return TCTI_A64_KBUILD_GENERATOR_DUPLICATE_SOURCE;
 	}
+	if (!fixed_text(accessor_metadata->architecture,
+			TCTI_A64_KBUILD_ARCHITECTURE) ||
+	    !fixed_text(accessor_metadata->build, TCTI_A64_KBUILD_BUILD) ||
+	    !fixed_text(accessor_metadata->reference,
+			TCTI_A64_KBUILD_REFERENCE) ||
+	    !fixed_text(accessor_metadata->schema, TCTI_A64_KBUILD_SCHEMA) ||
+	    !fixed_text(accessor_metadata->timestamp,
+			TCTI_A64_KBUILD_REGISTERS_TIMESTAMP) ||
+	    !fixed_text(accessor_metadata->registers_sha256,
+			TCTI_A64_KBUILD_REGISTERS_SHA256) ||
+	    !valid_sha256(accessor_metadata->registers_sha256))
+		return TCTI_A64_KBUILD_GENERATOR_ACCESSOR_METADATA_MISMATCH;
+	if (accessor_metadata->accessor_count !=
+			TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
+	    accessor_count != TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
+	    accessor_metadata->mapped_count +
+		    accessor_metadata->reserved_count +
+		    accessor_metadata->privileged_count +
+		    accessor_metadata->unsupported_count +
+		    accessor_metadata->ambiguous_count +
+		    accessor_metadata->contradictory_count +
+		    accessor_metadata->invalid_count !=
+			accessor_metadata->accessor_count)
+		return TCTI_A64_KBUILD_GENERATOR_ACCESSOR_COUNT_MISMATCH;
+	if (accessor_metadata->mapped_count != accessor_metadata->accessor_count ||
+	    accessor_metadata->reserved_count ||
+	    accessor_metadata->privileged_count ||
+	    accessor_metadata->unsupported_count ||
+	    accessor_metadata->ambiguous_count ||
+	    accessor_metadata->contradictory_count ||
+	    accessor_metadata->invalid_count)
+		return TCTI_A64_KBUILD_GENERATOR_ACCESSOR_BLOCKER;
+	for (index = 0; index < accessor_count; index++) {
+		const struct tcti_a64_kbuild_system_accessor_row *row =
+			&accessors[index];
+		int generic_leaf_found = 0;
+
+		if (!row->name || strncmp(row->name, "A64.", 4U) ||
+		    !row->generic_leaf || !row->generic_leaf[0] ||
+		    row->direction <
+			    TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_READ ||
+		    row->direction >
+			    TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_EXECUTE ||
+		    row->disposition != TCTI_A64_KBUILD_SYSTEM_ACCESSOR_MAPPED ||
+		    row->encoding_index == UINT32_MAX || !row->selector_count ||
+		    !row->selector_identity || !row->condition_identity ||
+		    row->condition_expression == UINT32_MAX ||
+		    !row->accessor_source_length || !row->encoding_source_length ||
+		    !row->condition_source_length)
+			return TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW;
+		for (prior = 0; prior < source_count; prior++)
+			if (!strcmp(source[prior].name, row->generic_leaf)) {
+				generic_leaf_found = 1;
+				break;
+			}
+		if (!generic_leaf_found)
+			return TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW;
+		for (prior = 0; prior < index; prior++)
+			if (accessors[prior].accessor_index == row->accessor_index ||
+			    accessors[prior].encoding_index == row->encoding_index)
+				return TCTI_A64_KBUILD_GENERATOR_DUPLICATE_ACCESSOR;
+	}
+	if (tcti_a64_kbuild_system_accessor_identity(accessors, accessor_count) !=
+		    accessor_metadata->reconciliation_identity)
+		return TCTI_A64_KBUILD_GENERATOR_ACCESSOR_METADATA_MISMATCH;
 	return TCTI_A64_KBUILD_GENERATOR_OK;
 }
 
@@ -172,11 +321,20 @@ static int build_offsets(
 	const struct tcti_a64_kbuild_source_row *source,
 	size_t source_count,
 	const struct tcti_a64_kbuild_classification_row *classification,
+	const struct tcti_a64_kbuild_system_accessor_metadata *accessor_metadata,
+	const struct tcti_a64_kbuild_system_accessor_row *accessors,
+	size_t accessor_count,
 	struct generated_offsets *offsets)
 {
 	const char *const metadata_text[] = {
 		metadata->architecture, metadata->build, metadata->reference,
 		metadata->schema, metadata->instructions_sha256,
+		metadata->timestamp,
+	};
+	const char *const accessor_metadata_text[] = {
+		accessor_metadata->architecture, accessor_metadata->build,
+		accessor_metadata->reference, accessor_metadata->schema,
+		accessor_metadata->timestamp, accessor_metadata->registers_sha256,
 	};
 	uint64_t pool_size = 0;
 	size_t index;
@@ -184,7 +342,8 @@ static int build_offsets(
 	offsets->source = calloc(source_count, sizeof(*offsets->source));
 	offsets->classification =
 		calloc(source_count, sizeof(*offsets->classification));
-	if (!offsets->source || !offsets->classification)
+	offsets->accessors = calloc(accessor_count, sizeof(*offsets->accessors));
+	if (!offsets->source || !offsets->classification || !offsets->accessors)
 		return -1;
 	for (index = 0; index < sizeof(metadata_text) / sizeof(metadata_text[0]);
 	     index++)
@@ -210,6 +369,19 @@ static int build_offsets(
 				      &offsets->classification[index].evidence) ||
 		    add_string_offset(&pool_size, classification[index].proof,
 				      &offsets->classification[index].proof))
+			return -1;
+	for (index = 0;
+	     index < sizeof(accessor_metadata_text) /
+		     sizeof(accessor_metadata_text[0]);
+	     index++)
+		if (add_string_offset(&pool_size, accessor_metadata_text[index],
+				      &offsets->accessor_metadata[index]))
+			return -1;
+	for (index = 0; index < accessor_count; index++)
+		if (add_string_offset(&pool_size, accessors[index].name,
+				      &offsets->accessors[index].name) ||
+		    add_string_offset(&pool_size, accessors[index].generic_leaf,
+				      &offsets->accessors[index].generic_leaf))
 			return -1;
 	offsets->pool_size = (uint32_t)pool_size;
 	return 0;
@@ -248,12 +420,20 @@ static int emit_header(
 	const struct tcti_a64_kbuild_source_row *source,
 	size_t source_count,
 	const struct tcti_a64_kbuild_classification_row *classification,
+	const struct tcti_a64_kbuild_system_accessor_metadata *accessor_metadata,
+	const struct tcti_a64_kbuild_system_accessor_row *accessors,
+	size_t accessor_count,
 	const struct generated_offsets *offsets,
 	FILE *output)
 {
 	const char *const metadata_text[] = {
 		metadata->architecture, metadata->build, metadata->reference,
 		metadata->schema, metadata->instructions_sha256,
+	};
+	const char *const accessor_metadata_text[] = {
+		accessor_metadata->architecture, accessor_metadata->build,
+		accessor_metadata->reference, accessor_metadata->schema,
+		accessor_metadata->timestamp, accessor_metadata->registers_sha256,
 	};
 	size_t unclassified_count = 0;
 	size_t index;
@@ -274,7 +454,10 @@ static int emit_header(
 		  "#define TCTI_A64_GENERATED_SCHEMA \"2.9.5\"\n"
 		  "#define TCTI_A64_GENERATED_INSTRUCTIONS_SHA256 "
 		  "\"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe\"\n"
-		  "#define TCTI_A64_GENERATED_SOURCE_COUNT 4350U\n",
+		  "#define TCTI_A64_GENERATED_REGISTERS_SHA256 "
+		  "\"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874\"\n"
+		  "#define TCTI_A64_GENERATED_SOURCE_COUNT 4350U\n"
+		  "#define TCTI_A64_GENERATED_SYSTEM_ACCESSOR_COUNT 2014U\n",
 		  output) == EOF ||
 	    fprintf(output,
 		    "#define TCTI_A64_GENERATED_UNCLASSIFIED_COUNT %zuU\n"
@@ -286,13 +469,32 @@ static int emit_header(
 		    offsets->pool_size) < 0 ||
 	    fputs("struct tcti_a64_generated_metadata {\n"
 		  "\tu32 architecture; u32 build; u32 reference; u32 schema;\n"
-		  "\tu32 instructions_sha256; u32 source_count;\n"
+		  "\tu32 instructions_sha256; u32 timestamp;\n"
+		  "\tu32 source_byte_length; u32 source_count;\n"
 		  "};\n"
 		  "struct tcti_a64_generated_row {\n"
 		  "\tu32 ordinal; u32 name; u32 mnemonic; u32 operation;\n"
 		  "\tu32 mask; u32 pattern; u32 condition;\n"
+		  "\tu32 source_offset; u32 source_length;\n"
 		  "\tu32 classification_name; u32 canonical; u32 evidence; u32 proof;\n"
 		  "\tu8 classification; u8 relation; u8 reserved[2];\n"
+		  "};\n"
+		  "struct tcti_a64_generated_system_accessor_metadata {\n"
+		  "\tu32 architecture; u32 build; u32 reference; u32 schema;\n"
+		  "\tu32 timestamp; u32 registers_sha256; u32 accessor_count;\n"
+		  "\tu32 mapped_count; u32 reserved_count; u32 privileged_count;\n"
+		  "\tu32 unsupported_count; u32 ambiguous_count;\n"
+		  "\tu32 contradictory_count; u32 invalid_count;\n"
+		  "\tu64 reconciliation_identity;\n"
+		  "};\n"
+		  "struct tcti_a64_generated_system_accessor_row {\n"
+		  "\tu32 accessor_index; u32 encoding_index; u32 name;\n"
+		  "\tu32 generic_leaf; u32 selector_count; u32 condition_expression;\n"
+		  "\tu64 selector_identity; u64 condition_identity;\n"
+		  "\tu32 accessor_source_offset; u32 accessor_source_length;\n"
+		  "\tu32 encoding_source_offset; u32 encoding_source_length;\n"
+		  "\tu32 condition_source_offset; u32 condition_source_length;\n"
+		  "\tu8 direction; u8 disposition; u8 reserved[2];\n"
 		  "};\n"
 		  "static const u8 tcti_a64_generated_strings[] = {\n",
 		  output) == EOF)
@@ -313,6 +515,16 @@ static int emit_header(
 		    emit_pool_text(output, classification[index].evidence, &column) ||
 		    emit_pool_text(output, classification[index].proof, &column))
 			return -1;
+	for (index = 0;
+	     index < sizeof(accessor_metadata_text) /
+		     sizeof(accessor_metadata_text[0]);
+	     index++)
+		if (emit_pool_text(output, accessor_metadata_text[index], &column))
+			return -1;
+	for (index = 0; index < accessor_count; index++)
+		if (emit_pool_text(output, accessors[index].name, &column) ||
+		    emit_pool_text(output, accessors[index].generic_leaf, &column))
+			return -1;
 	if (column && fputc('\n', output) == EOF)
 		return -1;
 	if (fprintf(output,
@@ -320,12 +532,13 @@ static int emit_header(
 		    "static const struct tcti_a64_generated_metadata "
 		    "tcti_a64_generated_metadata = {\n"
 		    "\t%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %"
-		    PRIu32 "U, %" PRIu32 "U, 4350U,\n};\n"
+		    PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		    "U, 115441429U, 4350U,\n};\n"
 		    "static const struct tcti_a64_generated_row "
 		    "tcti_a64_generated_rows[4350] = {\n",
 		    offsets->metadata[0], offsets->metadata[1],
 		    offsets->metadata[2], offsets->metadata[3],
-		    offsets->metadata[4]) < 0)
+		    offsets->metadata[4], offsets->metadata[5]) < 0)
 		return -1;
 	for (index = 0; index < source_count; index++) {
 		const struct source_string_offsets *source_strings =
@@ -338,15 +551,66 @@ static int emit_header(
 			    "U, %" PRIu32 "U, 0x%08" PRIx32
 			    "U, 0x%08" PRIx32 "U, %" PRIu32 "U, %"
 			    PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %"
+			    PRIu32 "U, %" PRIu32 "U, %"
 			    PRIu32 "U, %uU, %uU, { 0U, 0U } },\n",
 			    source[index].ordinal, source_strings->name,
 			    source_strings->mnemonic, source_strings->operation,
 			    source[index].mask, source[index].pattern,
-			    source_strings->condition, class_strings->name,
+			    source_strings->condition, source[index].source_offset,
+			    source[index].source_length, class_strings->name,
 			    class_strings->canonical, class_strings->evidence,
 			    class_strings->proof,
 			    (unsigned int)classification[index].classification,
 			    (unsigned int)classification[index].relation) < 0)
+			return -1;
+	}
+	if (fprintf(output,
+		    "};\n"
+		    "static const struct tcti_a64_generated_system_accessor_metadata "
+		    "tcti_a64_generated_system_accessor_metadata = {\n"
+		    "\t%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %"
+		    PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU, %uU, "
+		    "%uU, %uU, %uU, %uU, %uU, 0x%016" PRIx64 "ULL,\n};\n"
+		    "static const struct tcti_a64_generated_system_accessor_row "
+		    "tcti_a64_generated_system_accessors[2014] = {\n",
+		    offsets->accessor_metadata[0], offsets->accessor_metadata[1],
+		    offsets->accessor_metadata[2], offsets->accessor_metadata[3],
+		    offsets->accessor_metadata[4], offsets->accessor_metadata[5],
+		    accessor_metadata->accessor_count,
+		    accessor_metadata->mapped_count,
+		    accessor_metadata->reserved_count,
+		    accessor_metadata->privileged_count,
+		    accessor_metadata->unsupported_count,
+		    accessor_metadata->ambiguous_count,
+		    accessor_metadata->contradictory_count,
+		    accessor_metadata->invalid_count,
+		    accessor_metadata->reconciliation_identity) < 0)
+		return -1;
+	for (index = 0; index < accessor_count; index++) {
+		const struct system_accessor_string_offsets *strings =
+			&offsets->accessors[index];
+		const struct tcti_a64_kbuild_system_accessor_row *row =
+			&accessors[index];
+
+		if (fprintf(output,
+			    "\t{ %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		    "U, 0x%016" PRIx64 "ULL, 0x%016" PRIx64
+		    "ULL, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		    "U, %uU, %uU, { 0U, 0U } },\n",
+			    row->accessor_index, row->encoding_index,
+			    strings->name, strings->generic_leaf,
+		    row->selector_count, row->condition_expression,
+		    row->selector_identity, row->condition_identity,
+			    row->accessor_source_offset,
+			    row->accessor_source_length,
+			    row->encoding_source_offset,
+		    row->encoding_source_length,
+		    row->condition_source_offset,
+		    row->condition_source_length,
+			    (unsigned int)row->direction,
+			    (unsigned int)row->disposition) < 0)
 			return -1;
 	}
 	return fputs("};\n"
@@ -360,6 +624,9 @@ enum tcti_a64_kbuild_generator_error tcti_a64_kbuild_generate_header(
 	size_t source_count,
 	const struct tcti_a64_kbuild_classification_row *classification,
 	size_t classification_count,
+	const struct tcti_a64_kbuild_system_accessor_metadata *accessor_metadata,
+	const struct tcti_a64_kbuild_system_accessor_row *accessors,
+	size_t accessor_count,
 	FILE *output)
 {
 	struct generated_offsets offsets = { 0 };
@@ -368,20 +635,24 @@ enum tcti_a64_kbuild_generator_error tcti_a64_kbuild_generate_header(
 	if (!output)
 		return TCTI_A64_KBUILD_GENERATOR_INVALID_ARGUMENT;
 	error = validate_inputs(metadata, source, source_count, classification,
-				classification_count);
+				classification_count, accessor_metadata, accessors,
+				accessor_count);
 	if (error != TCTI_A64_KBUILD_GENERATOR_OK)
 		return error;
 	if (build_offsets(metadata, source, source_count, classification,
-			  &offsets)) {
+			  accessor_metadata, accessors, accessor_count, &offsets)) {
 		free(offsets.source);
 		free(offsets.classification);
+		free(offsets.accessors);
 		return TCTI_A64_KBUILD_GENERATOR_NO_MEMORY;
 	}
 	error = emit_header(metadata, source, source_count, classification,
-			    &offsets, output) ?
+			    accessor_metadata, accessors, accessor_count, &offsets,
+			    output) ?
 		TCTI_A64_KBUILD_GENERATOR_IO : TCTI_A64_KBUILD_GENERATOR_OK;
 	free(offsets.source);
 	free(offsets.classification);
+	free(offsets.accessors);
 	return error;
 }
 
@@ -407,6 +678,16 @@ const char *tcti_a64_kbuild_generator_error_name(
 		return "classification identity mismatch";
 	case TCTI_A64_KBUILD_GENERATOR_BAD_CLASSIFICATION:
 		return "bad classification";
+	case TCTI_A64_KBUILD_GENERATOR_ACCESSOR_METADATA_MISMATCH:
+		return "system accessor metadata mismatch";
+	case TCTI_A64_KBUILD_GENERATOR_ACCESSOR_COUNT_MISMATCH:
+		return "system accessor count mismatch";
+	case TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW:
+		return "bad system accessor row";
+	case TCTI_A64_KBUILD_GENERATOR_DUPLICATE_ACCESSOR:
+		return "duplicate system accessor";
+	case TCTI_A64_KBUILD_GENERATOR_ACCESSOR_BLOCKER:
+		return "unmapped system accessor blocker";
 	case TCTI_A64_KBUILD_GENERATOR_NO_MEMORY:
 		return "out of memory";
 	case TCTI_A64_KBUILD_GENERATOR_IO:
@@ -417,9 +698,11 @@ const char *tcti_a64_kbuild_generator_error_name(
 
 #ifndef TCTI_A64_KBUILD_GENERATOR_NO_BUILTIN_INPUT
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(architecture, build, reference, schema, \
-					sha256, count) \
+					sha256, count, timestamp_value, \
+					source_byte_length_value) \
 	static const struct tcti_a64_kbuild_metadata builtin_metadata = { \
-		architecture, build, reference, schema, sha256, count \
+		architecture, build, reference, schema, sha256, timestamp_value, \
+		source_byte_length_value, count \
 	};
 #define TCTI_A64_SOURCE_MANIFEST_ROW(...)
 #include "../isa/source_manifest.def"
@@ -428,8 +711,10 @@ const char *tcti_a64_kbuild_generator_error_name(
 
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, \
-				     pattern, condition) \
-	{ ordinal, name, mnemonic, operation, mask, pattern, condition },
+				     pattern, condition, source_offset_value, \
+				     source_length_value) \
+	{ ordinal, name, mnemonic, operation, mask, pattern, condition, \
+	  source_offset_value, source_length_value },
 static const struct tcti_a64_kbuild_source_row builtin_source[] = {
 #include "../isa/source_manifest.def"
 };
@@ -465,6 +750,64 @@ builtin_classification[] = {
 };
 #undef TCTI_A64_TARGET_CLASSIFICATION
 
+#define TCTI_A64_SYSTEM_ACCESSOR_SOURCE(architecture_value, build_value, \
+					reference_value, schema_value, \
+					timestamp_value, sha256_value) \
+	static const char builtin_accessor_architecture[] = architecture_value; \
+	static const char builtin_accessor_build[] = build_value; \
+	static const char builtin_accessor_reference[] = reference_value; \
+	static const char builtin_accessor_schema[] = schema_value; \
+	static const char builtin_accessor_timestamp[] = timestamp_value; \
+	static const char builtin_accessor_sha256[] = sha256_value;
+#define TCTI_A64_SYSTEM_ACCESSOR_COUNTS(total, mapped, reserved, privileged, \
+					unsupported, ambiguous, contradictory, \
+					invalid) \
+	static const uint32_t builtin_accessor_counts[] = { \
+		total, mapped, reserved, privileged, unsupported, ambiguous, \
+		contradictory, invalid \
+	};
+#define TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity_value) \
+	static const uint64_t builtin_accessor_identity = identity_value;
+#define TCTI_A64_SYSTEM_ACCESSOR(...)
+#include "../isa/target_system_accessor_reconciliation.def"
+#undef TCTI_A64_SYSTEM_ACCESSOR
+#undef TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+
+static const struct tcti_a64_kbuild_system_accessor_metadata
+builtin_accessor_metadata = {
+	builtin_accessor_architecture, builtin_accessor_build,
+	builtin_accessor_reference, builtin_accessor_schema,
+	builtin_accessor_timestamp, builtin_accessor_sha256,
+	builtin_accessor_counts[0], builtin_accessor_counts[1],
+	builtin_accessor_counts[2], builtin_accessor_counts[3],
+	builtin_accessor_counts[4], builtin_accessor_counts[5],
+	builtin_accessor_counts[6], builtin_accessor_counts[7],
+	builtin_accessor_identity,
+};
+
+#define TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, generic, \
+				 direction_value, disposition_value, selectors, \
+				 condition, selector_identity_value, \
+				 condition_identity_value, accessor_offset, accessor_length, \
+				 encoding_offset, encoding_length, condition_offset, \
+				 condition_length) \
+	{ accessor, encoding, name_value, generic, direction_value, \
+	  disposition_value, selectors, condition, selector_identity_value, \
+	  condition_identity_value, accessor_offset, accessor_length, \
+	  encoding_offset, encoding_length, condition_offset, condition_length },
+static const struct tcti_a64_kbuild_system_accessor_row builtin_accessors[] = {
+#include "../isa/target_system_accessor_reconciliation.def"
+};
+#undef TCTI_A64_SYSTEM_ACCESSOR
+#undef TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+
 #ifndef TCTI_A64_KBUILD_GENERATOR_NO_MAIN
 int main(int argc, char **argv)
 {
@@ -480,6 +823,8 @@ int main(int argc, char **argv)
 		sizeof(builtin_source) / sizeof(builtin_source[0]),
 		builtin_classification,
 		sizeof(builtin_classification) / sizeof(builtin_classification[0]),
+		&builtin_accessor_metadata, builtin_accessors,
+		sizeof(builtin_accessors) / sizeof(builtin_accessors[0]),
 		stdout);
 	if (error != TCTI_A64_KBUILD_GENERATOR_OK) {
 		fprintf(stderr, "target ISA Kbuild generator: %s\n",

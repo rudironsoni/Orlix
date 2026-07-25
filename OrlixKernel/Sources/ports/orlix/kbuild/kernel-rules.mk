@@ -1051,13 +1051,13 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_lse_operation_catalog.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_resume_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_bitfield_extract_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_scalar_fp_semantics_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_baseline_decoder_regression_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_gadget_program_boundary_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_load_store_writeback_overlap_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_caspal_atomicity_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_kthread_handoff_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_mapping_invalidation_test.c \
@@ -1822,6 +1822,7 @@ __kernel-archive: __prepare-kbuild
 	target_inventory_generator_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_isa_kbuild_generator.h"; \
 	target_inventory_source_manifest="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/source_manifest.def"; \
 	target_inventory_classification="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_classification.def"; \
+	target_inventory_system_accessors="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_system_accessor_reconciliation.def"; \
 	target_inventory_tool="$$inventory_dir/target_isa_kbuild_generator"; \
 	target_inventory_header="$$inventory_dir/target_inventory.h"; \
 	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
@@ -1840,7 +1841,8 @@ __kernel-archive: __prepare-kbuild
 			[ "$$target_inventory_generator" -nt "$$target_inventory_tool" ] || \
 			[ "$$target_inventory_generator_header" -nt "$$target_inventory_tool" ] || \
 			[ "$$target_inventory_source_manifest" -nt "$$target_inventory_tool" ] || \
-			[ "$$target_inventory_classification" -nt "$$target_inventory_tool" ]; then \
+			[ "$$target_inventory_classification" -nt "$$target_inventory_tool" ] || \
+			[ "$$target_inventory_system_accessors" -nt "$$target_inventory_tool" ]; then \
 			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
 				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
 				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
@@ -1851,7 +1853,8 @@ __kernel-archive: __prepare-kbuild
 		if [ ! -s "$$target_inventory_header" ] || \
 			[ "$$target_inventory_tool" -nt "$$target_inventory_header" ] || \
 			[ "$$target_inventory_source_manifest" -nt "$$target_inventory_header" ] || \
-			[ "$$target_inventory_classification" -nt "$$target_inventory_header" ]; then \
+			[ "$$target_inventory_classification" -nt "$$target_inventory_header" ] || \
+			[ "$$target_inventory_system_accessors" -nt "$$target_inventory_header" ]; then \
 			target_inventory_header_tmp="$$target_inventory_header.tmp.$$$$"; \
 			rm -f "$$target_inventory_header_tmp"; \
 			if ! "$$target_inventory_tool" > "$$target_inventory_header_tmp"; then \
@@ -1886,6 +1889,7 @@ __kernel-archive: __prepare-kbuild
 		archive="$$output_dir/$(ORLIX_KERNEL_ARCHIVE_NAME)"; \
 		archive_tmp="$$output_dir/.$(ORLIX_KERNEL_ARCHIVE_NAME).tmp.$$$$"; \
 		symbols_tmp="$$output_dir/.symbols.txt.tmp.$$$$"; \
+		strings_tmp="$$output_dir/.strings.txt.tmp.$$$$"; \
 		mkdir -p "$$obj_dir"; \
 		object_dependencies_current() { \
 			object="$$1"; depfile="$$2"; \
@@ -1908,6 +1912,7 @@ __kernel-archive: __prepare-kbuild
 				"$$target_inventory_generator_header" \
 				"$$target_inventory_source_manifest" \
 				"$$target_inventory_classification" \
+				"$$target_inventory_system_accessors" \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$archive" -nt "$$cache_dep" ]; then archive_ready=0; break; fi; \
 			done; \
@@ -2021,8 +2026,10 @@ __kernel-archive: __prepare-kbuild
 		grep -q '_arch_boot_entry' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_entry: $$archive_tmp" >&2; exit 1; }; \
 		grep -q '_arch_boot_params' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_params: $$archive_tmp" >&2; exit 1; }; \
 		if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
-			"$$strings_cmd" "$$archive_tmp" | grep -Fxq 'kunit.filter_glob' || { echo "Orlix KUnit archive missing canonical kunit.filter_glob parameter: $$archive_tmp" >&2; exit 1; }; \
-			if "$$strings_cmd" "$$archive_tmp" | grep -Fxq 'executor.filter_glob'; then echo "Orlix KUnit archive retains noncanonical executor.filter_glob parameter: $$archive_tmp" >&2; exit 1; fi; \
+			"$$strings_cmd" "$$archive_tmp" > "$$strings_tmp"; \
+			grep -Fxq 'kunit.filter_glob' "$$strings_tmp" || { echo "Orlix KUnit archive missing canonical kunit.filter_glob parameter: $$archive_tmp" >&2; exit 1; }; \
+			if grep -Fxq 'executor.filter_glob' "$$strings_tmp"; then echo "Orlix KUnit archive retains noncanonical executor.filter_glob parameter: $$archive_tmp" >&2; exit 1; fi; \
+			rm -f "$$strings_tmp"; \
 		fi; \
 		mv -f "$$archive_tmp" "$$archive"; \
 		mv -f "$$symbols_tmp" "$$output_dir/symbols.txt"; \

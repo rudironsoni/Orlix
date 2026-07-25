@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-24
+updated: 2026-07-25
 status: doing
 summary: "Classify and implement the complete pinned AArch64 ISA target through Orlix TCTI."
 task_of:
@@ -127,3 +127,14 @@ The current runtime HWCAP profile may remain narrower while implementation is in
 Privileged and non-EL0 leaves remain visible in the inventory. Completion proves their architecturally correct EL0 rejection or exception behavior rather than silently discarding them.
 
 Passing mlibc, Coreutils, or another package suite is downstream compatibility evidence. It does not close this task while any of the 4,350 source leaves is unclassified, any applicable EL0 leaf lacks exact production semantics and typed evidence, or any privileged leaf lacks its required EL0 behavior.
+
+The current audit foundation retains raw source spans for all 4,350 direct
+leaves, binds all pinned inline operation objects as explicit shared-ASL
+absence witnesses with explicit operational-note provenance, authenticates
+the selector and condition identity of all supplemental system accessors
+without changing the direct-leaf denominator, and treats KUnit and kselftest
+source registration as ownership only. Native execution remains unproved
+until a typed result binds each source ordinal and individual obligation to
+an executed production-path case. Runtime HWCAP and HWCAP2 projection
+requires the complete 4,350-leaf provider and remains disabled for every
+unproved extension.

@@ -607,6 +607,63 @@ static int source_spans_and_relationships(const struct tcti_register_model *mode
 			      field->wrapper_condition_length);
 		}
 	}
+	CHECK(model->field_value_relation_count == model->field_count);
+	for (index = 0; index < model->field_value_relation_count; index++) {
+		const struct tcti_register_field_value_relation *relation =
+			&model->field_value_relations[index];
+		const struct tcti_field_identity *field = &model->fields[index];
+		size_t candidate;
+
+		CHECK(relation->field_index == index);
+		CHECK(relation->source_offset == field->source_offset);
+		CHECK(relation->source_length == field->source_length);
+		CHECK(relation->field_condition_expression ==
+		      field->condition_expression);
+		CHECK(relation->wrapper_condition_expression ==
+		      field->wrapper_condition_expression);
+		if (!relation->value_candidate_count)
+			CHECK(relation->first_value_candidate == UINT32_MAX);
+		else {
+			CHECK(relation->first_value_candidate <
+			      model->field_value_candidate_count);
+			CHECK(relation->value_candidate_count <=
+			      model->field_value_candidate_count -
+			      relation->first_value_candidate);
+			for (candidate = 0; candidate < relation->value_candidate_count;
+			     candidate++) {
+				const struct tcti_register_field_value_candidate *entry =
+					&model->field_value_candidates[
+						relation->first_value_candidate + candidate];
+
+				CHECK(entry->field_index == index);
+				CHECK(entry->kind == TCTI_REGISTER_FIELD_VALUE_SOURCE_VALUES ||
+				      entry->kind == TCTI_REGISTER_FIELD_VALUE_SOURCE_IMPLEMENTATION_DEFINED);
+				CHECK(entry->valueset_index < model->valueset_count);
+				CHECK(model->valuesets[entry->valueset_index].field_index == index);
+				CHECK(!object_span(model, entry->source_offset, entry->source_length));
+			}
+		}
+		if (!relation->constraint_candidate_count)
+			CHECK(relation->first_constraint_candidate == UINT32_MAX);
+		else {
+			CHECK(relation->first_constraint_candidate <
+			      model->field_constraint_candidate_count);
+			CHECK(relation->constraint_candidate_count <=
+			      model->field_constraint_candidate_count -
+			      relation->first_constraint_candidate);
+			for (candidate = 0; candidate < relation->constraint_candidate_count;
+			     candidate++) {
+				const struct tcti_register_field_constraint_candidate *entry =
+					&model->field_constraint_candidates[
+						relation->first_constraint_candidate + candidate];
+
+				CHECK(entry->field_index == index);
+				CHECK(entry->constraint_index < model->constraint_count);
+				CHECK(model->constraints[entry->constraint_index].field_index == index);
+				CHECK(entry->kind == model->constraints[entry->constraint_index].kind);
+			}
+		}
+	}
 	for (index = 0; index < model->fieldset_count; index++) {
 		const struct tcti_register_fieldset *fieldset = &model->fieldsets[index];
 

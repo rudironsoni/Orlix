@@ -25,6 +25,7 @@ REFRESH_SOURCES := target_refresh.c target_artifact_publisher.c \
 INSTRUCTIONS ?= $(ORLIX_AARCHMRS_INSTRUCTIONS)
 FEATURES ?= $(ORLIX_AARCHMRS_FEATURES)
 REGISTERS ?= $(ORLIX_AARCHMRS_REGISTERS)
+CANONICAL_DIR := $(abspath ../../OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/isa)
 
 .PHONY: check source-check refresh
 
@@ -59,17 +60,21 @@ source-check:
 		target_system_accessor_reconciliation_test.c \
 		-o '$(OUT)/target_system_accessor_reconciliation_test'
 	@'$(OUT)/target_system_accessor_reconciliation_test' '$(REGISTERS)'
+	@$(CC) $(CFLAGS) target_register_model.c \
+		target_system_accessor_reconciliation.c \
+		target_system_accessor_reconciliation_generator.c \
+		-o '$(OUT)/target_system_accessor_reconciliation_generator'
 	@$(CC) $(CFLAGS) target_artifact_publisher_test.c \
 		-o '$(OUT)/target_artifact_publisher_test'
 	@'$(OUT)/target_artifact_publisher_test'
 	@$(CC) $(CFLAGS) $(CONDITION_INCLUDE) $(REFRESH_TEST_DEFINES) \
 		target_refresh_test.c $(REFRESH_SOURCES) \
 		-o '$(OUT)/target_refresh_test'
-	@'$(OUT)/target_refresh_test' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
+	@'$(OUT)/target_refresh_test' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
 
 refresh: source-check
 	@mkdir -p '$(BUILD_ROOT)'
 	@$(CC) $(CFLAGS) $(CONDITION_INCLUDE) $(REFRESH_DEFINES) \
 		target_refresh.c $(filter-out target_refresh.c,$(REFRESH_SOURCES)) \
 		-o '$(OUT)/target_refresh'
-	@'$(OUT)/target_refresh' '$(BUILD_ROOT)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
+	@'$(OUT)/target_refresh' '$(BUILD_ROOT)' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'

@@ -26,8 +26,10 @@
 
 static const struct tcti_target_completion_source_provenance source_provenance = {
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(arch_value, build_value, release_value, \
-					schema_value, sha_value, count_value) \
-	arch_value, build_value, release_value, schema_value, sha_value, count_value
+					schema_value, sha_value, count_value, \
+					timestamp_value, source_length_value) \
+	arch_value, build_value, release_value, schema_value, timestamp_value, \
+	sha_value, source_length_value, count_value
 #define TCTI_A64_SOURCE_MANIFEST_ROW(...)
 #include "../isa/source_manifest.def"
 #undef TCTI_A64_SOURCE_MANIFEST_ROW
@@ -36,13 +38,76 @@ static const struct tcti_target_completion_source_provenance source_provenance =
 
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, \
-				      pattern, condition) \
-	{ ordinal, name, mnemonic, operation, mask, pattern, condition },
+				      pattern, condition, source_offset, source_length) \
+	{ ordinal, name, mnemonic, operation, mask, pattern, condition, \
+	  source_offset, source_length },
 static const struct tcti_target_completion_source_row source_rows[] = {
 #include "../isa/source_manifest.def"
 };
 #undef TCTI_A64_SOURCE_MANIFEST_ROW
 #undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+static const struct tcti_target_completion_asl_provenance asl_provenance = {
+#define TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, availability) \
+	format, source_sha256, availability
+#define TCTI_A64_ASL_AVAILABILITY_ROW(...)
+#include "../isa/target_asl_availability.def"
+#undef TCTI_A64_ASL_AVAILABILITY_ROW
+#undef TCTI_A64_ASL_AVAILABILITY_SOURCE
+};
+
+#define TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
+#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, object, \
+					      offset, length, note_presence, note_offset, \
+					      note_length, note_digest, availability) \
+	{ ordinal, name, operation, object, offset, length, note_presence, \
+	  note_offset, note_length, note_digest, availability },
+static const struct tcti_target_completion_asl_row asl_rows[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef TCTI_A64_ASL_AVAILABILITY_ROW
+#undef TCTI_A64_ASL_AVAILABILITY_SOURCE
+
+static const struct tcti_target_completion_system_accessor_provenance
+system_accessor_provenance = {
+#define TCTI_A64_SYSTEM_ACCESSOR_SOURCE(architecture, build, release, schema, \
+					timestamp, sha256) \
+	architecture, build, release, schema, timestamp, sha256,
+#define TCTI_A64_SYSTEM_ACCESSOR_COUNTS(total, mapped, reserved, privileged, \
+					unsupported, ambiguous, contradictory, \
+					invalid) \
+	total, mapped, reserved, privileged, unsupported, ambiguous, \
+	contradictory, invalid,
+#define TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity) identity,
+#define TCTI_A64_SYSTEM_ACCESSOR(...)
+#include "../isa/target_system_accessor_reconciliation.def"
+#undef TCTI_A64_SYSTEM_ACCESSOR
+#undef TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+};
+
+#define TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
+				 disposition, selectors, condition, \
+				 selector_identity, condition_identity, \
+				 accessor_offset, accessor_length, \
+				 encoding_offset, encoding_length, condition_offset, \
+				 condition_length) \
+	{ accessor, encoding, name, generic, direction, disposition, selectors, \
+	  condition, selector_identity, condition_identity, accessor_offset, \
+	  accessor_length, encoding_offset, encoding_length, condition_offset, \
+	  condition_length },
+static const struct tcti_target_completion_system_accessor_row
+system_accessor_rows[] = {
+#include "../isa/target_system_accessor_reconciliation.def"
+};
+#undef TCTI_A64_SYSTEM_ACCESSOR
+#undef TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef TCTI_A64_SYSTEM_ACCESSOR_SOURCE
 
 #define TCTI_A64_TARGET_CLASSIFICATION(name, classification, relation, \
 				       canonical, evidence, proof) \
@@ -59,6 +124,12 @@ _Static_assert(sizeof(source_rows) / sizeof(source_rows[0]) ==
 _Static_assert(sizeof(classification_rows) / sizeof(classification_rows[0]) ==
 		       TCTI_TARGET_COMPLETION_SOURCE_ROWS,
 	       "classification ledger must contain exactly 4,350 rows");
+_Static_assert(sizeof(asl_rows) / sizeof(asl_rows[0]) ==
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+	       "ASL availability ledger must contain exactly 4,350 rows");
+_Static_assert(sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]) ==
+		       TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS,
+	       "system accessor ledger must contain exactly 2,014 rows");
 
 static bool empty(const char *text)
 {
@@ -185,7 +256,159 @@ static bool source_row_well_formed(
 {
 	return row && row->ordinal == ordinal && !empty(row->name) &&
 		!empty(row->mnemonic) && !empty(row->operation_id) &&
-		!empty(row->condition_tcnd_hex);
+		!empty(row->condition_tcnd_hex) && row->source_length &&
+		row->source_offset < TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		row->source_length <=
+			TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH - row->source_offset;
+}
+
+static bool source_row_matches_canonical(
+	const struct tcti_target_completion_source_row *row, size_t ordinal)
+{
+	const struct tcti_target_completion_source_row *canonical;
+
+	if (!source_row_well_formed(row, ordinal) ||
+	    ordinal >= sizeof(source_rows) / sizeof(source_rows[0]))
+		return false;
+	canonical = &source_rows[ordinal];
+	return !strcmp(row->name, canonical->name) &&
+		!strcmp(row->mnemonic, canonical->mnemonic) &&
+		!strcmp(row->operation_id, canonical->operation_id) &&
+		row->mask == canonical->mask &&
+		row->pattern == canonical->pattern &&
+		!strcmp(row->condition_tcnd_hex,
+			canonical->condition_tcnd_hex) &&
+		row->source_offset == canonical->source_offset &&
+		row->source_length == canonical->source_length;
+}
+
+static bool asl_availability_is_valid(const char *availability)
+{
+	/*
+	 * A future available state must add a corpus digest plus an ASL entry and
+	 * body locator to this checked schema.  Do not accept a status-string-only
+	 * claim before that provenance exists.
+	 */
+	return availability && !strcmp(availability, "shared_asl_absent_blocking");
+}
+
+static bool sha256_hex_is_valid(const char *value)
+{
+	size_t index;
+
+	if (!value || strlen(value) != 64U)
+		return false;
+	for (index = 0; index < 64U; index++)
+		if (!((value[index] >= '0' && value[index] <= '9') ||
+		      (value[index] >= 'a' && value[index] <= 'f')))
+			return false;
+	return true;
+}
+
+static bool asl_operational_note_provenance_is_valid(
+	const struct tcti_target_completion_asl_row *row)
+{
+	if (!row || empty(row->operational_note_presence) ||
+	    !row->operational_note_sha256)
+		return false;
+	if (!strcmp(row->operational_note_presence, "absent"))
+		return row->operational_note_source_offset == 0U &&
+			row->operational_note_source_length == 0U &&
+			row->operational_note_sha256[0] == '\0';
+	if (strcmp(row->operational_note_presence, "present"))
+		return false;
+	return row->operational_note_source_length != 0U &&
+		row->operational_note_source_offset <
+			TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		row->operational_note_source_length <=
+			TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+				row->operational_note_source_offset &&
+		sha256_hex_is_valid(row->operational_note_sha256);
+}
+
+int tcti_target_completion_validate_asl_availability(
+	const struct tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct tcti_target_completion_asl_provenance *provenance,
+	const struct tcti_target_completion_asl_row *availability,
+	size_t availability_count,
+	struct tcti_target_completion_result *result)
+{
+	size_t index;
+
+	if (!result)
+		return -1;
+	if (!source || source_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !availability ||
+	    availability_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !provenance || empty(provenance->format) ||
+	    empty(provenance->source_sha256) || empty(provenance->availability) ||
+	    strcmp(provenance->format, "inline_aarchmrs_operations_v2") ||
+	    strcmp(provenance->source_sha256,
+		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
+	    !asl_availability_is_valid(provenance->availability)) {
+		record_error(result, TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+		if (!source || !availability)
+			return -1;
+	}
+
+	for (index = 0; index < source_count; index++) {
+		const struct tcti_target_completion_asl_row *row;
+		const struct tcti_target_completion_asl_row *canonical;
+		bool valid;
+
+		if (index >= availability_count) {
+			result->invalid_asl_availability_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+			continue;
+		}
+		row = &availability[index];
+		/* The checked artifact is the source-derived absence witness. */
+		canonical = &asl_rows[index];
+		valid = source_row_well_formed(&source[index], index) &&
+			row->ordinal == index && !empty(row->name) &&
+			!empty(row->operation_id) && !empty(row->operation_object) &&
+			row->source_length != 0U &&
+			row->source_offset <
+				TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+			row->source_length <=
+				TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+					row->source_offset &&
+			asl_operational_note_provenance_is_valid(row) &&
+			asl_availability_is_valid(row->availability) &&
+			!strcmp(row->name, source[index].name) &&
+			!strcmp(row->operation_id, source[index].operation_id) &&
+			row->ordinal == canonical->ordinal &&
+			!strcmp(row->name, canonical->name) &&
+			!strcmp(row->operation_id, canonical->operation_id) &&
+			!strcmp(row->operation_object, canonical->operation_object) &&
+			row->source_offset == canonical->source_offset &&
+			row->source_length == canonical->source_length &&
+			!strcmp(row->operational_note_presence,
+				canonical->operational_note_presence) &&
+			row->operational_note_source_offset ==
+				canonical->operational_note_source_offset &&
+			row->operational_note_source_length ==
+				canonical->operational_note_source_length &&
+			!strcmp(row->operational_note_sha256,
+				canonical->operational_note_sha256) &&
+			!strcmp(row->availability, canonical->availability);
+		if (!valid) {
+			result->invalid_asl_availability_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+			continue;
+		}
+		result->asl_availability_rows++;
+		if (!strcmp(row->availability, "shared_asl_absent_blocking")) {
+			result->unavailable_asl_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+		}
+	}
+	return result->invalid_asl_availability_rows ||
+		result->unavailable_asl_rows ? -1 : 0;
 }
 
 static void record_error(struct tcti_target_completion_result *result,
@@ -208,6 +431,203 @@ static size_t find_source(
 		    !strcmp(source[index].name, name))
 			return index;
 	return source_count;
+}
+
+static bool register_source_span_valid(uint64_t offset, uint64_t length)
+{
+	return length && offset < TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH &&
+	       length <= TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH - offset;
+}
+
+static uint64_t accessor_identity_byte(uint64_t identity, unsigned char byte)
+{
+	return (identity ^ byte) * UINT64_C(1099511628211);
+}
+
+static uint64_t accessor_identity_u64(uint64_t identity, uint64_t value)
+{
+	unsigned int index;
+
+	for (index = 0; index < 8U; index++)
+		identity = accessor_identity_byte(identity,
+			(unsigned char)(value >> (index * 8U)));
+	return identity;
+}
+
+static uint64_t accessor_identity_text(uint64_t identity, const char *text)
+{
+	size_t length = strlen(text);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, length);
+	for (index = 0; index < length; index++)
+		identity = accessor_identity_byte(identity, (unsigned char)text[index]);
+	return identity;
+}
+
+static uint64_t system_accessor_identity(
+	const struct tcti_target_completion_system_accessor_row *accessors,
+	size_t accessor_count)
+{
+	uint64_t identity = UINT64_C(1469598103934665603);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, accessor_count);
+	for (index = 0; index < accessor_count; index++) {
+		const struct tcti_target_completion_system_accessor_row *row =
+			&accessors[index];
+
+		identity = accessor_identity_u64(identity, row->accessor_index);
+		identity = accessor_identity_u64(identity, row->encoding_index);
+		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->generic_leaf);
+		identity = accessor_identity_u64(identity, row->direction);
+		identity = accessor_identity_u64(identity, row->disposition);
+		identity = accessor_identity_u64(identity, row->selector_count);
+		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->selector_identity);
+		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_length);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_length);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_length);
+	}
+	return identity;
+}
+
+int tcti_target_completion_validate_system_accessors(
+	const struct tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct tcti_target_completion_system_accessor_provenance *provenance,
+	const struct tcti_target_completion_system_accessor_row *accessors,
+	size_t accessor_count,
+	struct tcti_target_completion_result *result)
+{
+	size_t actual[7] = { 0 };
+	size_t index;
+
+	if (!result)
+		return -1;
+	result->system_accessor_rows = accessor_count;
+	if (!source || source_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !provenance || !accessors ||
+	    empty(provenance->architecture) || empty(provenance->build) ||
+	    empty(provenance->release) || empty(provenance->schema) ||
+	    empty(provenance->timestamp) || empty(provenance->source_sha256) ||
+	    strcmp(provenance->architecture, "vFATAp1-A") ||
+	    strcmp(provenance->build, "818") ||
+	    strcmp(provenance->release, "2026-06_rel") ||
+	    strcmp(provenance->schema, "2.9.5") ||
+	    strcmp(provenance->timestamp, "2026-06-24 17:12:14") ||
+	    strcmp(provenance->source_sha256,
+		   "5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874") ||
+	    provenance->accessor_count !=
+		    TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
+	    accessor_count != TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
+	    provenance->mapped_count + provenance->reserved_count +
+			    provenance->privileged_count +
+			    provenance->unsupported_count +
+			    provenance->ambiguous_count +
+			    provenance->contradictory_count +
+			    provenance->invalid_count !=
+		    provenance->accessor_count) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+		if (!source || !provenance || !accessors)
+			return -1;
+	}
+
+	for (index = 0; index < accessor_count; index++) {
+		const struct tcti_target_completion_system_accessor_row *row =
+			&accessors[index];
+		size_t previous;
+		bool valid = !empty(row->name) &&
+			!strncmp(row->name, "A64.", 4U) &&
+			row->direction >=
+				TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ &&
+			row->direction <=
+				TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_EXECUTE &&
+			row->disposition >=
+				TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED &&
+			row->disposition <=
+				TCTI_TARGET_COMPLETION_ACCESSOR_INVALID &&
+			register_source_span_valid(row->accessor_source_offset,
+						   row->accessor_source_length);
+
+		if (valid && row->disposition ==
+				     TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED)
+			valid = row->encoding_index != UINT32_MAX &&
+				!empty(row->generic_leaf) &&
+				row->selector_count &&
+				row->selector_identity && row->condition_identity &&
+				row->condition_expression != UINT32_MAX &&
+				register_source_span_valid(
+					row->condition_source_offset,
+					row->condition_source_length) &&
+				register_source_span_valid(
+					row->encoding_source_offset,
+					row->encoding_source_length) &&
+				find_source(source, source_count,
+					    row->generic_leaf) < source_count;
+		for (previous = 0; valid && previous < index; previous++)
+			if (accessors[previous].accessor_index ==
+				    row->accessor_index ||
+			    (row->encoding_index != UINT32_MAX &&
+			     accessors[previous].encoding_index ==
+				     row->encoding_index))
+				valid = false;
+		if (!valid) {
+			result->invalid_system_accessor_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+			continue;
+		}
+		actual[row->disposition]++;
+		if (row->disposition ==
+		    TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED) {
+			result->mapped_system_accessor_rows++;
+		} else {
+			result->nonmapped_system_accessor_rows++;
+			record_error(result,
+				     TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+		}
+	}
+	if (actual[TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED] !=
+		    provenance->mapped_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_RESERVED] !=
+		    provenance->reserved_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_PRIVILEGED] !=
+		    provenance->privileged_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_UNSUPPORTED] !=
+		    provenance->unsupported_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_AMBIGUOUS] !=
+		    provenance->ambiguous_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_CONTRADICTORY] !=
+		    provenance->contradictory_count ||
+	    actual[TCTI_TARGET_COMPLETION_ACCESSOR_INVALID] !=
+	    provenance->invalid_count) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+	}
+	if (system_accessor_identity(accessors, accessor_count) !=
+		    provenance->reconciliation_identity) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+	}
+	return result->invalid_system_accessor_rows ||
+		       result->nonmapped_system_accessor_rows ?
+	       -1 : 0;
 }
 
 static size_t find_classification(
@@ -387,6 +807,14 @@ static void validate_registry_bindings(
 			bool valid = source_index < source_count &&
 				classification_index < classification_count;
 
+			/*
+			 * An unclassified row may carry an incomplete ownership
+			 * binding without claiming classification proof.
+			 */
+			if (valid && entry->unproved_obligations &&
+			    classification[classification_index].classification ==
+				    TCTI_TARGET_COMPLETION_UNCLASSIFIED)
+				continue;
 			if (valid)
 				valid = exact_binding(&source[source_index],
 						      binding) &&
@@ -482,7 +910,7 @@ int tcti_target_completion_validate(
 	for (index = 0; index < source_count; index++) {
 		size_t previous;
 
-		if (!source_row_well_formed(&source[index], index)) {
+		if (!source_row_matches_canonical(&source[index], index)) {
 			result->invalid_source_rows++;
 			record_error(result,
 				     TCTI_TARGET_COMPLETION_ERROR_SOURCE);
@@ -658,13 +1086,17 @@ int tcti_target_completion_validate_source_provenance(
 		return -1;
 	if (!provenance || empty(provenance->architecture) ||
 	    empty(provenance->build) || empty(provenance->release) ||
-	    empty(provenance->schema) || empty(provenance->source_sha256) ||
+	    empty(provenance->schema) || empty(provenance->timestamp) ||
+	    empty(provenance->source_sha256) ||
 	    strcmp(provenance->architecture, "vFATAp1-A") ||
 	    strcmp(provenance->build, "818") ||
 	    strcmp(provenance->release, "2026-06_rel") ||
 	    strcmp(provenance->schema, "2.9.5") ||
+	    strcmp(provenance->timestamp, "2026-06-24 17:12:14") ||
 	    strcmp(provenance->source_sha256,
 		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
+	    provenance->source_byte_length !=
+		TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH ||
 	    provenance->leaf_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS) {
 		result->invalid_source_provenance++;
 		record_error(result,
@@ -692,6 +1124,17 @@ int tcti_target_completion_audit(struct tcti_target_completion_result *result)
 	if (tcti_target_completion_validate_source_provenance(
 		    &source_provenance, result))
 		status = -1;
+	if (tcti_target_completion_validate_asl_availability(
+		    source_rows, sizeof(source_rows) / sizeof(source_rows[0]),
+		    &asl_provenance, asl_rows,
+		    sizeof(asl_rows) / sizeof(asl_rows[0]), result))
+		status = -1;
+	if (tcti_target_completion_validate_system_accessors(
+		    source_rows, sizeof(source_rows) / sizeof(source_rows[0]),
+		    &system_accessor_provenance, system_accessor_rows,
+		    sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]),
+		    result))
+		status = -1;
 	validate_source_feature_domain(source_rows,
 			       sizeof(source_rows) / sizeof(source_rows[0]), result);
 	if (result->invalid_feature_artifact ||
@@ -705,6 +1148,36 @@ const struct tcti_target_completion_source_provenance *
 tcti_target_completion_source_provenance(void)
 {
 	return &source_provenance;
+}
+
+const struct tcti_target_completion_asl_provenance *
+tcti_target_completion_asl_provenance(void)
+{
+	return &asl_provenance;
+}
+
+const struct tcti_target_completion_asl_row *
+tcti_target_completion_asl_availability(size_t *count)
+{
+	if (count)
+		*count = sizeof(asl_rows) / sizeof(asl_rows[0]);
+	return asl_rows;
+}
+
+const struct tcti_target_completion_system_accessor_provenance *
+tcti_target_completion_system_accessor_provenance(void)
+{
+	return &system_accessor_provenance;
+}
+
+const struct tcti_target_completion_system_accessor_row *
+tcti_target_completion_system_accessors(size_t *count)
+{
+	if (count)
+		*count =
+			sizeof(system_accessor_rows) /
+			sizeof(system_accessor_rows[0]);
+	return system_accessor_rows;
 }
 
 const struct tcti_target_completion_source_row *

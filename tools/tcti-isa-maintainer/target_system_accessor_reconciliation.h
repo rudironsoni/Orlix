@@ -34,8 +34,11 @@ enum tcti_system_accessor_direction {
 
 enum tcti_system_accessor_disposition {
 	TCTI_SYSTEM_ACCESSOR_MAPPED,
+	TCTI_SYSTEM_ACCESSOR_RESERVED,
+	TCTI_SYSTEM_ACCESSOR_PRIVILEGED,
 	TCTI_SYSTEM_ACCESSOR_UNSUPPORTED,
 	TCTI_SYSTEM_ACCESSOR_AMBIGUOUS,
+	TCTI_SYSTEM_ACCESSOR_CONTRADICTORY,
 	TCTI_SYSTEM_ACCESSOR_INVALID,
 };
 
@@ -43,8 +46,11 @@ enum tcti_system_accessor_reconciliation_error {
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK,
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID_ARGUMENT,
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_NO_MEMORY,
+	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_RESERVED,
+	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_PRIVILEGED,
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_UNSUPPORTED,
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_AMBIGUOUS,
+	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_CONTRADICTORY,
 	TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID,
 };
 
@@ -56,18 +62,26 @@ struct tcti_system_accessor_reconciliation_entry {
 	enum tcti_system_accessor_generic_leaf generic_leaf;
 	enum tcti_system_accessor_direction direction;
 	enum tcti_system_accessor_disposition disposition;
+	/* Exact source identities, not merely a count or parser-local index. */
+	uint64_t selector_identity;
+	uint64_t condition_identity;
 	const char *accessor_name;
 	size_t accessor_source_offset;
 	size_t accessor_source_length;
 	size_t encoding_source_offset;
 	size_t encoding_source_length;
+	size_t condition_source_offset;
+	size_t condition_source_length;
 };
 
 struct tcti_system_accessor_reconciliation_census {
 	size_t aarch64_accessors;
 	size_t mapped;
+	size_t reserved;
+	size_t privileged;
 	size_t unsupported;
 	size_t ambiguous;
+	size_t contradictory;
 	size_t invalid;
 };
 

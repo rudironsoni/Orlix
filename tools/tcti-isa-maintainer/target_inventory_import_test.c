@@ -16,7 +16,8 @@
 
 static const char empty_a64_source[] =
 	"{\"_meta\":{\"version\":{\"architecture\":\"vFATAp1-A\","
-	"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\"}},"
+	"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\","
+	"\"timestamp\":\"2026-06-24 17:12:14\"}},"
 	"\"instructions\":[{\"name\":\"A64\","
 	"\"_type\":\"Instruction.InstructionSet\","
 	"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
@@ -27,7 +28,8 @@ static int import_encoding_mutation(const char *values,
 {
 	static const char prefix[] =
 		"{\"_meta\":{\"version\":{\"architecture\":\"vFATAp1-A\","
-		"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\"}},"
+		"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\","
+		"\"timestamp\":\"2026-06-24 17:12:14\"}},"
 		"\"instructions\":[{\"name\":\"A64\","
 		"\"_type\":\"Instruction.InstructionSet\","
 		"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
@@ -186,6 +188,25 @@ static int pinned_operand_provenance_is_exact(
 	return 0;
 }
 
+static int pinned_leaf_source_spans_are_exact(
+	const struct tcti_target_inventory *inventory, const char *json,
+	size_t json_length)
+{
+	size_t index;
+
+	for (index = 0; index < inventory->leaf_count; index++) {
+		const struct tcti_target_leaf *leaf = &inventory->leaves[index];
+
+		if (!leaf->source_length || leaf->source_offset >= json_length ||
+		    leaf->source_length > json_length - leaf->source_offset ||
+		    json[leaf->source_offset] != '{' ||
+		    !strstr(json + leaf->source_offset, leaf->name) ||
+		    !strstr(json + leaf->source_offset, leaf->operation_id))
+			return -1;
+	}
+	return 0;
+}
+
 static int import_pinned_source(const char *path)
 {
 	FILE *file;
@@ -207,6 +228,8 @@ static int import_pinned_source(const char *path)
 	EXPECT_EQ(0, tcti_target_inventory_import(json, (size_t)length,
 			&inventory, &error));
 	EXPECT_EQ(TCTI_A64_TARGET_LEAF_COUNT, inventory.leaf_count);
+	if (pinned_leaf_source_spans_are_exact(&inventory, json, (size_t)length))
+		goto out_json;
 	if (pinned_operand_provenance_is_exact(&inventory))
 		goto out_json;
 	tcti_target_inventory_destroy(&inventory);
@@ -230,7 +253,7 @@ static int source_metadata_mutation_fails(void)
 	static const char mutated_source[] =
 		"{\"_meta\":{\"version\":{\"architecture\":\"other\","
 		"\"build\":\"818\",\"ref\":\"2026-06_rel\","
-		"\"schema\":\"2.9.5\"}},\"instructions\":[]}";
+		"\"schema\":\"2.9.5\",\"timestamp\":\"2026-06-24 17:12:14\"}},\"instructions\":[]}";
 	struct tcti_target_inventory inventory = { 0 };
 	struct tcti_target_import_error error = { 0 };
 

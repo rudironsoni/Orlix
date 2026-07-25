@@ -97,11 +97,24 @@ int main(int argc, char **argv)
 		size_t field_count = 0;
 		for (i = 0; i < model.node_count; i++)
 			if (model.nodes[i].kind == TCTI_FEATURE_FIELD) {
+				const struct tcti_feature_field *field =
+					&model.nodes[i].field;
 				field_count++;
-				failed |= check(model.nodes[i].field.state &&
-					model.nodes[i].field.register_name &&
-					model.nodes[i].field.selector,
+				failed |= check(field->state && field->register_name &&
+					field->selector,
 					"complete field identity");
+				failed |= check(field->instance.kind ==
+					TCTI_FEATURE_FIELD_QUALIFIER_NULL &&
+					field->slices.kind ==
+					TCTI_FEATURE_FIELD_QUALIFIER_NULL,
+					"explicit null field qualifiers retained");
+				failed |= check(field->instance.provenance.length == 4 &&
+					!memcmp(source + field->instance.provenance.offset,
+						"null", 4) &&
+					field->slices.provenance.length == 4 &&
+					!memcmp(source + field->slices.provenance.offset,
+						"null", 4),
+					"field qualifier source provenance");
 			}
 		failed |= check(field_count != 0, "field references retained");
 	}
@@ -113,6 +126,12 @@ int main(int argc, char **argv)
 	failed |= check(mutation != NULL, "find binary operator"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, "unknown operator"); free(mutation); }
 	mutation = replace_once(source, length, "\"UInt\"", "\"XInt\"", &mutated_length);
 	failed |= check(mutation != NULL, "find function"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, "unknown function"); free(mutation); }
+	mutation = replace_once(source, length, "\"instance\": null", "\"instance\": 0", &mutated_length);
+	failed |= check(mutation != NULL, "find Types.Field instance"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, "non-null field instance"); free(mutation); }
+	mutation = replace_once(source, length, "\"slices\": null", "\"slices\": []", &mutated_length);
+	failed |= check(mutation != NULL, "find Types.Field slices"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, "non-null field slices"); free(mutation); }
+	mutation = replace_once(source, length, "\"instance\": null", "\"instancE\": null", &mutated_length);
+	failed |= check(mutation != NULL, "construct missing Types.Field instance"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, "missing field instance"); free(mutation); }
 	mutation = replace_once(source, length, "\"_type\": \"AST.Bool\"", "\"_type\": \"AST.Bool\", \"\\u005ftype\": \"AST.Bool\"", &mutated_length);
 	failed |= check(mutation != NULL, "construct duplicate key"); if (mutation) { failed |= expect(mutation, mutated_length, TCTI_FEATURE_DUPLICATE_KEY, "decoded duplicate key"); free(mutation); }
 	mutation = replace_once(source, length, "true", "tru", &mutated_length);

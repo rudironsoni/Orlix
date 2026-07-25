@@ -102,6 +102,16 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIKthreadHandoffDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-kthread-handoff",
+        expectedKUnitSuite: "orlix-tcti-kthread-handoff",
+        hostDirectoryFixture: true
+    )
+
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

@@ -17,8 +17,8 @@ struct tcti_lse_source_row {
 	const char *condition;
 };
 
-#define TCTI_A64_SOURCE_MANIFEST_SOURCE(version, build, reference, schema, sha256, count)
-#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, pattern, condition) \
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(version, build, reference, schema, sha256, count, ...)
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, pattern, condition, ...) \
 	{ ordinal, name, mnemonic, operation, mask, pattern, condition },
 static const struct tcti_lse_source_row source_rows[] = {
 #include "../isa/source_manifest.def"

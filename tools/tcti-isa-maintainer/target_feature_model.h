@@ -19,10 +19,25 @@ enum tcti_feature_node_kind {
 };
 
 struct tcti_feature_provenance { size_t offset; size_t length; };
+/*
+ * AARCHMRS 2026-06 represents Types.Field instance and slices explicitly as
+ * JSON null. Keep that source fact and its exact span instead of silently
+ * treating either qualifier as absent. A future source form needs an explicit
+ * model extension before it can enter the target inventory.
+ */
+enum tcti_feature_field_qualifier_kind {
+	TCTI_FEATURE_FIELD_QUALIFIER_NULL,
+};
+struct tcti_feature_field_qualifier {
+	enum tcti_feature_field_qualifier_kind kind;
+	struct tcti_feature_provenance provenance;
+};
 struct tcti_feature_field {
 	char *state;
 	char *register_name;
 	char *selector;
+	struct tcti_feature_field_qualifier instance;
+	struct tcti_feature_field_qualifier slices;
 	struct tcti_feature_provenance provenance;
 };
 struct tcti_feature_node {

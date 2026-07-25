@@ -180,4 +180,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testTCTIAtomicMemoryKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIAtomicMemoryDiagnostic)
     }
+
+    func testTCTIKthreadHandoffKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIKthreadHandoffDiagnostic)
+    }
 }

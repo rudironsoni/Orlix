@@ -48,6 +48,14 @@ struct operation_requirements {
 	uint32_t obligations;
 };
 
+#define LSE_REQUIRED_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
+	 TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+
 struct kunit_source_provenance {
 	const char *source;
 	const char *sha256;
@@ -82,7 +90,7 @@ struct source_bound_proof {
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...) \
 	/* The source provenance header is consumed by the owning audit. */
 #define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, leaf, mnemonic, operation, \
-					     mask, pattern, condition) \
+					     mask, pattern, condition, ...) \
 	{ ordinal, leaf, mnemonic, operation, mask, pattern, condition },
 static const struct source_manifest_binding source_manifest_bindings[] = {
 #include "../isa/source_manifest.def"
@@ -97,20 +105,18 @@ static const struct source_bound_proof source_bound_proofs[] = {
 };
 #undef TCTI_A64_SOURCE_BOUND_PROOF
 
-#define DECODE_SOURCE \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_decode_test.c"
 #define LSE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse_decode_test.c"
 #define LSE_SOURCE_BOUND_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c"
 #define LSE_SOURCE_BOUND_SUITE "orlix-tcti-lse-source-bound"
-#define LSE_SOURCE_BOUND_SUITE_SYMBOL "lse_source_bound_test_suite"
-#define LSE_SOURCE_BOUND_CASE_ARRAY "lse_source_bound_test_cases"
+#define LSE_SOURCE_BOUND_SUITE_SYMBOL "tcti_lse_source_bound_test_suite"
+#define LSE_SOURCE_BOUND_CASE_ARRAY "tcti_lse_source_bound_test_cases"
 #define LSE128_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c"
 #define LSE128_SUITE "orlix_tcti_lse128_noncas"
 #define LSE128_SUITE_SYMBOL "tcti_lse128_noncas_test_suite"
-#define LSE128_CASE_ARRAY "tcti_lse128_noncas_test_cases"
+#define LSE128_CASE_ARRAY "tcti_lse128_noncas_cases"
 #define LOGICAL_SHIFT_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c"
 #define LOGICAL_SHIFT_SUITE "orlix-tcti-logical-shifted-register"
@@ -144,7 +150,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"b655c7ac26531b827202e28db8bf5510902cd31f997cf4c07d11391d16e67dce"
+	"09592e2b655464bc41d8ad5fb3813838c7163043d5b90e8578aafdcfc44a93f6"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -156,9 +162,6 @@ static const struct source_bound_proof source_bound_proofs[] = {
 
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
-	{ DECODE_SOURCE,
-	  "74d5a3ca065d376e33cf0d9929a192583fa61522dc69a831c2970506f1632e2c",
-	  "tcti_decode_test.o" },
 	{ LSE_SOURCE,
 	  "49e3d4cc6b7db58162bead19c795d51197c3186d0c4cd0f1bd0b9c475180b997",
 	  "tcti_lse_decode_test.o" },
@@ -362,13 +365,43 @@ static const struct operation_requirements operation_requirements[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ "LDADD", BASELINE_OBLIGATIONS |
-		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		TCTI_TARGET_PROOF_OBLIGATION_PC |
-		TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
-		TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
-		TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+#define LSE_REQUIREMENT(operation) \
+	{ operation, LSE_REQUIRED_OBLIGATIONS }
+	LSE_REQUIREMENT("CASB"),
+	LSE_REQUIREMENT("CASH"),
+	LSE_REQUIREMENT("CAS"),
+	LSE_REQUIREMENT("CASP"),
+	LSE_REQUIREMENT("LDADDB"),
+	LSE_REQUIREMENT("LDADDH"),
+	LSE_REQUIREMENT("LDADD"),
+	LSE_REQUIREMENT("LDCLRB"),
+	LSE_REQUIREMENT("LDCLRH"),
+	LSE_REQUIREMENT("LDCLR"),
+	LSE_REQUIREMENT("LDEORB"),
+	LSE_REQUIREMENT("LDEORH"),
+	LSE_REQUIREMENT("LDEOR"),
+	LSE_REQUIREMENT("LDSETB"),
+	LSE_REQUIREMENT("LDSETH"),
+	LSE_REQUIREMENT("LDSET"),
+	LSE_REQUIREMENT("LDSMAXB"),
+	LSE_REQUIREMENT("LDSMAXH"),
+	LSE_REQUIREMENT("LDSMAX"),
+	LSE_REQUIREMENT("LDSMINB"),
+	LSE_REQUIREMENT("LDSMINH"),
+	LSE_REQUIREMENT("LDSMIN"),
+	LSE_REQUIREMENT("LDUMAXB"),
+	LSE_REQUIREMENT("LDUMAXH"),
+	LSE_REQUIREMENT("LDUMAX"),
+	LSE_REQUIREMENT("LDUMINB"),
+	LSE_REQUIREMENT("LDUMINH"),
+	LSE_REQUIREMENT("LDUMIN"),
+	LSE_REQUIREMENT("SWPB"),
+	LSE_REQUIREMENT("SWPH"),
+	LSE_REQUIREMENT("SWP"),
+	LSE_REQUIREMENT("LDCLRP"),
+	LSE_REQUIREMENT("LDSETP"),
+	LSE_REQUIREMENT("SWPP"),
+#undef LSE_REQUIREMENT
 	{ "LDXR", BASELINE_OBLIGATIONS |
 		TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
@@ -575,7 +608,40 @@ static const struct tcti_target_proof_case add_sub_immediate_flags_cases[] = {
 		  TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ "tcti_add_sub_immediate_source_mask_boundaries",
-	  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+		  TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+};
+
+static const struct tcti_target_proof_case lse_source_bound_cases[] = {
+	{ "lse_source_bound_decodes_every_base_leaf",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "lse_source_bound_executes_every_base_leaf",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "lse_source_bound_rejects_reserved_encodings",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct tcti_target_proof_case lse128_source_bound_cases[] = {
+	{ "tcti_lse128_decode_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_lse128_rejects_reserved_operations",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_lse128_accepts_independent_odd_registers",
+	  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "tcti_lse128_execute_all_leaves",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "tcti_lse128_rejects_overlapping_result_lanes",
+	  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "tcti_lse128_fixed_bit_near_misses_are_not_decoded",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
 #define ADD_SUB_IMMEDIATE_BASE_BINDING(ordinal, leaf, mnemonic, pattern) \
@@ -637,21 +703,26 @@ static const struct tcti_target_proof_binding cssc_umin_bindings[] = {
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
 	  LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE, cases, ARRAY_COUNT(cases), \
-	  bindings, ARRAY_COUNT(bindings), NULL, 0 }
+	  bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
 #define CSSC_ENTRY(proof_id, operation, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
 	  CSSC_OBLIGATIONS, TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
 	  CSSC_SOURCE, CSSC_SUITE, cssc_cases, ARRAY_COUNT(cssc_cases), \
-	  bindings, ARRAY_COUNT(bindings), NULL, 0 }
+	  bindings, ARRAY_COUNT(bindings), NULL, CSSC_OBLIGATIONS }
 
 #define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
 	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
-	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, 0 }
+	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
-static const struct tcti_target_proof_registry_entry proof_registry_entries[] = {
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 16U
+#define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
+#define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
+
+static struct tcti_target_proof_registry_entry proof_registry_entries[
+	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -708,7 +779,168 @@ static const struct tcti_target_proof_registry_entry proof_registry_entries[] = 
 #undef CSSC_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS
-#undef ARRAY_COUNT
+
+struct lse_registry_operation {
+	const char *operation_id;
+	const char *proof_id;
+	const char *condition;
+	const char *source;
+	const char *suite;
+	const struct tcti_target_proof_case *cases;
+	size_t case_count;
+	size_t expected_bindings;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+#define LSE_OPERATION(operation, slug, expected) \
+	{ operation, "kunit:lse-base-" slug, LSE_CONDITION, \
+	  LSE_SOURCE_BOUND_SOURCE, LSE_SOURCE_BOUND_SUITE, \
+	  lse_source_bound_cases, ARRAY_COUNT(lse_source_bound_cases), expected, \
+	  0, 0 }
+#define LSE128_OPERATION(operation, slug) \
+	{ operation, "kunit:lse128-" slug, LSE128_CONDITION, LSE128_SOURCE, \
+	  LSE128_SUITE, lse128_source_bound_cases, \
+	  ARRAY_COUNT(lse128_source_bound_cases), 4, 0, 0 }
+
+static struct lse_registry_operation lse_registry_operations[] = {
+	LSE_OPERATION("CASB", "casb", 4),
+	LSE_OPERATION("CASH", "cash", 4),
+	LSE_OPERATION("CAS", "cas", 8),
+	LSE_OPERATION("CASP", "casp", 8),
+	LSE_OPERATION("LDADDB", "ldaddb", 4),
+	LSE_OPERATION("LDADDH", "ldaddh", 4),
+	LSE_OPERATION("LDADD", "ldadd", 8),
+	LSE_OPERATION("LDCLRB", "ldclrb", 4),
+	LSE_OPERATION("LDCLRH", "ldclrh", 4),
+	LSE_OPERATION("LDCLR", "ldclr", 8),
+	LSE_OPERATION("LDEORB", "ldeorb", 4),
+	LSE_OPERATION("LDEORH", "ldeorh", 4),
+	LSE_OPERATION("LDEOR", "ldeor", 8),
+	LSE_OPERATION("LDSETB", "ldsetb", 4),
+	LSE_OPERATION("LDSETH", "ldseth", 4),
+	LSE_OPERATION("LDSET", "ldset", 8),
+	LSE_OPERATION("LDSMAXB", "ldsmaxb", 4),
+	LSE_OPERATION("LDSMAXH", "ldsmaxh", 4),
+	LSE_OPERATION("LDSMAX", "ldsmax", 8),
+	LSE_OPERATION("LDSMINB", "ldsminb", 4),
+	LSE_OPERATION("LDSMINH", "ldsminh", 4),
+	LSE_OPERATION("LDSMIN", "ldsmin", 8),
+	LSE_OPERATION("LDUMAXB", "ldumaxb", 4),
+	LSE_OPERATION("LDUMAXH", "ldumaxh", 4),
+	LSE_OPERATION("LDUMAX", "ldumax", 8),
+	LSE_OPERATION("LDUMINB", "lduminb", 4),
+	LSE_OPERATION("LDUMINH", "lduminh", 4),
+	LSE_OPERATION("LDUMIN", "ldumin", 8),
+	LSE_OPERATION("SWPB", "swpb", 4),
+	LSE_OPERATION("SWPH", "swph", 4),
+	LSE_OPERATION("SWP", "swp", 8),
+	LSE128_OPERATION("LDCLRP", "ldclrp"),
+	LSE128_OPERATION("LDSETP", "ldsetp"),
+	LSE128_OPERATION("SWPP", "swpp"),
+};
+
+#undef LSE128_OPERATION
+#undef LSE_OPERATION
+
+static struct tcti_target_proof_binding lse_registry_bindings[
+	LSE_PROOF_REGISTRY_BINDING_COUNT];
+static bool lse_registry_ready;
+
+static struct lse_registry_operation *
+lse_registry_operation_for(const struct source_manifest_binding *source)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(lse_registry_operations); index++)
+		if (!strcmp(source->operation_id,
+			    lse_registry_operations[index].operation_id) &&
+		    !strcmp(source->condition_tcnd_hex,
+			    lse_registry_operations[index].condition))
+			return &lse_registry_operations[index];
+	return NULL;
+}
+
+static bool build_lse_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t index;
+
+	if (lse_registry_ready)
+		return true;
+	if (ARRAY_COUNT(lse_registry_operations) !=
+	    LSE_PROOF_REGISTRY_ENTRY_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		struct lse_registry_operation *operation =
+			lse_registry_operation_for(&source_manifest_bindings[index]);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(lse_registry_operations); index++) {
+		struct lse_registry_operation *operation =
+			&lse_registry_operations[index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != LSE_PROOF_REGISTRY_BINDING_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		const struct source_manifest_binding *source =
+			&source_manifest_bindings[index];
+		struct lse_registry_operation *operation =
+			lse_registry_operation_for(source);
+		struct tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		binding = &lse_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		binding->leaf_name = source->leaf_name;
+		binding->mnemonic = source->mnemonic;
+		binding->encoding_mask = source->encoding_mask;
+		binding->encoding_pattern = source->encoding_pattern;
+		binding->condition_tcnd_hex = source->condition_tcnd_hex;
+		binding->kunit_case_mask =
+			(UINT64_C(1) << operation->case_count) - 1;
+		binding->source_ordinal = source->ordinal;
+	}
+	for (index = 0; index < ARRAY_COUNT(lse_registry_operations); index++) {
+		struct lse_registry_operation *operation =
+			&lse_registry_operations[index];
+		struct tcti_target_proof_registry_entry *entry =
+			&proof_registry_entries[
+				CORE_PROOF_REGISTRY_ENTRY_COUNT + index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		*entry = (struct tcti_target_proof_registry_entry) {
+			.id = operation->proof_id,
+			.operation_id = operation->operation_id,
+			.classification_mask =
+				TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+			.obligations = LSE_REQUIRED_OBLIGATIONS,
+			.linux_interface =
+				TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+			.kunit_source = operation->source,
+			.kunit_suite = operation->suite,
+			.kunit_cases = operation->cases,
+			.kunit_case_count = operation->case_count,
+			.bindings =
+				&lse_registry_bindings[operation->binding_offset],
+			.binding_count = operation->binding_count,
+			.kselftest = NULL,
+			.unproved_obligations = LSE_REQUIRED_OBLIGATIONS,
+		};
+	}
+	lse_registry_ready = true;
+	return true;
+}
 
 static bool empty(const char *text)
 {
@@ -1220,7 +1452,6 @@ int tcti_target_proof_registry_validate(
 	for (index = 0; index < count; index++) {
 		const struct tcti_target_proof_registry_entry *entry = &entries[index];
 		uint32_t case_obligations = 0;
-		uint32_t kunit_obligations;
 		uint32_t required;
 		unsigned int classification;
 		size_t binding;
@@ -1263,11 +1494,17 @@ int tcti_target_proof_registry_validate(
 					TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS;
 			return -1;
 		}
-		if (entry->unproved_obligations & ~required)
-			goto invalid;
-		kunit_obligations =
-			required & ~entry->unproved_obligations &
-			~TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
+		/*
+		 * This registry authenticates static ownership only. Source hashes,
+		 * Kbuild membership, and named cases are not native execution
+		 * records, so they discharge no architectural obligation.
+		 */
+		if (entry->unproved_obligations != required) {
+			if (error)
+				*error =
+					TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS;
+			return -1;
+		}
 		if (entry->linux_interface ==
 		    TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED) {
 			/* KUnit cannot satisfy Linux-visible interface proof. */
@@ -1299,12 +1536,8 @@ int tcti_target_proof_registry_validate(
 					goto invalid;
 			case_obligations |= item->obligations;
 		}
-		if (case_obligations != kunit_obligations) {
-			if (error)
-				*error =
-					TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS;
-			return -1;
-		}
+		if (case_obligations & ~required)
+			goto invalid;
 		if (!valid_kunit_provenance(entry)) {
 			if (error)
 				*error =
@@ -1334,12 +1567,8 @@ int tcti_target_proof_registry_validate(
 				if (item->kunit_case_mask & (UINT64_C(1) << case_index))
 					binding_obligations |=
 						entry->kunit_cases[case_index].obligations;
-			if (binding_obligations != kunit_obligations) {
-				if (error)
-					*error =
-						TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS;
-				return -1;
-			}
+			if (binding_obligations & ~required)
+				goto invalid;
 			for (previous = 0; previous < binding; previous++)
 				if (!strcmp(item->leaf_name,
 					    entry->bindings[previous].leaf_name))
@@ -1446,6 +1675,11 @@ enum tcti_target_proof_registry_error tcti_target_proof_registry_lookup(
 const struct tcti_target_proof_registry_entry *
 tcti_target_proof_registry_entries(size_t *count)
 {
+	if (!build_lse_registry()) {
+		if (count)
+			*count = 0;
+		return NULL;
+	}
 	if (count)
 		*count = sizeof(proof_registry_entries) /
 			 sizeof(proof_registry_entries[0]);

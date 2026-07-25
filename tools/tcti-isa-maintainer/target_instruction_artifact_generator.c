@@ -467,7 +467,7 @@ static int emit_artifact(struct artifact_bytes *output,
 
 	if (outputf(output,
 		"/* SPDX-License-Identifier: BSD-3-Clause */\n"
-		"/* Generated from pinned Arm AARCHMRS 2026-06 Instructions.json. Do not edit. */\n"
+		"/* Generated from the pinned Arm AARCHMRS 2026-06 instruction source. Do not edit. */\n"
 		"#ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#include \"target_instruction_artifact.h\"\n\n"

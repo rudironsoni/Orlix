@@ -100,7 +100,21 @@ static int digest_file(const char *path, char digest[65])
 	return 0;
 }
 
-static int refresh_is_atomic_and_idempotent(const char *instructions,
+static int write_file(const char *path, const char *data, size_t length)
+{
+	int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+
+	if (fd < 0)
+		return -1;
+	if (write(fd, data, length) != (ssize_t)length || close(fd)) {
+		close(fd);
+		return -1;
+	}
+	return 0;
+}
+
+static int refresh_is_atomic_and_idempotent(const char *canonical,
+		const char *instructions,
 		const char *features, const char *registers)
 {
 	char *root = make_root();
@@ -115,6 +129,7 @@ static int refresh_is_atomic_and_idempotent(const char *instructions,
 	struct tcti_target_artifact_verify_result verify;
 	char invalid_path[PATH_MAX];
 	int root_fd;
+	int canonical_fd;
 	int invalid_fd;
 
 	EXPECT(root);
@@ -126,14 +141,16 @@ static int refresh_is_atomic_and_idempotent(const char *instructions,
 	provenance.registers_sha256 = register_digest;
 	root_fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	EXPECT(root_fd >= 0);
-	EXPECT(!tcti_target_refresh(root_fd, instructions, features, registers,
+	canonical_fd = open(canonical, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	EXPECT(canonical_fd >= 0);
+	EXPECT(!tcti_target_refresh(root_fd, canonical_fd, instructions, features, registers,
 				    &result));
 	EXPECT(result.error == TCTI_TARGET_REFRESH_OK);
-	EXPECT(!tcti_target_refresh(root_fd, instructions, features, registers,
+	EXPECT(!tcti_target_refresh(root_fd, canonical_fd, instructions, features, registers,
 				    NULL));
 	EXPECT(!tcti_target_artifact_verify(root_fd, "aarchmrs-2026-06",
 					     &provenance, &verify));
-	EXPECT(!tcti_target_refresh(root_fd, instructions, features, registers,
+	EXPECT(!tcti_target_refresh(root_fd, canonical_fd, instructions, features, registers,
 				    &result));
 	EXPECT(result.error == TCTI_TARGET_REFRESH_OK);
 	EXPECT(snprintf(invalid_path, sizeof(invalid_path), "%s/not-arm.json", root) <
@@ -143,25 +160,71 @@ static int refresh_is_atomic_and_idempotent(const char *instructions,
 	EXPECT(invalid_fd >= 0);
 	EXPECT(write(invalid_fd, "{}", 2) == 2);
 	EXPECT(!close(invalid_fd));
-	EXPECT(tcti_target_refresh(root_fd, invalid_path, features, registers,
+	EXPECT(tcti_target_refresh(root_fd, canonical_fd, invalid_path, features, registers,
 				   &result) < 0);
 	EXPECT(result.error == TCTI_TARGET_REFRESH_MANIFEST);
 	EXPECT(!tcti_target_artifact_verify(root_fd, "aarchmrs-2026-06",
 					     &provenance, &verify));
+	EXPECT(!close(canonical_fd));
 	EXPECT(!close(root_fd));
 	EXPECT(!remove_tree(root));
 	free(root);
 	return 0;
 }
 
+static int canonical_failures_do_not_publish(const char *instructions,
+		const char *features, const char *registers)
+{
+	char *root = make_root();
+	char *canonical = make_root();
+	char manifest[PATH_MAX];
+	struct tcti_target_refresh_result result;
+	int root_fd;
+	int canonical_fd;
+
+	EXPECT(root && canonical);
+	root_fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	canonical_fd = open(canonical, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	EXPECT(root_fd >= 0 && canonical_fd >= 0);
+	EXPECT(tcti_target_refresh(root_fd, canonical_fd, instructions, features,
+				   registers, &result) < 0);
+	EXPECT(result.error == TCTI_TARGET_REFRESH_CANONICAL_MISSING);
+	EXPECT(!strcmp(result.canonical_artifact, "source_manifest.def"));
+	EXPECT(snprintf(manifest, sizeof(manifest), "%s/aarchmrs-2026-06", root) <
+	       (int)sizeof(manifest));
+	EXPECT(access(manifest, F_OK) < 0 && errno == ENOENT);
+	EXPECT(!close(canonical_fd));
+	EXPECT(snprintf(manifest, sizeof(manifest), "%s/source_manifest.def", canonical) <
+	       (int)sizeof(manifest));
+	EXPECT(!write_file(manifest, "mismatch", sizeof("mismatch") - 1U));
+	canonical_fd = open(canonical, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	EXPECT(canonical_fd >= 0);
+	EXPECT(tcti_target_refresh(root_fd, canonical_fd, instructions, features,
+				   registers, &result) < 0);
+	EXPECT(result.error == TCTI_TARGET_REFRESH_CANONICAL_MISMATCH);
+	EXPECT(!strcmp(result.canonical_artifact, "source_manifest.def"));
+	EXPECT(access(manifest, F_OK) == 0);
+	EXPECT(snprintf(manifest, sizeof(manifest), "%s/aarchmrs-2026-06", root) <
+	       (int)sizeof(manifest));
+	EXPECT(access(manifest, F_OK) < 0 && errno == ENOENT);
+	EXPECT(!close(canonical_fd));
+	EXPECT(!close(root_fd));
+	EXPECT(!remove_tree(canonical));
+	EXPECT(!remove_tree(root));
+	free(canonical);
+	free(root);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
-	if (argc != 4) {
-		fprintf(stderr, "usage: %s Instructions.json Features.json Registers.json\n",
+	if (argc != 5) {
+		fprintf(stderr, "usage: %s CANONICAL_DIR Instructions.json Features.json Registers.json\n",
 			argv[0]);
 		return 2;
 	}
-	if (refresh_is_atomic_and_idempotent(argv[1], argv[2], argv[3]))
+	if (refresh_is_atomic_and_idempotent(argv[1], argv[2], argv[3], argv[4]) ||
+	    canonical_failures_do_not_publish(argv[2], argv[3], argv[4]))
 		return 1;
 	puts("PASS target refresh transaction");
 	return 0;

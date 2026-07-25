@@ -1138,7 +1138,7 @@ static int source_mnemonic(const struct importer *importer, int node_index)
 }
 
 static int add_leaf(struct importer *importer, int node_index,
-		    uint32_t condition)
+			    uint32_t condition)
 {
 	struct tcti_target_inventory *inventory = importer->inventory;
 	struct tcti_target_leaf leaf = {0};
@@ -1152,7 +1152,11 @@ static int add_leaf(struct importer *importer, int node_index,
 	leaf.mnemonic = copy_token(importer, mnemonic);
 	leaf.operation_id = copy_token(importer, operation);
 	leaf.condition = condition;
-	if (!leaf.name || !leaf.mnemonic || !leaf.operation_id) {
+	leaf.source_offset = importer->tokens[node_index].start;
+	leaf.source_length = importer->tokens[node_index].end -
+		leaf.source_offset;
+	if (!leaf.name || !leaf.mnemonic || !leaf.operation_id ||
+	    !leaf.source_length) {
 		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE,
 			  importer->tokens[node_index].start,
 			  "A64 leaf lacks a complete identity");
@@ -1343,6 +1347,26 @@ static int import_operations(struct importer *importer, int root)
 		operation.source_offset = importer->tokens[value].start;
 		operation.source_length = importer->tokens[value].end -
 			operation.source_offset;
+		{
+			int note = object_find(importer, value, "operational_note");
+
+			if (note >= 0) {
+				operation.operational_note_present = true;
+				operation.operational_note_source_offset =
+					importer->tokens[note].start;
+				operation.operational_note_source_length =
+					importer->tokens[note].end -
+					operation.operational_note_source_offset;
+				if (!operation.operational_note_source_length) {
+					free(operation.id);
+					set_error(importer->error,
+						  TCTI_TARGET_IMPORT_INVALID_SOURCE,
+						  importer->tokens[note].start,
+						  "Instructions.json has an empty operational_note token");
+					return -1;
+				}
+			}
+		}
 		if (!operation.id || !operation.source_length ||
 		    tcti_target_inventory_operation(importer->inventory, operation.id)) {
 			free(operation.id);
@@ -1402,8 +1426,10 @@ static int validate_source_metadata(struct importer *importer, int root)
 	int build = object_find(importer, version, "build");
 	int reference = object_find(importer, version, "ref");
 	int schema = object_find(importer, version, "schema");
+	int timestamp = object_find(importer, version, "timestamp");
 
 	if (architecture < 0 || build < 0 || reference < 0 || schema < 0 ||
+	    timestamp < 0 ||
 	    !token_equals(importer->json, &importer->tokens[architecture],
 			  source_architecture) ||
 	    !token_equals(importer->json, &importer->tokens[build],
@@ -1411,7 +1437,9 @@ static int validate_source_metadata(struct importer *importer, int root)
 	    !token_equals(importer->json, &importer->tokens[reference],
 			  source_ref) ||
 	    !token_equals(importer->json, &importer->tokens[schema],
-			  source_schema)) {
+			  source_schema) ||
+	    !token_equals(importer->json, &importer->tokens[timestamp],
+			  "2026-06-24 17:12:14")) {
 		set_error(importer->error, TCTI_TARGET_IMPORT_INVALID_SOURCE, 0,
 			  "Instructions.json metadata does not match the pinned "
 			  "Arm AARCHMRS 2026-06 source");
@@ -1486,7 +1514,8 @@ static void sha256_update(struct sha256_state *sha, const char *data, size_t len
 	}
 }
 
-static void sha256_hex(const char *data, size_t length, char output[65])
+void tcti_target_inventory_sha256(const void *data, size_t length,
+					 char output[65])
 {
 	static const char hex[] = "0123456789abcdef";
 	struct sha256_state sha = { .state = { 0x6a09e667U, 0xbb67ae85U,
@@ -1608,7 +1637,7 @@ int tcti_target_inventory_import(const char *json, size_t length,
 	if (import_operations(&importer, root) ||
 	    validate_leaf_operations(&importer))
 		goto out_inventory;
-	sha256_hex(json, length, digest);
+	tcti_target_inventory_sha256(json, length, digest);
 	if (strcmp(digest, source_sha256)) {
 		set_error(error, TCTI_TARGET_IMPORT_HASH_MISMATCH, 0,
 			  "Instructions.json SHA-256 does not match the pinned source");

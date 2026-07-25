@@ -23,18 +23,6 @@ static int reserve(void **pointer, size_t *capacity, size_t needed, size_t size)
 	return 0;
 }
 
-static int parameter(const struct tcti_feature_model *model, const char *name)
-{
-	size_t index;
-
-	if (!name)
-		return -1;
-	for (index = 0; index < model->parameter_count; index++)
-		if (!strcmp(model->parameters[index].name, name))
-			return (int)index;
-	return -1;
-}
-
 static int diagnostic(struct tcti_feature_typed_result *result,
 			      const struct tcti_feature_node *node,
 			      enum tcti_feature_typed_error code)
@@ -48,6 +36,18 @@ static int diagnostic(struct tcti_feature_typed_result *result,
 			.provenance = node->provenance,
 		};
 	return 0;
+}
+
+static int parameter(const struct tcti_feature_model *model, const char *name)
+{
+	size_t index;
+
+	if (!name)
+		return -1;
+	for (index = 0; index < model->parameter_count; index++)
+		if (!strcmp(model->parameters[index].name, name))
+			return (int)index;
+	return -1;
 }
 
 static int hard_error(struct tcti_feature_typed_result *result,
@@ -175,31 +175,41 @@ static int lower(const struct tcti_feature_model *model, uint32_t index,
 	enum tcti_typed_error error;
 	size_t child_count;
 	int parameter_index;
+	struct tcti_typed_value value;
 
 	if (index >= model->node_count || depth > TCTI_FEATURE_TYPED_MAX_DEPTH)
 		return -1;
 	node = &model->nodes[index];
 	switch (node->kind) {
 	case TCTI_FEATURE_BOOL:
+		if (tcti_typed_value_from_u64(&value, (uint64_t)node->integer, 1,
+					      &error))
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
 		return tcti_typed_literal(expression, TCTI_TYPED_BOOL, 0,
-				   (uint64_t)node->integer, 0, 0, provenance(node),
+				   &value, 0, 0, provenance(node),
 				   out, &error);
 	case TCTI_FEATURE_IDENTIFIER:
+		/* Feature conditions also name architectural version predicates,
+		 * which are not Parameters.Boolean entries. Preserve them as Boolean
+		 * atoms so a later domain binding can decide their interpretation. */
+		if (!node->text)
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
 		parameter_index = parameter(model, node->text);
-		if (parameter_index < 0)
-			return hard_error(result, node,
-					  TCTI_FEATURE_TYPED_UNBOUND_IDENTIFIER);
-		return tcti_typed_atom(expression, TCTI_TYPED_BOOL, node->text,
-				       NULL, NULL, NULL, provenance(node), out, &error);
+		return tcti_typed_boolean_atom(expression, node->text,
+					       parameter_index >= 0, provenance(node), out,
+					       &error);
 	case TCTI_FEATURE_INTEGER:
-		return tcti_typed_literal(expression, TCTI_TYPED_SIGNED, 64,
-				   (uint64_t)node->integer, 0, 0, provenance(node),
+		if (tcti_typed_value_from_u64(&value, (uint64_t)node->integer, 64,
+					      &error))
+			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
+		return tcti_typed_literal(expression, TCTI_TYPED_OPERAND, 64,
+				   &value, 0, 0, provenance(node),
 				   out, &error);
 	case TCTI_FEATURE_VALUE:
 		if (!node->text)
 			return hard_error(result, node, TCTI_FEATURE_TYPED_TYPE);
-		return tcti_typed_atom(expression, TCTI_TYPED_VALUE, node->text,
-				       NULL, NULL, NULL, provenance(node), out, &error);
+		return tcti_typed_value_atom(expression, node->text,
+					     provenance(node), out, &error);
 	case TCTI_FEATURE_FIELD:
 		return tcti_typed_atom(expression, TCTI_TYPED_FIELD, NULL,
 				       node->field.state, node->field.register_name,
@@ -282,8 +292,7 @@ int tcti_feature_typed_lower(const struct tcti_feature_model *model,
 		const struct tcti_feature_parameter *parameter = &model->parameters[index];
 
 		if (!parameter->name ||
-		    tcti_typed_atom(expression, TCTI_TYPED_BOOL, parameter->name,
-				    NULL, NULL, NULL,
+		    tcti_typed_boolean_atom(expression, parameter->name, 1,
 				    (struct tcti_typed_provenance){
 					parameter->provenance.offset,
 					parameter->provenance.length,
@@ -304,7 +313,6 @@ int tcti_feature_typed_lower(const struct tcti_feature_model *model,
 	}
 	return 0;
 fail:
-	tcti_feature_typed_result_destroy(result);
 	return -1;
 }
 

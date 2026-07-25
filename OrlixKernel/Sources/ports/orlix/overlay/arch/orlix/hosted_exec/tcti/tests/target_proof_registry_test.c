@@ -76,18 +76,23 @@ static const struct tcti_target_proof_registry_entry add_entry = {
 	TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 	ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE,
 	add_cases, sizeof(add_cases) / sizeof(add_cases[0]), add_bindings, 2,
-	NULL, 0,
+	NULL, ADD_OBLIGATIONS,
 };
 
 static int real_manifest_bindings_are_exact(void)
 {
+	enum tcti_target_proof_registry_error error;
+	int result;
 	struct tcti_target_proof_reference reference = {
 		"kunit:add-sub-immediate-add", "ADD_32_addsub_imm", "ADD",
 		"ADD_addsub_imm", 0xff800000U, 0x11000000U,
 		TRUE_CONDITION, 1,
 	};
 
-	EXPECT(tcti_target_proof_registry_validate(&add_entry, 1, NULL) == 0);
+	result = tcti_target_proof_registry_validate(&add_entry, 1, &error);
+	if (result)
+		fprintf(stderr, "registry validation error: %d\n", error);
+	EXPECT(result == 0);
 	EXPECT(tcti_target_proof_registry_lookup(&add_entry, 1, &reference) ==
 	       TCTI_TARGET_PROOF_REGISTRY_OK);
 	reference.encoding_pattern = 0x91000000U;
@@ -179,7 +184,8 @@ static int lse_cannot_omit_atomicity(void)
 		LSE_OBLIGATIONS & ~TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY,
 		TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 		LSE_SOURCE, "orlix-tcti-lse-decode", cases, 1, bindings, 1,
-		NULL, 0,
+		NULL,
+		LSE_OBLIGATIONS & ~TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY,
 	};
 	enum tcti_target_proof_registry_error error;
 
@@ -230,7 +236,7 @@ static int registered_case_cannot_overclaim_obligations(void)
 		TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, LSE_OBLIGATIONS,
 		TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 		DECODE_SOURCE, "orlix-tcti-decode", cases, 1, bindings, 1,
-		NULL, 0,
+		NULL, LSE_OBLIGATIONS,
 	};
 	enum tcti_target_proof_registry_error error;
 
@@ -451,6 +457,78 @@ static int add_sub_immediate_registry_is_source_bound(void)
 	return 0;
 }
 
+static int lse_registry_binds_180_leaves_without_claiming_completion(void)
+{
+	const struct tcti_target_proof_registry_entry *entries;
+	enum tcti_target_proof_registry_error error;
+	size_t binding_count = 0;
+	size_t entry_count = 0;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(tcti_target_proof_registry_source_bound_projection_validate(
+		       entries, count, &error) == 0);
+	for (index = 0; index < count; index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[index];
+
+		if (strncmp(entry->id, "kunit:lse-base-", 15) &&
+		    strncmp(entry->id, "kunit:lse128-", 13))
+			continue;
+		EXPECT(entry->obligations == LSE_OBLIGATIONS);
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->linux_interface ==
+		       TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		entry_count++;
+		binding_count += entry->binding_count;
+	}
+	EXPECT(entry_count == 34);
+	EXPECT(binding_count == 180);
+	return 0;
+}
+
+static int lse_registry_cannot_clear_unproved_duties_statically(void)
+{
+	const struct tcti_target_proof_registry_entry *entries;
+	struct tcti_target_proof_registry_entry entry;
+	enum tcti_target_proof_registry_error error;
+	size_t count;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	entry = entries[count - 1];
+	EXPECT(entry.unproved_obligations != 0);
+	entry.unproved_obligations = 0;
+	EXPECT(tcti_target_proof_registry_validate(&entry, 1, &error) == -1);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS);
+	return 0;
+}
+
+static int source_registration_discharges_zero_semantic_obligations(void)
+{
+	const struct tcti_target_proof_registry_entry *entries;
+	size_t binding_count = 0;
+	size_t count;
+	size_t index;
+
+	entries = tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < count; index++) {
+		const struct tcti_target_proof_registry_entry *entry =
+			&entries[index];
+
+		EXPECT(entry->obligations != 0);
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
+		binding_count += entry->binding_count;
+	}
+	EXPECT(binding_count == 212);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -479,6 +557,12 @@ int main(void)
 		  cssc_min_max_immediate_registry_is_source_bound },
 		{ "add_sub_immediate_registry_is_source_bound",
 		  add_sub_immediate_registry_is_source_bound },
+		{ "lse_registry_binds_180_leaves_without_claiming_completion",
+		  lse_registry_binds_180_leaves_without_claiming_completion },
+		{ "lse_registry_cannot_clear_unproved_duties_statically",
+		  lse_registry_cannot_clear_unproved_duties_statically },
+		{ "source_registration_discharges_zero_semantic_obligations",
+		  source_registration_discharges_zero_semantic_obligations },
 	};
 	size_t index;
 

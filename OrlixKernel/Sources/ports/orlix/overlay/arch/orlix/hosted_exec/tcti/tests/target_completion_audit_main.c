@@ -16,10 +16,17 @@ int main(void)
 	       "invalid_relationships=%zu "
 	       "invalid_source=%zu invalid_source_provenance=%zu "
 	       "invalid_registry=%zu "
-	       "stale_proof_bindings=%zu source_condition_domain_bound=%zu "
+	       "stale_proof_bindings=%zu unproved_obligation_bindings=%zu "
+	       "source_condition_domain_bound=%zu "
 	       "invalid_source_conditions=%zu "
 	       "unresolved_feature_applicability=%zu "
-	       "invalid_feature_artifact=%zu errors=%zu error_mask=0x%08x\n",
+	       "invalid_feature_artifact=%zu "
+	       "asl_availability=%zu invalid_asl_availability=%zu "
+	       "unavailable_asl=%zu "
+	       "system_accessors=%zu mapped_system_accessors=%zu "
+	       "nonmapped_system_accessors=%zu "
+	       "invalid_system_accessors=%zu "
+	       "errors=%zu error_mask=0x%08x\n",
 	       result.source_rows, result.classification_rows,
 	       result.classified_rows, result.unclassified_rows,
 	       result.absent_rows, result.stale_rows,
@@ -30,10 +37,18 @@ int main(void)
 	       result.invalid_source_rows, result.invalid_source_provenance,
 	       result.invalid_registry_entries,
 	       result.stale_proof_bindings,
+	       result.unproved_obligation_bindings,
 	       result.source_condition_domain_bound_rows,
 	       result.invalid_source_condition_rows,
 	       result.unresolved_feature_applicability_rows,
-	       result.invalid_feature_artifact, result.errors,
+	       result.invalid_feature_artifact,
+	       result.asl_availability_rows,
+	       result.invalid_asl_availability_rows,
+	       result.unavailable_asl_rows,
+	       result.system_accessor_rows,
+	       result.mapped_system_accessor_rows,
+	       result.nonmapped_system_accessor_rows,
+	       result.invalid_system_accessor_rows, result.errors,
 	       result.error_mask);
 	return status ? 1 : 0;
 }

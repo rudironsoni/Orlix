@@ -407,6 +407,51 @@ struct tcti_register_constraint_item {
 	size_t source_length;
 };
 
+/*
+ * Direct, source-preserving bridge from a field to the declarations that
+ * constrain its representable values.  The arrays retained elsewhere remain
+ * the authoritative detailed trees.  This relation exists so a consumer does
+ * not have to infer field ownership by scanning every Valueset, domain, and
+ * constraint node.  It never selects a value or projects runtime HWCAP.
+ */
+enum tcti_register_field_value_source_kind {
+	TCTI_REGISTER_FIELD_VALUE_SOURCE_NONE,
+	TCTI_REGISTER_FIELD_VALUE_SOURCE_VALUES,
+	TCTI_REGISTER_FIELD_VALUE_SOURCE_IMPLEMENTATION_DEFINED,
+};
+
+struct tcti_register_field_value_relation {
+	uint32_t field_index;
+	uint32_t first_value_candidate;
+	uint32_t value_candidate_count;
+	uint32_t first_constraint_candidate;
+	uint32_t constraint_candidate_count;
+	uint32_t field_condition_expression;
+	uint32_t wrapper_condition_expression;
+	size_t source_offset;
+	size_t source_length;
+};
+
+struct tcti_register_field_value_candidate {
+	uint32_t field_index;
+	enum tcti_register_field_value_source_kind kind;
+	uint32_t valueset_index;
+	uint32_t first_domain;
+	uint32_t domain_count;
+	size_t source_offset;
+	size_t source_length;
+};
+
+struct tcti_register_field_constraint_candidate {
+	uint32_t field_index;
+	uint32_t constraint_index;
+	enum tcti_register_constraint_kind kind;
+	uint32_t first_domain;
+	uint32_t domain_count;
+	size_t source_offset;
+	size_t source_length;
+};
+
 struct tcti_register_link {
 	char *key;
 	char *value;
@@ -453,6 +498,15 @@ struct tcti_register_model {
 	struct tcti_register_constraint_item *constraint_items;
 	size_t constraint_item_count;
 	size_t constraint_item_capacity;
+	struct tcti_register_field_value_relation *field_value_relations;
+	size_t field_value_relation_count;
+	size_t field_value_relation_capacity;
+	struct tcti_register_field_value_candidate *field_value_candidates;
+	size_t field_value_candidate_count;
+	size_t field_value_candidate_capacity;
+	struct tcti_register_field_constraint_candidate *field_constraint_candidates;
+	size_t field_constraint_candidate_count;
+	size_t field_constraint_candidate_capacity;
 	struct tcti_register_link *links;
 	size_t link_count;
 	size_t link_capacity;

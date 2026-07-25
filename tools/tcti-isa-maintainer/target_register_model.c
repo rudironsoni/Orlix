@@ -1139,7 +1139,7 @@ static int addaccessor(struct import *x, int o, int type, uint32_t reg)
 	}
 	return 0;
 }
-static int addfield(struct import *x, int o, int type, uint32_t width, uint32_t reg, uint32_t parent, int wrapper_condition, int wrapper_object, uint32_t *index) { int condition=member(x,o,"condition"), branches=member(x,o,"fields"); struct tcti_field_identity f = { .name=dup(x,member(x,o,"name")), .type=dup(x,type), .width=width, .register_index=reg, .parent_field=parent, .fieldset_index=(uint32_t)(x->m->fieldset_count-1), .first_range=(uint32_t)x->m->range_count, .condition_offset=condition>=0?x->t[condition].start:0, .condition_length=condition>=0?x->t[condition].end-x->t[condition].start:0, .wrapper_condition_offset=wrapper_condition>=0?x->t[wrapper_condition].start:0, .wrapper_condition_length=wrapper_condition>=0?x->t[wrapper_condition].end-x->t[wrapper_condition].start:0, .branch_offset=branches>=0?x->t[branches].start:0, .branch_length=branches>=0?x->t[branches].end-x->t[branches].start:0, .source_offset=x->t[o].start, .source_length=x->t[o].end-x->t[o].start }; if (!f.type || grow((void **)&x->m->fields, &x->m->field_capacity, x->m->field_count + 1, sizeof(f),x->allocated)) { free(f.name); free(f.type); fail(x->e,TCTI_REGISTER_MODEL_NO_MEMORY,x->t[o].start,"cannot store field identity"); return -1; } *index=(uint32_t)x->m->field_count; x->m->fields[x->m->field_count++] = f; if (wrapper_object >= 0) { struct tcti_conditional_field_branch b = { .conditional_field_index=parent, .field_index=*index, .condition_offset=x->t[wrapper_condition].start, .condition_length=x->t[wrapper_condition].end-x->t[wrapper_condition].start, .source_offset=x->t[wrapper_object].start, .source_length=x->t[wrapper_object].end-x->t[wrapper_object].start }; if (parent==UINT32_MAX || grow((void **)&x->m->field_branches,&x->m->field_branch_capacity,x->m->field_branch_count+1,sizeof(b),x->allocated)) { fail(x->e,TCTI_REGISTER_MODEL_NO_MEMORY,x->t[o].start,"cannot store conditional-field branch"); return -1; } x->m->field_branches[x->m->field_branch_count++]=b; } return 0; }
+static int addfield(struct import *x, int o, int type, uint32_t width, uint32_t reg, uint32_t parent, int wrapper_condition, int wrapper_object, uint32_t *index) { int condition=member(x,o,"condition"), branches=member(x,o,"fields"); struct tcti_field_identity f = { .name=dup(x,member(x,o,"name")), .type=dup(x,type), .width=width, .register_index=reg, .parent_field=parent, .fieldset_index=(uint32_t)(x->m->fieldset_count-1), .first_range=(uint32_t)x->m->range_count, .condition_expression=UINT32_MAX, .wrapper_condition_expression=UINT32_MAX, .condition_offset=condition>=0?x->t[condition].start:0, .condition_length=condition>=0?x->t[condition].end-x->t[condition].start:0, .wrapper_condition_offset=wrapper_condition>=0?x->t[wrapper_condition].start:0, .wrapper_condition_length=wrapper_condition>=0?x->t[wrapper_condition].end-x->t[wrapper_condition].start:0, .branch_offset=branches>=0?x->t[branches].start:0, .branch_length=branches>=0?x->t[branches].end-x->t[branches].start:0, .source_offset=x->t[o].start, .source_length=x->t[o].end-x->t[o].start }; struct tcti_register_field_value_relation relation; if (!f.type || grow((void **)&x->m->fields, &x->m->field_capacity, x->m->field_count + 1, sizeof(f),x->allocated)) { free(f.name); free(f.type); fail(x->e,TCTI_REGISTER_MODEL_NO_MEMORY,x->t[o].start,"cannot store field identity"); return -1; } *index=(uint32_t)x->m->field_count; x->m->fields[x->m->field_count++] = f; relation = (struct tcti_register_field_value_relation){ .field_index = *index, .first_value_candidate = UINT32_MAX, .first_constraint_candidate = UINT32_MAX, .field_condition_expression = UINT32_MAX, .wrapper_condition_expression = UINT32_MAX, .source_offset = f.source_offset, .source_length = f.source_length }; if (grow((void **)&x->m->field_value_relations, &x->m->field_value_relation_capacity, x->m->field_value_relation_count + 1, sizeof(relation), x->allocated)) { fail(x->e,TCTI_REGISTER_MODEL_NO_MEMORY,x->t[o].start,"cannot store field value relation"); return -1; } if (x->m->field_value_relation_count != *index) { fail(x->e,TCTI_REGISTER_MODEL_INVALID_SOURCE,x->t[o].start,"field value relation ordering is ambiguous"); return -1; } x->m->field_value_relations[x->m->field_value_relation_count++] = relation; if (wrapper_object >= 0) { struct tcti_conditional_field_branch b = { .conditional_field_index=parent, .field_index=*index, .condition_offset=x->t[wrapper_condition].start, .condition_length=x->t[wrapper_condition].end-x->t[wrapper_condition].start, .source_offset=x->t[wrapper_object].start, .source_length=x->t[wrapper_object].end-x->t[wrapper_object].start }; if (parent==UINT32_MAX || grow((void **)&x->m->field_branches,&x->m->field_branch_capacity,x->m->field_branch_count+1,sizeof(b),x->allocated)) { fail(x->e,TCTI_REGISTER_MODEL_NO_MEMORY,x->t[o].start,"cannot store conditional-field branch"); return -1; } x->m->field_branches[x->m->field_branch_count++]=b; } return 0; }
 static int field_condition_roots(struct import *x, int object, uint32_t field,
 				 int wrapper_condition)
 {
@@ -1147,6 +1147,8 @@ static int field_condition_roots(struct import *x, int object, uint32_t field,
 	uint32_t root;
 	x->m->fields[field].condition_expression = UINT32_MAX;
 	x->m->fields[field].wrapper_condition_expression = UINT32_MAX;
+	x->m->field_value_relations[field].field_condition_expression = UINT32_MAX;
+	x->m->field_value_relations[field].wrapper_condition_expression = UINT32_MAX;
 
 	if (condition >= 0) {
 		if (x->t[condition].kind != OBJ ||
@@ -1156,6 +1158,7 @@ static int field_condition_roots(struct import *x, int object, uint32_t field,
 			return -1;
 		}
 		x->m->fields[field].condition_expression = root;
+		x->m->field_value_relations[field].field_condition_expression = root;
 	}
 	if (wrapper_condition >= 0) {
 		if (x->t[wrapper_condition].kind != OBJ ||
@@ -1165,6 +1168,7 @@ static int field_condition_roots(struct import *x, int object, uint32_t field,
 			return -1;
 		}
 		x->m->fields[field].wrapper_condition_expression = root;
+		x->m->field_value_relations[field].wrapper_condition_expression = root;
 		{
 			size_t branch;
 			for (branch = 0; branch < x->m->field_branch_count; branch++)
@@ -1228,6 +1232,57 @@ static int addvalueset(struct import *x, int o, uint32_t field, uint32_t *index,
 	if (!constraint) x->m->top_level_valueset_count++;
 	return 0;
 }
+
+static int record_field_values(struct import *x, uint32_t field,
+			       uint32_t valueset, size_t first_domain,
+			       int values_token)
+{
+	struct tcti_register_field_value_relation *relation;
+	struct tcti_register_field_value_candidate candidate;
+	int type;
+
+	if (field >= x->m->field_value_relation_count ||
+	    valueset >= x->m->valueset_count || values_token < 0) {
+		fail(x->e, TCTI_REGISTER_MODEL_INVALID_SOURCE, 0,
+		     "field Valueset relation is not well formed");
+		return -1;
+	}
+	relation = &x->m->field_value_relations[field];
+	type = member(x, values_token, "_type");
+	candidate = (struct tcti_register_field_value_candidate){
+		.field_index = field,
+		.valueset_index = valueset,
+		.first_domain = first_domain == x->m->domain_count ?
+			UINT32_MAX : (uint32_t)first_domain,
+		.domain_count = (uint32_t)(x->m->domain_count - first_domain),
+		.source_offset = x->t[values_token].start,
+		.source_length = x->t[values_token].end - x->t[values_token].start,
+	};
+	if (eq(x, type, "Valuesets.Values"))
+		candidate.kind = TCTI_REGISTER_FIELD_VALUE_SOURCE_VALUES;
+	else if (eq(x, type, "Valuesets.ImplementationDefined"))
+		candidate.kind =
+			TCTI_REGISTER_FIELD_VALUE_SOURCE_IMPLEMENTATION_DEFINED;
+	else {
+		fail(x->e, TCTI_REGISTER_MODEL_UNSUPPORTED_TYPE,
+		     x->t[values_token].start, "unsupported field Valueset kind");
+		return -1;
+	}
+	if (grow((void **)&x->m->field_value_candidates,
+		 &x->m->field_value_candidate_capacity,
+		 x->m->field_value_candidate_count + 1, sizeof(candidate),
+		 x->allocated)) {
+		fail(x->e, TCTI_REGISTER_MODEL_NO_MEMORY, x->t[values_token].start,
+		     "cannot store field Valueset candidate");
+		return -1;
+	}
+	if (!relation->value_candidate_count)
+		relation->first_value_candidate =
+			(uint32_t)x->m->field_value_candidate_count;
+	relation->value_candidate_count++;
+	x->m->field_value_candidates[x->m->field_value_candidate_count++] = candidate;
+	return 0;
+}
 static int domain(struct import *x, int o, uint32_t field, uint32_t valueset,
 		  uint32_t parent, int constraint);
 static int add_constraint_item(struct import *x, uint32_t constraint_index,
@@ -1253,6 +1308,7 @@ static int add_constraint_item(struct import *x, uint32_t constraint_index,
 }
 static int addconstraint(struct import *x, int token, uint32_t field)
 {
+	size_t first_domain = x->m->domain_count;
 	struct tcti_register_constraint c = {
 		.kind = TCTI_REGISTER_CONSTRAINT_NULL, .field_index = field,
 		.valueset_index = UINT32_MAX, .first_item = UINT32_MAX,
@@ -1309,6 +1365,42 @@ static int addconstraint(struct import *x, int token, uint32_t field)
 			 (c.kind == TCTI_REGISTER_CONSTRAINT_NULL ?
 			  x->m->constraint_item_count :
 			  x->m->constraints[constraint_index].first_item));
+	}
+	if (field != UINT32_MAX) {
+		struct tcti_register_field_value_relation *relation;
+		struct tcti_register_field_constraint_candidate candidate;
+
+		if (field >= x->m->field_value_relation_count) {
+			fail(x->e, TCTI_REGISTER_MODEL_INVALID_SOURCE,
+			     x->t[token].start,
+			     "constraint references a field without provenance relation");
+			return -1;
+		}
+		relation = &x->m->field_value_relations[field];
+		candidate = (struct tcti_register_field_constraint_candidate){
+			.field_index = field,
+			.constraint_index = (uint32_t)(x->m->constraint_count - 1U),
+			.kind = c.kind,
+			.first_domain = first_domain == x->m->domain_count ?
+				UINT32_MAX : (uint32_t)first_domain,
+			.domain_count = (uint32_t)(x->m->domain_count - first_domain),
+			.source_offset = x->t[token].start,
+			.source_length = x->t[token].end - x->t[token].start,
+		};
+		if (grow((void **)&x->m->field_constraint_candidates,
+			 &x->m->field_constraint_candidate_capacity,
+			 x->m->field_constraint_candidate_count + 1,
+			 sizeof(candidate), x->allocated)) {
+			fail(x->e, TCTI_REGISTER_MODEL_NO_MEMORY, x->t[token].start,
+			     "cannot store field constraints candidate");
+			return -1;
+		}
+		if (!relation->constraint_candidate_count)
+			relation->first_constraint_candidate =
+				(uint32_t)x->m->field_constraint_candidate_count;
+		relation->constraint_candidate_count++;
+		x->m->field_constraint_candidates[
+			x->m->field_constraint_candidate_count++] = candidate;
 	}
 	return 0;
 }
@@ -1470,7 +1562,7 @@ static int walk(struct import *x, int i, uint32_t width, uint32_t reg,
 		if(eq(x,t,"Register")||eq(x,t,"RegisterArray")||eq(x,t,"RegisterBlock")) { uint32_t next; if (((require_metadata || member(x,i,"_meta") >= 0) && (metadata(x,i) || add_metadata(x,i))) || addreg(x,i,t,reg,&next)) goto bad; reg=next; if (eq(x,t,"RegisterBlock") && register_block_default_access(x,i,reg)) goto bad; }
 		if (t >= 0 && allowed_accessor(x, t) && addaccessor(x, i, t, reg)) goto bad;
 		if(eq(x,t,"Fieldset")) { if(number(x,member(x,i,"width"),&width) || !width || width > 128 || reg == UINT32_MAX || addfieldset(x, i, reg, width)) { fail(x->e,TCTI_REGISTER_MODEL_INVALID_SOURCE,x->t[i].start,"invalid Fieldset"); goto bad; } if(reg!=UINT32_MAX){struct tcti_register_identity *r=&x->m->registers[reg];if(r->first_fieldset==UINT32_MAX)r->first_fieldset=(uint32_t)(x->m->fieldset_count-1);r->fieldset_count++;} }
-		if (t >= 0 && x->t[t].kind == STR && x->t[t].end-x->t[t].start > 7 && !memcmp(x->s+x->t[t].start,"Fields.",7)) { int vals, constraints; uint32_t field; if(!allowed_field(x,t)) { fail(x->e,TCTI_REGISTER_MODEL_UNSUPPORTED_TYPE,x->t[i].start,"unsupported field type"); goto bad; } if(!width || reg==UINT32_MAX || addfield(x,i,t,width,reg,parent_field,wrapper_condition,wrapper_object,&field) || ranges(x,member(x,i,"rangeset"),width,field)) goto bad; vals=member(x,i,"values"); if(vals>=0) { size_t q; int a; uint32_t valueset; if (addvalueset(x, vals, field, &valueset, 0)) goto bad; a=member(x,vals,"values"); if(a<0||x->t[a].kind!=ARR) { fail(x->e,TCTI_REGISTER_MODEL_INVALID_SOURCE,x->t[vals].start,"Valueset lacks array"); goto bad; } for(q=0;q<x->t[a].size;q++) if(domain(x,elem(x,a,q),field,valueset,UINT32_MAX,0)) goto bad; } constraints=member(x,i,"constraints"); if(constraints>=0 && addconstraint(x,constraints,field)) goto bad; parent_field=field; }
+		if (t >= 0 && x->t[t].kind == STR && x->t[t].end-x->t[t].start > 7 && !memcmp(x->s+x->t[t].start,"Fields.",7)) { int vals, constraints; uint32_t field; if(!allowed_field(x,t)) { fail(x->e,TCTI_REGISTER_MODEL_UNSUPPORTED_TYPE,x->t[i].start,"unsupported field type"); goto bad; } if(!width || reg==UINT32_MAX || addfield(x,i,t,width,reg,parent_field,wrapper_condition,wrapper_object,&field) || ranges(x,member(x,i,"rangeset"),width,field)) goto bad; vals=member(x,i,"values"); if(vals>=0) { size_t q, first_domain = x->m->domain_count; int a; uint32_t valueset; if (addvalueset(x, vals, field, &valueset, 0)) goto bad; a=member(x,vals,"values"); if(a<0||x->t[a].kind!=ARR) { fail(x->e,TCTI_REGISTER_MODEL_INVALID_SOURCE,x->t[vals].start,"Valueset lacks array"); goto bad; } for(q=0;q<x->t[a].size;q++) if(domain(x,elem(x,a,q),field,valueset,UINT32_MAX,0)) goto bad; if (record_field_values(x, field, valueset, first_domain, vals)) goto bad; } constraints=member(x,i,"constraints"); if(constraints>=0 && addconstraint(x,constraints,field)) goto bad; parent_field=field; }
 		{ int wrapped=member(x,i,"field"), condition=member(x,i,"condition"), constraints=member(x,i,"constraints"); size_t c=(size_t)i+1; if (constraints >= 0 && !(t >= 0 && x->t[t].kind == STR && x->t[t].end-x->t[t].start > 7 && !memcmp(x->s+x->t[t].start,"Fields.",7)) && addconstraint(x,constraints,UINT32_MAX)) goto bad; for(z=0;z<x->t[i].size;z++) { size_t v=x->t[c].next; if(walk(x,(int)v,width,reg,parent_field,0,(int)v==wrapped?condition:-1,(int)v==wrapped?i:-1)) goto bad; c=x->t[v].next; } }
 	} else if(x->t[i].kind==ARR) for(z=0;z<x->t[i].size;z++) if(walk(x,elem(x,i,z),width,reg,parent_field,require_metadata,wrapper_condition,wrapper_object)) goto bad;
 	x->depth--; return 0;
@@ -1578,7 +1670,7 @@ static void sha256_hex(const char *data, size_t length, char output[65])
 	s.block[s.used++]=0x80;if(s.used>56){memset(s.block+s.used,0,64-s.used);sha256_block(&s,s.block);s.used=0;}memset(s.block+s.used,0,56-s.used);for(i=0;i<8;i++)s.block[56+i]=(unsigned char)(bits>>(56-8*i));sha256_block(&s,s.block);
 	for(i=0;i<8;i++){size_t j;for(j=0;j<4;j++){unsigned char v=(unsigned char)(s.state[i]>>(24-8*j));output[8*i+2*j]=hex[v>>4];output[8*i+2*j+1]=hex[v&15];}}output[64]=0;
 }
-void tcti_register_model_destroy(struct tcti_register_model *m) { size_t i; if(!m)return; for(i=0;i<m->register_count;i++){free(m->registers[i].name);free(m->registers[i].type);free(m->registers[i].state);free(m->registers[i].index_variable);} for(i=0;i<m->metadata_count;i++){free(m->metadata[i].copyright);free(m->metadata[i].license_info);free(m->metadata[i].architecture);free(m->metadata[i].build);free(m->metadata[i].ref);free(m->metadata[i].schema);free(m->metadata[i].timestamp);} for(i=0;i<m->field_count;i++){free(m->fields[i].name);free(m->fields[i].type);} for(i=0;i<m->fieldset_count;i++){free(m->fieldsets[i].name);free(m->fieldsets[i].display);} for(i=0;i<m->domain_count;i++){free(m->domains[i].type);free(m->domains[i].value);free(m->domains[i].start);free(m->domains[i].end);free(m->domains[i].link);free(m->domains[i].meaning);} for(i=0;i<m->valueset_count;i++)free(m->valuesets[i].type); for(i=0;i<m->link_count;i++){free(m->links[i].key);free(m->links[i].value);} for(i=0;i<m->accessor_count;i++){free(m->accessors[i].type);free(m->accessors[i].name);free(m->accessors[i].index_variable);free(m->accessors[i].component);free(m->accessors[i].frame);free(m->accessors[i].instance);free(m->accessors[i].power_domain);} for(i=0;i<m->system_encoding_count;i++){free(m->system_encodings[i].type);free(m->system_encodings[i].asmvalue);} for(i=0;i<m->system_selector_count;i++){free(m->system_selectors[i].name);free(m->system_selectors[i].type);free(m->system_selectors[i].value);} for(i=0;i<m->expression_count;i++){free(m->expressions[i].type);free(m->expressions[i].name);free(m->expressions[i].op);free(m->expressions[i].value);free(m->expressions[i].role);free(m->expressions[i].register_state);free(m->expressions[i].register_name);free(m->expressions[i].field_name);} free(m->registers);free(m->metadata);free(m->memory_accesses);free(m->implementation_defined_permissions);free(m->fields);free(m->ranges);free(m->field_branches);free(m->fieldsets);free(m->domains);free(m->valuesets);free(m->constraints);free(m->constraint_items);free(m->links);free(m->accessors);free(m->accessor_offset_expressions);free(m->system_encodings);free(m->system_selectors);free(m->expressions);free(m->expression_children);free(m->source);memset(m,0,sizeof(*m)); }
+void tcti_register_model_destroy(struct tcti_register_model *m) { size_t i; if(!m)return; for(i=0;i<m->register_count;i++){free(m->registers[i].name);free(m->registers[i].type);free(m->registers[i].state);free(m->registers[i].index_variable);} for(i=0;i<m->metadata_count;i++){free(m->metadata[i].copyright);free(m->metadata[i].license_info);free(m->metadata[i].architecture);free(m->metadata[i].build);free(m->metadata[i].ref);free(m->metadata[i].schema);free(m->metadata[i].timestamp);} for(i=0;i<m->field_count;i++){free(m->fields[i].name);free(m->fields[i].type);} for(i=0;i<m->fieldset_count;i++){free(m->fieldsets[i].name);free(m->fieldsets[i].display);} for(i=0;i<m->domain_count;i++){free(m->domains[i].type);free(m->domains[i].value);free(m->domains[i].start);free(m->domains[i].end);free(m->domains[i].link);free(m->domains[i].meaning);} for(i=0;i<m->valueset_count;i++)free(m->valuesets[i].type); for(i=0;i<m->link_count;i++){free(m->links[i].key);free(m->links[i].value);} for(i=0;i<m->accessor_count;i++){free(m->accessors[i].type);free(m->accessors[i].name);free(m->accessors[i].index_variable);free(m->accessors[i].component);free(m->accessors[i].frame);free(m->accessors[i].instance);free(m->accessors[i].power_domain);} for(i=0;i<m->system_encoding_count;i++){free(m->system_encodings[i].type);free(m->system_encodings[i].asmvalue);} for(i=0;i<m->system_selector_count;i++){free(m->system_selectors[i].name);free(m->system_selectors[i].type);free(m->system_selectors[i].value);} for(i=0;i<m->expression_count;i++){free(m->expressions[i].type);free(m->expressions[i].name);free(m->expressions[i].op);free(m->expressions[i].value);free(m->expressions[i].role);free(m->expressions[i].register_state);free(m->expressions[i].register_name);free(m->expressions[i].field_name);} free(m->registers);free(m->metadata);free(m->memory_accesses);free(m->implementation_defined_permissions);free(m->fields);free(m->ranges);free(m->field_branches);free(m->fieldsets);free(m->domains);free(m->valuesets);free(m->constraints);free(m->constraint_items);free(m->field_value_relations);free(m->field_value_candidates);free(m->field_constraint_candidates);free(m->links);free(m->accessors);free(m->accessor_offset_expressions);free(m->system_encodings);free(m->system_selectors);free(m->expressions);free(m->expression_children);free(m->source);memset(m,0,sizeof(*m)); }
 #undef tcti_register_model_destroy
 void tcti_register_model_destroy(struct tcti_register_model *m)
 {
@@ -1612,7 +1704,8 @@ int tcti_register_model_import(const char *json,size_t length,struct tcti_regist
 	memset(e,0,sizeof(*e));
 	if(!json||!length||!m){fail(e,TCTI_REGISTER_MODEL_INVALID_ARGUMENT,0,"JSON and model are required");return -1;}
 	if (m->source || m->registers || m->metadata || m->memory_accesses ||
-	    m->implementation_defined_permissions || m->fields || m->expressions) {
+	    m->implementation_defined_permissions || m->fields ||
+	    m->field_value_relations || m->expressions) {
 		fail(e, TCTI_REGISTER_MODEL_INVALID_ARGUMENT, 0,
 		     "model must be destroyed before reuse");
 		return -1;

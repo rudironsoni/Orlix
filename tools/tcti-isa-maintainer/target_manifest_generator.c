@@ -19,8 +19,10 @@ static const char source_architecture[] = "vFATAp1-A";
 static const char source_build[] = "818";
 static const char source_reference[] = "2026-06_rel";
 static const char source_schema[] = "2.9.5";
+static const char source_timestamp[] = "2026-06-24 17:12:14";
 static const char source_sha256[] =
 	"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe";
+#define SOURCE_BYTE_LENGTH UINT64_C(115441429)
 
 struct source_bytes {
 	char *data;
@@ -319,7 +321,9 @@ static int emit_manifest(FILE *output,
 	emit_c_string(output, source_schema);
 	fputs(", ", output);
 	emit_c_string(output, source_sha256);
-	fprintf(output, ", %u)\n", TCTI_A64_TARGET_LEAF_COUNT);
+	fprintf(output, ", %u, ", TCTI_A64_TARGET_LEAF_COUNT);
+	emit_c_string(output, source_timestamp);
+	fprintf(output, ", %" PRIu64 "U)\n", SOURCE_BYTE_LENGTH);
 	for (index = 0; index < inventory->leaf_count; index++) {
 		const struct tcti_target_leaf *leaf = &inventory->leaves[index];
 
@@ -336,7 +340,9 @@ static int emit_manifest(FILE *output,
 			fprintf(stderr, "cannot serialize condition %s\n", leaf->name);
 			return -1;
 		}
-		fputs(")\n", output);
+		fprintf(output, ", %" PRIu64 "U, %" PRIu64 "U)\n",
+			(uint64_t)leaf->source_offset,
+			(uint64_t)leaf->source_length);
 	}
 	return ferror(output) ? -1 : 0;
 }
@@ -363,6 +369,10 @@ target_manifest_generator_emit(const char *source, size_t length, FILE *output)
 	}
 	if (inventory.leaf_count != TCTI_A64_TARGET_LEAF_COUNT) {
 		status = TCTI_TARGET_MANIFEST_GENERATOR_COUNT;
+		goto out;
+	}
+	if (length != SOURCE_BYTE_LENGTH) {
+		status = TCTI_TARGET_MANIFEST_GENERATOR_DIGEST;
 		goto out;
 	}
 	sha256_hex(source, length, digest);

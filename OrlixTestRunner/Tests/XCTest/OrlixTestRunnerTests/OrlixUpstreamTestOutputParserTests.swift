@@ -18,6 +18,16 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-atomic-memory")
     }
 
+    func testFocusedTCTIKthreadHandoffDiagnosticSelectsExactOuterSuite() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIKthreadHandoffDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-kthread-handoff"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-kthread-handoff")
+    }
+
     func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
         XCTAssertEqual(
             OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(

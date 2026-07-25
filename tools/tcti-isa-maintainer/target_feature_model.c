@@ -355,6 +355,31 @@ static bool primitive_eq(const struct importer *in, int index, const char *text)
 		!memcmp(in->s + in->tokens[index].start, text, length);
 }
 
+static int field_null_qualifier(struct importer *in, int object,
+	const char *name, struct tcti_feature_field_qualifier *qualifier)
+{
+	int value = field(in, object, name);
+
+	/*
+	 * Do not collapse a missing qualifier with JSON null. The pinned source
+	 * contains an explicit null for both fields, and another representation has
+	 * no defined target-inventory meaning yet.
+	 */
+	if (!primitive_eq(in, value, "null")) {
+		error(in->error, TCTI_FEATURE_UNSUPPORTED_GRAMMAR,
+			value >= 0 && (size_t)value < in->count ?
+			in->tokens[value].start : in->tokens[object].start,
+			"unsupported Types.Field qualifier");
+		return -1;
+	}
+	qualifier->kind = TCTI_FEATURE_FIELD_QUALIFIER_NULL;
+	qualifier->provenance = (struct tcti_feature_provenance) {
+		in->tokens[value].start,
+		in->tokens[value].end - in->tokens[value].start,
+	};
+	return 0;
+}
+
 static int node(struct importer *in, int object, uint32_t *out)
 {
 	int type, value;
@@ -383,6 +408,9 @@ static int node(struct importer *in, int object, uint32_t *out)
 		};
 		if (!n.field.state || !n.field.register_name || !n.field.selector)
 			goto malformed_depth;
+		if (field_null_qualifier(in, value, "instance", &n.field.instance) ||
+		    field_null_qualifier(in, value, "slices", &n.field.slices))
+			goto fail_depth;
 	}
 	else { error(in->error, TCTI_FEATURE_UNSUPPORTED_GRAMMAR, in->tokens[object].start, "unsupported AST type"); goto fail_depth; }
 	in->depth--; return node_add(in, n, out);

@@ -11,6 +11,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	target_lse_operation_catalog.o \
 	tcti_lse_source_bound_test.o \
 	tcti_lse128_noncas_test.o \
+	tcti_lse128_resume_test.o \
 	tcti_add_sub_immediate_test.o \
 	tcti_logical_shifted_register_test.o \
 	tcti_bitfield_extract_source_bound_test.o \
@@ -40,7 +41,8 @@ $(obj)/inventory.h: $(obj)/gen_inventory \
 
 $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 			   $(src)/../isa/source_manifest.def \
-			   $(src)/../isa/target_classification.def FORCE
+			   $(src)/../isa/target_classification.def \
+			   $(src)/../isa/target_system_accessor_reconciliation.def FORCE
 	$(call if_changed,tcti_target_inventory)
 
 $(obj)/tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h

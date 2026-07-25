@@ -199,7 +199,7 @@ static void zero_advertised_bits_preserves_complete_target(void)
 	EXPECT(result.unadvertised_incomplete_feature_count == 2);
 }
 
-static void empty_and_oversized_counts_fail_before_iteration(void)
+static void reduced_and_oversized_counts_fail_before_iteration(void)
 {
 	struct tcti_runtime_projection_leaf leaf = {
 		.name = "LEAF",
@@ -217,6 +217,17 @@ static void empty_and_oversized_counts_fail_before_iteration(void)
 			    &result) == -EINVAL);
 
 	ledger.leaves = &leaf;
+	ledger.leaf_count = TARGET_LEAF_COUNT - 1U;
+	ledger.target_leaf_count = ledger.leaf_count;
+	EXPECT(audit_custom(&ledger, &profile, capabilities,
+			    sizeof(capabilities) / sizeof(capabilities[0]),
+			    &result) == -EINVAL);
+	ledger.leaf_count = TARGET_LEAF_COUNT;
+	ledger.target_leaf_count = TARGET_LEAF_COUNT - 1U;
+	EXPECT(audit_custom(&ledger, &profile, capabilities,
+			    sizeof(capabilities) / sizeof(capabilities[0]),
+			    &result) == -EINVAL);
+
 	ledger.leaf_count =
 		TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES + 1U;
 	ledger.target_leaf_count = ledger.leaf_count;
@@ -339,6 +350,16 @@ static void live_provider_retains_full_target_and_fails_closed(void)
 		.leaf_count = TARGET_LEAF_COUNT,
 		.read_leaf = read_live_leaf,
 	};
+	const struct tcti_runtime_projection_provider reduced_provider = {
+		.context = &fixture,
+		.leaf_count = TARGET_LEAF_COUNT - 1U,
+		.read_leaf = read_live_leaf,
+	};
+	const struct tcti_runtime_projection_provider oversized_provider = {
+		.context = &fixture,
+		.leaf_count = TARGET_LEAF_COUNT + 1U,
+		.read_leaf = read_live_leaf,
+	};
 	const struct tcti_runtime_projection_profile zero_profile = { 0 };
 	const struct tcti_runtime_projection_profile advertised_profile = {
 		.hwcap = HWCAP_ALPHA,
@@ -350,6 +371,17 @@ static void live_provider_retains_full_target_and_fails_closed(void)
 		{ TCTI_RUNTIME_CAPABILITY_HWCAP, HWCAP_ALPHA, "FEAT_ALPHA" },
 	};
 	struct tcti_runtime_projection_result result;
+
+	EXPECT(tcti_runtime_projection_audit_provider(
+		       &reduced_provider, &zero_profile, alpha_capability,
+		       sizeof(alpha_capability) / sizeof(alpha_capability[0]),
+		       &result) == -EINVAL);
+	EXPECT(fixture.calls == 0);
+	EXPECT(tcti_runtime_projection_audit_provider(
+		       &oversized_provider, &zero_profile, alpha_capability,
+		       sizeof(alpha_capability) / sizeof(alpha_capability[0]),
+		       &result) == -EINVAL);
+	EXPECT(fixture.calls == 0);
 
 	EXPECT(tcti_runtime_projection_audit_provider(
 		       &provider, &zero_profile, alpha_capability,
@@ -393,7 +425,7 @@ int main(void)
 	advertised_feature_rejects_source_unbound_leaf();
 	proved_cohort_cannot_authorize_another_bit();
 	zero_advertised_bits_preserves_complete_target();
-	empty_and_oversized_counts_fail_before_iteration();
+	reduced_and_oversized_counts_fail_before_iteration();
 	malformed_leaf_feature_sets_fail();
 	invalid_capability_mappings_fail();
 	unadvertised_gap_cannot_authorize_or_block_proved_bit();

@@ -13,6 +13,7 @@ int main(int argc, char **argv)
 	char *source;
 	char line[512];
 	size_t rows = 0;
+	size_t absent_notes = 0;
 
 	if (argc != 2)
 		return 2;
@@ -36,18 +37,22 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	if (!fgets(line, sizeof(line), output) ||
+	    !strstr(line, "inline_aarchmrs_operations_v2") ||
 	    !strstr(line, "shared_asl_absent_blocking")) {
 		free(source);
 		fclose(output);
 		return 1;
 	}
 	while (fgets(line, sizeof(line), output))
-		if (strstr(line, "TCTI_A64_ASL_AVAILABILITY_ROW("))
+		if (strstr(line, "TCTI_A64_ASL_AVAILABILITY_ROW(")) {
 			rows++;
+			if (strstr(line, "\"absent\", 0U, 0U, \"\""))
+				absent_notes++;
+		}
 	free(source);
 	fclose(output);
-	if (rows != 4350U)
+	if (rows != 4350U || absent_notes != 4350U)
 		return 1;
-	puts("PASS inline AARCHMRS operation availability remains shared-ASL blocking");
+	puts("PASS inline AARCHMRS operation and operational-note provenance remain shared-ASL blocking");
 	return 0;
 }

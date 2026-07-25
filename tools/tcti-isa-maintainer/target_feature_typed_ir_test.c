@@ -69,9 +69,15 @@ int main(int argc, char **argv) {
     free(source);
     return 1;
   }
-  failed |= tcti_feature_typed_lower(&model, &typed, &result);
+  if (tcti_feature_typed_lower(&model, &typed, &result)) {
+    if (result.diagnostic_count)
+      fprintf(stderr, "feature typed IR lower failed: code=%d kind=%d offset=%zu\n",
+              result.diagnostics[0].code, result.diagnostics[0].source_kind,
+              result.diagnostics[0].provenance.offset);
+    failed = 1;
+  }
   failed |= result.parameter_count != TCTI_FEATURE_PARAMETER_COUNT;
-  failed |= result.diagnostic_count == 0;
+  failed |= result.diagnostic_count != 0;
 	for (i = 0; i <= TCTI_FEATURE_VALUE; i++)
 		total += result.grammar_counts[i];
 	failed |= total != model.node_count;

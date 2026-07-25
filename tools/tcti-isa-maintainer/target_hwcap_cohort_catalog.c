@@ -46,7 +46,7 @@ static const struct tcti_hwcap_catalog_mapping current_mappings[] = {
 #undef TCTI_A64_SOURCE
 #undef TCTI_A64_PROFILE
 
-#define TCTI_A64_SOURCE_MANIFEST_SOURCE(release, build, ref, schema, sha, count) \
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(release, build, ref, schema, sha, count, ...) \
 	static const char pinned_source_sha256[] = sha; \
 	static const size_t pinned_source_declared_count = count;
 #define TCTI_A64_SOURCE_MANIFEST_ROW(...)
@@ -56,7 +56,7 @@ static const struct tcti_hwcap_catalog_mapping current_mappings[] = {
 
 #define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, \
-				     pattern, condition) \
+					     pattern, condition, ...) \
 	{ ordinal, name, mnemonic, operation, mask, pattern, condition },
 static const struct tcti_target_ledger_source_row pinned_source_rows[] = {
 #include "../isa/source_manifest.def"

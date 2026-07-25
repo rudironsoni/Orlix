@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Generated from the pinned Arm AARCHMRS 2026-06 instruction source. */
+/* Generated from the pinned Arm AARCHMRS 2026-06 instruction source. Do not edit. */
 #ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H
 #include "target_instruction_artifact.h"
