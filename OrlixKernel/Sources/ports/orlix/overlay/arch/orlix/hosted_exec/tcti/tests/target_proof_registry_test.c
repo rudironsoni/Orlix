@@ -642,7 +642,7 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 		EXPECT((entry->obligations & ~entry->unproved_obligations) == 0);
 		binding_count += entry->binding_count;
 	}
-	EXPECT(binding_count == 417);
+	EXPECT(binding_count == 419);
 	return 0;
 }
 
