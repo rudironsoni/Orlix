@@ -31490,6 +31490,109 @@ static void tcti_resume_user_executes_advsimd_fp16_three_same(
 	KUNIT_EXPECT_EQ(test, 0, ret);
 }
 
+/*
+ * Each row is a pinned AARCHMRS 2026-06 source leaf.  The exhaustive
+ * decoder and executor matrices above establish the per-arrangement data
+ * semantics.  This test establishes that every source leaf also reaches that
+ * production implementation from mapped guest text through tcti_resume_user.
+ */
+struct tcti_advsimd_permute_source_leaf {
+	u16 ordinal;
+	const char *name;
+	u32 mask;
+	u32 pattern;
+	u32 instruction;
+};
+
+static const struct tcti_advsimd_permute_source_leaf
+tcti_advsimd_permute_source_leaves[] = {
+	{ 3672, "TBL_asimdtbl_L1_1", 0xbfe0fc00U, 0x0e000000U,
+	  0x4e080020U },
+	{ 3673, "TBX_asimdtbl_L1_1", 0xbfe0fc00U, 0x0e001000U,
+	  0x4e081020U },
+	{ 3674, "TBL_asimdtbl_L2_2", 0xbfe0fc00U, 0x0e002000U,
+	  0x4e082020U },
+	{ 3675, "TBX_asimdtbl_L2_2", 0xbfe0fc00U, 0x0e003000U,
+	  0x4e083020U },
+	{ 3676, "TBL_asimdtbl_L3_3", 0xbfe0fc00U, 0x0e004000U,
+	  0x4e084020U },
+	{ 3677, "TBX_asimdtbl_L3_3", 0xbfe0fc00U, 0x0e005000U,
+	  0x4e085020U },
+	{ 3678, "TBL_asimdtbl_L4_4", 0xbfe0fc00U, 0x0e006000U,
+	  0x4e086020U },
+	{ 3679, "TBX_asimdtbl_L4_4", 0xbfe0fc00U, 0x0e007000U,
+	  0x4e087020U },
+	{ 3684, "UZP1_asimdperm_only", 0xbf20fc00U, 0x0e001800U,
+	  0x4e021820U },
+	{ 3685, "TRN1_asimdperm_only", 0xbf20fc00U, 0x0e002800U,
+	  0x4e022820U },
+	{ 3686, "ZIP1_asimdperm_only", 0xbf20fc00U, 0x0e003800U,
+	  0x4e023820U },
+	{ 3687, "UZP2_asimdperm_only", 0xbf20fc00U, 0x0e005800U,
+	  0x4e025820U },
+	{ 3688, "TRN2_asimdperm_only", 0xbf20fc00U, 0x0e006800U,
+	  0x4e026820U },
+	{ 3689, "ZIP2_asimdperm_only", 0xbf20fc00U, 0x0e007800U,
+	  0x4e027820U },
+	{ 3690, "EXT_asimdext_only", 0xbfe08400U, 0x2e000000U,
+	  0x6e023820U },
+};
+
+static void tcti_resume_user_executes_advsimd_permute_source_leaves(
+	struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_advsimd_permute_source_leaves);
+	     index++) {
+		const struct tcti_advsimd_permute_source_leaf *leaf =
+			&tcti_advsimd_permute_source_leaves[index];
+		const u32 instructions[] = { leaf->instruction, 0xd4000001U };
+		struct tcti_result result;
+		struct pt_regs regs = {};
+		unsigned long mapped;
+		int ret;
+
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern,
+				    leaf->instruction & leaf->mask,
+				    "%u %s", leaf->ordinal, leaf->name);
+		mapped = tcti_test_map_instructions(test, instructions,
+						    ARRAY_SIZE(instructions));
+		KUNIT_ASSERT_NE_MSG(test, 0UL, mapped, "%u %s",
+				    leaf->ordinal, leaf->name);
+		memset(current->thread.user_simd, 0,
+		       sizeof(current->thread.user_simd));
+		current->thread.user_simd[2] = 0x0706050403020100ULL;
+		current->thread.user_simd[3] = 0x0f0e0d0c0b0a0908ULL;
+		current->thread.user_simd[4] = 0x1716151413121110ULL;
+		current->thread.user_simd[5] = 0x1f1e1d1c1b1a1918ULL;
+		current->thread.user_simd[16] = 0xff3020100f000100ULL;
+		current->thread.user_simd[17] = 0xffffffffffffffffULL;
+		current->thread.user_simd_valid = 1;
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[8] = __NR_getpid;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+				    "%u %s", leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, 0L, result.status, "%u %s",
+				    leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, mapped + sizeof(u32), result.pc,
+				    "%u %s", leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, instructions[1], result.instruction,
+				    "%u %s", leaf->ordinal, leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, mapped + sizeof(u32), regs.pc,
+				    "%u %s", leaf->ordinal, leaf->name);
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%u %s", leaf->ordinal,
+				    leaf->name);
+	}
+}
+
 static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_guest_profile_matches_elf_auxv),
 	KUNIT_CASE(tcti_complete_target_inventory_is_kernel_visible),
@@ -31975,6 +32078,7 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_decode_exhaustive_simd_vector_two_register_fp_family),
 	KUNIT_CASE(tcti_decode_advsimd_fp16_three_same_source_rows),
 	KUNIT_CASE(tcti_resume_user_executes_advsimd_fp16_three_same),
+	KUNIT_CASE(tcti_resume_user_executes_advsimd_permute_source_leaves),
 	KUNIT_CASE(tcti_gadget_executes_simd_vector_two_register_fp_family),
 	KUNIT_CASE(tcti_simd_vector_two_register_rejects_invalid_runtime_shapes),
 #endif
