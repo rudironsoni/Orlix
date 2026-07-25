@@ -53,6 +53,8 @@
 #define AARCH64_RET_PATTERN 0xd65f0000U
 #define AARCH64_COMPARE_BRANCH_IMM_MASK 0x7e000000U
 #define AARCH64_COMPARE_BRANCH_IMM_PATTERN 0x34000000U
+#define AARCH64_COMPARE_BRANCH_EXTENSION_MASK 0x7c000000U
+#define AARCH64_COMPARE_BRANCH_EXTENSION_PATTERN 0x74000000U
 #define AARCH64_TEST_BRANCH_IMM_MASK 0x7e000000U
 #define AARCH64_TEST_BRANCH_IMM_PATTERN 0x36000000U
 #define AARCH64_CONDITIONAL_BRANCH_IMM_MASK 0xff000010U
@@ -1162,6 +1164,62 @@ struct tcti_decoded_instruction tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.nonzero = instruction & BIT(24);
 		decoded.branch_imm = sign_extend64(imm << 2, 20);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_COMPARE_BRANCH_EXTENSION_MASK) ==
+	    AARCH64_COMPARE_BRANCH_EXTENSION_PATTERN) {
+		u8 condition = (instruction >> 21) & 0x7U;
+		u8 size = (instruction >> 14) & 0x3U;
+
+		if (condition == 4 || condition == 5)
+			return decoded;
+		decoded.compare_branch_immediate = instruction & BIT(24);
+		if (decoded.compare_branch_immediate) {
+			if (instruction & BIT(14))
+				return decoded;
+			decoded.compare_branch_access_size =
+				instruction & BIT(31) ? sizeof(u64) : sizeof(u32);
+			decoded.imm6 = ((instruction >> 16) & 0x1fU) |
+				       ((instruction >> 10) & 0x20U);
+		} else {
+			if (size == 1 || (size && (instruction & BIT(31))))
+				return decoded;
+			decoded.compare_branch_access_size =
+				size == 2 ? sizeof(u8) :
+				size == 3 ? sizeof(u16) :
+				instruction & BIT(31) ? sizeof(u64) : sizeof(u32);
+			decoded.rm = (instruction >> 16) & 0x1fU;
+		}
+
+		decoded.decode_class = TCTI_DECODE_COMPARE_BRANCH_EXTENSION;
+		decoded.rt = instruction & 0x1fU;
+		decoded.branch_imm = sign_extend64(
+			((instruction >> 5) & 0x1ffU) << 2, 11);
+		switch (condition) {
+		case 0:
+			decoded.compare_branch_condition = TCTI_COMPARE_BRANCH_GT;
+			break;
+		case 1:
+			decoded.compare_branch_condition =
+				decoded.compare_branch_immediate ? TCTI_COMPARE_BRANCH_LT :
+				TCTI_COMPARE_BRANCH_GE;
+			break;
+		case 2:
+			decoded.compare_branch_condition = TCTI_COMPARE_BRANCH_HI;
+			break;
+		case 3:
+			decoded.compare_branch_condition =
+				decoded.compare_branch_immediate ? TCTI_COMPARE_BRANCH_LO :
+				TCTI_COMPARE_BRANCH_HS;
+			break;
+		case 6:
+			decoded.compare_branch_condition = TCTI_COMPARE_BRANCH_EQ;
+			break;
+		default:
+			decoded.compare_branch_condition = TCTI_COMPARE_BRANCH_NE;
+			break;
+		}
 		return decoded;
 	}
 

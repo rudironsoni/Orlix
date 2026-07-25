@@ -317,11 +317,375 @@ static void bcs_al_nv_condition_production(struct kunit *test)
 	}
 }
 
+enum cbe_condition {
+	CBE_GT,
+	CBE_GE,
+	CBE_HI,
+	CBE_HS,
+	CBE_EQ,
+	CBE_NE,
+	CBE_LT,
+	CBE_LO,
+};
+
+struct cbe_leaf {
+	u16 ordinal;
+	const char *name;
+	u32 mask;
+	u32 pattern;
+	enum cbe_condition condition;
+	u8 access_size;
+	bool immediate;
+};
+
+/* Complete FEAT_CMPBR source inventory, ordinals 2215-2226 and 2318-2341. */
+static const struct cbe_leaf cbe_leaves[] = {
+	{ 2215, "CBBGT_8_regs", 0xffe0c000U, 0x74008000U, CBE_GT, 1, false },
+	{ 2216, "CBBGE_8_regs", 0xffe0c000U, 0x74208000U, CBE_GE, 1, false },
+	{ 2217, "CBBHI_8_regs", 0xffe0c000U, 0x74408000U, CBE_HI, 1, false },
+	{ 2218, "CBBHS_8_regs", 0xffe0c000U, 0x74608000U, CBE_HS, 1, false },
+	{ 2219, "CBBEQ_8_regs", 0xffe0c000U, 0x74c08000U, CBE_EQ, 1, false },
+	{ 2220, "CBBNE_8_regs", 0xffe0c000U, 0x74e08000U, CBE_NE, 1, false },
+	{ 2221, "CBHGT_16_regs", 0xffe0c000U, 0x7400c000U, CBE_GT, 2, false },
+	{ 2222, "CBHGE_16_regs", 0xffe0c000U, 0x7420c000U, CBE_GE, 2, false },
+	{ 2223, "CBHHI_16_regs", 0xffe0c000U, 0x7440c000U, CBE_HI, 2, false },
+	{ 2224, "CBHHS_16_regs", 0xffe0c000U, 0x7460c000U, CBE_HS, 2, false },
+	{ 2225, "CBHEQ_16_regs", 0xffe0c000U, 0x74c0c000U, CBE_EQ, 2, false },
+	{ 2226, "CBHNE_16_regs", 0xffe0c000U, 0x74e0c000U, CBE_NE, 2, false },
+	{ 2318, "CBGT_32_regs", 0xffe0c000U, 0x74000000U, CBE_GT, 4, false },
+	{ 2319, "CBGE_32_regs", 0xffe0c000U, 0x74200000U, CBE_GE, 4, false },
+	{ 2320, "CBHI_32_regs", 0xffe0c000U, 0x74400000U, CBE_HI, 4, false },
+	{ 2321, "CBHS_32_regs", 0xffe0c000U, 0x74600000U, CBE_HS, 4, false },
+	{ 2322, "CBEQ_32_regs", 0xffe0c000U, 0x74c00000U, CBE_EQ, 4, false },
+	{ 2323, "CBNE_32_regs", 0xffe0c000U, 0x74e00000U, CBE_NE, 4, false },
+	{ 2324, "CBGT_64_regs", 0xffe0c000U, 0xf4000000U, CBE_GT, 8, false },
+	{ 2325, "CBGE_64_regs", 0xffe0c000U, 0xf4200000U, CBE_GE, 8, false },
+	{ 2326, "CBHI_64_regs", 0xffe0c000U, 0xf4400000U, CBE_HI, 8, false },
+	{ 2327, "CBHS_64_regs", 0xffe0c000U, 0xf4600000U, CBE_HS, 8, false },
+	{ 2328, "CBEQ_64_regs", 0xffe0c000U, 0xf4c00000U, CBE_EQ, 8, false },
+	{ 2329, "CBNE_64_regs", 0xffe0c000U, 0xf4e00000U, CBE_NE, 8, false },
+	{ 2330, "CBGT_32_imm", 0xffe04000U, 0x75000000U, CBE_GT, 4, true },
+	{ 2331, "CBLT_32_imm", 0xffe04000U, 0x75200000U, CBE_LT, 4, true },
+	{ 2332, "CBHI_32_imm", 0xffe04000U, 0x75400000U, CBE_HI, 4, true },
+	{ 2333, "CBLO_32_imm", 0xffe04000U, 0x75600000U, CBE_LO, 4, true },
+	{ 2334, "CBEQ_32_imm", 0xffe04000U, 0x75c00000U, CBE_EQ, 4, true },
+	{ 2335, "CBNE_32_imm", 0xffe04000U, 0x75e00000U, CBE_NE, 4, true },
+	{ 2336, "CBGT_64_imm", 0xffe04000U, 0xf5000000U, CBE_GT, 8, true },
+	{ 2337, "CBLT_64_imm", 0xffe04000U, 0xf5200000U, CBE_LT, 8, true },
+	{ 2338, "CBHI_64_imm", 0xffe04000U, 0xf5400000U, CBE_HI, 8, true },
+	{ 2339, "CBLO_64_imm", 0xffe04000U, 0xf5600000U, CBE_LO, 8, true },
+	{ 2340, "CBEQ_64_imm", 0xffe04000U, 0xf5c00000U, CBE_EQ, 8, true },
+	{ 2341, "CBNE_64_imm", 0xffe04000U, 0xf5e00000U, CBE_NE, 8, true },
+};
+
+static u32 cbe_instruction(const struct cbe_leaf *leaf, u8 rt, u8 rm,
+			   u8 immediate)
+{
+	u32 instruction = leaf->pattern | (2U << 5) | rt;
+
+	if (leaf->immediate)
+		return instruction | ((u32)(immediate & 0x1fU) << 16) |
+			       ((u32)(immediate & 0x20U) << 10);
+	return instruction | ((u32)rm << 16);
+}
+
+static bool cbe_taken(enum cbe_condition condition, u64 left, u64 right,
+		      u8 access_size)
+{
+	switch (access_size) {
+	case 1:
+		left = (u8)left;
+		right = (u8)right;
+		break;
+	case 2:
+		left = (u16)left;
+		right = (u16)right;
+		break;
+	case 4:
+		left = (u32)left;
+		right = (u32)right;
+		break;
+	default:
+		break;
+	}
+
+	switch (condition) {
+	case CBE_GT:
+		return access_size == 1 ? (s8)left > (s8)right :
+		       access_size == 2 ? (s16)left > (s16)right :
+		       access_size == 4 ? (s32)left > (s32)right :
+					 (s64)left > (s64)right;
+	case CBE_GE:
+		return access_size == 1 ? (s8)left >= (s8)right :
+		       access_size == 2 ? (s16)left >= (s16)right :
+		       access_size == 4 ? (s32)left >= (s32)right :
+					 (s64)left >= (s64)right;
+	case CBE_HI:
+		return left > right;
+	case CBE_HS:
+		return left >= right;
+	case CBE_EQ:
+		return left == right;
+	case CBE_NE:
+		return left != right;
+	case CBE_LT:
+		return access_size == 4 ? (s32)left < (s32)right :
+					 (s64)left < (s64)right;
+	case CBE_LO:
+		return left < right;
+	}
+
+	return false;
+}
+
+static u64 cbe_left_for_path(const struct cbe_leaf *leaf, u8 immediate,
+			     bool taken)
+{
+	u64 right = leaf->immediate ? immediate : 0;
+
+	switch (leaf->condition) {
+	case CBE_GT:
+	case CBE_HI:
+	case CBE_NE:
+		return taken ? right + 1 : right;
+	case CBE_GE:
+	case CBE_HS:
+	case CBE_EQ:
+		return taken ? right : right - 1;
+	case CBE_LT:
+	case CBE_LO:
+		return taken ? right - 1 : right;
+	}
+
+	return 0;
+}
+
+static void cbe_source_decode(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cbe_leaves); index++) {
+		const struct cbe_leaf *leaf = &cbe_leaves[index];
+		static const u16 branch_immediates[] = { 0, 1, 0x100, 0x1ff };
+		u8 rt, rm_or_imm;
+
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, leaf->pattern & leaf->mask,
+				    "%s ordinal %u", leaf->name, leaf->ordinal);
+		for (rt = 0; rt < 32; rt++) {
+			for (rm_or_imm = 0; rm_or_imm < (leaf->immediate ? 64 : 32);
+			     rm_or_imm++) {
+				struct tcti_decoded_instruction decoded =
+					tcti_decode_aarch64(cbe_instruction(leaf, rt,
+								    rm_or_imm, rm_or_imm));
+
+				KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_COMPARE_BRANCH_EXTENSION,
+						    decoded.decode_class, "%s", leaf->name);
+				KUNIT_EXPECT_EQ_MSG(test, rt, decoded.rt, "%s", leaf->name);
+				if (leaf->immediate)
+					KUNIT_EXPECT_EQ_MSG(test, rm_or_imm, decoded.imm6,
+							    "%s", leaf->name);
+				else
+					KUNIT_EXPECT_EQ_MSG(test, rm_or_imm, decoded.rm,
+							    "%s", leaf->name);
+			}
+		}
+		for (rm_or_imm = 0; rm_or_imm < ARRAY_SIZE(branch_immediates);
+		     rm_or_imm++) {
+			u16 branch = branch_immediates[rm_or_imm];
+			struct tcti_decoded_instruction decoded = tcti_decode_aarch64(
+				(cbe_instruction(leaf, 0, 0, 0) & ~0x3fe0U) |
+				((u32)branch << 5));
+			s64 expected = branch & BIT(8) ?
+				((s64)branch - 0x200) * sizeof(u32) :
+				(s64)branch * sizeof(u32);
+
+			KUNIT_EXPECT_EQ_MSG(test, expected, decoded.branch_imm, "%s",
+					    leaf->name);
+		}
+	}
+}
+
+static void cbe_resume_case(struct kunit *test, const struct cbe_leaf *leaf,
+			    u64 left, u64 right, u8 immediate, bool requested_taken)
+{
+	struct pt_regs regs = {}, before;
+	struct tcti_result result;
+	unsigned long address;
+	bool taken;
+
+	address = bcs_map_program(test, cbe_instruction(leaf, 1, 2, immediate));
+	bcs_seed_regs(&regs, address, &bcs_leaves[0], false);
+	regs.regs[1] = left;
+	regs.regs[2] = right;
+	before = regs;
+	taken = cbe_taken(leaf->condition, left,
+		leaf->immediate ? immediate : right, leaf->access_size);
+	KUNIT_ASSERT_EQ_MSG(test, requested_taken, taken,
+			    "%s ordinal %u did not construct requested path", leaf->name,
+			    leaf->ordinal);
+	result = tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			    "%s ordinal %u", leaf->name, leaf->ordinal);
+	KUNIT_EXPECT_EQ(test, taken ? BCS_SVC_TAKEN : BCS_SVC_NOT_TAKEN,
+			result.instruction);
+	KUNIT_EXPECT_EQ(test, address + (taken ? 3 : 2) * sizeof(u32), regs.pc);
+	KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
+	KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
+static void cbe_production_resume(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cbe_leaves); index++) {
+		const struct cbe_leaf *leaf = &cbe_leaves[index];
+		unsigned int requested_taken;
+
+		for (requested_taken = 0; requested_taken < 2; requested_taken++) {
+			u8 immediate = leaf->immediate ? 1 : 0;
+			u64 left = cbe_left_for_path(leaf, immediate,
+						     requested_taken);
+			u64 right = leaf->immediate ? immediate : 0;
+
+			if (!leaf->immediate && leaf->condition == CBE_HS &&
+			    !requested_taken) {
+				left = 0;
+				right = 1;
+			}
+			if (leaf->condition == CBE_LO) {
+				left = requested_taken ? 0 : 1;
+				right = leaf->immediate ? immediate :
+					(requested_taken ? 1 : 0);
+			}
+			if (leaf->access_size < sizeof(u64)) {
+				left |= 0xa5a5a5a500000000ULL;
+				right |= 0x5a5a5a5a00000000ULL;
+			}
+			cbe_resume_case(test, leaf, left, right, immediate,
+					requested_taken);
+		}
+		if (leaf->immediate) {
+			bool zero_taken = leaf->condition != CBE_LO;
+
+			cbe_resume_case(test, leaf,
+				cbe_left_for_path(leaf, 0, zero_taken), 0, 0,
+				zero_taken);
+			cbe_resume_case(test, leaf,
+				cbe_left_for_path(leaf, 63, true), 0, 63, true);
+		}
+	}
+}
+
+static void cbe_extrema_production(struct kunit *test)
+{
+	static const struct {
+		u8 leaf;
+		u64 left;
+		u64 right;
+		u8 immediate;
+		bool taken;
+	} cases[] = {
+		{ 0, 0x7f, 0x80, 0, true }, { 1, 0x80, 0x7f, 0, false },
+		{ 6, 0x7fff, 0x8000, 0, true }, { 7, 0x8000, 0x7fff, 0, false },
+		{ 12, 0x7fffffff, 0x80000000, 0, true },
+		{ 13, 0x80000000, 0x7fffffff, 0, false },
+		{ 18, S64_MAX, S64_MIN, 0, true },
+		{ 19, S64_MIN, S64_MAX, 0, false },
+		{ 24, S32_MAX, 0, 63, true }, { 25, S32_MIN, 0, 0, true },
+		{ 30, S64_MAX, 0, 63, true }, { 31, S64_MIN, 0, 0, true },
+		{ 2, 0xff, 0, 0, true }, { 3, 0, 0xff, 0, false },
+		{ 8, 0xffff, 0, 0, true }, { 9, 0, 0xffff, 0, false },
+		{ 14, U32_MAX, 0, 0, true }, { 15, 0, U32_MAX, 0, false },
+		{ 20, U64_MAX, 0, 0, true }, { 21, 0, U64_MAX, 0, false },
+		{ 26, U32_MAX, 0, 63, true }, { 27, 0, 0, 63, true },
+		{ 32, U64_MAX, 0, 63, true }, { 33, 0, 0, 63, true },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cases); index++)
+		cbe_resume_case(test, &cbe_leaves[cases[index].leaf],
+				cases[index].left, cases[index].right,
+				cases[index].immediate, cases[index].taken);
+}
+
+static void cbe_invalid_encodings_reject(struct kunit *test)
+{
+	static const u32 invalid[] = {
+		0x74004000U, 0x74800000U, 0x74a00000U, 0x75004000U,
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(invalid); index++)
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+				tcti_decode_aarch64(invalid[index]).decode_class,
+				"invalid FEAT_CMPBR encoding %#x", invalid[index]);
+}
+
+static void cbe_invalid_encodings_fail_closed_in_production(struct kunit *test)
+{
+	static const u32 invalid[] = {
+		0x74004000U, 0x74800000U, 0x74a00000U, 0x75004000U,
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(invalid); index++) {
+		struct pt_regs regs = {};
+		struct tcti_result result;
+		unsigned long address = bcs_map_program(test, invalid[index]);
+
+		bcs_seed_regs(&regs, address, &bcs_leaves[0], false);
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+		KUNIT_EXPECT_EQ(test, address, result.pc);
+		KUNIT_EXPECT_EQ(test, invalid[index], result.instruction);
+		KUNIT_EXPECT_EQ(test, address, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
+
+static void cbe_narrow_sf_encodings_fail_closed(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(cbe_leaves); index++) {
+		const struct cbe_leaf *leaf = &cbe_leaves[index];
+		struct pt_regs regs = {};
+		struct tcti_result result;
+		u32 instruction;
+		unsigned long address;
+
+		if (leaf->immediate || leaf->access_size >= sizeof(u32))
+			continue;
+		instruction = cbe_instruction(leaf, 1, 2, 0) | BIT(31);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_DECODE_UNSUPPORTED,
+			tcti_decode_aarch64(instruction).decode_class,
+			"%s ordinal %u", leaf->name, leaf->ordinal);
+		address = bcs_map_program(test, instruction);
+		bcs_seed_regs(&regs, address, &bcs_leaves[0], false);
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "%s ordinal %u", leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+		KUNIT_EXPECT_EQ(test, address, result.pc);
+		KUNIT_EXPECT_EQ(test, instruction, result.instruction);
+		KUNIT_EXPECT_EQ(test, address, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
+
 static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_source_decode),
 	KUNIT_CASE(bcs_production_resume),
 	KUNIT_CASE(bcs_x31_semantics_production),
 	KUNIT_CASE(bcs_al_nv_condition_production),
+	KUNIT_CASE(cbe_source_decode),
+	KUNIT_CASE(cbe_production_resume),
+	KUNIT_CASE(cbe_extrema_production),
+	KUNIT_CASE(cbe_invalid_encodings_reject),
+	KUNIT_CASE(cbe_invalid_encodings_fail_closed_in_production),
+	KUNIT_CASE(cbe_narrow_sf_encodings_fail_closed),
 	{}
 };
 

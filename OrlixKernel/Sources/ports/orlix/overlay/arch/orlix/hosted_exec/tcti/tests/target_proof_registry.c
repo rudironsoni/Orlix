@@ -282,7 +282,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "a6d4768f0458875a667ec8f4dca2a722a5adac831aa0fd9d4cd24f1079d3d25c",
 	  "tcti_source_leaf_classification_test.o" },
 	{ BRANCH_CONTROL_SOURCE,
-	  "588e4bf1730a045805bec9f77846de2afb2f72226fbb708ea9c92f0838122c00",
+	  "e3c49a1eb3dac876250db1806581b7da1fe1654717bd7eaa698d488f67ceb9b0",
 	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
 	  "4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",

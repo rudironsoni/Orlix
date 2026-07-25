@@ -23,6 +23,7 @@ enum tcti_decode_class {
 	TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE,
 	TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER,
 	TCTI_DECODE_COMPARE_BRANCH_IMMEDIATE,
+	TCTI_DECODE_COMPARE_BRANCH_EXTENSION,
 	TCTI_DECODE_TEST_BRANCH_IMMEDIATE,
 	TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE,
 	TCTI_DECODE_CONDITIONAL_COMPARE,
@@ -143,6 +144,17 @@ enum tcti_branch_register_op {
 	TCTI_BRANCH_REGISTER_BR = 0,
 	TCTI_BRANCH_REGISTER_BLR,
 	TCTI_BRANCH_REGISTER_RET,
+};
+
+enum tcti_compare_branch_condition {
+	TCTI_COMPARE_BRANCH_GT = 0,
+	TCTI_COMPARE_BRANCH_GE,
+	TCTI_COMPARE_BRANCH_HI,
+	TCTI_COMPARE_BRANCH_HS,
+	TCTI_COMPARE_BRANCH_EQ,
+	TCTI_COMPARE_BRANCH_NE,
+	TCTI_COMPARE_BRANCH_LT,
+	TCTI_COMPARE_BRANCH_LO,
 };
 
 enum tcti_system_register {
@@ -552,7 +564,11 @@ struct tcti_decoded_instruction {
 	bool link;
 	u8 condition;
 	u8 nzcv;
+	u8 imm6;
 	bool nonzero;
+	bool compare_branch_immediate;
+	u8 compare_branch_access_size;
+	enum tcti_compare_branch_condition compare_branch_condition;
 	u8 test_bit;
 	s64 memory_offset;
 	bool load;

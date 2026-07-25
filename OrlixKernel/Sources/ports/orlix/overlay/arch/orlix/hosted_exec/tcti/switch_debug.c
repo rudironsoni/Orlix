@@ -99,7 +99,16 @@ static u64 tcti_read_gpr_or_zero(const struct pt_regs *regs, u8 reg,
 {
 	u64 value = reg == 31 ? 0 : regs->regs[reg];
 
-	return access_size == sizeof(u32) ? (u32)value : value;
+	switch (access_size) {
+	case sizeof(u8):
+		return (u8)value;
+	case sizeof(u16):
+		return (u16)value;
+	case sizeof(u32):
+		return (u32)value;
+	default:
+		return value;
+	}
 }
 
 static void tcti_write_gpr_or_zero(struct pt_regs *regs, u8 reg,
@@ -7586,6 +7595,56 @@ int tcti_execute_decoded_semantics(struct mm_struct *mm,
 		else
 			regs->pc += sizeof(u32);
 		return 0;
+	case TCTI_DECODE_COMPARE_BRANCH_EXTENSION: {
+		u64 left = tcti_read_gpr_or_zero(regs, decoded->rt,
+				decoded->compare_branch_access_size);
+		u64 right = decoded->compare_branch_immediate ? decoded->imm6 :
+			tcti_read_gpr_or_zero(regs, decoded->rm,
+				decoded->compare_branch_access_size);
+		bool taken;
+
+		switch (decoded->compare_branch_condition) {
+		case TCTI_COMPARE_BRANCH_GT:
+			taken = decoded->compare_branch_access_size == sizeof(u8) ?
+				(s8)left > (s8)right :
+				decoded->compare_branch_access_size == sizeof(u16) ?
+				(s16)left > (s16)right :
+				decoded->compare_branch_access_size == sizeof(u32) ?
+				(s32)left > (s32)right : (s64)left > (s64)right;
+			break;
+		case TCTI_COMPARE_BRANCH_GE:
+			taken = decoded->compare_branch_access_size == sizeof(u8) ?
+				(s8)left >= (s8)right :
+				decoded->compare_branch_access_size == sizeof(u16) ?
+				(s16)left >= (s16)right :
+				decoded->compare_branch_access_size == sizeof(u32) ?
+				(s32)left >= (s32)right : (s64)left >= (s64)right;
+			break;
+		case TCTI_COMPARE_BRANCH_HI:
+			taken = left > right;
+			break;
+		case TCTI_COMPARE_BRANCH_HS:
+			taken = left >= right;
+			break;
+		case TCTI_COMPARE_BRANCH_EQ:
+			taken = left == right;
+			break;
+		case TCTI_COMPARE_BRANCH_NE:
+			taken = left != right;
+			break;
+		case TCTI_COMPARE_BRANCH_LT:
+			taken = decoded->compare_branch_access_size == sizeof(u32) ?
+				(s32)left < (s32)right : (s64)left < (s64)right;
+			break;
+		case TCTI_COMPARE_BRANCH_LO:
+			taken = left < right;
+			break;
+		default:
+			return -EOPNOTSUPP;
+		}
+		regs->pc += taken ? decoded->branch_imm : sizeof(u32);
+		return 0;
+	}
 	case TCTI_DECODE_TEST_BRANCH_IMMEDIATE:
 		source = tcti_read_gpr_or_zero(regs, decoded->rt, sizeof(u64));
 		if (!!(source & BIT_ULL(decoded->test_bit)) ==
