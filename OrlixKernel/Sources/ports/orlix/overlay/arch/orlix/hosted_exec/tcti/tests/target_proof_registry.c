@@ -292,7 +292,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "c39f31899aa12ff965fe5a10942f87fd918182cc88bf614fdf195d28c107a029",
 	  "tcti_scalar_fp_semantics_test.o" },
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
-	  "03dfe8feb6f678c09560fe1e7ad1e040c6e7698f27db401f4cc0c361f13ea8f3",
+	  "aab93c4152202c7347882f2dc77aeef666a63a2d409f5ab8c0aa7ebe453ebd9f",
 	  "tcti_advsimd_fp_arithmetic_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "324578ba782bab9e0aa95aa8783a7a4dbf04ebc47e2ca5d1485831f7e68acac1",

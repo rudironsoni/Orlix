@@ -292,7 +292,6 @@ TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE(
 	TCTI_SIMD_ARITH_FDIV, 0x3f000000U, 0xc0400000U)
 
 #undef TCTI_ADVSIMD_FP_SOURCE_LEAF_CASE
-}
 
 static void tcti_advsimd_fp_2d_required_variants_execute_exact_bits(
 	struct kunit *test)
