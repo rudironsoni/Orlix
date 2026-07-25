@@ -676,3 +676,12 @@ execution-evidence blockers, and runtime-candidate provenance. Malformed source,
 classification, or registry inputs leave caller output untouched. Every row
 remains blocked on the incomplete authoritative feature-configuration union,
 and static KUnit registration cannot become execution proof.
+
+## [2026-07-25] test | Bind PMUL target reachability
+
+Added source ordinal 3955, `PMUL_asimdsame_only`, to the durable crypto target
+contract as implemented but blocked on official shared ASL. Focused KUnit binds
+the canonical source identity, feature condition, mask and pattern, ASL locator,
+decoder shape, and production executor PC reachability without introducing a
+PMUL result oracle. The KUnit object compiles, while app-hosted execution remains
+unproved because strict `xcode-offload doctor` currently fails its machine checks.

@@ -16,6 +16,50 @@ static const char *crypto_artifact_string(
 	return (const char *)artifact->string_pool + offset;
 }
 
+struct crypto_asl_availability_row {
+	u32 source_ordinal;
+	const char *source_id;
+	const char *operation;
+	const char *object;
+	const char *availability;
+};
+
+#define TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
+#define TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, object, \
+					      offset, length, note_presence, note_offset, \
+					      note_length, note_digest, availability) \
+	{ ordinal, name, operation, object, availability },
+static const struct crypto_asl_availability_row crypto_asl_availability[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef TCTI_A64_ASL_AVAILABILITY_ROW
+#undef TCTI_A64_ASL_AVAILABILITY_SOURCE
+
+static const struct tcti_crypto_target_contract_row *
+crypto_target_contract_row(u32 source_ordinal)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(tcti_crypto_sve_sme_target_contract); i++)
+		if (tcti_crypto_sve_sme_target_contract[i].source_ordinal ==
+		    source_ordinal)
+			return &tcti_crypto_sve_sme_target_contract[i];
+
+	return NULL;
+}
+
+static const struct crypto_asl_availability_row *
+crypto_asl_availability_row(u32 source_ordinal)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(crypto_asl_availability); i++)
+		if (crypto_asl_availability[i].source_ordinal == source_ordinal)
+			return &crypto_asl_availability[i];
+
+	return NULL;
+}
+
 struct crypto_leaf {
 	u32 source_ordinal;
 	const char *source_id;
@@ -156,6 +200,86 @@ static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
 				TCTI_CRYPTO_TARGET_REQUIRED_UNIMPLEMENTED, row->status,
 				"vector/matrix leaf %s must remain visible", row->source_id);
 	}
+}
+
+/*
+ * Reachability only.  The pinned public package has no shared ASL body for
+ * PMUL, so this establishes neither arithmetic semantics nor proof credit.
+ */
+static void crypto_pmul_source_contract_and_decoder_reachability(
+	struct kunit *test)
+{
+	static const u8 expected_condition[] =
+		"\x54\x43\x4e\x44\x01\x07\x00\x00\x00\x31\x07\x00"
+		"\x00\x00\x17\x07\x00\x00\x00\x0c\x01\x00\x00\x00"
+		"\x01\x01\x01\x00\x00\x00\x01\x01\x01\x00\x00\x00"
+		"\x01\x01\x02\x00\x00\x00\x10\x00\x00\x00\x0c\x46"
+		"\x45\x41\x54\x5f\x41\x64\x76\x53\x49\x4d\x44";
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *leaf;
+	const struct tcti_crypto_target_contract_row *contract;
+	const struct crypto_asl_availability_row *asl;
+	struct tcti_decoded_instruction decoded;
+	struct pt_regs regs = { .pc = 0x4000 };
+	const char *source_id;
+	const char *mnemonic;
+	const char *operation;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_LT(test, 3955U, artifact->leaf_count);
+	leaf = &artifact->leaves[3955U];
+	source_id = crypto_artifact_string(artifact, leaf->name_offset);
+	mnemonic = crypto_artifact_string(artifact, leaf->mnemonic_offset);
+	operation = crypto_artifact_string(artifact, leaf->operation_offset);
+	KUNIT_ASSERT_NOT_NULL(test, source_id);
+	KUNIT_ASSERT_NOT_NULL(test, mnemonic);
+	KUNIT_ASSERT_NOT_NULL(test, operation);
+	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", source_id);
+	KUNIT_EXPECT_STREQ(test, "PMUL", mnemonic);
+	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", operation);
+	KUNIT_EXPECT_EQ(test, 0xbf20fc00U, leaf->encoding_mask);
+	KUNIT_EXPECT_EQ(test, 0x2e209c00U, leaf->encoding_pattern);
+	KUNIT_EXPECT_EQ(test, sizeof(expected_condition) - 1U,
+			leaf->condition_length);
+	KUNIT_ASSERT_LE(test, leaf->condition_offset + leaf->condition_length,
+			artifact->condition_pool_size);
+	KUNIT_EXPECT_MEMEQ(test,
+		artifact->condition_pool + leaf->condition_offset,
+		expected_condition, sizeof(expected_condition) - 1U);
+
+	contract = crypto_target_contract_row(3955U);
+	KUNIT_ASSERT_NOT_NULL_MSG(test, contract,
+		"PMUL must remain a durable crypto target-contract obligation");
+	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", contract->source_id);
+	KUNIT_EXPECT_STREQ(test, "PMUL", contract->mnemonic);
+	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd",
+		contract->asl_operation);
+	KUNIT_EXPECT_EQ(test, TCTI_CRYPTO_TARGET_ADVSIMD, contract->family);
+	KUNIT_EXPECT_EQ(test, TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED,
+		contract->status);
+
+	asl = crypto_asl_availability_row(3955U);
+	KUNIT_ASSERT_NOT_NULL(test, asl);
+	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", asl->source_id);
+	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", asl->operation);
+	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd", asl->object);
+	KUNIT_EXPECT_STREQ(test, "shared_asl_absent_blocking",
+		asl->availability);
+
+	decoded = tcti_decode_aarch64(0x2e239d31U);
+	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+		decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_PMUL,
+		decoded.simd_arithmetic_op);
+	KUNIT_EXPECT_EQ(test, 17U, decoded.rd);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rn);
+	KUNIT_EXPECT_EQ(test, 3U, decoded.rm);
+	KUNIT_EXPECT_EQ(test, 1U, decoded.access_size);
+	KUNIT_EXPECT_EQ(test, 8U, decoded.result_size);
+	KUNIT_ASSERT_EQ(test, 0,
+		tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL));
+	KUNIT_EXPECT_EQ(test, 0x4004ULL, regs.pc);
 }
 
 static void crypto_decode_legal_and_immediate_variants(struct kunit *test)
@@ -343,6 +467,7 @@ static void crypto_executor_aliasing(struct kunit *test)
 static struct kunit_case crypto_extension_cases[] = {
 	KUNIT_CASE(crypto_source_leaf_provenance_is_complete),
 	KUNIT_CASE(crypto_sve_sme_target_contract_is_source_bound),
+	KUNIT_CASE(crypto_pmul_source_contract_and_decoder_reachability),
 	KUNIT_CASE(crypto_decode_legal_and_immediate_variants),
 	KUNIT_CASE(crypto_decode_rejects_fixed_neighbours),
 	KUNIT_CASE(crypto_executor_known_vectors),
