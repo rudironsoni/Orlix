@@ -13,6 +13,7 @@
 
 #define TRUE_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
+#define ERET_CONDITION TRUE_CONDITION
 #define LSE_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4c5345"
 #define DECODE_SOURCE \
@@ -165,6 +166,24 @@ static int explicit_binding_set_is_mandatory_and_unique(void)
 	invalid.binding_count = 2;
 	EXPECT(tcti_target_proof_registry_validate(&invalid, 1, &error) == -1);
 	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY);
+	return 0;
+}
+
+static int cross_operation_multi_binding_is_rejected(void)
+{
+	static const struct tcti_target_proof_binding bindings[] = {
+		{ "ADD_32_addsub_imm", "ADD", 0xff800000U, 0x11000000U,
+		  TRUE_CONDITION, UINT64_C(0x1f), 2173U },
+		{ "ERET_64E_branch_reg", "ERET", 0xffffffffU, 0xd69f03e0U,
+		  ERET_CONDITION, UINT64_C(0x1f), 2299U },
+	};
+	struct tcti_target_proof_registry_entry invalid = add_entry;
+	enum tcti_target_proof_registry_error error;
+
+	invalid.bindings = bindings;
+	invalid.binding_count = sizeof(bindings) / sizeof(bindings[0]);
+	EXPECT(tcti_target_proof_registry_validate(&invalid, 1, &error) == -1);
+	EXPECT(error == TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
 	return 0;
 }
 
@@ -640,6 +659,8 @@ int main(void)
 		{ "required_operation_maps_once", required_operation_maps_once },
 		{ "explicit_binding_set_is_mandatory_and_unique",
 		  explicit_binding_set_is_mandatory_and_unique },
+		{ "cross_operation_multi_binding_is_rejected",
+		  cross_operation_multi_binding_is_rejected },
 		{ "lse_cannot_omit_atomicity", lse_cannot_omit_atomicity },
 		{ "kunit_provenance_must_be_registered",
 		  kunit_provenance_must_be_registered },
