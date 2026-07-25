@@ -170,6 +170,14 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"tcti_advsimd_fp_arithmetic_test_suite"
 #define ADVSIMD_FP_ARITHMETIC_CASE_ARRAY \
 	"tcti_advsimd_fp_arithmetic_test_cases"
+#define ADVSIMD_HALVING_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_advsimd_halving_source_bound_test.c"
+#define ADVSIMD_HALVING_SUITE \
+	"orlix-tcti-advsimd-halving-source-bound"
+#define ADVSIMD_HALVING_SUITE_SYMBOL \
+	"tcti_advsimd_halving_source_bound_suite"
+#define ADVSIMD_HALVING_CASE_ARRAY \
+	"tcti_advsimd_halving_source_bound_cases"
 #define INTEGER_CONDITIONAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/tcti_integer_conditional_source_bound_test.c"
 #define INTEGER_CONDITIONAL_SUITE "orlix-tcti-integer-conditional-source-bound"
@@ -222,6 +230,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ADVSIMD_FP_ARITHMETIC_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC | TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define ADVSIMD_HALVING_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define INTEGER_CONDITIONAL_BASE_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -237,7 +246,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"140f63cc2e5e26bd31f0534fadacb55968dbb70b9832e520560676f594ff10f0"
+	"49d2b393f0d6cf38a148f3c7ab8c7f99f2e841891d8617212dd79f1515ca6f90"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -283,10 +292,10 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "83e04d900faa2abc7a8120b29d8a01e4fe2300266e182423515cbbf5428ab0ca",
 	  "tcti_source_leaf_classification_test.o" },
 	{ BRANCH_CONTROL_SOURCE,
-	  "e3c49a1eb3dac876250db1806581b7da1fe1654717bd7eaa698d488f67ceb9b0",
+	  "a9693d014b7e6ad10b8e988667dfb437b3484b3afd2534c998a11ec30ef07daf",
 	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
-	  "4a8242910b991f782b6f87abf9d17859da6e758cff6df060ea9b84ddc062aede",
+	  "bb538a43b2e667be6118a6f457478aad3c03456fa6436879a5da83064dca09cc",
 	  "tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
 	  "c39f31899aa12ff965fe5a10942f87fd918182cc88bf614fdf195d28c107a029",
@@ -294,6 +303,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
 	  "aab93c4152202c7347882f2dc77aeef666a63a2d409f5ab8c0aa7ebe453ebd9f",
 	  "tcti_advsimd_fp_arithmetic_source_bound_test.o" },
+	{ ADVSIMD_HALVING_SOURCE,
+	  "6ab6ba3e20964278ca6c86c4e8b9ec47578b224225902fdddcb3ce4978f3e043",
+	  "tcti_advsimd_halving_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "324578ba782bab9e0aa95aa8783a7a4dbf04ebc47e2ca5d1485831f7e68acac1",
 	  "tcti_integer_conditional_source_bound_test.o" },
@@ -665,6 +677,22 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ADVSIMD_FP_ARITHMETIC_SUITE_SYMBOL, ADVSIMD_FP_ARITHMETIC_CASE_ARRAY,
 	  "tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits",
 	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS },
+	{ ADVSIMD_HALVING_SOURCE, ADVSIMD_HALVING_SUITE,
+	  ADVSIMD_HALVING_SUITE_SYMBOL, ADVSIMD_HALVING_CASE_ARRAY,
+	  "tcti_advsimd_halving_source_leaves_decode",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_HALVING_SOURCE, ADVSIMD_HALVING_SUITE,
+	  ADVSIMD_HALVING_SUITE_SYMBOL, ADVSIMD_HALVING_CASE_ARRAY,
+	  "tcti_advsimd_halving_reserved_64bit_lanes_reject",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_HALVING_SOURCE, ADVSIMD_HALVING_SUITE,
+	  ADVSIMD_HALVING_SUITE_SYMBOL, ADVSIMD_HALVING_CASE_ARRAY,
+	  "tcti_advsimd_halving_source_leaves_execute",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 
 };
 
@@ -818,6 +846,12 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("FMIN_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FMUL_advsimd_vec", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FDIV_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHSUB_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UHSUB_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -1020,6 +1054,39 @@ ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits,
 ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits, 3961U, "FMUL_asimdsame_only", "FMUL", 0x2e20dc00U);
 ADVSIMD_FP_ARITHMETIC_PROOF(tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits, 3965U, "FDIV_asimdsame_only", "FDIV", 0x2e20fc00U);
 #undef ADVSIMD_FP_ARITHMETIC_PROOF
+
+static const struct tcti_target_proof_case advsimd_halving_cases[] = {
+	{ "tcti_advsimd_halving_source_leaves_decode",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tcti_advsimd_halving_reserved_64bit_lanes_reject",
+	  TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tcti_advsimd_halving_source_leaves_execute",
+	  TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
+#define ADVSIMD_HALVING_BINDING(name, ordinal, leaf, mnemonic, pattern) \
+	static const struct tcti_target_proof_binding name##_bindings[] = { \
+		{ leaf, mnemonic, 0xbf20fc00U, pattern, \
+		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
+		  TCTI_PROOF_U64_C(1), ordinal }, \
+	}
+ADVSIMD_HALVING_BINDING(advsimd_halving_shadd, 3895U,
+	"SHADD_asimdsame_only", "SHADD", 0x0e200400U);
+ADVSIMD_HALVING_BINDING(advsimd_halving_srhadd, 3897U,
+	"SRHADD_asimdsame_only", "SRHADD", 0x0e201400U);
+ADVSIMD_HALVING_BINDING(advsimd_halving_shsub, 3898U,
+	"SHSUB_asimdsame_only", "SHSUB", 0x0e202400U);
+ADVSIMD_HALVING_BINDING(advsimd_halving_uhadd, 3937U,
+	"UHADD_asimdsame_only", "UHADD", 0x2e200400U);
+ADVSIMD_HALVING_BINDING(advsimd_halving_urhadd, 3939U,
+	"URHADD_asimdsame_only", "URHADD", 0x2e201400U);
+ADVSIMD_HALVING_BINDING(advsimd_halving_uhsub, 3940U,
+	"UHSUB_asimdsame_only", "UHSUB", 0x2e202400U);
+#undef ADVSIMD_HALVING_BINDING
 
 #define LOGICAL_BINDING(ordinal, leaf, mnemonic, pattern, cases) \
 	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
@@ -1452,7 +1519,14 @@ static const struct tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ADVSIMD_FP_ARITHMETIC_SOURCE, ADVSIMD_FP_ARITHMETIC_SUITE, cases, \
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_FP_ARITHMETIC_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 49U
+#define ADVSIMD_HALVING_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  ADVSIMD_HALVING_OBLIGATIONS, \
+	  TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  ADVSIMD_HALVING_SOURCE, ADVSIMD_HALVING_SUITE, \
+	  advsimd_halving_cases, ARRAY_COUNT(advsimd_halving_cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL, ADVSIMD_HALVING_OBLIGATIONS }
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 55U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -1597,6 +1671,18 @@ static struct tcti_target_proof_registry_entry proof_registry_entries[
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmin-source-leaf", "FMIN_advsimd", tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmul-source-leaf", "FMUL_advsimd_vec", tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fdiv-source-leaf", "FDIV_advsimd", tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_cases, tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-shadd-source-leaf",
+		"SHADD_advsimd", advsimd_halving_shadd_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-srhadd-source-leaf",
+		"SRHADD_advsimd", advsimd_halving_srhadd_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-shsub-source-leaf",
+		"SHSUB_advsimd", advsimd_halving_shsub_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-uhadd-source-leaf",
+		"UHADD_advsimd", advsimd_halving_uhadd_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-urhadd-source-leaf",
+		"URHADD_advsimd", advsimd_halving_urhadd_bindings),
+	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-uhsub-source-leaf",
+		"UHSUB_advsimd", advsimd_halving_uhsub_bindings),
 };
 
 #undef LOGICAL_ENTRY
