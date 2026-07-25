@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "target_proof_registry.h"
+#include "target_feature_domain.h"
 #include "target_feature_field_domain_binding_artifact.h"
 #include "target_runtime_capability_cohort_artifact.h"
 
@@ -26,6 +27,62 @@ enum tcti_target_completion_relation {
 	TCTI_TARGET_COMPLETION_RELATION_NONE,
 	TCTI_TARGET_COMPLETION_RELATION_ALIAS,
 	TCTI_TARGET_COMPLETION_RELATION_DUPLICATE,
+};
+
+/*
+ * A derived per-source-leaf status.  These bits report only a missing or
+ * unresolved relationship in a checked canonical artifact.  They never
+ * imply an implementation owner, semantic behavior, or executed proof.
+ */
+enum tcti_target_completion_obligation_blocker {
+	TCTI_TARGET_COMPLETION_BLOCKER_NONE = 0,
+	TCTI_TARGET_COMPLETION_BLOCKER_UNCLASSIFIED = 1U << 0,
+	TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP = 1U << 1,
+	TCTI_TARGET_COMPLETION_BLOCKER_ASL = 1U << 2,
+	TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION = 1U << 3,
+	TCTI_TARGET_COMPLETION_BLOCKER_PROOF = 1U << 4,
+	TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS = 1U << 5,
+	TCTI_TARGET_COMPLETION_BLOCKER_RUNTIME_CANDIDATE = 1U << 6,
+	TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE = 1U << 7,
+	TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE = 1U << 8,
+	/* The aggregate result carries artifact-wide failures separately. */
+	TCTI_TARGET_COMPLETION_BLOCKER_SOURCE_CONDITION = 1U << 9,
+};
+
+enum tcti_target_completion_asl_state {
+	TCTI_TARGET_COMPLETION_ASL_INVALID,
+	TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING,
+	TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE,
+};
+
+enum tcti_target_completion_feature_union_state {
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_OPERAND,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_UNRESOLVED,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED,
+};
+
+/* More than one source condition may be incomplete for one leaf. */
+enum tcti_target_completion_feature_union_reason {
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_NONE = 0,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_FEATURE = 1U << 0,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_OPERAND = 1U << 1,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE = 1U << 2,
+	TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID = 1U << 3,
+};
+
+enum tcti_target_completion_proof_state {
+	TCTI_TARGET_COMPLETION_PROOF_NONE,
+	TCTI_TARGET_COMPLETION_PROOF_STALE,
+	TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED,
+	/* Static registry metadata has no outstanding bits, never execution credit. */
+	TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA,
+};
+
+enum tcti_target_completion_runtime_candidate_state {
+	TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_NONE,
+	TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_UNRESOLVED,
 };
 
 struct tcti_target_completion_source_row {
@@ -59,6 +116,40 @@ struct tcti_target_completion_classification_row {
 	const char *canonical_name;
 	const char *evidence;
 	const char *proof_id;
+};
+
+/*
+ * Optional ordinal-indexed projection of the canonical completion audit.
+ * All pointers borrow immutable canonical artifact storage.  A NULL owner is
+ * intentionally not represented by a placeholder: this audit does not own
+ * per-leaf implementation assignment.
+ */
+struct tcti_target_completion_obligation {
+	uint32_t ordinal;
+	uint32_t blocker_mask;
+	const char *name;
+	const char *mnemonic;
+	const char *operation_id;
+	enum tcti_target_completion_class classification;
+	enum tcti_target_completion_relation relation;
+	const char *canonical_name;
+	const char *asl_operation_object;
+	enum tcti_target_completion_asl_state asl_state;
+	enum tcti_target_completion_feature_union_state feature_union_state;
+	/* Diagnostic order is retained only as a first-failure locator. */
+	enum tcti_feature_domain_tcnd_error first_unsupported_error;
+	/* First failure plus incompleteness only. This is not an exhaustive cause set. */
+	uint32_t known_feature_union_reason_mask;
+	const char *proof_id;
+	enum tcti_target_completion_proof_state proof_state;
+	uint32_t required_obligations;
+	uint32_t unproved_obligations;
+	const char *kunit_source;
+	const char *kunit_suite;
+	const struct tcti_target_kselftest_provenance *kselftest;
+	enum tcti_target_completion_runtime_candidate_state runtime_candidate_state;
+	uint32_t runtime_candidate_first;
+	uint32_t runtime_candidate_count;
 };
 
 /*
@@ -230,6 +321,16 @@ struct tcti_target_completion_result {
 	size_t invalid_runtime_capability_cohort_rows;
 };
 
+/* Host-test-only dependency injection. It is not a kernel or runtime ABI. */
+struct tcti_target_completion_audit_inputs_for_test {
+	const struct tcti_target_completion_source_row *source;
+	size_t source_count;
+	const struct tcti_target_completion_classification_row *classification;
+	size_t classification_count;
+	const struct tcti_target_proof_registry_entry *registry;
+	size_t registry_count;
+};
+
 int tcti_target_completion_validate(
 	const struct tcti_target_completion_source_row *source,
 	size_t source_count,
@@ -240,6 +341,23 @@ int tcti_target_completion_validate(
 	struct tcti_target_completion_result *result);
 
 int tcti_target_completion_audit(struct tcti_target_completion_result *result);
+
+/*
+ * Run the canonical aggregate audit and, when requested, derive exactly one
+ * immutable obligation row for every source ordinal.  A projection is valid
+ * only with a full 4,350-row caller buffer.  NULL with count zero requests no
+ * projection.
+ */
+int tcti_target_completion_audit_with_obligations(
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations,
+	size_t obligation_count);
+
+int tcti_target_completion_audit_with_inputs_for_test(
+	const struct tcti_target_completion_audit_inputs_for_test *inputs,
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations,
+	size_t obligation_count);
 
 int tcti_target_completion_validate_source_provenance(
 	const struct tcti_target_completion_source_provenance *provenance,

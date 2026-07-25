@@ -21,21 +21,21 @@ static int current_inventory_fails_with_exact_incomplete_counts(void)
 	EXPECT(tcti_target_completion_audit(&result) == -1);
 	EXPECT(result.source_rows == 4350);
 	EXPECT(result.classification_rows == 4350);
-	EXPECT(result.classified_rows == 1085);
-	EXPECT(result.unclassified_rows == 3265);
+	EXPECT(result.classified_rows == 1087);
+	EXPECT(result.unclassified_rows == 3263);
 	EXPECT(result.required_el0_rows == 1076);
-	EXPECT(result.non_el0_rows == 8);
+	EXPECT(result.non_el0_rows == 10);
 	EXPECT(result.undefined_or_unallocated_rows == 1);
 	EXPECT(result.alias_or_duplicate_rows == 0);
 	EXPECT(result.absent_rows == 0);
 	EXPECT(result.stale_rows == 0);
-	EXPECT(result.source_bound_rows == 41);
+	EXPECT(result.source_bound_rows == 43);
 	EXPECT(result.source_unbound_rows == 1044);
 	EXPECT(result.invalid_relationship_rows == 0);
 	EXPECT(result.invalid_source_rows == 0);
 	EXPECT(result.invalid_registry_entries == 0);
 	EXPECT(result.stale_proof_bindings == 196);
-	EXPECT(result.unproved_obligation_bindings == 417);
+	EXPECT(result.unproved_obligation_bindings == 419);
 	EXPECT(result.asl_availability_rows == 4350);
 	EXPECT(result.invalid_asl_availability_rows == 0);
 	EXPECT(result.unavailable_asl_rows == 4350);
@@ -1005,6 +1005,325 @@ static int alias_relationship_does_not_require_source_identity(void)
 	return 0;
 }
 
+static int obligation_projection_rejects_noncanonical_capacity(void)
+{
+	struct tcti_target_completion_obligation obligation = {
+		.ordinal = UINT32_MAX,
+	};
+	struct tcti_target_completion_result result;
+
+	EXPECT(tcti_target_completion_audit_with_obligations(
+		       &result, &obligation,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS - 1U) == -1);
+	EXPECT(obligation.ordinal == UINT32_MAX);
+	EXPECT(tcti_target_completion_audit_with_obligations(&result, NULL, 1) ==
+	       -1);
+	return 0;
+}
+
+static int obligation_projection_matches_canonical_red_audit(void)
+{
+	const struct tcti_target_completion_classification_row *classification;
+	const struct tcti_target_completion_source_row *source;
+	const struct tcti_runtime_capability_cohort_artifact *runtime;
+	struct tcti_target_completion_obligation *obligations;
+	struct tcti_target_completion_result result;
+	size_t classification_count;
+	size_t source_count;
+	size_t absent_asl = 0;
+	size_t missing_configuration = 0;
+	size_t missing_operand = 0;
+	size_t incomplete_union = 0;
+	size_t unresolved_feature = 0;
+	size_t runtime_memberships = 0;
+	size_t unclassified = 0;
+	size_t required = 0;
+	size_t non_el0 = 0;
+	size_t undefined = 0;
+	size_t aliases = 0;
+	size_t index;
+
+	source = tcti_target_completion_source(&source_count);
+	runtime = tcti_runtime_capability_cohort_artifact_canonical();
+	classification =
+		tcti_target_completion_classification(&classification_count);
+	obligations = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+			    sizeof(*obligations));
+	EXPECT(obligations != NULL);
+	EXPECT(tcti_target_completion_audit_with_obligations(
+		       &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(source_count == TCTI_TARGET_COMPLETION_SOURCE_ROWS);
+	EXPECT(runtime != NULL);
+	EXPECT(runtime->counts.leaf_count == source_count);
+	EXPECT(classification_count == TCTI_TARGET_COMPLETION_SOURCE_ROWS);
+	for (index = 0; index < TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++) {
+		EXPECT(obligations[index].ordinal == source[index].ordinal);
+		EXPECT(!strcmp(obligations[index].name, source[index].name));
+		EXPECT(!strcmp(obligations[index].operation_id,
+			       source[index].operation_id));
+		EXPECT(obligations[index].classification ==
+		       classification[index].classification);
+		EXPECT(obligations[index].asl_state ==
+		       TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING);
+		EXPECT(obligations[index].blocker_mask &
+		       TCTI_TARGET_COMPLETION_BLOCKER_ASL);
+		if (obligations[index].asl_state ==
+		    TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING)
+			absent_asl++;
+		if (obligations[index].blocker_mask &
+		    TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION)
+			unresolved_feature++;
+		if (obligations[index].feature_union_state ==
+		    TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION)
+			missing_configuration++;
+		if (obligations[index].feature_union_state ==
+		    TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_OPERAND)
+			missing_operand++;
+		if (obligations[index].known_feature_union_reason_mask &
+		    TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE)
+			incomplete_union++;
+		runtime_memberships += obligations[index].runtime_candidate_count;
+		EXPECT(obligations[index].runtime_candidate_first ==
+		       runtime->leaves[index].first_membership);
+		EXPECT(obligations[index].runtime_candidate_count ==
+		       runtime->leaves[index].membership_count);
+		if (classification[index].classification ==
+		    TCTI_TARGET_COMPLETION_UNCLASSIFIED)
+			unclassified++;
+		switch (obligations[index].classification) {
+		case TCTI_TARGET_COMPLETION_REQUIRED_EL0:
+			required++;
+			break;
+		case TCTI_TARGET_COMPLETION_NON_EL0:
+			non_el0++;
+			break;
+		case TCTI_TARGET_COMPLETION_ARCH_UNDEFINED_OR_UNALLOCATED:
+			undefined++;
+			break;
+		case TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE:
+			aliases++;
+			break;
+		case TCTI_TARGET_COMPLETION_UNCLASSIFIED:
+			break;
+		}
+	}
+	EXPECT(unclassified == result.unclassified_rows);
+	EXPECT(required == result.required_el0_rows);
+	EXPECT(non_el0 == result.non_el0_rows);
+	EXPECT(undefined == result.undefined_or_unallocated_rows);
+	EXPECT(aliases == result.alias_or_duplicate_rows);
+	EXPECT(absent_asl == result.unavailable_asl_rows);
+	EXPECT(unresolved_feature == result.unresolved_feature_applicability_rows);
+	EXPECT(missing_configuration ==
+	       result.unresolved_feature_configuration_rows);
+	EXPECT(missing_operand == result.unresolved_instruction_operand_rows);
+	EXPECT(incomplete_union == TCTI_TARGET_COMPLETION_SOURCE_ROWS);
+	EXPECT(runtime_memberships ==
+	       result.runtime_capability_cohort_candidate_membership_rows);
+	/* Ordinal zero is a feature-conditioned, still-unclassified SVE leaf. */
+	EXPECT(obligations[0].classification ==
+	       TCTI_TARGET_COMPLETION_UNCLASSIFIED);
+	EXPECT(obligations[0].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_UNCLASSIFIED);
+	EXPECT(obligations[0].feature_union_state ==
+	       TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION);
+	EXPECT(obligations[0].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION);
+	EXPECT(obligations[0].proof_state == TCTI_TARGET_COMPLETION_PROOF_NONE);
+	EXPECT(obligations[0].runtime_candidate_state ==
+	       TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_UNRESOLVED);
+	/* A real registry binding remains red until native execution discharges it. */
+	EXPECT(obligations[2300].classification ==
+	       TCTI_TARGET_COMPLETION_NON_EL0);
+	EXPECT(!strcmp(obligations[2300].proof_id,
+	       "kunit:source-leaf-ereta-non-el0"));
+	EXPECT(obligations[2300].proof_state ==
+	       TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED);
+	EXPECT(obligations[2300].unproved_obligations != 0U);
+	EXPECT(obligations[2300].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS);
+	EXPECT(obligations[2300].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
+	free(obligations);
+	return 0;
+}
+
+static int obligation_projection_retains_exact_ereta_delta(void)
+{
+	struct tcti_target_completion_obligation *obligations;
+	struct tcti_target_completion_result result;
+	size_t non_el0 = 0;
+	size_t source_bound = 0;
+	size_t unproved = 0;
+	size_t index;
+
+	obligations = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+			    sizeof(*obligations));
+	EXPECT(obligations != NULL);
+	EXPECT(tcti_target_completion_audit_with_obligations(
+		       &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	for (index = 0; index < TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++) {
+		if (obligations[index].classification ==
+		    TCTI_TARGET_COMPLETION_NON_EL0)
+			non_el0++;
+		if (obligations[index].proof_state ==
+		    TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED ||
+		    obligations[index].proof_state ==
+		    TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA)
+			source_bound++;
+		if (obligations[index].unproved_obligations)
+			unproved++;
+	}
+	EXPECT(non_el0 == result.non_el0_rows);
+	EXPECT(source_bound == result.source_bound_rows);
+	EXPECT(unproved == result.unproved_obligation_bindings);
+	for (index = 2300; index <= 2301; index++) {
+		EXPECT(obligations[index].classification ==
+		       TCTI_TARGET_COMPLETION_NON_EL0);
+		EXPECT(obligations[index].proof_state ==
+		       TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED);
+		EXPECT(obligations[index].blocker_mask &
+		       TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS);
+		EXPECT(obligations[index].blocker_mask &
+		       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
+	}
+	EXPECT(result.non_el0_rows == 10U);
+	EXPECT(result.source_bound_rows == 43U);
+	EXPECT(result.unproved_obligation_bindings == 419U);
+	free(obligations);
+	return 0;
+}
+
+static int malformed_projection_dependencies_leave_output_untouched(void)
+{
+	const struct tcti_target_completion_source_row *source;
+	const struct tcti_target_completion_classification_row *classification;
+	const struct tcti_target_proof_registry_entry *registry;
+	struct tcti_target_completion_source_row *source_copy;
+	struct tcti_target_completion_classification_row *classification_copy;
+	struct tcti_target_proof_registry_entry *registry_copy;
+	struct tcti_target_completion_audit_inputs_for_test inputs;
+	struct tcti_target_completion_obligation *before;
+	struct tcti_target_completion_obligation *obligations;
+	struct tcti_target_completion_result result;
+	size_t source_count;
+	size_t classification_count;
+	size_t registry_count;
+	size_t bytes = TCTI_TARGET_COMPLETION_SOURCE_ROWS * sizeof(*obligations);
+
+	source = tcti_target_completion_source(&source_count);
+	classification =
+		tcti_target_completion_classification(&classification_count);
+	registry = tcti_target_proof_registry_entries(&registry_count);
+	source_copy = malloc(source_count * sizeof(*source_copy));
+	classification_copy = malloc(classification_count * sizeof(*classification_copy));
+	registry_copy = malloc(registry_count * sizeof(*registry_copy));
+	before = malloc(bytes);
+	obligations = malloc(bytes);
+	EXPECT(source_copy != NULL);
+	EXPECT(classification_copy != NULL);
+	EXPECT(registry_copy != NULL);
+	EXPECT(before != NULL);
+	EXPECT(obligations != NULL);
+	memcpy(source_copy, source, source_count * sizeof(*source_copy));
+	memcpy(classification_copy, classification,
+	       classification_count * sizeof(*classification_copy));
+	memcpy(registry_copy, registry, registry_count * sizeof(*registry_copy));
+	memset(obligations, 0xa5, bytes);
+	memcpy(before, obligations, bytes);
+	inputs = (struct tcti_target_completion_audit_inputs_for_test) {
+		.source = source_copy,
+		.source_count = source_count,
+		.classification = classification_copy,
+		.classification_count = classification_count,
+		.registry = registry_copy,
+		.registry_count = registry_count,
+	};
+
+	source_copy[0].name = NULL;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.invalid_source_rows != 0U);
+	EXPECT(!memcmp(obligations, before, bytes));
+	source_copy[0] = source[0];
+
+	classification_copy[0].relation = TCTI_TARGET_COMPLETION_RELATION_ALIAS;
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.invalid_relationship_rows != 0U);
+	EXPECT(!memcmp(obligations, before, bytes));
+	classification_copy[0] = classification[0];
+
+	registry_copy[0].id = "";
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(result.invalid_registry_entries != 0U);
+	EXPECT(!memcmp(obligations, before, bytes));
+	free(obligations);
+	free(before);
+	free(registry_copy);
+	free(classification_copy);
+	free(source_copy);
+	return 0;
+}
+
+static int static_proof_metadata_never_becomes_execution_evidence(void)
+{
+	const struct tcti_target_completion_source_row *source;
+	const struct tcti_target_completion_classification_row *classification;
+	const struct tcti_target_proof_registry_entry *registry;
+	struct tcti_target_proof_registry_entry *registry_copy;
+	struct tcti_target_completion_audit_inputs_for_test inputs;
+	struct tcti_target_completion_obligation *obligations;
+	struct tcti_target_completion_result result;
+	size_t source_count;
+	size_t classification_count;
+	size_t registry_count;
+	size_t index;
+
+	source = tcti_target_completion_source(&source_count);
+	classification =
+		tcti_target_completion_classification(&classification_count);
+	registry = tcti_target_proof_registry_entries(&registry_count);
+	registry_copy = malloc(registry_count * sizeof(*registry_copy));
+	obligations = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+			    sizeof(*obligations));
+	EXPECT(registry_copy != NULL);
+	EXPECT(obligations != NULL);
+	memcpy(registry_copy, registry, registry_count * sizeof(*registry_copy));
+	for (index = 0; index < registry_count; index++)
+		if (!strcmp(registry_copy[index].id,
+			    "kunit:source-leaf-ereta-non-el0"))
+			break;
+	EXPECT(index < registry_count);
+	registry_copy[index].unproved_obligations = 0;
+	inputs = (struct tcti_target_completion_audit_inputs_for_test) {
+		.source = source,
+		.source_count = source_count,
+		.classification = classification,
+		.classification_count = classification_count,
+		.registry = registry_copy,
+		.registry_count = registry_count,
+	};
+	EXPECT(tcti_target_completion_audit_with_inputs_for_test(
+		       &inputs, &result, obligations,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS) == -1);
+	EXPECT(obligations[2300].proof_state ==
+	       TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA);
+	EXPECT(obligations[2300].blocker_mask &
+	       TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE);
+	EXPECT(!(obligations[2300].blocker_mask &
+		 TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS));
+	free(obligations);
+	free(registry_copy);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -1068,6 +1387,16 @@ int main(void)
 		  unproven_available_asl_status_fails_hard },
 		{ "alias_relationship_does_not_require_source_identity",
 		  alias_relationship_does_not_require_source_identity },
+		{ "obligation_projection_rejects_noncanonical_capacity",
+		  obligation_projection_rejects_noncanonical_capacity },
+		{ "obligation_projection_matches_canonical_red_audit",
+		  obligation_projection_matches_canonical_red_audit },
+		{ "obligation_projection_retains_exact_ereta_delta",
+		  obligation_projection_retains_exact_ereta_delta },
+		{ "malformed_projection_dependencies_leave_output_untouched",
+		  malformed_projection_dependencies_leave_output_untouched },
+		{ "static_proof_metadata_never_becomes_execution_evidence",
+		  static_proof_metadata_never_becomes_execution_evidence },
 	};
 	size_t index;
 

@@ -666,3 +666,13 @@ fixed-field span with exact condition, bit range, mask, value, source span, and
 pinned-source locator. Canonical tests cover `opc` on ordinals 203 through 205
 and `op21` on ordinals 2169 and 2170, plus adversarial artifact mutations. This
 remains provenance infrastructure and grants no semantic or proof credit.
+
+## [2026-07-25] test | Project every TCTI target leaf obligation
+
+Added a transactional C-native projection for all 4,350 target leaves from the
+canonical completion audit. Each ordinal retains source identity, classification,
+ASL availability, known feature-union reasons, proof metadata, unproved duties,
+execution-evidence blockers, and runtime-candidate provenance. Malformed source,
+classification, or registry inputs leave caller output untouched. Every row
+remains blocked on the incomplete authoritative feature-configuration union,
+and static KUnit registration cannot become execution proof.

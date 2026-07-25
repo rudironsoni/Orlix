@@ -5,6 +5,7 @@
 #include "target_instruction_artifact.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define stringify_1(value) #value
@@ -138,6 +139,26 @@ static bool empty(const char *text)
 
 static void record_error(struct tcti_target_completion_result *result,
 			 uint32_t error);
+static int completion_audit_internal(
+	const struct tcti_target_completion_audit_inputs_for_test *inputs,
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations);
+
+static bool completion_projection_dependencies_valid(
+	const struct tcti_target_completion_result *result)
+{
+	return result && !result->invalid_source_rows &&
+		!result->absent_rows && !result->stale_rows &&
+		!result->invalid_relationship_rows &&
+		!result->invalid_source_provenance &&
+		!result->invalid_registry_entries &&
+		!result->invalid_asl_availability_rows &&
+		!result->invalid_system_accessor_rows &&
+		!result->invalid_feature_field_domain_rows &&
+		!result->invalid_runtime_capability_cohort_rows &&
+		!result->invalid_feature_artifact &&
+		!result->invalid_source_condition_rows;
+}
 
 static int hex_nibble(char character, unsigned int *value)
 {
@@ -188,7 +209,8 @@ static bool source_condition_matches_artifact(
 
 static void validate_source_feature_domain(
 	const struct tcti_target_completion_source_row *source,
-	size_t source_count, struct tcti_target_completion_result *result)
+	size_t source_count, struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations)
 {
 	const struct tcti_feature_artifact *feature_artifact =
 		tcti_feature_artifact_canonical();
@@ -242,6 +264,16 @@ static void validate_source_feature_domain(
 			result->invalid_source_condition_rows++;
 			record_error(result,
 				     TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
+			if (obligations) {
+				obligations[index].blocker_mask |=
+					TCTI_TARGET_COMPLETION_BLOCKER_SOURCE_CONDITION;
+				obligations[index].feature_union_state =
+					TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID;
+				obligations[index].first_unsupported_error =
+					TCTI_FEATURE_DOMAIN_TCND_INVALID_ARGUMENT;
+				obligations[index].known_feature_union_reason_mask |=
+					TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID;
+			}
 			continue;
 		}
 		result->source_condition_domain_bound_rows++;
@@ -267,6 +299,35 @@ static void validate_source_feature_domain(
 				result->invalid_feature_applicability_rows++;
 				break;
 			}
+			if (obligations) {
+				obligations[index].first_unsupported_error =
+					applicability.first_unsupported.error;
+				switch (applicability.first_unsupported.error) {
+				case TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
+					obligations[index].feature_union_state =
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION;
+					obligations[index].known_feature_union_reason_mask |=
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_FEATURE;
+					break;
+				case TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
+					obligations[index].feature_union_state =
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_OPERAND;
+					obligations[index].known_feature_union_reason_mask |=
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_OPERAND;
+					break;
+				default:
+					obligations[index].feature_union_state =
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_UNRESOLVED;
+					obligations[index].known_feature_union_reason_mask |=
+						TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID;
+					break;
+				}
+				obligations[index].blocker_mask |=
+					TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION |
+					TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
+				obligations[index].known_feature_union_reason_mask |=
+					TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
+			}
 			record_error(result,
 				TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
 		} else {
@@ -276,6 +337,17 @@ static void validate_source_feature_domain(
 				applicability.satisfied_count;
 			result->unsatisfied_feature_applicability_rows +=
 				applicability.unsatisfied_count;
+			if (obligations) {
+				obligations[index].first_unsupported_error =
+					TCTI_FEATURE_DOMAIN_TCND_OK;
+				obligations[index].feature_union_state =
+					TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED;
+				/* No authoritative configuration union exists yet. */
+				obligations[index].blocker_mask |=
+					TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
+				obligations[index].known_feature_union_reason_mask |=
+					TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
+			}
 		}
 	}
 }
@@ -1230,47 +1302,7 @@ int tcti_target_completion_validate_source_provenance(
 
 int tcti_target_completion_audit(struct tcti_target_completion_result *result)
 {
-	const struct tcti_target_proof_registry_entry *registry;
-	int status;
-	size_t registry_count;
-
-	if (!result)
-		return -1;
-
-	registry = tcti_target_proof_registry_entries(&registry_count);
-	status = tcti_target_completion_validate(
-		source_rows, sizeof(source_rows) / sizeof(source_rows[0]),
-		classification_rows,
-		sizeof(classification_rows) / sizeof(classification_rows[0]),
-		registry, registry_count, result);
-	if (tcti_target_completion_validate_source_provenance(
-		    &source_provenance, result))
-		status = -1;
-	if (tcti_target_completion_validate_asl_availability(
-		    source_rows, sizeof(source_rows) / sizeof(source_rows[0]),
-		    &asl_provenance, asl_rows,
-		    sizeof(asl_rows) / sizeof(asl_rows[0]), result))
-		status = -1;
-	if (tcti_target_completion_validate_system_accessors(
-		    source_rows, sizeof(source_rows) / sizeof(source_rows[0]),
-		    &system_accessor_provenance, system_accessor_rows,
-		    sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]),
-		    result))
-		status = -1;
-	if (tcti_target_completion_validate_feature_field_domains(
-		    tcti_feature_artifact_canonical(),
-		    tcti_feature_field_domain_binding_artifact_canonical(), result))
-		status = -1;
-	if (tcti_target_completion_validate_runtime_capability_cohorts(
-		    tcti_runtime_capability_cohort_artifact_canonical(), result))
-		status = -1;
-	validate_source_feature_domain(source_rows,
-			       sizeof(source_rows) / sizeof(source_rows[0]), result);
-	if (result->invalid_feature_artifact ||
-	    result->invalid_source_condition_rows ||
-	    result->unresolved_feature_applicability_rows)
-		status = -1;
-	return status;
+	return completion_audit_internal(NULL, result, NULL);
 }
 
 const struct tcti_target_completion_source_provenance *
@@ -1325,4 +1357,277 @@ tcti_target_completion_classification(size_t *count)
 			sizeof(classification_rows) /
 			sizeof(classification_rows[0]);
 	return classification_rows;
+}
+
+static const struct tcti_target_proof_registry_entry *
+completion_registry_entry(const struct tcti_target_proof_registry_entry *registry,
+				  size_t registry_count, const char *id)
+{
+	size_t index;
+
+	if (empty(id))
+		return NULL;
+	for (index = 0; index < registry_count; index++)
+		if (!strcmp(registry[index].id, id))
+			return &registry[index];
+	return NULL;
+}
+
+static bool completion_alias_proof_resolves(
+	size_t ordinal, const struct tcti_target_proof_registry_entry *registry,
+	size_t registry_count)
+{
+	const struct tcti_target_completion_classification_row *row =
+		&classification_rows[ordinal];
+	size_t canonical_source;
+	size_t canonical_classification;
+
+	if (!valid_alias_relationship(source_rows,
+				      sizeof(source_rows) / sizeof(source_rows[0]),
+				      classification_rows,
+				      sizeof(classification_rows) / sizeof(classification_rows[0]),
+				      ordinal) ||
+	    !registry_binds_source(registry, registry_count, row->proof_id,
+				   &source_rows[ordinal]))
+		return false;
+	canonical_source = find_source(source_rows,
+				       sizeof(source_rows) / sizeof(source_rows[0]),
+				       row->canonical_name);
+	canonical_classification = find_classification(classification_rows,
+						 sizeof(classification_rows) /
+						 sizeof(classification_rows[0]),
+						 row->canonical_name);
+	return canonical_source < sizeof(source_rows) / sizeof(source_rows[0]) &&
+		canonical_classification < sizeof(classification_rows) /
+			sizeof(classification_rows[0]) &&
+		source_proof_binding_resolves(&source_rows[canonical_source],
+					     &classification_rows[canonical_classification],
+					     registry, registry_count);
+}
+
+static void completion_project_obligation(
+	size_t ordinal, const struct tcti_target_proof_registry_entry *registry,
+	size_t registry_count,
+	const struct tcti_runtime_capability_cohort_artifact *runtime,
+	struct tcti_target_completion_obligation *obligation)
+{
+	const struct tcti_target_completion_source_row *source = &source_rows[ordinal];
+	const struct tcti_target_completion_classification_row *classification =
+		&classification_rows[ordinal];
+	const struct tcti_target_completion_asl_row *asl = &asl_rows[ordinal];
+	const struct tcti_target_proof_registry_entry *entry;
+	const struct tcti_runtime_capability_cohort_leaf *runtime_leaf;
+	bool proof_resolves = false;
+
+	memset(obligation, 0, sizeof(*obligation));
+	obligation->ordinal = source->ordinal;
+	obligation->name = source->name;
+	obligation->mnemonic = source->mnemonic;
+	obligation->operation_id = source->operation_id;
+	obligation->classification = classification->classification;
+	obligation->relation = classification->relation;
+	obligation->canonical_name = classification->canonical_name;
+	obligation->asl_operation_object = asl->operation_object;
+	obligation->proof_id = classification->proof_id;
+
+	if (classification->classification ==
+	    TCTI_TARGET_COMPLETION_UNCLASSIFIED) {
+		obligation->blocker_mask |=
+			TCTI_TARGET_COMPLETION_BLOCKER_UNCLASSIFIED;
+	} else if (classification->classification ==
+		   TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE ?
+		   !valid_alias_relationship(source_rows,
+				     sizeof(source_rows) / sizeof(source_rows[0]),
+				     classification_rows,
+				     sizeof(classification_rows) /
+				     sizeof(classification_rows[0]), ordinal) :
+		   !valid_non_alias_relationship(classification)) {
+		obligation->blocker_mask |=
+			TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP;
+	}
+
+	if (!strcmp(asl->availability, "shared_asl_absent_blocking")) {
+		obligation->asl_state =
+			TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING;
+	} else {
+		obligation->asl_state = TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE;
+	}
+	obligation->blocker_mask |= TCTI_TARGET_COMPLETION_BLOCKER_ASL;
+
+	entry = completion_registry_entry(registry, registry_count,
+					 obligation->proof_id);
+	if (!entry) {
+		obligation->proof_state = TCTI_TARGET_COMPLETION_PROOF_NONE;
+		obligation->blocker_mask |= TCTI_TARGET_COMPLETION_BLOCKER_PROOF;
+	} else {
+		obligation->required_obligations = entry->obligations;
+		obligation->unproved_obligations = entry->unproved_obligations;
+		obligation->kunit_source = entry->kunit_source;
+		obligation->kunit_suite = entry->kunit_suite;
+		obligation->kselftest = entry->kselftest;
+		/* Registry provenance never observes native test execution. */
+		obligation->blocker_mask |=
+			TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE;
+		if (classification->classification ==
+		    TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE)
+			proof_resolves = completion_alias_proof_resolves(ordinal,
+								 registry, registry_count);
+		else
+			proof_resolves = source_proof_binding_resolves(source,
+				classification, registry, registry_count);
+		if (!proof_resolves) {
+			obligation->proof_state = TCTI_TARGET_COMPLETION_PROOF_STALE;
+			obligation->blocker_mask |=
+				TCTI_TARGET_COMPLETION_BLOCKER_PROOF;
+		} else if (entry->unproved_obligations) {
+			obligation->proof_state =
+				TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED;
+			obligation->blocker_mask |=
+				TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS;
+	} else {
+		obligation->proof_state =
+			TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA;
+	}
+	}
+
+	runtime_leaf = &runtime->leaves[ordinal];
+	obligation->runtime_candidate_first = runtime_leaf->first_membership;
+	obligation->runtime_candidate_count = runtime_leaf->membership_count;
+	if (runtime_leaf->membership_count) {
+		obligation->runtime_candidate_state =
+			TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_UNRESOLVED;
+		obligation->blocker_mask |=
+			TCTI_TARGET_COMPLETION_BLOCKER_RUNTIME_CANDIDATE;
+	} else {
+		obligation->runtime_candidate_state =
+			TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_NONE;
+	}
+}
+
+static int completion_audit_internal(
+	const struct tcti_target_completion_audit_inputs_for_test *inputs,
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations)
+{
+	const struct tcti_target_proof_registry_entry *registry;
+	const struct tcti_runtime_capability_cohort_artifact *runtime;
+	struct tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
+	int status;
+	size_t registry_count;
+	size_t index;
+	const struct tcti_target_completion_source_row *source = source_rows;
+	const struct tcti_target_completion_classification_row *classification =
+		classification_rows;
+	size_t source_count = sizeof(source_rows) / sizeof(source_rows[0]);
+	size_t classification_count =
+		sizeof(classification_rows) / sizeof(classification_rows[0]);
+
+	if (!result)
+		return -1;
+	/* Validate before touching caller output, so malformed runtime input is atomic. */
+	runtime = tcti_runtime_capability_cohort_artifact_canonical();
+	if (!runtime || tcti_runtime_capability_cohort_artifact_validate(
+			    runtime, &runtime_diagnostic))
+		return -1;
+	registry = tcti_target_proof_registry_entries(&registry_count);
+	if (inputs) {
+		source = inputs->source;
+		source_count = inputs->source_count;
+		classification = inputs->classification;
+		classification_count = inputs->classification_count;
+		registry = inputs->registry;
+		registry_count = inputs->registry_count;
+	}
+	if (obligations)
+		for (index = 0; index < TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++)
+			completion_project_obligation(index, registry, registry_count,
+					      runtime, &obligations[index]);
+	status = tcti_target_completion_validate(
+		source, source_count, classification, classification_count,
+		registry, registry_count, result);
+	if (tcti_target_completion_validate_source_provenance(
+		    &source_provenance, result))
+		status = -1;
+	if (tcti_target_completion_validate_asl_availability(
+		    source, source_count,
+		    &asl_provenance, asl_rows,
+		    sizeof(asl_rows) / sizeof(asl_rows[0]), result))
+		status = -1;
+	if (tcti_target_completion_validate_system_accessors(
+		    source, source_count,
+		    &system_accessor_provenance, system_accessor_rows,
+		    sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]),
+		    result))
+		status = -1;
+	if (tcti_target_completion_validate_feature_field_domains(
+		    tcti_feature_artifact_canonical(),
+		    tcti_feature_field_domain_binding_artifact_canonical(), result))
+		status = -1;
+	if (tcti_target_completion_validate_runtime_capability_cohorts(runtime,
+								 result))
+		status = -1;
+	validate_source_feature_domain(source, source_count, result,
+			       obligations);
+	if (result->invalid_feature_artifact ||
+	    result->invalid_source_condition_rows ||
+	    result->unresolved_feature_applicability_rows)
+		status = -1;
+	return status;
+}
+
+int tcti_target_completion_audit_with_obligations(
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations,
+	size_t obligation_count)
+{
+	if (!result || (obligations &&
+			obligation_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS) ||
+		(!obligations && obligation_count))
+		return -1;
+	return tcti_target_completion_audit_with_inputs_for_test(
+		NULL, result, obligations, obligation_count);
+}
+
+int tcti_target_completion_audit_with_inputs_for_test(
+	const struct tcti_target_completion_audit_inputs_for_test *inputs,
+	struct tcti_target_completion_result *result,
+	struct tcti_target_completion_obligation *obligations,
+	size_t obligation_count)
+{
+	struct tcti_target_completion_audit_inputs_for_test canonical_inputs;
+	const struct tcti_target_completion_audit_inputs_for_test *effective =
+		inputs;
+	struct tcti_target_completion_obligation *staging;
+	int status;
+	size_t registry_count;
+
+	if (!result || (obligations &&
+			obligation_count != TCTI_TARGET_COMPLETION_SOURCE_ROWS) ||
+		(!obligations && obligation_count))
+		return -1;
+	if (!effective) {
+		canonical_inputs =
+			(struct tcti_target_completion_audit_inputs_for_test) {
+				.source = source_rows,
+				.source_count = sizeof(source_rows) / sizeof(source_rows[0]),
+				.classification = classification_rows,
+				.classification_count = sizeof(classification_rows) /
+					sizeof(classification_rows[0]),
+				.registry = tcti_target_proof_registry_entries(&registry_count),
+				.registry_count = registry_count,
+			};
+		effective = &canonical_inputs;
+	}
+	if (!obligations)
+		return completion_audit_internal(effective, result, NULL);
+	staging = calloc(TCTI_TARGET_COMPLETION_SOURCE_ROWS, sizeof(*staging));
+	if (!staging)
+		return -1;
+	status = completion_audit_internal(effective, result, staging);
+	/* Completion blockers are expected. Malformed dependencies are not. */
+	if (completion_projection_dependencies_valid(result))
+		memcpy(obligations, staging,
+		       TCTI_TARGET_COMPLETION_SOURCE_ROWS * sizeof(*staging));
+	free(staging);
+	return status;
 }
