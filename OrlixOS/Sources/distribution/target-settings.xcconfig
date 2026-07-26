@@ -4,24 +4,20 @@ ORLIX_OS_PRODUCT_ROOT_IMAGE_ROLE = product
 ORLIX_OS_KSELFTEST_ROOT_IMAGE_IDENTIFIER = orlix.test.kselftest.rootfs
 ORLIX_OS_KSELFTEST_ROOT_IMAGE_ROLE = kernel
 ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_NAME = OrlixTestInitramfs
-ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.OrlixTestInitramfs
+ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.orlix.os.kselftest-initramfs
 ORLIX_OS_KSELFTEST_INITRAMFS_SOURCE_ROOT = Build/OrlixMLibC/test-initramfs
 ORLIX_OS_MLIBC_ROOT_IMAGE_IDENTIFIER = orlix.test.mlibc.rootfs
 ORLIX_OS_MLIBC_ROOT_IMAGE_ROLE = mlibc
 ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_NAME = OrlixMLibCTestInitramfs
-ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.OrlixMLibCTestInitramfs
+ORLIX_OS_MLIBC_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.orlix.os.mlibc-test-initramfs
 ORLIX_OS_MLIBC_INITRAMFS_SOURCE_ROOT = Build/OrlixMLibC/test-initramfs
 ORLIX_OS_COREUTILS_ROOT_IMAGE_IDENTIFIER = orlix.test.coreutils.rootfs
 ORLIX_OS_COREUTILS_ROOT_IMAGE_ROLE = coreutils
 ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_NAME = CoreutilsTestInitramfs
-ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.CoreutilsTestInitramfs
+ORLIX_OS_COREUTILS_INITRAMFS_BUNDLE_IDENTIFIER = com.rudironsoni.orlix.os.coreutils-test-initramfs
 ORLIX_OS_COREUTILS_INITRAMFS_SOURCE_ROOT = Build/OrlixOS/test-initramfs
 ORLIX_OS_TEST_INITRAMFS_RESOURCE = rootfs/initramfs.cpio.gz
 ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION = bundle
-ORLIX_OS_PAYLOAD_BUNDLE_NAME = OrlixOSPayload
-ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION = bundle
-ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME = OrlixKernelPayload
-ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_IDENTIFIER = com.rudironsoni.OrlixKernelPayload
 ORLIX_OS_PAYLOAD_SELECTED_PROFILE_INFO_KEY = OrlixSelectedProfile
 ORLIX_OS_PAYLOAD_KERNEL_COMMAND_LINE_INFO_KEY = OrlixKernelCommandLine
 ORLIX_OS_PAYLOAD_ROOT_INITRAMFS_INFO_KEY = OrlixRootInitramfs
@@ -41,6 +37,9 @@ ORLIX_OS_RELEASE_ROOT_MODE = direct
 ORLIX_OS_DEVELOPMENT_ROOT_MODE = overlay
 ORLIX_OS_RELEASE_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 root=/dev/vda rootfstype=ext4 ro orlix.profile=release
 ORLIX_OS_DEVELOPMENT_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=overlay debug ignore_loglevel orlix.profile=development
+ORLIX_OS_KERNEL_COMMAND_LINE_release = $(ORLIX_OS_RELEASE_KERNEL_COMMAND_LINE)
+ORLIX_OS_KERNEL_COMMAND_LINE_development = $(ORLIX_OS_DEVELOPMENT_KERNEL_COMMAND_LINE)
+ORLIX_OS_KERNEL_COMMAND_LINE = $(ORLIX_OS_KERNEL_COMMAND_LINE_$(ORLIX_PROFILE))
 ORLIX_OS_RELEASE_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.root.readonly=1 orlix.hostname=oci-host orlix.domainname=oci.example orlix.profile=release
 ORLIX_OS_DEVELOPMENT_TEST_INITRAMFS_KERNEL_COMMAND_LINE = console=ttyS0 console=hvc0 rdinit=/init orlix.root=initramfs-only orlix.root.readonly=1 orlix.hostname=oci-host orlix.domainname=oci.example debug ignore_loglevel orlix.profile=development
 ORLIX_OS_TEST_INITRAMFS_KERNEL_COMMAND_LINE_release = $(ORLIX_OS_RELEASE_TEST_INITRAMFS_KERNEL_COMMAND_LINE)

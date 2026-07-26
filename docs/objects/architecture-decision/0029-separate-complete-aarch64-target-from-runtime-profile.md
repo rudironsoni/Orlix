@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-24
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0029"
 summary: "Separate the complete AArch64 ISA-on-ISA target inventory from the Linux runtime HWCAP projection."
@@ -12,7 +12,7 @@ part_of:
 amends:
   - "[ADR 0022](0022-use-hosted-linux-elf-execution.md)"
 targets:
-  - "[TCTI](../software-component/tcti.md)"
+  - "[OrlixTCTI](../software-component/orlixtcti.md)"
 ---
 
 # ADR 0029: Separate Complete AArch64 Target From Runtime Profile

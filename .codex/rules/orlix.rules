@@ -1,4 +1,4 @@
-# Project-local Codex command rules for OrlixSystem.
+# Project-local Codex command rules for Orlix.
 #
 # rtk only changes command output shape. Rules cover bare, rtk, and rtk proxy
 # forms when the side effect is the same.

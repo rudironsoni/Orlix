@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0013"
 summary: "Durable Orlix architecture decision ADR 0013."
@@ -25,9 +25,9 @@ Orlix cannot validate the product direction without building and testing through
 
 `OrlixKernel.xcframework` packaging is Milestone 3 and must package or link the app-hosted OrlixKernel integration for the selected profile. Boot-stub packaging is not product proof.
 
-Each XCFramework slice contains a real iOS Mach-O framework or static-library wrapper plus the private OrlixKernel runtime integration and boot resources needed by the iOS host path. A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, and not libc proof.
+Each XCFramework slice contains a real iOS Mach-O static library plus the private OrlixKernel runtime integration and boot resources needed by the iOS host path. A `vmlinux`-style artifact may exist only as an optional developer/debug artifact with a named consumer. It is not a milestone, not product proof, not runtime proof, and not libc proof.
 
-Each `OrlixKernel` framework build packages one selected profile's kernel integration. Closed built-in profile DTBs may all be bundled with the kernel framework as machine-description resources. Product rootfs and distribution payload resources are delivered by the `OrlixOS` Kit/framework.
+Each private static `OrlixKernel.xcframework` build packages one selected profile's kernel integration. Closed built-in profile DTBs may be bundled with that implementation artifact as machine-description resources. Product rootfs and distribution resources belong directly to the sole public `OrlixOS.xcframework`; there is no separate payload bundle.
 
 ## Consequences
 
@@ -37,7 +37,7 @@ Packaging proof is separate from execution proof: it proves the product artifact
 
 Packaging multiple profile-specific hosted integrations into one framework would blur proof and increase product surface. Build separate framework artifacts when a different profile kernel integration is needed.
 
-The lower-level boot entrypoint lives in the iOS wrapper header under `OrlixKernel/Sources/include`. Apps consume the `OrlixOS` Kit for the delivered OS session API and payload surface. Private kernel resources carry hosted kernel integration inputs and bundled built-in profile DTBs; curated OS payload resources are `OrlixOS` resources resolved from target metadata.
+The lower-level boot entrypoint lives in the iOS wrapper header under `OrlixKernel/Sources/include`. Apps consume the sole public `OrlixOS.xcframework` for the delivered OS session API and distribution resources. Private kernel resources carry hosted kernel integration inputs and bundled built-in profile DTBs; curated OS resources belong directly to OrlixOS rather than a separate payload bundle or target-selected payload identity.
 
 The test initramfs belongs to the XCTest host app bundle and owning project `Tests` tree. It may be addressed through an opaque resource identifier during tests, but it is not part of the product framework contract.
 

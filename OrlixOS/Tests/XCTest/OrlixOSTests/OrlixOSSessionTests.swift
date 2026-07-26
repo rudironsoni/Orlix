@@ -4,10 +4,112 @@ import zlib
 
 final class OrlixOSSessionTests: XCTestCase {
 
-    func testLinuxSessionExposesTypedBootProgress() {
+    func testSharedOSExposesStableDefaultMachine() {
+        let directory = OrlixOS.shared
+        let machine = directory.defaultMachine
+
+        XCTAssertTrue(directory === OrlixOS.shared)
+        XCTAssertEqual(directory.machines.map(\.id), ["default"])
+        XCTAssertTrue(directory.machine(id: "default") === machine)
+        XCTAssertNil(directory.machine(id: "missing"))
+        XCTAssertEqual(machine.id, "default")
+        XCTAssertEqual(machine.name, "Default Machine")
+        XCTAssertEqual(machine.containers.machineID, "default")
+    }
+
+    func testContainersAndTerminalsReportUnavailableBackendsHonestly() {
+        let directory = OrlixOS.shared
+        let machine = directory.defaultMachine
+        let containers = directory.containers(for: machine)
+
+        XCTAssertTrue(containers === machine.containers)
+        XCTAssertEqual(containers.backendState, .unavailable)
+        XCTAssertEqual(containers.all, [])
+        XCTAssertNil(containers.container(id: "missing"))
+        XCTAssertTrue(directory.terminals(for: machine).isEmpty)
+    }
+
+    func testDirectoryProjectsProcessesFromContainerSnapshots() {
+        let process = OrlixOS.Containers.Process(
+            id: "process-1",
+            arguments: ["/bin/sh"],
+            state: .running(pid: 42),
+            terminalSessionID: "terminal-1"
+        )
+        let container = OrlixOS.Containers.Container(
+            id: "container-1",
+            imageReference: "registry.example/orlix:latest",
+            state: .running,
+            processes: [process]
+        )
+
+        XCTAssertEqual(OrlixOS.shared.processes(for: container), [process])
+    }
+
+    func testTerminalSessionStaysOpaqueUntilHerdrBindsIt() {
+        let session = OrlixTerminalSession(
+            id: "session-1",
+            transport: RecordingTerminalTransport()
+        )
+
+        XCTAssertEqual(session.id, "session-1")
+        XCTAssertEqual(session.backendState, .unbound)
+    }
+
+    func testSessionSourceKeepsKernelSessionOutOfPublicAPI() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Session/OrlixOS.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("final class OrlixKernelSession"))
+        XCTAssertTrue(source.contains("@_spi(OrlixPrivateTesting)\npublic final class OrlixKernelSession"))
+        XCTAssertFalse(source.contains("public final class Workspace"))
+        XCTAssertFalse(source.contains("public final class Tab"))
+        XCTAssertFalse(source.contains("public final class Pane"))
+        XCTAssertFalse(source.contains("initialWorkspace"))
+        XCTAssertFalse(source.contains("Bundle(url:"))
+        XCTAssertFalse(source.contains("OrlixOS" + "Payload"))
+    }
+
+    func testLegacyOCIAndEnvironmentDeclarationsRequirePrivateTestingSPI() throws {
+        let sessionSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Session")
+
+        for filename in ["OrlixEnvironment.swift", "OrlixOCIImageLayout.swift", "OrlixOS.swift"] {
+            let source = try String(
+                contentsOf: sessionSources.appendingPathComponent(filename),
+                encoding: .utf8
+            )
+            let lines = source.components(separatedBy: .newlines)
+
+            for (index, line) in lines.enumerated() where line.hasPrefix("public ") {
+                let isLegacyDeclaration = line.contains(" OrlixOCI")
+                    || line.contains(" OrlixEnvironment")
+                    || line.hasPrefix("public enum OrlixLinuxSignal")
+                guard isLegacyDeclaration else { continue }
+
+                XCTAssertGreaterThan(index, 0, "\(filename):\(index + 1)")
+                XCTAssertEqual(
+                    lines[index - 1],
+                    "@_spi(OrlixPrivateTesting)",
+                    "\(filename):\(index + 1) exposes a legacy container facade without the test-only SPI"
+                )
+            }
+        }
+    }
+
+    func testKernelSessionExposesTypedBootProgress() {
         let terminal = OrlixTerminalSession(transport: RecordingTerminalTransport())
         terminal.resize(rows: 24, columns: 80)
-        let session = OrlixLinuxSession(
+        let session = OrlixKernelSession(
             bootConfig: OrlixBootConfig(
                 profile: .release,
                 kernelCommandLine: "console=hvc0",
@@ -35,8 +137,8 @@ final class OrlixOSSessionTests: XCTestCase {
 			.failed,
 		])
         XCTAssertEqual(
-            session.instanceSnapshot,
-            OrlixInstanceSnapshot(
+            session.machineSnapshot,
+            OrlixMachineSnapshot(
                 state: .failed(session.latestBootProgress),
                 latestBootProgress: session.latestBootProgress,
                 hasConsoleOutput: false
@@ -75,8 +177,8 @@ final class OrlixOSSessionTests: XCTestCase {
         XCTAssertEqual(event.posixErrno, 22)
     }
 
-    func testLinuxSessionExposesRecentConsoleOutputThroughSessionSurface() {
-        let session = OrlixLinuxSession(
+    func testKernelSessionExposesRecentConsoleOutputThroughSessionSurface() {
+        let session = OrlixKernelSession(
             bootConfig: OrlixBootConfig(
                 profile: .release,
                 kernelCommandLine: nil,
@@ -2026,7 +2128,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         }
     }
 
-    func testLinuxSessionCanBindMaterializedEnvironmentRootImage() throws {
+    func testKernelSessionCanBindMaterializedEnvironmentRootImage() throws {
         let root = temporaryRegistryRoot()
         let registry = OrlixEnvironmentRegistry(
             linuxStateRoot: root.appendingPathComponent(
@@ -2056,7 +2158,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
             forEnvironmentID: descriptor.id,
             kernelCommandLine: "console=hvc0 root=/dev/vda rootfstype=ext4 ro"
         )
-        let session = OrlixLinuxSession(materializedRootImage: rootImage)
+        let session = OrlixKernelSession(materializedRootImage: rootImage)
 
         XCTAssertEqual(session.bootConfig, rootImage.bootConfig)
         XCTAssertEqual(
@@ -2069,7 +2171,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         )
     }
 
-    func testLinuxSessionCanSelectNamedEnvironmentRootFromRegistry() throws {
+    func testKernelSessionCanSelectNamedEnvironmentRootFromRegistry() throws {
         let root = temporaryRegistryRoot()
         let registry = OrlixEnvironmentRegistry(
             linuxStateRoot: root.appendingPathComponent(
@@ -2095,7 +2197,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         try Data("base".utf8).write(to: layout.baseImageURL)
         try Data("state".utf8).write(to: layout.stateImageURL)
 
-        let session = try OrlixLinuxSession(
+        let session = try OrlixKernelSession(
             environmentID: descriptor.id,
             registry: registry,
             kernelCommandLine: "console=hvc0"
@@ -2137,7 +2239,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         try Data("base".utf8).write(to: layout.baseImageURL)
         try Data("state-before".utf8).write(to: layout.stateImageURL)
 
-        let firstSession = try OrlixLinuxSession(
+        let firstSession = try OrlixKernelSession(
             environmentID: descriptor.id,
             registry: registry,
             kernelCommandLine: "console=hvc0"
@@ -2147,7 +2249,7 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
         )
         try Data("state-after-mutation".utf8).write(to: layout.stateImageURL)
 
-        let secondSession = try OrlixLinuxSession(
+        let secondSession = try OrlixKernelSession(
             environmentID: descriptor.id,
             registry: registry,
             kernelCommandLine: "console=hvc0"
@@ -2198,18 +2300,18 @@ XCTAssertTrue(commandLine.contains("orlix.cgroups.cpu.max=50000%20100000"))
             kernelCommandLine: "console=hvc0 root=/dev/vda rootfstype=ext4 ro"
         )
 
-        let payloadRoot = root.appendingPathComponent(
-            "Payload.bundle",
+        let resourceRoot = root.appendingPathComponent(
+            "OrlixOSResources",
             isDirectory: true
         )
         try FileManager.default.createDirectory(
-            at: payloadRoot,
+            at: resourceRoot,
             withIntermediateDirectories: true
         )
 
         XCTAssertTrue(
             rootImage.registerWithHostAdapterForTesting(
-                payloadBundlePath: payloadRoot.path,
+                resourceRootPath: resourceRoot.path,
                 initrdResource: "rootfs/initramfs.cpio.gz",
                 baseBlockDevice: 0,
                 stateBlockDevice: 1,
@@ -6541,17 +6643,19 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
         XCTAssertFalse(rootfsMakefile.contains("Documents"))
     }
 
-	func testPayloadBundleIsResolvedFromOrlixOSTargetMetadata() throws {
-		let payloadURL = try XCTUnwrap(OrlixOSPayload.bundleURL)
-		let profile = try XCTUnwrap(OrlixOSPayload.selectedBootProfile)
-		let kernelCommandLine = try XCTUnwrap(OrlixOSPayload.kernelCommandLine)
+    func testResourcesAreResolvedDirectlyFromOrlixOSFramework() throws {
+        let resourceRootURL = OrlixOSResources.resourceRootURL
+		let manifestURL = try XCTUnwrap(OrlixOSResources.manifestURL)
+		let profile = try XCTUnwrap(OrlixOSResources.selectedBootProfile)
+		let kernelCommandLine = try XCTUnwrap(OrlixOSResources.kernelCommandLine)
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: payloadURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resourceRootURL.path))
+		XCTAssertTrue(FileManager.default.fileExists(atPath: manifestURL.path))
         XCTAssertTrue(profile == .release || profile == .development)
 		XCTAssertTrue(kernelCommandLine.contains("console=ttyS0"))
 		XCTAssertTrue(kernelCommandLine.contains("console=hvc0"))
 		XCTAssertEqual(
-			OrlixLinuxSession.interactiveConsoleSource(
+			OrlixKernelSession.interactiveConsoleSource(
 				kernelCommandLine: kernelCommandLine
 			),
 			1
@@ -6560,11 +6664,11 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
 	func testRootImageDescriptorsComeFromOrlixOSTargetMetadata() throws {
 		let productRootIdentifier = try XCTUnwrap(
-			OrlixOSPayload.productRootImageIdentifier
+			OrlixOSResources.productRootImageIdentifier
 		)
-		let profile = try XCTUnwrap(OrlixOSPayload.selectedBootProfile)
+		let profile = try XCTUnwrap(OrlixOSResources.selectedBootProfile)
 		let profileName = profile == .release ? "release" : "development"
-        let descriptors = OrlixOSPayload.rootImageDescriptors
+        let descriptors = OrlixOSResources.rootImageDescriptors
 
         XCTAssertFalse(productRootIdentifier.isEmpty)
         XCTAssertTrue(
@@ -6626,7 +6730,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
     func testTerminalGeometryNeverChangesKernelCommandLine() throws {
         let transport = RecordingTerminalTransport()
         let terminal = OrlixTerminalSession(transport: transport)
-        let session = OrlixLinuxSession(
+        let session = OrlixKernelSession(
             bootConfig: OrlixBootConfig(
                 profile: .development,
 				kernelCommandLine: "console=ttyS0 console=hvc0",
@@ -6665,7 +6769,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
 		for (commandLine, expectedSource) in cases {
 			XCTAssertEqual(
-				OrlixLinuxSession.interactiveConsoleSource(
+				OrlixKernelSession.interactiveConsoleSource(
 					kernelCommandLine: commandLine
 				),
 				expectedSource,
@@ -6676,12 +6780,12 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
 	func testInteractiveConsoleSourceRejectsMissingOrUnsupportedPolicy() {
 		XCTAssertNil(
-			OrlixLinuxSession.interactiveConsoleSource(
+			OrlixKernelSession.interactiveConsoleSource(
 				kernelCommandLine: "rdinit=/init"
 			)
 		)
 		XCTAssertNil(
-			OrlixLinuxSession.interactiveConsoleSource(
+			OrlixKernelSession.interactiveConsoleSource(
 				kernelCommandLine: "console=hvc0 console=tty0"
 			)
 		)
@@ -6691,7 +6795,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 		let transport = RecordingTerminalTransport()
 		let terminal = OrlixTerminalSession(transport: transport)
 		terminal.resize(rows: 40, columns: 120)
-		let virtioSession = OrlixLinuxSession(
+		let virtioSession = OrlixKernelSession(
 			bootConfig: OrlixBootConfig(
 				profile: .development,
 				kernelCommandLine: "console=ttyS0 console=hvc0"
@@ -6702,7 +6806,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 		XCTAssertEqual(transport.configuredSources, [1])
 		XCTAssertEqual(transport.sentInput, [Data([0, 40, 0, 120])])
 
-		let serialSession = OrlixLinuxSession(
+		let serialSession = OrlixKernelSession(
 			bootConfig: OrlixBootConfig(
 				profile: .development,
 				kernelCommandLine: "console=hvc0 console=ttyS0"
@@ -6716,7 +6820,7 @@ func testOCIImageLayoutImporterRejectsRelativeWorkingDirectory() throws {
 
 	func testSessionRejectsMissingInteractiveConsolePolicy() {
 		let transport = RecordingTerminalTransport()
-		let session = OrlixLinuxSession(
+		let session = OrlixKernelSession(
 			bootConfig: OrlixBootConfig(
 				profile: .development,
 				kernelCommandLine: "rdinit=/init"
@@ -11626,7 +11730,7 @@ func testOCIEnvironmentInstallerInstallsRegistryImageAndBuildsSession() async th
 	XCTAssertEqual(recorder.executables.filter { $0 == tools.mke2fs }.count, 2)
 	XCTAssertEqual(recorder.executables.filter { $0 == tools.debugfs }.count, 2)
 
-	let session = try installer.session(
+	let session = try installer.kernelSession(
 		id: "registry-installed-session",
 		terminal: OrlixTerminalSession()
 	)
@@ -11855,7 +11959,7 @@ func testOCIEnvironmentInstallerInstallsDockerShorthandImageStringAndBuildsSessi
 			}
 		)
 
-		let session = try installer.session(id: result.id)
+		let session = try installer.kernelSession(id: result.id)
 
 		XCTAssertEqual(result.image, image)
 		XCTAssertEqual(result.pullResult.image, image)
@@ -12218,7 +12322,7 @@ XCTAssertEqual(driver.events, [
 		try recorder.run(executable: executable, arguments: arguments)
 	}
 
-	let rootImage = try XCTUnwrap(result.linuxSession.materializedRootImageForTesting)
+	let rootImage = try XCTUnwrap(result.kernelSession.materializedRootImageForTesting)
 	let commandLine = try XCTUnwrap(rootImage.bootConfig.kernelCommandLine)
 		XCTAssertEqual(result.installResult.id, "orlix-run-terminal-session")
 		XCTAssertEqual(result.installResult.image, image)
@@ -12263,7 +12367,7 @@ XCTAssertEqual(driver.events, [
 		terminal: OrlixTerminalSession(transport: RecordingTerminalTransport()),
 		fileManager: fileManager
 	)
-	let reopenedRootImage = try XCTUnwrap(opened.linuxSession.materializedRootImageForTesting)
+	let reopenedRootImage = try XCTUnwrap(opened.kernelSession.materializedRootImageForTesting)
 	let reopenedCommandLine = try XCTUnwrap(reopenedRootImage.bootConfig.kernelCommandLine)
 	XCTAssertEqual(opened.id, "orlix-run-terminal-session")
 	XCTAssertEqual(opened.image, image)
@@ -12990,7 +13094,7 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 		try Data("base".utf8).write(to: layout.baseImageURL)
 		try Data("state".utf8).write(to: layout.stateImageURL)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeBundle: try OrlixOCIRuntimeBundle.load(from: bundleURL),
 			id: "bundle-session",
 			rootMount: OrlixEnvironmentRootMount.defaultOverlay,
@@ -13001,10 +13105,10 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let savedEnvironment = try registry.load(environmentID: "bundle-session")
 		XCTAssertEqual(savedEnvironment.id, "bundle-session")
 
-		let rootImage = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		let rootImage = try XCTUnwrap(kernelSession.materializedRootImageForTesting)
 		XCTAssertEqual(rootImage.baseImageURL, layout.baseImageURL)
 		XCTAssertEqual(rootImage.stateImageURL, layout.stateImageURL)
-		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		let commandLine = try XCTUnwrap(kernelSession.bootConfig.kernelCommandLine)
 		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"), commandLine)
 		XCTAssertTrue(commandLine.contains("orlix.argv0=/usr/bin/env"), commandLine)
 		XCTAssertTrue(commandLine.contains("orlix.argv1=sh"), commandLine)
@@ -13210,7 +13314,7 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		)
 	}
 
-	func testOCIRuntimeBundleImportPlanBuildsMaterializedLinuxSessionWhenImagesExist() throws {
+	func testOCIRuntimeBundleImportPlanBuildsMaterializedKernelSessionWhenImagesExist() throws {
 		let fileManager = FileManager.default
 		let bundleURL = fileManager.temporaryDirectory
 			.appendingPathComponent("orlix-oci-bundle-\(UUID().uuidString)", isDirectory: true)
@@ -13241,11 +13345,11 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		try Data("base".utf8).write(to: importPlan.storageLayout.baseImageURL)
 		try Data("state".utf8).write(to: importPlan.storageLayout.stateImageURL)
 
-		let linuxSession = try importPlan.linuxSession(
+		let kernelSession = try importPlan.kernelSession(
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
-		let materializedRoot = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		let materializedRoot = try XCTUnwrap(kernelSession.materializedRootImageForTesting)
 		XCTAssertEqual(materializedRoot.environmentID, "bundle-bound-root")
 		XCTAssertEqual(materializedRoot.baseImageURL, importPlan.storageLayout.baseImageURL)
 		XCTAssertEqual(materializedRoot.stateImageURL, importPlan.storageLayout.stateImageURL)
@@ -13831,7 +13935,7 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		XCTAssertEqual(deletedCompletedProcess.lifecycle.record.exitStatus, 0)
 	}
 
-	func testOCIRuntimeProcessSessionBindsHandleToLinuxSession() throws {
+	func testOCIRuntimeProcessSessionBindsHandleToKernelSession() throws {
 		let fileManager = FileManager.default
 		let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 			"orlix-oci-process-session-\(UUID().uuidString)",
@@ -13880,19 +13984,19 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		try Data("state".utf8).write(
 			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 		)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 
 		XCTAssertEqual(processSession.processHandle.lifecycle.record.state, .created)
 		XCTAssertEqual(processSession.processHandle.sessionDescriptor.lifecycleState, .created)
-		XCTAssertNotNil(processSession.linuxSession.materializedRootImageForTesting)
+		XCTAssertNotNil(processSession.kernelSession.materializedRootImageForTesting)
 	}
 
 	func testOCIRuntimeProcessSessionInitializerAttachesLifecycleStore() throws {
@@ -13943,7 +14047,7 @@ func testOCIRuntimeBundleRejectsUnsafeEnvironmentIDs() throws {
 		let store = try XCTUnwrap(processSession.lifecycleStore)
 		let report = try store.stateReport(id: "oci-demo")
 		XCTAssertEqual(processSession.processHandle.lifecycle.record.state, .created)
-		XCTAssertNotNil(processSession.linuxSession.materializedRootImageForTesting)
+		XCTAssertNotNil(processSession.kernelSession.materializedRootImageForTesting)
 		XCTAssertEqual(report.status, .created)
 		XCTAssertNil(report.pid)
 		XCTAssertEqual(report.bundle, "/bundles/oci-demo")
@@ -14808,7 +14912,7 @@ func testOCIEnvironmentInstallerMaterializesBundleAndBuildsSession() throws {
 		try registry.load(environmentID: "oci-installed-session").defaultCommand,
 		["/bin/true"]
 	)
-	let session = try installer.session(
+	let session = try installer.kernelSession(
 		bundleURL: bundleURL,
 		id: "oci-installed-session",
 		terminal: OrlixTerminalSession()
@@ -15521,7 +15625,7 @@ func testOCIRuntimeStartAndWaitResumePersistedLifecycle() throws {
 
 	XCTAssertEqual(started.stateReport.status, .running)
 	XCTAssertEqual(started.stateReport.pid, 77)
-	XCTAssertNotNil(started.processSession.linuxSession.materializedRootImageForTesting)
+	XCTAssertNotNil(started.processSession.kernelSession.materializedRootImageForTesting)
 	XCTAssertEqual(completed.stateReport.status, .stopped)
 	XCTAssertEqual(completed.stateReport.pid, 77)
 	XCTAssertEqual(completed.stateReport.exitStatus, 5)
@@ -15598,7 +15702,7 @@ func testOCIRuntimeKillResumesRunningLifecycleAndPersistsSignalRequest() throws 
 	)
 }
 
-func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() throws {
+func testOCIRuntimeProcessSessionPreservesKernelSessionAcrossLifecycleUpdates() throws {
 	let fileManager = FileManager.default
 	let scratch = fileManager.temporaryDirectory.appendingPathComponent(
 		"orlix-oci-process-session-\(UUID().uuidString)",
@@ -15647,22 +15751,22 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 		try Data("state".utf8).write(
 			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 		)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 		let runningSession = try processSession.start(
 			observedProcess: OrlixOCIRuntimeProcessStartObservation(pid: 42)
 		)
 		let signaledSession = try runningSession.kill(signal: 15)
 
-		XCTAssertTrue(runningSession.linuxSession === processSession.linuxSession)
-		XCTAssertTrue(signaledSession.linuxSession === processSession.linuxSession)
+		XCTAssertTrue(runningSession.kernelSession === processSession.kernelSession)
+		XCTAssertTrue(signaledSession.kernelSession === processSession.kernelSession)
 		XCTAssertEqual(signaledSession.processHandle.lifecycle.record.state, .running)
 		XCTAssertEqual(signaledSession.processHandle.sessionDescriptor.lifecycleState, .running)
 
@@ -15728,14 +15832,14 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 		try Data("state".utf8).write(
 			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 		)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
 			startPID: 42,
@@ -15752,8 +15856,8 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 		let completedProcess = try signaledSession.wait(using: driver)
 		let report = try completedProcess.stateReport()
 
-		XCTAssertTrue(runningSession.linuxSession === processSession.linuxSession)
-		XCTAssertTrue(signaledSession.linuxSession === processSession.linuxSession)
+		XCTAssertTrue(runningSession.kernelSession === processSession.kernelSession)
+		XCTAssertTrue(signaledSession.kernelSession === processSession.kernelSession)
 		XCTAssertEqual(signaledSession.processHandle.lifecycle.record.state, .running)
 		XCTAssertEqual(report.status, OrlixOCIRuntimeStateStatus.stopped)
 		XCTAssertEqual(report.pid, 42)
@@ -15768,13 +15872,13 @@ func testOCIRuntimeProcessSessionPreservesLinuxSessionAcrossLifecycleUpdates() t
 	)
 }
 
-func testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput() throws {
+func testOCIRuntimeKernelSessionObservationDriverRunsFromInitOutput() throws {
 	let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
 		scratchName: "orlix-oci-linux-session-driver"
 	)
 	defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 
-	let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+	let driver = OrlixOCIRuntimeKernelSessionObservationDriver(
 		timeout: 1
 	) { _ in
 		fixture.terminal.emit(
@@ -15803,31 +15907,31 @@ func testOCIRuntimeLinuxSessionObservationDriverRunsFromInitOutput() throws {
 	)
 }
 
-func testOCIRuntimeLinuxSessionObservationDriverRejectsUnsupportedSignal() throws {
+func testOCIRuntimeKernelSessionObservationDriverRejectsUnsupportedSignal() throws {
     let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
         scratchName: "orlix-oci-linux-session-driver-signal"
     )
 	defer { try? FileManager.default.removeItem(at: fixture.scratch) }
 	let runningSession = try fixture.session.start(observedPID: 42)
-	let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 1)
+	let driver = OrlixOCIRuntimeKernelSessionObservationDriver(timeout: 1)
 
 	XCTAssertThrowsError(
 		try runningSession.kill(signal: 15, using: driver)
 	) { error in
 		XCTAssertEqual(
-			error as? OrlixOCIRuntimeLinuxSessionObservationError,
+			error as? OrlixOCIRuntimeKernelSessionObservationError,
 			.signalUnsupported
         )
     }
 }
 
-func testOCIRuntimeLinuxSessionObservationDriverSendsTerminalInterruptSignal() throws {
+func testOCIRuntimeKernelSessionObservationDriverSendsTerminalInterruptSignal() throws {
     let fixture = try makeCreatedOCIRuntimeProcessSessionFixture(
         scratchName: "orlix-oci-linux-session-driver-terminal-signal"
     )
     defer { try? FileManager.default.removeItem(at: fixture.scratch) }
     let runningSession = try fixture.session.start(observedPID: 42)
-    let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 1)
+    let driver = OrlixOCIRuntimeKernelSessionObservationDriver(timeout: 1)
 
     let signaledSession = try runningSession.kill(signal: 2, using: driver)
 
@@ -15961,14 +16065,14 @@ func testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects() thr
 		try Data("state".utf8).write(
 			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 		)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
 			startPID: 42,
@@ -16044,14 +16148,14 @@ func testOCIRuntimeProcessSessionValidatesLifecycleBeforeDriverSideEffects() thr
 		try Data("state".utf8).write(
 			to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 		)
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			terminal: OrlixTerminalSession(transport: RecordingTerminalTransport())
 		)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
 			startPID: 42,
@@ -16168,7 +16272,7 @@ func testOCIRuntimeProcessSessionPersistsLifecycleTransitionsWhenStoreAttached()
 		let store = OrlixOCIRuntimeLifecycleStore(registry: registry)
 		let processSession = OrlixOCIRuntimeProcessSession(
 			processHandle: fixture.session.processHandle,
-			linuxSession: fixture.session.linuxSession,
+			kernelSession: fixture.session.kernelSession,
 			lifecycleStore: store
 		)
 		let driver = try RecordingOCIRuntimeProcessObservationDriver(
@@ -16635,17 +16739,17 @@ func testOCIRuntimeConfigParserTranslatesStandardHostPathBindMount() throws {
 		try Data().write(to: layout.baseImageURL)
 		try Data().write(to: layout.stateImageURL)
 
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: sessionDescriptor,
 			registry: registry
 		)
 
-		let materializedRootImage = try XCTUnwrap(linuxSession.materializedRootImageForTesting)
+		let materializedRootImage = try XCTUnwrap(kernelSession.materializedRootImageForTesting)
 		XCTAssertEqual(materializedRootImage.environmentID, sessionDescriptor.environment.id)
 		XCTAssertEqual(materializedRootImage.rootImageIdentifier, sessionDescriptor.environment.rootImageIdentifier)
 		XCTAssertEqual(materializedRootImage.baseImageURL, layout.baseImageURL)
 		XCTAssertEqual(materializedRootImage.stateImageURL, layout.stateImageURL)
-		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		let commandLine = try XCTUnwrap(kernelSession.bootConfig.kernelCommandLine)
 		XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=1 "))
 		XCTAssertTrue(commandLine.contains("console=hvc0"))
 		XCTAssertTrue(commandLine.contains("orlix.exec=/usr/bin/env"))
@@ -16699,17 +16803,17 @@ func testOCIRuntimeSessionDescriptorCarriesTerminalFalseIntoBootCommandLine() th
 	try Data().write(to: layout.baseImageURL)
 	try Data().write(to: layout.stateImageURL)
 
-	let linuxSession = try OrlixLinuxSession(
+	let kernelSession = try OrlixKernelSession(
 		ociRuntimeSession: sessionDescriptor,
 		registry: registry
 	)
-		let commandLine = try XCTUnwrap(linuxSession.bootConfig.kernelCommandLine)
+		let commandLine = try XCTUnwrap(kernelSession.bootConfig.kernelCommandLine)
 		XCTAssertTrue(commandLine.contains("orlix.exec=/bin/true"))
 	XCTAssertTrue(commandLine.contains("orlix.terminal=0"))
 	XCTAssertTrue(commandLine.hasPrefix("orlix.terminal=0 "))
 }
 
-func testOCIRuntimeBundleLinuxSessionUsesMaterializedRootAndTerminalFalseMetadata() throws {
+func testOCIRuntimeBundleKernelSessionUsesMaterializedRootAndTerminalFalseMetadata() throws {
 	let fileManager = FileManager.default
 	let root = fileManager.temporaryDirectory.appendingPathComponent(
 		"orlix-oci-bundle-linux-session-\(UUID().uuidString)",
@@ -16740,7 +16844,7 @@ func testOCIRuntimeBundleLinuxSessionUsesMaterializedRootAndTerminalFalseMetadat
 	let layout = try registry.prepareStorage(forEnvironmentID: "oci-bundle-session")
 	try Data("base".utf8).write(to: layout.baseImageURL)
 	try Data("state".utf8).write(to: layout.stateImageURL)
-	let session = try OrlixLinuxSession(
+	let session = try OrlixKernelSession(
 		ociRuntimeBundle: try OrlixOCIRuntimeBundle.load(from: bundleURL),
 		id: "oci-bundle-session",
 		rootMount: .defaultOverlay,
@@ -16849,7 +16953,7 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 		to: stateRoot.appendingPathComponent("environments/oci-demo/state.ext4")
 	)
 	let terminal = RecordingTerminalTransport()
-	let linuxSession = try OrlixLinuxSession(
+	let kernelSession = try OrlixKernelSession(
 		ociRuntimeSession: processHandle.sessionDescriptor,
 		registry: registry,
 		terminal: OrlixTerminalSession(transport: terminal)
@@ -16858,7 +16962,7 @@ private func makeCreatedOCIRuntimeProcessSessionFixture(
 	return (
 		OrlixOCIRuntimeProcessSession(
 			processHandle: processHandle,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		),
 		scratch,
 		terminal
@@ -16968,7 +17072,7 @@ startRootImageIdentifiers.append(
 processSession.processHandle.sessionDescriptor.environment.rootImageIdentifier
 )
 startKernelCommandLines.append(
-processSession.linuxSession.bootConfig.kernelCommandLine
+processSession.kernelSession.bootConfig.kernelCommandLine
 )
         startConsoleSizes.append(processSession.processHandle.sessionDescriptor.consoleSize)
         startCapabilities.append(
@@ -17198,7 +17302,7 @@ private final class DataRecorder: @unchecked Sendable {
 }
 
 private final class RecordingTerminalTransport:
-    OrlixTerminalTransport,
+    OrlixPaneTransport,
     @unchecked Sendable
 {
     private var outputHandlers: [UUID: @Sendable (Data) -> Void] = [:]

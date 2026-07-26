@@ -26,7 +26,7 @@ The audit inspected every `PrivacyInfo.xcprivacy` file in the 32 resolved packag
 - Swift Crypto, SwiftNIO SSL, and Swift Protobuf manifests declared no tracking, collected data, tracking domains, or required-reason API use.
 - Three SwiftNIO manifests and ZIPFoundation declared `NSPrivacyAccessedAPICategoryFileTimestamp` with reason `0A2A.1`: `NIOFS`, `NIOPosix`, `_NIOFileSystem`, and `ZIPFoundation`.
 - The Orlix application already declared `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1` for its telemetry data categories.
-- `Orlix/App/Orlix/PrivacyInfo.xcprivacy` now contains the union of non-empty application and resolved-dependency required-reason declarations: UserDefaults `CA92.1` and File Timestamp `0A2A.1`.
+- `Orlix/Orlix/PrivacyInfo.xcprivacy` now contains the union of non-empty application and resolved-dependency required-reason declarations: UserDefaults `CA92.1` and File Timestamp `0A2A.1`.
 
 The three non-empty SwiftNIO manifests were byte-identical at SHA-256 `982f20d820bc4460acc9d4116c3e6c8ec837f717dc82edbb7308f7400515c909`. ZIPFoundation's manifest SHA-256 is `9a2f930cedb8d58309a581b9bf9bf3673685ec02ae2197d9f1c56828b718dffd`. The resulting Orlix source manifest SHA-256 is `6d3ed45d047b7e3ed09da81372eb18e7360633e04682682b75bb95f8cb4ba6c6`.
 
@@ -38,7 +38,7 @@ The same resolved-checkout audit found a root `LICENSE`, `LICENSE.txt`, or equiv
 
 Resolution includes `thrift-swift` because OpenTelemetry exposes a `JaegerExporter` target. Orlix links `OpenTelemetryProtocolExporterHTTP`, `OpenTelemetryApi`, and `OpenTelemetrySdk`; it does not request `JaegerExporter`. Therefore the resolved `thrift-swift` checkout must not be represented as shipped Orlix code without build or link evidence.
 
-`Orlix/App/THIRD_PARTY_NOTICES.md` currently contains notices for the vendored native Ghostty, libssh2, and OpenSSL artifacts. It does not yet contain a verified distributable notice set for the Swift package products actually linked into the exported Orlix application. Do not use all 32 resolved pins as a substitute for shipped-product closure, and do not represent the current notice file as complete.
+`Orlix/THIRD_PARTY_NOTICES.md` currently contains notices for the vendored native Ghostty, libssh2, and OpenSSL artifacts. It does not yet contain a verified distributable notice set for the Swift package products actually linked into the exported Orlix application. Do not use all 32 resolved pins as a substitute for shipped-product closure, and do not represent the current notice file as complete.
 
 ## Required closure evidence
 

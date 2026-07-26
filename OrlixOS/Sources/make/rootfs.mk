@@ -73,7 +73,7 @@ $(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORL
 	mkdir -p "$$state_tree/upper" "$$state_tree/work"; \
 	install -m 0755 "$(ORLIXOS_BASH_BINARY)" "$$root_tree/bin/bash"; \
 	install -m 0755 "$(ORLIXOS_GREP_BINARY)" "$$root_tree/bin/grep"; \
-	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do install -m 0755 "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" "$$root_tree/bin/$$program"; done; \
+	for program in $(ORLIXOS_COREUTILS_PROGRAMS); do install -m 0755 "$(ORLIXOS_COREUTILS_INSTALL_DIR)/usr/bin/$$program" "$$root_tree/bin/$$program"; done; \
 	for program in $(ORLIXOS_FINDUTILS_PROGRAMS); do install -m 0755 "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program" "$$root_tree/bin/$$program"; done; \
 	install -m 0755 "$(ORLIXOS_MKE2FS_BINARY)" "$$root_tree/bin/mke2fs"; \
 	install -m 0755 "$(ORLIXOS_MKFS_EXT4_BINARY)" "$$root_tree/bin/mkfs.ext4"; \

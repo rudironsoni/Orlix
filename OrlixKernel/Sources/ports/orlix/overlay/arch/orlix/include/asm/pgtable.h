@@ -7,8 +7,8 @@
 #include <linux/types.h>
 #include <asm/page.h>
 #include <asm/processor.h>
-#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
-#include <asm/tcti.h>
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
+#include <asm/orlix_tcti.h>
 #endif
 
 /*
@@ -131,14 +131,14 @@ static inline int pte_present(pte_t pte)
 static inline void pte_clear(struct mm_struct *mm, unsigned long addr,
 			     pte_t *ptep)
 {
-#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	if (mm != &init_mm)
-		tcti_mapping_sequence_begin(mm);
+		orlix_tcti_mapping_sequence_begin(mm);
 #endif
 	set_pte(ptep, __pte(0));
-#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	if (mm != &init_mm)
-		tcti_note_pte_update_range(mm, addr, addr + PAGE_SIZE);
+		orlix_tcti_note_pte_update_range(mm, addr, addr + PAGE_SIZE);
 #endif
 }
 
@@ -269,12 +269,12 @@ static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
 	(void)mm;
 	(void)addr;
 #endif
-#if !defined(ORLIX_APP_HOSTED_BOOT) || !defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#if !defined(ORLIX_APP_HOSTED_BOOT) || !defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	(void)start;
 #endif
-#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	if (mm != &init_mm)
-		tcti_mapping_sequence_begin(mm);
+		orlix_tcti_mapping_sequence_begin(mm);
 #endif
 	for (;;) {
 		set_pte(ptep, pte);
@@ -284,9 +284,9 @@ static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
 		ptep++;
 		pte_val(pte) += 1UL << PFN_PTE_SHIFT;
 	}
-#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
+#if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	if (mm != &init_mm)
-		tcti_note_pte_update_range(mm, start, addr + PAGE_SIZE);
+		orlix_tcti_note_pte_update_range(mm, start, addr + PAGE_SIZE);
 #endif
 }
 
