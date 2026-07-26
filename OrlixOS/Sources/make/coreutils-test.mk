@@ -85,7 +85,7 @@ $(ORLIXOS_COREUTILS_TEST_INITRAMFS): $(ORLIXOS_COREUTILS_TEST_INIT_BINARY) $(ORL
 		printf 'file /coreutils-test-list.txt %s 0644 0 0\n' "$(ORLIXOS_COREUTILS_TEST_LIST)"; \
 		printf 'file /bin/bash %s 0755 0 0\n' "$(ORLIXOS_BASH_BINARY)"; \
 		printf 'slink /bin/sh bash 0777 0 0\n'; \
-		for program in $(ORLIXOS_COREUTILS_PROGRAMS); do printf 'file /bin/%s %s 0755 0 0\n' "$$program" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; done; \
+		for program in $(ORLIXOS_COREUTILS_PROGRAMS); do printf 'file /bin/%s %s 0755 0 0\n' "$$program" "$(ORLIXOS_COREUTILS_INSTALL_DIR)/usr/bin/$$program"; done; \
 		printf 'file /bin/grep %s 0755 0 0\n' "$(ORLIXOS_GREP_BINARY)"; \
 		printf 'file /bin/sed %s 0755 0 0\n' "$(ORLIXOS_SED_BINARY)"; \
 		printf 'file /bin/gawk %s 0755 0 0\n' "$(ORLIXOS_GAWK_BINARY)"; \
@@ -178,7 +178,7 @@ $(ORLIXOS_COREUTILS_TEST_INITRAMFS): $(ORLIXOS_COREUTILS_TEST_INIT_BINARY) $(ORL
 		done; \
 		printf 'file /coreutils/init.cfg %s 0644 0 0\n' "$(ORLIXOS_COREUTILS_SRC_DIR)/init.cfg"; \
 		printf 'dir /coreutils-build/src 0755 0 0\n'; \
-		for program in $(ORLIXOS_COREUTILS_PROGRAMS); do printf 'file /coreutils-build/src/%s %s 0755 0 0\n' "$$program" "$(ORLIXOS_PACKAGE_INSTALL_DIR)/usr/bin/$$program"; done; \
+		for program in $(ORLIXOS_COREUTILS_PROGRAMS); do printf 'file /coreutils-build/src/%s %s 0755 0 0\n' "$$program" "$(ORLIXOS_COREUTILS_INSTALL_DIR)/usr/bin/$$program"; done; \
 		printf 'dir /coreutils-build/lib 0755 0 0\n'; \
 		if [ -s "$(ORLIXOS_COREUTILS_CONFIG_HEADER)" ]; then printf 'file /coreutils-build/lib/config.h %s 0644 0 0\n' "$(ORLIXOS_COREUTILS_CONFIG_HEADER)"; fi; \
 	} > "$$cpio_list"; \

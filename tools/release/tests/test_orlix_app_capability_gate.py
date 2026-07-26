@@ -41,11 +41,11 @@ class CapabilityGateTests(unittest.TestCase):
 
     def expected_entitlements(self) -> dict:
         return {
-            "application-identifier": "TESTTEAM.com.rudironsoni.Orlix",
-            "keychain-access-groups": ["TESTTEAM.com.rudironsoni.Orlix"],
-            "com.apple.developer.icloud-container-identifiers": ["iCloud.com.rudironsoni.Orlix"],
+            "application-identifier": "TESTTEAM.com.rudironsoni.orlix",
+            "keychain-access-groups": ["TESTTEAM.com.rudironsoni.orlix"],
+            "com.apple.developer.icloud-container-identifiers": ["iCloud.com.rudironsoni.orlix"],
             "com.apple.developer.icloud-services": ["CloudKit"],
-            "com.apple.developer.ubiquity-kvstore-identifier": "TESTTEAM.com.rudironsoni.Orlix",
+            "com.apple.developer.ubiquity-kvstore-identifier": "TESTTEAM.com.rudironsoni.orlix",
             "com.apple.security.network.client": True,
             "com.apple.security.network.server": True,
             "aps-environment": "production",
@@ -56,7 +56,7 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             app / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.Orlix",
+                "CFBundleIdentifier": "com.rudironsoni.orlix",
                 "CFBundleDisplayName": "Orlix",
                 "ITSAppUsesNonExemptEncryption": False,
             },
@@ -69,11 +69,11 @@ class CapabilityGateTests(unittest.TestCase):
         self.write_plist(
             extension / "Info.plist",
             {
-                "CFBundleIdentifier": "com.rudironsoni.Orlix.liveactivity",
+                "CFBundleIdentifier": "com.rudironsoni.orlix.live-activity",
                 "CFBundleExecutable": "OrlixLiveActivity",
             },
         )
-        (extension / "OrlixLiveActivity").write_bytes(b"com.rudironsoni.Orlix.liveactivity")
+        (extension / "OrlixLiveActivity").write_bytes(b"com.rudironsoni.orlix.live-activity")
 
         entitlements = self.temp / "entitlements.plist"
         profile = self.temp / "profile.plist"
@@ -112,7 +112,9 @@ class CapabilityGateTests(unittest.TestCase):
 
     def test_forbidden_identity_in_product_input_fails(self) -> None:
         value = copy.deepcopy(self.manifest)
-        value["exported_product"]["forbidden_identity_fragments"].append("OrlixApp")
+        value["exported_product"]["forbidden_identity_fragments"].append(
+            "OrlixOSDistribution"
+        )
         with self.assertRaisesRegex(gate.GateError, "forbidden product identity fragment"):
             gate.validate_manifest(self.write_manifest(value), REPO_ROOT)
 

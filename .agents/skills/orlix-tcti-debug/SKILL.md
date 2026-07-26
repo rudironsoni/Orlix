@@ -1,11 +1,11 @@
 ---
 name: orlix-tcti-debug
 description: >-
-  Orlix TCTI debugging with native LLDB and kernel-owned C proof. Use for
+  OrlixTCTI debugging with native LLDB and kernel-owned C proof. Use for
   crashes, watchpoints, disassembly, ELF, Mach-O, instruction encodings,
-  symbols, sections, relocations, and TCTI runtime corruption.
+  symbols, sections, relocations, and OrlixTCTI runtime corruption.
 ---
-# Orlix TCTI Debug
+# OrlixTCTI Debug
 
 Use native LLDB to locate the first incorrect state transition. Keep durable
 diagnostics and proof in the owning kernel subsystem.
@@ -27,14 +27,14 @@ diagnostics and proof in the owning kernel subsystem.
 4. Fix the root cause in its owning layer, then remove temporary instrumentation
    that is not a durable invariant. This step is complete when the original
    reproducer remains green without diagnostic scaffolding.
-5. Add a KUnit regression for TCTI internals. Add or update kselftest when the
+5. Add a KUnit regression for OrlixTCTI internals. Add or update kselftest when the
    defect changes Linux-visible behavior. This step is complete only when the
    owning tests fail on the defect and pass on the correction.
 
 ## Ownership
 
-- TCTI invariants and runtime assertions belong in C under `arch/orlix`.
-- TCTI regression tests belong in KUnit.
+- OrlixTCTI invariants and runtime assertions belong in C under `arch/orlix`.
+- OrlixTCTI regression tests belong in KUnit.
 - Linux-visible behavior belongs in kselftest.
 - LLDB and LLVM binary tools observe execution. Their output does not replace
   behavioral proof.

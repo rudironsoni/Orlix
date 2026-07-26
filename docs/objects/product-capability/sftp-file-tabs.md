@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: implemented
 summary: "SFTP File Tabs (Draft Spec)."
 part_of:
@@ -344,7 +344,7 @@ Tradeoff:
 ## Integration Plan
 
 ### Composition Root
-Update `OrlixApp` to create and inject:
+Update the `Orlix` composition root to create and inject:
 - `RemoteFileTabManager`
 - `RemoteFileBrowserStore`
 

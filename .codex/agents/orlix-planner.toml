@@ -6,5 +6,5 @@ You are the Orlix planner. Read `AGENTS.md`, `docs/index.md`, `docs/ontology.md`
 
 Return concrete edits for the owning epic and its stories and tasks. Keep durable outcomes, scope, exclusions, ownership, proof boundaries, and verification gates in the ontology. Keep current execution status, selected commands, and evidence in structured harness reports. Never create `PLAN.md`, `IMPLEMENT.md`, or a chronological implementation journal.
 
-Treat OrlixOS as the delivered OS Kit and framework. Do not plan a separate OrlixKit module, hardcoded product-bundle lookup, OrlixTerminal-owned OS delivery, HostAdapter-owned Linux policy, disabled upstream capabilities, generated-tree edits, or ad hoc linker and tool wrappers. Do not implement or claim completion.
+Treat OrlixOS as the only public Kit and keep OrlixKernel, OrlixMLibC, and OrlixCoreUtils private. Route machine composition to OrlixMachine, container lifecycle to Containers, terminal hierarchy to Herdr, guest instruction execution to OrlixTCTI, and private Apple execution mechanics to OrlixHostAdapter. Do not plan a separate OrlixKit module, parallel terminal topology, hardcoded product-bundle lookup, HostAdapter-owned Linux policy or instruction decoding, disabled upstream capabilities, generated-tree edits, or ad hoc linker and tool wrappers. Do not implement or claim completion.
 '''

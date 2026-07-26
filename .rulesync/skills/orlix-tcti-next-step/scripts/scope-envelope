@@ -33,13 +33,13 @@ suites = [
     {
         "id": "kernel-dependency-kunit",
         "owner": "OrlixKernel",
-        "command": "make tcti-kernel-tests",
-        "required_conditions": "requires app-hosted kernel dependency proof and production-path TCTI KUnit; the envelope records no test result",
+        "command": "make orlix-tcti-kernel-tests",
+        "required_conditions": "requires app-hosted kernel dependency proof and production-path OrlixTCTI KUnit; the envelope records no test result",
     },
     {
         "id": "kernel-kselftest",
         "owner": "upstream Linux",
-        "command": "make tcti-kernel-tests",
+        "command": "make orlix-tcti-kernel-tests",
         "required_conditions": "requires Linux kernel-interface kselftest after KUnit; the envelope records no test result",
     },
     {
@@ -140,10 +140,10 @@ envelope = {
             "native app XCTest",
         ],
         "forbidden_substitutes": [
-            "host-side TCTI behavioral models",
-            "terminal text or log parsing as TCTI proof",
+            "host-side OrlixTCTI behavioral models",
+            "terminal text or log parsing as OrlixTCTI proof",
             "generated-tree edits",
-            "a TCTI-specific product profile",
+            "an OrlixTCTI-specific product profile",
         ],
     },
     "completion": "unverified",
@@ -172,7 +172,7 @@ elif mode == "check":
     matches = [value for value in forbidden if value in encoded]
     if matches:
         raise SystemExit(f"task envelope contains retired contracts: {matches}")
-    print("Orlix TCTI task envelope valid")
+    print("OrlixTCTI task envelope valid")
 else:
     raise SystemExit("usage: scope-envelope status|next|check")
 PY
