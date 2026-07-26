@@ -640,6 +640,214 @@ unmap:
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
 }
 
+#define CRYPTO_EOR3_SOURCE_ORDINAL 4078U
+
+struct crypto_eor3_registers {
+	u8 rd;
+	u8 rn;
+	u8 rm;
+	u8 ra;
+};
+
+static const struct crypto_eor3_registers crypto_eor3_overlap_cases[] = {
+	{ 31U, 0U, 15U, 30U },
+	{ 9U, 9U, 15U, 30U },
+	{ 9U, 0U, 9U, 30U },
+	{ 9U, 0U, 15U, 9U },
+	{ 9U, 15U, 15U, 30U },
+	{ 9U, 15U, 30U, 15U },
+	{ 9U, 15U, 30U, 30U },
+	{ 31U, 31U, 31U, 31U },
+};
+
+static const struct crypto_leaf *crypto_eor3_leaf(void)
+{
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(crypto_leaves); index++)
+		if (crypto_leaves[index].source_ordinal ==
+		    CRYPTO_EOR3_SOURCE_ORDINAL)
+			return &crypto_leaves[index];
+	return NULL;
+}
+
+static void crypto_eor3_seed_simd_state(u64 simd[], u32 instruction)
+{
+	unsigned int index;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
+		simd[index] = 0x9e3779b97f4a7c15ULL ^
+			((u64)instruction << (index & 31U)) ^
+			rol64(0xd1b54a32d192ed03ULL, index) ^ index;
+}
+
+static void crypto_eor3_source_binding_and_decode_fields(struct kunit *test)
+{
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	const struct tcti_target_instruction_artifact_leaf *source;
+	const struct crypto_leaf *leaf = crypto_eor3_leaf();
+	const char *name;
+	const char *mnemonic;
+	const char *operation;
+	u8 field;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	KUNIT_ASSERT_LT(test, CRYPTO_EOR3_SOURCE_ORDINAL, artifact->leaf_count);
+	source = &artifact->leaves[CRYPTO_EOR3_SOURCE_ORDINAL];
+	name = crypto_artifact_string(artifact, source->name_offset);
+	mnemonic = crypto_artifact_string(artifact, source->mnemonic_offset);
+	operation = crypto_artifact_string(artifact, source->operation_offset);
+	KUNIT_ASSERT_NOT_NULL(test, name);
+	KUNIT_ASSERT_NOT_NULL(test, mnemonic);
+	KUNIT_ASSERT_NOT_NULL(test, operation);
+	KUNIT_EXPECT_STREQ(test, "EOR3_VVV16_crypto4", name);
+	KUNIT_EXPECT_STREQ(test, "EOR3", mnemonic);
+	KUNIT_EXPECT_STREQ(test, "EOR3_advsimd", operation);
+	KUNIT_EXPECT_EQ(test, leaf->mask, source->encoding_mask);
+	KUNIT_EXPECT_EQ(test, leaf->value, source->encoding_pattern);
+	KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_EOR3, leaf->op);
+
+	for (field = 0; field < 32; field++) {
+		struct tcti_decoded_instruction decoded;
+		u32 instruction;
+
+		instruction = crypto_instruction(leaf, leaf->value,
+			field, 9U, 3U, 7U, 0U);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, TCTI_SIMD_ARITH_EOR3,
+			decoded.simd_arithmetic_op);
+		KUNIT_EXPECT_EQ(test, field, decoded.rd);
+
+		instruction = crypto_instruction(leaf, leaf->value,
+			17U, field, 3U, 7U, 0U);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, field, decoded.rn);
+
+		instruction = crypto_instruction(leaf, leaf->value,
+			17U, 9U, field, 7U, 0U);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, field, decoded.rm);
+
+		instruction = crypto_instruction(leaf, leaf->value,
+			17U, 9U, 3U, field, 0U);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
+			decoded.decode_class);
+		KUNIT_EXPECT_EQ(test, field, decoded.ra);
+	}
+}
+
+static void crypto_eor3_resume_mapped_rx_with_register_aliases(
+	struct kunit *test)
+{
+	const struct crypto_leaf *leaf = crypto_eor3_leaf();
+	u64 saved_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 saved_fpcr = current->thread.user_fpcr;
+	u64 saved_fpsr = current->thread.user_fpsr;
+	unsigned long saved_valid = current->thread.user_simd_valid;
+	unsigned long text = 0;
+	unsigned int case_index;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	ret = crypto_resume_map_text(&text);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	memcpy(saved_simd, current->thread.user_simd, sizeof(saved_simd));
+
+	for (case_index = 0;
+	     case_index < ARRAY_SIZE(crypto_eor3_overlap_cases); case_index++) {
+		const struct crypto_eor3_registers *registers =
+			&crypto_eor3_overlap_cases[case_index];
+		u32 instruction = crypto_instruction(leaf, leaf->value,
+			registers->rd, registers->rn, registers->rm, registers->ra,
+			0U);
+		const u32 expected_program[] = { instruction, CRYPTO_RESUME_SVC };
+		u32 before_program[ARRAY_SIZE(expected_program)];
+		u32 after_program[ARRAY_SIZE(expected_program)];
+		u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u64 low;
+		u64 high;
+		struct pt_regs regs = {
+			.sp = 0x12345000,
+			.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT |
+				PSR_C_BIT | PSR_V_BIT,
+			.syscallno = NO_SYSCALL,
+		};
+		struct pt_regs expected_regs;
+		struct tcti_result result;
+
+		ret = crypto_resume_write_program(text, instruction);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		if (ret)
+			goto restore;
+		ret = tcti_read_user_data(current->mm, text, before_program,
+					  sizeof(before_program));
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_program, before_program,
+				   sizeof(expected_program));
+		crypto_eor3_seed_simd_state(current->thread.user_simd, instruction);
+		memcpy(expected_simd, current->thread.user_simd,
+		       sizeof(expected_simd));
+		low = expected_simd[registers->rn * 2] ^
+			expected_simd[registers->rm * 2] ^
+			expected_simd[registers->ra * 2];
+		high = expected_simd[registers->rn * 2 + 1] ^
+			expected_simd[registers->rm * 2 + 1] ^
+			expected_simd[registers->ra * 2 + 1];
+		expected_simd[registers->rd * 2] = low;
+		expected_simd[registers->rd * 2 + 1] = high;
+		current->thread.user_simd_valid = 0;
+		current->thread.user_fpcr = 0x04000000ULL;
+		current->thread.user_fpsr = BIT(5);
+		regs.regs[0] = 0x0123456789abcdefULL;
+		regs.regs[8] = 0xfedcba9876543210ULL;
+		regs.regs[30] = 0x8877665544332211ULL;
+		regs.orig_x0 = 0xfeedfaceULL;
+		regs.pc = text;
+		expected_regs = regs;
+		expected_regs.pc += sizeof(u32);
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+			"EOR3 overlap case=%u", case_index);
+		KUNIT_EXPECT_EQ(test, 0L, result.status);
+		KUNIT_EXPECT_EQ(test, 0UL, result.fault_address);
+		KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
+		KUNIT_EXPECT_EQ(test, text + sizeof(u32), result.pc);
+		KUNIT_EXPECT_EQ(test, CRYPTO_RESUME_SVC, result.instruction);
+		KUNIT_EXPECT_MEMEQ(test, &expected_regs, &regs, sizeof(regs));
+		KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
+				   sizeof(expected_simd));
+		KUNIT_EXPECT_EQ(test, 1UL, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test, 0x04000000ULL, current->thread.user_fpcr);
+		KUNIT_EXPECT_EQ(test, BIT(5), current->thread.user_fpsr);
+		ret = tcti_read_user_data(current->mm, text, after_program,
+					  sizeof(after_program));
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		KUNIT_EXPECT_MEMEQ(test, expected_program, after_program,
+				   sizeof(expected_program));
+		ret = sys_mprotect(text, PAGE_SIZE, PROT_READ | PROT_WRITE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+		if (ret)
+			goto restore;
+	}
+
+restore:
+	memcpy(current->thread.user_simd, saved_simd, sizeof(saved_simd));
+	current->thread.user_fpcr = saved_fpcr;
+	current->thread.user_fpsr = saved_fpsr;
+	current->thread.user_simd_valid = saved_valid;
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
+}
+
 static struct kunit_case crypto_extension_cases[] = {
 	KUNIT_CASE(crypto_source_leaf_provenance_is_complete),
 	KUNIT_CASE(crypto_sve_sme_target_contract_is_source_bound),
@@ -649,6 +857,8 @@ static struct kunit_case crypto_extension_cases[] = {
 	KUNIT_CASE(crypto_executor_known_vectors),
 	KUNIT_CASE(crypto_executor_aliasing),
 	KUNIT_CASE(crypto_resume_production_path_regression),
+	KUNIT_CASE(crypto_eor3_source_binding_and_decode_fields),
+	KUNIT_CASE(crypto_eor3_resume_mapped_rx_with_register_aliases),
 	{}
 };
 
