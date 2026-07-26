@@ -305,7 +305,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "cb0896f92dfbfd694e45ee7f6f35f053b476822fafda38d0ad3fa25724d4ba53",
 	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
-	  "c96c16ca9c9beb683968f2cf46446ba83d460b6b6da26066b2d580faba911b33",
+	  "cb82f87bb8febdfc8b02f8cd4a77ad65d6721d546f897294dc218764ee65ec99",
 	  "tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
 	  "23f1137220b48b83de9a9a6cf983e1bfdcb2cc93bcac38ed70bfbfe7985a9fce",

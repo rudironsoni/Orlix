@@ -13363,6 +13363,39 @@ static u64 tcti_test_count_leading_sign_bits(u64 value, u8 width)
 	return count;
 }
 
+static u64 tcti_test_count_trailing_zeros(u64 value, u8 width)
+{
+	u64 count = 0;
+	u8 bit;
+
+	for (bit = 0; bit < width; bit++) {
+		if (value & BIT_ULL(bit))
+			break;
+		count++;
+	}
+	return count;
+}
+
+static u64 tcti_test_count_set_bits(u64 value, u8 width)
+{
+	u64 count = 0;
+	u8 bit;
+
+	for (bit = 0; bit < width; bit++)
+		count += !!(value & BIT_ULL(bit));
+	return count;
+}
+
+static u64 tcti_test_signed_abs(u64 value, u8 width)
+{
+	u64 mask = width == 64 ? U64_MAX : U32_MAX;
+
+	value &= mask;
+	if (value & BIT_ULL(width - 1))
+		value = -value;
+	return value & mask;
+}
+
 static void tcti_gadget_executes_complete_data_processing_1source_family(
 	struct kunit *test)
 {
@@ -13405,7 +13438,7 @@ static void tcti_gadget_executes_complete_data_processing_1source_family(
 		selector >>= 6;
 		is_64bit = selector & 0x1U;
 		rd = (rn + opcode + is_64bit) & 0x1fU;
-		valid = opcode <= 5 && (is_64bit || opcode != 3);
+		valid = opcode <= 8 && (is_64bit || opcode != 3);
 		if (valid) {
 			switch (opcode) {
 			case 0:
@@ -13426,6 +13459,15 @@ static void tcti_gadget_executes_complete_data_processing_1source_family(
 				break;
 			case 5:
 				expected_op = TCTI_DP1_CLS;
+				break;
+			case 6:
+				expected_op = TCTI_DP1_CTZ;
+				break;
+			case 7:
+				expected_op = TCTI_DP1_CNT;
+				break;
+			case 8:
+				expected_op = TCTI_DP1_ABS;
 				break;
 			}
 		}
@@ -13489,6 +13531,15 @@ static void tcti_gadget_executes_complete_data_processing_1source_family(
 			break;
 		case TCTI_DP1_CLS:
 			expected = tcti_test_count_leading_sign_bits(value, width);
+			break;
+		case TCTI_DP1_CTZ:
+			expected = tcti_test_count_trailing_zeros(value, width);
+			break;
+		case TCTI_DP1_CNT:
+			expected = tcti_test_count_set_bits(value, width);
+			break;
+		case TCTI_DP1_ABS:
+			expected = tcti_test_signed_abs(value, width);
 			break;
 		default:
 			KUNIT_FAIL(test, "invalid data-processing one-source operation");
