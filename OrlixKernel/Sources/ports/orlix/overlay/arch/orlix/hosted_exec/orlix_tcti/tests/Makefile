@@ -8,6 +8,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_ordinal_ledger_test.o \
 	target_feature_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
+	target_execution_slice_map.o \
+	target_execution_slice_map_test.o \
 	orlix_tcti_atomic_memory_test.o orlix_tcti_lse_decode_test.o orlix_tcti_uaccess_test.o \
 	orlix_tcti_cssc_min_max_immediate_test.o \
 	orlix_tcti_crypto_decode_boundary_test.o \
@@ -99,6 +101,9 @@ $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
 $(obj)/target_runtime_capability_cohort_artifact.o: \
 	$(src)/../isa/target_runtime_capability_cohort_artifact.def \
 	$(src)/../isa/target_feature_artifact.def
+$(obj)/target_execution_slice_map.o: \
+	$(src)/../isa/target_execution_slice_map.def \
+	$(src)/../isa/source_manifest.def
 $(obj)/target_feature_artifact.o: $(src)/../isa/target_feature_artifact.def
 
 ccflags-y += -I$(obj)

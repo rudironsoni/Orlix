@@ -58,6 +58,7 @@ ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tc
 ORLIX_TCTI_FEATURE_DOMAIN_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_domain_test
 ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_field_domain_binding_artifact_test
 ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_runtime_capability_cohort_artifact_test
+ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_execution_slice_map_test
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_ORDINAL_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_ordinal_ledger_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
@@ -383,6 +384,13 @@ orlix-tcti-isa-host-tests:
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact_test.c \
 		-o '$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
 	@'$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_execution_slice_map_test.c \
+		-o '$(ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST)'
+	@'$(ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_ordinal_ledger.c \
