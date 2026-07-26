@@ -53,6 +53,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_advsimd_logical_source_bound_test.o \
 	tcti_advsimd_compare_register_source_bound_test.o \
 	tcti_advsimd_add_sub_source_bound_test.o \
+	tcti_advsimd_mul_source_bound_test.o \
 	tcti_advsimd_integer_min_max_source_bound_test.o \
 	tcti_advsimd_pairwise_minmax_source_bound_test.o \
 	tcti_advsimd_halving_source_bound_test.o \
