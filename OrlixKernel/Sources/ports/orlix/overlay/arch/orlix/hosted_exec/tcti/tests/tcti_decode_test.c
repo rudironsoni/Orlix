@@ -27568,7 +27568,15 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 	unsigned int rm;
 	u32 instruction;
 
-	for (type = 0; type < 2; type++) {
+	for (type = 0; type < 4; type++) {
+		if (type == 2) {
+			instruction = 0x1e202000U | (type << 22);
+			decoded = tcti_decode_aarch64(instruction);
+			KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class);
+			continue;
+		}
+
 		for (signal_all_nans = 0; signal_all_nans < 2;
 		     signal_all_nans++) {
 			for (rn = 0; rn < 32; rn++) {
@@ -27590,6 +27598,7 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 					KUNIT_EXPECT_EQ(test, signal_all_nans,
 							decoded.fp_signal_all_nans);
 					KUNIT_EXPECT_EQ(test,
+							type == 3 ? sizeof(u16) :
 							type ? sizeof(u64) : sizeof(u32),
 							decoded.access_size);
 				}
@@ -27608,6 +27617,7 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 					KUNIT_EXPECT_EQ(test, signal_all_nans,
 							decoded.fp_signal_all_nans);
 					KUNIT_EXPECT_EQ(test,
+							type == 3 ? sizeof(u16) :
 							type ? sizeof(u64) : sizeof(u32),
 							decoded.access_size);
 				}
@@ -27615,12 +27625,6 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 		}
 	}
 
-	for (type = 2; type < 4; type++) {
-		instruction = 0x1e202000U | (type << 22);
-		decoded = tcti_decode_aarch64(instruction);
-		KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
-				decoded.decode_class);
-	}
 }
 
 static void tcti_gadget_executes_exhaustive_fp_compare_family(
@@ -27773,7 +27777,7 @@ static void tcti_decode_recognizes_exhaustive_fp_3source_family(
 				instruction = tcti_test_fp3_instruction(
 					type, operation, reg, reg, reg, reg);
 				decoded = tcti_decode_aarch64(instruction);
-				if (type > 1) {
+				if (type == 2) {
 					KUNIT_ASSERT_EQ_MSG(
 						test, TCTI_DECODE_UNSUPPORTED,
 						decoded.decode_class,
@@ -27792,6 +27796,7 @@ static void tcti_decode_recognizes_exhaustive_fp_3source_family(
 				KUNIT_EXPECT_EQ(test, reg, decoded.ra);
 				KUNIT_EXPECT_EQ(test, operation, decoded.fp3_op);
 				KUNIT_EXPECT_EQ(test,
+						type == 3 ? sizeof(u16) :
 						type ? sizeof(u64) : sizeof(u32),
 						decoded.access_size);
 				KUNIT_EXPECT_EQ(test, decoded.access_size,
@@ -27939,7 +27944,7 @@ static void tcti_decode_exhaustive_fp_scalar_2source_family(
 			struct tcti_decoded_instruction decoded =
 				tcti_decode_aarch64(tcti_test_fp2_instruction(
 					type, opcode, 7, 11, 19));
-			bool legal = type < 2 && opcode < ARRAY_SIZE(operations);
+			bool legal = type != 2 && opcode < ARRAY_SIZE(operations);
 
 			if (!legal) {
 				KUNIT_EXPECT_NE(test,
@@ -27955,6 +27960,7 @@ static void tcti_decode_exhaustive_fp_scalar_2source_family(
 			KUNIT_EXPECT_EQ(test, 11, decoded.rn);
 			KUNIT_EXPECT_EQ(test, 19, decoded.rm);
 			KUNIT_EXPECT_EQ(test,
+					type == 3 ? sizeof(u16) :
 					type ? sizeof(u64) : sizeof(u32),
 					decoded.access_size);
 			KUNIT_EXPECT_EQ(test, decoded.access_size,
@@ -28042,6 +28048,15 @@ static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
 		{ 0x1e626820U, TCTI_FP2_FMAXNM, sizeof(u64) },
 		{ 0x1e627820U, TCTI_FP2_FMINNM, sizeof(u64) },
 		{ 0x1e628820U, TCTI_FP2_FNMUL, sizeof(u64) },
+		{ 0x1ee20820U, TCTI_FP2_FMUL, sizeof(u16) },
+		{ 0x1ee21820U, TCTI_FP2_FDIV, sizeof(u16) },
+		{ 0x1ee22820U, TCTI_FP2_FADD, sizeof(u16) },
+		{ 0x1ee23820U, TCTI_FP2_FSUB, sizeof(u16) },
+		{ 0x1ee24820U, TCTI_FP2_FMAX, sizeof(u16) },
+		{ 0x1ee25820U, TCTI_FP2_FMIN, sizeof(u16) },
+		{ 0x1ee26820U, TCTI_FP2_FMAXNM, sizeof(u16) },
+		{ 0x1ee27820U, TCTI_FP2_FMINNM, sizeof(u16) },
+		{ 0x1ee28820U, TCTI_FP2_FNMUL, sizeof(u16) },
 	};
 	struct tcti_decoded_instruction decoded;
 	size_t i;
@@ -28061,8 +28076,6 @@ static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
 	}
 
 	decoded = tcti_decode_aarch64(0x1ea24820U);
-	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
-	decoded = tcti_decode_aarch64(0x1ee24820U);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	decoded = tcti_decode_aarch64(0x1e229820U);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
