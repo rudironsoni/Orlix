@@ -1091,9 +1091,13 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_modified_immediate_regression_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/mops_provenance.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_fp_arithmetic_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_logical_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_add_sub_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_halving_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_shift_right_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_structure_load_store_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pair_load_store_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crc32_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pauth_bti_gcs_obligation_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sme_state_contract_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_mops_provenance_test.c \
