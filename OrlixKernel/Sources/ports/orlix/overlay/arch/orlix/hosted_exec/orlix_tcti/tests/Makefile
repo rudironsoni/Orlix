@@ -53,11 +53,16 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_advsimd_logical_source_bound_test.o \
 	orlix_tcti_advsimd_compare_register_source_bound_test.o \
 	orlix_tcti_advsimd_add_sub_source_bound_test.o \
+	orlix_tcti_advsimd_mul_source_bound_test.o \
 	orlix_tcti_advsimd_integer_min_max_source_bound_test.o \
+	orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o \
 	orlix_tcti_advsimd_pairwise_minmax_source_bound_test.o \
 	orlix_tcti_advsimd_halving_source_bound_test.o \
 	orlix_tcti_advsimd_compare_zero_source_bound_test.o \
 	orlix_tcti_advsimd_shift_right_source_bound_test.o \
+	orlix_tcti_advsimd_permute_source_bound_test.o \
+	orlix_tcti_advsimd_table_lookup_source_bound_test.o \
+	orlix_tcti_simd_fp_register_offset_source_bound_test.o \
 	orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o \
 	orlix_tcti_advsimd_structure_load_store_source_bound_test.o \
 	orlix_tcti_pauth_bti_gcs_obligation_test.o \
