@@ -57,6 +57,11 @@ struct tcti_advsimd_compare_registers {
 	u8 rm;
 };
 
+struct tcti_advsimd_compare_operands {
+	u64 left[2];
+	u64 right[2];
+};
+
 static const struct tcti_advsimd_compare_registers
 tcti_advsimd_compare_overlap_cases[] = {
 	{ 3U, 4U, 5U },
@@ -65,6 +70,18 @@ tcti_advsimd_compare_overlap_cases[] = {
 	{ 10U, 11U, 11U },
 	{ 12U, 12U, 12U },
 	{ 31U, 0U, 30U },
+};
+
+static const struct tcti_advsimd_compare_operands
+tcti_advsimd_compare_operand_cases[] = {
+	{
+		.left = { 0x7f80000080017fffULL, 0x800000007fffffffULL },
+		.right = { 0x807fffff7fff8001ULL, 0x7fffffff80000000ULL },
+	},
+	{
+		.left = { 0x1122334455667788ULL, 0x99aabbccddeeff00ULL },
+		.right = { 0x1122334455667788ULL, 0x99aabbccddeeff01ULL },
+	},
 };
 
 static const char *tcti_advsimd_compare_artifact_string(
@@ -260,6 +277,73 @@ static void tcti_advsimd_compare_source_bindings(struct kunit *test)
 	}
 }
 
+static void tcti_advsimd_compare_operand_corpus_distinguishes_predicates(
+	struct kunit *test)
+{
+	size_t leaf_index;
+	u8 q;
+	u8 size;
+
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(tcti_advsimd_compare_leaves);
+	     leaf_index++) {
+		const struct tcti_advsimd_compare_leaf *leaf =
+			&tcti_advsimd_compare_leaves[leaf_index];
+
+		for (q = 0; q < 2; q++) {
+			for (size = 0; size < 4; size++) {
+				bool saw_match = false;
+				bool saw_mismatch = false;
+				size_t operand_index;
+
+				if (!q && size == 3)
+					continue;
+				for (operand_index = 0;
+				     operand_index < ARRAY_SIZE(
+					tcti_advsimd_compare_operand_cases);
+				     operand_index++) {
+					const struct tcti_advsimd_compare_operands *operands =
+						&tcti_advsimd_compare_operand_cases[
+							operand_index];
+					u8 lane_bytes = BIT(size);
+					u8 result_bytes = q ? 2 * sizeof(u64) :
+							      sizeof(u64);
+					u64 mask = tcti_advsimd_compare_lane_mask(
+						lane_bytes);
+					u8 lane;
+
+					for (lane = 0; lane < result_bytes / lane_bytes;
+					     lane++) {
+						u8 byte = lane * lane_bytes;
+						u8 word = byte / sizeof(u64);
+						u8 shift =
+							(byte % sizeof(u64)) * 8;
+						u64 left =
+							(operands->left[word] >> shift) &
+							mask;
+						u64 right =
+							(operands->right[word] >> shift) &
+							mask;
+						bool matches =
+							tcti_advsimd_compare_lane_matches(
+								leaf->operation, left, right,
+								lane_bytes * 8);
+
+						saw_match |= matches;
+						saw_mismatch |= !matches;
+					}
+				}
+				KUNIT_EXPECT_TRUE_MSG(
+					test, saw_match, "%s q=%u size=%u",
+					leaf->source_name, q, size);
+				KUNIT_EXPECT_TRUE_MSG(
+					test, saw_mismatch, "%s q=%u size=%u",
+					leaf->source_name, q, size);
+			}
+		}
+	}
+}
+
 static void tcti_advsimd_compare_legal_fields_decode(struct kunit *test)
 {
 	size_t leaf_index;
@@ -384,16 +468,10 @@ static void tcti_advsimd_compare_reserved_1d_rejected(struct kunit *test)
 static void tcti_advsimd_compare_source_leaves_resume(struct kunit *test)
 {
 	struct tcti_advsimd_compare_context *context = test->priv;
-	static const u64 left_values[2] = {
-		0x807fff0080017fffULL, 0x7fffffff80000000ULL,
-	};
-	static const u64 right_values[2] = {
-		0x7f80ff007fff8001ULL, 0x800000007fffffffULL,
-	};
 	size_t leaf_index;
 	u8 q;
 	u8 size;
-	size_t overlap_index;
+	size_t case_index;
 
 	for (leaf_index = 0;
 	     leaf_index < ARRAY_SIZE(tcti_advsimd_compare_leaves);
@@ -405,26 +483,45 @@ static void tcti_advsimd_compare_source_leaves_resume(struct kunit *test)
 			for (size = 0; size < 4; size++) {
 				if (!q && size == 3)
 					continue;
-				for (overlap_index = 0;
-				     overlap_index < ARRAY_SIZE(
-					tcti_advsimd_compare_overlap_cases);
-				     overlap_index++) {
-					const struct tcti_advsimd_compare_registers *registers =
-						&tcti_advsimd_compare_overlap_cases[
-							overlap_index];
+				for (case_index = 0;
+				     case_index <
+				     ARRAY_SIZE(
+					     tcti_advsimd_compare_overlap_cases) *
+					     ARRAY_SIZE(
+						     tcti_advsimd_compare_operand_cases);
+				     case_index++) {
+					size_t overlap_index =
+						case_index /
+						ARRAY_SIZE(
+							tcti_advsimd_compare_operand_cases);
+					size_t operand_index =
+						case_index %
+						ARRAY_SIZE(
+							tcti_advsimd_compare_operand_cases);
+					const struct tcti_advsimd_compare_registers
+						*registers =
+							&tcti_advsimd_compare_overlap_cases
+								[overlap_index];
+					const struct tcti_advsimd_compare_operands
+						*operands =
+							&tcti_advsimd_compare_operand_cases
+								[operand_index];
 					u32 instruction =
 						tcti_advsimd_compare_instruction(
-							leaf, q, size, registers->rd,
-							registers->rn, registers->rm);
+							leaf, q, size,
+							registers->rd,
+							registers->rn,
+							registers->rm);
 					const u32 expected_program[] = {
-						instruction, TCTI_ADVSIMD_COMPARE_SVC,
+						instruction,
+						TCTI_ADVSIMD_COMPARE_SVC,
 					};
-					u32 before_program[
-						ARRAY_SIZE(expected_program)];
-					u32 after_program[
-						ARRAY_SIZE(expected_program)];
-					u64 expected_simd[
-						ARRAY_SIZE(current->thread.user_simd)];
+					u32 before_program[ARRAY_SIZE(
+						expected_program)];
+					u32 after_program[ARRAY_SIZE(
+						expected_program)];
+					u64 expected_simd[ARRAY_SIZE(
+						current->thread.user_simd)];
 					u64 expected_result[2];
 					struct pt_regs regs;
 					struct pt_regs expected_regs;
@@ -436,95 +533,121 @@ static void tcti_advsimd_compare_source_leaves_resume(struct kunit *test)
 						test, instruction);
 					KUNIT_ASSERT_EQ(test, 0, ret);
 					ret = tcti_read_user_data(
-						current->mm, context->instructions,
-						before_program, sizeof(before_program));
+						current->mm,
+						context->instructions,
+						before_program,
+						sizeof(before_program));
 					KUNIT_ASSERT_EQ(test, 0, ret);
-					KUNIT_EXPECT_MEMEQ(test, expected_program,
-							   before_program,
-							   sizeof(expected_program));
+					KUNIT_EXPECT_MEMEQ(
+						test, expected_program,
+						before_program,
+						sizeof(expected_program));
 
 					for (simd_index = 0;
-					     simd_index < ARRAY_SIZE(
-						current->thread.user_simd);
+					     simd_index <
+					     ARRAY_SIZE(
+						     current->thread.user_simd);
 					     simd_index++)
-						current->thread.user_simd[simd_index] =
+						current->thread
+							.user_simd[simd_index] =
 							0x3c6ef372fe94f82bULL ^
-							((u64)(simd_index + 1U) *
+							((u64)(simd_index +
+							       1U) *
 							 0x0102040810204081ULL);
-					current->thread.user_simd[
-						registers->rn * 2U] = left_values[0];
-					current->thread.user_simd[
-						registers->rn * 2U + 1U] =
-						left_values[1];
+					current->thread
+						.user_simd[registers->rn * 2U] =
+						operands->left[0];
+					current->thread
+						.user_simd[registers->rn * 2U +
+							   1U] =
+						operands->left[1];
 					if (registers->rm != registers->rn) {
-						current->thread.user_simd[
-							registers->rm * 2U] =
-							right_values[0];
-						current->thread.user_simd[
-							registers->rm * 2U + 1U] =
-							right_values[1];
+						current->thread.user_simd
+							[registers->rm * 2U] =
+							operands->right[0];
+						current->thread.user_simd
+							[registers->rm * 2U +
+							 1U] =
+							operands->right[1];
 					}
 					memcpy(expected_simd,
 					       current->thread.user_simd,
 					       sizeof(expected_simd));
 					tcti_advsimd_compare_expected(
-						expected_result, leaf->operation,
-						&expected_simd[registers->rn * 2U],
-						&expected_simd[registers->rm * 2U],
+						expected_result,
+						leaf->operation,
+						&expected_simd[registers->rn *
+							       2U],
+						&expected_simd[registers->rm *
+							       2U],
 						BIT(size),
-						q ? 2 * sizeof(u64) : sizeof(u64));
+						q ? 2 * sizeof(u64) :
+						    sizeof(u64));
 					expected_simd[registers->rd * 2U] =
 						expected_result[0];
 					expected_simd[registers->rd * 2U + 1U] =
 						expected_result[1];
 
 					current->thread.user_simd_valid = 0;
-					current->thread.user_fpcr = BIT(22) | BIT(24);
-					current->thread.user_fpsr = BIT(27) | BIT(4);
+					current->thread.user_fpcr = BIT(22) |
+								    BIT(24);
+					current->thread.user_fpsr = BIT(27) |
+								    BIT(4);
 					tcti_advsimd_compare_seed_regs(
-						&regs, context->instructions, instruction);
+						&regs, context->instructions,
+						instruction);
 					expected_regs = regs;
 					expected_regs.pc += sizeof(u32);
 
-					result = tcti_resume_user(current, &regs,
-								  current->mm);
+					result = tcti_resume_user(
+						current, &regs, current->mm);
 
 					KUNIT_EXPECT_EQ_MSG(
-						test, TCTI_EXIT_SYSCALL, result.reason,
-						"%s q=%u size=%u overlap=%zu",
+						test, TCTI_EXIT_SYSCALL,
+						result.reason,
+						"%s q=%u size=%u overlap=%zu operands=%zu",
 						leaf->source_name, q, size,
-						overlap_index);
-					KUNIT_EXPECT_EQ(test, 0L, result.status);
+						overlap_index, operand_index);
+					KUNIT_EXPECT_EQ(test, 0L,
+							result.status);
 					KUNIT_EXPECT_EQ(test, 0UL,
 							result.fault_address);
 					KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH,
 							result.fault_access);
-					KUNIT_EXPECT_EQ(
-						test,
-						context->instructions + sizeof(u32),
-						result.pc);
 					KUNIT_EXPECT_EQ(test,
-							TCTI_ADVSIMD_COMPARE_SVC,
-							result.instruction);
-					KUNIT_EXPECT_MEMEQ(test, expected_simd,
-							   current->thread.user_simd,
-							   sizeof(expected_simd));
-					KUNIT_EXPECT_EQ(test, 1UL,
-							current->thread.user_simd_valid);
-					KUNIT_EXPECT_EQ(test, BIT(22) | BIT(24),
-							current->thread.user_fpcr);
-					KUNIT_EXPECT_EQ(test, BIT(27) | BIT(4),
-							current->thread.user_fpsr);
-					KUNIT_EXPECT_MEMEQ(test, &expected_regs, &regs,
-							   sizeof(expected_regs));
+							context->instructions +
+								sizeof(u32),
+							result.pc);
+					KUNIT_EXPECT_EQ(
+						test, TCTI_ADVSIMD_COMPARE_SVC,
+						result.instruction);
+					KUNIT_EXPECT_MEMEQ(
+						test, expected_simd,
+						current->thread.user_simd,
+						sizeof(expected_simd));
+					KUNIT_EXPECT_EQ(
+						test, 1UL,
+						current->thread.user_simd_valid);
+					KUNIT_EXPECT_EQ(
+						test, BIT(22) | BIT(24),
+						current->thread.user_fpcr);
+					KUNIT_EXPECT_EQ(
+						test, BIT(27) | BIT(4),
+						current->thread.user_fpsr);
+					KUNIT_EXPECT_MEMEQ(
+						test, &expected_regs, &regs,
+						sizeof(expected_regs));
 
 					ret = tcti_read_user_data(
-						current->mm, context->instructions,
-						after_program, sizeof(after_program));
+						current->mm,
+						context->instructions,
+						after_program,
+						sizeof(after_program));
 					KUNIT_ASSERT_EQ(test, 0, ret);
-					KUNIT_EXPECT_MEMEQ(test, expected_program,
-							   after_program,
-							   sizeof(expected_program));
+					KUNIT_EXPECT_MEMEQ(
+						test, expected_program,
+						after_program,
+						sizeof(expected_program));
 				}
 			}
 		}
@@ -533,6 +656,7 @@ static void tcti_advsimd_compare_source_leaves_resume(struct kunit *test)
 
 static struct kunit_case tcti_advsimd_compare_source_bound_cases[] = {
 	KUNIT_CASE(tcti_advsimd_compare_source_bindings),
+	KUNIT_CASE(tcti_advsimd_compare_operand_corpus_distinguishes_predicates),
 	KUNIT_CASE(tcti_advsimd_compare_legal_fields_decode),
 	KUNIT_CASE(tcti_advsimd_compare_reserved_1d_rejected),
 	KUNIT_CASE(tcti_advsimd_compare_source_leaves_resume),
