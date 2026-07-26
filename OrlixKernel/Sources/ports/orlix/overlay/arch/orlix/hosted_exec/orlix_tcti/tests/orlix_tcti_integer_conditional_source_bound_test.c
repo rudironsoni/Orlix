@@ -11,6 +11,7 @@
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "target_instruction_artifact.h"
 
 #define INTEGER_CONDITIONAL_SVC 0xd4000001U
 #define INTEGER_CONDITIONAL_NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
@@ -88,6 +89,15 @@ static const struct orlix_tcti_integer_conditional_leaf
 	 ORLIX_TCTI_DECODE_MULTIPLY_ADD_SUB},
 };
 
+static const char *orlix_tcti_integer_conditional_artifact_string(
+	const struct orlix_tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+
+	return (const char *)artifact->string_pool + offset;
+}
+
 static unsigned long orlix_tcti_integer_conditional_map(struct kunit *test,
 						  u32 instruction) {
 	const u32 program[] = {instruction, INTEGER_CONDITIONAL_SVC};
@@ -127,16 +137,34 @@ static struct orlix_tcti_result orlix_tcti_integer_conditional_run(struct kunit 
 }
 
 static void orlix_tcti_integer_conditional_source_bindings(struct kunit *test) {
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	struct orlix_tcti_target_instruction_artifact_validation_result validation;
 	size_t index;
 
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_target_instruction_artifact_validate(artifact,
+								    &validation));
+	KUNIT_ASSERT_EQ(test, 4350U, artifact->leaf_count);
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_integer_conditional_leaves);
 	     index++) {
 		const struct orlix_tcti_integer_conditional_leaf *leaf =
 		    &orlix_tcti_integer_conditional_leaves[index];
+		const struct orlix_tcti_target_instruction_artifact_leaf *source;
+		const char *source_name;
 		struct orlix_tcti_decoded_instruction decoded =
 		    orlix_tcti_decode_aarch64(leaf->pattern);
 
 		KUNIT_EXPECT_GT(test, leaf->ordinal, (u16)0);
+		KUNIT_ASSERT_LT(test, (u32)leaf->ordinal, artifact->leaf_count);
+		source = &artifact->leaves[leaf->ordinal];
+		source_name = orlix_tcti_integer_conditional_artifact_string(
+			artifact, source->name_offset);
+		KUNIT_ASSERT_NOT_NULL(test, source_name);
+		KUNIT_EXPECT_STREQ(test, leaf->name, source_name);
+		KUNIT_EXPECT_EQ(test, leaf->mask, source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, leaf->pattern, source->encoding_pattern);
 		KUNIT_EXPECT_EQ(test, leaf->pattern,
 				leaf->pattern & leaf->mask);
 		KUNIT_EXPECT_EQ_MSG(test, leaf->decode_class,
