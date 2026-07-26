@@ -27408,7 +27408,7 @@ static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 							      (signal_all_nans << 4) |
 							      nzcv;
 						decoded = tcti_decode_aarch64(instruction);
-						if (type > 1) {
+						if (type == 2) {
 							KUNIT_ASSERT_EQ_MSG(
 								test, TCTI_DECODE_UNSUPPORTED,
 								decoded.decode_class,
@@ -27431,6 +27431,7 @@ static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 						KUNIT_EXPECT_EQ(test, signal_all_nans,
 								decoded.fp_signal_all_nans);
 						KUNIT_EXPECT_EQ(test,
+								type == 3 ? sizeof(u16) :
 								type ? sizeof(u64) : sizeof(u32),
 								decoded.access_size);
 					}
