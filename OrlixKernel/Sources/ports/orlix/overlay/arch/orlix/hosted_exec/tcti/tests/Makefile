@@ -14,6 +14,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_cssc_min_max_immediate_test.o \
 	tcti_crypto_decode_boundary_test.o \
 	tcti_crc32_decode_boundary_test.o \
+	tcti_crc32_source_bound_test.o \
 	tcti_crypto_extension_decode_boundary_test.o \
 	tcti_atomic_128_rmw_test.o \
 	target_lse_operation_catalog.o \
