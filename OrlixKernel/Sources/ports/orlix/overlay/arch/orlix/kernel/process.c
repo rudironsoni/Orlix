@@ -13,7 +13,7 @@
 #include <asm/hosted_exec.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
-#include <asm/tcti.h>
+#include <asm/orlix_tcti.h>
 #include <asm/tlbflush.h>
 
 struct task_struct *orlix_current_task = &init_task;
@@ -68,7 +68,7 @@ asmlinkage void orlix_ret_from_fork_user(struct pt_regs *regs)
 		do_exit(0);
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
-	if (!IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI))
+	if (!IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC))
 		orlix_sync_current_user_mappings(regs);
 	orlix_hosted_enter_user(regs);
 #endif
@@ -84,9 +84,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	regs->syscallno = NO_SYSCALL;
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	flush_tlb_mm(current->mm);
-#if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
-	tcti_flush_task_state(current);
-	pr_debug("Orlix TCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
+	orlix_tcti_flush_task_state(current);
+	pr_debug("OrlixTCTI: linux exec start_thread task=%s pid=%d pc=%#lx sp=%#lx pstate=%#lx syscallno=%d\n",
 		current->comm, task_pid_nr(current), regs->pc, regs->sp,
 		regs->pstate, regs->syscallno);
 #endif
@@ -97,9 +97,9 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
-	tcti_sve_state_reset(&current->thread.user_sve,
+	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
-			     TCTI_SVE_DEFAULT_VL_BYTES);
+			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -114,17 +114,17 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 void flush_thread(void)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
-#if IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
-	tcti_flush_task_state(current);
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
+	orlix_tcti_flush_task_state(current);
 #endif
 	current->thread.user_tls = 0;
 	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
 	current->thread.user_simd_valid = 1;
-	tcti_sve_state_reset(&current->thread.user_sve,
+	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
-			     TCTI_SVE_DEFAULT_VL_BYTES);
+			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -151,8 +151,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_fpsr = 0;
 	p->thread.user_fpcr = 0;
 	p->thread.user_simd_valid = 0;
-	tcti_sve_state_reset(&p->thread.user_sve, p->thread.user_simd,
-			     TCTI_SVE_DEFAULT_VL_BYTES);
+	orlix_tcti_sve_state_reset(&p->thread.user_sve, p->thread.user_simd,
+			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
@@ -184,7 +184,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 		p->thread.user_fpsr = current->thread.user_fpsr;
 		p->thread.user_fpcr = current->thread.user_fpcr;
 		p->thread.user_simd_valid = current->thread.user_simd_valid;
-		ret = tcti_sve_state_copy(&p->thread.user_sve,
+		ret = orlix_tcti_sve_state_copy(&p->thread.user_sve,
 					  p->thread.user_simd,
 					  &current->thread.user_sve,
 					  current->thread.user_simd);
@@ -215,8 +215,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 
 void exit_thread(struct task_struct *task)
 {
-#if defined(ORLIX_APP_HOSTED_BOOT) && IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI)
-	tcti_release_task_state(task);
+#if defined(ORLIX_APP_HOSTED_BOOT) && IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
+	orlix_tcti_release_task_state(task);
 #else
 	(void)task;
 #endif

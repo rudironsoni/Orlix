@@ -68,7 +68,6 @@ AuthKey_*.p8
 .DS_Store
 Orlix.xcodeproj/
 OrlixKernel.xcodeproj/
-OrlixSystem.xcodeproj/
 
 # Build artifacts
 /build/

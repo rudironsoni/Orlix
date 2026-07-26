@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: partial
 summary: "Remote Rich Clipboard Forwarding (Draft Spec)."
 part_of:
@@ -41,8 +41,8 @@ That is correct for normal terminal paste, but it breaks down for rich clipboard
 - Users increasingly want to paste screenshots and other images into remote coding/agent workflows.
 
 The current pipeline is explicitly text-only:
-- [Clipboard.swift](../../../Orlix/App/Orlix/Core/Terminal/Clipboard.swift)
-- [Ghostty.App.swift](../../../Orlix/App/Orlix/GhosttyTerminal/Ghostty.App.swift)
+- [Clipboard.swift](../../../Orlix/Orlix/Core/Terminal/Clipboard.swift)
+- [Ghostty.App.swift](../../../Orlix/Orlix/GhosttyTerminal/Ghostty.App.swift)
 
 ## Why Normal Paste Cannot Solve This
 Terminal paste is fundamentally a byte stream into stdin, not a file transfer channel.
@@ -142,9 +142,9 @@ Add a higher-level paste router in the terminal view layer:
   - `remoteRichPaste`
 
 Likely touchpoints:
-- [GhosttyTerminalView+iOS.swift](../../../Orlix/App/Orlix/GhosttyTerminal/GhosttyTerminalView+iOS.swift)
-- [GhosttyTerminalView+macOS.swift](../../../Orlix/App/Orlix/GhosttyTerminal/GhosttyTerminalView+macOS.swift)
-- [TerminalPaneSSHCoordinator.swift](../../../Orlix/App/Orlix/Features/TerminalSessions/UI/Terminal/TerminalPaneSSHCoordinator.swift)
+- [GhosttyTerminalView+iOS.swift](../../../Orlix/Orlix/GhosttyTerminal/GhosttyTerminalView+iOS.swift)
+- [GhosttyTerminalView+macOS.swift](../../../Orlix/Orlix/GhosttyTerminal/GhosttyTerminalView+macOS.swift)
+- [TerminalPaneSSHCoordinator.swift](../../../Orlix/Orlix/Features/TerminalSessions/UI/Terminal/TerminalPaneSSHCoordinator.swift)
 
 Important distinction:
 - Ghostty clipboard callbacks remain for terminal-native text copy/paste.
@@ -222,7 +222,7 @@ enum RichPasteOutcome {
 Use the existing SSH connection as a control/transfer channel.
 
 V1 preferred implementation after Kitty capability has been ruled out or disabled:
-- add an SSH upload primitive in [SSHClient.swift](../../../Orlix/App/Orlix/Core/SSH/SSHClient.swift)
+- add an SSH upload primitive in [SSHClient.swift](../../../Orlix/Orlix/Core/SSH/SSHClient.swift)
 - create remote directories with `execute(...)`
 - transfer file bytes with a dedicated SFTP or SCP-style implementation
 

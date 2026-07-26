@@ -81,7 +81,7 @@ def require_platform_map(value: Any, label: str, value_type: type) -> dict[str, 
 
 def scan_forbidden_sources(repo_root: Path, fragments: list[str]) -> None:
     candidates = [repo_root / "project.yml"]
-    source_root = repo_root / "Orlix/App/Orlix"
+    source_root = repo_root / "Orlix/Orlix"
     candidates.extend(
         path for path in source_root.rglob("*") if path.is_file() and path.suffix in APP_SOURCE_SUFFIXES
     )

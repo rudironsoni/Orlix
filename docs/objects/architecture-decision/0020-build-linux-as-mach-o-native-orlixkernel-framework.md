@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0020"
 summary: "Durable Orlix architecture decision ADR 0020."
@@ -11,7 +11,7 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 ---
 
-# ADR 0020: Build Linux As Mach-O-Native OrlixKernel Framework
+# ADR 0020: Build Linux As Mach-O-Native Private Static OrlixKernel
 
 ## Status
 
@@ -24,6 +24,8 @@ OrlixKernel is the Linux kernel product that the iOS app hosts. The product arti
 iOS signs and links Mach-O binaries. The product cannot boot a standalone ELF kernel image, relocate an ELF kernel payload at runtime, convert `vmlinux.o` into Mach-O as the product architecture, or present `vmlinux`, `vmlinux.o`, or another ELF payload as the OrlixKernel product artifact.
 
 ## Decision
+
+ADR 0030 fixes `OrlixKernel.xcframework` as a private static implementation artifact with identifier `com.rudironsoni.orlix.os.kernel`. `OrlixOS.xcframework` is the sole public SDK and statically consumes OrlixKernel. References below to the product kernel artifact describe this private build artifact, not a consumer-facing framework.
 
 `OrlixKernel.xcframework` is the product kernel artifact. It contains upstream Linux plus the Orlix arch port compiled as Mach-O-native iOS code. The app does not boot a standalone ELF image. The framework links real Linux kernel code directly into the signed iOS binary, including `start_kernel()`, once the Mach-O-native Linux build is complete.
 
@@ -48,7 +50,7 @@ During bring-up, `OrlixBoot()` may return `ORLIX_BOOT_STATUS_UNAVAILABLE` if a s
 - The product link format is Mach-O, not ELF.
 - Kbuild remains source, config, and generation truth where useful, but the product artifact is not `vmlinux`.
 - Linux UAPI headers still come from standard `headers_install`.
-- `OrlixKernel.framework` must not include Darwin, Foundation, POSIX host, libc, MLibC, musl, or glibc headers in Linux-owned code.
+- `OrlixKernel.xcframework` must not include Darwin, Foundation, POSIX host, libc, MLibC, musl, or glibc headers in Linux-owned code.
 - Host mechanics stay behind `OrlixHostAdapter/Sources`.
 - iOS slices must preserve one Linux userspace ABI.
 - `vmlinux`, `vmlinux.o`, and ELF payloads may appear only in explicit non-product experiments.
@@ -87,6 +89,6 @@ Unsupported section classes may be stubbed only when the selected first slice ca
 
 ## Initial Build Slice
 
-The first Mach-O-native lane prepares the generated Orlix Linux port tree from `Build/OrlixKernel/upstream`, `Build/OrlixKernel/src`, and `OrlixKernel/Sources/ports/orlix`, runs Kbuild preparation and DTB generation, compiles selected Linux-owned source from the generated tree with iOS Mach-O target triples, archives those objects as `Build/OrlixKernel/<profile>/<platform>/OrlixKernel.a`, links the matching archive into `OrlixKernel.framework`, and verifies exported arch boot symbols.
+The first Mach-O-native lane prepares the generated Orlix Linux port tree from `Build/OrlixKernel/upstream`, `Build/OrlixKernel/src`, and `OrlixKernel/Sources/ports/orlix`, runs Kbuild preparation and DTB generation, compiles selected Linux-owned source from the generated tree with iOS Mach-O target triples, archives those objects as `Build/OrlixKernel/<profile>/<platform>/OrlixKernel.a`, packages the matching archive into private static `OrlixKernel.xcframework`, and verifies exported arch boot symbols.
 
 The current dependency lane includes real upstream `init/main.c` and the Orlix hosted-exec/syscall substrate. Remaining failures in this lane are normal upstream Linux dependency-closure work, not permission to add fake `start_kernel()` providers or boot-only package shortcuts.

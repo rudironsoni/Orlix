@@ -15,6 +15,7 @@
 #define ORLIX_HOST_USER_FRAME_SYSCALL_RETURN	(1UL << 2)
 
 #define ORLIX_HOST_USER_TRAP_TLS_RESUME_OFFSET	16UL
+#define ORLIX_HOST_USER_TLS_REPAIR_HISTORY_COUNT	32U
 
 #define ORLIX_HOST_AARCH64_SVC0_INSN		0xd4000001UL
 #define ORLIX_HOST_AARCH64_SYSCALL_BRK_INSN	0xd4209e80UL
@@ -37,11 +38,33 @@ struct orlix_host_user_trap_frame {
 	unsigned long frame_flags;
 };
 
+struct orlix_host_user_tls_repair_request {
+	unsigned long user_base;
+	unsigned long user_limit;
+	unsigned long fault_address;
+	unsigned long installed_host_tls;
+	unsigned long live_host_tls;
+	unsigned long active_user_tls;
+	unsigned long regs[31];
+	unsigned int faulting_instruction;
+	unsigned int instruction_history[ORLIX_HOST_USER_TLS_REPAIR_HISTORY_COUNT];
+	unsigned int instruction_history_count;
+};
+
+struct orlix_host_user_tls_repair_decision {
+	unsigned int register_index;
+	unsigned long register_value;
+	unsigned long user_tls;
+};
+
 typedef void (*orlix_host_user_trap_entry_t)(int signal_number,
 					     const struct orlix_host_user_trap_frame *frame);
 typedef int (*orlix_host_kernel_fault_handler_t)(unsigned long pc,
 						 unsigned long fault_address,
 						 unsigned long fault_flags);
+typedef int (*orlix_host_user_tls_repair_handler_t)(
+	const struct orlix_host_user_tls_repair_request *request,
+	struct orlix_host_user_tls_repair_decision *decision);
 
 int orlix_host_user_trap_install(unsigned long user_base,
 				 unsigned long user_limit,
@@ -51,6 +74,7 @@ int orlix_host_user_trap_install(unsigned long user_base,
 				 const unsigned long *active_user_tls,
 				 unsigned long *user_active,
 				 orlix_host_kernel_fault_handler_t kernel_fault_handler,
+				 orlix_host_user_tls_repair_handler_t tls_repair_handler,
 				 orlix_host_user_trap_entry_t entry);
 int orlix_host_user_trap_start_timer(unsigned long long period_ns);
 void orlix_host_user_trap_resume(

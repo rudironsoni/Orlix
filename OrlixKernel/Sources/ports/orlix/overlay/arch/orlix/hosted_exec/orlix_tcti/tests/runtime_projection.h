@@ -1,0 +1,126 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef ORLIX_TCTI_RUNTIME_PROJECTION_H
+#define ORLIX_TCTI_RUNTIME_PROJECTION_H
+
+#ifdef ORLIX_TCTI_RUNTIME_PROJECTION_HOST_TEST
+#include <stdbool.h>
+#include <stddef.h>
+#else
+#include <linux/types.h>
+#endif
+
+#define ORLIX_TCTI_RUNTIME_PROJECTION_MAX_TARGET_LEAVES 4350U
+#define ORLIX_TCTI_RUNTIME_PROJECTION_MAX_FEATURES_PER_LEAF 4350U
+#define ORLIX_TCTI_RUNTIME_PROJECTION_MAX_CAPABILITY_MAPPINGS \
+	(2U * sizeof(unsigned long) * 8U)
+
+enum orlix_tcti_runtime_capability_word {
+	ORLIX_TCTI_RUNTIME_CAPABILITY_HWCAP,
+	ORLIX_TCTI_RUNTIME_CAPABILITY_HWCAP2,
+};
+
+/*
+ * This is deliberately a source-leaf ledger, not the decoder-family summary.
+ * A capability may be promoted only after every source leaf whose predicate
+ * includes its Arm feature has its owning classification and proof recorded.
+ */
+enum orlix_tcti_runtime_leaf_classification {
+	ORLIX_TCTI_RUNTIME_LEAF_UNCLASSIFIED = 0,
+	ORLIX_TCTI_RUNTIME_LEAF_REQUIRED_EL0,
+	ORLIX_TCTI_RUNTIME_LEAF_NON_EL0,
+	ORLIX_TCTI_RUNTIME_LEAF_ARCH_UNDEFINED_OR_UNALLOCATED,
+	ORLIX_TCTI_RUNTIME_LEAF_ALIAS_OR_DUPLICATE,
+};
+
+struct orlix_tcti_runtime_projection_leaf {
+	const char *name;
+	const char *const *features;
+	size_t feature_count;
+	/*
+	 * Structural feature candidates do not authorize a capability until the
+	 * complete typed feature-domain audit resolves their semantic regions.
+	 */
+	bool unresolved_feature_semantics;
+	enum orlix_tcti_runtime_leaf_classification classification;
+	const char *proof;
+	bool source_bound;
+	bool proved;
+};
+
+struct orlix_tcti_runtime_projection_ledger {
+	const struct orlix_tcti_runtime_projection_leaf *leaves;
+	size_t leaf_count;
+	size_t target_leaf_count;
+};
+
+/*
+ * A provider keeps the live kernel audit allocation-free: the canonical
+ * generated target inventory has 4,350 rows and need not be copied onto a
+ * kernel stack merely to project a runtime capability policy.
+ */
+struct orlix_tcti_runtime_projection_provider {
+	const void *context;
+	size_t leaf_count;
+	int (*read_leaf)(const void *context, size_t index,
+			 struct orlix_tcti_runtime_projection_leaf *leaf);
+};
+
+struct orlix_tcti_runtime_projection_profile {
+	unsigned long hwcap;
+	unsigned long hwcap2;
+};
+
+struct orlix_tcti_runtime_projection_capability {
+	enum orlix_tcti_runtime_capability_word word;
+	unsigned long bit;
+	const char *feature;
+};
+
+struct orlix_tcti_runtime_projection_result {
+	unsigned long advertised_hwcap;
+	unsigned long advertised_hwcap2;
+	unsigned long mapped_hwcap;
+	unsigned long mapped_hwcap2;
+	unsigned long proved_hwcap;
+	unsigned long proved_hwcap2;
+	unsigned long unmapped_advertised_hwcap;
+	unsigned long unmapped_advertised_hwcap2;
+	unsigned long advertised_without_proof_hwcap;
+	unsigned long advertised_without_proof_hwcap2;
+	size_t mapping_count;
+	/* Mappings whose authoritative feature cohort is absent from the target. */
+	size_t missing_feature_mapping_count;
+	size_t unadvertised_mapping_count;
+	size_t target_leaf_count;
+	size_t classified_leaf_count;
+	size_t source_bound_leaf_count;
+	size_t unproved_leaf_count;
+	size_t unadvertised_incomplete_feature_count;
+};
+
+/*
+ * Audit the complete pinned 4,350-leaf source ledger against a runtime
+ * capability profile. Both ledger counts must exactly equal the authoritative
+ * target count. Unadvertised gaps remain visible in the result but do not
+ * make Linux advertise a capability or erase target leaves.
+ */
+int orlix_tcti_runtime_projection_audit_ledger(
+	const struct orlix_tcti_runtime_projection_ledger *ledger,
+	const struct orlix_tcti_runtime_projection_profile *profile,
+	const struct orlix_tcti_runtime_projection_capability *capabilities,
+	size_t capability_count,
+	struct orlix_tcti_runtime_projection_result *result);
+
+/* Audit the complete pinned 4,350-leaf provider without copying its ledger. */
+int orlix_tcti_runtime_projection_audit_provider(
+	const struct orlix_tcti_runtime_projection_provider *provider,
+	const struct orlix_tcti_runtime_projection_profile *profile,
+	const struct orlix_tcti_runtime_projection_capability *capabilities,
+	size_t capability_count,
+	struct orlix_tcti_runtime_projection_result *result);
+
+/* Audit the actual asm/isa.h policy against the repository's complete ledger. */
+int orlix_tcti_runtime_projection_audit(
+	struct orlix_tcti_runtime_projection_result *result);
+
+#endif /* ORLIX_TCTI_RUNTIME_PROJECTION_H */

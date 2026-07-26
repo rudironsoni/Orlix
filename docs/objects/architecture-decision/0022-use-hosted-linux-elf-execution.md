@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-25
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0022"
 summary: "Durable Orlix architecture decision ADR 0022."
@@ -27,7 +27,7 @@ Orlix has separate products that must not collapse into one runtime facade:
 
 - `OrlixKernel` is upstream Linux plus the `arch/orlix` port, compiled into the iOS-hosted kernel product.
 - `OrlixMLibC` is the libc for Orlix Linux userspace and tracks upstream mlibc.
-- `OrlixOS` is the delivered OS Kit and app-facing Linux session and payload surface.
+- `OrlixOS.xcframework` is the sole public SDK and app-facing `OrlixMachine` and `OrlixOS.Containers` surface.
 - `OrlixHostAdapter` owns private iOS/Darwin mediation only.
 
 iOS and XNU/Darwin are the physical host environment. They are not the Orlix userspace ABI. Orlix userspace must see Linux UAPI and Linux syscall behavior owned by `OrlixKernel`.
@@ -46,7 +46,7 @@ This is a hybrid execution design, not an all-interpreted system. The Orlix app,
 
 Product development and simulator validation use the same TCTI guest backend and executable-memory restrictions as the published app. Simulator-only host capabilities must not substitute for release-equivalent proof. A separate direct-native guest oracle may be used for comparison or diagnosis, but it cannot satisfy product gates. App Store guest ELF text must not use executable anonymous mappings, generated executable pages, JIT, MAP_JIT, or RWX memory.
 
-The first physical-iPhone userspace backend is Orlix TCTI. TCTI belongs under `arch/orlix` and only owns guest AArch64 EL0 instruction fetch, decode, data-only gadget-program dispatch, guest register execution, guest memory fast paths, `svc #0` exits, user fault exits, yield/signal exits, unsupported-instruction reporting, and hot-path counters.
+The first physical-iPhone userspace backend is `OrlixTCTI`. OrlixTCTI belongs under `arch/orlix` and only owns guest AArch64 EL0 instruction fetch, decode, data-only gadget-program dispatch, guest register execution, guest memory fast paths, `svc #0` exits, user fault exits, yield/signal exits, unsupported-instruction reporting, and hot-path counters.
 
 TCTI completion requires the complete AArch64 EL0 instruction set exposed to the guest, including integer, branch, load/store, atomic, SIMD, floating-point, crypto, and system-register behavior available in the declared guest ISA profile. Package workloads may prioritize implementation order, but they do not define instruction coverage. An architecturally valid instruction in the exposed profile may not be replaced by an unsupported-instruction exit, a hard-coded workload special case, or a reduced semantic approximation. Reserved, unallocated, privileged, and unadvertised optional-extension encodings must produce their architecturally defined exception or deterministic TCTI exit.
 
@@ -149,4 +149,4 @@ Linux ELF / AArch64 Linux userspace
 - Treating QEMU, Wasm, JIT, MAP_JIT, RWX memory, generated executable memory, or host-executable guest text as the TestFlight/App Store path.
 - Copying iSH, OpenMinis, or ios-linuxkit internals wholesale and renaming them Orlix.
 
-Orlix TCTI is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel’s existing Linux userspace surface run on iOS without host-executable guest text.
+`OrlixTCTI` is an Orlix-owned, arch/orlix, no-JIT, same-ISA, tail-call-threaded user-instruction backend for unmodified AArch64 Linux ELF binaries. It does not replace Linux; it lets OrlixKernel's existing Linux userspace surface run on iOS without host-executable guest text.
