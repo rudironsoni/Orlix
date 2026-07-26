@@ -27,50 +27,86 @@ suites = [
     {
         "id": "complete-target-isa-audit",
         "owner": "OrlixKernel C-native ISA audit",
-        "command": "make tcti-isa-audit",
-        "proves": "complete target inventory, exact feature-domain evaluation, classification, and proof-registry integrity",
+        "command": "make orlix-tcti-isa-audit",
+        "required_conditions": "requires a complete target inventory, exact feature-domain evaluation, classification, and proof-registry integrity; the envelope records no audit result",
     },
     {
-        "id": "kernel-kunit-kselftest",
-        "owner": "OrlixKernel and upstream Linux",
-        "command": "make tcti-kernel-tests",
-        "proves": "TCTI structured execution plus Linux-visible kernel interfaces",
+        "id": "kernel-dependency-kunit",
+        "owner": "OrlixKernel",
+        "command": "make orlix-tcti-kernel-tests",
+        "required_conditions": "requires app-hosted kernel dependency proof and production-path OrlixTCTI KUnit; the envelope records no test result",
+    },
+    {
+        "id": "kernel-kselftest",
+        "owner": "upstream Linux",
+        "command": "make orlix-tcti-kernel-tests",
+        "required_conditions": "requires Linux kernel-interface kselftest after KUnit; the envelope records no test result",
     },
     {
         "id": "mlibc",
         "owner": "OrlixMLibC and upstream mlibc",
         "command": "make mlibc-tests PROFILE=development",
-        "proves": "libc behavior through the upstream mlibc suite",
+        "required_conditions": "requires libc proof through the upstream mlibc suite after kernel-interface proof; the envelope records no test result",
+    },
+    {
+        "id": "mlibc-syscall-uapi",
+        "owner": "OrlixMLibC and upstream Linux",
+        "command": "owning OrlixMLibC-built kselftest command",
+        "required_conditions": "requires OrlixMLibC-built syscall and UAPI proof after upstream mlibc proof; the envelope records no test result",
+    },
+    {
+        "id": "posix-shell",
+        "owner": "OrlixOS package integration",
+        "command": "owning POSIX shell proof command",
+        "required_conditions": "requires normal Linux POSIX shell environment proof after OrlixMLibC syscall and UAPI proof; the envelope records no test result",
     },
     {
         "id": "coreutils",
         "owner": "OrlixOS package integration and upstream Coreutils",
         "command": "make coreutils-tests PROFILE=development",
-        "proves": "packaged Coreutils behavior through its upstream suite",
+        "required_conditions": "requires Coreutils compatibility proof without replacing the package ladder; the envelope records no test result",
+    },
+    {
+        "id": "jq",
+        "owner": "OrlixOS package integration",
+        "command": "owning jq package proof command",
+        "required_conditions": "requires jq package proof after the POSIX shell tier; the envelope records no test result",
+    },
+    {
+        "id": "curl",
+        "owner": "OrlixOS package integration",
+        "command": "owning curl package proof command",
+        "required_conditions": "requires curl package proof after jq; the envelope records no test result",
+    },
+    {
+        "id": "zsh",
+        "owner": "OrlixOS package integration",
+        "command": "owning zsh package proof command",
+        "required_conditions": "requires zsh package proof after curl; the envelope records no test result",
     },
     {
         "id": "hostadapter",
         "owner": "OrlixHostAdapter",
         "command": "make hostadapter-tests",
-        "proves": "private Darwin memory and source-preserving terminal transport mechanics",
+        "required_conditions": "requires private Darwin memory and source-preserving terminal transport proof; the envelope records no test result",
     },
     {
         "id": "orlixos",
         "owner": "OrlixOS",
         "command": "make orlixos-tests",
-        "proves": "payload, session, and app-facing OS Kit behavior",
+        "required_conditions": "requires payload, session, and app-facing OS Kit proof; the envelope records no test result",
     },
     {
         "id": "app",
         "owner": "native Orlix app",
         "command": "make app-tests",
-        "proves": "application integration and presentation",
+        "required_conditions": "requires application integration and presentation proof; the envelope records no test result",
     },
     {
         "id": "app-hosted-runtime",
         "owner": "native app plus OrlixOS session",
         "command": "make runtime-tests PROFILE=development",
-        "proves": "app-hosted OCI lifecycle, shell, serial and virtio PTY, input, output, and resize integration",
+        "required_conditions": "requires the complete app-hosted promotion suite to be rerun after per-family ISA coverage closes; the envelope records no test result",
     },
 ]
 
@@ -81,7 +117,7 @@ status = {
     "product_profiles": ["release", "development"],
     "test_suites": suites,
     "completion": "unverified",
-    "completion_reason": "Owning suites must provide their own current results.",
+    "completion_reason": "This is a scope contract. Owning suites provide current results in their native formats.",
 }
 
 envelope = {
@@ -98,15 +134,16 @@ envelope = {
             "OrlixKernel KUnit and Linux kselftest",
             "OrlixMLibC tests",
             "upstream Coreutils tests",
+            "OrlixOS package integration",
             "OrlixHostAdapter XCTest",
             "OrlixOS XCTest",
             "native app XCTest",
         ],
         "forbidden_substitutes": [
-            "host-side TCTI behavioral models",
-            "terminal text or log parsing as TCTI proof",
+            "host-side OrlixTCTI behavioral models",
+            "terminal text or log parsing as OrlixTCTI proof",
             "generated-tree edits",
-            "a TCTI-specific product profile",
+            "an OrlixTCTI-specific product profile",
         ],
     },
     "completion": "unverified",
@@ -135,7 +172,7 @@ elif mode == "check":
     matches = [value for value in forbidden if value in encoded]
     if matches:
         raise SystemExit(f"task envelope contains retired contracts: {matches}")
-    print("Orlix TCTI task envelope valid")
+    print("OrlixTCTI task envelope valid")
 else:
     raise SystemExit("usage: scope-envelope status|next|check")
 PY

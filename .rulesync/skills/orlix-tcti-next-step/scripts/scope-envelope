@@ -27,7 +27,7 @@ suites = [
     {
         "id": "complete-target-isa-audit",
         "owner": "OrlixKernel C-native ISA audit",
-        "command": "make tcti-isa-audit",
+        "command": "make orlix-tcti-isa-audit",
         "required_conditions": "requires a complete target inventory, exact feature-domain evaluation, classification, and proof-registry integrity; the envelope records no audit result",
     },
     {
