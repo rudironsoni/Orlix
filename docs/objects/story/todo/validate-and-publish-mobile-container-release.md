@@ -4,7 +4,7 @@ tags:
   - story
   - release
   - container
-updated: 2026-07-15
+updated: 2026-07-26
 status: todo
 summary: "Validate and publish the mobile container and Docker release after the mobile terminal release."
 story_of:
@@ -23,6 +23,6 @@ blocks:
 
 # Validate and publish the mobile container release
 
-As a release operator, I want the already-published mobile terminal product to add Local Instance container and Docker behavior only after OCI lifecycle, Docker conformance, and downloaded-content distribution approval pass for one exact candidate.
+As a release operator, I want the already-published mobile terminal product to add `OrlixOS.Containers`, Docker, and Compose behavior only after OrlixMachine isolation, OCI lifecycle, Docker conformance, and downloaded-content distribution approval pass for one exact candidate.
 
 The container release cannot replace or precede the mobile terminal release. Simulator validation is mandatory, physical-device validation is authorization-dependent, and archive or upload requires explicit operator authorization.

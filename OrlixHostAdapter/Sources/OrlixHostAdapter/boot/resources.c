@@ -1,5 +1,5 @@
 #include "OrlixHostAdapter/boot/resources.h"
-#include "OrlixHostAdapter/runtime/host_tls.h"
+#include "OrlixHostAdapter/execution/host_tls.h"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <errno.h>

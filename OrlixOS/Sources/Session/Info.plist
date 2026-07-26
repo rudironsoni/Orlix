@@ -18,30 +18,26 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
-    <key>OrlixOSPayloadBundleExtension</key>
-    <string>$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)</string>
-    <key>OrlixOSPayloadBundleName</key>
-    <string>$(ORLIX_OS_PAYLOAD_BUNDLE_NAME)</string>
-    <key>OrlixOSPayloadProfileInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_SELECTED_PROFILE_INFO_KEY)</string>
-    <key>OrlixOSPayloadKernelCommandLineInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_KERNEL_COMMAND_LINE_INFO_KEY)</string>
-    <key>OrlixOSPayloadRootInitramfsInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_ROOT_INITRAMFS_INFO_KEY)</string>
-    <key>OrlixOSPayloadBaseRootImageInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_BASE_ROOT_IMAGE_INFO_KEY)</string>
-    <key>OrlixOSPayloadStateRootImageInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_STATE_ROOT_IMAGE_INFO_KEY)</string>
-    <key>OrlixOSPayloadBaseRootDeviceInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_BASE_ROOT_DEVICE_INFO_KEY)</string>
-    <key>OrlixOSPayloadStateRootDeviceInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_STATE_ROOT_DEVICE_INFO_KEY)</string>
-    <key>OrlixOSPayloadBaseRootHostBlockDeviceInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_BASE_ROOT_HOST_BLOCK_DEVICE_INFO_KEY)</string>
-    <key>OrlixOSPayloadStateRootHostBlockDeviceInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_STATE_ROOT_HOST_BLOCK_DEVICE_INFO_KEY)</string>
-    <key>OrlixOSPayloadStateRootMinimumBytesInfoKey</key>
-    <string>$(ORLIX_OS_PAYLOAD_STATE_ROOT_MINIMUM_BYTES_INFO_KEY)</string>
+    <key>OrlixSelectedProfile</key>
+    <string>$(ORLIX_PROFILE)</string>
+    <key>OrlixKernelCommandLine</key>
+    <string>$(ORLIX_OS_KERNEL_COMMAND_LINE)</string>
+    <key>OrlixRootInitramfs</key>
+    <string>$(ORLIX_OS_ROOT_INITRAMFS_RESOURCE)</string>
+    <key>OrlixBaseRootImage</key>
+    <string>$(ORLIX_OS_BASE_ROOT_IMAGE_RESOURCE)</string>
+    <key>OrlixStateRootImage</key>
+    <string>$(ORLIX_OS_STATE_ROOT_IMAGE_RESOURCE)</string>
+    <key>OrlixBaseRootDevice</key>
+    <string>$(ORLIX_OS_BASE_ROOT_DEVICE)</string>
+    <key>OrlixStateRootDevice</key>
+    <string>$(ORLIX_OS_STATE_ROOT_DEVICE)</string>
+    <key>OrlixBaseRootHostBlockDevice</key>
+    <string>$(ORLIX_OS_BASE_ROOT_HOST_BLOCK_DEVICE)</string>
+    <key>OrlixStateRootHostBlockDevice</key>
+    <string>$(ORLIX_OS_STATE_ROOT_HOST_BLOCK_DEVICE)</string>
+    <key>OrlixStateRootMinimumBytes</key>
+    <string>$(ORLIX_OS_STATE_ROOT_MINIMUM_BYTES)</string>
     <key>OrlixOSProductRootImageIdentifier</key>
     <string>$(ORLIX_OS_PRODUCT_ROOT_IMAGE_IDENTIFIER)</string>
     <key>OrlixOSRootImageInitrdBundleExtension</key>

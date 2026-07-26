@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-15
+updated: 2026-07-26
 status: current
 summary: "Canonical repository source for app source provenance."
 ---
@@ -18,12 +18,12 @@ This document records the immutable source and native artifact inputs for the Or
 - Upstream: `https://github.com/vivy-company/vvterm.git`
 - Pinned upstream commit: `791eebae946b0831ffff3ac839e0f2b75d076458`
 - Retrieval date: 2026-07-13
-- Current Orlix fork path: `Orlix/App`
+- Current Orlix fork path: `Orlix`
 - Import method: single-parent source snapshot
 - Upstream tree: `ad7e13ae260293aa5aa2fcce6bcde240617eb383`
 - Orlix snapshot commit: `a73e449406b757cba16aef9df20e65ae13733e9d`
 
-The source snapshot was imported at `Orlix/VVTerm` and then fully renamed to `Orlix/App`. The snapshot tree exactly matches the pinned upstream tree, but the upstream repository commit ancestry is not part of Orlix history.
+The source snapshot was imported at `Orlix/VVTerm` and then renamed and later flattened into `Orlix`. The snapshot tree exactly matches the pinned upstream tree, but the upstream repository commit ancestry is not part of Orlix history.
 
 Updates must fetch an explicitly reviewed full commit, check it out in a temporary directory, replace the imported source files, and commit the result as a normal single-parent Orlix snapshot. A branch name alone is never a release input:
 
@@ -33,7 +33,7 @@ git -C /tmp/orlix-app-source fetch origin <full-reviewed-commit>
 git -C /tmp/orlix-app-source checkout --detach <full-reviewed-commit>
 ```
 
-Copy the reviewed working tree into `Orlix/App` without its `.git` directory, then compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline provenance reference. `project.yml` remains the authoritative Orlix project definition.
+Copy the reviewed working tree into `Orlix` without its `.git` directory, then compare the updated fork sources, resources, packages, entitlements, privacy manifests, extensions, unit tests, UI tests, and target settings against `project.yml`. The upstream Xcode project is retained only as a baseline provenance reference. `project.yml` remains the authoritative Orlix project definition.
 
 ## Swift package baseline
 
@@ -71,7 +71,7 @@ This check proves engineering release-input integrity only. It does not approve 
 The imported rebuild entry points are:
 
 ```sh
-cd Orlix/App
+cd Orlix
 ./scripts/build.sh ghostty
 ./scripts/build.sh ssh
 ```
@@ -80,7 +80,7 @@ The Ghostty script must default to the full pinned commit above, not the mutable
 
 ## Committed native artifact hashes
 
-Hashes use SHA-256 and were recomputed after the Orlix identity correction. The six Ghostty archives received a length-preserving replacement of a stale embedded source-product identifier with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.Orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed foreign developer workspace paths. The resulting archives passed format checks and the final application linked successfully.
+Hashes use SHA-256 and were recomputed after the Orlix identity correction. The six Ghostty archives received a length-preserving replacement of a stale embedded source-product identifier with `com.rudi.OrlixApp`. The pinned source rebuild script now patches Ghostty to the full `com.rudironsoni.orlix` identifier, but a clean Ghostty source rebuild remains blocked on installing the Zig compiler. The nine OpenSSL and libssh2 archives were rebuilt from pinned OpenSSL 3.2.0 and libssh2 1.11.0 sources in the Orlix workspace so they no longer embed foreign developer workspace paths. The resulting archives passed format checks and the final application linked successfully.
 
 | Artifact | SHA-256 |
 | --- | --- |
@@ -102,7 +102,7 @@ Hashes use SHA-256 and were recomputed after the Orlix identity correction. The 
 
 ## Licenses and notices
 
-- Imported application license: `Orlix/App/LICENSE`, GPL-3.0.
-- Imported dependency notices: `Orlix/App/THIRD_PARTY_NOTICES.md`.
+- Imported application license: `Orlix/LICENSE`, GPL-3.0.
+- Imported dependency notices: `Orlix/THIRD_PARTY_NOTICES.md`.
 
 Before public distribution, the capability and provenance gate must verify that source offers, modification notices, copyright notices, dependency licenses, App Store terms, export classification, and every statically linked dependency have written legal approval. Missing approval blocks the release.

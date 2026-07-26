@@ -4,7 +4,7 @@ tags:
   - story
   - release
   - macos
-updated: 2026-07-15
+updated: 2026-07-26
 status: todo
 summary: "Implement, validate, and publish the native Apple-silicon macOS product after both mobile releases."
 story_of:
@@ -19,6 +19,6 @@ depends_on:
 
 # Validate and publish the native macOS release
 
-As a release operator, I want the native Apple-silicon macOS product to begin only after the mobile terminal and mobile container releases are published so the Mac app carries the same terminal, Local Runtime, container, and App Store contract instead of creating an early divergent product.
+As a release operator, I want the native Apple-silicon macOS product to begin only after the mobile terminal and mobile container releases are published so the Mac app carries the same terminal, OrlixMachine, `OrlixOS.Containers`, and App Store contract instead of creating an early divergent product.
 
-The story includes the native target, OrlixKernel and OrlixOS slices, user-scoped runtime service, embedded helpers and CLIs, Herdr integration, Docker contexts, shared-folder grants, product validation, and authorized Mac App Store publication.
+The story includes the native target, the public OrlixOS slice and its private static implementation slices, user-scoped runtime service, embedded helpers and CLIs, Herdr integration, Docker contexts, shared-folder grants, product validation, and authorized Mac App Store publication.

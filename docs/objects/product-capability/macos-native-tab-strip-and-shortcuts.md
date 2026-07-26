@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: partial
 summary: "macOS Native-Feeling Tab Strip and Tab Shortcuts."
 part_of:
@@ -38,7 +38,7 @@ Shortcut remapping, server navigation shortcuts, and a server spotlight/palette 
 
 ### macOS Commands
 
-`Orlix/App/OrlixApp.swift` defines the current app command surface:
+`Orlix/Orlix/App/Orlix.swift` defines the current app command surface:
 
 - `Cmd+T`: New Tab
 - `Cmd+W`: Close Tab
@@ -368,7 +368,7 @@ Expected:
 - `Orlix/Core/UI/ServerTabChrome.swift`
 - `Orlix/Features/TerminalSessions/UI/Tabs/ConnectionTabsView.swift`
 - `Orlix/Features/RemoteFiles/UI/Components/RemoteFileTabChrome.swift`
-- `Orlix/App/OrlixApp.swift`
+- `Orlix/Orlix/App/Orlix.swift`
 
 Possible:
 

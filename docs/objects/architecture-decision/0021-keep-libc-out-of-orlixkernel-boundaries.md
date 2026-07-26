@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0021"
 summary: "Durable Orlix architecture decision ADR 0021."
@@ -36,6 +36,8 @@ HostAdapter headers, structs, callbacks, return conventions, ownership rules, an
 `OrlixHostAdapter` must not become a libc backend, Linux syscall translator, userspace runtime, package facade, userspace dynamic loader, or ABI compatibility layer. It may expose only narrow host mechanics needed by Linux-owned `arch/orlix` and `drivers/orlix` code, such as clocks, timers, execution substrate, low-level memory mapping, lifecycle notification, very-early entropy, virtio transport, and backend mechanics.
 
 `OrlixMLibC` remains a separate top-level component under `OrlixMLibC/Sources`, with tests under `OrlixMLibC/Tests`. It consumes Linux UAPI only through `headers_install` output and calls Linux-shaped syscalls. It is the only place for libc sysdeps and libc compatibility work.
+
+`OrlixMLibC.xcframework` and `OrlixCoreUtils.xcframework` are private static implementation artifacts consumed through the sole public `OrlixOS.xcframework`. Coreutils remains ordinary Linux userspace linked against OrlixMLibC; it does not move command behavior into OrlixOS, OrlixKernel, or OrlixHostAdapter.
 
 Linux kernel internal helper sources are not libc ownership. They may be added to Mach-O-native kernel builds only as real upstream Linux kernel dependencies, never as a libc substitute, and only after auditing header dependencies, exported symbols, and collisions with host or framework symbols.
 

@@ -20,9 +20,9 @@ int main(void)
 			  pc < ORLIX_FIXED_EXEC_BASE_ADDRESS + 0x01000000UL,
 			  "ET_EXEC retains its fixed Linux virtual address");
 	orlix_test_result(initialized_data == 0x0123456789abcdefULL,
-			  "ET_EXEC initialized data is readable through TCTI");
+			  "ET_EXEC initialized data is readable through OrlixTCTI");
 	zero_data = 0xfedcba9876543210ULL;
 	orlix_test_result(zero_data == 0xfedcba9876543210ULL,
-			  "ET_EXEC writable data is updated through TCTI");
+			  "ET_EXEC writable data is updated through OrlixTCTI");
 	orlix_test_exit();
 }

@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - native-app-foundation
-updated: 2026-07-15
+updated: 2026-07-26
 status: todo
 summary: "Integrate the approved Herdr terminal platform with Orlix Linux and validate its product contract."
 task_of:
@@ -17,4 +17,4 @@ blocks:
 
 # Integrate and validate the Herdr terminal platform
 
-Port and validate the Herdr server, CLI, and raw TUI behavior through normal Orlix Linux userspace, then connect the approved external pane backend without moving topology ownership into OrlixOS. Use upstream behavior, focused fault coverage, and the pinned app-hosted execution path as the acceptance surfaces.
+After commercial access exists, port and validate the Herdr server, CLI, and raw TUI behavior through normal Orlix Linux userspace, then connect the approved external Pane backend without moving topology ownership into OrlixOS. Prove the Session to Workspace to Tab to Pane hierarchy with upstream behavior, focused fault coverage, and the pinned app-hosted execution path. This task is unfinished while its commercial dependency remains todo.

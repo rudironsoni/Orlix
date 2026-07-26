@@ -44,7 +44,7 @@ static os_log_t OrlixHostTraceLog(orlix_host_trace_category_t category)
         index = 0;
     }
     if (!logs[index]) {
-        logs[index] = os_log_create("com.rudironsoni.Orlix",
+		logs[index] = os_log_create("com.rudironsoni.orlix",
                                     OrlixHostTraceCategoryName(category));
     }
     return logs[index];

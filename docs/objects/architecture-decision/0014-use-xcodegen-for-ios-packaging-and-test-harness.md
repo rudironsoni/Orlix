@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0014"
 summary: "Durable Orlix architecture decision ADR 0014."
@@ -25,13 +25,13 @@ Tuist and XcodeGen could both generate the Xcode surface. Tuist would add a larg
 
 ## Decision
 
-Use XcodeGen for the iOS project generation surface. XcodeGen describes the iOS packaging, OrlixOS payload resource bundling, and XCTest host targets that consume or link the app-hosted OrlixKernel integration. `vmlinux` is not an XcodeGen packaging input and is not a proof artifact.
+Use XcodeGen for the iOS project generation surface. XcodeGen describes iOS packaging, OrlixOS-owned framework resources, and private XCTest host targets that consume or link the app-hosted implementation layers. `vmlinux` is not an XcodeGen packaging input and is not a proof artifact.
 
 Commit `project.yml` as the durable XcodeGen source of truth. Do not commit the generated `.xcodeproj` unless a concrete future toolchain constraint requires it.
 
 XcodeGen schemes should make local Xcode use clear, but repository `make` targets own non-interactive proof orchestration for the full App Store/development by `iphoneos`/`iphonesimulator` matrix.
 
-The generated project includes `OrlixOS` as the delivered OS Kit/framework, the native application under `Orlix/App` as the interactive iOS and iPadOS host, and `OrlixTestRunner` as the private XCTest host application. The production application uses its vendored Ghostty libraries for terminal presentation, while Linux execution remains owned by Orlix.
+The generated project includes `OrlixOS.xcframework` as the sole public SDK, the native `Orlix` application under `Orlix`, `OrlixTestApp` as the private lower-layer XCTest host, and `OrlixOSTestApp` as the private public-SDK product-session host. The production application uses its vendored Ghostty libraries for terminal presentation, while Linux execution remains owned by Orlix.
 
 The full iOS proof matrix should run through repository automation using the Linux-shaped Make surface and XcodeBuildMCP, not implicitly through a generic fast local test target or a separate public command for every milestone.
 
@@ -45,9 +45,9 @@ For a selected Orlix profile, both slices must run the same Linux-visible kernel
 
 `project.yml` must not recreate boot-stub product proof. Its packaging target must depend on the app-hosted OrlixKernel integration for the selected profile.
 
-Xcode targets may run build phases that invoke repository build targets through the top-level Makefile or project Makefiles, but they must not become the source of Linux semantics or replace Kbuild proof. Target-owned payload names and bundle metadata belong in `project.yml`/target Info.plist settings; runtime code should read that metadata rather than hardcoding product bundle identifiers or resource names.
+Xcode targets may run build phases that invoke repository build targets through the top-level Makefile or project Makefiles, but they must not become the source of Linux semantics or replace Kbuild proof. Framework, target, and test-host names belong in `project.yml`. Curated distribution resources belong directly to `OrlixOS.xcframework`; no target metadata selects a separate payload bundle.
 
-XCTest targets live under project-local test roots such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `Orlix/App/OrlixTests`. They are for iOS-hosted Orlix launch, Linux test-output collection, packaging checks, OrlixOS payload/session wiring, and narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions remain in KUnit or kselftest.
+XCTest targets live under project-local test roots such as `OrlixKernel/Tests/XCTest`, `OrlixHostAdapter/Tests/XCTest`, `OrlixOS/Tests/XCTest`, and `Orlix/OrlixTests`. They are for iOS-hosted Orlix launch, Linux test-output collection, packaging checks, OrlixOS distribution/session wiring, and narrow `OrlixHostAdapter` host mechanics. Linux subsystem assertions remain in KUnit or kselftest.
 
 Milestone proof should not treat Simulator as a lighter preflight or physical device as a different scope. The same XCTest suite and assertions must pass on both destinations. Destination-specific wiring is allowed for signing, bundle/resource lookup, simulator/device transport, or host-adapter mechanics, but not for skipping milestone scope.
 

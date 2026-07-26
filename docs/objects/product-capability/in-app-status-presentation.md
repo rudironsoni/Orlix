@@ -49,7 +49,7 @@ This makes the UI feel inconsistent and makes the code harder to scale safely.
 
 ### Existing presentation surfaces
 - App-shell initial connect empty state on iOS:
-  - `Orlix/App/iOS/iOSContentView.swift`
+  - `Orlix/Orlix/App/iOS/iOSContentView.swift`
   - `connectingStateView(serverName:)`
 - Terminal blocking and progress overlays:
   - `Orlix/Features/TerminalSessions/UI/Terminal/TerminalContainerView.swift`

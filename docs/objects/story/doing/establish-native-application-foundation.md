@@ -3,9 +3,9 @@ type: story
 tags:
   - story
   - native-app-foundation
-updated: 2026-07-15
+updated: 2026-07-26
 status: doing
-summary: "Provide native mobile presentation over the commercially approved Herdr terminal platform."
+summary: "Provide native mobile presentation over the commercially approved Herdr terminal platform once its external gates pass."
 story_of:
   - "[Native app foundation](../../epic/doing/native-app-foundation.md)"
 has_task:
@@ -21,4 +21,4 @@ blocks:
 
 As an Orlix user, I want native iOS and iPadOS presentation over one authoritative terminal topology so remote and local sessions behave consistently without duplicating OS or terminal ownership.
 
-The story is complete when the Herdr commercial and integration path is approved, the real Herdr platform owns workspace, tab, pane, and focus topology, and the iOS and iPadOS adapters pass focused presentation tests. Native macOS implementation and validation belong to the later macOS release story.
+The story is complete when the currently unavailable commercial Herdr source and external Pane extension are approved and integrated, the real Herdr platform owns Session, Workspace, Tab, Pane, and focus topology, and the iOS and iPadOS adapters pass focused presentation tests. Native macOS implementation and validation belong to the later macOS release story.
