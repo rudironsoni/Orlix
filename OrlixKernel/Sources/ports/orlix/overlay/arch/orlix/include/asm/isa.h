@@ -12,7 +12,7 @@
  *
  * Linux auxiliary-vector bits are advertised only after every pinned source
  * leaf in the corresponding feature cohort resolves through the production
- * proof registry. The complete 4,350-leaf TCTI target remains independent of
+ * proof registry. The complete 4,350-leaf OrlixTCTI target remains independent of
  * this runtime-advertisement projection.
  */
 #define ORLIX_EL0_ARCH_MAJOR	8

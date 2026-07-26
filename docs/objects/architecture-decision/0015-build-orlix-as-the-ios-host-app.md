@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: superseded
 external_id: "ADR-0015"
 summary: "Durable Orlix architecture decision ADR 0015."
@@ -27,7 +27,7 @@ The first host-app prototype used a UIKit terminal controller. The production di
 
 ## Decision
 
-Create the iOS host app as `Orlix` rather than a blank proof-only host. ADR 0024 supersedes the prototype layout: production sources and tests live under `Orlix/App`, terminal presentation uses the vendored Ghostty integration, and `OrlixOS` remains the delivered OS session and payload surface. Do not use a sandbox shell as the execution backend. Orlix owns terminal bytes through Linux console and terminal plumbing.
+Create the iOS host app as `Orlix` rather than a blank proof-only host. ADR 0024 supersedes the prototype layout: production sources and tests live under `Orlix`, terminal presentation uses the vendored Ghostty integration, and `OrlixOS` remains the delivered OS session and distribution-resource surface. Do not use a sandbox shell as the execution backend. Orlix owns terminal bytes through Linux console and terminal plumbing.
 
 ## Consequences
 

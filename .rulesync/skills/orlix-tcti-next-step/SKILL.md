@@ -1,12 +1,12 @@
 ---
 name: orlix-tcti-next-step
 description: >-
-  Select the next owning TCTI test suite and emit a narrow scope envelope
+  Select the next owning OrlixTCTI test suite and emit a narrow scope envelope
   without reimplementing or interpreting test behavior.
 targets:
   - '*'
 ---
-# Orlix TCTI Next Step
+# OrlixTCTI Next Step
 
 Use this skill only to route work to the owning test layer.
 
@@ -33,7 +33,7 @@ The resulting `Build/AgentHarness/orlix-tcti/next-task.json` is a scope contract
 ## Test ownership
 
 - Complete target inventory, feature-domain satisfiability, classification, and proof-registry integrity: OrlixKernel C-native ISA audit.
-- TCTI instruction execution and structured exits: kernel KUnit.
+- OrlixTCTI instruction execution and structured exits: kernel KUnit.
 - Linux-visible process, syscall, signal, PTY, and terminal behavior: Linux kselftest.
 - libc behavior: upstream mlibc tests.
 - package behavior: upstream Coreutils tests.
@@ -41,4 +41,4 @@ The resulting `Build/AgentHarness/orlix-tcti/next-task.json` is a scope contract
 - OS session and payload behavior: OrlixOS XCTest.
 - application integration and presentation: native app XCTest.
 
-Do not add a host-side TCTI behavioral model, golden-ELF oracle, reducer protocol, report interpreter, or aggregate pass/fail gate here.
+Do not add a host-side OrlixTCTI behavioral model, golden-ELF oracle, reducer protocol, report interpreter, or aggregate pass/fail gate here.

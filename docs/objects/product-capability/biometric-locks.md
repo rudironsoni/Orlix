@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: implemented
 summary: "Biometric Locks (Face ID / Touch ID) Spec."
 part_of:
@@ -55,7 +55,7 @@ Orlix currently protects credentials in Keychain, but opening the app or selecti
 - Server CRUD/rebuild paths: `Orlix/Managers/ServerManager.swift`
 
 ### App lifecycle
-- App root and delegates: `Orlix/OrlixApp.swift`
+- App root and delegates: `Orlix/Orlix/App/Orlix.swift`
 - iOS background hook already exists: `applicationDidEnterBackground`
 
 ### Settings and server edit UI
@@ -198,7 +198,7 @@ Behavior:
   - Gate `onServerSelected` with `ensureServerUnlocked`.
 - `Orlix/Managers/ConnectionSessionManager.swift`
   - Fail-safe check at start of `openConnection(to:forceNew:)`.
-- `Orlix/OrlixApp.swift`
+- `Orlix/Orlix/App/Orlix.swift`
   - Listen to `scenePhase` and lock on background/inactive transitions.
 
 ### macOS
@@ -208,7 +208,7 @@ Behavior:
   - Gate `openNewTab` for protected server.
 - `Orlix/Managers/TerminalTabManager.swift`
   - Fail-safe check in `openTab(for:)` (or return nil/throw variant).
-- `Orlix/OrlixApp.swift`
+- `Orlix/Orlix/App/Orlix.swift`
   - On app active, require unlock if full-app lock enabled.
 
 ## Error Handling & UX

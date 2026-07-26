@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0024"
 summary: "Durable Orlix architecture decision ADR 0024."
@@ -27,7 +27,7 @@ The forked source is GPL-3.0. Combining a GPL-derived app with paid App Store di
 
 ## Decision
 
-Maintain the pinned revision `791eebae946b0831ffff3ac839e0f2b75d076458` as the source ancestry of the Orlix-owned application fork. Compile that fork directly as the Orlix iOS and iPadOS application. Preserve its `App`, `Core`, `Features`, `GhosttyTerminal`, `Compatibility`, `Generated`, and `Resources` organization and full implemented feature surface through an explicit parity ledger. Do not create a reusable `OrlixTerminal` module or generic product boundary. Orlix is the sole app identity, `OrlixApp` is the product composition root, OrlixOS remains the delivered Linux Kit, and Ghostty remains presentation rather than Linux runtime authority. The upstream name is not a product name, compatibility name, target, module, bundle identifier, UI label, source directory, or public architecture concept in Orlix. It may appear only where immutable upstream provenance or legally required attribution must identify the original work accurately.
+Maintain the pinned revision `791eebae946b0831ffff3ac839e0f2b75d076458` as the source ancestry of the Orlix-owned application fork. Compile that fork directly as the Orlix iOS and iPadOS application. Preserve its `App`, `Core`, `Features`, `GhosttyTerminal`, `Compatibility`, `Generated`, and `Resources` organization and full implemented feature surface through an explicit parity ledger. Do not create a reusable terminal module or generic product boundary. `Orlix` is the sole app identity and product composition root, `OrlixOS.xcframework` is the sole public SDK, and Ghostty remains presentation rather than Linux runtime authority. The upstream name is not a product name, compatibility name, target, module, bundle identifier, UI label, source directory, or public architecture concept in Orlix. It may appear only where immutable upstream provenance or legally required attribution must identify the original work accurately.
 
 The first public replacement supports iOS and iPadOS 16.1 or later. It preserves the Orlix bundle identifier and existing preferences. Native Apple-silicon macOS 13.3 or later is implemented only after the mobile terminal and container releases are in good shape and published to the App Store. The application retains macOS-compatible source, resources, package declarations, and conditional compilation so mobile work lays that foundation without starting the Mac product early.
 
@@ -37,6 +37,6 @@ RootShell remains a behavioral and regression reference only. Contained remains 
 
 ## Consequences
 
-The production Orlix target has exactly one SwiftUI `@main`, supplied by `OrlixApp`, and directly compiles the complete native application. The retired UIKit prototype, its separate application target, duplicate assets, and conflicting Ghostty package are removed rather than retained as a fallback.
+The production Orlix target has exactly one SwiftUI `@main`, supplied by the `Orlix` entry point in `Orlix/Orlix/App/Orlix.swift`, and directly compiles the complete native application. The retired UIKit prototype, its separate application target, duplicate assets, and conflicting Ghostty package are removed rather than retained as a fallback.
 
 App-facing Linux lifecycle and payload behavior continue to flow through OrlixOS. Application-data and purchase migration from unrelated products remains explicitly out of scope.

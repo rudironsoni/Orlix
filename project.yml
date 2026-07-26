@@ -64,7 +64,7 @@ packages:
     revision: 06f8a460a66f813758d22f09025d85df45450a63
 targets:
   OrlixKernel:
-    type: framework
+    type: framework.static
     platform: iOS
     sources:
       - path: OrlixKernel/Sources/boot
@@ -82,7 +82,7 @@ targets:
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/observability
         includes:
           - "*.c"
-      - path: OrlixHostAdapter/Sources/OrlixHostAdapter/runtime
+      - path: OrlixHostAdapter/Sources/OrlixHostAdapter/execution
         includes:
           - "*.c"
       - path: OrlixKernel/Sources/include
@@ -120,8 +120,9 @@ targets:
         CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixKernel/Sources/Support/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernel
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.kernel
         PRODUCT_NAME: OrlixKernel
+        SKIP_INSTALL: YES
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixKernel/Sources
           - $(SRCROOT)/OrlixKernel/Sources/include
@@ -137,6 +138,58 @@ targets:
         - $(inherited)
         - ORLIX_APP_HOSTED_BOOT=1
         - ORLIX_BETA_OBSERVABILITY=1
+  OrlixMLibC:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: OrlixMLibC/Sources/Provider
+        excludes:
+          - Info.plist
+    dependencies:
+      - target: OrlixKernel
+        link: false
+    preBuildScripts:
+      - name: Build OrlixMLibC Linux Sysroot
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          profile="${ORLIX_PROFILE:-release}"
+          build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixMLibC/Makefile" build PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root"
+    settings:
+      base:
+        DEFINES_MODULE: NO
+        INFOPLIST_FILE: OrlixMLibC/Sources/Provider/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.mlibc
+        PRODUCT_NAME: OrlixMLibC
+        SKIP_INSTALL: YES
+  OrlixCoreUtils:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: OrlixCoreUtils/Sources/Provider
+        excludes:
+          - Info.plist
+    dependencies:
+      - target: OrlixMLibC
+        link: false
+    preBuildScripts:
+      - name: Build OrlixCoreUtils Linux Payload
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          profile="${ORLIX_PROFILE:-release}"
+          build_root="${ORLIX_BUILD_ROOT:-$SRCROOT/Build}"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixCoreUtils/Makefile" build PROFILE="$profile" ORLIX_BUILD_ROOT="$build_root"
+    settings:
+      base:
+        DEFINES_MODULE: NO
+        INFOPLIST_FILE: OrlixCoreUtils/Sources/Provider/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.coreutils
+        PRODUCT_NAME: OrlixCoreUtils
+        SKIP_INSTALL: YES
   OrlixOS:
     type: framework
     platform: iOS
@@ -144,12 +197,18 @@ targets:
       - path: OrlixOS/Sources/Session
     dependencies:
       - target: OrlixKernel
+      - target: OrlixMLibC
+        link: true
+      - target: OrlixCoreUtils
+        link: true
       - sdk: libz.tbd
     postBuildScripts:
-      - name: Embed OrlixOS Payload
+      - name: Embed OrlixOS Resources
         basedOnDependencyAnalysis: true
         inputFiles:
           - $(SRCROOT)/OrlixOS/Makefile
+          - $(SRCROOT)/OrlixCoreUtils/Makefile
+          - $(SRCROOT)/OrlixCoreUtils/Sources/make/config.mk
           - $(SRCROOT)/OrlixOS/Sources/distribution/target-settings.xcconfig
           - $(SRCROOT)/OrlixOS/Sources/init
           - $(SRCROOT)/OrlixOS/Sources/make
@@ -173,19 +232,18 @@ targets:
           - $(SRCROOT)/OrlixOS/Sources/make/packages.mk
           - $(SRCROOT)/OrlixOS/Sources/make/rootfs.mk
         outputFiles:
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/Info.plist
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/.orlix-payload-ready
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/initramfs.cpio.gz
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/base.ext4
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/rootfs/state.ext4
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts/development.dtb
-          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/$(ORLIX_OS_PAYLOAD_BUNDLE_NAME).$(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)/arch/orlix/boot/dts/release.dtb
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/OrlixOSManifest.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/.orlix-payload-ready
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/initramfs.cpio.gz
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/base.ext4
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rootfs/state.ext4
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts/development.dtb
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/arch/orlix/boot/dts/release.dtb
         script: |
           set -eu
           export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -196,14 +254,11 @@ targets:
               exit 0
           fi
           profile="${ORLIX_PROFILE:-release}"
-          payload_name="${ORLIX_OS_PAYLOAD_BUNDLE_NAME:?}"
-          payload_extension="${ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION:?}"
-          source_payload_name="${ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME:?}"
-          ORLIX_OS_PAYLOAD_SOURCE_ROOT="$ORLIX_BUILD_ROOT/OrlixKernel/payload"
+          ORLIX_OS_PAYLOAD_SOURCE_ROOT="$ORLIX_BUILD_ROOT/OrlixKernel/resource-staging"
           ORLIX_OS_ROOT_INITRAMFS_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/rootfs/initramfs.cpio.gz"
           ORLIX_OS_BASE_ROOT_TREE_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/base-tree"
           ORLIX_OS_STATE_ROOT_TREE_INPUT="$ORLIX_BUILD_ROOT/OrlixOS/rootfs/$profile/state-tree"
-          payload="$ORLIX_OS_PAYLOAD_SOURCE_ROOT/$source_payload_name.$payload_extension"
+          payload="$ORLIX_OS_PAYLOAD_SOURCE_ROOT/$profile"
           if [ "${ORLIX_OS_EXPECTED_ROOTFS_INPUT+x}" = x ]; then
               expected_rootfs_input="$ORLIX_OS_EXPECTED_ROOTFS_INPUT"
           else
@@ -265,7 +320,7 @@ targets:
               fi
           fi
           if [ ! -d "$payload" ]; then
-              echo "missing OrlixOS payload bundle after packaging: $payload" >&2
+              echo "missing staged OrlixOS resources after packaging: $payload" >&2
               exit 1
           fi
           if [ ! -s "$stamp" ]; then
@@ -303,66 +358,66 @@ targets:
                       ;;
               esac
           fi
-          destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/$payload_name.$payload_extension"
+          destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
           "$SRCROOT/tools/runtime/orlix-sync-payload.sh" "$payload" "$destination"
     settings:
       base:
+        BUILD_LIBRARY_FOR_DISTRIBUTION: YES
         CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         INFOPLIST_FILE: OrlixOS/Sources/Session/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os
         PRODUCT_NAME: OrlixOS
+        SKIP_INSTALL: NO
   OrlixOSTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: OrlixOS/Tests/XCTest/OrlixOSTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
       - target: OrlixOS
       - sdk: libz.tbd
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixOSTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   Orlix:
     type: application
     platform: iOS
     sources:
-      - path: Orlix/App/Orlix/App
-      - path: Orlix/App/Orlix/Compatibility
-      - path: Orlix/App/Orlix/Core
-      - path: Orlix/App/Orlix/Features
-      - path: Orlix/App/Orlix/Generated
-      - path: Orlix/App/Orlix/GhosttyTerminal
-      - path: Orlix/App/OrlixShared
-      - path: Orlix/App/Orlix/Core/Analytics/OrlixTelemetry.swift
-      - path: Orlix/App/Orlix/Assets.xcassets
+      - path: Orlix/Orlix/App
+      - path: Orlix/Orlix/Compatibility
+      - path: Orlix/Orlix/Core
+      - path: Orlix/Orlix/Features
+      - path: Orlix/Orlix/Generated
+      - path: Orlix/Orlix/GhosttyTerminal
+      - path: Orlix/OrlixShared
+      - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
+      - path: Orlix/Orlix/Assets.xcassets
         buildPhase: resources
-      - path: Orlix/App/Orlix/Resources
+      - path: Orlix/Orlix/Resources
         buildPhase: resources
         excludes:
           - Assets.xcassets
           - ghostty
           - terminfo
-      - path: Orlix/App/Orlix/Resources/Assets.xcassets
+      - path: Orlix/Orlix/Resources/Assets.xcassets
         buildPhase: resources
-      - path: Orlix/App/Orlix/Resources/ghostty
-        buildPhase: resources
-        type: folder
-      - path: Orlix/App/Orlix/Resources/terminfo
+      - path: Orlix/Orlix/Resources/ghostty
         buildPhase: resources
         type: folder
-      - path: Orlix/App/Orlix/PrivacyInfo.xcprivacy
+      - path: Orlix/Orlix/Resources/terminfo
+        buildPhase: resources
+        type: folder
+      - path: Orlix/Orlix/PrivacyInfo.xcprivacy
         buildPhase: resources
       - path: docs/sources/release/orlix-app-release-inputs.json
         buildPhase: resources
     dependencies:
       - target: OrlixOS
-        embed: true
-      - target: OrlixKernel
         embed: true
       - target: OrlixLiveActivity
         embed: true
@@ -387,23 +442,23 @@ targets:
           - OpenTelemetrySdk
       - sdk: AppIntents.framework
     settings:
-      base:
+      base: &orlix_application_settings
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: Orlix/App/Orlix-iOS/Orlix.entitlements
+        CODE_SIGN_ENTITLEMENTS: Orlix/Orlix-iOS/Orlix.entitlements
         PROVISIONING_PROFILE_SPECIFIER: $(ORLIX_PROVISIONING_PROFILE_SPECIFIER)
         DEAD_CODE_STRIPPING: YES
         ENABLE_PREVIEWS: YES
         GENERATE_INFOPLIST_FILE: NO
         CLANG_CXX_LANGUAGE_STANDARD: gnu++20
         HEADER_SEARCH_PATHS[sdk=iphoneos*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/include
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios/include
+          - $(SRCROOT)/Orlix/Vendor/libssh2/include
         HEADER_SEARCH_PATHS[sdk=iphonesimulator*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/include
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
-        INFOPLIST_FILE: Orlix/App/Orlix-iOS/Info.plist
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include
+          - $(SRCROOT)/Orlix/Vendor/libssh2/include
+        INFOPLIST_FILE: Orlix/Orlix-iOS/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Orlix
         INFOPLIST_KEY_CFBundleName: Orlix
@@ -411,11 +466,11 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "16.1"
         LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
         LIBRARY_SEARCH_PATHS[sdk=iphoneos*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/lib
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/ios/lib
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios/lib
+          - $(SRCROOT)/Orlix/Vendor/libssh2/ios/lib
         LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/lib
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/ios-simulator/lib
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/lib
+          - $(SRCROOT)/Orlix/Vendor/libssh2/ios-simulator/lib
         OTHER_LDFLAGS:
           - $(inherited)
           - -lghostty
@@ -431,7 +486,7 @@ targets:
           - -framework
           - UIKit
         OTHER_MTLFLAGS: -Wno-c++17-extensions
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix
         PRODUCT_NAME: Orlix
         ORLIX_ANALYTICS_ENABLED: NO
         ORLIX_OBSERVABILITY_ENABLED: NO
@@ -445,48 +500,114 @@ targets:
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_EMIT_LOC_STRINGS: YES
-        SWIFT_OBJC_BRIDGING_HEADER: Orlix/App/Orlix/ghostty-bridging-header.h
+        SWIFT_OBJC_BRIDGING_HEADER: Orlix/Orlix/ghostty-bridging-header.h
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
-      configs:
+      configs: &orlix_application_config_settings
         Debug:
           APS_ENVIRONMENT: development
           ORLIX_TELEMETRY_ENVIRONMENT: simulator-validation
         Release:
           APS_ENVIRONMENT: production
           ORLIX_TELEMETRY_ENVIRONMENT: testflight
+  OrlixTestApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Orlix/Orlix/App
+        excludes:
+          - Orlix.swift
+      - path: Orlix/Orlix/Compatibility
+      - path: Orlix/Orlix/Core
+      - path: Orlix/Orlix/Features
+      - path: Orlix/Orlix/Generated
+      - path: Orlix/Orlix/GhosttyTerminal
+      - path: Orlix/OrlixShared
+      - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
+      - path: OrlixTestApp/Sources
+      - path: Orlix/Orlix/Assets.xcassets
+        buildPhase: resources
+      - path: Orlix/Orlix/Resources
+        buildPhase: resources
+        excludes:
+          - Assets.xcassets
+          - ghostty
+          - terminfo
+      - path: Orlix/Orlix/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: Orlix/Orlix/Resources/ghostty
+        buildPhase: resources
+        type: folder
+      - path: Orlix/Orlix/Resources/terminfo
+        buildPhase: resources
+        type: folder
+      - path: Orlix/Orlix/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: docs/sources/release/orlix-app-release-inputs.json
+        buildPhase: resources
+    dependencies:
+      - target: OrlixOS
+        embed: true
+      - package: MLXSwift
+        products:
+          - MLX
+          - MLXNN
+          - MLXFFT
+      - package: SwiftCloudflared
+        product: Cloudflared
+      - package: SwiftMosh
+        products:
+          - MoshCore
+          - MoshBootstrap
+      - package: ZIPFoundation
+        product: ZIPFoundation
+      - package: OpenTelemetrySwift
+        product: OpenTelemetryProtocolExporterHTTP
+      - package: OpenTelemetrySwiftCore
+        products:
+          - OpenTelemetryApi
+          - OpenTelemetrySdk
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        <<: *orlix_application_settings
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.test-app
+        PRODUCT_MODULE_NAME: Orlix
+        PRODUCT_NAME: OrlixTestApp
+      configs:
+        <<: *orlix_application_config_settings
   OrlixLiveActivity:
     type: app-extension
     platform: iOS
     sources:
-      - path: Orlix/App/OrlixLiveActivity
+      - path: Orlix/OrlixLiveActivity
         excludes:
           - Assets.xcassets
           - Info.plist
-      - path: Orlix/App/OrlixShared
+      - path: Orlix/OrlixShared
     resources:
-      - path: Orlix/App/OrlixLiveActivity/Assets.xcassets
+      - path: Orlix/OrlixLiveActivity/Assets.xcassets
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
         DEAD_CODE_STRIPPING: YES
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Orlix/App/OrlixLiveActivity/Info.plist
+        INFOPLIST_FILE: Orlix/OrlixLiveActivity/Info.plist
         IPHONEOS_DEPLOYMENT_TARGET: "16.1"
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.Orlix.liveactivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.live-activity
         PRODUCT_NAME: OrlixLiveActivity
         SKIP_INSTALL: YES
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
-  OrlixAppTests:
+  OrlixTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: Orlix/App/OrlixTests
+      - path: Orlix/OrlixTests
     dependencies:
-      - target: Orlix
+      - target: OrlixTestApp
       - package: SwiftMosh
         product: MoshBootstrap
     settings:
@@ -494,13 +615,13 @@ targets:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         HEADER_SEARCH_PATHS[sdk=iphoneos*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios/include
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios/include
+          - $(SRCROOT)/Orlix/Vendor/libssh2/include
         HEADER_SEARCH_PATHS[sdk=iphonesimulator*]:
-          - $(SRCROOT)/Orlix/App/Vendor/libghostty/ios-simulator/include
-          - $(SRCROOT)/Orlix/App/Vendor/libssh2/include
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixAppTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
+          - $(SRCROOT)/Orlix/Vendor/libghostty/ios-simulator/include
+          - $(SRCROOT)/Orlix/Vendor/libssh2/include
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp
         BUNDLE_LOADER: $(TEST_HOST)
         STRING_CATALOG_GENERATE_SYMBOLS: NO
         SWIFT_APPROACHABLE_CONCURRENCY: YES
@@ -512,29 +633,27 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - path: Orlix/App/OrlixUITests
+      - path: Orlix/OrlixUITests
     dependencies:
-      - target: Orlix
+      - target: OrlixTestApp
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.ui-tests
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_EMIT_LOC_STRINGS: NO
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: 1,2
         TEST_TARGET_NAME: Orlix
-  OrlixTestRunner:
+  OrlixOSTestApp:
     type: application
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Sources
+      - path: OrlixOSTestApp/Sources
     dependencies:
       - target: OrlixOS
-        embed: true
-      - target: OrlixKernel
         embed: true
     postBuildScripts:
       - name: Embed Orlix Upstream Test Rootfs Bundles
@@ -603,26 +722,27 @@ targets:
         CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunner
-        PRODUCT_NAME: OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.test-app
+        PRODUCT_NAME: OrlixOSTestApp
   OrlixKernelHostedTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: OrlixKernel/Tests/XCTest/OrlixKernelHostedTests
     dependencies:
-      - target: Orlix
+      - target: OrlixTestApp
       - target: OrlixKernel
+        embed: false
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelHostedTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.kernel-hosted-tests
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixKernel/Sources/include
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_APP_HOSTED_BOOT=1
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orlix.app/Orlix
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestApp.app/OrlixTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixHostAdapterTests:
     type: bundle.unit-test
@@ -645,75 +765,75 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixHostAdapterTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.host-adapter-tests
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OrlixHostAdapter/Sources
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include
         GCC_PREPROCESSOR_DEFINITIONS:
           - $(inherited)
           - ORLIX_HOST_ADAPTER_TEST_LINUX_PAGE_SIZE=$(ORLIX_OS_LINUX_PAGE_SIZE)
-  OrlixTestRunnerTests:
+  OrlixOSTestAppTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/OrlixTestRunnerTests
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixTestRunnerTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.test-app.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixKernelConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixKernelConformanceTests
+      - path: OrlixOSTestApp/Tests/XCTest/Support
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixKernelConformanceTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixKernelConformanceTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.kernel-conformance-tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixMLibCConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixMLibCConformanceTests
+      - path: OrlixOSTestApp/Tests/XCTest/Support
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixMLibCConformanceTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixMLibCConformanceTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.mlibc-conformance-tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
   OrlixPackagesConformanceTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/Support
-      - path: OrlixTestRunner/Tests/XCTest/OrlixPackagesConformanceTests
+      - path: OrlixOSTestApp/Tests/XCTest/Support
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixPackagesConformanceTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixPackagesConformanceTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.packages-conformance-tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
-  OrlixRuntimeTests:
+  OrlixOSRuntimeTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: OrlixTestRunner/Tests/XCTest/OrlixRuntimeTests
+      - path: OrlixOSTestApp/Tests/XCTest/OrlixOSRuntimeTests
     dependencies:
-      - target: OrlixTestRunner
+      - target: OrlixOSTestApp
       - target: OrlixOS
     postBuildScripts:
       - name: Build Orlix Environment Runtime Proof Fixtures
@@ -725,14 +845,20 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.OrlixRuntimeTests
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixTestRunner.app/OrlixTestRunner
+        PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.runtime-tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OrlixOSTestApp.app/OrlixOSTestApp
         BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   OrlixKernel:
     build:
       targets:
         OrlixKernel: all
+  OrlixOS:
+    build:
+      targets:
+        OrlixOS: all
+    archive:
+      config: Release
   Orlix:
     build:
       targets:
@@ -740,13 +866,13 @@ schemes:
     run:
       config: Debug
       executable: Orlix
-      storeKitConfiguration: Orlix/App/OrlixStoreKit.storekit
+      storeKitConfiguration: Orlix/OrlixStoreKit.storekit
     archive:
       config: Release
   "OrlixOS Tests":
     build:
       targets:
-        OrlixTestRunner: all
+        OrlixOSTestApp: all
         OrlixOSTests: test
     test:
       config: Debug
@@ -756,24 +882,24 @@ schemes:
   "OrlixKernel Hosted Tests":
     build:
       targets:
-        Orlix: all
+        OrlixTestApp: all
         OrlixKernelHostedTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - name: OrlixKernelHostedTests
-  "Orlix App Tests":
+  "Orlix Tests":
     build:
       targets:
         Orlix: all
-        OrlixAppTests: test
+        OrlixTests: test
         OrlixUITests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixAppTests
+        - name: OrlixTests
         - name: OrlixUITests
   "Orlix Release UI Tests":
     build:
@@ -794,30 +920,30 @@ schemes:
       gatherCoverageData: false
       targets:
         - name: OrlixHostAdapterTests
-  "OrlixTestRunner Tests":
+  "OrlixOSTestApp Tests":
     build:
       targets:
-        OrlixTestRunner: all
-        OrlixTestRunnerTests: test
+        OrlixOSTestApp: all
+        OrlixOSTestAppTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixTestRunnerTests
-  "OrlixRuntime Tests":
+        - name: OrlixOSTestAppTests
+  "OrlixOS Runtime Tests":
     build:
       targets:
-        OrlixTestRunner: all
-        OrlixRuntimeTests: test
+        OrlixOSTestApp: all
+        OrlixOSRuntimeTests: test
     test:
       config: Debug
       gatherCoverageData: false
       targets:
-        - name: OrlixRuntimeTests
+        - name: OrlixOSRuntimeTests
   "OrlixKernel Conformance":
     build:
       targets:
-        OrlixTestRunner: all
+        OrlixOSTestApp: all
         OrlixKernelConformanceTests: test
     test:
       config: Debug
@@ -827,7 +953,7 @@ schemes:
   "OrlixMLibC Conformance":
     build:
       targets:
-        OrlixTestRunner: all
+        OrlixOSTestApp: all
         OrlixMLibCConformanceTests: test
     test:
       config: Debug
@@ -837,7 +963,7 @@ schemes:
   "OrlixPackages Conformance":
     build:
       targets:
-        OrlixTestRunner: all
+        OrlixOSTestApp: all
         OrlixPackagesConformanceTests: test
     test:
       config: Debug

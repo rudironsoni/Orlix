@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: implemented
 summary: "Terminal Custom Themes (Spec)."
 part_of:
@@ -191,7 +191,7 @@ Update `Orlix/Utilities/ThemeColorParser.swift`:
   - UI keeps distinct picker values
 
 ## CloudKit Sync (V1)
-Use existing container `iCloud.com.rudironsoni.Orlix` and current custom zone.
+Use existing container `iCloud.com.rudironsoni.orlix` and current custom zone.
 
 Add record type:
 - `TerminalTheme`

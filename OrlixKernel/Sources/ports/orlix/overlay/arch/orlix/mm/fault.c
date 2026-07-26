@@ -7,7 +7,7 @@
 #include <asm/hosted_exec.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
-#include <asm/tcti.h>
+#include <asm/orlix_tcti.h>
 #include <internal/asm/host_trap.h>
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -100,21 +100,21 @@ out_of_memory:
 	return 0;
 }
 
-static int tcti_fault_requirements(enum tcti_access access,
+static int orlix_tcti_fault_requirements(enum orlix_tcti_access access,
 				   vm_flags_t *required,
 				   unsigned int *flags)
 {
 	*flags = FAULT_FLAG_DEFAULT | FAULT_FLAG_USER;
 
 	switch (access) {
-	case TCTI_ACCESS_FETCH:
+	case ORLIX_TCTI_ACCESS_FETCH:
 		*required = VM_EXEC;
 		*flags |= FAULT_FLAG_INSTRUCTION;
 		return 0;
-	case TCTI_ACCESS_READ:
+	case ORLIX_TCTI_ACCESS_READ:
 		*required = VM_READ;
 		return 0;
-	case TCTI_ACCESS_WRITE:
+	case ORLIX_TCTI_ACCESS_WRITE:
 		*required = VM_WRITE;
 		*flags |= FAULT_FLAG_WRITE;
 		return 0;
@@ -123,20 +123,20 @@ static int tcti_fault_requirements(enum tcti_access access,
 	}
 }
 
-static int tcti_sync_faulted_user_window(unsigned long address,
-					 enum tcti_access access)
+static int orlix_tcti_sync_faulted_user_window(unsigned long address,
+					 enum orlix_tcti_access access)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT)
 	unsigned long fault_flags = 0;
 
 	switch (access) {
-	case TCTI_ACCESS_FETCH:
+	case ORLIX_TCTI_ACCESS_FETCH:
 		fault_flags = ORLIX_HOST_USER_FAULT_EXEC;
 		break;
-	case TCTI_ACCESS_WRITE:
+	case ORLIX_TCTI_ACCESS_WRITE:
 		fault_flags = ORLIX_HOST_USER_FAULT_WRITE;
 		break;
-	case TCTI_ACCESS_READ:
+	case ORLIX_TCTI_ACCESS_READ:
 		break;
 	}
 
@@ -148,8 +148,8 @@ static int tcti_sync_faulted_user_window(unsigned long address,
 #endif
 }
 
-int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
-			   enum tcti_access access)
+int orlix_tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
+			   enum orlix_tcti_access access)
 {
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
@@ -162,7 +162,7 @@ int tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
 	if (!user_mode(regs) || faulthandler_disabled() || !mm)
 		return -EFAULT;
 
-	ret = tcti_fault_requirements(access, &required, &flags);
+	ret = orlix_tcti_fault_requirements(access, &required, &flags);
 	if (ret)
 		return ret;
 
@@ -179,7 +179,7 @@ retry:
 	if (fault_signal_pending(fault, regs))
 		return 0;
 	if (fault & VM_FAULT_COMPLETED)
-		return tcti_sync_faulted_user_window(address, access);
+		return orlix_tcti_sync_faulted_user_window(address, access);
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
@@ -197,12 +197,12 @@ retry:
 	}
 
 	mmap_read_unlock(mm);
-	return tcti_sync_faulted_user_window(address, access);
+	return orlix_tcti_sync_faulted_user_window(address, access);
 
 bad_area:
 	mmap_read_unlock(mm);
 bad_area_nosemaphore:
-	pr_info("Orlix TCTI: user fault task=%s pid=%d pc=%#llx lr=%#llx sp=%#llx x0=%#llx x1=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x12=%#llx x13=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x29=%#llx addr=%#lx access=%d si=%d\n",
+	pr_info("OrlixTCTI: user fault task=%s pid=%d pc=%#llx lr=%#llx sp=%#llx x0=%#llx x1=%#llx x8=%#llx x9=%#llx x10=%#llx x11=%#llx x12=%#llx x13=%#llx x19=%#llx x20=%#llx x21=%#llx x22=%#llx x29=%#llx addr=%#lx access=%d si=%d\n",
 		current->comm, task_pid_nr(current), regs->pc,
 		regs->regs[30], regs->sp, regs->regs[0], regs->regs[1],
 		regs->regs[8], regs->regs[9], regs->regs[10], regs->regs[11],

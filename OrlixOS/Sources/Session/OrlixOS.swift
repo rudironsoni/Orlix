@@ -75,7 +75,7 @@ private enum COrlixHostConsoleSource {
 }
 
 @_spi(OrlixPrivateTesting)
-public enum OrlixTerminalTransportDiagnostics {
+public enum OrlixPaneTransportDiagnostics {
 	public static let serialSource: UInt32 = COrlixHostConsoleSource.serial
 	public static let virtioSource: UInt32 = COrlixHostConsoleSource.virtio
 
@@ -265,7 +265,7 @@ public struct OrlixBootProgressEvent: Equatable, Sendable {
     }
 }
 
-public enum OrlixInstanceState: Equatable, Sendable {
+public enum OrlixMachineState: Equatable, Sendable {
     case idle
     case preparing
     case booting
@@ -274,8 +274,8 @@ public enum OrlixInstanceState: Equatable, Sendable {
     case stopped
 }
 
-public struct OrlixInstanceSnapshot: Equatable, Sendable {
-    public let state: OrlixInstanceState
+public struct OrlixMachineSnapshot: Equatable, Sendable {
+    public let state: OrlixMachineState
     public let latestBootProgress: OrlixBootProgressEvent?
     public let hasConsoleOutput: Bool
 }
@@ -303,22 +303,22 @@ public struct OrlixBootConfig: Equatable, Sendable {
 
 public enum OrlixOSDistribution {
     public static var bundledBootProfile: OrlixBootProfile? {
-        OrlixOSPayload.selectedBootProfile
+        OrlixOSResources.selectedBootProfile
     }
 
     public static var bundledKernelCommandLine: String? {
-        OrlixOSPayload.kernelCommandLine
+        OrlixOSResources.kernelCommandLine
     }
 
     public static var productRootImageIdentifier: String? {
-        OrlixOSPayload.productRootImageIdentifier
+        OrlixOSResources.productRootImageIdentifier
     }
 
     @_spi(OrlixPrivateTesting)
     public static func rootImageDescriptor(
         forRole role: String
     ) -> OrlixRootImageDescriptor? {
-        OrlixOSPayload.rootImageDescriptors.first { $0.role == role }
+        OrlixOSResources.rootImageDescriptors.first { $0.role == role }
     }
 }
 
@@ -334,29 +334,20 @@ public struct OrlixRootImageDescriptor: Equatable, Sendable {
 
 private final class OrlixOSBundleAnchor {}
 
-enum OrlixOSPayload {
-    private static let bundleNameKey = "OrlixOSPayloadBundleName"
-    private static let bundleExtensionKey = "OrlixOSPayloadBundleExtension"
-    private static let payloadProfileInfoKeyKey =
-        "OrlixOSPayloadProfileInfoKey"
-    private static let payloadKernelCommandLineInfoKeyKey =
-        "OrlixOSPayloadKernelCommandLineInfoKey"
-    private static let payloadRootInitrdInfoKeyKey =
-        "OrlixOSPayloadRootInitramfsInfoKey"
-    private static let payloadBaseRootImageInfoKeyKey =
-        "OrlixOSPayloadBaseRootImageInfoKey"
-    private static let payloadStateRootImageInfoKeyKey =
-        "OrlixOSPayloadStateRootImageInfoKey"
-    private static let payloadBaseRootDeviceInfoKeyKey =
-        "OrlixOSPayloadBaseRootDeviceInfoKey"
-    private static let payloadStateRootDeviceInfoKeyKey =
-        "OrlixOSPayloadStateRootDeviceInfoKey"
-    private static let payloadBaseRootHostBlockDeviceInfoKeyKey =
-        "OrlixOSPayloadBaseRootHostBlockDeviceInfoKey"
-    private static let payloadStateRootHostBlockDeviceInfoKeyKey =
-        "OrlixOSPayloadStateRootHostBlockDeviceInfoKey"
-    private static let payloadStateRootMinimumBytesInfoKeyKey =
-        "OrlixOSPayloadStateRootMinimumBytesInfoKey"
+enum OrlixOSResources {
+    private static let manifestName = "OrlixOSManifest"
+    private static let selectedProfileKey = "OrlixSelectedProfile"
+    private static let kernelCommandLineKey = "OrlixKernelCommandLine"
+    private static let rootInitrdResourceKey = "OrlixRootInitramfs"
+    private static let baseRootImageResourceKey = "OrlixBaseRootImage"
+    private static let stateRootImageResourceKey = "OrlixStateRootImage"
+    private static let baseRootDeviceKey = "OrlixBaseRootDevice"
+    private static let stateRootDeviceKey = "OrlixStateRootDevice"
+    private static let baseRootHostBlockDeviceKey =
+        "OrlixBaseRootHostBlockDevice"
+    private static let stateRootHostBlockDeviceKey =
+        "OrlixStateRootHostBlockDevice"
+    private static let stateRootMinimumBytesKey = "OrlixStateRootMinimumBytes"
     private static let productRootImageIdentifierKey =
         "OrlixOSProductRootImageIdentifier"
     private static let rootImageInitrdBundleExtensionKey =
@@ -371,19 +362,6 @@ enum OrlixOSPayload {
     private static let rootImageInitrdResourceKey =
         "OrlixRootImageInitrdResource"
 
-    private struct PayloadMetadataSchema {
-        let selectedProfileKey: String
-        let kernelCommandLineKey: String
-        let rootInitrdResourceKey: String
-        let baseRootImageResourceKey: String
-        let stateRootImageResourceKey: String
-        let baseRootDeviceKey: String
-        let stateRootDeviceKey: String
-        let baseRootHostBlockDeviceKey: String
-        let stateRootHostBlockDeviceKey: String
-        let stateRootMinimumBytesKey: String
-    }
-
     struct ProductRootResources {
         let initrdResource: String
         let baseBlockResource: String
@@ -393,26 +371,19 @@ enum OrlixOSPayload {
         let stateBlockMinimumBytes: UInt64
     }
 
-    static var bundleURL: URL? {
-        guard let name = bundleMetadataValue(for: bundleNameKey),
-              let extensionName = bundleMetadataValue(for: bundleExtensionKey)
-        else {
-            return nil
-        }
+    static var resourceRootURL: URL {
+        frameworkBundle.resourceURL ?? frameworkBundle.bundleURL
+    }
 
-        return frameworkBundle.url(
-            forResource: name,
-            withExtension: extensionName
+    static var manifestURL: URL? {
+        frameworkBundle.url(
+            forResource: manifestName,
+            withExtension: "plist"
         )
     }
 
     static var selectedBootProfile: OrlixBootProfile? {
-        guard let payloadBundleURL = bundleURL,
-              let payloadBundle = Bundle(url: payloadBundleURL),
-              let schema = payloadMetadataSchema,
-              let profile = payloadBundle.object(
-                forInfoDictionaryKey: schema.selectedProfileKey
-              ) as? String
+        guard let profile = bundleMetadataValue(for: selectedProfileKey)
         else {
             return nil
         }
@@ -432,14 +403,7 @@ enum OrlixOSPayload {
     }
 
     static var kernelCommandLine: String? {
-        guard let payloadBundleURL = bundleURL,
-              let payloadBundle = Bundle(url: payloadBundleURL),
-              let schema = payloadMetadataSchema
-        else {
-            return nil
-        }
-
-        return payloadMetadataValue(schema.kernelCommandLineKey, in: payloadBundle)
+        bundleMetadataValue(for: kernelCommandLineKey)
     }
 
     static var productRootImageIdentifier: String? {
@@ -485,9 +449,7 @@ enum OrlixOSPayload {
     }
 
     static func registerWithHostAdapter() -> Bool {
-        guard let payloadBundlePath = bundleURL?.path else {
-            return false
-        }
+        let resourceRootPath = resourceRootURL.path
         guard let productResources = productResources,
               let productRootImageIdentifier = productRootImageIdentifier,
               rootImageDescriptors.contains(
@@ -497,7 +459,7 @@ enum OrlixOSPayload {
             return false
         }
 
-        guard payloadBundlePath.withCString({ path in
+        guard resourceRootPath.withCString({ path in
             orlix_host_resources_set_payload_root_path(path) == 0
         }) else {
             return false
@@ -526,14 +488,13 @@ enum OrlixOSPayload {
     static func registerMaterializedRootImage(
         _ rootImage: OrlixEnvironmentRootImage
     ) -> Bool {
-        guard let payloadBundlePath = bundleURL?.path,
-              let productResources = productResources
+        guard let productResources = productResources
         else {
             return false
         }
         return registerMaterializedRootImage(
             rootImage,
-            payloadBundlePath: payloadBundlePath,
+            resourceRootPath: resourceRootURL.path,
             productResources: productResources
         )
     }
@@ -549,10 +510,10 @@ enum OrlixOSPayload {
 
     static func registerMaterializedRootImage(
         _ rootImage: OrlixEnvironmentRootImage,
-        payloadBundlePath: String,
+        resourceRootPath: String,
         productResources: ProductRootResources
     ) -> Bool {
-        guard payloadBundlePath.withCString({ path in
+        guard resourceRootPath.withCString({ path in
             orlix_host_resources_set_payload_root_path(path) == 0
         }) else {
             return false
@@ -654,34 +615,25 @@ enum OrlixOSPayload {
     }
 
     private static var productResources: ProductRootResources? {
-        guard let payloadBundleURL = bundleURL,
-              let payloadBundle = Bundle(url: payloadBundleURL),
-              let schema = payloadMetadataSchema,
-              let initrdResource = payloadMetadataValue(
-                schema.rootInitrdResourceKey,
-                in: payloadBundle
+        guard let initrdResource = bundleMetadataValue(
+                for: rootInitrdResourceKey
               ),
-              let baseBlockResource = payloadMetadataValue(
-                schema.baseRootImageResourceKey,
-                in: payloadBundle
+              let baseBlockResource = bundleMetadataValue(
+                for: baseRootImageResourceKey
               ),
-              let stateBlockResource = payloadMetadataValue(
-                schema.stateRootImageResourceKey,
-                in: payloadBundle
+              let stateBlockResource = bundleMetadataValue(
+                for: stateRootImageResourceKey
               ),
-              payloadMetadataValue(schema.baseRootDeviceKey, in: payloadBundle) != nil,
-              payloadMetadataValue(schema.stateRootDeviceKey, in: payloadBundle) != nil,
-              let baseBlockDevice = payloadMetadataUInt32(
-                schema.baseRootHostBlockDeviceKey,
-                in: payloadBundle
+              bundleMetadataValue(for: baseRootDeviceKey) != nil,
+              bundleMetadataValue(for: stateRootDeviceKey) != nil,
+              let baseBlockDevice = bundleMetadataUInt32(
+                for: baseRootHostBlockDeviceKey
               ),
-              let stateBlockDevice = payloadMetadataUInt32(
-                schema.stateRootHostBlockDeviceKey,
-                in: payloadBundle
+              let stateBlockDevice = bundleMetadataUInt32(
+                for: stateRootHostBlockDeviceKey
               ),
-              let stateBlockMinimumBytes = payloadMetadataUInt64(
-                schema.stateRootMinimumBytesKey,
-                in: payloadBundle
+              let stateBlockMinimumBytes = bundleMetadataUInt64(
+                for: stateRootMinimumBytesKey
               )
         else {
             return nil
@@ -694,55 +646,6 @@ enum OrlixOSPayload {
             baseBlockDevice: baseBlockDevice,
             stateBlockDevice: stateBlockDevice,
             stateBlockMinimumBytes: stateBlockMinimumBytes
-        )
-    }
-
-    private static var payloadMetadataSchema: PayloadMetadataSchema? {
-        guard let selectedProfileKey = bundleMetadataValue(
-                for: payloadProfileInfoKeyKey
-              ),
-              let kernelCommandLineKey = bundleMetadataValue(
-                for: payloadKernelCommandLineInfoKeyKey
-              ),
-              let rootInitrdResourceKey = bundleMetadataValue(
-                for: payloadRootInitrdInfoKeyKey
-              ),
-              let baseRootImageResourceKey = bundleMetadataValue(
-                for: payloadBaseRootImageInfoKeyKey
-              ),
-              let stateRootImageResourceKey = bundleMetadataValue(
-                for: payloadStateRootImageInfoKeyKey
-              ),
-              let baseRootDeviceKey = bundleMetadataValue(
-                for: payloadBaseRootDeviceInfoKeyKey
-              ),
-              let stateRootDeviceKey = bundleMetadataValue(
-                for: payloadStateRootDeviceInfoKeyKey
-              ),
-              let baseRootHostBlockDeviceKey = bundleMetadataValue(
-                for: payloadBaseRootHostBlockDeviceInfoKeyKey
-              ),
-              let stateRootHostBlockDeviceKey = bundleMetadataValue(
-                for: payloadStateRootHostBlockDeviceInfoKeyKey
-              ),
-              let stateRootMinimumBytesKey = bundleMetadataValue(
-                for: payloadStateRootMinimumBytesInfoKeyKey
-              )
-        else {
-            return nil
-        }
-
-        return PayloadMetadataSchema(
-            selectedProfileKey: selectedProfileKey,
-            kernelCommandLineKey: kernelCommandLineKey,
-            rootInitrdResourceKey: rootInitrdResourceKey,
-            baseRootImageResourceKey: baseRootImageResourceKey,
-            stateRootImageResourceKey: stateRootImageResourceKey,
-            baseRootDeviceKey: baseRootDeviceKey,
-            stateRootDeviceKey: stateRootDeviceKey,
-            baseRootHostBlockDeviceKey: baseRootHostBlockDeviceKey,
-            stateRootHostBlockDeviceKey: stateRootHostBlockDeviceKey,
-            stateRootMinimumBytesKey: stateRootMinimumBytesKey
         )
     }
 
@@ -761,24 +664,8 @@ enum OrlixOSPayload {
         return value
     }
 
-    private static func payloadMetadataValue(
-        _ key: String,
-        in bundle: Bundle
-    ) -> String? {
-        guard let value = bundle.object(forInfoDictionaryKey: key) as? String,
-              !value.isEmpty
-        else {
-            return nil
-        }
-
-        return value
-    }
-
-    private static func payloadMetadataUInt32(
-        _ key: String,
-        in bundle: Bundle
-    ) -> UInt32? {
-        guard let value = payloadMetadataUInt64(key, in: bundle),
+    private static func bundleMetadataUInt32(for key: String) -> UInt32? {
+        guard let value = bundleMetadataUInt64(for: key),
               value <= UInt64(UInt32.max)
         else {
             return nil
@@ -787,18 +674,17 @@ enum OrlixOSPayload {
         return UInt32(value)
     }
 
-    private static func payloadMetadataUInt64(
-        _ key: String,
-        in bundle: Bundle
-    ) -> UInt64? {
-        if let value = bundle.object(forInfoDictionaryKey: key) as? NSNumber {
+    private static func bundleMetadataUInt64(for key: String) -> UInt64? {
+        if let value = frameworkBundle.object(
+            forInfoDictionaryKey: key
+        ) as? NSNumber {
             let intValue = value.int64Value
             guard intValue >= 0 else {
                 return nil
             }
             return UInt64(intValue)
         }
-        guard let text = payloadMetadataValue(key, in: bundle) else {
+        guard let text = bundleMetadataValue(for: key) else {
             return nil
         }
 
@@ -854,11 +740,11 @@ enum OrlixOSPayload {
 }
 
 public protocol OrlixTerminalInput: AnyObject {
-	func send(_ data: Data)
-	func resize(rows: UInt32, columns: UInt32)
+    func send(_ data: Data)
+    func resize(rows: UInt32, columns: UInt32)
 }
 
-protocol OrlixTerminalTransport: AnyObject {
+protocol OrlixPaneTransport: AnyObject {
 	func attachOutput(
 		_ handler: @escaping @Sendable (Data) -> Void
 	) -> OrlixTerminalOutput
@@ -895,16 +781,29 @@ public final class OrlixTerminalOutput: @unchecked Sendable {
 }
 
 public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable {
-    private let transport: OrlixTerminalTransport
-    private let geometryLock = NSLock()
-    private var geometry: (rows: UInt32, columns: UInt32)?
-
-    public convenience init() {
-        self.init(transport: HostConsoleTerminalTransport())
+    public enum BackendState: Equatable, Sendable {
+        case unbound
     }
 
-    init(transport: OrlixTerminalTransport) {
+    public let id: String
+    public let backendState: BackendState
+
+    private let transport: OrlixPaneTransport
+    private let geometryLock = NSLock()
+    private var geometry: (rows: UInt32, columns: UInt32)?
+    private weak var kernelSession: OrlixKernelSession?
+
+    public convenience init() {
+        self.init(transport: HostConsolePaneTransport())
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        transport: OrlixPaneTransport
+    ) {
+        self.id = id
         self.transport = transport
+        backendState = .unbound
     }
 
     @discardableResult
@@ -914,21 +813,29 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
         transport.attachOutput(handler)
     }
 
-	public func send(_ data: Data) {
-		transport.send(data)
-	}
+    public func send(_ data: Data) {
+        transport.send(data)
+    }
 
-	public func resize(rows: UInt32, columns: UInt32) {
-		guard rows > 0, rows <= UInt32(UInt16.max),
-		      columns > 0, columns <= UInt32(UInt16.max)
-		else {
-			return
-		}
-		geometryLock.lock()
-		geometry = (rows, columns)
-		geometryLock.unlock()
-		transport.resize(rows: rows, columns: columns)
-	}
+    public func resize(rows: UInt32, columns: UInt32) {
+        guard rows > 0, rows <= UInt32(UInt16.max),
+              columns > 0, columns <= UInt32(UInt16.max)
+        else {
+            return
+        }
+        geometryLock.lock()
+        geometry = (rows, columns)
+        geometryLock.unlock()
+        transport.resize(rows: rows, columns: columns)
+    }
+
+    public func boot() -> OrlixBootStatus {
+        kernelSession?.boot() ?? .invalidConfig
+    }
+
+    func bind(kernelSession: OrlixKernelSession) {
+        self.kernelSession = kernelSession
+    }
 
     var latestGeometry: (rows: UInt32, columns: UInt32)? {
         geometryLock.lock()
@@ -936,24 +843,25 @@ public final class OrlixTerminalSession: OrlixTerminalInput, @unchecked Sendable
         return geometry
     }
 
-	func configureOutputSource(_ source: UInt32) -> Bool {
-		transport.configureOutputSource(source)
-	}
+    func configureOutputSource(_ source: UInt32) -> Bool {
+        transport.configureOutputSource(source)
+    }
 
-	func clearRecentOutput() {
-		transport.clearRecentOutput()
-	}
+    func clearRecentOutput() {
+        transport.clearRecentOutput()
+    }
 
-	func recentOutput() -> Data {
-		transport.recentOutput()
-	}
+    func recentOutput() -> Data {
+        transport.recentOutput()
+    }
 
-	func transportDidBecomeReady(rows: UInt32, columns: UInt32) {
-		transport.resize(rows: rows, columns: columns)
-	}
+    func transportDidBecomeReady(rows: UInt32, columns: UInt32) {
+        transport.resize(rows: rows, columns: columns)
+    }
 }
 
-public final class OrlixLinuxSession: @unchecked Sendable {
+@_spi(OrlixPrivateTesting)
+public final class OrlixKernelSession: @unchecked Sendable {
     public let terminal: OrlixTerminalSession
     public let bootConfig: OrlixBootConfig
     private let materializedRootImage: OrlixEnvironmentRootImage?
@@ -1050,11 +958,11 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         String(decoding: recentConsoleOutput, as: UTF8.self)
     }
 
-    public var instanceSnapshot: OrlixInstanceSnapshot {
+    public var machineSnapshot: OrlixMachineSnapshot {
         let snapshot = bootProgressSnapshot
         let latest = snapshot.last
         let hasConsoleOutput = snapshot.contains { $0.stage == .firstConsoleOutput }
-        let state: OrlixInstanceState
+        let state: OrlixMachineState
 
         switch latest?.stage {
         case nil:
@@ -1067,7 +975,7 @@ public final class OrlixLinuxSession: @unchecked Sendable {
             state = .booting
         }
 
-        return OrlixInstanceSnapshot(
+        return OrlixMachineSnapshot(
             state: state,
             latestBootProgress: latest,
             hasConsoleOutput: hasConsoleOutput
@@ -1260,10 +1168,10 @@ public final class OrlixLinuxSession: @unchecked Sendable {
         if let materializedRootImage {
             return materializedRootImage.registerWithHostAdapter()
         }
-        guard OrlixOSPayload.registerWithHostAdapter() else {
+        guard OrlixOSResources.registerWithHostAdapter() else {
             return false
         }
-        return OrlixOSPayload.registerAdditionalHostDirectoriesForTesting(
+        return OrlixOSResources.registerAdditionalHostDirectoriesForTesting(
             hostDirectories
         )
     }
@@ -1277,7 +1185,7 @@ public protocol OrlixOCIRuntimeProcessObservationDriver: Sendable {
 }
 
 @_spi(OrlixPrivateTesting)
-public enum OrlixOCIRuntimeLinuxSessionObservationError: Error, Equatable, Sendable {
+public enum OrlixOCIRuntimeKernelSessionObservationError: Error, Equatable, Sendable {
 	case bootFailed(OrlixBootStatus)
 	case timedOutWaitingForStart
 	case timedOutWaitingForCompletion
@@ -1285,12 +1193,12 @@ public enum OrlixOCIRuntimeLinuxSessionObservationError: Error, Equatable, Senda
 }
 
 @_spi(OrlixPrivateTesting)
-public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
+public final class OrlixOCIRuntimeKernelSessionObservationDriver:
 	OrlixOCIRuntimeProcessObservationDriver,
 	@unchecked Sendable
 {
 	private let timeout: TimeInterval
-	private let bootSession: @Sendable (OrlixLinuxSession) -> OrlixBootStatus
+	private let bootSession: @Sendable (OrlixKernelSession) -> OrlixBootStatus
 	private let condition = NSCondition()
 	private var output: OrlixTerminalOutput?
 	private var text = ""
@@ -1306,7 +1214,7 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 
 	init(
 		timeout: TimeInterval = 600,
-		bootSession: @escaping @Sendable (OrlixLinuxSession) -> OrlixBootStatus
+		bootSession: @escaping @Sendable (OrlixKernelSession) -> OrlixBootStatus
 	) {
 		self.timeout = timeout
 		self.bootSession = bootSession
@@ -1322,12 +1230,12 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 		completionObservation = nil
 		condition.unlock()
 
-		output = processSession.linuxSession.terminal.attachOutput { [weak self] data in
+		output = processSession.kernelSession.terminal.attachOutput { [weak self] data in
 			self?.append(data)
 		}
 
 		DispatchQueue.global(qos: .userInitiated).async { [bootSession] in
-			let status = bootSession(processSession.linuxSession)
+			let status = bootSession(processSession.kernelSession)
 			self.condition.lock()
 			self.bootStatus = status
 			self.condition.broadcast()
@@ -1344,10 +1252,10 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
         guard processSession.processHandle.sessionDescriptor.terminal,
               let controlCharacter = Self.terminalControlCharacter(forLinuxSignal: signal)
         else {
-            throw OrlixOCIRuntimeLinuxSessionObservationError.signalUnsupported
+            throw OrlixOCIRuntimeKernelSessionObservationError.signalUnsupported
         }
 
-        processSession.linuxSession.terminal.send(Data([controlCharacter]))
+        processSession.kernelSession.terminal.send(Data([controlCharacter]))
     }
 
     private static func terminalControlCharacter(forLinuxSignal signal: Int32) -> UInt8? {
@@ -1444,11 +1352,11 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 		defer { condition.unlock() }
 		while startObservation == nil {
 			if let bootStatus, bootStatus != .ok {
-				throw OrlixOCIRuntimeLinuxSessionObservationError
+				throw OrlixOCIRuntimeKernelSessionObservationError
 					.bootFailed(bootStatus)
 			}
 			if !condition.wait(until: deadline) {
-				throw OrlixOCIRuntimeLinuxSessionObservationError
+				throw OrlixOCIRuntimeKernelSessionObservationError
 					.timedOutWaitingForStart
 			}
 		}
@@ -1461,7 +1369,7 @@ public final class OrlixOCIRuntimeLinuxSessionObservationDriver:
 		defer { condition.unlock() }
 		while completionObservation == nil {
 			if !condition.wait(until: deadline) {
-				throw OrlixOCIRuntimeLinuxSessionObservationError
+				throw OrlixOCIRuntimeKernelSessionObservationError
 					.timedOutWaitingForCompletion
 			}
 		}
@@ -1596,6 +1504,7 @@ public struct OrlixOCIRuntimeEphemeralRunFailure: Error {
 	public let deletedEnvironment: OrlixOCIRuntimeDeletedEnvironment?
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentMaterializationTools: Equatable, Sendable {
     public let mke2fs: URL
     public let truncate: URL
@@ -1610,18 +1519,21 @@ public struct OrlixOCIEnvironmentMaterializationTools: Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentInstallResult: Sendable {
 	public let id: String
 	public let bundleURL: URL
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryRootfsImportReport: Sendable {
 	public let stagingRootDirectory: URL
 	public let baseTreeDirectory: URL
 	public let layerDigests: [String]
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
 	public let id: String
 	public let image: OrlixOCIRegistryImageReference
@@ -1630,63 +1542,74 @@ public struct OrlixOCIRegistryEnvironmentInstallResult: Sendable {
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentRunResult: Sendable {
     public let id: String
     public let startedStateReport: OrlixOCIRuntimeStateReport
     public let completedStateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentExecResult: Sendable {
     public let id: String
     public let command: [String]
     public let runResult: OrlixOCIEnvironmentRunResult
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentHealthcheckResult: Sendable {
     public let id: String
     public let command: [String]
     public let runResult: OrlixOCIEnvironmentRunResult
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentStartResult: Sendable {
 	public let id: String
 	public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentWaitResult: Sendable {
     public let id: String
     public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentSignalResult: Sendable {
     public let id: String
     public let signal: Int32
     public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentInstallRunResult: Sendable {
     public let installResult: OrlixOCIEnvironmentInstallResult
     public let runResult: OrlixOCIEnvironmentRunResult
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryEnvironmentInstallRunResult: Sendable {
 	public let installResult: OrlixOCIRegistryEnvironmentInstallResult
 	public let runResult: OrlixOCIEnvironmentRunResult
 	public let deleteResult: OrlixOCIEnvironmentDeleteResult?
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryEnvironmentTerminalSessionResult: Sendable {
 	public let installResult: OrlixOCIRegistryEnvironmentInstallResult
-	public let linuxSession: OrlixLinuxSession
+	let kernelSession: OrlixKernelSession
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentTerminalSessionResult: Sendable {
     public let id: String
     public let image: OrlixOCIRegistryImageReference
     public let command: [String]?
-    public let linuxSession: OrlixLinuxSession
+    let kernelSession: OrlixKernelSession
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentPreparedState: Sendable {
     public let id: String
     public let platform: String
@@ -1695,6 +1618,7 @@ public struct OrlixOCIEnvironmentPreparedState: Sendable {
     public let stateReport: OrlixOCIRuntimeStateReport?
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentInspectResult: Sendable {
     public let id: String
     public let platform: String
@@ -1711,11 +1635,13 @@ public struct OrlixOCIEnvironmentInspectResult: Sendable {
     public let stateReport: OrlixOCIRuntimeStateReport
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentDeleteResult: Sendable {
     public let id: String
     public let lifecycleState: OrlixOCIRuntimeLifecycleState
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentListArgumentsError: Error, Equatable, Sendable {
 	case missingListCommand
 	case missingOptionValue(String)
@@ -1724,6 +1650,7 @@ public enum OrlixOCIEnvironmentListArgumentsError: Error, Equatable, Sendable {
 	case invalidState(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentListArguments: Equatable, Sendable {
 	public let states: [OrlixOCIRuntimeLifecycleState]
 
@@ -1782,6 +1709,7 @@ public struct OrlixOCIEnvironmentListArguments: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentStateArgumentsError: Error, Equatable, Sendable {
 	case missingStateCommand
 	case missingID
@@ -1790,6 +1718,7 @@ public enum OrlixOCIEnvironmentStateArgumentsError: Error, Equatable, Sendable {
 	case unexpectedArgument(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentStateArguments: Equatable, Sendable {
 	public let id: String
 
@@ -1847,6 +1776,7 @@ public struct OrlixOCIEnvironmentStateArguments: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentLifecycleArgumentsError: Error, Equatable, Sendable {
 	case missingCommand(String)
 	case missingID
@@ -1855,6 +1785,7 @@ public enum OrlixOCIEnvironmentLifecycleArgumentsError: Error, Equatable, Sendab
 	case unexpectedArgument(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentLifecycleArguments: Equatable, Sendable {
     public let id: String
 
@@ -1914,6 +1845,7 @@ public struct OrlixOCIEnvironmentLifecycleArguments: Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentExecArgumentsError: Error, Equatable, Sendable {
     case missingExecCommand
     case missingID
@@ -1923,6 +1855,7 @@ public enum OrlixOCIEnvironmentExecArgumentsError: Error, Equatable, Sendable {
     case unexpectedArgument(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentExecArguments: Equatable, Sendable {
     public let id: String
     public let command: [String]
@@ -1999,6 +1932,7 @@ public struct OrlixOCIEnvironmentExecArguments: Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentKillArgumentsError: Error, Equatable, Sendable {
     case missingKillCommand
     case missingID
@@ -2008,6 +1942,7 @@ public enum OrlixOCIEnvironmentKillArgumentsError: Error, Equatable, Sendable {
 	case invalidSignal(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 	public let id: String
 	public let signal: Int32
@@ -2107,6 +2042,7 @@ public struct OrlixOCIEnvironmentKillArguments: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 	case missingRunCommand
 	case missingImage
@@ -2115,12 +2051,14 @@ public enum OrlixOCIEnvironmentRunArgumentsError: Error, Equatable, Sendable {
 	case removeAfterRunRequiresObservedRun
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIEnvironmentHealthcheckError: Error, Equatable, Sendable {
 	case missingHealthcheck(String)
 	case disabledHealthcheck(String)
 	case invalidHealthcheckTest(String, [String])
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentRunArguments: Equatable, Sendable {
     public let image: String
     public let id: String
@@ -4508,6 +4446,7 @@ private static func parseVolume(_ value: String) throws
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIEnvironmentInstaller: Sendable {
 	private let registry: OrlixEnvironmentRegistry
 
@@ -5490,6 +5429,7 @@ mergingDeviceNodesWith: deviceNodeOverrides,
 	}
 
 	@discardableResult
+	@_spi(OrlixPrivateTesting)
 	public func prepareTerminalSession(
 		arguments: [String],
 		tools: OrlixOCIEnvironmentMaterializationTools,
@@ -5560,6 +5500,7 @@ mergingDeviceNodesWith: deviceNodeOverrides,
 		)
 	}
 
+	@_spi(OrlixPrivateTesting)
 	public func terminalSession(
 		arguments: [String],
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
@@ -5571,7 +5512,7 @@ mergingDeviceNodesWith: deviceNodeOverrides,
 				.removeAfterRunRequiresObservedRun
 		}
 		let image = try OrlixOCIRegistryImageReference(request.image)
-		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
+		let kernelSession = try OrlixOCIRuntime(registry: registry).kernelSession(
             id: request.id,
             command: request.resolvedCommandOverride,
             terminal: terminal,
@@ -5581,11 +5522,12 @@ mergingDeviceNodesWith: deviceNodeOverrides,
             id: request.id,
             image: image,
             command: request.resolvedCommandOverride,
-            linuxSession: linuxSession
+            kernelSession: kernelSession
         )
 	}
 
 	@discardableResult
+	@_spi(OrlixPrivateTesting)
 	public func prepareTerminalSession(
 		image: String,
 		id: String,
@@ -5697,6 +5639,7 @@ deviceNodeOverrides: deviceNodeOverrides,
 	}
 
 	@discardableResult
+	@_spi(OrlixPrivateTesting)
 	public func prepareTerminalSession(
 		image: OrlixOCIRegistryImageReference,
 		id: String,
@@ -5803,7 +5746,7 @@ gidMappingOverrides: gidMappingOverrides,
 fileManager: fileManager,
 			runCommand: runCommand
 		)
-		let linuxSession = try OrlixOCIRuntime(registry: registry).terminalSession(
+		let kernelSession = try OrlixOCIRuntime(registry: registry).kernelSession(
 			id: id,
 			command: command,
 			terminal: terminal,
@@ -5811,7 +5754,7 @@ fileManager: fileManager,
 		)
 		return OrlixOCIRegistryEnvironmentTerminalSessionResult(
 			installResult: installResult,
-			linuxSession: linuxSession
+			kernelSession: kernelSession
 		)
 	}
 
@@ -6284,13 +6227,13 @@ deviceNodeOverrides: deviceNodeOverrides,
 		)
 	}
 
-	public func session(
+		func kernelSession(
 		bundleURL: URL,
 		id: String,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
-	) throws -> OrlixLinuxSession {
-		try OrlixLinuxSession(
+	) throws -> OrlixKernelSession {
+		try OrlixKernelSession(
 			ociRuntimeBundle: OrlixOCIRuntimeBundle.load(
 				from: bundleURL,
 				fileManager: fileManager
@@ -6302,12 +6245,12 @@ deviceNodeOverrides: deviceNodeOverrides,
 		)
 	}
 
-	public func session(
+		func kernelSession(
 		id: String,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
-	) throws -> OrlixLinuxSession {
-		try OrlixLinuxSession(
+	) throws -> OrlixKernelSession {
+		try OrlixKernelSession(
 			environmentID: id,
 			registry: registry,
 			terminal: terminal
@@ -6512,7 +6455,7 @@ deviceNodeOverrides: deviceNodeOverrides,
             id: id,
             signal: signal,
             terminal: terminal,
-            using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+            using: OrlixOCIRuntimeKernelSessionObservationDriver(
                 timeout: observationTimeout
             ),
             fileManager: fileManager
@@ -7388,14 +7331,14 @@ public struct OrlixOCIRuntime: Sendable {
         .sorted { $0.id < $1.id }
     }
 
-    public func terminalSession(
+	func kernelSession(
         id: String,
         command: [String]? = nil,
         rootMount: OrlixEnvironmentRootMount = .defaultOverlay,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
-	) throws -> OrlixLinuxSession {
+	) throws -> OrlixKernelSession {
 		try processSession(
 			id: id,
 			command: command,
@@ -7403,7 +7346,7 @@ public struct OrlixOCIRuntime: Sendable {
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
 			fileManager: fileManager
-		).linuxSession
+		).kernelSession
 	}
 
 	public func start(
@@ -7444,7 +7387,7 @@ public struct OrlixOCIRuntime: Sendable {
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
-			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+			using: OrlixOCIRuntimeKernelSessionObservationDriver(
 				timeout: observationTimeout
 			),
 			fileManager: fileManager
@@ -7519,7 +7462,7 @@ public struct OrlixOCIRuntime: Sendable {
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
-			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+			using: OrlixOCIRuntimeKernelSessionObservationDriver(
 				timeout: observationTimeout
 			),
 			fileManager: fileManager
@@ -7580,7 +7523,7 @@ public struct OrlixOCIRuntime: Sendable {
 			rootMount: rootMount,
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
-			using: OrlixOCIRuntimeLinuxSessionObservationDriver(
+			using: OrlixOCIRuntimeKernelSessionObservationDriver(
 				timeout: observationTimeout
 			),
 			fileManager: fileManager
@@ -7651,7 +7594,7 @@ public struct OrlixOCIRuntime: Sendable {
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
 			materializationRunner: materializationRunner,
-			processDriver: OrlixOCIRuntimeLinuxSessionObservationDriver(
+			processDriver: OrlixOCIRuntimeKernelSessionObservationDriver(
 				timeout: observationTimeout
 			),
 			fileManager: fileManager
@@ -7750,7 +7693,7 @@ public struct OrlixOCIRuntime: Sendable {
 			kernelCommandLine: kernelCommandLine,
 			terminal: terminal,
 			materializationRunner: materializationRunner,
-			processDriver: OrlixOCIRuntimeLinuxSessionObservationDriver(
+			processDriver: OrlixOCIRuntimeKernelSessionObservationDriver(
 				timeout: observationTimeout
 			),
 			fileManager: fileManager
@@ -7860,16 +7803,16 @@ public struct OrlixOCIRuntime: Sendable {
 @_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessSession: Sendable {
 	public let processHandle: OrlixOCIRuntimeProcessHandle
-	public let linuxSession: OrlixLinuxSession
+	let kernelSession: OrlixKernelSession
 	public let lifecycleStore: OrlixOCIRuntimeLifecycleStore?
 
-	public init(
+	init(
 		processHandle: OrlixOCIRuntimeProcessHandle,
-		linuxSession: OrlixLinuxSession,
+		kernelSession: OrlixKernelSession,
 		lifecycleStore: OrlixOCIRuntimeLifecycleStore? = nil
 	) {
 		self.processHandle = processHandle
-		self.linuxSession = linuxSession
+		self.kernelSession = kernelSession
 		self.lifecycleStore = lifecycleStore
 	}
 
@@ -7897,7 +7840,7 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		) {
 			try registry.save(processHandle.sessionDescriptor.environment)
 		}
-		let linuxSession = try OrlixLinuxSession(
+		let kernelSession = try OrlixKernelSession(
 			ociRuntimeSession: processHandle.sessionDescriptor,
 			registry: registry,
 			kernelCommandLine: kernelCommandLine,
@@ -7909,7 +7852,7 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		try resolvedStore.save(processHandle.lifecycle)
 		self.init(
 			processHandle: processHandle,
-			linuxSession: linuxSession,
+			kernelSession: kernelSession,
 			lifecycleStore: resolvedStore
 		)
 	}
@@ -7936,7 +7879,7 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		try persist(startedHandle.lifecycle)
 		return OrlixOCIRuntimeProcessSession(
 			processHandle: startedHandle,
-			linuxSession: linuxSession,
+			kernelSession: kernelSession,
 			lifecycleStore: lifecycleStore
 		)
 	}
@@ -7956,7 +7899,7 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		try persist(signaledHandle.lifecycle)
 		return OrlixOCIRuntimeProcessSession(
 			processHandle: signaledHandle,
-			linuxSession: linuxSession,
+			kernelSession: kernelSession,
 			lifecycleStore: lifecycleStore
 		)
 	}
@@ -7967,7 +7910,7 @@ public struct OrlixOCIRuntimeProcessSession: Sendable {
 		try persist(signaledHandle.lifecycle)
 		return OrlixOCIRuntimeProcessSession(
 			processHandle: signaledHandle,
-			linuxSession: linuxSession,
+			kernelSession: kernelSession,
 			lifecycleStore: lifecycleStore
 		)
 	}
@@ -8054,8 +7997,8 @@ enum OrlixTerminalMuxEncoder {
 	}
 }
 
-private final class HostConsoleTerminalTransport:
-    OrlixTerminalTransport,
+private final class HostConsolePaneTransport:
+    OrlixPaneTransport,
     @unchecked Sendable
 {
     private let pipe = Pipe()

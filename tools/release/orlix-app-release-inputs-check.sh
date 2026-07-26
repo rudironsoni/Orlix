@@ -47,15 +47,15 @@ openssl_sha256="$(jq -r '.native_sources.openssl.archive_sha256' "$MANIFEST")"
 libssh2_version="$(jq -r '.native_sources.libssh2.version' "$MANIFEST")"
 libssh2_sha256="$(jq -r '.native_sources.libssh2.archive_sha256' "$MANIFEST")"
 
-[ "$(tr -d '[:space:]' < Orlix/App/Vendor/libghostty/VERSION)" = "$ghostty_commit" ] || {
+[ "$(tr -d '[:space:]' < Orlix/Vendor/libghostty/VERSION)" = "$ghostty_commit" ] || {
     echo "Ghostty VERSION does not match immutable release inputs" >&2
     exit 1
 }
-grep -Fq "GHOSTTY_REF=\"\${GHOSTTY_REF:-$ghostty_commit}\"" Orlix/App/scripts/build.sh || { echo "Ghostty build default is not pinned" >&2; exit 1; }
-grep -Fq "OPENSSL_VERSION=\"$openssl_version\"" Orlix/App/scripts/build.sh || { echo "OpenSSL build version differs from release inputs" >&2; exit 1; }
-grep -Fq "OPENSSL_SHA256=\"$openssl_sha256\"" Orlix/App/scripts/build.sh || { echo "OpenSSL source hash differs from release inputs" >&2; exit 1; }
-grep -Fq "LIBSSH2_VERSION=\"$libssh2_version\"" Orlix/App/scripts/build.sh || { echo "libssh2 build version differs from release inputs" >&2; exit 1; }
-grep -Fq "LIBSSH2_SHA256=\"$libssh2_sha256\"" Orlix/App/scripts/build.sh || { echo "libssh2 source hash differs from release inputs" >&2; exit 1; }
+grep -Fq "GHOSTTY_REF=\"\${GHOSTTY_REF:-$ghostty_commit}\"" Orlix/scripts/build.sh || { echo "Ghostty build default is not pinned" >&2; exit 1; }
+grep -Fq "OPENSSL_VERSION=\"$openssl_version\"" Orlix/scripts/build.sh || { echo "OpenSSL build version differs from release inputs" >&2; exit 1; }
+grep -Fq "OPENSSL_SHA256=\"$openssl_sha256\"" Orlix/scripts/build.sh || { echo "OpenSSL source hash differs from release inputs" >&2; exit 1; }
+grep -Fq "LIBSSH2_VERSION=\"$libssh2_version\"" Orlix/scripts/build.sh || { echo "libssh2 build version differs from release inputs" >&2; exit 1; }
+grep -Fq "LIBSSH2_SHA256=\"$libssh2_sha256\"" Orlix/scripts/build.sh || { echo "libssh2 source hash differs from release inputs" >&2; exit 1; }
 
 while IFS=$'\t' read -r path expected_sha256; do
     [ -f "$path" ] || { echo "missing vendored artifact: $path" >&2; exit 1; }

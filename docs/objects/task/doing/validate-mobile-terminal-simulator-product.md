@@ -4,7 +4,7 @@ tags:
   - task
   - release
   - mobile-terminal
-updated: 2026-07-16
+updated: 2026-07-26
 status: doing
 summary: "Validate the complete mobile terminal product on the selected simulator."
 task_of:
@@ -12,7 +12,7 @@ task_of:
 depends_on:
   - "[Keep Herdr authoritative for terminal topology](keep-herdr-authoritative-for-terminal-topology.md)"
   - "[Validate mobile platform presentation](../todo/validate-mobile-platform-presentation.md)"
-  - "[Prove concurrent Local Instance isolation](../todo/prove-concurrent-local-instance-isolation.md)"
+  - "[Prove concurrent OrlixMachine isolation](../todo/prove-concurrent-orlix-machine-isolation.md)"
   - "[Promote TCTI as the product default](../todo/promote-tcti-as-product-default.md)"
 blocks:
   - "[Validate an authorized mobile terminal device](../todo/validate-authorized-mobile-terminal-device.md)"
@@ -21,4 +21,4 @@ blocks:
 
 # Validate the mobile terminal simulator product
 
-Advance the exact mobile terminal release candidate through source policy, focused owning regression tests, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, Herdr, Local Runtime, and TCTI contract. OCI and Docker behavior belongs to the later mobile container release.
+Advance the exact mobile terminal release candidate through source policy, focused owning regression tests, component integration, and complete simulator product validation while preserving one semantic product fingerprint. This task proves the terminal, commercially available Herdr, OrlixMachine, and OrlixTCTI contract. OCI and Docker behavior belongs to the later mobile container release.

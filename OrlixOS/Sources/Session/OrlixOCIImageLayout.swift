@@ -1,6 +1,7 @@
 import Foundation
 import zlib
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRegistryReferenceError: Error, Equatable, Sendable {
 	case emptyReference
 	case unsupportedScheme(String)
@@ -13,6 +14,7 @@ public enum OrlixOCIRegistryReferenceError: Error, Equatable, Sendable {
 	case invalidEndpoint(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 	public let scheme: String
 	public let registry: String
@@ -229,6 +231,7 @@ public struct OrlixOCIRegistryImageReference: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRegistryPullError: Error, Equatable, Sendable {
 	case destinationExists(String)
 	case invalidHTTPResponse(String)
@@ -244,6 +247,7 @@ public enum OrlixOCIRegistryPullError: Error, Equatable, Sendable {
 	case missingBearerToken(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryFetchRequest: Equatable, Sendable {
 	public let url: URL
 	public let accept: [String]
@@ -256,6 +260,7 @@ public struct OrlixOCIRegistryFetchRequest: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryFetchResponse: Equatable, Sendable {
 	public let statusCode: Int
 	public let headers: [String: String]
@@ -274,6 +279,7 @@ public struct OrlixOCIRegistryFetchResponse: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryPullResult: Equatable, Sendable {
 	public let layoutURL: URL
 	public let image: OrlixOCIRegistryImageReference
@@ -282,6 +288,7 @@ public struct OrlixOCIRegistryPullResult: Equatable, Sendable {
 	public let layerDigests: [String]
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryBearerAuthorizingFetch: Sendable {
 	public typealias Fetch = OrlixOCIRegistryPuller.Fetch
 
@@ -455,6 +462,7 @@ public struct OrlixOCIRegistryBearerAuthorizingFetch: Sendable {
 
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRegistryPuller: Sendable {
 	public typealias Fetch = @Sendable (OrlixOCIRegistryFetchRequest) async throws
 		-> OrlixOCIRegistryFetchResponse
@@ -2167,12 +2175,14 @@ private enum OrlixSHA256 {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeFeatureStatus: String, Codable, Equatable, Sendable {
 	case implemented
 	case recognized
 	case deterministicallyRejected
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeFeature: Codable, Equatable, Sendable {
 	public let name: String
 	public let status: OrlixOCIRuntimeFeatureStatus
@@ -2191,6 +2201,7 @@ public struct OrlixOCIRuntimeFeature: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 	public let schemaVersion: UInt
 	public let platform: String
@@ -2572,6 +2583,7 @@ public struct OrlixOCIRuntimeFeatureReport: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case unsupportedOCIVersion(String)
 	case missingProcess
@@ -2589,6 +2601,7 @@ public enum OrlixOCIRuntimeConfigError: Error, Equatable, Sendable {
 	case unsupportedLinuxFeature(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeConfigDescriptor: Equatable, Sendable {
 	public let ociVersion: String
 	public let annotations: [String: String]
@@ -2831,6 +2844,7 @@ public let cgroupIOWeight: UInt64?
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeMount: Equatable, Sendable {
 	public let destination: String
 	public let type: String
@@ -3001,11 +3015,13 @@ extension OrlixOCIRuntimeMount {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeConsoleSize: Equatable, Sendable {
 	public let height: UInt32
 	public let width: UInt32
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeConfigParser: Sendable {
 	public init() {}
 
@@ -4319,6 +4335,7 @@ private struct OCIRuntimeCapabilities: Decodable {
 }
 private struct OCIRuntimeNetDevice: Decodable {}
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeBundleError: Error, Equatable, Sendable {
 	case missingConfig(String)
 	case missingRootfs(String)
@@ -4439,13 +4456,13 @@ public struct OrlixOCIRuntimeBundleImportPlan: Equatable, Sendable {
 		)
 	}
 
-	public func linuxSession(
+	func kernelSession(
 		registry: OrlixEnvironmentRegistry,
 		kernelCommandLine: String? = OrlixEnvironmentRootImage.defaultKernelCommandLine,
 		terminal: OrlixTerminalSession = OrlixTerminalSession(),
 		fileManager: FileManager = .default
-	) throws -> OrlixLinuxSession {
-		try OrlixLinuxSession(
+	) throws -> OrlixKernelSession {
+		try OrlixKernelSession(
 			materializedRootImage: materializedRootImage(
 				registry: registry,
 				kernelCommandLine: kernelCommandLine,
@@ -4496,6 +4513,7 @@ public struct OrlixOCIRuntimeBundleMaterializationToolchainCheck:
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 	public let bundleURL: URL
 	public let configURL: URL
@@ -4644,6 +4662,7 @@ public struct OrlixOCIRuntimeBundle: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable {
 	case configured
 	case created
@@ -4652,6 +4671,7 @@ public enum OrlixOCIRuntimeLifecycleState: String, Codable, Equatable, Sendable 
 	case deleted
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeLifecycleAction: String, Codable, Equatable, Sendable {
 	case create
 	case start
@@ -4660,6 +4680,7 @@ public enum OrlixOCIRuntimeLifecycleAction: String, Codable, Equatable, Sendable
 	case delete
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case invalidTransition(from: OrlixOCIRuntimeLifecycleState,
 			       action: OrlixOCIRuntimeLifecycleAction)
@@ -4671,6 +4692,7 @@ public enum OrlixOCIRuntimeLifecycleError: Error, Equatable, Sendable {
 	case stateReportRequiresPID(OrlixOCIRuntimeStateStatus)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessStartObservation: Equatable, Sendable {
 	public let pid: Int32
 
@@ -4683,6 +4705,7 @@ public struct OrlixOCIRuntimeProcessStartObservation: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessExitObservation: Equatable, Sendable {
 	public let pid: Int32
 	public let exitStatus: Int32
@@ -4701,6 +4724,7 @@ public struct OrlixOCIRuntimeProcessExitObservation: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeProcessSignalObservation: Equatable, Sendable {
 	public let pid: Int32
 	public let signal: Int32
@@ -4719,17 +4743,20 @@ public struct OrlixOCIRuntimeProcessSignalObservation: Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeProcessCompletionObservation: Equatable, Sendable {
 	case exited(OrlixOCIRuntimeProcessExitObservation)
 	case signaled(OrlixOCIRuntimeProcessSignalObservation)
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixOCIRuntimeStateStatus: String, Codable, Equatable, Sendable {
 	case created
 	case running
 	case stopped
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeStateReport: Codable, Equatable, Sendable {
 	public let ociVersion: String
 	public let id: String
@@ -4746,6 +4773,7 @@ public struct OrlixOCIRuntimeStateReport: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeLifecycleRecord: Codable, Equatable, Sendable {
 	public let id: String
 	public let bundlePath: String
@@ -4900,6 +4928,7 @@ public struct OrlixOCIRuntimeLifecycleStore: Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixOCIRuntimeLifecycleController: Equatable, Sendable {
 	public let config: OrlixOCIRuntimeConfigDescriptor
 	public let record: OrlixOCIRuntimeLifecycleRecord

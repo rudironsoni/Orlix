@@ -3,7 +3,7 @@ type: story
 tags:
   - story
   - oci
-updated: 2026-07-15
+updated: 2026-07-26
 status: doing
 summary: "Import OCI images and run their processes through a complete Linux lifecycle."
 story_of:
@@ -13,7 +13,7 @@ has_task:
   - "[Implement OCI runtime lifecycle](../../task/todo/implement-oci-runtime-lifecycle.md)"
   - "[Prove Docker engine compatibility](../../task/todo/prove-docker-engine-compatibility.md)"
 depends_on:
-  - "[Deliver Local Runtime and Local Instances](deliver-local-runtime-and-instances.md)"
+  - "[Deliver Orlix machines](deliver-orlix-machines.md)"
 blocks:
   - "[Validate and publish the mobile container release](../todo/validate-and-publish-mobile-container-release.md)"
 ---

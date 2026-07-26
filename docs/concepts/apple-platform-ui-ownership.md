@@ -3,7 +3,7 @@ type: concept
 tags:
   - application
   - architecture
-updated: 2026-07-15
+updated: 2026-07-26
 summary: "Apple Platform UI Split Pattern (Spec)."
 applies:
   - "[Orlix native app](../objects/software-component/orlix-native-app.md)"
@@ -561,26 +561,24 @@ Initial implementation status:
 
 Current issues:
 
-- `OrlixApp.swift` contains app entry and shared root composition; app delegates and macOS commands live in platform files.
+- `Orlix.swift` contains app entry and shared root composition; app delegates and macOS commands live in platform files.
 - `ContentView.swift` is mostly macOS shell composition but has shared naming.
 - `App/iOS/iOSContentView.swift` is a platform shell and can keep an iOS-specific file path, but product child views inside it should be split over time.
 
 Target files:
 
 ```text
-Orlix/App/
-  OrlixApp.swift
-  OrlixApp+iOS.swift
-  OrlixApp+macOS.swift
+Orlix/Orlix/App/
+  Orlix.swift
   AppDelegate+iOS.swift
   AppDelegate+macOS.swift
   Commands+macOS.swift
   ContentView.swift
-  ContentView+macOS.swift
   iOS/
-    ContentView+iOS.swift
-    ServerListView+iOS.swift
-    ServerRows+iOS.swift
+    iOSContentView.swift
+    ServerComponents+iOS.swift
+    ServerListScreen+iOS.swift
+    ServerTerminalRoute+iOS.swift
 ```
 
 Allowed exceptions:
@@ -595,7 +593,7 @@ These are platform shell/adapters, not product UI.
 Migration notes:
 
 - Do not rename root shell types casually. App shell names are public to a lot of composition code.
-- Move `OrlixCommands` and app delegates out of `OrlixApp.swift`.
+- Keep `OrlixCommands` and app delegates outside `Orlix.swift`.
 - Then split iOS server-list child views into separate iOS files with neutral type names where feasible.
 
 Initial implementation status:
@@ -841,7 +839,7 @@ Steps:
 
 Acceptance:
 
-- `OrlixApp.swift` remains a small composition root.
+- `Orlix.swift` remains a small composition root.
 - Platform app lifecycle code lives in platform files.
 - Existing commands, windows, notifications, and app lock behavior are unchanged.
 
