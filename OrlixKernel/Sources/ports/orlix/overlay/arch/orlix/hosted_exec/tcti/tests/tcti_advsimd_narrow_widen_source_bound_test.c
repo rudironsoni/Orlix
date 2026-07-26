@@ -41,13 +41,125 @@
 #define TCTI_TEST_FPSR_QC			BIT(27)
 #define TCTI_TEST_SVC				0xd4000001U
 
+struct tcti_advsimd_narrow_widen_leaf {
+	u16 source_ordinal;
+	const char *source_name;
+	const char *source_mnemonic;
+	const char *source_operation;
+	u32 source_mask;
+	u32 source_pattern;
+};
+
+struct tcti_advsimd_narrow_widen_manifest_leaf {
+	u32 ordinal;
+	const char *id;
+	const char *mnemonic;
+	const char *operation;
+	u32 mask;
+	u32 pattern;
+};
+
+#define TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
+#define TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, id, mnemonic, operation, mask, \
+					     pattern, feature_predicate, offset, length) \
+	{ ordinal, id, mnemonic, operation, mask, pattern },
+static const struct tcti_advsimd_narrow_widen_manifest_leaf
+	tcti_advsimd_narrow_widen_manifest[] = {
+#include "../isa/source_manifest.def"
+};
+#undef TCTI_A64_SOURCE_MANIFEST_ROW
+#undef TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+static const struct tcti_advsimd_narrow_widen_leaf
+	tcti_advsimd_narrow_widen_leaves[] = {
+	{ 3559U, "SQXTN_asisdmisc_N", "SQXTN", "SQXTN_advsimd",
+	  0xff3ffc00U, 0x5e214800U },
+	{ 3576U, "SQXTUN_asisdmisc_N", "SQXTUN", "SQXTUN_advsimd",
+	  0xff3ffc00U, 0x7e212800U },
+	{ 3577U, "UQXTN_asisdmisc_N", "UQXTN", "UQXTN_advsimd",
+	  0xff3ffc00U, 0x7e214800U },
+	{ 3795U, "XTN_asimdmisc_N", "XTN", "XTN_advsimd",
+	  0xbf3ffc00U, 0x0e212800U },
+	{ 3796U, "SQXTN_asimdmisc_N", "SQXTN", "SQXTN_advsimd",
+	  0xbf3ffc00U, 0x0e214800U },
+	{ 3827U, "SQXTUN_asimdmisc_N", "SQXTUN", "SQXTUN_advsimd",
+	  0xbf3ffc00U, 0x2e212800U },
+	{ 3828U, "SHLL_asimdmisc_S", "SHLL", "SHLL_advsimd",
+	  0xbf3ffc00U, 0x2e213800U },
+	{ 3829U, "UQXTN_asimdmisc_N", "UQXTN", "UQXTN_advsimd",
+	  0xbf3ffc00U, 0x2e214800U },
+	{ 4005U, "SSHLL_asimdshf_L", "SSHLL", "SSHLL_advsimd",
+	  0xbf80fc00U, 0x0f00a400U },
+	{ 4020U, "USHLL_asimdshf_L", "USHLL", "USHLL_advsimd",
+	  0xbf80fc00U, 0x2f00a400U },
+};
+
+static const struct tcti_advsimd_narrow_widen_leaf *
+tcti_advsimd_narrow_widen_leaf(u32 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_advsimd_narrow_widen_leaves);
+	     index++)
+		if (tcti_advsimd_narrow_widen_leaves[index].source_ordinal == ordinal)
+			return &tcti_advsimd_narrow_widen_leaves[index];
+	return NULL;
+}
+
+static const struct tcti_advsimd_narrow_widen_manifest_leaf *
+tcti_advsimd_narrow_widen_manifest_leaf(u32 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(tcti_advsimd_narrow_widen_manifest);
+	     index++)
+		if (tcti_advsimd_narrow_widen_manifest[index].ordinal == ordinal)
+			return &tcti_advsimd_narrow_widen_manifest[index];
+	return NULL;
+}
+
+static void tcti_advsimd_narrow_widen_expect_source_encoding(
+	struct kunit *test, u32 ordinal, u32 instruction)
+{
+	const struct tcti_advsimd_narrow_widen_leaf *leaf =
+		tcti_advsimd_narrow_widen_leaf(ordinal);
+
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	KUNIT_EXPECT_EQ(test, leaf->source_pattern,
+			instruction & leaf->source_mask);
+}
+
 struct tcti_advsimd_narrow_widen_context {
 	struct mm_struct *mm;
 	unsigned long instructions;
 	u64 simd[ARRAY_SIZE(current->thread.user_simd)];
 	unsigned long simd_valid;
+	unsigned long fpcr;
 	unsigned long fpsr;
 };
+
+static void tcti_advsimd_narrow_widen_source_manifest_is_exact(
+	struct kunit *test)
+{
+	size_t index;
+
+	KUNIT_ASSERT_EQ(test, 10U,
+			ARRAY_SIZE(tcti_advsimd_narrow_widen_leaves));
+	for (index = 0; index < ARRAY_SIZE(tcti_advsimd_narrow_widen_leaves);
+	     index++) {
+		const struct tcti_advsimd_narrow_widen_leaf *leaf =
+			&tcti_advsimd_narrow_widen_leaves[index];
+		const struct tcti_advsimd_narrow_widen_manifest_leaf *source =
+			tcti_advsimd_narrow_widen_manifest_leaf(leaf->source_ordinal);
+
+		KUNIT_ASSERT_NOT_NULL(test, source);
+		KUNIT_EXPECT_STREQ(test, leaf->source_name, source->id);
+		KUNIT_EXPECT_STREQ(test, leaf->source_mnemonic, source->mnemonic);
+		KUNIT_EXPECT_STREQ(test, leaf->source_operation, source->operation);
+		KUNIT_EXPECT_EQ(test, leaf->source_mask, source->mask);
+		KUNIT_EXPECT_EQ(test, leaf->source_pattern, source->pattern);
+	}
+}
 
 static int tcti_advsimd_narrow_widen_test_init(struct kunit *test)
 {
@@ -72,6 +184,7 @@ static int tcti_advsimd_narrow_widen_test_init(struct kunit *test)
 	memcpy(context->simd, current->thread.user_simd,
 	       sizeof(context->simd));
 	context->simd_valid = current->thread.user_simd_valid;
+	context->fpcr = current->thread.user_fpcr;
 	context->fpsr = current->thread.user_fpsr;
 	test->priv = context;
 	return 0;
@@ -90,6 +203,7 @@ static void tcti_advsimd_narrow_widen_test_exit(struct kunit *test)
 	memcpy(current->thread.user_simd, context->simd,
 	       sizeof(context->simd));
 	current->thread.user_simd_valid = context->simd_valid;
+	current->thread.user_fpcr = context->fpcr;
 	current->thread.user_fpsr = context->fpsr;
 }
 
@@ -114,6 +228,10 @@ tcti_test_resume_instruction(struct kunit *test, struct pt_regs *regs,
 				     u32 instruction)
 {
 	struct tcti_advsimd_narrow_widen_context *context = test->priv;
+	const u32 expected_program[] = { instruction, TCTI_TEST_SVC };
+	u32 before_program[2];
+	u32 after_program[2];
+	struct tcti_result result;
 	int ret;
 
 	ret = tcti_test_load_instruction(test, instruction);
@@ -122,10 +240,26 @@ tcti_test_resume_instruction(struct kunit *test, struct pt_regs *regs,
 		return (struct tcti_result) {
 			.status = ret,
 		};
+	KUNIT_EXPECT_MEMEQ(test, expected_program, before_program,
+			   sizeof(expected_program));
+	ret = tcti_read_user_data(current->mm, context->instructions,
+				  before_program, sizeof(before_program));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	if (ret)
+		return (struct tcti_result) {
+			.status = ret,
+		};
 	regs->pc = context->instructions;
 	regs->pstate |= PSR_MODE_EL0t;
 	regs->syscallno = NO_SYSCALL;
-	return tcti_resume_user(current, regs, current->mm);
+	result = tcti_resume_user(current, regs, current->mm);
+	ret = tcti_read_user_data(current->mm, context->instructions,
+				  after_program, sizeof(after_program));
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	if (!ret)
+		KUNIT_EXPECT_MEMEQ(test, expected_program, after_program,
+				   sizeof(expected_program));
+	return result;
 }
 
 static void tcti_test_expect_resume_success(struct kunit *test,
@@ -134,16 +268,20 @@ static void tcti_test_expect_resume_success(struct kunit *test,
 					    const struct pt_regs *after)
 {
 	struct tcti_advsimd_narrow_widen_context *context = test->priv;
+	struct pt_regs expected = *before;
 
+	expected.pc = context->instructions + sizeof(u32);
 	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result->reason);
 	KUNIT_EXPECT_EQ(test, 0L, result->status);
+	KUNIT_EXPECT_EQ(test, 0UL, result->fault_address);
+	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result->fault_access);
 	KUNIT_EXPECT_EQ(test, context->instructions + sizeof(u32), result->pc);
 	KUNIT_EXPECT_EQ(test, TCTI_TEST_SVC, result->instruction);
-	KUNIT_EXPECT_EQ(test, context->instructions + sizeof(u32), after->pc);
-	KUNIT_EXPECT_MEMEQ(test, before->regs, after->regs, sizeof(before->regs));
-	KUNIT_EXPECT_EQ(test, before->sp, after->sp);
-	KUNIT_EXPECT_EQ(test, before->pstate, after->pstate);
+	KUNIT_EXPECT_MEMEQ(test, &expected, after, sizeof(expected));
 }
+
+static void tcti_test_initialize_registers(struct pt_regs *regs,
+					   u32 instruction);
 
 static void tcti_test_expect_rejected_instruction(struct kunit *test,
 						  u32 instruction)
@@ -152,17 +290,34 @@ static void tcti_test_expect_rejected_instruction(struct kunit *test,
 	struct pt_regs regs = {};
 	struct pt_regs before;
 	struct tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned long before_simd_valid;
+	unsigned long before_fpcr;
+	unsigned long before_fpsr;
 
+	tcti_test_initialize_registers(&regs, instruction);
 	regs.pc = context->instructions;
 	regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
 	regs.syscallno = NO_SYSCALL;
 	before = regs;
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_simd_valid = current->thread.user_simd_valid;
+	before_fpcr = current->thread.user_fpcr;
+	before_fpsr = current->thread.user_fpsr;
 	result = tcti_test_resume_instruction(test, &regs, instruction);
 	KUNIT_EXPECT_EQ(test, TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
 	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, 0UL, result.fault_address);
+	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
 	KUNIT_EXPECT_EQ(test, context->instructions, result.pc);
 	KUNIT_EXPECT_EQ(test, instruction, result.instruction);
 	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_MEMEQ(test, before_simd, current->thread.user_simd,
+			   sizeof(before_simd));
+	KUNIT_EXPECT_EQ(test, before_simd_valid,
+			current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, before_fpcr, current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, before_fpsr, current->thread.user_fpsr);
 }
 
 static u64 tcti_test_lane_mask(u8 size)
@@ -199,13 +354,18 @@ static void tcti_test_initialize_registers(struct pt_regs *regs, u32 instruction
 				    ((u64)instruction << 9) ^ index;
 	regs->pc = 0x123456789000ULL;
 	regs->sp = 0x23456789a000ULL;
-	regs->pstate = PSR_N_BIT | PSR_C_BIT | 0x155UL;
+	regs->pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+	regs->orig_x0 = 0xd1b54a32d192ed03ULL;
+	regs->syscallno = NO_SYSCALL;
+	regs->unused = 0x6d5a56c3U;
 
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
 			0xfedcba9876543210ULL ^
 			((u64)instruction << 13) ^
 			(0x0101010101010101ULL * index);
+	current->thread.user_fpcr = BIT(22) | BIT(24);
+	current->thread.user_fpsr = BIT(4);
 }
 
 static void tcti_test_execute_xtn_case(struct kunit *test, u8 size,
@@ -226,6 +386,8 @@ static void tcti_test_execute_xtn_case(struct kunit *test, u8 size,
 	u8 lane;
 	struct tcti_result result;
 
+	tcti_advsimd_narrow_widen_expect_source_encoding(test, 3795U,
+							 instruction);
 	KUNIT_ASSERT_EQ(test, TCTI_TEST_XTN_PATTERN,
 			instruction & TCTI_TEST_XTN_MASK);
 	KUNIT_ASSERT_EQ(test, TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
@@ -267,6 +429,8 @@ static void tcti_test_execute_xtn_case(struct kunit *test, u8 size,
 	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
 			   sizeof(expected_simd));
 	KUNIT_EXPECT_EQ(test, 1UL, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, BIT(22) | BIT(24), current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, BIT(4), current->thread.user_fpsr);
 }
 
 static void tcti_xtn_source_leaf_executes_all_legal_variants(struct kunit *test)
@@ -299,6 +463,8 @@ static void tcti_xtn_source_leaf_rejects_reserved_size(struct kunit *test)
 					(3U << 22) | (upper ? BIT(30) : 0) |
 					((u32)rn << 5) | rd;
 
+				tcti_advsimd_narrow_widen_expect_source_encoding(
+					test, 3795U, instruction);
 				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 					tcti_decode_aarch64(instruction).decode_class);
 				tcti_test_expect_rejected_instruction(test, instruction);
@@ -332,7 +498,10 @@ static void tcti_test_execute_shift_long_case(struct kunit *test, bool shll,
 	u8 lane_count = sizeof(u64) / source_size;
 	u8 lane;
 	struct tcti_result exec_result;
+	u32 source_ordinal = shll ? 3828U : sign ? 4005U : 4020U;
 
+	tcti_advsimd_narrow_widen_expect_source_encoding(test, source_ordinal,
+							 instruction);
 	KUNIT_ASSERT_EQ(test, pattern, instruction &
 			(shll ? TCTI_TEST_SHLL_MASK :
 				TCTI_TEST_SHIFT_LONG_MASK));
@@ -380,6 +549,8 @@ static void tcti_test_execute_shift_long_case(struct kunit *test, bool shll,
 	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
 			   sizeof(expected_simd));
 	KUNIT_EXPECT_EQ(test, 1UL, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, BIT(22) | BIT(24), current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, BIT(4), current->thread.user_fpsr);
 }
 
 static void tcti_shift_long_source_leaves_execute_all_legal_variants(
@@ -435,6 +606,8 @@ static void tcti_shift_long_source_leaves_reject_reserved_immediates(
 					((u32)immediates[immediate_index] << 16) |
 					(9U << 5) | 10U;
 
+				tcti_advsimd_narrow_widen_expect_source_encoding(
+					test, sign ? 4005U : 4020U, instruction);
 				KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 					tcti_decode_aarch64(instruction).decode_class);
 				tcti_test_expect_rejected_instruction(test, instruction);
@@ -487,6 +660,8 @@ static void tcti_shll_source_leaf_rejects_reserved_size(struct kunit *test)
 				(3U << 22) | (upper ? BIT(30) : 0) |
 				((u32)rn << 5) | 31U;
 
+			tcti_advsimd_narrow_widen_expect_source_encoding(test, 3828U,
+								 instruction);
 			KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 				tcti_decode_aarch64(instruction).decode_class);
 			tcti_test_expect_rejected_instruction(test, instruction);
@@ -553,6 +728,16 @@ static u64 tcti_test_saturating_narrow_input(
 	}
 }
 
+static u32 tcti_test_saturating_narrow_source_ordinal(
+	enum tcti_simd_vector_arithmetic_op operation, bool scalar)
+{
+	if (operation == TCTI_SIMD_ARITH_SQXTN)
+		return scalar ? 3559U : 3796U;
+	if (operation == TCTI_SIMD_ARITH_UQXTN)
+		return scalar ? 3577U : 3829U;
+	return scalar ? 3576U : 3827U;
+}
+
 static void tcti_test_execute_saturating_narrow_case(
 	struct kunit *test, enum tcti_simd_vector_arithmetic_op operation,
 	bool scalar, bool upper, u8 size, u8 rn, u8 rd)
@@ -583,6 +768,9 @@ static void tcti_test_execute_saturating_narrow_case(
 		(!scalar && upper ? BIT(30) : 0) | ((u32)rn << 5) | rd;
 	decoded = tcti_decode_aarch64(instruction);
 
+	tcti_advsimd_narrow_widen_expect_source_encoding(test,
+		tcti_test_saturating_narrow_source_ordinal(operation, scalar),
+		instruction);
 	KUNIT_ASSERT_EQ(test, pattern,
 		instruction & (scalar ? TCTI_TEST_SCALAR_SATURATING_NARROW_MASK :
 			TCTI_TEST_SATURATING_NARROW_MASK));
@@ -633,6 +821,7 @@ static void tcti_test_execute_saturating_narrow_case(
 	KUNIT_EXPECT_MEMEQ(test, expected_simd, current->thread.user_simd,
 			   sizeof(expected_simd));
 	KUNIT_EXPECT_EQ(test, 1UL, current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, BIT(22) | BIT(24), current->thread.user_fpcr);
 	KUNIT_EXPECT_EQ(test, BIT(5) | (saturated ? TCTI_TEST_FPSR_QC : 0),
 			current->thread.user_fpsr);
 }
@@ -664,18 +853,25 @@ static void tcti_saturating_narrow_source_leaves_execute_all_legal_variants(
 static void tcti_saturating_narrow_source_leaves_reject_reserved_encodings(
 	struct kunit *test)
 {
-	static const u32 patterns[] = {
-		TCTI_TEST_SQXTN_PATTERN,
-		TCTI_TEST_SQXTUN_PATTERN,
-		TCTI_TEST_SCALAR_SQXTN_PATTERN,
-		TCTI_TEST_SCALAR_SQXTUN_PATTERN,
+	static const struct {
+		u32 ordinal;
+		u32 pattern;
+	} leaves[] = {
+		{ 3796U, 0x0e214800U },
+		{ 3829U, 0x2e214800U },
+		{ 3827U, 0x2e212800U },
+		{ 3559U, 0x5e214800U },
+		{ 3577U, 0x7e214800U },
+		{ 3576U, 0x7e212800U },
 	};
-	u8 pattern;
+	u8 index;
 
-	for (pattern = 0; pattern < ARRAY_SIZE(patterns); pattern++) {
-		u32 instruction = patterns[pattern] | (3U << 22) |
-			(pattern & 1U ? BIT(29) : 0) | (7U << 5) | 8U;
+	for (index = 0; index < ARRAY_SIZE(leaves); index++) {
+		u32 instruction = leaves[index].pattern | (3U << 22) |
+			(7U << 5) | 8U;
 
+		tcti_advsimd_narrow_widen_expect_source_encoding(test,
+			leaves[index].ordinal, instruction);
 		KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
 			tcti_decode_aarch64(instruction).decode_class);
 		tcti_test_expect_rejected_instruction(test, instruction);
@@ -699,26 +895,43 @@ static void tcti_narrow_widen_resume_reports_instruction_fetch_fault(
 	struct pt_regs regs = {};
 	struct pt_regs before;
 	struct tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned long before_simd_valid;
+	unsigned long before_fpcr;
+	unsigned long before_fpsr;
 	int ret;
 
 	ret = sys_mprotect(context->instructions, PAGE_SIZE, PROT_NONE);
 	KUNIT_ASSERT_EQ(test, 0, ret);
+	tcti_test_initialize_registers(&regs, 0xaabbccddU);
 	regs.pc = context->instructions;
 	regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
 	regs.syscallno = NO_SYSCALL;
 	before = regs;
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_simd_valid = current->thread.user_simd_valid;
+	before_fpcr = current->thread.user_fpcr;
+	before_fpsr = current->thread.user_fpsr;
 	result = tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, TCTI_EXIT_USER_FAULT, result.reason);
 	KUNIT_EXPECT_EQ(test, -EACCES, result.status);
 	KUNIT_EXPECT_EQ(test, context->instructions, result.fault_address);
 	KUNIT_EXPECT_EQ(test, TCTI_ACCESS_FETCH, result.fault_access);
 	KUNIT_EXPECT_EQ(test, context->instructions, result.pc);
+	KUNIT_EXPECT_EQ(test, 0U, result.instruction);
 	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_MEMEQ(test, before_simd, current->thread.user_simd,
+			   sizeof(before_simd));
+	KUNIT_EXPECT_EQ(test, before_simd_valid,
+			current->thread.user_simd_valid);
+	KUNIT_EXPECT_EQ(test, before_fpcr, current->thread.user_fpcr);
+	KUNIT_EXPECT_EQ(test, before_fpsr, current->thread.user_fpsr);
 	KUNIT_EXPECT_EQ(test, 0, sys_mprotect(context->instructions, PAGE_SIZE,
 						 PROT_READ | PROT_WRITE));
 }
 
 static struct kunit_case tcti_advsimd_narrow_widen_source_bound_cases[] = {
+	KUNIT_CASE(tcti_advsimd_narrow_widen_source_manifest_is_exact),
 	KUNIT_CASE(tcti_xtn_source_leaf_executes_all_legal_variants),
 	KUNIT_CASE(tcti_xtn_source_leaf_rejects_reserved_size),
 	KUNIT_CASE(tcti_shift_long_source_leaves_execute_all_legal_variants),
