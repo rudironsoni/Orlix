@@ -17,11 +17,12 @@
 #include <linux/time64.h>
 #include <linux/uaccess.h>
 #include <asm/hosted_exec.h>
+#include <asm/hosted_tls_repair.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/signal.h>
-#include <asm/tcti.h>
+#include <asm/orlix_tcti.h>
 #include <asm/time.h>
 #include <asm/unistd.h>
 #include <internal/asm/host_memory.h>
@@ -438,7 +439,7 @@ static void __noreturn orlix_hosted_handle_user_syscall(struct pt_regs *regs)
 
 void __noreturn orlix_hosted_enter_user(struct pt_regs *regs)
 {
-	if (IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_TCTI))
+	if (IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC))
 		orlix_tcti_enter_user(regs);
 
 	if (!IS_ENABLED(CONFIG_ORLIX_HOSTED_EXEC_NATIVE))
@@ -613,6 +614,7 @@ void orlix_hosted_capture_host_context(void)
 					 &orlix_hosted_active_user_tls,
 					 &orlix_hosted_user_active,
 					 orlix_hosted_handle_kernel_fault,
+					 orlix_hosted_decide_user_tls_repair,
 					 orlix_hosted_user_trap_entry))
 		panic("Orlix: failed to install hosted user trap transport\n");
 }

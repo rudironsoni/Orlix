@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0004"
 summary: "Durable Orlix architecture decision ADR 0004."
@@ -25,7 +25,7 @@ Exposing Linux management APIs from the product surface would confuse kernel, li
 
 ## Decision
 
-The app-facing product API lives in `OrlixOS` and is bootloader/session-shaped only. It exposes a minimal Linux session surface with closed profile selection and opaque app-level resource identifiers. The lower-level boot entrypoint remains under `OrlixKernel/Sources/include` for kernel integration, but apps should consume the `OrlixOS` Kit rather than target kernel headers directly.
+The app-facing product API lives in the sole public `OrlixOS.xcframework`. It exposes `OrlixMachine` sessions with closed profile selection and opaque app-level resource identifiers; [ADR 0028](0028-provide-full-docker-engine-compatibility-through-orlixos.md) separately owns `OrlixOS.Containers`. The lower-level boot entrypoint remains under `OrlixKernel/Sources/include` for private kernel integration, and apps do not target kernel headers directly.
 
 ## Consequences
 
@@ -33,4 +33,4 @@ Raw `struct boot_params` is not the main public API.
 
 Public syscall, file, mount, exec, task, cgroup, and runtime management APIs are forbidden.
 
-`OrlixOS` resolves target-owned payload metadata and registers private HostAdapter resource paths before boot. The bootloader under `OrlixKernel/Sources/boot` translates app-level inputs into Linux-shaped boot data.
+`OrlixOS` resolves curated distribution resources from its own framework and registers private HostAdapter resource paths before boot. There is no separate payload bundle or target-selected payload identity. The bootloader under `OrlixKernel/Sources/boot` translates app-level inputs into Linux-shaped boot data.

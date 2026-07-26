@@ -724,3 +724,46 @@ source artifact and asserts acquire and release classification. Branch-target
 fetch faults now report deterministic structured results in both production and
 switch-debug execution. These checkpoints expand owning KUnit evidence without
 advertising a capability or claiming complete target-ISA proof.
+
+## [2026-07-26] decide | Canonicalize the public SDK and private layers
+
+Made `Orlix` the sole product and app identity and `OrlixOS.xcframework` the
+sole public SDK. Recorded private static OrlixKernel, OrlixMLibC, and
+OrlixCoreUtils artifacts, private OrlixTCTI and OrlixHostAdapter execution,
+framework-owned distribution resources without a payload bundle, OrlixMachine,
+`OrlixOS.Containers`, the Herdr Session to Workspace to Tab to Pane hierarchy,
+and the two private test hosts. Renamed the structured machine work without
+compatibility aliases while keeping commercial Herdr access and Docker/Compose
+behavior explicitly unfinished behind their existing todo tasks.
+
+## [2026-07-26] refresh | Rebind application release inputs after flattening
+
+Moved the release manifest's imported source, package resolution, vendor
+artifacts, required evidence, capability evidence, privacy source, product
+identity, and current documentation source references to the flattened
+`Orlix/` tree. Recomputed the package-resolution and privacy hashes, revalidated
+every vendored artifact and native-source hash, and recorded the lowercase app,
+CloudKit, application-group, and Live Activity identifiers while preserving the
+external StoreKit commerce identifiers.
+
+## [2026-07-26] correct | Restore agreed private implementation identifiers
+
+[CORRECTION] ADR 0030 and its derived component pages now identify the private
+static implementation artifacts as `com.rudironsoni.orlix.os.kernel`,
+`com.rudironsoni.orlix.os.mlibc`, and
+`com.rudironsoni.orlix.os.coreutils`. The public OrlixOS SDK identifier remains
+`com.rudironsoni.orlix.os`; no code identifiers changed in this documentation
+correction.
+
+## [2026-07-26] correct | Reconcile flattened app, TCTI, and entitlement references
+
+[CORRECTION] Current application provenance and XcodeGen decisions now use the
+flattened `Orlix/` root, OrlixTCTI ownership resolves to
+`arch/orlix/hosted_exec/orlix_tcti`, and CloudKit plus app-group references use
+the agreed lowercase identifiers. Historical forbidden-identity evidence and
+external `com.rudironsoni.Orlix.pro.*` StoreKit commerce identifiers remain
+unchanged.
+
+Direct OrlixOS resource synchronization now uses checksum comparison after a
+staging identity change, so same-size files changed within one timestamp tick
+cannot leave stale framework resources behind.

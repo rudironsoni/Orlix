@@ -1,6 +1,6 @@
 #include "OrlixHostAdapter/memory/kernel_mapping.h"
 #include "OrlixHostAdapter/observability/log.h"
-#include "OrlixHostAdapter/runtime/host_tls.h"
+#include "OrlixHostAdapter/execution/host_tls.h"
 #include "internal/asm/host_trap.h"
 
 #include <libkern/OSCacheControl.h>

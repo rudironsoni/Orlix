@@ -289,7 +289,7 @@ Likely implementation step:
 - `Orlix/GhosttyTerminal/GhosttyTerminalView+iOS.swift`
 - `Orlix/GhosttyTerminal/Ghostty.App.swift`
 - `Orlix/Features/TerminalSessions/UI/Terminal/SSHTerminalWrapper.swift`
-- `Orlix/App/iOS/iOSContentView.swift`
+- `Orlix/Orlix/App/iOS/iOSContentView.swift`
 - `Orlix/Features/TerminalSessions/Application/ConnectionSessionManager.swift`
 - `Orlix/Features/TerminalSessions/UI/Terminal/ZenModeControls.swift`
 - `OrlixTests/TerminalHardwareTextInputRoutingPolicyTests.swift` or a dedicated keyboard-focus-policy test file

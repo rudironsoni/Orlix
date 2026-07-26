@@ -8,6 +8,7 @@ public enum OrlixEnvironmentSource: Codable, Equatable, Sendable {
     case ociLayout
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentRootPropagation: String, Codable, Equatable, Sendable {
 	case `private`
 	case shared
@@ -15,6 +16,7 @@ public enum OrlixEnvironmentRootPropagation: String, Codable, Equatable, Sendabl
 	case unbindable
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixLinuxSignal {
 	public static func number(_ value: String) -> Int32? {
 		if let signal = Int32(value), (1...127).contains(signal) {
@@ -63,6 +65,7 @@ public enum OrlixLinuxSignal {
 	]
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentExposedPort: Codable, Equatable, Sendable {
 	public let port: UInt16
 	public let proto: String
@@ -73,6 +76,7 @@ public struct OrlixEnvironmentExposedPort: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentPublishedPort: Codable, Equatable, Sendable {
 	public let containerPort: UInt16
 	public let proto: String
@@ -92,6 +96,7 @@ public struct OrlixEnvironmentPublishedPort: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentHealthcheck: Codable, Equatable, Sendable {
 	public let test: [String]
 	public let intervalNanoseconds: UInt64?
@@ -675,6 +680,7 @@ try container.encodeIfPresent(cgroupPidsLimit, forKey: .cgroupPidsLimit)
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentRlimit: Codable, Equatable, Sendable {
 	public let type: String
 	public let soft: UInt64
@@ -687,6 +693,7 @@ public struct OrlixEnvironmentRlimit: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentCgroupCPUMax: Codable, Equatable, Sendable {
 public static let defaultPeriodMicros: UInt64 = 100_000
 
@@ -702,6 +709,7 @@ self.periodMicros = periodMicros
 }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentCgroupUnifiedEntry: Codable, Equatable, Sendable {
 public let file: String
 public let value: String
@@ -712,6 +720,7 @@ self.value = value
 }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentDeviceNode: Codable, Equatable, Sendable {
     public let path: String
     public let type: String
@@ -740,6 +749,7 @@ self.uid = uid
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentTimeOffset: Codable, Equatable, Sendable {
     public let clock: String
     public let secs: Int64
@@ -752,6 +762,7 @@ public struct OrlixEnvironmentTimeOffset: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentIDMapping: Codable, Equatable, Sendable {
     public let containerID: UInt32
     public let hostID: UInt32
@@ -764,6 +775,7 @@ public struct OrlixEnvironmentIDMapping: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentCapabilities: Codable, Equatable, Sendable {
 	static let supportedLinuxNames: Set<String> = [
 		"CAP_CHOWN",
@@ -830,6 +842,7 @@ public struct OrlixEnvironmentCapabilities: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentScheduler: Codable, Equatable, Sendable {
     public let policy: String
     public let priority: Int32
@@ -840,6 +853,7 @@ public struct OrlixEnvironmentScheduler: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentIOPriority: Codable, Equatable, Sendable {
     public let `class`: String
     public let priority: Int32
@@ -850,6 +864,7 @@ public struct OrlixEnvironmentIOPriority: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentCPUAffinity: Codable, Equatable, Sendable {
     public let mask: String
 
@@ -858,12 +873,14 @@ public struct OrlixEnvironmentCPUAffinity: Codable, Equatable, Sendable {
     }
 }
 
+@_spi(OrlixPrivateTesting)
 public enum OrlixEnvironmentMountSource: Codable, Equatable, Sendable {
 	case documents
 	case securityScopedExternal(bookmarkID: String)
 	case hostPath(String)
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 	public let source: OrlixEnvironmentMountSource
 	public let targetPath: String
@@ -978,6 +995,7 @@ public struct OrlixEnvironmentMount: Codable, Equatable, Sendable {
 	}
 }
 
+@_spi(OrlixPrivateTesting)
 public struct OrlixEnvironmentTmpfsMount: Codable, Equatable, Sendable {
 	public let targetPath: String
 	public let readOnly: Bool
@@ -1400,21 +1418,21 @@ public static let hostDirectoryIdentifierPrefix = "orlix-host"
     }
 
     public func registerWithHostAdapter() -> Bool {
-        OrlixOSPayload.registerMaterializedRootImage(self)
+        OrlixOSResources.registerMaterializedRootImage(self)
     }
 
     @_spi(OrlixPrivateTesting)
     public func registerWithHostAdapterForTesting(
-        payloadBundlePath: String,
+        resourceRootPath: String,
         initrdResource: String,
         baseBlockDevice: UInt32,
         stateBlockDevice: UInt32,
         stateBlockMinimumBytes: UInt64
     ) -> Bool {
-        OrlixOSPayload.registerMaterializedRootImage(
+        OrlixOSResources.registerMaterializedRootImage(
             self,
-            payloadBundlePath: payloadBundlePath,
-            productResources: OrlixOSPayload.ProductRootResources(
+            resourceRootPath: resourceRootPath,
+            productResources: OrlixOSResources.ProductRootResources(
                 initrdResource: initrdResource,
                 baseBlockResource: "",
                 stateBlockResource: "",

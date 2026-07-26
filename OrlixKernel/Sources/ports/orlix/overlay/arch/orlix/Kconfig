@@ -51,8 +51,8 @@ config ORLIX_HOSTED_EXEC_NATIVE
 	  or benchmark backend. This backend cannot provide product-development,
 	  simulator-readiness, or release evidence.
 
-config ORLIX_HOSTED_EXEC_TCTI
-	bool "Use Orlix TCTI hosted user execution"
+config ORLIX_TCTI_HOSTED_EXEC
+	bool "Use OrlixTCTI hosted user execution"
 	default y
 	help
 	  Enable the Orlix-owned no-JIT same-ISA threaded interpreter backend
@@ -61,26 +61,26 @@ config ORLIX_HOSTED_EXEC_TCTI
 	  text.
 
 config ORLIX_TCTI_DEBUG_SWITCH
-	bool "Enable Orlix TCTI switch debug oracle"
-	depends on ORLIX_HOSTED_EXEC_TCTI
+	bool "Enable OrlixTCTI switch debug oracle"
+	depends on ORLIX_TCTI_HOSTED_EXEC
 	default n
 	help
-	  Build the slow switch-dispatch correctness oracle used to test TCTI
+	  Build the slow switch-dispatch correctness oracle used to test OrlixTCTI
 	  decoding, fault, syscall, and register semantics. Keep this test-only
 	  implementation disabled in product profiles.
 
 config ORLIX_TCTI_SYSCALL_TRACE
-	bool "Trace every Orlix TCTI syscall entry and return"
-	depends on ORLIX_HOSTED_EXEC_TCTI
+	bool "Trace every OrlixTCTI syscall entry and return"
+	depends on ORLIX_TCTI_HOSTED_EXEC
 	default n
 	help
-	  Enable full per-syscall TCTI tracing. Normal TCTI execution keeps
+	  Enable full per-syscall OrlixTCTI tracing. Normal OrlixTCTI execution keeps
 	  syscall-entry reporting bounded so app-hosted Linux workloads are not
 	  throttled by console mirroring.
 
 config ORLIX_TCTI_KUNIT_TEST
-	bool "Enable Orlix TCTI KUnit tests"
-	depends on ORLIX_HOSTED_EXEC_TCTI && KUNIT
+	bool "Enable OrlixTCTI KUnit tests"
+	depends on ORLIX_TCTI_HOSTED_EXEC && KUNIT
 	default n
 
 source "kernel/Kconfig.hz"

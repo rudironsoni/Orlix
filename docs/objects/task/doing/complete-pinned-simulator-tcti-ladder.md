@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-24
+updated: 2026-07-26
 status: doing
 summary: "Complete the selected TCTI proof ladder through the pinned app-hosted simulator."
 task_of:
@@ -12,7 +12,7 @@ depends_on:
   - "[Complete AArch64 ISA-on-ISA coverage](complete-aarch64-isa-on-isa-coverage.md)"
 blocks:
   - "[Integrate and validate the Herdr terminal platform](../todo/integrate-and-validate-herdr-terminal-platform.md)"
-  - "[Implement namespaced Local Instance lifecycle](../todo/implement-namespaced-local-instance-lifecycle.md)"
+  - "[Implement namespaced OrlixMachine lifecycle](../todo/implement-namespaced-orlix-machine-lifecycle.md)"
   - "[Run authorized TCTI device validation](../todo/run-authorized-tcti-device-validation.md)"
   - "[Promote TCTI as the product default](../todo/promote-tcti-as-product-default.md)"
 ---

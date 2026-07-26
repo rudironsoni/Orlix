@@ -1,7 +1,7 @@
 #include "OrlixHostAdapter/terminal/console.h"
 #include "OrlixHostAdapter/boot/progress.h"
 #include "OrlixHostAdapter/observability/log.h"
-#include "OrlixHostAdapter/runtime/host_tls.h"
+#include "OrlixHostAdapter/execution/host_tls.h"
 
 #include <errno.h>
 #include <fcntl.h>

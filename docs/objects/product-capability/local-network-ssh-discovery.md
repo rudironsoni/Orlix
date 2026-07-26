@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: implemented
 summary: "Local Network SSH Device Discovery (Spec)."
 part_of:
@@ -182,7 +182,7 @@ Update `ServerFormSheet`:
 - `Orlix/Views/ServerDetail/ServerFormSheet.swift`
   - add `Pick from Local Discovery...` action
   - accept and apply `ServerFormPrefill`
-- `Orlix/OrlixApp.swift`
+- `Orlix/Orlix/App/Orlix.swift`
   - add macOS command and shortcut
 - `Orlix-iOS/Info.plist` and `Orlix-macOS/Info.plist`
   - add `NSBonjourServices` entries:

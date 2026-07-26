@@ -117,16 +117,16 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/boot/boot.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/engine.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/report.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/switch_debug.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/fixed_fp.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/sve_state.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/sve_decode.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/decode_aarch64.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/gadget_program.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/block_cache.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tlb.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/engine.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/report.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/switch_debug.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fixed_fp.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_decode.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/decode_aarch64.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/gadget_program.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/block_cache.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tlb.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/idle.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/irq.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/process.c \
@@ -143,8 +143,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/mm/iomem.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/init.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/mmap.c \
-	arch/$(ORLIX_PORT_ARCH)/mm/tcti_user_page.c \
-	arch/$(ORLIX_PORT_ARCH)/mm/tcti_invalidate.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_user_page.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_invalidate.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/uaccess.c \
 	init/version.c \
 	init/main.c \
@@ -1040,72 +1040,72 @@ ORLIX_KERNEL_KUNIT_COMPOSITE_SOURCES := \
 ifeq ($(ORLIX_KERNEL_KUNIT),1)
 ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/boot/boot_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_decode_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/runtime_projection.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_ordinal_ledger.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_ordinal_ledger_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_feature_artifact.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_instruction_artifact.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_runtime_capability_cohort_artifact.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_memory_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_decode_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_uaccess_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_cssc_min_max_immediate_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crypto_decode_boundary_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crc32_decode_boundary_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crypto_extension_decode_boundary_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_atomic_128_rmw_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_lse_operation_catalog.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_noncas_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse128_resume_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_resume_production_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_scalar_rmw_resume_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_exclusive_resume_production_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_native_observation_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_immediate_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_shifted_register_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_variable_shift_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_logical_immediate_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_move_wide_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_add_sub_register_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_bitfield_extract_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_scalar_bitops_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_narrow_widen_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_ordinary_single_load_store_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_load_literal_resume_regression_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_branch_control_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_source_leaf_classification_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_scalar_fp_semantics_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_baseline_decoder_regression_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_gadget_program_boundary_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_lse_caspal_atomicity_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_kthread_handoff_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_mapping_invalidation_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pmull_semantic_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_integer_conditional_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sve_state_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sve_decode_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sve_resume_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_modified_immediate_regression_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/mops_provenance.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_fp_arithmetic_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_compare_register_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_compare_zero_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_logical_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_add_sub_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_integer_min_max_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_pairwise_minmax_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_halving_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_shift_right_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_advsimd_structure_load_store_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_simd_fp_register_offset_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pair_load_store_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_crc32_source_bound_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_pauth_bti_gcs_obligation_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_sme_state_contract_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/tcti_mops_provenance_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/runtime_projection.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_ordinal_ledger.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_ordinal_ledger_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_decode_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_uaccess_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_cssc_min_max_immediate_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_crypto_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_crc32_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_crypto_extension_decode_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_128_rmw_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_lse_operation_catalog.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse128_noncas_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse128_resume_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_resume_production_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_scalar_rmw_resume_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_exclusive_resume_production_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_shifted_register_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_variable_shift_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_immediate_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_move_wide_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_register_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_bitfield_extract_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_narrow_widen_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_ordinary_single_load_store_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_load_literal_resume_regression_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_source_leaf_classification_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_fp_semantics_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_baseline_decoder_regression_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_gadget_program_boundary_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_caspal_atomicity_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_kthread_handoff_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_mapping_invalidation_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_pmull_semantic_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_integer_conditional_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_sve_state_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_sve_decode_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_sve_resume_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_modified_immediate_regression_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/mops_provenance.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_arithmetic_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_compare_register_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_compare_zero_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_logical_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_add_sub_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_integer_min_max_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_pairwise_minmax_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_halving_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_shift_right_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_simd_fp_register_offset_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_structure_load_store_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_pair_load_store_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_crc32_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_pauth_bti_gcs_obligation_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_sme_state_contract_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_mops_provenance_test.c \
 	lib/kunit/assert.c \
 	lib/kunit/attributes.c \
 	lib/kunit/device.c \
@@ -1135,7 +1135,7 @@ ORLIX_IOS_SIMULATOR_ID ?=
 ORLIX_IOS_SIMULATOR_DERIVED_DATA ?= $(ORLIX_BUILD_ROOT)/DerivedData/Orlix-sim
 ORLIX_IOS_SIMULATOR_FRAMEWORK := $(ORLIX_IOS_SIMULATOR_DERIVED_DATA)/Build/Products/Debug-iphonesimulator/OrlixKernel.framework
 ORLIX_IOS_SIMULATOR_RUN_LOG_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/run/$(PROFILE)
-ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.Orlix
+ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 ORLIX_KERNEL_RUN_UNTIL_MARKER ?=
 ORLIX_KERNEL_RUN_TIMEOUT_SECONDS ?= 120
 ORLIX_KERNEL_RUN_STARTUP_TIMEOUT_SECONDS ?= 30
@@ -1147,9 +1147,6 @@ ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_NAME ?= $(ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_
 ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION ?= $(ORLIX_OS_TEST_INITRAMFS_BUNDLE_EXTENSION)
 ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_IDENTIFIER ?= $(ORLIX_OS_KSELFTEST_INITRAMFS_BUNDLE_IDENTIFIER)
 ORLIX_MLIBC_TEST_INITRAMFS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/test-initramfs/$(PROFILE)/$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_NAME).$(ORLIX_MLIBC_TEST_INITRAMFS_BUNDLE_EXTENSION)
-ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME ?= $(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_NAME)
-ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION ?= $(ORLIX_OS_PAYLOAD_BUNDLE_EXTENSION)
-ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER ?= $(ORLIX_OS_PAYLOAD_SOURCE_BUNDLE_IDENTIFIER)
 ORLIX_KERNEL_PAYLOAD_SELECTED_PROFILE_INFO_KEY ?= $(ORLIX_OS_PAYLOAD_SELECTED_PROFILE_INFO_KEY)
 ORLIX_KERNEL_PAYLOAD_KERNEL_COMMAND_LINE_INFO_KEY ?= $(ORLIX_OS_PAYLOAD_KERNEL_COMMAND_LINE_INFO_KEY)
 ORLIX_KERNEL_PAYLOAD_ROOT_INITRAMFS_INFO_KEY ?= $(ORLIX_OS_PAYLOAD_ROOT_INITRAMFS_INFO_KEY)
@@ -1164,7 +1161,7 @@ ORLIX_KERNEL_LINUX_PAGE_SIZE ?= $(ORLIX_OS_LINUX_PAGE_SIZE)
 ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE ?= $(ORLIX_OS_ROOT_INITRAMFS_RESOURCE)
 ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE ?= $(ORLIX_OS_BASE_ROOT_IMAGE_RESOURCE)
 ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE ?= $(ORLIX_OS_STATE_ROOT_IMAGE_RESOURCE)
-ORLIX_KERNEL_PAYLOAD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)
+ORLIX_KERNEL_RESOURCE_STAGING_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/resource-staging/$(PROFILE)
 ORLIX_KERNEL_ROOTFS_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/rootfs/$(PROFILE)
 ORLIX_KERNEL_BASE_ROOT_IMAGE := $(ORLIX_KERNEL_ROOTFS_BUILD_DIR)/$(notdir $(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE))
 ORLIX_KERNEL_STATE_ROOT_IMAGE := $(ORLIX_KERNEL_ROOTFS_BUILD_DIR)/$(notdir $(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE))
@@ -1361,7 +1358,7 @@ run: __ios-simulator-framework xcodeproj
 	cleanup_tree() { pid="$$1"; [ -n "$$pid" ] || return 0; for child in $$(pgrep -P "$$pid" 2>/dev/null || true); do cleanup_tree "$$child"; done; kill "$$pid" >/dev/null 2>&1 || true; }; \
 	cleanup() { cleanup_tree "$$log_pid"; cleanup_tree "$$launch_pid"; xcrun simctl terminate "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >/dev/null 2>&1 || true; sync_terminal_capture; }; \
 	trap cleanup EXIT INT TERM; \
-	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "Orlix" || subsystem == "com.rudironsoni.Orlix"' >> "$$runtime_log" 2>&1 & \
+	xcrun simctl spawn "$$simctl_device" log stream --style compact --predicate 'process == "Orlix" || subsystem == "com.rudironsoni.orlix"' >> "$$runtime_log" 2>&1 & \
 	log_pid="$$!"; \
 	SIMCTL_CHILD_ORLIX_SIMULATOR_CAPTURE_TERMINAL_OUTPUT=1 xcrun simctl launch --terminate-running-process --console "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" >> "$$runtime_log" 2>&1 & \
 	launch_pid="$$!"; \
@@ -1826,7 +1823,7 @@ __kunit: __prepare-kbuild
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_tls_repair.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_tls_repair_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kernel-archive: __prepare-kbuild
@@ -1857,16 +1854,16 @@ __kernel-archive: __prepare-kbuild
 	mkdir -p "$$root"; \
 	$(call orlix_product_adapter_prepare); \
 	mkdir -p "$(ORLIX_KERNEL_BUILD_DIR)/init"; \
-	inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/gen_inventory.c"; \
-	inventory_definition="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/inventory.def"; \
-	inventory_dir="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests"; \
+	inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/gen_inventory.c"; \
+	inventory_definition="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/inventory.def"; \
+	inventory_dir="$(ORLIX_KERNEL_BUILD_DIR)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests"; \
 	inventory_tool="$$inventory_dir/gen_inventory"; \
 	inventory_header="$$inventory_dir/inventory.h"; \
-	target_inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_isa_kbuild_generator.c"; \
-	target_inventory_generator_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/tests/target_isa_kbuild_generator.h"; \
-	target_inventory_source_manifest="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/source_manifest.def"; \
-	target_inventory_classification="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_classification.def"; \
-	target_inventory_system_accessors="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/isa/target_system_accessor_reconciliation.def"; \
+	target_inventory_generator="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_isa_kbuild_generator.c"; \
+	target_inventory_generator_header="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_isa_kbuild_generator.h"; \
+	target_inventory_source_manifest="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/source_manifest.def"; \
+	target_inventory_classification="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_classification.def"; \
+	target_inventory_system_accessors="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_system_accessor_reconciliation.def"; \
 	target_inventory_tool="$$inventory_dir/target_isa_kbuild_generator"; \
 	target_inventory_header="$$inventory_dir/target_inventory.h"; \
 	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
@@ -1936,7 +1933,7 @@ __kernel-archive: __prepare-kbuild
 		symbols_tmp="$$output_dir/.symbols.txt.tmp.$$$$"; \
 		strings_tmp="$$output_dir/.strings.txt.tmp.$$$$"; \
 		archive_cache="$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.sh"; \
-		tcti_kbuild="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/tcti/Makefile"; \
+		orlix_tcti_kbuild="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/Makefile"; \
 		mkdir -p "$$obj_dir"; \
 		object_dependencies_current() { \
 			object="$$1"; depfile="$$2"; \
@@ -1951,7 +1948,7 @@ __kernel-archive: __prepare-kbuild
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
-				"$$tcti_kbuild" \
+				"$$orlix_tcti_kbuild" \
 				"$$archive_cache" \
 				"$$inventory_generator" \
 				"$$inventory_definition" \
@@ -1987,7 +1984,7 @@ __kernel-archive: __prepare-kbuild
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
-				"$$tcti_kbuild" \
+				"$$orlix_tcti_kbuild" \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
 			done; \
@@ -2035,7 +2032,7 @@ __kernel-archive: __prepare-kbuild
 				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
-				[ "$$obj" -nt "$$tcti_kbuild" ] && \
+				[ "$$obj" -nt "$$orlix_tcti_kbuild" ] && \
 				object_dependencies_current "$$obj" "$$dep"; then \
 				needs_build=0; \
 			fi; \
@@ -2118,7 +2115,7 @@ __verify-xcodegen-boundary:
 		exit 1; \
 	fi; \
 	if grep -R -n -E 'dlsym[[:space:]]*\([^;]*start_kernel|start_kernel[^;]*dlsym|RTLD_DEFAULT[^;]*start_kernel|start_kernel[^;]*RTLD_DEFAULT' \
-		OrlixHostAdapter/Sources OrlixKernel/Sources/boot Orlix/Sources; then \
+		OrlixHostAdapter/Sources OrlixKernel/Sources/boot Orlix/Orlix; then \
 		echo "product boot path must not resolve start_kernel through dlsym or RTLD_DEFAULT" >&2; \
 		exit 1; \
 	fi; \
@@ -2285,13 +2282,10 @@ __kselftest-initramfs:
 __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
-	output="$(ORLIX_KERNEL_PAYLOAD_DIR)"; \
+	output="$(ORLIX_KERNEL_RESOURCE_STAGING_DIR)"; \
 	required_settings=( \
 		"ORLIX_PRODUCT_VERSION=$(ORLIX_PRODUCT_VERSION)" \
 		"ORLIX_PRODUCT_BUILD_ID=$(ORLIX_PRODUCT_BUILD_ID)" \
-		"ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" \
-		"ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" \
-		"ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER=$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" \
 		"ORLIX_KERNEL_PAYLOAD_SELECTED_PROFILE_INFO_KEY=$(ORLIX_KERNEL_PAYLOAD_SELECTED_PROFILE_INFO_KEY)" \
 		"ORLIX_KERNEL_PAYLOAD_ROOT_INITRAMFS_INFO_KEY=$(ORLIX_KERNEL_PAYLOAD_ROOT_INITRAMFS_INFO_KEY)" \
 		"ORLIX_KERNEL_PAYLOAD_BASE_ROOT_IMAGE_INFO_KEY=$(ORLIX_KERNEL_PAYLOAD_BASE_ROOT_IMAGE_INFO_KEY)" \
@@ -2317,10 +2311,6 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		value="$${setting#*=}"; \
 		[ -n "$$value" ] || { echo "missing OrlixOS payload target setting: $${setting%%=*}" >&2; exit 1; }; \
 	done; \
-	validate_payload_name() { \
-		name="$$1"; \
-		case "$$name" in ""|/*|*/*|.*|*..*) echo "invalid OrlixOS payload bundle name: $$name" >&2; exit 1 ;; esac; \
-	}; \
 	validate_payload_resource() { \
 		resource="$$1"; \
 		case "$$resource" in ""|/*|..|../*|*/..|*/../*) echo "invalid OrlixOS payload resource path: $$resource" >&2; exit 1 ;; esac; \
@@ -2329,8 +2319,6 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		value="$$1"; \
 		case "$$value" in ""|*[!0-9]*) echo "invalid unsigned OrlixOS payload setting: $$value" >&2; exit 1 ;; esac; \
 	}; \
-	validate_payload_name "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)"; \
-	validate_payload_name "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)"; \
 	validate_payload_resource "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)"; \
 	validate_payload_resource "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)"; \
 	validate_payload_resource "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)"; \
@@ -2339,10 +2327,10 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)"; \
 	validate_unsigned_int "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)"; \
 	validate_unsigned_int "$(ORLIX_PRODUCT_BUILD_ID)"; \
-	expected_output="$(ORLIX_BUILD_ROOT)/OrlixKernel/payload/$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME).$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)"; \
-	[ "$$output" = "$$expected_output" ] || { echo "OrlixKernel payload path must come from OrlixOS target metadata: $$output" >&2; exit 1; }; \
-	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixKernel/payload" "$$output"; do \
-		if [ -L "$$path" ]; then echo "refusing to package OrlixKernel payload through symlinked path: $$path" >&2; exit 1; fi; \
+	expected_output="$(ORLIX_BUILD_ROOT)/OrlixKernel/resource-staging/$(PROFILE)"; \
+	[ "$$output" = "$$expected_output" ] || { echo "unexpected OrlixOS resource staging path: $$output" >&2; exit 1; }; \
+	for path in "$(ORLIX_BUILD_ROOT)" "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_BUILD_ROOT)/OrlixKernel/resource-staging" "$$output"; do \
+		if [ -L "$$path" ]; then echo "refusing to stage OrlixOS resources through symlinked path: $$path" >&2; exit 1; fi; \
 	done; \
 	rootfs_input="$(ORLIX_KERNEL_TEST_INITRAMFS_INPUT)"; \
 	if [ -z "$$rootfs_input" ] && [ -n "$(ORLIX_KERNEL_ROOT_INITRAMFS_INPUT)" ]; then rootfs_input="$(ORLIX_KERNEL_ROOT_INITRAMFS_INPUT)"; fi; \
@@ -2411,9 +2399,6 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		[ "$$(sed -n 's/^state_root_tree_sha256=//p' "$$payload_stamp")" = "$$state_root_tree_sha256" ] && \
 		[ "$$(sed -n 's/^payload_boot_profile=//p' "$$payload_stamp")" = "$$payload_boot_profile" ] && \
 		[ "$$(sed -n 's/^kernel_command_line=//p' "$$payload_stamp")" = "$$payload_kernel_command_line" ] && \
-		[ "$$(sed -n 's/^payload_bundle_name=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" ] && \
-		[ "$$(sed -n 's/^payload_bundle_extension=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" ] && \
-		[ "$$(sed -n 's/^payload_bundle_identifier=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" ] && \
 		[ "$$(sed -n 's/^product_version=//p' "$$payload_stamp")" = "$(ORLIX_PRODUCT_VERSION)" ] && \
 		[ "$$(sed -n 's/^product_build_id=//p' "$$payload_stamp")" = "$(ORLIX_PRODUCT_BUILD_ID)" ] && \
 		[ "$$(sed -n 's/^linux_page_size=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" ] && \
@@ -2429,13 +2414,13 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		[ "$$(sed -n 's/^base_root_image_size=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" ] && \
 		[ "$$(sed -n 's/^state_root_image_size=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" ] && \
 		[ "$$(sed -n 's/^state_root_minimum_bytes=//p' "$$payload_stamp")" = "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)" ] && \
-		[ -s "$$output/Info.plist" ] && \
+		[ -s "$$output/OrlixOSManifest.plist" ] && \
 		[ -s "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts/release.dtb" ] && \
 		[ -s "$$output/arch/$(ORLIX_PORT_ARCH)/boot/dts/development.dtb" ] && \
 		[ -s "$$output/$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" ] && \
 		[ -s "$$output/$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" ] && \
 		[ -s "$$output/$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)" ]; then \
-		echo "reusing OrlixKernel payload: $$output (profile $(PROFILE))"; \
+		echo "reusing staged OrlixOS resources: $$output (profile $(PROFILE))"; \
 		exit 0; \
 	fi; \
 	rm -rf "$$output"; \
@@ -2488,15 +2473,9 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'; \
 		printf '%s\n' '<plist version="1.0">'; \
 		printf '%s\n' '<dict>'; \
-		printf '%s\n' '    <key>CFBundleIdentifier</key>'; \
-		printf '%s\n' '    <string>$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)</string>'; \
-		printf '%s\n' '    <key>CFBundleName</key>'; \
-		printf '%s\n' '    <string>$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)</string>'; \
-		printf '%s\n' '    <key>CFBundlePackageType</key>'; \
-		printf '%s\n' '    <string>BNDL</string>'; \
-		printf '%s\n' '    <key>CFBundleShortVersionString</key>'; \
+		printf '%s\n' '    <key>OrlixProductVersion</key>'; \
 		printf '%s\n' '    <string>$(ORLIX_PRODUCT_VERSION)</string>'; \
-		printf '%s\n' '    <key>CFBundleVersion</key>'; \
+		printf '%s\n' '    <key>OrlixProductBuildID</key>'; \
 		printf '%s\n' '    <string>$(ORLIX_PRODUCT_BUILD_ID)</string>'; \
 		printf '%s\n' '    <key>OrlixLinuxArch</key>'; \
 		printf '%s\n' '    <string>$(ORLIX_PORT_ARCH)</string>'; \
@@ -2530,10 +2509,10 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 		printf '%s\n' '    <string>$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)</string>'; \
 		printf '%s\n' '</dict>'; \
 		printf '%s\n' '</plist>'; \
-	} > "$$output/Info.plist"; \
-	plutil -lint "$$output/Info.plist" >/dev/null; \
-	printf 'profile=%s\nlinux_version=%s\nproduct_version=%s\nproduct_build_id=%s\nrootfs_input=%s\nrootfs_sha256=%s\nbase_root_tree_input=%s\nbase_root_tree_sha256=%s\nstate_root_tree_input=%s\nstate_root_tree_sha256=%s\npayload_boot_profile=%s\nkernel_command_line=%s\npayload_bundle_name=%s\npayload_bundle_extension=%s\npayload_bundle_identifier=%s\nlinux_page_size=%s\nroot_initramfs_resource=%s\nbase_root_image_resource=%s\nstate_root_image_resource=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\nbase_root_host_block_device=%s\nstate_root_host_block_device=%s\nbase_root_image_size=%s\nstate_root_image_size=%s\nstate_root_minimum_bytes=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$$rootfs_input" "$$rootfs_sha256" "$$base_root_tree_input" "$$base_root_tree_sha256" "$$state_root_tree_input" "$$state_root_tree_sha256" "$$payload_boot_profile" "$$payload_kernel_command_line" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_NAME)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_EXTENSION)" "$(ORLIX_KERNEL_PAYLOAD_BUNDLE_IDENTIFIER)" "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_ROOT_MODES)" "$$selected_root_mode" "$(ORLIX_KERNEL_BASE_ROOT_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)" > "$$payload_stamp"; \
-	echo "packaged OrlixKernel payload: $$output (profile $(PROFILE))"
+	} > "$$output/OrlixOSManifest.plist"; \
+	plutil -lint "$$output/OrlixOSManifest.plist" >/dev/null; \
+	printf 'profile=%s\nlinux_version=%s\nproduct_version=%s\nproduct_build_id=%s\nrootfs_input=%s\nrootfs_sha256=%s\nbase_root_tree_input=%s\nbase_root_tree_sha256=%s\nstate_root_tree_input=%s\nstate_root_tree_sha256=%s\npayload_boot_profile=%s\nkernel_command_line=%s\nlinux_page_size=%s\nroot_initramfs_resource=%s\nbase_root_image_resource=%s\nstate_root_image_resource=%s\nroot_modes=%s\nselected_root_mode=%s\nbase_root_device=%s\nstate_root_device=%s\nbase_root_host_block_device=%s\nstate_root_host_block_device=%s\nbase_root_image_size=%s\nstate_root_image_size=%s\nstate_root_minimum_bytes=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$$rootfs_input" "$$rootfs_sha256" "$$base_root_tree_input" "$$base_root_tree_sha256" "$$state_root_tree_input" "$$state_root_tree_sha256" "$$payload_boot_profile" "$$payload_kernel_command_line" "$(ORLIX_KERNEL_LINUX_PAGE_SIZE)" "$(ORLIX_KERNEL_ROOT_INITRAMFS_RESOURCE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_RESOURCE)" "$(ORLIX_KERNEL_ROOT_MODES)" "$$selected_root_mode" "$(ORLIX_KERNEL_BASE_ROOT_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_STATE_ROOT_HOST_BLOCK_DEVICE)" "$(ORLIX_KERNEL_BASE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_IMAGE_SIZE)" "$(ORLIX_KERNEL_STATE_ROOT_MINIMUM_BYTES)" > "$$payload_stamp"; \
+	echo "staged OrlixOS resources: $$output (profile $(PROFILE))"
 
 __ios-simulator-framework: xcodeproj
 	@set -euo pipefail; \
