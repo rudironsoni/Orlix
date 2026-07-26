@@ -7,6 +7,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	../isa/target_ordinal_ledger.o \
 	target_instruction_artifact.o \
 	target_ordinal_ledger_test.o \
+	target_instruction_artifact.o \
 	target_feature_artifact.o \
 	target_instruction_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
@@ -52,6 +53,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_sve_decode_test.o \
 	tcti_sve_resume_test.o \
 	tcti_advsimd_modified_immediate_regression_test.o \
+	tcti_advsimd_add_sub_source_bound_test.o \
 	tcti_advsimd_halving_source_bound_test.o \
 	tcti_advsimd_shift_right_source_bound_test.o \
 	tcti_advsimd_fp_arithmetic_source_bound_test.o \
