@@ -847,6 +847,8 @@ struct tcti_scalar_fp_binary_source_row {
 
 #define TCTI_SCALAR_FP_BINARY_S(base) ((base) + 0x00020020U)
 #define TCTI_SCALAR_FP_BINARY_SOURCE_MASK 0xffe0fc00U
+#define TCTI_SCALAR_FP_NZCV \
+	(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
 
 static const char *tcti_scalar_fp_binary_artifact_string(
 	const struct tcti_target_instruction_artifact *artifact, u32 offset)
@@ -1060,7 +1062,186 @@ static void tcti_scalar_fp_binary_resume_source_rows(struct kunit *test)
 	}
 }
 
+/*
+ * This is production-path execution evidence for the pinned compare leaves.
+ * The absent shared-ASL corpus remains a separate semantic-proof blocker.
+ */
+struct tcti_scalar_fp_compare_source_row {
+	u16 ordinal;
+	const char *source_id;
+	const char *operation_id;
+	u32 source_mask;
+	u32 source_pattern;
+	u32 instruction;
+	u8 width;
+	bool immediate;
+	bool signal_all_nans;
+	u64 left;
+	u64 right;
+	unsigned long expected_nzcv;
+	unsigned long expected_fpsr;
+};
+
+static const struct tcti_scalar_fp_compare_source_row
+tcti_scalar_fp_compare_source_rows[] = {
+	{ 4287U, "FCMP_S_floatcmp", "FCMP_float", 0xffe0fc1fU,
+	  0x1e202000U, 0x1e222020U, sizeof(u32), false, false,
+	  0x3f800000U, 0x40000000U, PSR_N_BIT, TCTI_FPSR_QC },
+	{ 4288U, "FCMP_SZ_floatcmp", "FCMP_float", 0xfffffc1fU,
+	  0x1e202008U, 0x1e202028U, sizeof(u32), true, false,
+	  0x80000000U, 0, PSR_Z_BIT | PSR_C_BIT, TCTI_FPSR_QC },
+	{ 4289U, "FCMPE_S_floatcmp", "FCMPE_float", 0xffe0fc1fU,
+	  0x1e202010U, 0x1e222030U, sizeof(u32), false, true,
+	  0x7fc00001U, 0x3f800000U, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC | TCTI_FPSR_IOC },
+	{ 4290U, "FCMPE_SZ_floatcmp", "FCMPE_float", 0xfffffc1fU,
+	  0x1e202018U, 0x1e202038U, sizeof(u32), true, true,
+	  0x7fc00001U, 0, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC | TCTI_FPSR_IOC },
+	{ 4291U, "FCMP_D_floatcmp", "FCMP_float", 0xffe0fc1fU,
+	  0x1e602000U, 0x1e622020U, sizeof(u64), false, false,
+	  0x4000000000000000ULL, 0x3ff0000000000000ULL, PSR_C_BIT,
+	  TCTI_FPSR_QC },
+	{ 4292U, "FCMP_DZ_floatcmp", "FCMP_float", 0xfffffc1fU,
+	  0x1e602008U, 0x1e602028U, sizeof(u64), true, false,
+	  0x8000000000000000ULL, 0, PSR_Z_BIT | PSR_C_BIT,
+	  TCTI_FPSR_QC },
+	{ 4293U, "FCMPE_D_floatcmp", "FCMPE_float", 0xffe0fc1fU,
+	  0x1e602010U, 0x1e622030U, sizeof(u64), false, true,
+	  0x7ff8000000000001ULL, 0x3ff0000000000000ULL,
+	  PSR_C_BIT | PSR_V_BIT, TCTI_FPSR_QC | TCTI_FPSR_IOC },
+	{ 4294U, "FCMPE_DZ_floatcmp", "FCMPE_float", 0xfffffc1fU,
+	  0x1e602018U, 0x1e602038U, sizeof(u64), true, true,
+	  0x7ff8000000000001ULL, 0, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC | TCTI_FPSR_IOC },
+	/* FCMP signals only signaling NaNs, unlike FCMPE above. */
+	{ 4287U, "FCMP_S_floatcmp", "FCMP_float", 0xffe0fc1fU,
+	  0x1e202000U, 0x1e222020U, sizeof(u32), false, false,
+	  0x7fc00001U, 0x3f800000U, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC },
+	{ 4288U, "FCMP_SZ_floatcmp", "FCMP_float", 0xfffffc1fU,
+	  0x1e202008U, 0x1e202028U, sizeof(u32), true, false,
+	  0x7f800001U, 0, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC | TCTI_FPSR_IOC },
+	{ 4291U, "FCMP_D_floatcmp", "FCMP_float", 0xffe0fc1fU,
+	  0x1e602000U, 0x1e622020U, sizeof(u64), false, false,
+	  0x7ff8000000000001ULL, 0x3ff0000000000000ULL,
+	  PSR_C_BIT | PSR_V_BIT, TCTI_FPSR_QC },
+	{ 4292U, "FCMP_DZ_floatcmp", "FCMP_float", 0xfffffc1fU,
+	  0x1e602008U, 0x1e602028U, sizeof(u64), true, false,
+	  0x7ff0000000000001ULL, 0, PSR_C_BIT | PSR_V_BIT,
+	  TCTI_FPSR_QC | TCTI_FPSR_IOC },
+};
+
+static void tcti_scalar_fp_compare_resume_source_rows(struct kunit *test)
+{
+	static const u32 svc = 0xd4000001U;
+	const struct tcti_target_instruction_artifact *artifact =
+		tcti_target_instruction_artifact_canonical();
+	struct tcti_target_instruction_artifact_validation_result validation;
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		tcti_target_instruction_artifact_validate(artifact, &validation));
+	KUNIT_ASSERT_GT(test, artifact->leaf_count, 4294U);
+	for (index = 0; index < ARRAY_SIZE(tcti_scalar_fp_compare_source_rows);
+	     index++) {
+		const struct tcti_scalar_fp_compare_source_row *row =
+			&tcti_scalar_fp_compare_source_rows[index];
+		const struct tcti_target_instruction_artifact_leaf *source =
+			&artifact->leaves[row->ordinal];
+		const char *source_id = tcti_scalar_fp_binary_artifact_string(
+			artifact, source->name_offset);
+		const char *operation_id = tcti_scalar_fp_binary_artifact_string(
+			artifact, source->operation_offset);
+		const u32 instructions[] = { row->instruction, svc };
+		struct tcti_decoded_instruction decoded =
+			tcti_decode_aarch64(row->instruction);
+		struct tcti_result result;
+		struct pt_regs regs = {};
+		struct pt_regs expected;
+		u64 simd_before[ARRAY_SIZE(current->thread.user_simd)];
+		unsigned long mapped;
+		size_t register_index;
+		int ret;
+
+		KUNIT_ASSERT_EQ_MSG(test, TCTI_DECODE_FP_SCALAR_COMPARE,
+				    decoded.decode_class, "%s source ordinal %u",
+				    row->source_id, row->ordinal);
+		KUNIT_ASSERT_EQ(test, row->width, decoded.access_size);
+		KUNIT_ASSERT_EQ(test, row->width, decoded.result_size);
+		KUNIT_ASSERT_EQ(test, row->immediate, decoded.immediate);
+		KUNIT_ASSERT_EQ(test, row->signal_all_nans,
+				decoded.fp_signal_all_nans);
+		KUNIT_ASSERT_EQ(test, 1U, decoded.rn);
+		KUNIT_ASSERT_EQ(test, row->immediate ? 0U : 2U, decoded.rm);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, source_id, "ordinal=%u",
+				      row->ordinal);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, operation_id, "ordinal=%u",
+				      row->ordinal);
+		KUNIT_EXPECT_STREQ(test, row->source_id, source_id);
+		KUNIT_EXPECT_STREQ(test, row->operation_id, operation_id);
+		KUNIT_EXPECT_EQ(test, row->source_mask, source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, row->source_pattern,
+				source->encoding_pattern);
+		KUNIT_EXPECT_EQ(test, row->source_pattern,
+				row->instruction & row->source_mask);
+		KUNIT_EXPECT_EQ(test, source->encoding_pattern,
+				row->instruction & source->encoding_mask);
+
+		mapped = tcti_scalar_fp16_map_instructions(test, instructions,
+						     ARRAY_SIZE(instructions));
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t | TCTI_SCALAR_FP_NZCV;
+		for (register_index = 0; register_index < ARRAY_SIZE(regs.regs);
+		     register_index++)
+			regs.regs[register_index] = 0x9e3779b97f4a7c15ULL ^
+				((u64)register_index << 32) ^ register_index;
+		regs.orig_x0 = 0xd1b54a32d192ed03ULL;
+		regs.syscallno = NO_SYSCALL;
+		regs.unused = 0x6d5a56c3U;
+		memset(current->thread.user_simd, 0x5a,
+		       sizeof(current->thread.user_simd));
+		current->thread.user_simd[2] = row->left;
+		current->thread.user_simd[3] = 0x0123456789abcdefULL;
+		current->thread.user_simd[4] = row->right;
+		current->thread.user_simd[5] = 0xfedcba9876543210ULL;
+		current->thread.user_simd_valid = true;
+		current->thread.user_fpcr = TCTI_FPCR_RMODE_ZERO;
+		current->thread.user_fpsr = TCTI_FPSR_QC;
+		memcpy(simd_before, current->thread.user_simd,
+		       sizeof(simd_before));
+		expected = regs;
+		expected.pc += sizeof(u32);
+		expected.pstate &= ~TCTI_SCALAR_FP_NZCV;
+		expected.pstate |= row->expected_nzcv;
+
+		result = tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, TCTI_EXIT_SYSCALL, result.reason,
+				    "%s source ordinal %u", row->source_id,
+				    row->ordinal);
+		KUNIT_EXPECT_EQ(test, 0L, result.status);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+		KUNIT_EXPECT_EQ(test, svc, result.instruction);
+		KUNIT_EXPECT_MEMEQ(test, &expected, &regs, sizeof(regs));
+		KUNIT_EXPECT_MEMEQ(test, simd_before, current->thread.user_simd,
+				  sizeof(simd_before));
+		KUNIT_EXPECT_TRUE(test, current->thread.user_simd_valid);
+		KUNIT_EXPECT_EQ(test, TCTI_FPCR_RMODE_ZERO,
+				current->thread.user_fpcr);
+		KUNIT_EXPECT_EQ(test, row->expected_fpsr,
+				current->thread.user_fpsr);
+
+		ret = vm_munmap(mapped, PAGE_SIZE);
+		KUNIT_EXPECT_EQ(test, 0, ret);
+	}
+}
+
 #undef TCTI_SCALAR_FP_BINARY_S
+#undef TCTI_SCALAR_FP_NZCV
 
 static struct kunit_case tcti_scalar_fp_semantics_test_cases[] = {
 	KUNIT_CASE(tcti_scalar_fp16_decode_pinned_legal_and_reserved),
@@ -1084,6 +1265,7 @@ static struct kunit_case tcti_scalar_fp_semantics_test_cases[] = {
 	KUNIT_CASE(tcti_scalar_fp_convert_resume_source_rows),
 	KUNIT_CASE(tcti_scalar_fp_convert_reserved_forms_exit_without_state_change),
 	KUNIT_CASE(tcti_scalar_fp_binary_resume_source_rows),
+	KUNIT_CASE(tcti_scalar_fp_compare_resume_source_rows),
 	{}
 };
 

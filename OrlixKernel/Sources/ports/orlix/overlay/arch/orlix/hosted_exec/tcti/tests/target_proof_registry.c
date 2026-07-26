@@ -308,7 +308,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "bb538a43b2e667be6118a6f457478aad3c03456fa6436879a5da83064dca09cc",
 	  "tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
-	  "863706903667d712083874b4eb4376e8f8ce6cfa59d2feb87f29672a7867de37",
+	  "23f1137220b48b83de9a9a6cf983e1bfdcb2cc93bcac38ed70bfbfe7985a9fce",
 	  "tcti_scalar_fp_semantics_test.o" },
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
 	  "aab93c4152202c7347882f2dc77aeef666a63a2d409f5ab8c0aa7ebe453ebd9f",
