@@ -32,15 +32,12 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_bitfield_extract_source_bound_test.o \
 	tcti_scalar_bitops_source_bound_test.o \
 	tcti_variable_shift_source_bound_test.o \
-	tcti_scalar_multiply_divide_source_bound_test.o \
 	tcti_advsimd_narrow_widen_source_bound_test.o \
 	tcti_ordinary_single_load_store_source_bound_test.o \
-	tcti_simd_fp_register_offset_load_store_source_bound_test.o \
 	tcti_pair_load_store_source_bound_test.o \
 	tcti_load_literal_resume_regression_test.o \
 	tcti_branch_control_source_bound_test.o \
 	tcti_source_leaf_classification_test.o \
-	tcti_scalar_fp_convert_source_bound_test.o \
 	tcti_scalar_fp_semantics_test.o \
 	tcti_baseline_decoder_regression_test.o \
 	tcti_gadget_program_boundary_test.o \

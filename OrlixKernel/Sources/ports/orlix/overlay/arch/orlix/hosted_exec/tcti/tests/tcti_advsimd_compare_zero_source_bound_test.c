@@ -346,7 +346,7 @@ static void compare_zero_leaves_execute_all_arrangements(struct kunit *test)
 					u64 source[2];
 					u64 expected_result[2];
 					u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
-					u64 *source_register =
+					unsigned long *source_register =
 						&current->thread.user_simd[COMPARE_ZERO_RN * 2];
 
 					KUNIT_ASSERT_NE(test, 0UL, address);
