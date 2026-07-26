@@ -183,6 +183,170 @@ static int stream_contains(FILE *stream, const char *needle)
 	return found ? 0 : -1;
 }
 
+static int read_emitted_string_pool(FILE *stream, unsigned char **pool,
+				    size_t *pool_size)
+{
+	static const char pool_start[] =
+		"static const u8 tcti_a64_generated_strings[] = {\n";
+	static const char pool_end[] =
+		"};\nstatic const struct tcti_a64_generated_metadata ";
+	long length = stream_length(stream);
+	char *header;
+	char *cursor;
+	char *end;
+	unsigned char *bytes;
+	size_t count = 0;
+
+	CHECK(pool != NULL);
+	CHECK(pool_size != NULL);
+	CHECK(length >= 0);
+	CHECK(!fseek(stream, 0, SEEK_SET));
+	header = malloc((size_t)length + 1U);
+	CHECK(header != NULL);
+	CHECK(fread(header, 1, (size_t)length, stream) == (size_t)length);
+	header[length] = '\0';
+	cursor = strstr(header, pool_start);
+	CHECK(cursor != NULL);
+	cursor += sizeof(pool_start) - 1U;
+	end = strstr(cursor, pool_end);
+	CHECK(end != NULL);
+	bytes = malloc((size_t)(end - cursor));
+	CHECK(bytes != NULL);
+	while (cursor < end) {
+		char *number;
+		char *after;
+		unsigned long value;
+
+		number = strstr(cursor, "0x");
+		if (!number || number >= end)
+			break;
+		value = strtoul(number, &after, 16);
+		CHECK(after > number + 2);
+		CHECK(after + 1 < end);
+		CHECK(after[0] == 'U');
+		CHECK(after[1] == ',');
+		CHECK(value <= 0xffU);
+		bytes[count++] = (unsigned char)value;
+		cursor = after + 2;
+	}
+	free(header);
+	*pool = bytes;
+	*pool_size = count;
+	return 0;
+}
+
+static int emitted_string_equals(const unsigned char *pool, size_t pool_size,
+				 uint32_t offset, const char *expected)
+{
+	size_t length;
+
+	CHECK(pool != NULL);
+	CHECK(expected != NULL);
+	CHECK(offset < pool_size);
+	length = strlen(expected) + 1U;
+	CHECK(length <= pool_size - offset);
+	CHECK(!memcmp(pool + offset, expected, length));
+	return 0;
+}
+
+static int emitted_string_offsets_resolve_exact_source_strings(void)
+{
+	struct fixture fixture = { 0 };
+	struct generated_offsets offsets = { 0 };
+	const char *metadata_text[6];
+	const char *accessor_metadata_text[6];
+	unsigned char *pool = NULL;
+	size_t pool_size = 0;
+	size_t index;
+	FILE *output;
+
+	CHECK(!fixture_init(&fixture));
+	metadata_text[0] = fixture.metadata.architecture;
+	metadata_text[1] = fixture.metadata.build;
+	metadata_text[2] = fixture.metadata.reference;
+	metadata_text[3] = fixture.metadata.schema;
+	metadata_text[4] = fixture.metadata.instructions_sha256;
+	metadata_text[5] = fixture.metadata.timestamp;
+	accessor_metadata_text[0] =
+		fixture.accessor_metadata.architecture;
+	accessor_metadata_text[1] =
+		fixture.accessor_metadata.build;
+	accessor_metadata_text[2] =
+		fixture.accessor_metadata.reference;
+	accessor_metadata_text[3] =
+		fixture.accessor_metadata.schema;
+	accessor_metadata_text[4] =
+		fixture.accessor_metadata.timestamp;
+	accessor_metadata_text[5] =
+		fixture.accessor_metadata.registers_sha256;
+	CHECK(!build_offsets(&fixture.metadata, fixture.source,
+		TCTI_A64_KBUILD_SOURCE_COUNT, fixture.classification,
+		&fixture.accessor_metadata, fixture.accessors,
+		TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT, &offsets));
+	output = tmpfile();
+	CHECK(output != NULL);
+	CHECK(tcti_a64_kbuild_generate_header(
+		      &fixture.metadata, fixture.source,
+		      TCTI_A64_KBUILD_SOURCE_COUNT, fixture.classification,
+		      TCTI_A64_KBUILD_SOURCE_COUNT,
+		      &fixture.accessor_metadata, fixture.accessors,
+		      TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT, output) ==
+	      TCTI_A64_KBUILD_GENERATOR_OK);
+	CHECK(!read_emitted_string_pool(output, &pool, &pool_size));
+	CHECK(pool_size == offsets.pool_size);
+	for (index = 0; index < sizeof(metadata_text) / sizeof(metadata_text[0]);
+	     index++)
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.metadata[index], metadata_text[index]));
+	for (index = 0; index < TCTI_A64_KBUILD_SOURCE_COUNT; index++) {
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.source[index].name, fixture.source[index].name));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.source[index].mnemonic,
+			fixture.source[index].mnemonic));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.source[index].operation,
+			fixture.source[index].operation));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.source[index].condition,
+			fixture.source[index].condition_tcnd_hex));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.classification[index].name,
+			fixture.classification[index].name));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.classification[index].canonical,
+			fixture.classification[index].canonical));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.classification[index].evidence,
+			fixture.classification[index].evidence));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.classification[index].proof,
+			fixture.classification[index].proof));
+	}
+	for (index = 0;
+	     index < sizeof(accessor_metadata_text) /
+		     sizeof(accessor_metadata_text[0]); index++)
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessor_metadata[index],
+			accessor_metadata_text[index]));
+	for (index = 0; index < TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT;
+	     index++) {
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].name,
+			fixture.accessors[index].name));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].generic_leaf,
+			fixture.accessors[index].generic_leaf));
+	}
+	free(pool);
+	free(offsets.source);
+	free(offsets.classification);
+	free(offsets.accessors);
+	fclose(output);
+	fixture_destroy(&fixture);
+	return 0;
+}
+
 static int expect_failure(struct fixture *fixture,
 			  enum tcti_a64_kbuild_generator_error expected)
 {
@@ -493,6 +657,7 @@ static int adversarial_c_fixtures(void)
 int main(void)
 {
 	CHECK(!deterministic_fixed_width_artifact());
+	CHECK(!emitted_string_offsets_resolve_exact_source_strings());
 	CHECK(!adversarial_c_fixtures());
 	puts("target ISA Kbuild generator C-fixture tests: passed");
 	return 0;
