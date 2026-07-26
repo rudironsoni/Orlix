@@ -61,6 +61,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_advsimd_compare_zero_source_bound_test.o \
 	tcti_advsimd_shift_right_source_bound_test.o \
 	tcti_advsimd_fp_arithmetic_source_bound_test.o \
+	tcti_advsimd_table_lookup_source_bound_test.o \\
 	tcti_advsimd_structure_load_store_source_bound_test.o \
 	tcti_pauth_bti_gcs_obligation_test.o \
 	tcti_sme_state_contract_test.o \
