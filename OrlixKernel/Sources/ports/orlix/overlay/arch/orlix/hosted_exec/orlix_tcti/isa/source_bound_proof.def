@@ -536,3 +536,6 @@ ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3855U, "kunit:advsimd-minmax-reduction-smaxv-s
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3856U, "kunit:advsimd-minmax-reduction-sminv-source-leaf")
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3863U, "kunit:advsimd-minmax-reduction-umaxv-source-leaf")
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3864U, "kunit:advsimd-minmax-reduction-uminv-source-leaf")
+ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3912U, "kunit:advsimd-mul-mla-source-leaf")
+ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3913U, "kunit:advsimd-mul-mul-source-leaf")
+ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(3954U, "kunit:advsimd-mul-mls-source-leaf")

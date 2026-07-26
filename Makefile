@@ -308,7 +308,7 @@ orlix-tcti-isa-host-tests:
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry_test.c \
 		-o '$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
 	@'$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
-	@$(CC) -DTCTI_RUNTIME_PROJECTION_HOST_TEST -std=c11 \
+	@$(CC) -DORLIX_TCTI_RUNTIME_PROJECTION_HOST_TEST -std=c11 \
 		-Wall -Wextra -Werror -pedantic \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/runtime_projection.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_runtime_projection_test.c \

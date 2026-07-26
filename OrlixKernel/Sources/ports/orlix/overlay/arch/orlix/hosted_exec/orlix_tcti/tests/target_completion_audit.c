@@ -515,15 +515,13 @@ static bool asl_member_locator_is_valid(const char *operation_id,
 	static const char prefix[] = "operations/";
 	size_t prefix_length = sizeof(prefix) - 1U;
 	size_t operation_length;
-	size_t member_length;
 
 	if (empty(operation_id) || empty(semantic_operation_id) || !locator ||
 	    strncmp(locator, prefix, prefix_length))
 		return false;
 	operation_length = strlen(semantic_operation_id);
-	member_length = strlen(member);
 	return !strncmp(locator + prefix_length, semantic_operation_id,
-				operation_length) &&
+			operation_length) &&
 		!strcmp(locator + prefix_length + operation_length, member);
 }
 
@@ -1484,7 +1482,7 @@ static void completion_project_obligation(
 	obligation->classification = classification->classification;
 	obligation->relation = classification->relation;
 	obligation->canonical_name = classification->canonical_name;
-	obligation->asl_operation_object = asl->operation_object;
+	obligation->asl_operation_object = asl->semantic_member_locator;
 	obligation->proof_id = classification->proof_id;
 
 	if (classification->classification ==
@@ -1503,7 +1501,7 @@ static void completion_project_obligation(
 			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP;
 	}
 
-	if (!strcmp(asl->availability, "shared_asl_absent_blocking")) {
+	if (asl_absence_provenance_is_valid(asl)) {
 		obligation->asl_state =
 			ORLIX_TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING;
 	} else {

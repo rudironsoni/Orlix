@@ -671,7 +671,7 @@ static const struct crypto_leaf *crypto_eor3_leaf(void)
 	return NULL;
 }
 
-static void crypto_eor3_seed_simd_state(unsigned long simd[], u32 instruction)
+static void crypto_eor3_seed_simd_state(u64 simd[], u32 instruction)
 {
 	unsigned int index;
 
@@ -793,8 +793,8 @@ static void crypto_eor3_resume_mapped_rx_with_register_aliases(
 		KUNIT_EXPECT_EQ(test, 0, ret);
 		KUNIT_EXPECT_MEMEQ(test, expected_program, before_program,
 				   sizeof(expected_program));
-		crypto_eor3_seed_simd_state(current->thread.user_simd, instruction);
-		memcpy(expected_simd, current->thread.user_simd,
+		crypto_eor3_seed_simd_state(expected_simd, instruction);
+		memcpy(current->thread.user_simd, expected_simd,
 		       sizeof(expected_simd));
 		low = expected_simd[registers->rn * 2] ^
 			expected_simd[registers->rm * 2] ^

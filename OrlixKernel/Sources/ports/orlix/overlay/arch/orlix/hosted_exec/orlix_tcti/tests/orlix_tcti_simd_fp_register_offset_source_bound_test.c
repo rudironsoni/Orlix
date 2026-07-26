@@ -219,6 +219,7 @@ static void sfro_expect_success(struct kunit *test,
 {
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason);
 	KUNIT_EXPECT_EQ(test, 0L, result->status);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_FETCH, result->fault_access);
 	KUNIT_EXPECT_EQ(test, SFRO_SVC, result->instruction);
 	KUNIT_EXPECT_EQ(test, 0UL, result->fault_address);
 	KUNIT_EXPECT_EQ(test, text + 2 * sizeof(u32), result->pc);
