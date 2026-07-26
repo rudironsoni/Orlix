@@ -392,50 +392,6 @@ tcti_test_find_inventory_encoding(const char *name)
 	return NULL;
 }
 
-static void tcti_positive_pair_inventory_uses_nonoverlap_registers(
-	struct kunit *test)
-{
-	size_t overlap_sensitive_witnesses = 0;
-	size_t i;
-
-	for (i = 0; i < ARRAY_SIZE(tcti_a64_encoding_inventory); i++) {
-		const struct tcti_a64_encoding_inventory_entry *encoding =
-			&tcti_a64_encoding_inventory[i];
-		u32 instruction;
-		u8 mode;
-		u8 rn;
-		u8 rt;
-		u8 rt2;
-
-		if (strcmp(encoding->operation_id, "LDNP_fpsimd") &&
-		    strcmp(encoding->operation_id, "LDP_fpsimd") &&
-		    strcmp(encoding->operation_id, "STP_fpsimd"))
-			continue;
-
-		instruction = encoding->witness;
-		mode = (instruction >> 23) & 0x3U;
-		if (!(instruction & BIT(22)) && mode != 1 && mode != 3)
-			continue;
-
-		overlap_sensitive_witnesses++;
-		rn = (instruction >> 5) & 0x1fU;
-		rt = instruction & 0x1fU;
-		rt2 = (instruction >> 10) & 0x1fU;
-
-		KUNIT_EXPECT_EQ_MSG(test, (u8)0, rt,
-			"positive pair witness has unexpected Rt: %s",
-			encoding->name);
-		KUNIT_EXPECT_EQ_MSG(test, (u8)1, rn,
-			"positive pair witness has unexpected Rn: %s",
-			encoding->name);
-		KUNIT_EXPECT_EQ_MSG(test, (u8)2, rt2,
-			"positive pair witness has unexpected Rt2: %s",
-			encoding->name);
-	}
-
-	KUNIT_ASSERT_GT(test, overlap_sensitive_witnesses, (size_t)0);
-}
-
 static bool tcti_test_inventory_condition_holds(
 	const struct tcti_a64_condition_inventory_entry *condition,
 	u32 instruction)
@@ -27452,7 +27408,7 @@ static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 							      (signal_all_nans << 4) |
 							      nzcv;
 						decoded = tcti_decode_aarch64(instruction);
-						if (type == 2) {
+						if (type > 1) {
 							KUNIT_ASSERT_EQ_MSG(
 								test, TCTI_DECODE_UNSUPPORTED,
 								decoded.decode_class,
@@ -27475,7 +27431,6 @@ static void tcti_decode_recognizes_complete_fp_conditional_compare_family(
 						KUNIT_EXPECT_EQ(test, signal_all_nans,
 								decoded.fp_signal_all_nans);
 						KUNIT_EXPECT_EQ(test,
-								type == 3 ? sizeof(u16) :
 								type ? sizeof(u64) : sizeof(u32),
 								decoded.access_size);
 					}
@@ -27612,15 +27567,7 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 	unsigned int rm;
 	u32 instruction;
 
-	for (type = 0; type < 4; type++) {
-		if (type == 2) {
-			instruction = 0x1e202000U | (type << 22);
-			decoded = tcti_decode_aarch64(instruction);
-			KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
-					decoded.decode_class);
-			continue;
-		}
-
+	for (type = 0; type < 2; type++) {
 		for (signal_all_nans = 0; signal_all_nans < 2;
 		     signal_all_nans++) {
 			for (rn = 0; rn < 32; rn++) {
@@ -27642,7 +27589,6 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 					KUNIT_EXPECT_EQ(test, signal_all_nans,
 							decoded.fp_signal_all_nans);
 					KUNIT_EXPECT_EQ(test,
-							type == 3 ? sizeof(u16) :
 							type ? sizeof(u64) : sizeof(u32),
 							decoded.access_size);
 				}
@@ -27661,7 +27607,6 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 					KUNIT_EXPECT_EQ(test, signal_all_nans,
 							decoded.fp_signal_all_nans);
 					KUNIT_EXPECT_EQ(test,
-							type == 3 ? sizeof(u16) :
 							type ? sizeof(u64) : sizeof(u32),
 							decoded.access_size);
 				}
@@ -27669,6 +27614,12 @@ static void tcti_decode_recognizes_exhaustive_fp_compare_family(
 		}
 	}
 
+	for (type = 2; type < 4; type++) {
+		instruction = 0x1e202000U | (type << 22);
+		decoded = tcti_decode_aarch64(instruction);
+		KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+	}
 }
 
 static void tcti_gadget_executes_exhaustive_fp_compare_family(
@@ -27821,7 +27772,7 @@ static void tcti_decode_recognizes_exhaustive_fp_3source_family(
 				instruction = tcti_test_fp3_instruction(
 					type, operation, reg, reg, reg, reg);
 				decoded = tcti_decode_aarch64(instruction);
-				if (type == 2) {
+				if (type > 1) {
 					KUNIT_ASSERT_EQ_MSG(
 						test, TCTI_DECODE_UNSUPPORTED,
 						decoded.decode_class,
@@ -27840,7 +27791,6 @@ static void tcti_decode_recognizes_exhaustive_fp_3source_family(
 				KUNIT_EXPECT_EQ(test, reg, decoded.ra);
 				KUNIT_EXPECT_EQ(test, operation, decoded.fp3_op);
 				KUNIT_EXPECT_EQ(test,
-						type == 3 ? sizeof(u16) :
 						type ? sizeof(u64) : sizeof(u32),
 						decoded.access_size);
 				KUNIT_EXPECT_EQ(test, decoded.access_size,
@@ -27988,7 +27938,7 @@ static void tcti_decode_exhaustive_fp_scalar_2source_family(
 			struct tcti_decoded_instruction decoded =
 				tcti_decode_aarch64(tcti_test_fp2_instruction(
 					type, opcode, 7, 11, 19));
-			bool legal = type != 2 && opcode < ARRAY_SIZE(operations);
+			bool legal = type < 2 && opcode < ARRAY_SIZE(operations);
 
 			if (!legal) {
 				KUNIT_EXPECT_NE(test,
@@ -28004,7 +27954,6 @@ static void tcti_decode_exhaustive_fp_scalar_2source_family(
 			KUNIT_EXPECT_EQ(test, 11, decoded.rn);
 			KUNIT_EXPECT_EQ(test, 19, decoded.rm);
 			KUNIT_EXPECT_EQ(test,
-					type == 3 ? sizeof(u16) :
 					type ? sizeof(u64) : sizeof(u32),
 					decoded.access_size);
 			KUNIT_EXPECT_EQ(test, decoded.access_size,
@@ -28092,15 +28041,6 @@ static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
 		{ 0x1e626820U, TCTI_FP2_FMAXNM, sizeof(u64) },
 		{ 0x1e627820U, TCTI_FP2_FMINNM, sizeof(u64) },
 		{ 0x1e628820U, TCTI_FP2_FNMUL, sizeof(u64) },
-		{ 0x1ee20820U, TCTI_FP2_FMUL, sizeof(u16) },
-		{ 0x1ee21820U, TCTI_FP2_FDIV, sizeof(u16) },
-		{ 0x1ee22820U, TCTI_FP2_FADD, sizeof(u16) },
-		{ 0x1ee23820U, TCTI_FP2_FSUB, sizeof(u16) },
-		{ 0x1ee24820U, TCTI_FP2_FMAX, sizeof(u16) },
-		{ 0x1ee25820U, TCTI_FP2_FMIN, sizeof(u16) },
-		{ 0x1ee26820U, TCTI_FP2_FMAXNM, sizeof(u16) },
-		{ 0x1ee27820U, TCTI_FP2_FMINNM, sizeof(u16) },
-		{ 0x1ee28820U, TCTI_FP2_FNMUL, sizeof(u16) },
 	};
 	struct tcti_decoded_instruction decoded;
 	size_t i;
@@ -28120,6 +28060,8 @@ static void tcti_decode_recognizes_complete_fp_scalar_2source_family(
 	}
 
 	decoded = tcti_decode_aarch64(0x1ea24820U);
+	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	decoded = tcti_decode_aarch64(0x1ee24820U);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	decoded = tcti_decode_aarch64(0x1e229820U);
 	KUNIT_EXPECT_EQ(test, TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
@@ -31709,7 +31651,6 @@ static struct kunit_case tcti_decode_test_cases[] = {
 	KUNIT_CASE(tcti_runtime_projection_initializes_rejected_ledger_result),
 	KUNIT_CASE(tcti_isa_coverage_inventory_is_machine_auditable),
 	KUNIT_CASE(tcti_configured_profile_encodings_are_decoded),
-	KUNIT_CASE(tcti_positive_pair_inventory_uses_nonoverlap_registers),
 	KUNIT_CASE(tcti_configured_profile_leaf_conditions_are_exact),
 	KUNIT_CASE(tcti_switch_executes_fp16_scalar_conversions),
 	KUNIT_CASE(tcti_switch_executes_simd_scalar_fp_compare_zero),

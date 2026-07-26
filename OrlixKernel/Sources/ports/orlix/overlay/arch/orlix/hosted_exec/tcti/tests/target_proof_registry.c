@@ -253,7 +253,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"3a6919a592eb471098e03b069db98cc6549b2927ab3c703a1684ed662cdf3ef8"
+	"3d7038d3eb6081772fa0dcb30d91f1bdb3e1cc157b857e3e1f15d43318c80ae1"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -305,7 +305,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "cb0896f92dfbfd694e45ee7f6f35f053b476822fafda38d0ad3fa25724d4ba53",
 	  "tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
-	  "d7fbb345463cfa001522e9678d9ac7c8d33aa70ff987ca756426258d7c401e70",
+	  "cb82f87bb8febdfc8b02f8cd4a77ad65d6721d546f897294dc218764ee65ec99",
 	  "tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
 	  "23f1137220b48b83de9a9a6cf983e1bfdcb2cc93bcac38ed70bfbfe7985a9fce",

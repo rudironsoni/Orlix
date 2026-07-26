@@ -472,7 +472,6 @@ static int emit_header(
 	const char *const metadata_text[] = {
 		metadata->architecture, metadata->build, metadata->reference,
 		metadata->schema, metadata->instructions_sha256,
-		metadata->timestamp,
 	};
 	const char *const accessor_metadata_text[] = {
 		accessor_metadata->architecture, accessor_metadata->build,
