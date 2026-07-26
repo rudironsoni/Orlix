@@ -47,6 +47,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_mapping_invalidation_test.o \
 	tcti_pmull_semantic_test.o \
 	tcti_integer_conditional_source_bound_test.o \
+	tcti_fp_conditional_compare_source_bound_test.o \
 	tcti_sve_state_test.o \
 	tcti_sve_decode_test.o \
 	tcti_sve_resume_test.o \
