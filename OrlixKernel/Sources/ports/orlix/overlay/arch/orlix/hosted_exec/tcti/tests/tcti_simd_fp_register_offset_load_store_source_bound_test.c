@@ -147,7 +147,8 @@ static void sfro_run(struct kunit *test, u32 instruction, struct pt_regs *regs)
 	KUNIT_EXPECT_EQ(test, TCTI_EXIT_SYSCALL, result.reason);
 	KUNIT_EXPECT_EQ(test, 0L, result.status);
 	KUNIT_EXPECT_EQ(test, SFRO_SVC, result.instruction);
-	KUNIT_EXPECT_EQ(test, regs->pc, result.pc);
+	KUNIT_EXPECT_EQ(test, code + 2 * sizeof(u32), result.pc);
+	KUNIT_EXPECT_EQ(test, code + 2 * sizeof(u32), regs->pc);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
