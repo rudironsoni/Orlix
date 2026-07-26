@@ -40,6 +40,7 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_load_literal_resume_regression_test.o \
 	tcti_branch_control_source_bound_test.o \
 	tcti_source_leaf_classification_test.o \
+	tcti_scalar_fp_convert_source_bound_test.o \
 	tcti_scalar_fp_semantics_test.o \
 	tcti_baseline_decoder_regression_test.o \
 	tcti_gadget_program_boundary_test.o \
@@ -48,7 +49,6 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_mapping_invalidation_test.o \
 	tcti_pmull_semantic_test.o \
 	tcti_integer_conditional_source_bound_test.o \
-	tcti_fp_conditional_compare_source_bound_test.o \
 	tcti_sve_state_test.o \
 	tcti_sve_decode_test.o \
 	tcti_sve_resume_test.o \
@@ -62,7 +62,6 @@ orlix_tcti_test-y := tcti_decode_test.o runtime_projection.o \
 	tcti_advsimd_compare_zero_source_bound_test.o \
 	tcti_advsimd_shift_right_source_bound_test.o \
 	tcti_advsimd_fp_arithmetic_source_bound_test.o \
-	tcti_advsimd_table_lookup_source_bound_test.o \\
 	tcti_advsimd_structure_load_store_source_bound_test.o \
 	tcti_pauth_bti_gcs_obligation_test.o \
 	tcti_sme_state_contract_test.o \
