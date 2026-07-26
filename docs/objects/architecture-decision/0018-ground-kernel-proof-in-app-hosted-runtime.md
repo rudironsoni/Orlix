@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0018"
 summary: "Durable Orlix architecture decision ADR 0018."
@@ -27,7 +27,7 @@ Linux-shaped proof means preserving Linux UAPI, syscall behavior, ABI discipline
 
 Orlix does not require `vmlinux` as a canonical build, proof, or runtime artifact.
 
-The canonical OrlixKernel proof artifact is the iOS app-hosted OrlixKernel integration that actually runs inside the Orlix app environment: OrlixKernel static library, framework, or object set plus `OrlixHostAdapter/Sources`, the `OrlixOS` session/payload surface where relevant, the iOS app or test host, and simulator/device execution.
+The canonical OrlixKernel proof artifact is the iOS app-hosted integration that actually runs inside an Orlix host: private static `OrlixKernel.xcframework` plus `OrlixHostAdapter/Sources`, the public `OrlixOS` OrlixMachine and distribution-resource surface where relevant, `OrlixTestApp` or `OrlixOSTestApp`, and simulator/device execution.
 
 Kernel proof must be based on that hosted runtime path. The proof question is always whether the Orlix app-hosted runtime executed the Linux-shaped behavior on iOS.
 

@@ -25,10 +25,10 @@ TEST_GEN_PROGS += readonly_root_probe
 TEST_GEN_PROGS += stack_growth_probe
 TEST_GEN_PROGS += time_namespace_probe
 TEST_GEN_PROGS += time_surface_probe
-TEST_GEN_PROGS += tcti_system_probe
-TEST_GEN_PROGS += tcti_hwcap_probe
-TEST_GEN_PROGS += tcti_crypto_probe
-TEST_GEN_PROGS += tcti_lse_atomic_probe
+TEST_GEN_PROGS += orlix_tcti_system_probe
+TEST_GEN_PROGS += orlix_tcti_hwcap_probe
+TEST_GEN_PROGS += orlix_tcti_crypto_probe
+TEST_GEN_PROGS += orlix_tcti_lse_atomic_probe
 TEST_GEN_PROGS += user_namespace_probe
 TEST_GEN_PROGS += pty_terminal_probe
 

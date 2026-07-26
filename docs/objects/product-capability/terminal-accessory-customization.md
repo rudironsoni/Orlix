@@ -3,7 +3,7 @@ type: product-capability
 tags:
   - application
   - capability
-updated: 2026-07-15
+updated: 2026-07-26
 status: implemented
 summary: "Terminal Accessory Bar Customization (Spec)."
 part_of:
@@ -169,7 +169,7 @@ Responsibilities:
   - merge local/remote on conflicts
 
 ### CloudKit Sync Design (V1)
-Use existing private container `iCloud.com.rudironsoni.Orlix` and same custom zone.
+Use existing private container `iCloud.com.rudironsoni.orlix` and same custom zone.
 Accessory preference sync is implemented through `CloudKitManager` (centralized CloudKit ownership).
 
 Record:

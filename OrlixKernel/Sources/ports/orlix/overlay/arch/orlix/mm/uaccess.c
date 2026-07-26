@@ -3,7 +3,7 @@
 #include <linux/mm.h>
 #include <linux/uaccess.h>
 #include <asm/page.h>
-#include <asm/tcti.h>
+#include <asm/orlix_tcti.h>
 
 static unsigned long orlix_uaccess_copy_from_user(void *to,
 					  unsigned long from,
@@ -15,7 +15,7 @@ static unsigned long orlix_uaccess_copy_from_user(void *to,
 
 	/*
 	 * raw_copy_from_user() also backs __copy_from_user_inatomic().  The
-	 * TCTI transport may fault or acquire sleeping locks, so do not enter it
+	 * OrlixTCTI transport may fault or acquire sleeping locks, so do not enter it
 	 * when fault handling is disabled.
 	 */
 	if (!mm || faulthandler_disabled())
@@ -25,7 +25,7 @@ static unsigned long orlix_uaccess_copy_from_user(void *to,
 		unsigned long chunk = min(remaining,
 					  PAGE_SIZE - offset_in_page(from));
 
-		if (tcti_read_user_data(mm, from, dst, chunk))
+		if (orlix_tcti_read_user_data(mm, from, dst, chunk))
 			return remaining;
 
 		dst += chunk;
@@ -51,7 +51,7 @@ static unsigned long orlix_uaccess_copy_to_user(unsigned long to,
 		unsigned long chunk = min(remaining,
 					  PAGE_SIZE - offset_in_page(to));
 
-		if (tcti_write_user_data(mm, to, src, chunk))
+		if (orlix_tcti_write_user_data(mm, to, src, chunk))
 			return remaining;
 
 		src += chunk;

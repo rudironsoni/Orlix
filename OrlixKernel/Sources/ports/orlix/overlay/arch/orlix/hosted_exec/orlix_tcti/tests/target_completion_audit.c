@@ -1,0 +1,1709 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include "target_completion_audit.h"
+#include "target_feature_artifact.h"
+#include "target_feature_domain.h"
+#include "target_instruction_artifact.h"
+
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define stringify_1(value) #value
+#define stringify(value) stringify_1(value)
+
+#define UNCLASSIFIED ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED
+#define REQUIRED ORLIX_TCTI_TARGET_COMPLETION_REQUIRED_EL0
+#define REQUIRED_EL0 ORLIX_TCTI_TARGET_COMPLETION_REQUIRED_EL0
+#define NON_EL0 ORLIX_TCTI_TARGET_COMPLETION_NON_EL0
+#define ARCHITECTURALLY_UNDEFINED \
+	ORLIX_TCTI_TARGET_COMPLETION_ARCH_UNDEFINED_OR_UNALLOCATED
+#define ARCH_UNDEFINED_OR_UNALLOCATED \
+	ORLIX_TCTI_TARGET_COMPLETION_ARCH_UNDEFINED_OR_UNALLOCATED
+#define ALIAS_OR_DUPLICATE ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE
+#define ORLIX_TCTI_A64_TARGET_RELATION_NONE ORLIX_TCTI_TARGET_COMPLETION_RELATION_NONE
+#define ORLIX_TCTI_A64_TARGET_RELATION_ALIAS ORLIX_TCTI_TARGET_COMPLETION_RELATION_ALIAS
+#define ORLIX_TCTI_A64_TARGET_RELATION_DUPLICATE \
+	ORLIX_TCTI_TARGET_COMPLETION_RELATION_DUPLICATE
+
+static const struct orlix_tcti_target_completion_source_provenance source_provenance = {
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(arch_value, build_value, release_value, \
+					schema_value, sha_value, count_value, \
+					timestamp_value, source_length_value) \
+	arch_value, build_value, release_value, schema_value, timestamp_value, \
+	sha_value, source_length_value, count_value
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(...)
+#include "../isa/source_manifest.def"
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
+};
+
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, mask, \
+				      pattern, condition, source_offset, source_length) \
+	{ ordinal, name, mnemonic, operation, mask, pattern, condition, \
+	  source_offset, source_length },
+static const struct orlix_tcti_target_completion_source_row source_rows[] = {
+#include "../isa/source_manifest.def"
+};
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+static const struct orlix_tcti_target_completion_asl_provenance asl_provenance = {
+#define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, corpus, helpers) \
+	format, source_sha256, corpus, helpers
+#define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(...)
+#include "../isa/target_asl_availability.def"
+#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
+#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
+};
+
+#define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
+#define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
+					      semantic_locator, semantic_member_offset, \
+					      semantic_member_length, semantic_body_offset, \
+					      semantic_body_length, semantic_body_digest, semantic_body_state, \
+					      decode_locator, decode_member_offset, decode_member_length, \
+					      decode_offset, decode_length, decode_digest, decode_state, \
+					      corpus_state, helper_state) \
+	{ ordinal, name, operation, semantic_operation, semantic_locator, \
+	  semantic_member_offset, semantic_member_length, semantic_body_offset, \
+	  semantic_body_length, semantic_body_digest, semantic_body_state, \
+	  decode_locator, decode_member_offset, decode_member_length, decode_offset, \
+	  decode_length, decode_digest, decode_state, corpus_state, helper_state },
+static const struct orlix_tcti_target_completion_asl_row asl_rows[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
+#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
+
+static const struct orlix_tcti_target_completion_system_accessor_provenance
+system_accessor_provenance = {
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(architecture, build, release, schema, \
+					timestamp, sha256) \
+	architecture, build, release, schema, timestamp, sha256,
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(total, mapped, reserved, privileged, \
+					unsupported, ambiguous, contradictory, \
+					invalid) \
+	total, mapped, reserved, privileged, unsupported, ambiguous, \
+	contradictory, invalid,
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity) identity,
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(...)
+#include "../isa/target_system_accessor_reconciliation.def"
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+};
+
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
+				 disposition, selectors, condition, \
+				 selector_identity, condition_identity, \
+				 accessor_offset, accessor_length, \
+				 encoding_offset, encoding_length, condition_offset, \
+				 condition_length) \
+	{ accessor, encoding, name, generic, direction, disposition, selectors, \
+	  condition, selector_identity, condition_identity, accessor_offset, \
+	  accessor_length, encoding_offset, encoding_length, condition_offset, \
+	  condition_length },
+static const struct orlix_tcti_target_completion_system_accessor_row
+system_accessor_rows[] = {
+#include "../isa/target_system_accessor_reconciliation.def"
+};
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+
+#define ORLIX_TCTI_A64_TARGET_CLASSIFICATION(name, classification, relation, \
+				       canonical, evidence, proof) \
+	{ stringify(name), classification, relation, canonical, evidence, proof },
+static const struct orlix_tcti_target_completion_classification_row
+classification_rows[] = {
+#include "../isa/target_classification.def"
+};
+#undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
+
+_Static_assert(sizeof(source_rows) / sizeof(source_rows[0]) ==
+		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+	       "source manifest must contain exactly 4,350 rows");
+_Static_assert(sizeof(classification_rows) / sizeof(classification_rows[0]) ==
+		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+	       "classification ledger must contain exactly 4,350 rows");
+_Static_assert(sizeof(asl_rows) / sizeof(asl_rows[0]) ==
+		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS,
+	       "ASL availability ledger must contain exactly 4,350 rows");
+_Static_assert(sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]) ==
+		       ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS,
+	       "system accessor ledger must contain exactly 2,014 rows");
+
+static bool empty(const char *text)
+{
+	return !text || !text[0];
+}
+
+static void record_error(struct orlix_tcti_target_completion_result *result,
+			 orlix_tcti_completion_u32 error);
+static int completion_audit_internal(
+	const struct orlix_tcti_target_completion_audit_inputs_for_test *inputs,
+	struct orlix_tcti_target_completion_result *result,
+	struct orlix_tcti_target_completion_obligation *obligations);
+
+static bool completion_projection_dependencies_valid(
+	const struct orlix_tcti_target_completion_result *result)
+{
+	return result &&
+		!(result->error_mask &
+		  (ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_COUNT |
+		   ORLIX_TCTI_TARGET_COMPLETION_ERROR_CLASSIFICATION_COUNT)) &&
+		!result->invalid_source_rows &&
+		!result->absent_rows && !result->stale_rows &&
+		!result->invalid_relationship_rows &&
+		!result->invalid_source_provenance &&
+		!result->invalid_registry_entries &&
+		!result->invalid_asl_availability_rows &&
+		!result->invalid_system_accessor_rows &&
+		!result->invalid_feature_field_domain_rows &&
+		!result->invalid_runtime_capability_cohort_rows &&
+		!result->invalid_feature_artifact &&
+		!result->invalid_source_condition_rows;
+}
+
+static int hex_nibble(char character, unsigned int *value)
+{
+	if (character >= '0' && character <= '9') {
+		*value = (unsigned int)(character - '0');
+		return 0;
+	}
+	if (character >= 'a' && character <= 'f') {
+		*value = (unsigned int)(character - 'a' + 10);
+		return 0;
+	}
+	if (character >= 'A' && character <= 'F') {
+		*value = (unsigned int)(character - 'A' + 10);
+		return 0;
+	}
+	return -1;
+}
+
+static bool source_condition_matches_artifact(
+	const struct orlix_tcti_target_completion_source_row *source,
+	const struct orlix_tcti_target_instruction_artifact_leaf *leaf,
+	const struct orlix_tcti_target_instruction_artifact *artifact)
+{
+	const char *hex;
+	size_t index;
+
+	if (!source || !leaf || !artifact || !artifact->condition_pool ||
+	    !source->condition_tcnd_hex ||
+	    leaf->condition_offset > artifact->condition_pool_size ||
+	    leaf->condition_length > artifact->condition_pool_size -
+		leaf->condition_offset)
+		return false;
+	hex = source->condition_tcnd_hex;
+	if (strlen(hex) != (size_t)leaf->condition_length * 2U)
+		return false;
+	for (index = 0; index < leaf->condition_length; index++) {
+		unsigned int high;
+		unsigned int low;
+
+		if (hex_nibble(hex[index * 2U], &high) ||
+		    hex_nibble(hex[index * 2U + 1U], &low) ||
+		artifact->condition_pool[leaf->condition_offset + index] !=
+			(unsigned char)((high << 4) | low))
+			return false;
+	}
+	return true;
+}
+
+static bool validate_completion_feature_dependencies(
+	const struct orlix_tcti_feature_artifact *feature_artifact,
+	const struct orlix_tcti_target_instruction_artifact *instruction_artifact,
+	size_t source_count, struct orlix_tcti_target_completion_result *result)
+{
+	struct orlix_tcti_feature_artifact_scratch feature_scratch;
+	struct orlix_tcti_feature_artifact_diagnostic feature_diagnostic;
+	struct orlix_tcti_target_instruction_artifact_validation_result
+		instruction_diagnostic;
+	static orlix_tcti_feature_artifact_u8 feature_state[
+		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static struct orlix_tcti_feature_artifact_frame feature_frames[
+		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static orlix_tcti_feature_artifact_u8 feature_child_coverage[
+		ORLIX_TCTI_FEATURE_ARTIFACT_CHILD_COUNT];
+
+	feature_scratch = (struct orlix_tcti_feature_artifact_scratch) {
+		.state = feature_state,
+		.state_count = sizeof(feature_state),
+		.frames = feature_frames,
+		.frame_count = sizeof(feature_frames) / sizeof(feature_frames[0]),
+		.child_coverage = feature_child_coverage,
+		.child_coverage_count = sizeof(feature_child_coverage),
+	};
+	if (orlix_tcti_feature_artifact_validate(feature_artifact, &feature_scratch,
+					  &feature_diagnostic) !=
+		ORLIX_TCTI_FEATURE_ARTIFACT_VALID ||
+	    orlix_tcti_target_instruction_artifact_validate(instruction_artifact,
+					      &instruction_diagnostic) ||
+	    instruction_artifact->leaf_count != source_count) {
+		result->invalid_feature_artifact++;
+		record_error(result, ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
+		return false;
+	}
+	return true;
+}
+
+static void validate_source_feature_domain(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_feature_artifact *feature_artifact,
+	const struct orlix_tcti_target_instruction_artifact *instruction_artifact,
+	struct orlix_tcti_target_completion_result *result,
+	struct orlix_tcti_target_completion_obligation *obligations)
+{
+	size_t index;
+	for (index = 0; index < source_count; index++) {
+		struct orlix_tcti_feature_domain_tcnd_diagnostic diagnostic;
+		struct orlix_tcti_target_instruction_operand_assignment assignment;
+		struct orlix_tcti_feature_domain_tcnd_environment environment;
+		struct orlix_tcti_feature_domain_tcnd_union_candidate candidate;
+		struct orlix_tcti_feature_domain_tcnd_union_result applicability;
+		const struct orlix_tcti_target_instruction_artifact_leaf *leaf =
+			&instruction_artifact->leaves[index];
+
+		if (!source_condition_matches_artifact(&source[index], leaf,
+						      instruction_artifact) ||
+		    orlix_tcti_feature_domain_validate_tcnd_features(
+				feature_artifact, source[index].condition_tcnd_hex,
+				&diagnostic)) {
+			result->invalid_source_condition_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
+			if (obligations) {
+				obligations[index].blocker_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_SOURCE_CONDITION;
+				obligations[index].feature_union_state =
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID;
+				obligations[index].first_unsupported_error =
+					ORLIX_TCTI_FEATURE_DOMAIN_TCND_INVALID_ARGUMENT;
+				obligations[index].known_feature_union_reason_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID;
+			}
+			continue;
+		}
+		result->source_condition_domain_bound_rows++;
+		/*
+		 * The encoding pattern is a checked source witness, not a legal-domain
+		 * enumeration or runtime capability claim. It supplies only the
+		 * source-declared operand values. The missing feature callback keeps
+		 * the full target union incomplete.
+		 */
+		assignment = (struct orlix_tcti_target_instruction_operand_assignment) {
+			.artifact = instruction_artifact,
+			.leaf_index = index,
+			.instruction = leaf->encoding_pattern,
+		};
+		environment = (struct orlix_tcti_feature_domain_tcnd_environment) {
+			.context = &assignment,
+			.operand = orlix_tcti_target_instruction_operand_assignment,
+		};
+		candidate = (struct orlix_tcti_feature_domain_tcnd_union_candidate) {
+			.environment = &environment,
+		};
+		if (orlix_tcti_feature_domain_evaluate_tcnd_union(feature_artifact,
+			source[index].condition_tcnd_hex, &candidate, 1,
+			&applicability)) {
+			result->unresolved_feature_applicability_rows++;
+			result->unsupported_feature_applicability_rows++;
+			switch (applicability.first_unsupported.error) {
+			case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
+				result->unresolved_feature_configuration_rows++;
+				break;
+			case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
+				result->unresolved_instruction_operand_rows++;
+				break;
+			default:
+				result->invalid_feature_applicability_rows++;
+				break;
+			}
+			if (obligations) {
+				obligations[index].first_unsupported_error =
+					applicability.first_unsupported.error;
+				switch (applicability.first_unsupported.error) {
+				case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
+					obligations[index].feature_union_state =
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION;
+					obligations[index].known_feature_union_reason_mask |=
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_FEATURE;
+					break;
+				case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
+					obligations[index].feature_union_state =
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_OPERAND;
+					obligations[index].known_feature_union_reason_mask |=
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_OPERAND;
+					break;
+				default:
+					obligations[index].feature_union_state =
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_UNRESOLVED;
+					obligations[index].known_feature_union_reason_mask |=
+						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID;
+					break;
+				}
+				obligations[index].blocker_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION |
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
+				obligations[index].known_feature_union_reason_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
+			}
+			record_error(result,
+				ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
+		} else {
+			result->evaluated_feature_applicability_rows +=
+				applicability.evaluated_count;
+			result->satisfied_feature_applicability_rows +=
+				applicability.satisfied_count;
+			result->unsatisfied_feature_applicability_rows +=
+				applicability.unsatisfied_count;
+			if (obligations) {
+				obligations[index].first_unsupported_error =
+					ORLIX_TCTI_FEATURE_DOMAIN_TCND_OK;
+				obligations[index].feature_union_state =
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED;
+				/* No authoritative configuration union exists yet. */
+				obligations[index].blocker_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
+				obligations[index].known_feature_union_reason_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
+			}
+		}
+	}
+}
+
+int orlix_tcti_target_completion_validate_feature_field_domains(
+	const struct orlix_tcti_feature_artifact *feature_artifact,
+	const struct orlix_tcti_feature_field_domain_binding_artifact *artifact,
+	struct orlix_tcti_target_completion_result *result)
+{
+	struct orlix_tcti_feature_field_domain_binding_scratch scratch;
+	struct orlix_tcti_feature_field_domain_binding_diagnostic diagnostic;
+	static orlix_tcti_feature_artifact_u8 feature_node_coverage[
+		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static orlix_tcti_feature_artifact_u32 identity_group_coverage[
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
+	orlix_tcti_feature_artifact_u32 index;
+
+	if (!result)
+		return -1;
+	scratch = (struct orlix_tcti_feature_field_domain_binding_scratch) {
+		.feature_node_coverage = feature_node_coverage,
+		.feature_node_coverage_count = sizeof(feature_node_coverage),
+		.identity_group_coverage = identity_group_coverage,
+		.identity_group_coverage_count =
+			sizeof(identity_group_coverage) /
+			sizeof(identity_group_coverage[0]),
+	};
+	if (orlix_tcti_feature_field_domain_binding_validate(feature_artifact, artifact,
+						       &scratch, &diagnostic) !=
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID) {
+		result->invalid_feature_field_domain_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+		return -1;
+	}
+	for (index = 0; index < artifact->occurrence_count; index++) {
+		const struct orlix_tcti_feature_field_domain_binding *binding =
+			&artifact->bindings[index];
+
+		result->feature_field_domain_rows++;
+		if (binding->disposition == ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED) {
+			result->mapped_feature_field_domain_rows++;
+			/*
+			 * A source span and a Registers.json value-relation index are
+			 * ownership, not satisfiability or execution proof. Keep the
+			 * entire mapped domain blocking until the typed evaluator owns
+			 * every relation.
+			 */
+			result->unresolved_feature_field_domain_rows++;
+		} else {
+			result->ambiguous_feature_field_domain_rows++;
+		}
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN);
+	}
+	return -1;
+}
+
+int orlix_tcti_target_completion_validate_runtime_capability_cohorts(
+	const struct orlix_tcti_runtime_capability_cohort_artifact *artifact,
+	struct orlix_tcti_target_completion_result *result)
+{
+	struct orlix_tcti_runtime_capability_cohort_validation_result diagnostic;
+	size_t leaf_index;
+
+	if (!result)
+		return -1;
+	if (orlix_tcti_runtime_capability_cohort_artifact_validate(artifact,
+						     &diagnostic)) {
+		result->invalid_runtime_capability_cohort_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+		return -1;
+	}
+	for (leaf_index = 0; leaf_index < artifact->counts.leaf_count;
+	     leaf_index++) {
+		const struct orlix_tcti_runtime_capability_cohort_leaf *leaf =
+			&artifact->leaves[leaf_index];
+		size_t membership_index;
+
+		result->runtime_capability_cohort_leaf_rows++;
+		for (membership_index = leaf->first_membership;
+		     membership_index < leaf->first_membership + leaf->membership_count;
+		     membership_index++) {
+			const struct orlix_tcti_runtime_capability_cohort_membership *member =
+				&artifact->memberships[membership_index];
+
+			result->runtime_capability_cohort_candidate_membership_rows++;
+			if (member->disposition ==
+			    ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_UNRESOLVED) {
+				result->unresolved_runtime_capability_cohort_membership_rows++;
+				record_error(result,
+					     ORLIX_TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT);
+			}
+		}
+	}
+	return result->unresolved_runtime_capability_cohort_membership_rows ?
+		-1 : 0;
+}
+
+static bool source_row_well_formed(
+	const struct orlix_tcti_target_completion_source_row *row, size_t ordinal)
+{
+	return row && row->ordinal == ordinal && !empty(row->name) &&
+		!empty(row->mnemonic) && !empty(row->operation_id) &&
+		!empty(row->condition_tcnd_hex) && row->source_length &&
+		row->source_offset < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		row->source_length <=
+			ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH - row->source_offset;
+}
+
+static bool source_row_matches_canonical(
+	const struct orlix_tcti_target_completion_source_row *row, size_t ordinal)
+{
+	const struct orlix_tcti_target_completion_source_row *canonical;
+
+	if (!source_row_well_formed(row, ordinal) ||
+	    ordinal >= sizeof(source_rows) / sizeof(source_rows[0]))
+		return false;
+	canonical = &source_rows[ordinal];
+	return !strcmp(row->name, canonical->name) &&
+		!strcmp(row->mnemonic, canonical->mnemonic) &&
+		!strcmp(row->operation_id, canonical->operation_id) &&
+		row->mask == canonical->mask &&
+		row->pattern == canonical->pattern &&
+		!strcmp(row->condition_tcnd_hex,
+			canonical->condition_tcnd_hex) &&
+		row->source_offset == canonical->source_offset &&
+		row->source_length == canonical->source_length;
+}
+
+static bool asl_member_locator_is_valid(const char *operation_id,
+					const char *semantic_operation_id,
+					const char *locator, const char *member)
+{
+	static const char prefix[] = "operations/";
+	size_t prefix_length = sizeof(prefix) - 1U;
+	size_t operation_length;
+	size_t member_length;
+
+	if (empty(operation_id) || empty(semantic_operation_id) || !locator ||
+	    strncmp(locator, prefix, prefix_length))
+		return false;
+	operation_length = strlen(semantic_operation_id);
+	member_length = strlen(member);
+	return !strncmp(locator + prefix_length, semantic_operation_id,
+				operation_length) &&
+		!strcmp(locator + prefix_length + operation_length, member);
+}
+
+static bool sha256_hex_is_valid(const char *value)
+{
+	size_t index;
+
+	if (!value || strlen(value) != 64U)
+		return false;
+	for (index = 0; index < 64U; index++)
+		if (!((value[index] >= '0' && value[index] <= '9') ||
+		      (value[index] >= 'a' && value[index] <= 'f')))
+			return false;
+	return true;
+}
+
+static bool asl_raw_member_provenance_is_valid(
+	const char *locator, const char *operation_id,
+	const char *semantic_operation_id, const char *member,
+	orlix_tcti_completion_u32 member_offset, orlix_tcti_completion_u32 member_length,
+	orlix_tcti_completion_u32 value_offset, orlix_tcti_completion_u32 value_length, const char *digest)
+{
+	return asl_member_locator_is_valid(operation_id, semantic_operation_id,
+					  locator, member) &&
+		member_length != 0U && value_length != 0U &&
+		member_offset < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		member_length <= ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+			member_offset &&
+		value_offset < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+		value_length <= ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+			value_offset &&
+		member_offset <= value_offset &&
+		value_offset - member_offset < member_length &&
+		sha256_hex_is_valid(digest);
+}
+
+static bool asl_absence_provenance_is_valid(
+	const struct orlix_tcti_target_completion_asl_row *row)
+{
+	return row &&
+		row->semantic_body_state == ORLIX_TCTI_A64_ASL_BODY_PLACEHOLDER &&
+		row->decode_state == ORLIX_TCTI_A64_ASL_DECODE_NULL &&
+		row->corpus_state == ORLIX_TCTI_A64_ASL_CORPUS_ABSENT &&
+		row->helper_state == ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE &&
+		asl_raw_member_provenance_is_valid(row->semantic_member_locator,
+			row->operation_id, row->semantic_operation_id, "/operation",
+			row->semantic_member_source_offset,
+			row->semantic_member_source_length,
+			row->semantic_body_source_offset,
+			row->semantic_body_source_length, row->semantic_body_sha256) &&
+		asl_raw_member_provenance_is_valid(row->decode_member_locator,
+			row->operation_id, row->semantic_operation_id, "/decode",
+			row->decode_member_source_offset,
+			row->decode_member_source_length,
+			row->decode_source_offset, row->decode_source_length,
+			row->decode_sha256);
+}
+
+int orlix_tcti_target_completion_validate_asl_availability(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_target_completion_asl_provenance *provenance,
+	const struct orlix_tcti_target_completion_asl_row *availability,
+	size_t availability_count,
+	struct orlix_tcti_target_completion_result *result)
+{
+	size_t index;
+
+	if (!result)
+		return -1;
+	if (!source || source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !availability ||
+	    availability_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !provenance || empty(provenance->format) ||
+	    empty(provenance->source_sha256) ||
+	    strcmp(provenance->format, "inline_aarchmrs_operations_v3") ||
+	    strcmp(provenance->source_sha256,
+		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
+	    provenance->corpus_state != ORLIX_TCTI_A64_ASL_CORPUS_ABSENT ||
+	    provenance->helper_state != ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
+		record_error(result, ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+		if (!source || !availability)
+			return -1;
+	}
+
+	for (index = 0; index < source_count; index++) {
+		const struct orlix_tcti_target_completion_asl_row *row;
+		const struct orlix_tcti_target_completion_asl_row *canonical;
+		bool valid;
+
+		if (index >= availability_count) {
+			result->invalid_asl_availability_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+			continue;
+		}
+		row = &availability[index];
+		/* The checked artifact is the source-derived absence witness. */
+		canonical = &asl_rows[index];
+		valid = source_row_well_formed(&source[index], index) &&
+			row->ordinal == index && !empty(row->name) &&
+			!empty(row->semantic_operation_id) &&
+			asl_absence_provenance_is_valid(row) &&
+			!strcmp(row->name, source[index].name) &&
+			!strcmp(row->operation_id, source[index].operation_id) &&
+			row->ordinal == canonical->ordinal &&
+			!strcmp(row->name, canonical->name) &&
+			!strcmp(row->operation_id, canonical->operation_id) &&
+			!strcmp(row->semantic_operation_id,
+				canonical->semantic_operation_id) &&
+			!strcmp(row->semantic_member_locator,
+				canonical->semantic_member_locator) &&
+			row->semantic_member_source_offset ==
+				canonical->semantic_member_source_offset &&
+			row->semantic_member_source_length ==
+				canonical->semantic_member_source_length &&
+			row->semantic_body_source_offset ==
+				canonical->semantic_body_source_offset &&
+			row->semantic_body_source_length ==
+				canonical->semantic_body_source_length &&
+			!strcmp(row->semantic_body_sha256,
+				canonical->semantic_body_sha256) &&
+			row->semantic_body_state == canonical->semantic_body_state &&
+			!strcmp(row->decode_member_locator,
+				canonical->decode_member_locator) &&
+			row->decode_member_source_offset ==
+				canonical->decode_member_source_offset &&
+			row->decode_member_source_length ==
+				canonical->decode_member_source_length &&
+			row->decode_source_offset == canonical->decode_source_offset &&
+			row->decode_source_length == canonical->decode_source_length &&
+			!strcmp(row->decode_sha256, canonical->decode_sha256) &&
+			row->decode_state == canonical->decode_state &&
+			row->corpus_state == canonical->corpus_state &&
+			row->helper_state == canonical->helper_state;
+		if (!valid) {
+			result->invalid_asl_availability_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+			continue;
+		}
+		result->asl_availability_rows++;
+		if (row->corpus_state == ORLIX_TCTI_A64_ASL_CORPUS_ABSENT ||
+		    row->helper_state == ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
+			result->unavailable_asl_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+		}
+	}
+	return result->invalid_asl_availability_rows ||
+		result->unavailable_asl_rows ? -1 : 0;
+}
+
+static void record_error(struct orlix_tcti_target_completion_result *result,
+			 orlix_tcti_completion_u32 error)
+{
+	result->error_mask |= error;
+	result->errors++;
+}
+
+static size_t find_source(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count, const char *name)
+{
+	size_t index;
+
+	if (empty(name))
+		return source_count;
+	for (index = 0; index < source_count; index++)
+		if (source_row_well_formed(&source[index], index) &&
+		    !strcmp(source[index].name, name))
+			return index;
+	return source_count;
+}
+
+static bool register_source_span_valid(orlix_tcti_completion_u64 offset, orlix_tcti_completion_u64 length)
+{
+	return length && offset < ORLIX_TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH &&
+	       length <= ORLIX_TCTI_TARGET_COMPLETION_REGISTERS_BYTE_LENGTH - offset;
+}
+
+static orlix_tcti_completion_u64 accessor_identity_byte(orlix_tcti_completion_u64 identity, unsigned char byte)
+{
+	return (identity ^ byte) * ORLIX_TCTI_COMPLETION_U64_C(1099511628211);
+}
+
+static orlix_tcti_completion_u64 accessor_identity_u64(orlix_tcti_completion_u64 identity, orlix_tcti_completion_u64 value)
+{
+	unsigned int index;
+
+	for (index = 0; index < 8U; index++)
+		identity = accessor_identity_byte(identity,
+			(unsigned char)(value >> (index * 8U)));
+	return identity;
+}
+
+static orlix_tcti_completion_u64 accessor_identity_text(orlix_tcti_completion_u64 identity, const char *text)
+{
+	size_t length = strlen(text);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, length);
+	for (index = 0; index < length; index++)
+		identity = accessor_identity_byte(identity, (unsigned char)text[index]);
+	return identity;
+}
+
+static orlix_tcti_completion_u64 system_accessor_identity(
+	const struct orlix_tcti_target_completion_system_accessor_row *accessors,
+	size_t accessor_count)
+{
+	orlix_tcti_completion_u64 identity = ORLIX_TCTI_COMPLETION_U64_C(1469598103934665603);
+	size_t index;
+
+	identity = accessor_identity_u64(identity, accessor_count);
+	for (index = 0; index < accessor_count; index++) {
+		const struct orlix_tcti_target_completion_system_accessor_row *row =
+			&accessors[index];
+
+		identity = accessor_identity_u64(identity, row->accessor_index);
+		identity = accessor_identity_u64(identity, row->encoding_index);
+		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->generic_leaf);
+		identity = accessor_identity_u64(identity, row->direction);
+		identity = accessor_identity_u64(identity, row->disposition);
+		identity = accessor_identity_u64(identity, row->selector_count);
+		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->selector_identity);
+		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->accessor_source_length);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->encoding_source_length);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_offset);
+		identity = accessor_identity_u64(identity,
+			row->condition_source_length);
+	}
+	return identity;
+}
+
+int orlix_tcti_target_completion_validate_system_accessors(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_target_completion_system_accessor_provenance *provenance,
+	const struct orlix_tcti_target_completion_system_accessor_row *accessors,
+	size_t accessor_count,
+	struct orlix_tcti_target_completion_result *result)
+{
+	size_t actual[7] = { 0 };
+	size_t index;
+
+	if (!result)
+		return -1;
+	result->system_accessor_rows = accessor_count;
+	if (!source || source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    !provenance || !accessors ||
+	    empty(provenance->architecture) || empty(provenance->build) ||
+	    empty(provenance->release) || empty(provenance->schema) ||
+	    empty(provenance->timestamp) || empty(provenance->source_sha256) ||
+	    strcmp(provenance->architecture, "vFATAp1-A") ||
+	    strcmp(provenance->build, "818") ||
+	    strcmp(provenance->release, "2026-06_rel") ||
+	    strcmp(provenance->schema, "2.9.5") ||
+	    strcmp(provenance->timestamp, "2026-06-24 17:12:14") ||
+	    strcmp(provenance->source_sha256,
+		   "5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874") ||
+	    provenance->accessor_count !=
+		    ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
+	    accessor_count != ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
+	    provenance->mapped_count + provenance->reserved_count +
+			    provenance->privileged_count +
+			    provenance->unsupported_count +
+			    provenance->ambiguous_count +
+			    provenance->contradictory_count +
+			    provenance->invalid_count !=
+		    provenance->accessor_count) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+		if (!source || !provenance || !accessors)
+			return -1;
+	}
+
+	for (index = 0; index < accessor_count; index++) {
+		const struct orlix_tcti_target_completion_system_accessor_row *row =
+			&accessors[index];
+		size_t previous;
+		bool valid = !empty(row->name) &&
+			!strncmp(row->name, "A64.", 4U) &&
+			row->direction >=
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ &&
+			row->direction <=
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_EXECUTE &&
+			row->disposition >=
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED &&
+			row->disposition <=
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_INVALID &&
+			register_source_span_valid(row->accessor_source_offset,
+						   row->accessor_source_length);
+
+		if (valid && row->disposition ==
+				     ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED)
+			valid = row->encoding_index != UINT32_MAX &&
+				!empty(row->generic_leaf) &&
+				row->selector_count &&
+				row->selector_identity && row->condition_identity &&
+				row->condition_expression != UINT32_MAX &&
+				register_source_span_valid(
+					row->condition_source_offset,
+					row->condition_source_length) &&
+				register_source_span_valid(
+					row->encoding_source_offset,
+					row->encoding_source_length) &&
+				find_source(source, source_count,
+					    row->generic_leaf) < source_count;
+		for (previous = 0; valid && previous < index; previous++)
+			if (accessors[previous].accessor_index ==
+				    row->accessor_index ||
+			    (row->encoding_index != UINT32_MAX &&
+			     accessors[previous].encoding_index ==
+				     row->encoding_index))
+				valid = false;
+		if (!valid) {
+			result->invalid_system_accessor_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+			continue;
+		}
+		actual[row->disposition]++;
+		if (row->disposition ==
+		    ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED) {
+			result->mapped_system_accessor_rows++;
+		} else {
+			result->nonmapped_system_accessor_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+		}
+	}
+	if (actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED] !=
+		    provenance->mapped_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_RESERVED] !=
+		    provenance->reserved_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_PRIVILEGED] !=
+		    provenance->privileged_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_UNSUPPORTED] !=
+		    provenance->unsupported_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_AMBIGUOUS] !=
+		    provenance->ambiguous_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_CONTRADICTORY] !=
+		    provenance->contradictory_count ||
+	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_INVALID] !=
+	    provenance->invalid_count) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+	}
+	if (system_accessor_identity(accessors, accessor_count) !=
+		    provenance->reconciliation_identity) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+	}
+	return result->invalid_system_accessor_rows ||
+		       result->nonmapped_system_accessor_rows ?
+	       -1 : 0;
+}
+
+static size_t find_classification(
+	const struct orlix_tcti_target_completion_classification_row *classification,
+	size_t classification_count, const char *name)
+{
+	size_t index;
+
+	if (empty(name))
+		return classification_count;
+	for (index = 0; index < classification_count; index++)
+		if (!empty(classification[index].name) &&
+		    !strcmp(classification[index].name, name))
+			return index;
+	return classification_count;
+}
+
+static bool exact_binding(
+	const struct orlix_tcti_target_completion_source_row *source,
+	const struct orlix_tcti_target_proof_binding *binding)
+{
+	return source && !empty(source->name) && !empty(source->mnemonic) &&
+	       !empty(source->condition_tcnd_hex) &&
+	       !strcmp(source->name, binding->leaf_name) &&
+	       !strcmp(source->mnemonic, binding->mnemonic) &&
+	       source->mask == binding->encoding_mask &&
+	       source->pattern == binding->encoding_pattern &&
+	       !strcmp(source->condition_tcnd_hex,
+		       binding->condition_tcnd_hex);
+}
+
+static bool registry_binds_source(
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count, const char *proof_id,
+	const struct orlix_tcti_target_completion_source_row *source)
+{
+	size_t entry_index;
+
+	for (entry_index = 0; entry_index < registry_count; entry_index++) {
+		size_t binding_index;
+
+		if (empty(registry[entry_index].id) ||
+		    empty(registry[entry_index].operation_id) ||
+		    strcmp(registry[entry_index].id, proof_id))
+			continue;
+		for (binding_index = 0;
+		     binding_index < registry[entry_index].binding_count;
+		     binding_index++)
+			if (!strcmp(registry[entry_index].operation_id,
+				    source->operation_id) &&
+			    exact_binding(
+				    source,
+				    &registry[entry_index]
+					     .bindings[binding_index]))
+				return true;
+		return false;
+	}
+	return false;
+}
+
+static bool valid_non_alias_relationship(
+	const struct orlix_tcti_target_completion_classification_row *row)
+{
+	return row->relation == ORLIX_TCTI_TARGET_COMPLETION_RELATION_NONE &&
+	       empty(row->canonical_name);
+}
+
+static bool valid_alias_relationship(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_target_completion_classification_row *classification,
+	size_t classification_count, size_t row_index)
+{
+	const struct orlix_tcti_target_completion_classification_row *row =
+		&classification[row_index];
+	size_t canonical_classification;
+	size_t canonical_source;
+
+	if (row->relation != ORLIX_TCTI_TARGET_COMPLETION_RELATION_ALIAS &&
+	    row->relation != ORLIX_TCTI_TARGET_COMPLETION_RELATION_DUPLICATE)
+		return false;
+	if (empty(row->canonical_name) || empty(row->evidence) ||
+	    empty(row->proof_id) ||
+	    !strcmp(row->name, row->canonical_name))
+		return false;
+	canonical_classification = find_classification(
+		classification, classification_count, row->canonical_name);
+	canonical_source = find_source(source, source_count,
+				       row->canonical_name);
+	if (canonical_classification == classification_count ||
+	    canonical_source == source_count ||
+	    classification[canonical_classification].classification ==
+		    ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED ||
+	    classification[canonical_classification].classification ==
+		    ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE ||
+	    classification[canonical_classification].relation !=
+		    ORLIX_TCTI_TARGET_COMPLETION_RELATION_NONE ||
+	    !empty(classification[canonical_classification].canonical_name) ||
+	    empty(classification[canonical_classification].evidence) ||
+	    empty(classification[canonical_classification].proof_id))
+		return false;
+	/*
+	 * AARCHMRS InstructionAlias and OperationAlias records may resolve a
+	 * distinct operation or constrained encoding. The pinned source records
+	 * the relationship as a provenance edge, not source-row identity.
+	 */
+	return true;
+}
+
+static bool classification_row_well_formed(
+	const struct orlix_tcti_target_completion_classification_row *row)
+{
+	return row && !empty(row->name);
+}
+
+/*
+ * This validates immutable source-to-test provenance. It does not observe a
+ * KUnit or kselftest result and therefore must not be described as proof.
+ */
+static bool source_proof_binding_resolves(
+	const struct orlix_tcti_target_completion_source_row *source,
+	const struct orlix_tcti_target_completion_classification_row *row,
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count)
+{
+	const struct orlix_tcti_target_proof_reference reference = {
+		.id = row->proof_id,
+		.leaf_name = source->name,
+		.mnemonic = source->mnemonic,
+		.operation_id = source->operation_id,
+		.encoding_mask = source->mask,
+		.encoding_pattern = source->pattern,
+		.condition_tcnd_hex = source->condition_tcnd_hex,
+		.classification = row->classification,
+	};
+
+	return orlix_tcti_target_proof_registry_lookup(
+		       registry, registry_count, &reference) ==
+	       ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK;
+}
+
+static void validate_registry_bindings(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_target_completion_classification_row *classification,
+	size_t classification_count,
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count, struct orlix_tcti_target_completion_result *result)
+{
+	size_t entry_index;
+
+	for (entry_index = 0; entry_index < registry_count; entry_index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			&registry[entry_index];
+		size_t binding_index;
+
+		for (binding_index = 0;
+		     binding_index < entry->binding_count;
+		     binding_index++) {
+			const struct orlix_tcti_target_proof_binding *binding =
+				&entry->bindings[binding_index];
+			size_t source_index =
+				find_source(source, source_count,
+					    binding->leaf_name);
+			size_t classification_index =
+				find_classification(classification,
+						    classification_count,
+						    binding->leaf_name);
+			bool valid = source_index < source_count &&
+				classification_index < classification_count;
+
+			/*
+			 * An unclassified row may carry an incomplete ownership
+			 * binding without claiming classification proof.
+			 */
+			if (valid && entry->unproved_obligations &&
+			    classification[classification_index].classification ==
+				    ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED)
+				continue;
+			if (valid)
+				valid = exact_binding(&source[source_index],
+						      binding) &&
+					!empty(source[source_index]
+						       .operation_id) &&
+					!strcmp(source[source_index].operation_id,
+						entry->operation_id) &&
+					classification[classification_index]
+							.classification < 32 &&
+					entry->classification_mask ==
+						(1U << classification[
+							classification_index]
+								.classification) &&
+					!empty(classification[
+							classification_index]
+								.proof_id) &&
+					!strcmp(classification[
+							classification_index]
+								.proof_id,
+						entry->id);
+			if (!valid) {
+				result->stale_proof_bindings++;
+				record_error(
+					result,
+					ORLIX_TCTI_TARGET_COMPLETION_ERROR_STALE_PROOF_BINDING);
+			}
+		}
+	}
+}
+
+static void validate_unproved_obligations(
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count, struct orlix_tcti_target_completion_result *result)
+{
+	size_t entry_index;
+
+	for (entry_index = 0; entry_index < registry_count; entry_index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			&registry[entry_index];
+		size_t binding_index;
+
+		if (!entry->unproved_obligations)
+			continue;
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++) {
+			result->unproved_obligation_bindings++;
+			record_error(
+				result,
+				ORLIX_TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS);
+		}
+	}
+}
+
+int orlix_tcti_target_completion_validate(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count,
+	const struct orlix_tcti_target_completion_classification_row *classification,
+	size_t classification_count,
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count,
+	struct orlix_tcti_target_completion_result *result)
+{
+	enum orlix_tcti_target_proof_registry_error registry_error;
+	bool registry_valid = true;
+	size_t index;
+
+	if (!result)
+		return -1;
+	memset(result, 0, sizeof(*result));
+	result->source_rows = source_count;
+	result->classification_rows = classification_count;
+
+	if (!source || source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) {
+		record_error(result, ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_COUNT);
+		if (!source)
+			return -1;
+	}
+	if (!classification ||
+	    classification_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) {
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_CLASSIFICATION_COUNT);
+		if (!classification)
+			return -1;
+	}
+	if (orlix_tcti_target_proof_registry_validate(registry, registry_count,
+						&registry_error)) {
+		registry_valid = false;
+		result->invalid_registry_entries++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_PROOF_REGISTRY);
+	}
+
+	for (index = 0; index < source_count; index++) {
+		size_t previous;
+
+		if (!source_row_matches_canonical(&source[index], index)) {
+			result->invalid_source_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE);
+		}
+		for (previous = 0; previous < index; previous++)
+			if (source_row_well_formed(&source[index], index) &&
+			    source_row_well_formed(&source[previous], previous) &&
+			    !strcmp(source[index].name,
+				    source[previous].name)) {
+				result->invalid_source_rows++;
+				record_error(
+					result,
+					ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE);
+				break;
+			}
+		if (source_row_well_formed(&source[index], index) &&
+		    find_classification(classification,
+					classification_count,
+					source[index].name) ==
+		    classification_count) {
+			result->absent_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ABSENT);
+		}
+	}
+
+	/* Never consume an invalid registry in binding or proof lookup paths. */
+	if (registry_valid)
+		validate_registry_bindings(source, source_count, classification,
+					   classification_count, registry,
+					   registry_count, result);
+	if (registry_valid)
+		validate_unproved_obligations(registry, registry_count, result);
+
+	for (index = 0; index < classification_count; index++) {
+		const struct orlix_tcti_target_completion_classification_row *row =
+			&classification[index];
+		size_t source_index =
+			find_source(source, source_count, row->name);
+		size_t previous;
+		bool relationship_valid;
+
+		if (!classification_row_well_formed(row) ||
+		    source_index == source_count) {
+			result->stale_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_STALE);
+			continue;
+		}
+		for (previous = 0; previous < index; previous++)
+			if (classification_row_well_formed(row) &&
+			    classification_row_well_formed(&classification[previous]) &&
+			    !strcmp(row->name,
+				    classification[previous].name)) {
+				result->stale_rows++;
+				record_error(result,
+					     ORLIX_TCTI_TARGET_COMPLETION_ERROR_STALE);
+				break;
+			}
+		if (row->classification ==
+		    ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED) {
+			result->unclassified_rows++;
+			record_error(
+				result,
+				ORLIX_TCTI_TARGET_COMPLETION_ERROR_UNCLASSIFIED);
+			continue;
+		}
+		if (row->classification >
+		    ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE) {
+			result->invalid_relationship_rows++;
+			record_error(
+				result,
+				ORLIX_TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP);
+			continue;
+		}
+		result->classified_rows++;
+		switch (row->classification) {
+		case ORLIX_TCTI_TARGET_COMPLETION_REQUIRED_EL0:
+			result->required_el0_rows++;
+			break;
+		case ORLIX_TCTI_TARGET_COMPLETION_NON_EL0:
+			result->non_el0_rows++;
+			break;
+		case ORLIX_TCTI_TARGET_COMPLETION_ARCH_UNDEFINED_OR_UNALLOCATED:
+			result->undefined_or_unallocated_rows++;
+			break;
+		case ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE:
+			result->alias_or_duplicate_rows++;
+			break;
+		case ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED:
+			break;
+		}
+
+		relationship_valid =
+			row->classification ==
+				ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE ?
+			valid_alias_relationship(
+				source, source_count, classification,
+				classification_count, index) :
+			valid_non_alias_relationship(row);
+		if (!relationship_valid) {
+			result->invalid_relationship_rows++;
+			record_error(
+				result,
+				ORLIX_TCTI_TARGET_COMPLETION_ERROR_RELATIONSHIP);
+		}
+
+		if (empty(row->evidence) || empty(row->proof_id)) {
+			result->source_unbound_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
+			continue;
+		}
+		if (row->classification ==
+		    ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE) {
+			size_t canonical_index =
+				find_source(source, source_count,
+					    row->canonical_name);
+			size_t canonical_classification =
+				find_classification(classification,
+						    classification_count,
+						    row->canonical_name);
+			bool alias_binding_valid =
+				registry_valid &&
+				registry_binds_source(
+					registry, registry_count,
+					row->proof_id,
+					&source[source_index]);
+
+			if (!relationship_valid ||
+			    canonical_index == source_count ||
+			    canonical_classification ==
+				    classification_count ||
+			    !registry_valid ||
+			    !source_proof_binding_resolves(
+				    &source[canonical_index],
+				    &classification[
+					    canonical_classification],
+				    registry, registry_count) ||
+			    !alias_binding_valid) {
+				result->source_unbound_rows++;
+				record_error(
+					result,
+					ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
+			} else {
+				result->source_bound_rows++;
+			}
+		} else if (registry_valid &&
+			   source_proof_binding_resolves(&source[source_index], row,
+					  registry, registry_count)) {
+			result->source_bound_rows++;
+		} else {
+			result->source_unbound_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_BINDING);
+		}
+	}
+	return result->errors ? -1 : 0;
+}
+
+int orlix_tcti_target_completion_validate_source_provenance(
+	const struct orlix_tcti_target_completion_source_provenance *provenance,
+	struct orlix_tcti_target_completion_result *result)
+{
+	if (!result)
+		return -1;
+	if (!provenance || empty(provenance->architecture) ||
+	    empty(provenance->build) || empty(provenance->release) ||
+	    empty(provenance->schema) || empty(provenance->timestamp) ||
+	    empty(provenance->source_sha256) ||
+	    strcmp(provenance->architecture, "vFATAp1-A") ||
+	    strcmp(provenance->build, "818") ||
+	    strcmp(provenance->release, "2026-06_rel") ||
+	    strcmp(provenance->schema, "2.9.5") ||
+	    strcmp(provenance->timestamp, "2026-06-24 17:12:14") ||
+	    strcmp(provenance->source_sha256,
+		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
+	    provenance->source_byte_length !=
+		ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH ||
+	    provenance->leaf_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) {
+		result->invalid_source_provenance++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SOURCE_PROVENANCE);
+		return -1;
+	}
+	return 0;
+}
+
+int orlix_tcti_target_completion_audit(struct orlix_tcti_target_completion_result *result)
+{
+	return completion_audit_internal(NULL, result, NULL);
+}
+
+const struct orlix_tcti_target_completion_source_provenance *
+orlix_tcti_target_completion_source_provenance(void)
+{
+	return &source_provenance;
+}
+
+const struct orlix_tcti_target_completion_asl_provenance *
+orlix_tcti_target_completion_asl_provenance(void)
+{
+	return &asl_provenance;
+}
+
+const struct orlix_tcti_target_completion_asl_row *
+orlix_tcti_target_completion_asl_availability(size_t *count)
+{
+	if (count)
+		*count = sizeof(asl_rows) / sizeof(asl_rows[0]);
+	return asl_rows;
+}
+
+const struct orlix_tcti_target_completion_system_accessor_provenance *
+orlix_tcti_target_completion_system_accessor_provenance(void)
+{
+	return &system_accessor_provenance;
+}
+
+const struct orlix_tcti_target_completion_system_accessor_row *
+orlix_tcti_target_completion_system_accessors(size_t *count)
+{
+	if (count)
+		*count =
+			sizeof(system_accessor_rows) /
+			sizeof(system_accessor_rows[0]);
+	return system_accessor_rows;
+}
+
+const struct orlix_tcti_target_completion_source_row *
+orlix_tcti_target_completion_source(size_t *count)
+{
+	if (count)
+		*count = sizeof(source_rows) / sizeof(source_rows[0]);
+	return source_rows;
+}
+
+const struct orlix_tcti_target_completion_classification_row *
+orlix_tcti_target_completion_classification(size_t *count)
+{
+	if (count)
+		*count =
+			sizeof(classification_rows) /
+			sizeof(classification_rows[0]);
+	return classification_rows;
+}
+
+static const struct orlix_tcti_target_proof_registry_entry *
+completion_registry_entry(const struct orlix_tcti_target_proof_registry_entry *registry,
+				  size_t registry_count, const char *id)
+{
+	size_t index;
+
+	if (empty(id))
+		return NULL;
+	for (index = 0; index < registry_count; index++)
+		if (!strcmp(registry[index].id, id))
+			return &registry[index];
+	return NULL;
+}
+
+static bool completion_alias_proof_resolves(
+	size_t ordinal, const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count)
+{
+	const struct orlix_tcti_target_completion_classification_row *row =
+		&classification_rows[ordinal];
+	size_t canonical_source;
+	size_t canonical_classification;
+
+	if (!valid_alias_relationship(source_rows,
+				      sizeof(source_rows) / sizeof(source_rows[0]),
+				      classification_rows,
+				      sizeof(classification_rows) / sizeof(classification_rows[0]),
+				      ordinal) ||
+	    !registry_binds_source(registry, registry_count, row->proof_id,
+				   &source_rows[ordinal]))
+		return false;
+	canonical_source = find_source(source_rows,
+				       sizeof(source_rows) / sizeof(source_rows[0]),
+				       row->canonical_name);
+	canonical_classification = find_classification(classification_rows,
+						 sizeof(classification_rows) /
+						 sizeof(classification_rows[0]),
+						 row->canonical_name);
+	return canonical_source < sizeof(source_rows) / sizeof(source_rows[0]) &&
+		canonical_classification < sizeof(classification_rows) /
+			sizeof(classification_rows[0]) &&
+		source_proof_binding_resolves(&source_rows[canonical_source],
+					     &classification_rows[canonical_classification],
+					     registry, registry_count);
+}
+
+static void completion_project_obligation(
+	size_t ordinal, const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count,
+	const struct orlix_tcti_runtime_capability_cohort_artifact *runtime,
+	struct orlix_tcti_target_completion_obligation *obligation)
+{
+	const struct orlix_tcti_target_completion_source_row *source = &source_rows[ordinal];
+	const struct orlix_tcti_target_completion_classification_row *classification =
+		&classification_rows[ordinal];
+	const struct orlix_tcti_target_completion_asl_row *asl = &asl_rows[ordinal];
+	const struct orlix_tcti_target_proof_registry_entry *entry;
+	const struct orlix_tcti_runtime_capability_cohort_leaf *runtime_leaf;
+	bool proof_resolves = false;
+
+	memset(obligation, 0, sizeof(*obligation));
+	obligation->ordinal = source->ordinal;
+	obligation->name = source->name;
+	obligation->mnemonic = source->mnemonic;
+	obligation->operation_id = source->operation_id;
+	obligation->classification = classification->classification;
+	obligation->relation = classification->relation;
+	obligation->canonical_name = classification->canonical_name;
+	obligation->asl_operation_object = asl->operation_object;
+	obligation->proof_id = classification->proof_id;
+
+	if (classification->classification ==
+	    ORLIX_TCTI_TARGET_COMPLETION_UNCLASSIFIED) {
+		obligation->blocker_mask |=
+			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_UNCLASSIFIED;
+	} else if (classification->classification ==
+		   ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE ?
+		   !valid_alias_relationship(source_rows,
+				     sizeof(source_rows) / sizeof(source_rows[0]),
+				     classification_rows,
+				     sizeof(classification_rows) /
+				     sizeof(classification_rows[0]), ordinal) :
+		   !valid_non_alias_relationship(classification)) {
+		obligation->blocker_mask |=
+			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP;
+	}
+
+	if (!strcmp(asl->availability, "shared_asl_absent_blocking")) {
+		obligation->asl_state =
+			ORLIX_TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING;
+	} else {
+		obligation->asl_state = ORLIX_TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE;
+	}
+	obligation->blocker_mask |= ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_ASL;
+
+	entry = completion_registry_entry(registry, registry_count,
+					 obligation->proof_id);
+	if (!entry) {
+		obligation->proof_state = ORLIX_TCTI_TARGET_COMPLETION_PROOF_NONE;
+		obligation->blocker_mask |= ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_PROOF;
+	} else {
+		obligation->required_obligations = entry->obligations;
+		obligation->unproved_obligations = entry->unproved_obligations;
+		obligation->kunit_source = entry->kunit_source;
+		obligation->kunit_suite = entry->kunit_suite;
+		obligation->kselftest = entry->kselftest;
+		/* Registry provenance never observes native test execution. */
+		obligation->blocker_mask |=
+			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_EXECUTION_EVIDENCE;
+		if (classification->classification ==
+		    ORLIX_TCTI_TARGET_COMPLETION_ALIAS_OR_DUPLICATE)
+			proof_resolves = completion_alias_proof_resolves(ordinal,
+								 registry, registry_count);
+		else
+			proof_resolves = source_proof_binding_resolves(source,
+				classification, registry, registry_count);
+		if (!proof_resolves) {
+			obligation->proof_state = ORLIX_TCTI_TARGET_COMPLETION_PROOF_STALE;
+			obligation->blocker_mask |=
+				ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_PROOF;
+		} else if (entry->unproved_obligations) {
+			obligation->proof_state =
+				ORLIX_TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_UNPROVED;
+			obligation->blocker_mask |=
+				ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS;
+	} else {
+		obligation->proof_state =
+			ORLIX_TCTI_TARGET_COMPLETION_PROOF_SOURCE_BOUND_NO_UNPROVED_METADATA;
+	}
+	}
+
+	runtime_leaf = &runtime->leaves[ordinal];
+	obligation->runtime_candidate_first = runtime_leaf->first_membership;
+	obligation->runtime_candidate_count = runtime_leaf->membership_count;
+	if (runtime_leaf->membership_count) {
+		obligation->runtime_candidate_state =
+			ORLIX_TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_UNRESOLVED;
+		obligation->blocker_mask |=
+			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_RUNTIME_CANDIDATE;
+	} else {
+		obligation->runtime_candidate_state =
+			ORLIX_TCTI_TARGET_COMPLETION_RUNTIME_CANDIDATE_NONE;
+	}
+}
+
+static int completion_audit_internal(
+	const struct orlix_tcti_target_completion_audit_inputs_for_test *inputs,
+	struct orlix_tcti_target_completion_result *result,
+	struct orlix_tcti_target_completion_obligation *obligations)
+{
+	const struct orlix_tcti_target_proof_registry_entry *registry;
+	const struct orlix_tcti_runtime_capability_cohort_artifact *runtime;
+	const struct orlix_tcti_feature_artifact *feature_artifact =
+		orlix_tcti_feature_artifact_canonical();
+	const struct orlix_tcti_target_instruction_artifact *instruction_artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	struct orlix_tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
+	int status;
+	size_t registry_count;
+	size_t index;
+	const struct orlix_tcti_target_completion_source_row *source = source_rows;
+	const struct orlix_tcti_target_completion_classification_row *classification =
+		classification_rows;
+	size_t source_count = sizeof(source_rows) / sizeof(source_rows[0]);
+	size_t classification_count =
+		sizeof(classification_rows) / sizeof(classification_rows[0]);
+
+	if (!result)
+		return -1;
+	/* Validate before touching caller output, so malformed runtime input is atomic. */
+	runtime = orlix_tcti_runtime_capability_cohort_artifact_canonical();
+	if (!runtime || orlix_tcti_runtime_capability_cohort_artifact_validate(
+			    runtime, &runtime_diagnostic))
+		return -1;
+	registry = orlix_tcti_target_proof_registry_entries(&registry_count);
+	if (inputs) {
+		source = inputs->source;
+		source_count = inputs->source_count;
+		classification = inputs->classification;
+		classification_count = inputs->classification_count;
+		registry = inputs->registry;
+		registry_count = inputs->registry_count;
+		if (inputs->instruction_artifact)
+			instruction_artifact = inputs->instruction_artifact;
+	}
+	/*
+	 * Reject malformed injected dependencies before constructing staged rows.
+	 * Ordinary completion gaps stay red but remain safe to project.
+	 */
+	status = orlix_tcti_target_completion_validate(
+		source, source_count, classification, classification_count,
+		registry, registry_count, result);
+	if (!source || !classification)
+		return -1;
+	if (!validate_completion_feature_dependencies(feature_artifact,
+		instruction_artifact, source_count, result))
+		return -1;
+	if (!completion_projection_dependencies_valid(result) ||
+	    source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    classification_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS)
+		return -1;
+	if (obligations)
+		for (index = 0; index < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++)
+			completion_project_obligation(index, registry, registry_count,
+					      runtime, &obligations[index]);
+	if (orlix_tcti_target_completion_validate_source_provenance(
+		    &source_provenance, result))
+		status = -1;
+	if (orlix_tcti_target_completion_validate_asl_availability(
+		    source, source_count,
+		    &asl_provenance, asl_rows,
+		    sizeof(asl_rows) / sizeof(asl_rows[0]), result))
+		status = -1;
+	if (orlix_tcti_target_completion_validate_system_accessors(
+		    source, source_count,
+		    &system_accessor_provenance, system_accessor_rows,
+		    sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]),
+		    result))
+		status = -1;
+	if (orlix_tcti_target_completion_validate_feature_field_domains(
+		    orlix_tcti_feature_artifact_canonical(),
+		    orlix_tcti_feature_field_domain_binding_artifact_canonical(), result))
+		status = -1;
+	if (orlix_tcti_target_completion_validate_runtime_capability_cohorts(runtime,
+								 result))
+		status = -1;
+	validate_source_feature_domain(source, source_count, feature_artifact,
+			       instruction_artifact, result, obligations);
+	if (result->invalid_feature_artifact ||
+	    result->invalid_source_condition_rows ||
+	    result->unresolved_feature_applicability_rows)
+		status = -1;
+	return status;
+}
+
+int orlix_tcti_target_completion_audit_with_obligations(
+	struct orlix_tcti_target_completion_result *result,
+	struct orlix_tcti_target_completion_obligation *obligations,
+	size_t obligation_count)
+{
+	if (!result || (obligations &&
+			obligation_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) ||
+		(!obligations && obligation_count))
+		return -1;
+	return orlix_tcti_target_completion_audit_with_inputs_for_test(
+		NULL, result, obligations, obligation_count);
+}
+
+int orlix_tcti_target_completion_audit_with_inputs_for_test(
+	const struct orlix_tcti_target_completion_audit_inputs_for_test *inputs,
+	struct orlix_tcti_target_completion_result *result,
+	struct orlix_tcti_target_completion_obligation *obligations,
+	size_t obligation_count)
+{
+	struct orlix_tcti_target_completion_audit_inputs_for_test canonical_inputs;
+	const struct orlix_tcti_target_completion_audit_inputs_for_test *effective =
+		inputs;
+	struct orlix_tcti_target_completion_obligation *staging;
+	int status;
+	size_t registry_count;
+
+	if (!result || (obligations &&
+			obligation_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) ||
+		(!obligations && obligation_count))
+		return -1;
+	if (!effective) {
+		canonical_inputs =
+			(struct orlix_tcti_target_completion_audit_inputs_for_test) {
+				.source = source_rows,
+				.source_count = sizeof(source_rows) / sizeof(source_rows[0]),
+				.classification = classification_rows,
+				.classification_count = sizeof(classification_rows) /
+					sizeof(classification_rows[0]),
+				.registry = orlix_tcti_target_proof_registry_entries(&registry_count),
+				.registry_count = registry_count,
+			};
+		effective = &canonical_inputs;
+	}
+	if (!obligations)
+		return completion_audit_internal(effective, result, NULL);
+	staging = calloc(ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS, sizeof(*staging));
+	if (!staging)
+		return -1;
+	status = completion_audit_internal(effective, result, staging);
+	/* Completion blockers are expected. Malformed dependencies are not. */
+	if (completion_projection_dependencies_valid(result))
+		memcpy(obligations, staging,
+		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS * sizeof(*staging));
+	free(staging);
+	return status;
+}

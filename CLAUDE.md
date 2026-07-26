@@ -12,6 +12,8 @@ OrlixKernel is Linux. It does not own shell behavior, libc behavior, package man
 
 Apps consume `OrlixOS` for the delivered OS session and payload surface. Do not recreate a separate `OrlixKit` module or move OS delivery into `OrlixTerminal` or `OrlixHostAdapter`.
 
+The canonical product layers are `OrlixOS`, `OrlixKernel`, `OrlixMLibC`, `OrlixCoreUtils`, `OrlixMachine`, `Containers`, `Herdr`, `OrlixTCTI`, and `OrlixHostAdapter`. Use these names in source, project configuration, tests, and harness guidance. Do not introduce aliases or parallel facades for them.
+
 ## First Reads
 
 - Knowledge index: `docs/index.md`
@@ -36,7 +38,13 @@ Durable Orlix Linux port inputs live under:
 
 `OrlixMLibC/Sources` owns OrlixMLibC sysdeps, configs, and patches. OrlixMLibC consumes Linux UAPI through `headers_install` for upstream `ARCH=arm64` and calls Linux-shaped syscalls.
 
-`OrlixOS` is the Kit: it owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API. It must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, or terminal UI rendering.
+`OrlixOS` is the only public Kit/framework and the app-facing product boundary. `OrlixKernel`, `OrlixMLibC`, and `OrlixCoreUtils` are private implementation products behind that boundary. Do not expose them as parallel app APIs.
+
+`OrlixOS` owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API. `OrlixMachine` owns Linux machine and session composition behind that API. `Containers` owns container lifecycle and integration with a machine. These layers must not absorb kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, or terminal UI topology.
+
+Herdr is authoritative for the terminal hierarchy: Session, Workspace, Tab, and Pane, including focus and topology. The native app presents that hierarchy; it does not maintain a parallel terminal model. `OrlixOS`, `OrlixMachine`, and `Containers` provide session targets to Herdr-owned panes without taking ownership of terminal topology.
+
+`OrlixTCTI` owns guest instruction translation and execution beneath Linux. It does not own Linux process, syscall, signal, fault, scheduling, or filesystem semantics. `OrlixHostAdapter` owns private Apple and Darwin execution mechanics used by the lower layers. It must not decode guest instructions, own Linux policy, expose public Linux ABI, or become an app-facing runtime facade.
 
 ## Generated Trees
 
@@ -70,10 +78,10 @@ Use Codex-native surfaces deliberately:
 `rtk` only shrinks command output. Harness rules and hooks must treat `rtk <command>` as equivalent to `<command>` for approval and block decisions.
 
 Repository lifecycle hooks enforce only repo-wide workflow invariants. They must
-not select, authorize, or validate TCTI work, release readiness, physical-device
-work, or machine-specific Xcode storage. TCTI kernel correctness is validated by
-`make tcti-kernel-tests` through KUnit and Linux kselftest execution inside the
-app-hosted TCTI kernel.
+not select, authorize, or validate OrlixTCTI work, release readiness,
+physical-device work, or machine-specific Xcode storage. OrlixTCTI kernel
+correctness is validated by `make orlix-tcti-kernel-tests` through KUnit and
+Linux kselftest execution inside the app-hosted OrlixTCTI kernel.
 
 ## Proof Rules
 

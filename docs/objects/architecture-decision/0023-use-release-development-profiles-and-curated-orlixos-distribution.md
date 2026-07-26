@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-26
 status: accepted
 external_id: "ADR-0023"
 summary: "Durable Orlix architecture decision ADR 0023."
@@ -28,7 +28,7 @@ Accepted
 
 Orlix is intended for App Store distribution. Naming the normal product profile `appstore` created the wrong distinction: every shippable Orlix build must respect App Store constraints, while the real engineering split is between release behavior and development diagnostics.
 
-The package proof ladder also risked reading as a sequence of arbitrary package experiments. Orlix needs a delivered OS Kit that defines curated userspace content, package trust, storage roles, update channels, payload metadata, and the app-facing Linux session surface.
+The package proof ladder also risked reading as a sequence of arbitrary package experiments. Orlix needs a delivered public SDK that defines curated userspace content, package trust, storage roles, update channels, distribution-resource ownership, and the app-facing Linux session surface.
 
 Root storage has more than one valid Linux-shaped mode. Virtio block plus ext4 and OverlayFS is the writable-root mode, but immutable roots and initramfs-only proof roots are also valid when selected intentionally.
 
@@ -41,11 +41,11 @@ Orlix supports exactly two product profiles:
 
 The profiles must remain userspace ABI invariant. Development may add diagnostics, assertions, tracing, and test knobs, but it must not expose a different Linux ABI, package ABI, device shape, or userspace contract.
 
-OrlixOS is the Kit. Release builds bundle curated executable userspace content as signed `OrlixOS` framework resources and update that content through app releases first. Apps consume `OrlixOS` for the delivered Linux session and payload surface; they must not depend on a separate `OrlixKit` module or make `Orlix` own OS delivery. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
+`OrlixOS.xcframework`, identified by `com.rudironsoni.orlix.os`, is the sole public SDK. Release builds bundle curated executable userspace content directly as signed OrlixOS framework resources and update that content through app releases first. Apps consume OrlixOS for `OrlixMachine` sessions and `OrlixOS.Containers`; they must not depend on a separate delivery module or make `Orlix` own OS delivery. Downloaded binary package repositories are deferred until a curated, signed, profile-approved channel with App Store-safe disclosure and policy checks is explicitly designed and reviewed.
 
-`OrlixOS` owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API. It may wrap the bootloader-shaped entrypoint as a Linux session. It must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, terminal UI rendering, shell behavior, or Linux test-result interpretation.
+`OrlixOS` owns curated distribution policy, package/rootfs assembly, framework-owned distribution resources, `OrlixMachine`, and `OrlixOS.Containers`. It may wrap the bootloader-shaped entrypoint as a Linux session. It must not own kernel semantics, libc semantics, syscall ABI, private iOS host mechanics, terminal UI rendering, shell behavior, or Linux test-result interpretation.
 
-`OrlixOS` resolves its payload bundle from target/project metadata and registers the resolved private payload root with `OrlixHostAdapter` before boot. Runtime code must not hardcode product bundle identifiers or resource names that belong in the project schema or target Info.plist metadata.
+`OrlixOS` resolves curated distribution resources from its own framework. It registers the private resolved resource root with `OrlixHostAdapter` before boot. There is no separate payload bundle, payload target, or target-metadata-selected payload identity.
 
 The package proof ladder remains ordered, but its meaning is distribution compatibility:
 

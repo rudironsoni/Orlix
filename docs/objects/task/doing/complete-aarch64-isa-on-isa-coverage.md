@@ -3,16 +3,16 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-25
+updated: 2026-07-26
 status: doing
-summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through Orlix TCTI."
+summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 blocks:
   - "[Complete the pinned simulator TCTI ladder](complete-pinned-simulator-tcti-ladder.md)"
   - "[Promote TCTI as the product default](../todo/promote-tcti-as-product-default.md)"
 targets:
-  - "[TCTI](../../software-component/tcti.md)"
+  - "[OrlixTCTI](../../software-component/orlixtcti.md)"
   - "[OrlixHostAdapter](../../software-component/orlixhostadapter.md)"
 derived_from:
   - "[TCTI reference review](../../../sources/tcti/reference-review.md)"

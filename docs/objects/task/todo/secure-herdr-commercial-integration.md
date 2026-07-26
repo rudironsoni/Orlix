@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - native-app-foundation
-updated: 2026-07-15
+updated: 2026-07-26
 status: todo
 summary: "Secure the commercial and maintainer approvals required to integrate Herdr as the terminal platform."
 task_of:
@@ -14,4 +14,4 @@ blocks:
 
 # Secure Herdr commercial integration
 
-Confirm the commercial license, maintainer approval for an external Orlix pane backend, and App Review feasibility before product integration is promoted. This task records required coordination and evidence. It does not grant permission to perform external commercial or maintainer actions.
+Confirm the commercial license, access to the currently unavailable commercial Herdr source, maintainer approval for an external Orlix Pane backend, and App Review feasibility before product integration is promoted. This unfinished task records required coordination and evidence. It does not grant permission to perform external commercial or maintainer actions.

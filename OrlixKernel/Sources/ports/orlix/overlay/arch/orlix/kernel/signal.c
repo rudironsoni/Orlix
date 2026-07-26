@@ -12,7 +12,7 @@
 #include <asm/ptrace.h>
 #include <asm/signal.h>
 #include <asm/syscall.h>
-#include <asm/tcti.h>
+#include <asm/orlix_tcti.h>
 #include <asm/ucontext.h>
 #include <asm/unistd.h>
 
@@ -139,7 +139,7 @@ static int setup_rt_frame(int usig, struct ksignal *ksig, sigset_t *set,
 	return orlix_valid_user_regs(regs) ? 0 : -EINVAL;
 }
 
-void tcti_prepare_signal_delivery(void)
+void orlix_tcti_prepare_signal_delivery(void)
 {
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
@@ -156,7 +156,7 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	sigset_t *oldset = sigmask_to_save();
 	int ret;
 
-	tcti_prepare_signal_delivery();
+	orlix_tcti_prepare_signal_delivery();
 	rseq_signal_deliver(ksig, regs);
 	ret = setup_rt_frame(ksig->sig, ksig, oldset, regs);
 	signal_setup_done(ret, ksig, 0);

@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - oci, docker
-updated: 2026-07-15
+updated: 2026-07-26
 status: todo
 summary: "Prove Docker engine-facing behavior after the OCI image and runtime boundaries pass."
 task_of:
@@ -16,4 +16,4 @@ blocks:
 
 # Prove Docker engine compatibility
 
-Exercise the engine-facing contract accepted by [ADR 0028](../../architecture-decision/0028-provide-full-docker-engine-compatibility-through-orlixos.md). Image import or an incomplete runtime lifecycle cannot satisfy this task.
+Exercise the complete Docker Engine and Compose contract accepted by [ADR 0028](../../architecture-decision/0028-provide-full-docker-engine-compatibility-through-orlixos.md) through `OrlixOS.Containers`. Image import, the public namespace, or an incomplete runtime lifecycle cannot satisfy this unfinished task.
