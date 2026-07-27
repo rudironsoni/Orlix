@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "target_arm_xml_package.h"
+
 /* This is source availability only. It is never semantic provenance. */
 enum orlix_tcti_target_asl_availability_error {
 	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK = 0,
@@ -15,7 +17,8 @@ enum orlix_tcti_target_asl_availability_error {
 };
 
 enum orlix_tcti_target_asl_availability_error
-orlix_tcti_target_asl_availability_emit(const char *source, size_t length,
-				  FILE *output);
+orlix_tcti_target_asl_availability_emit(
+	const char *source, size_t length,
+	const struct orlix_tcti_arm_xml_package *package, FILE *output);
 
 #endif /* ORLIX_TCTI_TARGET_ASL_AVAILABILITY_H */

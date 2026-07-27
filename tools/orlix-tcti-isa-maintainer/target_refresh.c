@@ -128,6 +128,14 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 		       ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256) ||
 	    count_token(asl_availability,
 			"ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(") != 4350U ||
+	    count_token(asl_availability,
+			"ORLIX_TCTI_A64_ASL_XML_ROW(") != 4350U ||
+	    count_token(asl_availability,
+			"ORLIX_TCTI_A64_ASL_XML_SEMANTICS_PRESENT") != 4332U ||
+	    count_token(asl_availability,
+			"ORLIX_TCTI_A64_ASL_XML_ENCODING_ABSENT") != 18U ||
+	    count_token(asl_availability,
+			"ORLIX_TCTI_A64_ASL_XML_SEMANTICS_INCOMPLETE") != 0U ||
 	    !has_token(instruction_artifact,
 		       "ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_SOURCE_SHA256 \"") ||
 	    !has_token(instruction_artifact,
@@ -232,6 +240,7 @@ const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_
 	case ORLIX_TCTI_TARGET_REFRESH_SOURCE_IO: return "source I/O failure";
 	case ORLIX_TCTI_TARGET_REFRESH_SOURCE_LIMIT: return "source exceeds refresh limit";
 	case ORLIX_TCTI_TARGET_REFRESH_SOURCE_IDENTITY: return "source SHA-256 does not match pinned Arm release";
+	case ORLIX_TCTI_TARGET_REFRESH_ARM_XML_PACKAGE: return "official Arm A64 XML package validation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_PARSE: return "injected parse failure";
 	case ORLIX_TCTI_TARGET_REFRESH_VALIDATION: return "injected cross-artifact validation failure";
 	case ORLIX_TCTI_TARGET_REFRESH_MANIFEST: return "manifest generation failed";
@@ -331,6 +340,7 @@ static int emit_manifest(const struct source_bytes *source,
 }
 
 static int emit_asl_availability(const struct source_bytes *source,
+				 const struct orlix_tcti_arm_xml_package *package,
 				 struct artifact_bytes *artifact)
 {
 	FILE *output = tmpfile();
@@ -339,7 +349,7 @@ static int emit_asl_availability(const struct source_bytes *source,
 	if (!output)
 		return -1;
 	result = orlix_tcti_target_asl_availability_emit(source->data, source->length,
-			output) == ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK &&
+			package, output) == ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK &&
 		!capture(output, artifact) ? 0 : -1;
 	fclose(output);
 	return result;
@@ -447,6 +457,7 @@ static int emit_system_accessors(const struct source_bytes *source,
 int orlix_tcti_target_refresh_with_fault(
 	int canonical_root_fd, const char *instructions_path,
 	const char *features_path, const char *registers_path,
+	const char *arm_xml_archive_path, const char *arm_xml_release_path,
 	const struct orlix_tcti_target_refresh_fault *fault,
 	struct orlix_tcti_target_refresh_result *result)
 {
@@ -463,6 +474,8 @@ int orlix_tcti_target_refresh_with_fault(
 		.generator = ORLIX_TCTI_TARGET_REFRESH_GENERATOR,
 	};
 	struct orlix_tcti_target_artifact_publish_result publish_result = { 0 };
+	struct orlix_tcti_arm_xml_package arm_xml_package = { 0 };
+	enum orlix_tcti_arm_xml_package_error arm_xml_error;
 	char instruction_digest[65];
 	char feature_digest[65];
 	char register_digest[65];
@@ -471,7 +484,7 @@ int orlix_tcti_target_refresh_with_fault(
 	if (result)
 		*result = (struct orlix_tcti_target_refresh_result) { 0 };
 	if (canonical_root_fd < 0 || !instructions_path || !features_path ||
-	    !registers_path) {
+	    !registers_path || !arm_xml_archive_path || !arm_xml_release_path) {
 		set_result(result, ORLIX_TCTI_TARGET_REFRESH_INVALID_ARGUMENT);
 		errno = EINVAL;
 		return -1;
@@ -497,6 +510,15 @@ int orlix_tcti_target_refresh_with_fault(
 	provenance.instructions_sha256 = instruction_digest;
 	provenance.features_sha256 = feature_digest;
 	provenance.registers_sha256 = register_digest;
+	arm_xml_error = orlix_tcti_arm_xml_package_validate(
+		arm_xml_archive_path, arm_xml_release_path, &arm_xml_package);
+	if (result)
+		result->arm_xml_error = arm_xml_error;
+	if (arm_xml_error != ORLIX_TCTI_ARM_XML_PACKAGE_OK) {
+		error = ORLIX_TCTI_TARGET_REFRESH_ARM_XML_PACKAGE;
+		errno = EINVAL;
+		goto out;
+	}
 	if (fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE) {
 		error = ORLIX_TCTI_TARGET_REFRESH_PARSE;
 		errno = EIO;
@@ -507,7 +529,8 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_MANIFEST;
 		goto out;
 	}
-	if (emit_asl_availability(&instructions, &asl_availability)) {
+	if (emit_asl_availability(&instructions, &arm_xml_package,
+				  &asl_availability)) {
 		error = ORLIX_TCTI_TARGET_REFRESH_ASL_AVAILABILITY;
 		goto out;
 	}
@@ -615,6 +638,7 @@ int orlix_tcti_target_refresh_with_fault(
 	 * after publication can manufacture a failure.
 	 */
 out:
+	orlix_tcti_arm_xml_package_destroy(&arm_xml_package);
 	free(instructions.data);
 	free(features.data);
 	free(registers.data);
@@ -633,11 +657,12 @@ out:
 int orlix_tcti_target_refresh(
 	int canonical_root_fd, const char *instructions_path,
 	const char *features_path, const char *registers_path,
+	const char *arm_xml_archive_path, const char *arm_xml_release_path,
 	struct orlix_tcti_target_refresh_result *result)
 {
 	return orlix_tcti_target_refresh_with_fault(
 		canonical_root_fd, instructions_path, features_path, registers_path,
-		NULL, result);
+		arm_xml_archive_path, arm_xml_release_path, NULL, result);
 }
 
 #ifndef ORLIX_TCTI_TARGET_REFRESH_NO_MAIN
@@ -647,9 +672,9 @@ int main(int argc, char **argv)
 	int canonical_fd;
 	int status;
 
-	if (argc != 5) {
+	if (argc != 7) {
 		fprintf(stderr,
-			"usage: %s CANONICAL_DIR Instructions.json Features.json Registers.json\n",
+			"usage: %s CANONICAL_DIR Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
 			argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -660,11 +685,15 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	status = orlix_tcti_target_refresh(canonical_fd, argv[2], argv[3],
-					  argv[4], &result);
+					   argv[4], argv[5], argv[6], &result);
 	close(canonical_fd);
 	if (status) {
 		fprintf(stderr, "OrlixTCTI ISA refresh: %s",
 			orlix_tcti_target_refresh_error_name(result.error));
+		if (result.arm_xml_error != ORLIX_TCTI_ARM_XML_PACKAGE_OK)
+			fprintf(stderr, ": %s",
+				orlix_tcti_arm_xml_package_error_name(
+					result.arm_xml_error));
 		if (result.publish.error != ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK)
 			fprintf(stderr, ": %s",
 				orlix_tcti_target_artifact_publish_error_name(

@@ -182,22 +182,31 @@ static int seed_prior(int canonical_fd,
 }
 
 static int full_refresh_is_authoritative_and_idempotent(
-	const char *instructions, const char *features, const char *registers)
+	const char *instructions, const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
 {
 	static const char expected_generation[] =
-		"aarchmrs-2026-06-v2-123b974fba17100700c15cba5b03c11e92677e0cdd5f5de46c30fe5f67f42d99";
+		"aarchmrs-2026-06-v2-6f9d82e8bcd3aa2471d83caae4dffdd3a43983815aec0843a5581ed05e11a877";
 	char *root = make_root();
 	char first[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	char second[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	struct orlix_tcti_target_refresh_result result;
 	struct orlix_tcti_target_artifact_verify_result verify_result;
 	int fd;
+	int refresh_status;
 
 	EXPECT(root);
 	fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	EXPECT(fd >= 0);
-	EXPECT(!orlix_tcti_target_refresh(fd, instructions, features, registers,
-					  &result));
+	refresh_status = orlix_tcti_target_refresh(fd, instructions, features,
+		registers, arm_xml_archive, arm_xml_release, &result);
+	if (refresh_status)
+		fprintf(stderr, "refresh failed: %s / %s / %s\n",
+			orlix_tcti_target_refresh_error_name(result.error),
+			orlix_tcti_arm_xml_package_error_name(result.arm_xml_error),
+			orlix_tcti_target_artifact_publish_error_name(
+				result.publish.error));
+	EXPECT(!refresh_status);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_OK);
 	EXPECT(!strcmp(result.publish.generation, expected_generation));
 	EXPECT(!selected_generation(root, first));
@@ -205,6 +214,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 	EXPECT(!orlix_tcti_target_artifact_verify(
 		fd, "generations", &pinned_provenance, &verify_result));
 	EXPECT(!orlix_tcti_target_refresh(fd, instructions, features, registers,
+					  arm_xml_archive, arm_xml_release,
 					  &result));
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_OK);
 	EXPECT(!selected_generation(root, second));
@@ -219,7 +229,8 @@ static int full_refresh_is_authoritative_and_idempotent(
 static int injected_failure_preserves_prior(
 	enum orlix_tcti_target_refresh_fault_stage refresh_stage,
 	enum orlix_tcti_target_artifact_publish_stage publish_stage,
-	const char *instructions, const char *features, const char *registers)
+	const char *instructions, const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
 {
 	char *root = make_root();
 	char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -253,7 +264,8 @@ static int injected_failure_preserves_prior(
 	if (!before_bytes)
 		goto out;
 	if (orlix_tcti_target_refresh_with_fault(
-		    fd, instructions, features, registers, &fault, &result) >= 0)
+		    fd, instructions, features, registers, arm_xml_archive,
+		    arm_xml_release, &fault, &result) >= 0)
 		goto out;
 	if ((refresh_stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE &&
 	     result.error != ORLIX_TCTI_TARGET_REFRESH_PARSE) ||
@@ -282,14 +294,15 @@ out:
 }
 
 static int all_injected_failures_are_atomic(
-	const char *instructions, const char *features, const char *registers)
+	const char *instructions, const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
 {
 	size_t artifact;
 
 	EXPECT(!injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, instructions, features,
-		registers));
+		registers, arm_xml_archive, arm_xml_release));
 	for (artifact = 0; artifact < 8U; artifact++) {
 		char *root = make_root();
 		char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -308,7 +321,8 @@ static int all_injected_failures_are_atomic(
 		EXPECT(!seed_prior(fd, &prior));
 		EXPECT(!selected_generation(root, before));
 		EXPECT(orlix_tcti_target_refresh_with_fault(
-			fd, instructions, features, registers, &fault, &result) < 0);
+			fd, instructions, features, registers, arm_xml_archive,
+			arm_xml_release, &fault, &result) < 0);
 		EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_VALIDATION);
 		EXPECT(!selected_generation(root, after));
 		EXPECT(!strcmp(before, after));
@@ -320,12 +334,13 @@ static int all_injected_failures_are_atomic(
 	EXPECT(!injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PUBLICATION,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC, instructions,
-		features, registers));
+		features, registers, arm_xml_archive, arm_xml_release));
 	return 0;
 }
 
 static int wrong_source_identity_does_not_publish(
-	const char *features, const char *registers)
+	const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
 {
 	char *root = make_root();
 	char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -340,6 +355,7 @@ static int wrong_source_identity_does_not_publish(
 	EXPECT(!seed_prior(fd, &prior));
 	EXPECT(!selected_generation(root, before));
 	EXPECT(orlix_tcti_target_refresh(fd, "/dev/null", features, registers,
+					 arm_xml_archive, arm_xml_release,
 					 &result) < 0);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_SOURCE_IDENTITY);
 	EXPECT(!selected_generation(root, after));
@@ -353,16 +369,18 @@ static int wrong_source_identity_does_not_publish(
 
 int main(int argc, char **argv)
 {
-	if (argc != 4) {
+	if (argc != 6) {
 		fprintf(stderr,
-			"usage: %s Instructions.json Features.json Registers.json\n",
+			"usage: %s Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
 			argv[0]);
 		return 2;
 	}
 	if (full_refresh_is_authoritative_and_idempotent(
-		    argv[1], argv[2], argv[3]) ||
-	    all_injected_failures_are_atomic(argv[1], argv[2], argv[3]) ||
-	    wrong_source_identity_does_not_publish(argv[2], argv[3]))
+		    argv[1], argv[2], argv[3], argv[4], argv[5]) ||
+	    all_injected_failures_are_atomic(argv[1], argv[2], argv[3],
+					     argv[4], argv[5]) ||
+	    wrong_source_identity_does_not_publish(argv[2], argv[3], argv[4],
+						   argv[5]))
 		return 1;
 	puts("PASS target refresh authoritative transaction");
 	return 0;
