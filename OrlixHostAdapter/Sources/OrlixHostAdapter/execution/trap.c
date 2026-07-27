@@ -237,8 +237,9 @@ static bool OrlixHostUserTrapRepairUserTlsLoad(mcontext_t machine_context,
 
     if (!OrlixHostUserTrap.tls_repair_handler ||
         !OrlixHostUserTrap.active_user_tls ||
-        user_pc < OrlixHostUserTrap.user_base + sizeof(uint32_t) ||
-        user_pc >= OrlixHostUserTrap.user_limit) {
+        user_pc < OrlixHostUserTrap.user_base ||
+        user_pc >= OrlixHostUserTrap.user_limit ||
+        OrlixHostUserTrap.user_limit - user_pc < sizeof(uint32_t)) {
         return false;
     }
 
@@ -257,19 +258,6 @@ static bool OrlixHostUserTrapRepairUserTlsLoad(mcontext_t machine_context,
                                            &request.regs[reg])) {
             return false;
         }
-    }
-
-    for (unsigned int offset = 1;
-         offset <= ORLIX_HOST_USER_TLS_REPAIR_HISTORY_COUNT;
-         offset++) {
-        unsigned long instruction_address = user_pc - offset * sizeof(uint32_t);
-
-        if (instruction_address < OrlixHostUserTrap.user_base) {
-            break;
-        }
-
-        request.instruction_history[request.instruction_history_count++] =
-            *(const uint32_t *)instruction_address;
     }
 
     if (!OrlixHostUserTrap.tls_repair_handler(&request, &decision) ||

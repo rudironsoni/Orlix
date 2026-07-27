@@ -15,8 +15,6 @@
 #define ORLIX_HOST_USER_FRAME_SYSCALL_RETURN	(1UL << 2)
 
 #define ORLIX_HOST_USER_TRAP_TLS_RESUME_OFFSET	16UL
-#define ORLIX_HOST_USER_TLS_REPAIR_HISTORY_COUNT	32U
-
 #define ORLIX_HOST_AARCH64_SVC0_INSN		0xd4000001UL
 #define ORLIX_HOST_AARCH64_SYSCALL_BRK_INSN	0xd4209e80UL
 #define ORLIX_HOST_AARCH64_MSR_TPIDR_EL0	0xd51bd040UL
@@ -47,8 +45,6 @@ struct orlix_host_user_tls_repair_request {
 	unsigned long active_user_tls;
 	unsigned long regs[31];
 	unsigned int faulting_instruction;
-	unsigned int instruction_history[ORLIX_HOST_USER_TLS_REPAIR_HISTORY_COUNT];
-	unsigned int instruction_history_count;
 };
 
 struct orlix_host_user_tls_repair_decision {

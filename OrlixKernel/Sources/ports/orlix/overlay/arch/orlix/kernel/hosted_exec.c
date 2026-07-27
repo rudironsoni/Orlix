@@ -17,7 +17,7 @@
 #include <linux/time64.h>
 #include <linux/uaccess.h>
 #include <asm/hosted_exec.h>
-#include <asm/hosted_tls_repair.h>
+#include "../hosted_exec/orlix_tcti/tls_repair.h"
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
@@ -614,7 +614,7 @@ void orlix_hosted_capture_host_context(void)
 					 &orlix_hosted_active_user_tls,
 					 &orlix_hosted_user_active,
 					 orlix_hosted_handle_kernel_fault,
-					 orlix_hosted_decide_user_tls_repair,
+					 orlix_tcti_decide_user_tls_repair,
 					 orlix_hosted_user_trap_entry))
 		panic("Orlix: failed to install hosted user trap transport\n");
 }

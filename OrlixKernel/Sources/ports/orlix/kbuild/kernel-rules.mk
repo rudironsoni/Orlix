@@ -124,6 +124,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_decode.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/decode_aarch64.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tls_repair.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/gadget_program.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/block_cache.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tlb.c \
@@ -1064,6 +1065,8 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_exclusive_resume_production_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation_production_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_tls_repair_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_shifted_register_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_variable_shift_source_bound_test.c \
@@ -1827,7 +1830,7 @@ __kunit: __prepare-kbuild
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_tls_repair.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_tls_repair_test.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kernel-archive: __prepare-kbuild

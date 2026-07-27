@@ -813,9 +813,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 					orlix_tcti_fault_access_for_decoded(&block_decoded);
 				block_instruction = block_decoded.instruction;
 			}
-			ret = orlix_tcti_execute_gadget_program_authorized(
+			ret = orlix_tcti_execute_gadget_program_authorized_observed(
 				mm, regs, block->program, block->program_words,
-				&fault_address, block->code_generation);
+				&fault_address, block->code_generation,
+				&result.entry_valid, &result.entry_pc,
+				&result.entry_instruction);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=1\n",
 					task->comm, task_pid_nr(task),
@@ -887,6 +889,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 		if (code_generation != orlix_tcti_code_generation(mm))
 			continue;
 		if (ret == -EINTR) {
+			if (!result.entry_valid) {
+				result.entry_valid = true;
+				result.entry_pc = regs->pc;
+				result.entry_instruction = instruction;
+			}
 			if (first_exit_class == ORLIX_TCTI_DECODE_SVC) {
 				result.reason = ORLIX_TCTI_EXIT_SYSCALL;
 				result.status = 0;
@@ -938,9 +945,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 
 			orlix_tcti_hot_blocks_remember(hot_blocks, &hot_block_cursor,
 						 block);
-			ret = orlix_tcti_execute_gadget_program_authorized(
+			ret = orlix_tcti_execute_gadget_program_authorized_observed(
 				mm, regs, block->program, block->program_words,
-				&fault_address, block->code_generation);
+				&fault_address, block->code_generation,
+				&result.entry_valid, &result.entry_pc,
+				&result.entry_instruction);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
@@ -954,9 +963,10 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
 
-			ret = orlix_tcti_execute_gadget_program_authorized(
+			ret = orlix_tcti_execute_gadget_program_authorized_observed(
 				mm, regs, program, word_count, &fault_address,
-				code_generation);
+				code_generation, &result.entry_valid,
+				&result.entry_pc, &result.entry_instruction);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%zu count=%u cached=0\n",
 					task->comm, task_pid_nr(task),

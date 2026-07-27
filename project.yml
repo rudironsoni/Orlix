@@ -130,7 +130,7 @@ targets:
           # or generated Kbuild include roots to Xcode targets.
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/include
           - $(SRCROOT)/OrlixHostAdapter/Sources
-        OTHER_LDFLAGS:
+        OTHER_LIBTOOLFLAGS:
           - $(inherited)
           - $(TARGET_TEMP_DIR)/OrlixKernel.a
         ARCHS[sdk=iphonesimulator*]: arm64
@@ -197,6 +197,7 @@ targets:
       - path: OrlixOS/Sources/Session
     dependencies:
       - target: OrlixKernel
+        link: true
       - target: OrlixMLibC
         link: true
       - target: OrlixCoreUtils

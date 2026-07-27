@@ -112,6 +112,28 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTINativeObservationDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-native-observation " +
+            "orlix.kselftest=boot_profile_contract",
+        expectedKUnitSuite: "orlix-tcti-native-observation",
+        hostDirectoryFixture: true
+    )
+
+    static let kernelTCTINativeObservationProductionDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-native-observation-production " +
+            "orlix.kselftest=boot_profile_contract",
+        expectedKUnitSuite: "orlix-tcti-native-observation-production",
+        hostDirectoryFixture: true
+    )
+
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

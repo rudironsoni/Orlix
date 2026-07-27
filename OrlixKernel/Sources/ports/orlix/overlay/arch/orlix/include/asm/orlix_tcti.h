@@ -83,6 +83,9 @@ struct orlix_tcti_result {
 	enum orlix_tcti_access fault_access;
 	unsigned long pc;
 	u32 instruction;
+	bool entry_valid;
+	unsigned long entry_pc;
+	u32 entry_instruction;
 };
 
 struct orlix_tcti_user_page {

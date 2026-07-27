@@ -44,5 +44,14 @@ int orlix_tcti_execute_gadget_program_authorized(
 	struct mm_struct *mm, struct pt_regs *regs,
 	const struct orlix_tcti_gadget_word *program, size_t word_count,
 	unsigned long *fault_address, u64 code_generation);
+int orlix_tcti_execute_gadget_program_authorized_observed(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
+	unsigned long *entry_pc, u32 *entry_instruction);
+#ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
+void orlix_tcti_gadget_program_set_pre_authorized_test_hook(
+	void (*hook)(void *), void *data);
+#endif
 
 #endif /* ORLIX_TCTI_GADGET_PROGRAM_H */
