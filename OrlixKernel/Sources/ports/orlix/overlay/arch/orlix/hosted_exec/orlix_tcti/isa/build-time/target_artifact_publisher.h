@@ -27,10 +27,28 @@ struct orlix_tcti_target_artifact {
 struct orlix_tcti_target_artifact_provenance {
 	const char *schema;
 	const char *generator;
+	const char *source_architecture;
+	const char *source_build;
+	const char *source_release;
+	const char *source_schema;
+	const char *source_timestamp;
+	size_t instructions_byte_length;
 	const char *instructions_sha256;
+	size_t features_byte_length;
 	const char *features_sha256;
+	size_t registers_byte_length;
 	const char *registers_sha256;
+	const char *reconciliation_identity;
 };
+
+/*
+ * Compute the identity which reconciles all three pinned Arm source records.
+ * The identity deliberately excludes generator and artifact data: it names
+ * the immutable source bundle shared by every artifact in one generation.
+ */
+int orlix_tcti_target_artifact_reconciliation_identity(
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char digest[65]);
 
 /* Compute the standard SHA-256 used by immutable generation manifests. */
 void orlix_tcti_target_artifact_sha256(const void *data, size_t length,

@@ -88,16 +88,46 @@ static bool valid_sha256(const char *text)
 	return true;
 }
 
+static bool valid_source_text(const char *text)
+{
+	size_t index;
+
+	if (!text || !*text || strlen(text) > ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME)
+		return false;
+	for (index = 0; text[index]; index++) {
+		unsigned char value = (unsigned char)text[index];
+
+		if (value < 0x20U || value > 0x7eU || value == '\n' || value == '\r' ||
+		    value == '=')
+			return false;
+	}
+	return true;
+}
+
 static bool valid_provenance(
 	const struct orlix_tcti_target_artifact_provenance *provenance)
 {
+	char reconciliation_identity[65];
+
 	return provenance &&
 		valid_component(provenance->schema, ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME) &&
 		valid_component(provenance->generator,
 				ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME) &&
+		valid_source_text(provenance->source_architecture) &&
+		valid_source_text(provenance->source_build) &&
+		valid_source_text(provenance->source_release) &&
+		valid_source_text(provenance->source_schema) &&
+		valid_source_text(provenance->source_timestamp) &&
+		provenance->instructions_byte_length &&
 		valid_sha256(provenance->instructions_sha256) &&
+		provenance->features_byte_length &&
 		valid_sha256(provenance->features_sha256) &&
-		valid_sha256(provenance->registers_sha256);
+		provenance->registers_byte_length &&
+		valid_sha256(provenance->registers_sha256) &&
+		valid_sha256(provenance->reconciliation_identity) &&
+		!orlix_tcti_target_artifact_reconciliation_identity(
+			provenance, reconciliation_identity) &&
+		!strcmp(provenance->reconciliation_identity, reconciliation_identity);
 }
 
 static enum orlix_tcti_target_artifact_publish_error
@@ -430,6 +460,42 @@ static bool line_has_value(const char *line, size_t length,
 		!memcmp(line + prefix_length, expected, expected_length);
 }
 
+static bool line_has_size_value(const char *line, size_t length,
+			      const char *prefix, size_t expected)
+{
+	char value[32];
+	int count = snprintf(value, sizeof(value), "%zu", expected);
+
+	return count > 0 && (size_t)count < sizeof(value) &&
+		line_has_value(line, length, prefix, value);
+}
+
+#define ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX 2048U
+
+static int format_source_binding(
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char binding[ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX])
+{
+	int count = snprintf(binding, ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX,
+		" source_architecture=%s source_build=%s source_release=%s"
+		" source_schema=%s source_timestamp=%s"
+		" instructions_byte_length=%zu instructions_sha256=%s"
+		" features_byte_length=%zu features_sha256=%s"
+		" registers_byte_length=%zu registers_sha256=%s"
+		" reconciliation_identity=%s",
+		provenance->source_architecture, provenance->source_build,
+		provenance->source_release, provenance->source_schema,
+		provenance->source_timestamp, provenance->instructions_byte_length,
+		provenance->instructions_sha256, provenance->features_byte_length,
+		provenance->features_sha256, provenance->registers_byte_length,
+		provenance->registers_sha256,
+		provenance->reconciliation_identity);
+
+	return count > 0 &&
+	       (size_t)count < ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX ?
+		count : -1;
+}
+
 static int parse_size(const char *text, size_t length, size_t *value)
 {
 	size_t index;
@@ -465,14 +531,20 @@ static const char *find_bytes(const char *data, size_t length,
 }
 
 static int parse_artifact_line(const char *line, size_t line_length,
+			       const struct orlix_tcti_target_artifact_provenance *
+				       expected_provenance,
 			       struct verified_artifact *artifact)
 {
 	static const char prefix[] = "artifact=";
 	static const char digest_marker[] = " sha256=";
+	static const char source_marker[] = " source_architecture=";
 	const char *name;
 	const char *name_end;
 	const char *digest;
+	const char *digest_end;
 	const char *length_end;
+	char expected_binding[ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX];
+	int expected_binding_length;
 	size_t name_length;
 	size_t index;
 
@@ -500,7 +572,15 @@ static int parse_artifact_line(const char *line, size_t line_length,
 		       &artifact->length))
 		return -1;
 	digest = length_end + sizeof(digest_marker) - 1;
-	if ((size_t)(line + line_length - digest) != 64)
+	digest_end = find_bytes(digest, line_length - (size_t)(digest - line),
+				source_marker, sizeof(source_marker) - 1);
+	expected_binding_length = format_source_binding(expected_provenance,
+						 expected_binding);
+	if (!digest_end || (size_t)(digest_end - digest) != 64 ||
+	    expected_binding_length < 0 ||
+	    (size_t)(line + line_length - digest_end) !=
+		(size_t)expected_binding_length ||
+	    memcmp(digest_end, expected_binding, (size_t)expected_binding_length))
 		return -1;
 	for (index = 0; index < 64; index++)
 		if (!((digest[index] >= '0' && digest[index] <= '9') ||
@@ -742,7 +822,7 @@ int orlix_tcti_target_artifact_verify(
 		goto manifest_format; \
 } while (0)
 	EXPECT_MANIFEST_LINE(line_is(line, line_length,
-				    "ORLIX_TCTI_TARGET_ARTIFACT_SET_V2"));
+				    "ORLIX_TCTI_TARGET_ARTIFACT_SET_V3"));
 	EXPECT_MANIFEST_LINE(line_has_value(line, line_length, "generation=",
 					   generation));
 	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
@@ -754,16 +834,52 @@ int orlix_tcti_target_artifact_verify(
 			    expected_provenance->generator))
 		goto provenance_mismatch;
 	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "source_architecture=",
+			    expected_provenance->source_architecture))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "source_build=",
+			    expected_provenance->source_build))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "source_release=",
+			    expected_provenance->source_release))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "source_schema=",
+			    expected_provenance->source_schema))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "source_timestamp=",
+			    expected_provenance->source_timestamp))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_size_value(line, line_length, "instructions_byte_length=",
+				expected_provenance->instructions_byte_length))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
 	    !line_has_value(line, line_length, "instructions_sha256=",
 			    expected_provenance->instructions_sha256))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_size_value(line, line_length, "features_byte_length=",
+				expected_provenance->features_byte_length))
 		goto provenance_mismatch;
 	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
 	    !line_has_value(line, line_length, "features_sha256=",
 			    expected_provenance->features_sha256))
 		goto provenance_mismatch;
 	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_size_value(line, line_length, "registers_byte_length=",
+				expected_provenance->registers_byte_length))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
 	    !line_has_value(line, line_length, "registers_sha256=",
 			    expected_provenance->registers_sha256))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "reconciliation_identity=",
+			    expected_provenance->reconciliation_identity))
 		goto provenance_mismatch;
 	artifacts = calloc(ORLIX_TCTI_TARGET_ARTIFACT_MAX_COUNT, sizeof(*artifacts));
 	if (!artifacts) {
@@ -804,6 +920,7 @@ int orlix_tcti_target_artifact_verify(
 			goto out;
 		}
 		if (parse_artifact_line(line, line_length,
+					expected_provenance,
 					&artifacts[artifact_count]))
 			goto manifest_format;
 		if (artifact_count &&
@@ -1088,6 +1205,54 @@ void orlix_tcti_target_artifact_sha256(const void *data, size_t length,
 	digest[64] = '\0';
 }
 
+int orlix_tcti_target_artifact_reconciliation_identity(
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char digest[65])
+{
+	char *buffer = NULL;
+	size_t length = 0;
+	size_t capacity = 0;
+	int result = -1;
+
+	if (!provenance || !digest ||
+	    !valid_source_text(provenance->source_architecture) ||
+	    !valid_source_text(provenance->source_build) ||
+	    !valid_source_text(provenance->source_release) ||
+	    !valid_source_text(provenance->source_schema) ||
+	    !valid_source_text(provenance->source_timestamp) ||
+	    !provenance->instructions_byte_length ||
+	    !valid_sha256(provenance->instructions_sha256) ||
+	    !provenance->features_byte_length ||
+	    !valid_sha256(provenance->features_sha256) ||
+	    !provenance->registers_byte_length ||
+	    !valid_sha256(provenance->registers_sha256)) {
+		errno = EINVAL;
+		return -1;
+	}
+	if (appendf(&buffer, &length, &capacity,
+		    "ORLIX_TCTI_AARCHMRS_THREE_SOURCE_V1\n"
+		    "architecture=%s\nbuild=%s\nrelease=%s\nschema=%s\n"
+		    "timestamp=%s\n"
+		    "instructions=%zu:%s\nfeatures=%zu:%s\nregisters=%zu:%s\n",
+		    provenance->source_architecture, provenance->source_build,
+		    provenance->source_release, provenance->source_schema,
+		    provenance->source_timestamp,
+		    provenance->instructions_byte_length,
+		    provenance->instructions_sha256,
+		    provenance->features_byte_length,
+		    provenance->features_sha256,
+		    provenance->registers_byte_length,
+		    provenance->registers_sha256)) {
+		errno = ENOMEM;
+		goto out;
+	}
+	orlix_tcti_target_artifact_sha256(buffer, length, digest);
+	result = 0;
+out:
+	free(buffer);
+	return result;
+}
+
 static int build_verified_identity(
 	const struct verified_artifact *artifacts, size_t artifact_count,
 	const struct orlix_tcti_target_artifact_provenance *provenance,
@@ -1097,21 +1262,22 @@ static int build_verified_identity(
 	size_t length = 0;
 	size_t capacity = 0;
 	size_t index;
+	char source_binding[ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX];
+
+	if (format_source_binding(provenance, source_binding) < 0)
+		goto fail;
 
 	if (appendf(&buffer, &length, &capacity,
-		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V1\n"
-		    "schema=%s\ngenerator=%s\ninstructions_sha256=%s\n"
-		    "features_sha256=%s\nregisters_sha256=%s\n",
+		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V2\n"
+		    "schema=%s\ngenerator=%s\nreconciliation_identity=%s\n",
 		    provenance->schema, provenance->generator,
-		    provenance->instructions_sha256,
-		    provenance->features_sha256,
-		    provenance->registers_sha256))
+		    provenance->reconciliation_identity))
 		goto fail;
 	for (index = 0; index < artifact_count; index++)
 		if (appendf(&buffer, &length, &capacity,
-			    "artifact=%s %zu sha256=%s\n",
+			    "artifact=%s %zu sha256=%s%s\n",
 			    artifacts[index].name, artifacts[index].length,
-			    artifacts[index].digest))
+			    artifacts[index].digest, source_binding))
 			goto fail;
 	orlix_tcti_target_artifact_sha256(buffer, length, digest);
 	free(buffer);
@@ -1130,15 +1296,16 @@ static int build_identity(
 	size_t length = 0;
 	size_t capacity = 0;
 	size_t index;
+	char source_binding[ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX];
+
+	if (format_source_binding(provenance, source_binding) < 0)
+		goto fail;
 
 	if (appendf(&buffer, &length, &capacity,
-		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V1\n"
-		    "schema=%s\ngenerator=%s\ninstructions_sha256=%s\n"
-		    "features_sha256=%s\nregisters_sha256=%s\n",
+		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V2\n"
+		    "schema=%s\ngenerator=%s\nreconciliation_identity=%s\n",
 		    provenance->schema, provenance->generator,
-		    provenance->instructions_sha256,
-		    provenance->features_sha256,
-		    provenance->registers_sha256))
+		    provenance->reconciliation_identity))
 		goto fail;
 	for (index = 0; index < artifact_count; index++) {
 		char artifact_digest[65];
@@ -1147,9 +1314,9 @@ static int build_identity(
 						 artifacts[index].length,
 						 artifact_digest);
 		if (appendf(&buffer, &length, &capacity,
-			    "artifact=%s %zu sha256=%s\n",
+			    "artifact=%s %zu sha256=%s%s\n",
 			    artifacts[index].name, artifacts[index].length,
-			    artifact_digest))
+			    artifact_digest, source_binding))
 			goto fail;
 	}
 	orlix_tcti_target_artifact_sha256(buffer, length, digest);
@@ -1170,14 +1337,27 @@ static int build_manifest(const char *generation,
 	size_t length = 0;
 	size_t capacity = 0;
 	size_t index;
+	char source_binding[ORLIX_TCTI_TARGET_ARTIFACT_SOURCE_BINDING_MAX];
+
+	if (format_source_binding(provenance, source_binding) < 0)
+		goto fail;
 
 	if (appendf(&buffer, &length, &capacity,
-		    "ORLIX_TCTI_TARGET_ARTIFACT_SET_V2\ngeneration=%s\nschema=%s\n"
-		    "generator=%s\ninstructions_sha256=%s\n"
-		    "features_sha256=%s\nregisters_sha256=%s\n", generation,
-		    provenance->schema, provenance->generator,
-		    provenance->instructions_sha256, provenance->features_sha256,
-		    provenance->registers_sha256))
+		 "ORLIX_TCTI_TARGET_ARTIFACT_SET_V3\ngeneration=%s\nschema=%s\n"
+		 "generator=%s\nsource_architecture=%s\nsource_build=%s\n"
+		 "source_release=%s\nsource_schema=%s\nsource_timestamp=%s\n"
+		 "instructions_byte_length=%zu\ninstructions_sha256=%s\n"
+		 "features_byte_length=%zu\nfeatures_sha256=%s\n"
+		 "registers_byte_length=%zu\nregisters_sha256=%s\n"
+		 "reconciliation_identity=%s\n",
+		 generation, provenance->schema, provenance->generator,
+		 provenance->source_architecture, provenance->source_build,
+		 provenance->source_release, provenance->source_schema,
+		 provenance->source_timestamp, provenance->instructions_byte_length,
+		 provenance->instructions_sha256, provenance->features_byte_length,
+		 provenance->features_sha256, provenance->registers_byte_length,
+		 provenance->registers_sha256,
+		 provenance->reconciliation_identity))
 		goto fail;
 	for (index = 0; index < artifact_count; index++) {
 		char digest[65];
@@ -1185,8 +1365,9 @@ static int build_manifest(const char *generation,
 		orlix_tcti_target_artifact_sha256(artifacts[index].data,
 					     artifacts[index].length, digest);
 		if (appendf(&buffer, &length, &capacity,
-			    "artifact=%s %zu sha256=%s\n", artifacts[index].name,
-			    artifacts[index].length, digest))
+			 "artifact=%s %zu sha256=%s%s\n",
+			 artifacts[index].name, artifacts[index].length, digest,
+			 source_binding))
 			goto fail;
 	}
 	{

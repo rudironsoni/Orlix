@@ -159,14 +159,11 @@ The current typed feature evaluation retains fixed-width values from 1 through
 without conflation or ambiguity. The direct denominator remains 4,350 leaves while the
 supplemental alias graph records 292 instruction aliases and 171 reachable
 operation aliases without using aliases as proof or denominator substitutions.
-The official Arm `ISA_A64_xml_A_profile-2026-06` archive is now a separately
-pinned external semantic-source input. Its validated release binds 4,332 direct
-leaves to semantic sections, records 18 leaves as encoding-absent, and leaves
-zero semantic-availability records incomplete. This is source provenance only:
-the archive is not redistributed, its bundled notice grants no intellectual
-property license, and repository evidence does not establish authorization to
-use it. Legal authorization, canonical artifact publication, implementation,
-and owning proof therefore remain blocking. LSE128 production resume fault
+Canonical V3 artifacts bind every row to architecture, build, release, schema,
+timestamp, exact three-source lengths and digests, and reconciliation identity.
+Normal proof graphs remain JSON-free. Official XML provenance is pinned, but
+legal authorization, semantic implementation, and owning proof remain open.
+LSE128 production resume fault
 matrix expanded fault coverage, but it makes no atomicity or ordering claim.
 Runtime HWCAP and HWCAP2 promotion remains zero.
 

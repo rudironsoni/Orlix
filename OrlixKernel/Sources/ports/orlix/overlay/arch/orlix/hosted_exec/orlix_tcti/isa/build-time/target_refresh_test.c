@@ -31,16 +31,34 @@
 	} \
 } while (0)
 
-static const struct orlix_tcti_target_artifact_provenance pinned_provenance = {
-	.schema = "orlix-tcti-aarchmrs-source-v2",
+static struct orlix_tcti_target_artifact_provenance pinned_provenance = {
+	.schema = "orlix-tcti-aarchmrs-source-v3",
 	.generator = "orlix-tcti-target-refresh",
+	.source_architecture = "vFATAp1-A",
+	.source_build = "818",
+	.source_release = "2026-06_rel",
+	.source_schema = "2.9.5",
+	.source_timestamp = "2026-06-24 17:12:14",
+	.instructions_byte_length = 115441429U,
 	.instructions_sha256 =
 		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe",
+	.features_byte_length = 1243621U,
 	.features_sha256 =
 		"633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187",
+	.registers_byte_length = 96016602U,
 	.registers_sha256 =
 		"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874",
 };
+static char pinned_reconciliation_identity[65];
+
+static int initialize_pinned_provenance(void)
+{
+	if (orlix_tcti_target_artifact_reconciliation_identity(
+		    &pinned_provenance, pinned_reconciliation_identity))
+		return -1;
+	pinned_provenance.reconciliation_identity = pinned_reconciliation_identity;
+	return 0;
+}
 
 static int remove_tree(const char *path)
 {
@@ -165,16 +183,30 @@ static int seed_prior(int canonical_fd,
 		.data = prior_data,
 		.length = sizeof(prior_data) - 1U,
 	};
-	static const struct orlix_tcti_target_artifact_provenance provenance = {
-		.schema = "orlix-tcti-aarchmrs-source-v2",
+	struct orlix_tcti_target_artifact_provenance provenance = {
+		.schema = "orlix-tcti-aarchmrs-source-v3",
 		.generator = "orlix-tcti-target-refresh",
+		.source_architecture = "vFATAp1-A",
+		.source_build = "818",
+		.source_release = "2026-06_rel",
+		.source_schema = "2.9.5",
+		.source_timestamp = "2026-06-24 17:12:14",
+		.instructions_byte_length = 1U,
 		.instructions_sha256 =
 			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		.features_byte_length = 1U,
 		.features_sha256 =
 			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		.registers_byte_length = 1U,
 		.registers_sha256 =
 			"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 	};
+	char reconciliation_identity[65];
+
+	if (orlix_tcti_target_artifact_reconciliation_identity(
+		    &provenance, reconciliation_identity))
+		return -1;
+	provenance.reconciliation_identity = reconciliation_identity;
 
 	return orlix_tcti_target_artifact_publish(
 		canonical_fd, "generations", "prior", &prior_artifact, 1U,
@@ -185,8 +217,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 	const char *instructions, const char *features, const char *registers,
 	const char *arm_xml_archive, const char *arm_xml_release)
 {
-	static const char expected_generation[] =
-		"aarchmrs-2026-06-v2-baf9c480c803b1444090e853615277544ab7f2abddcd86e05f1fe431857bb7fc";
+	static const char generation_prefix[] = "aarchmrs-2026-06-v3-";
 	char *root = make_root();
 	char first[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	char second[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -208,12 +239,12 @@ static int full_refresh_is_authoritative_and_idempotent(
 				result.publish.error));
 	EXPECT(!refresh_status);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_OK);
-	if (strcmp(result.publish.generation, expected_generation))
-		fprintf(stderr, "unexpected full-refresh generation: %s\n",
-			result.publish.generation);
-	EXPECT(!strcmp(result.publish.generation, expected_generation));
+	EXPECT(!strncmp(result.publish.generation, generation_prefix,
+		       sizeof(generation_prefix) - 1U));
+	EXPECT(strlen(result.publish.generation) ==
+	       sizeof(generation_prefix) - 1U + 64U);
 	EXPECT(!selected_generation(root, first));
-	EXPECT(!strcmp(first, expected_generation));
+	EXPECT(!strcmp(first, result.publish.generation));
 	EXPECT(!orlix_tcti_target_artifact_verify(
 		fd, "generations", &pinned_provenance, &verify_result));
 	EXPECT(!orlix_tcti_target_refresh(fd, instructions, features, registers,
@@ -391,6 +422,10 @@ int main(int argc, char **argv)
 			"usage: %s Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
 			argv[0]);
 		return 2;
+	}
+	if (initialize_pinned_provenance()) {
+		fprintf(stderr, "cannot initialize pinned three-source provenance\n");
+		return EXIT_FAILURE;
 	}
 	if (full_refresh_is_authoritative_and_idempotent(
 		    argv[1], argv[2], argv[3], argv[4], argv[5]) ||

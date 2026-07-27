@@ -26,13 +26,31 @@ static const struct orlix_tcti_target_artifact artifacts[] = {
 	{ .name = "instructions.h", .data = "instructions-v1\n", .length = 16 },
 	{ .name = "registers.h", .data = "registers-v1\n", .length = 13 },
 };
-static const struct orlix_tcti_target_artifact_provenance provenance = {
-	.schema = "orlix-tcti-target-artifact-v2",
+static struct orlix_tcti_target_artifact_provenance provenance = {
+	.schema = "orlix-tcti-target-artifact-v3",
 	.generator = "target-artifact-generator",
+	.source_architecture = "vFATAp1-A",
+	.source_build = "818",
+	.source_release = "2026-06_rel",
+	.source_schema = "2.9.5",
+	.source_timestamp = "2026-06-24 17:12:14",
+	.instructions_byte_length = 115441429U,
 	.instructions_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	.features_byte_length = 1243621U,
 	.features_sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	.registers_byte_length = 96016602U,
 	.registers_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 };
+static char reconciliation_identity[65];
+
+static int initialize_provenance(void)
+{
+	if (orlix_tcti_target_artifact_reconciliation_identity(
+		    &provenance, reconciliation_identity))
+		return -1;
+	provenance.reconciliation_identity = reconciliation_identity;
+	return 0;
+}
 
 static int sha256_known_answers(void)
 {
@@ -329,11 +347,23 @@ static int deterministic_immutable_publication(void)
 			left, left_generation) < (int)sizeof(left_path));
 	left_data = read_file(left_path, &left_length);
 	EXPECT(left_data);
-	EXPECT(strstr(left_data, "schema=orlix-tcti-target-artifact-v2\n"));
+	EXPECT(strstr(left_data, "ORLIX_TCTI_TARGET_ARTIFACT_SET_V3\n"));
+	EXPECT(strstr(left_data, "schema=orlix-tcti-target-artifact-v3\n"));
 	EXPECT(strstr(left_data, "generator=target-artifact-generator\n"));
+	EXPECT(strstr(left_data, "source_architecture=vFATAp1-A\n"));
+	EXPECT(strstr(left_data, "source_build=818\n"));
+	EXPECT(strstr(left_data, "source_release=2026-06_rel\n"));
+	EXPECT(strstr(left_data, "source_schema=2.9.5\n"));
+	EXPECT(strstr(left_data, "source_timestamp=2026-06-24 17:12:14\n"));
+	EXPECT(strstr(left_data, "instructions_byte_length=115441429\n"));
+	EXPECT(strstr(left_data, "features_byte_length=1243621\n"));
+	EXPECT(strstr(left_data, "registers_byte_length=96016602\n"));
 	EXPECT(strstr(left_data, provenance.instructions_sha256));
 	EXPECT(strstr(left_data, provenance.features_sha256));
 	EXPECT(strstr(left_data, provenance.registers_sha256));
+	EXPECT(strstr(left_data, provenance.reconciliation_identity));
+	EXPECT(strstr(left_data, " source_architecture=vFATAp1-A"));
+	EXPECT(strstr(left_data, " reconciliation_identity="));
 	EXPECT(strstr(left_data, "bundle_sha256="));
 	free(left_data);
 	EXPECT(!selector_is(left, "2026-06-a1"));
@@ -889,6 +919,92 @@ static int orphaned_hidden_staging_directory_does_not_block_retry(void)
 	return 0;
 }
 
+static int artifact_source_identity_tampering_is_rejected(void)
+{
+	char *root = make_root();
+	char path[PATH_MAX];
+	char *manifest;
+	char *where;
+	size_t length;
+	struct orlix_tcti_target_artifact_publish_result publish_result;
+	struct orlix_tcti_target_artifact_verify_result verify_result;
+
+	EXPECT(root);
+	EXPECT(!publish(root, "artifact-source-identity",
+			ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, &publish_result));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/manifest", root,
+			publish_result.generation) < (int)sizeof(path));
+	manifest = read_file(path, &length);
+	EXPECT(manifest);
+	where = strstr(manifest, " source_architecture=");
+	EXPECT(where);
+	where += strlen(" source_architecture=");
+	where[0] = where[0] == 'a' ? 'b' : 'a';
+	EXPECT(!overwrite_file(path, manifest, length));
+	free(manifest);
+	EXPECT(verify(root, &provenance, &verify_result) < 0);
+	EXPECT(verify_result.error ==
+	       ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_MANIFEST_FORMAT);
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
+static int every_three_source_field_is_verified(void)
+{
+	char *root = make_root();
+	struct orlix_tcti_target_artifact_publish_result publish_result;
+	struct orlix_tcti_target_artifact_verify_result verify_result;
+	struct orlix_tcti_target_artifact_provenance mutated;
+	char identity[65];
+
+	EXPECT(root);
+	EXPECT(!publish(root, "source-fields",
+			ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, &publish_result));
+
+#define EXPECT_PROVENANCE_MUTATION_REJECTED(mutation) do { \
+	mutated = provenance; \
+	mutation; \
+	EXPECT(!orlix_tcti_target_artifact_reconciliation_identity( \
+		&mutated, identity)); \
+	mutated.reconciliation_identity = identity; \
+	EXPECT(verify(root, &mutated, &verify_result) < 0); \
+	EXPECT(verify_result.error == ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_PROVENANCE); \
+} while (0)
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.source_architecture = "vFATAp1-B");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.source_build = "819");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.source_release = "2026-09_rel");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.source_schema = "2.9.6");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.source_timestamp = "2026-06-24 17:12:15");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.instructions_byte_length++);
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.instructions_sha256 =
+		"daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.features_byte_length++);
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.features_sha256 =
+		"dbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.registers_byte_length++);
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.registers_sha256 =
+		"dccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+#undef EXPECT_PROVENANCE_MUTATION_REJECTED
+
+	mutated = provenance;
+	mutated.reconciliation_identity =
+		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+	EXPECT(verify(root, &mutated, &verify_result) < 0);
+	EXPECT(verify_result.error ==
+	       ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_INVALID_ARGUMENT);
+
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -897,6 +1013,10 @@ int main(void)
 	} tests[] = {
 		{ "sha256_known_answers", sha256_known_answers },
 		{ "deterministic_immutable_publication", deterministic_immutable_publication },
+		{ "every_three_source_field_is_verified",
+		  every_three_source_field_is_verified },
+		{ "artifact_source_identity_tampering_is_rejected",
+		  artifact_source_identity_tampering_is_rejected },
 		{ "failures_preserve_prior_selector", failures_preserve_prior_selector },
 		{ "short_writes_publish_complete_generation", short_writes_publish_complete_generation },
 		{ "selector_sync_preserves_prior_selector", selector_sync_preserves_prior_selector },
@@ -914,6 +1034,11 @@ int main(void)
 		{ "orphaned_hidden_staging_directory_does_not_block_retry", orphaned_hidden_staging_directory_does_not_block_retry },
 	};
 	size_t index;
+
+	if (initialize_provenance()) {
+		fprintf(stderr, "FAIL initialize_provenance\n");
+		return 1;
+	}
 
 	for (index = 0; index < sizeof(tests) / sizeof(tests[0]); index++) {
 		if (tests[index].run()) {

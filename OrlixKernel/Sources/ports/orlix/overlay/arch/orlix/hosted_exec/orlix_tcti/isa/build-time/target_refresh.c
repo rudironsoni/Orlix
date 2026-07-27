@@ -29,14 +29,22 @@
 
 #define ORLIX_TCTI_TARGET_REFRESH_MAX_SOURCE (128U * 1024U * 1024U)
 #define ORLIX_TCTI_TARGET_REFRESH_PUBLISH_NAME "generations"
-#define ORLIX_TCTI_TARGET_REFRESH_GENERATION_PREFIX "aarchmrs-2026-06-v2"
+#define ORLIX_TCTI_TARGET_REFRESH_GENERATION_PREFIX "aarchmrs-2026-06-v3"
 #define ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256 \
 	"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe"
 #define ORLIX_TCTI_TARGET_REFRESH_FEATURES_SHA256 \
 	"633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187"
 #define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_SHA256 \
 	"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874"
-#define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v2"
+#define ORLIX_TCTI_TARGET_REFRESH_ARCHITECTURE "vFATAp1-A"
+#define ORLIX_TCTI_TARGET_REFRESH_BUILD "818"
+#define ORLIX_TCTI_TARGET_REFRESH_RELEASE "2026-06_rel"
+#define ORLIX_TCTI_TARGET_REFRESH_SOURCE_SCHEMA "2.9.5"
+#define ORLIX_TCTI_TARGET_REFRESH_TIMESTAMP "2026-06-24 17:12:14"
+#define ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_BYTE_LENGTH 115441429U
+#define ORLIX_TCTI_TARGET_REFRESH_FEATURES_BYTE_LENGTH 1243621U
+#define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_BYTE_LENGTH 96016602U
+#define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v3"
 #define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh"
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES 605U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS 362U
@@ -588,6 +596,11 @@ int orlix_tcti_target_refresh_with_fault(
 	struct orlix_tcti_target_artifact_provenance provenance = {
 		.schema = ORLIX_TCTI_TARGET_REFRESH_SCHEMA,
 		.generator = ORLIX_TCTI_TARGET_REFRESH_GENERATOR,
+		.source_architecture = ORLIX_TCTI_TARGET_REFRESH_ARCHITECTURE,
+		.source_build = ORLIX_TCTI_TARGET_REFRESH_BUILD,
+		.source_release = ORLIX_TCTI_TARGET_REFRESH_RELEASE,
+		.source_schema = ORLIX_TCTI_TARGET_REFRESH_SOURCE_SCHEMA,
+		.source_timestamp = ORLIX_TCTI_TARGET_REFRESH_TIMESTAMP,
 	};
 	struct orlix_tcti_target_artifact_publish_result publish_result = { 0 };
 	struct orlix_tcti_arm_xml_package arm_xml_package = { 0 };
@@ -595,6 +608,7 @@ int orlix_tcti_target_refresh_with_fault(
 	char instruction_digest[65];
 	char feature_digest[65];
 	char register_digest[65];
+	char reconciliation_identity[65];
 	enum orlix_tcti_target_refresh_error error = ORLIX_TCTI_TARGET_REFRESH_OK;
 
 	if (result)
@@ -624,8 +638,21 @@ int orlix_tcti_target_refresh_with_fault(
 		goto out;
 	}
 	provenance.instructions_sha256 = instruction_digest;
+	provenance.instructions_byte_length = instructions.length;
 	provenance.features_sha256 = feature_digest;
+	provenance.features_byte_length = features.length;
 	provenance.registers_sha256 = register_digest;
+	provenance.registers_byte_length = registers.length;
+	if (instructions.length != ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_BYTE_LENGTH ||
+	    features.length != ORLIX_TCTI_TARGET_REFRESH_FEATURES_BYTE_LENGTH ||
+	    registers.length != ORLIX_TCTI_TARGET_REFRESH_REGISTERS_BYTE_LENGTH ||
+	    orlix_tcti_target_artifact_reconciliation_identity(
+		&provenance, reconciliation_identity)) {
+		error = ORLIX_TCTI_TARGET_REFRESH_SOURCE_IDENTITY;
+		errno = EINVAL;
+		goto out;
+	}
+	provenance.reconciliation_identity = reconciliation_identity;
 	arm_xml_error = orlix_tcti_arm_xml_package_validate(
 		arm_xml_archive_path, arm_xml_release_path, &arm_xml_package);
 	if (result)

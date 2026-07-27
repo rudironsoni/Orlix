@@ -805,3 +805,12 @@ is either owned by source-and-build-bound Linux kselftest provenance or carries
 a typed `not_applicable` reason. The completion audit rejects missing,
 duplicate, stale, malformed, ambiguous, invalid-provenance, and non-kselftest
 substitution rows. This records ownership only; executed proof remains zero.
+
+## [2026-07-27] implement | Bind canonical artifacts to three-source provenance
+
+The immutable OrlixTCTI artifact manifest is now V3. It binds every artifact row
+to the pinned architecture, build, release, schema, timestamp, exact
+Instructions, Features, and Registers byte lengths and digests, plus a computed
+three-source reconciliation identity. Verification rejects field or row
+tampering. Normal kernel, KUnit, kselftest, product, and audit graphs remain
+isolated from Arm JSON inputs; canonical publication completed through Make.
