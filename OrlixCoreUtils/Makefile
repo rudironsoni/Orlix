@@ -22,6 +22,13 @@ ORLIX_COREUTILS_BUILD_DIR := $(ORLIX_COREUTILS_PACKAGE_BUILD_DIR)/coreutils-$(CO
 ORLIX_COREUTILS_STAGE_DIR := $(ORLIX_COREUTILS_BUILD_ROOT)/stage/$(PROFILE)
 ORLIX_COREUTILS_STAMP := $(ORLIX_COREUTILS_STAGE_DIR)/coreutils.stamp
 ORLIX_COREUTILS_GETLIMITS_BINARY := $(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/getlimits
+ORLIX_COREUTILS_EXTRA_PROGRAMS := getconf getent
+ORLIX_COREUTILS_ALL_PROGRAMS := $(ORLIX_COREUTILS_PROGRAMS) $(ORLIX_COREUTILS_EXTRA_PROGRAMS)
+ORLIX_COREUTILS_PROGRAM_SOURCE_DIR := $(PROJECT_DIR)/Sources/Programs
+ORLIX_COREUTILS_EXTRA_PROGRAM_SOURCES := $(addprefix $(ORLIX_COREUTILS_PROGRAM_SOURCE_DIR)/,$(addsuffix .c,$(ORLIX_COREUTILS_EXTRA_PROGRAMS)))
+ORLIX_COREUTILS_HOST_TOOLS_DIR := $(ORLIX_COREUTILS_BUILD_ROOT)/host-tools
+ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_SOURCE := $(PROJECT_DIR)/Tests/selinux_policy_prelude.c
+ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR := $(ORLIX_COREUTILS_HOST_TOOLS_DIR)/selinux-policy-prelude
 
 ORLIX_COREUTILS_HOMEBREW_PREFIX ?= $(shell command -v brew >/dev/null 2>&1 && brew --prefix)
 ORLIX_COREUTILS_BOOTSTRAP_PATH ?= $(if $(ORLIX_COREUTILS_HOMEBREW_PREFIX),$(ORLIX_COREUTILS_HOMEBREW_PREFIX)/opt/bison/bin:$(ORLIX_COREUTILS_HOMEBREW_PREFIX)/opt/coreutils/libexec/gnubin:$(PATH),$(PATH))
@@ -50,7 +57,7 @@ ORLIX_COREUTILS_BUILD_CC ?= xcrun --sdk macosx cc -target arm64-apple-macosx
 ORLIX_COREUTILS_PACKAGE_CFLAGS := -O2 -D_FILE_OFFSET_BITS=64 -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -include limits.h
 ORLIX_COREUTILS_FORCE_RECONFIGURE ?= 0
 
-.PHONY: all help source dependencies build clean mrproper
+.PHONY: all help source dependencies build clean mrproper __selinux-policy-prelude-generator
 
 all: build
 
@@ -67,6 +74,15 @@ dependencies:
 	@$(ORLIXOS_MAKE) "$(ORLIX_COREUTILS_ACL_STAMP)" "$(ORLIX_COREUTILS_LIBCAP_STAMP)" "$(ORLIX_COREUTILS_LIBSELINUX_STAMP)" PROFILE="$(PROFILE)" ORLIX_BUILD_ROOT="$(ORLIX_BUILD_ROOT)"
 
 build: dependencies $(ORLIX_COREUTILS_STAMP)
+
+__selinux-policy-prelude-generator: $(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR)
+
+$(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR): $(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_SOURCE) $(PROJECT_DIR)/Makefile
+	@set -euo pipefail; \
+	mkdir -p "$(dir $(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_GENERATOR))"; \
+	$(ORLIX_COREUTILS_BUILD_CC) -std=c17 -O2 -Wall -Wextra -Werror "$(ORLIX_COREUTILS_SELINUX_POLICY_PRELUDE_SOURCE)" -o "$@"; \
+	"$@" >/dev/null 2>&1 && { echo "SELinux policy prelude generator accepted missing inputs" >&2; exit 1; } || [ "$$?" -eq 2 ]; \
+	echo "built Coreutils SELinux test support: $@"
 
 $(ORLIX_COREUTILS_ACL_STAMP) $(ORLIX_COREUTILS_LIBCAP_STAMP) $(ORLIX_COREUTILS_LIBSELINUX_STAMP):
 	@$(ORLIXOS_MAKE) "$@" PROFILE="$(PROFILE)" ORLIX_BUILD_ROOT="$(ORLIX_BUILD_ROOT)"
@@ -118,7 +134,7 @@ $(ORLIX_COREUTILS_SOURCE_STAMP): $(PROJECT_DIR)/Sources/make/config.mk $(PROJECT
 	touch "$(ORLIX_COREUTILS_SOURCE_STAMP)"; \
 	echo "freshly cloned upstream Coreutils source: $(ORLIX_COREUTILS_SRC_DIR) ($(COREUTILS_GIT_REF) $(COREUTILS_GIT_COMMIT))"
 
-$(ORLIX_COREUTILS_STAMP): $(ORLIX_COREUTILS_SOURCE_STAMP) $(ORLIX_COREUTILS_ACL_STAMP) $(ORLIX_COREUTILS_LIBCAP_STAMP) $(ORLIX_COREUTILS_LIBSELINUX_STAMP) $(ORLIX_COREUTILS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIX_COREUTILS_MLIBC_RTLIB) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/config.mk
+$(ORLIX_COREUTILS_STAMP): $(ORLIX_COREUTILS_SOURCE_STAMP) $(ORLIX_COREUTILS_ACL_STAMP) $(ORLIX_COREUTILS_LIBCAP_STAMP) $(ORLIX_COREUTILS_LIBSELINUX_STAMP) $(ORLIX_COREUTILS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIX_COREUTILS_MLIBC_RTLIB) $(ORLIX_COREUTILS_EXTRA_PROGRAM_SOURCES) $(PROJECT_DIR)/Makefile $(PROJECT_DIR)/Sources/make/config.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIX_COREUTILS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIX_COREUTILS_MLIBC_HEADERS)"; \
@@ -149,10 +165,10 @@ $(ORLIX_COREUTILS_STAMP): $(ORLIX_COREUTILS_SOURCE_STAMP) $(ORLIX_COREUTILS_ACL_
 	configure_signature="$(ORLIX_COREUTILS_BUILD_DIR)/.orlix-configure.signature"; \
 	current_signature="profile=$(PROFILE)|version=$(COREUTILS_VERSION)|commit=$(COREUTILS_GIT_COMMIT)|source=$(ORLIX_COREUTILS_SRC_DIR)|cc=$$CC|cppflags=$$CPPFLAGS|cflags=$$CFLAGS|ldflags=$$LDFLAGS|libs=$$LIBS"; \
 	outputs_ready=1; \
-	for program in $(ORLIX_COREUTILS_PROGRAMS); do \
+	for program in $(ORLIX_COREUTILS_ALL_PROGRAMS); do \
 		if [ ! -x "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program" ]; then outputs_ready=0; fi; \
 	done; \
-	if [ "$(ORLIX_COREUTILS_FORCE_RECONFIGURE)" != 1 ] && [ "$$outputs_ready" = 1 ] && [ -x "$(ORLIX_COREUTILS_GETLIMITS_BINARY)" ] && [ -s "$(ORLIX_COREUTILS_STAMP)" ] && [ -s Makefile ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_SOURCE_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_ACL_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_LIBCAP_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_LIBSELINUX_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_MLIBC_RTLIB)" ]; then \
+	if [ "$(ORLIX_COREUTILS_FORCE_RECONFIGURE)" != 1 ] && [ "$$outputs_ready" = 1 ] && [ -x "$(ORLIX_COREUTILS_GETLIMITS_BINARY)" ] && [ -s "$(ORLIX_COREUTILS_STAMP)" ] && [ -s Makefile ] && [ -s "$$configure_signature" ] && [ "$$(cat "$$configure_signature")" = "$$current_signature" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_SOURCE_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_ACL_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_LIBCAP_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_LIBSELINUX_STAMP)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_MLIBC_RTLIB)" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_PROGRAM_SOURCE_DIR)/getconf.c" ] && [ "$(ORLIX_COREUTILS_STAMP)" -nt "$(ORLIX_COREUTILS_PROGRAM_SOURCE_DIR)/getent.c" ]; then \
 		touch "$(ORLIX_COREUTILS_STAMP)"; \
 		echo "reusing Orlix Linux Coreutils provider payload: $(ORLIX_COREUTILS_STAGE_DIR)"; \
 		exit 0; \
@@ -179,19 +195,23 @@ $(ORLIX_COREUTILS_STAMP): $(ORLIX_COREUTILS_SOURCE_STAMP) $(ORLIX_COREUTILS_ACL_
 		"$(ORLIX_COREUTILS_STRIP)" "$(ORLIX_COREUTILS_BUILD_DIR)/src/$$source_program"; \
 		install -m 0755 "$(ORLIX_COREUTILS_BUILD_DIR)/src/$$source_program" "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program"; \
 	done; \
+	for program in $(ORLIX_COREUTILS_EXTRA_PROGRAMS); do \
+		$(ORLIX_COREUTILS_CC_COMMAND) --target=aarch64-linux-gnu --sysroot="$$sysroot" -isystem "$$headers" -D_GNU_SOURCE -std=c17 -O2 -fhosted -fno-builtin -ffixed-x18 -fPIE -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 "$$sysroot/usr/lib/crt1.o" "$$sysroot/usr/lib/crti.o" "$(ORLIX_COREUTILS_PROGRAM_SOURCE_DIR)/$$program.c" -Wl,--start-group "$$sysroot/usr/lib/libc.a" "$$sysroot/usr/lib/libm.a" "$$sysroot/usr/lib/libpthread.a" "$$sysroot/usr/lib/libssp_nonshared.a" "$$sysroot/usr/lib/libssp.a" "$$rtlib" -Wl,--end-group "$$sysroot/usr/lib/crtn.o" -o "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program"; \
+		"$(ORLIX_COREUTILS_STRIP)" "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program"; \
+	done; \
 	"$(ORLIX_COREUTILS_STRIP)" "$(ORLIX_COREUTILS_BUILD_DIR)/src/getlimits"; \
 	cp "$(ORLIX_COREUTILS_BUILD_DIR)/src/getlimits" "$(ORLIX_COREUTILS_GETLIMITS_BINARY)"; \
 	file "$(ORLIX_COREUTILS_GETLIMITS_BINARY)" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIX_COREUTILS_GETLIMITS_BINARY)" >&2; exit 1; }; \
-	for program in $(ORLIX_COREUTILS_PROGRAMS); do \
+	for program in $(ORLIX_COREUTILS_ALL_PROGRAMS); do \
 		file "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program" | grep -F -q 'ELF 64-bit LSB pie executable, ARM aarch64' || { file "$(ORLIX_COREUTILS_STAGE_DIR)/usr/bin/$$program" >&2; exit 1; }; \
 	done; \
-	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\ngit_url=%s\ngit_ref=%s\ngit_commit=%s\ngnulib_git_url=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIX_COREUTILS_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_GIT_URL)" "$(COREUTILS_GIT_REF)" "$(COREUTILS_GIT_COMMIT)" "$(COREUTILS_GNULIB_GIT_URL)" > "$(ORLIX_COREUTILS_STAMP)"; \
+	printf 'profile=%s\ndistribution=%s\nchannel=%s\npackage=coreutils\nprograms=%s\nversion=%s\ngit_url=%s\ngit_ref=%s\ngit_commit=%s\ngnulib_git_url=%s\n' "$(PROFILE)" "$(ORLIXOS_DISTRIBUTION_ID)" "$(ORLIXOS_DISTRIBUTION_CHANNEL)" "$(ORLIX_COREUTILS_ALL_PROGRAMS)" "$(COREUTILS_VERSION)" "$(COREUTILS_GIT_URL)" "$(COREUTILS_GIT_REF)" "$(COREUTILS_GIT_COMMIT)" "$(COREUTILS_GNULIB_GIT_URL)" > "$(ORLIX_COREUTILS_STAMP)"; \
 	echo "built Orlix Linux Coreutils provider payload: $(ORLIX_COREUTILS_STAGE_DIR)"
 
 clean:
 	@set -euo pipefail; \
 	if [ -L "$(ORLIX_COREUTILS_BUILD_ROOT)" ]; then echo "refusing to clean symlinked OrlixCoreUtils build root: $(ORLIX_COREUTILS_BUILD_ROOT)" >&2; exit 1; fi; \
-	rm -rf "$(ORLIX_COREUTILS_BUILD_ROOT)/build" "$(ORLIX_COREUTILS_BUILD_ROOT)/stage"
+	rm -rf "$(ORLIX_COREUTILS_BUILD_ROOT)/build" "$(ORLIX_COREUTILS_BUILD_ROOT)/stage" "$(ORLIX_COREUTILS_HOST_TOOLS_DIR)"
 
 mrproper:
 	@set -euo pipefail; \

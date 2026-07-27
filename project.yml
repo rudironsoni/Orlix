@@ -220,8 +220,8 @@ targets:
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/overlay
           - $(SRCROOT)/OrlixKernel/Sources/ports/orlix/patches
-          - $(SRCROOT)/tools/runtime/orlix-sync-payload.sh
           - $(SRCROOT)/OrlixOS/Makefile
+          - $(SRCROOT)/OrlixOS/Sources/make/payload.mk
           - $(SRCROOT)/OrlixOS/Sources/distribution/manifest.mk
           - $(SRCROOT)/OrlixOS/Sources/init/init.c
           - $(SRCROOT)/OrlixOS/Sources/init/console_policy.c
@@ -360,7 +360,7 @@ targets:
               esac
           fi
           destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
-          "$SRCROOT/tools/runtime/orlix-sync-payload.sh" "$payload" "$destination"
+          "${MAKE:-make}" -f "$SRCROOT/OrlixOS/Makefile" __sync-payload ORLIX_PAYLOAD_SOURCE="$payload" ORLIX_PAYLOAD_DESTINATION="$destination"
     settings:
       base:
         BUILD_LIBRARY_FOR_DISTRIBUTION: YES
@@ -393,7 +393,6 @@ targets:
       - path: Orlix/Orlix/Compatibility
       - path: Orlix/Orlix/Core
       - path: Orlix/Orlix/Features
-      - path: Orlix/Orlix/Generated
       - path: Orlix/Orlix/GhosttyTerminal
       - path: Orlix/OrlixShared
       - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
@@ -489,6 +488,7 @@ targets:
         OTHER_MTLFLAGS: -Wno-c++17-extensions
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix
         PRODUCT_NAME: Orlix
+        APP_REVIEW_CODE: ORLIX-REVIEW-2026
         ORLIX_ANALYTICS_ENABLED: NO
         ORLIX_OBSERVABILITY_ENABLED: NO
         ORLIX_OPENPANEL_TRACK_ENDPOINT: https://analytics.orlix.rudironsoni.cloud/track
@@ -522,7 +522,6 @@ targets:
       - path: Orlix/Orlix/Compatibility
       - path: Orlix/Orlix/Core
       - path: Orlix/Orlix/Features
-      - path: Orlix/Orlix/Generated
       - path: Orlix/Orlix/GhosttyTerminal
       - path: Orlix/OrlixShared
       - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift

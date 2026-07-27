@@ -114,11 +114,12 @@ For upstream conformance work, upstream sources and tests are authoritative. Fix
 3. Touch only what the task requires.
 4. Surface ownership conflicts directly.
 5. Use `rtk` for shell commands in this workspace.
-6. Use `rg`/`rg --files` for searches.
-7. Preserve unrelated dirty worktree changes.
-8. Fail loud when evidence is missing, partial, skipped, or stale.
-9. Check simulator/app crash reports after app-hosted test failures or crashes.
-10. Commit and push after a coherent verified checkpoint when implementation work is complete.
+6. Use Make as the only repository-owned executable developer interface. Keep implementation in the owning component's Make rules or non-executable source modules invoked only by private Make targets; do not add standalone command scripts.
+7. Use `rg`/`rg --files` for searches.
+8. Preserve unrelated dirty worktree changes.
+9. Fail loud when evidence is missing, partial, skipped, or stale.
+10. Check simulator/app crash reports after app-hosted test failures or crashes.
+11. Commit and push after a coherent verified checkpoint when implementation work is complete.
 
 ## External Xcode Recovery
 

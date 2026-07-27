@@ -1,15 +1,12 @@
-#!/usr/bin/env python3
 """Validate Orlix application capabilities and exported product identity."""
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import plistlib
 import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -377,47 +374,3 @@ def validate_exported_app(
         )
         if any(status != "approved" for status in statuses):
             fail("encryption, provisioning, CloudKit, privacy, and license approvals are required")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    manifest_parser = subparsers.add_parser("validate-manifest")
-    manifest_parser.add_argument("--manifest", type=Path, required=True)
-    manifest_parser.add_argument("--repo-root", type=Path, required=True)
-
-    app_parser = subparsers.add_parser("validate-exported-app")
-    app_parser.add_argument("--app", type=Path, required=True)
-    app_parser.add_argument("--manifest", type=Path, required=True)
-    app_parser.add_argument("--repo-root", type=Path, required=True)
-    app_parser.add_argument("--entitlements-plist", type=Path)
-    app_parser.add_argument("--profile-plist", type=Path)
-    app_parser.add_argument("--require-public-approval", action="store_true")
-    return parser.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
-    try:
-        if args.command == "validate-manifest":
-            validate_manifest(args.manifest.resolve(), args.repo_root.resolve())
-            print("pass: Orlix application capability manifest")
-        else:
-            validate_exported_app(
-                args.app.resolve(),
-                args.manifest.resolve(),
-                args.repo_root.resolve(),
-                args.entitlements_plist.resolve() if args.entitlements_plist else None,
-                args.profile_plist.resolve() if args.profile_plist else None,
-                args.require_public_approval,
-            )
-            print(f"pass: exported Orlix application {args.app}")
-    except GateError as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 1
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

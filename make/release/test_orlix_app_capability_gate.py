@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
 import copy
 import json
 import plistlib
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "tools/release"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 import orlix_app_capability_gate as gate  # noqa: E402
 
@@ -149,7 +145,3 @@ class CapabilityGateTests(unittest.TestCase):
         app, entitlements, profile = self.make_exported_app()
         with self.assertRaisesRegex(gate.GateError, "public distribution approval is not recorded"):
             self.validate_app(app, entitlements, profile, public=True)
-
-
-if __name__ == "__main__":
-    unittest.main()

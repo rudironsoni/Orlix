@@ -8,6 +8,8 @@ COREUTILS_MAKE := $(MAKE) -f OrlixCoreUtils/Makefile
 ORLIXOS_MAKE := $(MAKE) -f OrlixOS/Makefile
 APP_MAKE := $(MAKE) -f Orlix/Makefile
 PROFILE ?= release
+type ?= product
+vendor ?= all
 -include $(CURDIR)/.orlix.local.xcconfig
 ORLIX_BUILD_ROOT ?= $(CURDIR)/Build
 export ORLIX_BUILD_ROOT
@@ -62,7 +64,9 @@ ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_isa_kbuild_generator_test
 ORLIX_TCTI_ORDINAL_LEDGER_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_ordinal_ledger_test
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests kernel-archive-cache-tests orlix-tcti-isa-host-tests orlix-tcti-isa-audit orlix-tcti-isa-maintainer orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper
+include $(CURDIR)/make/release.mk
+include $(CURDIR)/make/runtime.mk
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-isa-host-tests orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework
 
@@ -82,8 +86,7 @@ help:
 	@printf '%s\n' 'Owning test suites:'
 	@printf '%s\n' '  orlix-tcti-isa-host-tests    run deterministic OrlixTCTI inventory contract tests'
 	@printf '%s\n' '  orlix-tcti-isa-audit         audit the canonical C target inventory and proof ledger'
-	@printf '%s\n' '  orlix-tcti-isa-maintainer    atomically refresh the pinned C artifact bundle'
-	@printf '%s\n' '  kernel-archive-cache-tests run deterministic archive cache freshness tests'
+	@printf '%s\n' '  prepare type=tcti-isa         atomically refresh the pinned C artifact bundle'
 	@printf '%s\n' '  orlix-tcti-kernel-tests run OrlixTCTI KUnit and app-hosted Linux kselftests'
 	@printf '%s\n' '  mlibc-tests         run the upstream mlibc suite through OrlixOS'
 	@printf '%s\n' '  coreutils-tests     run the OrlixCoreUtils upstream suite through OrlixOS'
@@ -169,22 +172,17 @@ product-build-version-check: product-build-prepare
 		}; \
 	fi
 
-app-capability-gate:
-	@python3 tools/release/orlix_app_capability_gate.py validate-manifest --manifest docs/sources/release/orlix-app-release-inputs.json --repo-root .
+app-capability-gate: __release-manifest-check
 
-app-capability-test:
-	@python3 -m unittest tools/release/tests/test_orlix_app_capability_gate.py
+app-capability-test: __release-tests
 
-app-release-inputs-check:
-	@tools/release/orlix-app-release-inputs-check.sh
+app-release-inputs-check: __release-inputs-check
 
-app-release-inputs-test:
-	@tools/release/tests/test-orlix-app-release-inputs.sh
+app-release-inputs-test: __release-tests
 
-app-exported-product-check:
-	@python3 tools/release/orlix_app_capability_gate.py validate-exported-app --app "$(ORLIX_BETA_ARCHIVE_PATH)/Products/Applications/Orlix.app" --manifest docs/sources/release/orlix-app-release-inputs.json --repo-root .
+app-exported-product-check: __exported-app-check
 
-beta-prerequisites: check-build-tools app-release-inputs-check
+beta-prerequisites: check-build-tools __release-inputs-check
 	@set -euo pipefail; \
 	command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen is required; run: brew bundle --file Brewfile" >&2; exit 1; }; \
 	command -v xcodebuild >/dev/null 2>&1 || { echo "xcodebuild is required" >&2; exit 1; }; \
@@ -289,9 +287,6 @@ beta-simulator-gate: beta-prerequisites
 		-destination '$(ORLIX_BETA_SIMULATOR_DESTINATION)' \
 		-only-testing:OrlixOSRuntimeTests/OrlixEnvironmentRootRuntimeTests/testOCIDerivedMaterializedRootBindsDescriptorExecutionDefaults \
 		test
-
-kernel-archive-cache-tests:
-	@bash OrlixKernel/Sources/ports/orlix/kbuild/archive-cache-test.sh
 
 orlix-tcti-isa-host-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
@@ -413,12 +408,8 @@ orlix-tcti-isa-audit: orlix-tcti-isa-host-tests
 		-o '$(ORLIX_TCTI_INVENTORY_AUDITOR)'
 	@'$(ORLIX_TCTI_INVENTORY_AUDITOR)'
 
-orlix-tcti-isa-maintainer:
-	@$(MAKE) -C tools/orlix-tcti-isa-maintainer ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)' refresh
-
-# The explicit maintainer tool validates pinned Arm inputs and atomically
-# selects one immutable authoritative C generation below arch/orlix.
-# It is intentionally separate from normal kernel builds and audits.
+# `prepare type=tcti-isa` validates pinned Arm inputs and atomically selects
+# one immutable authoritative C generation below arch/orlix.
 orlix-tcti-kernel-tests:
 orlix-tcti-kernel-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
@@ -617,7 +608,7 @@ beta-validate-archive:
 		test ! -e "$$app/Frameworks/$$private_framework.framework" || { echo "private framework must be statically incorporated into OrlixOS: $$private_framework" >&2; exit 1; }; \
 	done; \
 	! find "$$app" -maxdepth 5 -name 'OrlixOSPayload.*' -print -quit | grep -q . || { echo "retired OrlixOS payload bundle remains in archive" >&2; exit 1; }; \
-	python3 tools/release/orlix_app_capability_gate.py validate-exported-app --app "$$app" --manifest docs/sources/release/orlix-app-release-inputs.json --repo-root .; \
+	$(MAKE) --no-print-directory __exported-app-check ORLIX_EXPORTED_APP="$$app"; \
 	printf '%s\n' "validated beta archive contents: $(ORLIX_BETA_ARCHIVE_PATH)"
 
 beta-export-archive: beta-validate-archive
@@ -655,7 +646,9 @@ beta-upload:
 xcodeproj:
 	@$(KERNEL_MAKE) xcodeproj
 
-build: product-build-version-check
+build: __build-$(type)
+
+__build-product: product-build-version-check
 	@$(MLIBC_MAKE) build
 	@$(COREUTILS_MAKE) build PROFILE="$(PROFILE)"
 	@$(ORLIXOS_MAKE) rootfs PROFILE="$(PROFILE)"
@@ -663,9 +656,20 @@ build: product-build-version-check
 	@$(HOSTADAPTER_MAKE) build
 	@$(APP_MAKE) build
 
+__build-vendor:
+	@$(APP_MAKE) build type=vendor vendor="$(vendor)"
+
 rebuild: clean build
 
-prepare scripts dtbs kunit kselftest kselftest-install test:
+prepare: __prepare-$(type)
+
+__prepare-product:
+	@$(KERNEL_MAKE) prepare
+
+__prepare-tcti-isa:
+	@$(KERNEL_MAKE) prepare type=tcti-isa
+
+scripts dtbs kunit kselftest kselftest-install test:
 	@$(KERNEL_MAKE) $@
 
 headers_install:

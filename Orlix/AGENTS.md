@@ -87,7 +87,6 @@ Orlix/
 │       └── UI/
 ├── GhosttyTerminal/              # libghostty terminal emulation
 ├── Compatibility/                # Version/platform compatibility helpers
-├── Generated/                    # Build-time generated sources
 └── Resources/                    # Bundled assets, themes, terminfo, l10n
 ```
 
@@ -225,10 +224,10 @@ Safe refactor expectation:
 
 ### libghostty
 Pre-built xcframework at `Vendor/libghostty/GhosttyKit.xcframework`
-Build with: `./scripts/build.sh ghostty`
+Build with: `make build type=vendor vendor=ghostty`
 
 ### libssh2 + OpenSSL
-Build with: `./scripts/build.sh ssh`
+Build with: `make build type=vendor vendor=ssh`
 Output: `Vendor/libssh2/{macos,ios,ios-simulator}/`
 
 ## Data Models

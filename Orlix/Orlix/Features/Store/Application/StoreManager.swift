@@ -3,6 +3,11 @@ import Foundation
 import Combine
 import os.log
 
+enum ReviewModeCode {
+    private static let fallbackValue = "ORLIX-REVIEW-2026"
+    static let value = Bundle.main.object(forInfoDictionaryKey: "OrlixReviewModeCode") as? String ?? fallbackValue
+}
+
 // MARK: - Store Manager
 
 @MainActor

@@ -57,7 +57,7 @@ $(ORLIXOS_INITRAMFS_CPIO): $(ORLIXOS_ROOT_INIT_BINARY) $(ORLIXOS_MANIFEST) $(PRO
 	[ -s "$$output" ] || { echo "missing generated OrlixOS initramfs: $$output" >&2; exit 1; }; \
 	echo "built OrlixOS product initramfs: $$output"
 
-$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST) $(ORLIXOS_TARGET_SETTINGS) $(ORLIX_PROJECT_YML)
+$(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORLIXOS_GREP_BINARY) $(ORLIXOS_FINDUTILS_STAMP) $(ORLIXOS_GETCONF_BINARY) $(ORLIXOS_GETENT_BINARY) $(ORLIXOS_MKE2FS_BINARY) $(ORLIXOS_MKFS_EXT4_BINARY) $(ORLIXOS_DEBUGFS_BINARY) $(ORLIXOS_E2FSCK_BINARY) $(ORLIXOS_INIT_BINARY) $(ORLIXOS_INITRAMFS_CPIO) $(ORLIXOS_MANIFEST) $(ORLIXOS_TARGET_SETTINGS) $(ORLIX_PROJECT_YML)
 	@set -euo pipefail; \
 	[ -n "$(ORLIX_PRODUCT_VERSION)" ] || { echo "project.yml lacks MARKETING_VERSION" >&2; exit 1; }; \
 	case "$(ORLIX_PRODUCT_BUILD_ID)" in ''|*[!0-9]*) echo "project.yml CURRENT_PROJECT_VERSION must be an integer" >&2; exit 1 ;; esac; \
@@ -80,6 +80,7 @@ $(ORLIXOS_ROOTFS_STAMP): $(ORLIXOS_BASH_BINARY) $(ORLIXOS_COREUTILS_STAMP) $(ORL
 	install -m 0755 "$(ORLIXOS_DEBUGFS_BINARY)" "$$root_tree/bin/debugfs"; \
 	install -m 0755 "$(ORLIXOS_E2FSCK_BINARY)" "$$root_tree/bin/e2fsck"; \
 	install -m 0755 "$(ORLIXOS_GETCONF_BINARY)" "$$root_tree/usr/bin/getconf"; \
+	install -m 0755 "$(ORLIXOS_GETENT_BINARY)" "$$root_tree/usr/bin/getent"; \
 	install -m 0755 "$(ORLIXOS_INIT_BINARY)" "$$root_tree/sbin/init"; \
 	ln -s bash "$$root_tree/bin/sh"; \
 	ln -s ../../bin/grep "$$root_tree/usr/bin/grep"; \

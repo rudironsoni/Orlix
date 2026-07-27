@@ -1199,7 +1199,7 @@ XCODEBUILD_MCP ?= xcodebuildmcp
 LINUX_MAKE ?=
 LINUX_SED ?=
 LINUX_LLVM_BIN ?= $(shell if command -v llvm-ar >/dev/null 2>&1; then dirname "$$(command -v llvm-ar)"; elif [ -x /opt/homebrew/opt/llvm/bin/llvm-ar ]; then printf '%s\n' /opt/homebrew/opt/llvm/bin; fi)
-LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/tools/linux_host_compat/include
+LINUX_HOST_COMPAT_INCLUDE_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/host-compat/include
 ORLIX_COMPILER_LAUNCHER ?= $(shell if command -v ccache >/dev/null 2>&1; then command -v ccache; elif command -v sccache >/dev/null 2>&1; then command -v sccache; fi)
 ORLIX_KERNEL_CC ?= clang
 ORLIX_KERNEL_HOSTCC ?= cc
@@ -1241,6 +1241,8 @@ ORLIX_KERNEL_PAYLOAD_PREREQS := __prepare-kbuild kselftest
 endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
+include OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk
+include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/rules.mk
 
 .PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
@@ -1261,7 +1263,13 @@ setup-env: __bootstrap-linux-upstream xcodeproj
 
 build: __ios-simulator-xcframework
 
-prepare scripts dtbs: __prepare-kbuild
+ifeq ($(type),tcti-isa)
+prepare: __tcti-isa-refresh
+else
+prepare: __prepare-kbuild
+endif
+
+scripts dtbs: __prepare-kbuild
 
 headers_install: __headers-install
 
@@ -1274,14 +1282,15 @@ kselftest: kselftest-install __kselftest-initramfs
 test:
 	@set -euo pipefail; \
 	if [ -z "$(TEST_TYPES)" ]; then \
-		echo "type must name at least one test class: kunit,kselftest" >&2; \
+		echo "type must name at least one test class: kunit,kselftest,archive-cache" >&2; \
 		exit 1; \
 	fi; \
 	for selected in $(TEST_TYPES); do \
 		case "$$selected" in \
 			kunit) $(MAKE) kunit PROFILE="$(PROFILE)" ;; \
 			kselftest) $(MAKE) kselftest PROFILE="$(PROFILE)" libc="$(libc)" ;; \
-			*) echo "unsupported test type: $$selected (expected kunit or kselftest)" >&2; exit 1 ;; \
+			archive-cache) $(MAKE) -f OrlixKernel/Makefile __archive-cache-tests ;; \
+			*) echo "unsupported test type: $$selected (expected kunit, kselftest, or archive-cache)" >&2; exit 1 ;; \
 		esac; \
 	done
 
@@ -1358,7 +1367,7 @@ run: __ios-simulator-framework xcodeproj
 	app_data="$$(xcrun simctl get_app_container "$$simctl_device" "$(ORLIX_APP_BUNDLE_ID)" data)"; \
 	terminal_capture="$$app_data/tmp/orlix-simulator-terminal-output.txt"; \
 	rm -f "$$terminal_capture"; \
-	. "$(CURDIR)/tools/runtime/orlix-runtime-log-policy.sh"; \
+	$(orlix_runtime_log_policy); \
 	log_pid=""; \
 	launch_pid=""; \
 	sync_terminal_capture() { if [ -r "$$terminal_capture" ]; then cp "$$terminal_capture" "$$os_log"; fi; }; \
@@ -1939,9 +1948,9 @@ __kernel-archive: __prepare-kbuild
 		archive_tmp="$$output_dir/.$(ORLIX_KERNEL_ARCHIVE_NAME).tmp.$$$$"; \
 		symbols_tmp="$$output_dir/.symbols.txt.tmp.$$$$"; \
 		strings_tmp="$$output_dir/.strings.txt.tmp.$$$$"; \
-		archive_cache="$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.sh"; \
 		orlix_tcti_kbuild="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/Makefile"; \
 		mkdir -p "$$obj_dir"; \
+		$(orlix_archive_cache_predicate) \
 		object_dependencies_current() { \
 			object="$$1"; depfile="$$2"; \
 			[ -s "$$depfile" ] || return 1; \
@@ -1951,12 +1960,14 @@ __kernel-archive: __prepare-kbuild
 			done < <(perl -0pe 's/\\\n/ /g; s/^[^:]*:\s*//' "$$depfile" | tr ' ' '\n'); \
 		}; \
 		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ]; then \
-			archive_cache_args=(--archive "$$archive" --symbols "$$output_dir/symbols.txt" --symbol _arch_boot_entry --symbol _arch_boot_params); \
+			symbols="$$output_dir/symbols.txt"; \
+			required_symbols=(_arch_boot_entry _arch_boot_params); \
+			cache_deps=(); sources=(); objects=(); depfiles=(); \
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$$orlix_tcti_kbuild" \
-				"$$archive_cache" \
+				OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk \
 				"$$inventory_generator" \
 				"$$inventory_definition" \
 				"$$target_inventory_generator" \
@@ -1964,15 +1975,15 @@ __kernel-archive: __prepare-kbuild
 				"$$target_inventory_source_manifest" \
 				"$$target_inventory_classification" \
 				"$$target_inventory_system_accessors" \
-				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do archive_cache_args+=(--cache-dep "$$cache_dep"); done; \
+				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do cache_deps+=("$$cache_dep"); done; \
 			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
 				src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
 				obj_name="$${src_rel//\//_}.o"; \
 				obj="$$obj_dir/$$obj_name"; \
 				dep="$$obj_dir/$${obj_name%.o}.d"; \
-				archive_cache_args+=(--source "$$src" --object "$$obj" --depfile "$$dep"); \
+				sources+=("$$src"); objects+=("$$obj"); depfiles+=("$$dep"); \
 			done; \
-			if "$$archive_cache" "$${archive_cache_args[@]}"; then \
+			if orlix_archive_cache_current; then \
 				echo "reusing OrlixKernel archive: $$archive ($$target)"; \
 				return 0; \
 			fi; \

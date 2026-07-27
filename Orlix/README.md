@@ -105,7 +105,6 @@ Orlix/
 │   └── Welcome/
 ├── GhosttyTerminal/             # Ghostty bridge and terminal host views
 ├── Compatibility/               # Version/platform helpers
-├── Generated/                   # Build-time generated sources
 └── Resources/                   # Bundled assets, themes, terminfo, localizations
 ```
 
@@ -127,7 +126,7 @@ OrlixTests/                    # Unit and integration tests
 OrlixUITests/                  # UI tests
 Vendor/                         # Vendored native dependencies
 docs/specs/                     # Feature specs and implementation notes
-scripts/                        # Vendor build scripts
+make/                           # Included Make implementation fragments
 web/                            # Orlix Astro marketing site
 ```
 
@@ -152,13 +151,15 @@ git clone https://github.com/rudironsoni/Orlix.git
 cd Orlix/Orlix
 
 # Build native vendor libraries (GhosttyKit + libssh2/OpenSSL)
-./scripts/build.sh all
+make build type=vendor vendor=all
 
 # Open the project in Xcode
 open Orlix.xcodeproj
 ```
 
-`./scripts/build.sh` supports `all`, `ghostty`, `ssh`, `clean`, and `help`.
+Use `vendor=ghostty` or `vendor=ssh` to rebuild one native dependency. `make clean`
+removes only project-local `.build` intermediates and preserves tracked `Vendor/`
+artifacts.
 
 ## Dependencies
 

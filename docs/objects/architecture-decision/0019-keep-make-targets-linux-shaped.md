@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-15
+updated: 2026-07-27
 status: accepted
 external_id: "ADR-0019"
 summary: "Durable Orlix architecture decision ADR 0019."
@@ -32,6 +32,14 @@ Use variables for Orlix-specific scope. `PROFILE=release` selects the normal pro
 Proof labels are artifact metadata and log markers, not public Make targets. Labels such as `orlixmlibc-kselftest-syscall-uapi` describe what the generated output proves; they do not become command names.
 
 Project Makefiles may use private implementation targets, but normal documentation and user workflows should point to the Linux-shaped public targets on the top-level Makefile.
+
+Make is also the only repository-owned executable developer interface. Build,
+test, release-validation, payload-staging, and artifact-refresh behavior lives
+in the owning component's Make rules or in non-executable source modules called
+only by those rules. Do not add standalone command scripts under generic
+`tools/`, component `scripts/`, or component `tools/` directories. Generated
+wrappers required by upstream build systems may exist only in disposable
+`Build/` output.
 
 Non-product investigations belong in ADRs or explicitly approved scratch space, not in normal Make targets or repository-owned probe directories.
 

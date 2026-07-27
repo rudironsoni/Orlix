@@ -241,7 +241,14 @@ static bool raw_arm_source_content(const char *text)
  */
 static bool build_time_inventory_source(const char *path)
 {
-	return strstr(path, "/hosted_exec/orlix_tcti/isa/build-time/") != NULL;
+	static const char marker[] =
+		"/hosted_exec/orlix_tcti/isa/build-time";
+	const char *match = strstr(path, marker);
+
+	if (!match)
+		return false;
+	match += sizeof(marker) - 1;
+	return *match == '\0' || *match == '/';
 }
 
 static bool include_visited(struct include_scan *scan, const char *path)
@@ -365,7 +372,8 @@ static void scan_overlay_tree(const char *directory, struct include_scan *scan)
 		if (lstat(path, &status) != 0) {
 			fail(path, strerror(errno));
 		} else if (S_ISDIR(status.st_mode)) {
-			scan_overlay_tree(path, scan);
+			if (!build_time_inventory_source(path))
+				scan_overlay_tree(path, scan);
 		} else if (S_ISREG(status.st_mode) && source_file_name(entry->d_name)) {
 			bool raw_source = false;
 			char *text;

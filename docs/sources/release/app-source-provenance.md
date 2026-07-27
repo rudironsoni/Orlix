@@ -2,7 +2,7 @@
 type: source
 tags:
   - provenance
-updated: 2026-07-26
+updated: 2026-07-27
 status: current
 summary: "Canonical repository source for app source provenance."
 ---
@@ -55,7 +55,7 @@ Orlix release inputs must use immutable revisions in `project.yml`. SwiftUmami i
 
 `docs/sources/release/orlix-app-release-inputs.json` is the machine-readable release-input record for the Orlix application. It records the imported source commit, every direct Swift package URL and full revision, pinned native source versions and archive hashes, committed native artifact hashes, and required engineering evidence files.
 
-`make app-release-inputs-check` compares that record against the resolved XcodeGen package graph, the vendor build script, the Ghostty version marker, the committed archives, and the required evidence paths. `beta-prerequisites` runs the same check. Version-only or branch-only direct package inputs, changed native artifacts, changed source hashes, or missing evidence fail before beta build work starts.
+`make app-release-inputs-check` compares that record against the resolved XcodeGen package graph, the vendor Make rules, the Ghostty version marker, the committed archives, and the required evidence paths. `beta-prerequisites` runs the same check. Version-only or branch-only direct package inputs, changed native artifacts, changed source hashes, or missing evidence fail before beta build work starts.
 
 This check proves engineering release-input integrity only. It does not approve public distribution or complete the separate capability, entitlement, provisioning, CloudKit production-schema, export-classification, privacy, or legal gates.
 
@@ -70,13 +70,12 @@ This check proves engineering release-input integrity only. It does not approve 
 
 The imported rebuild entry points are:
 
-```sh
-cd Orlix
-./scripts/build.sh ghostty
-./scripts/build.sh ssh
+```console
+make build type=vendor vendor=ghostty
+make build type=vendor vendor=ssh
 ```
 
-The Ghostty script must default to the full pinned commit above, not the mutable `custom-io` branch. OpenSSL and libssh2 versions remain pinned in the script. A rebuilt artifact may replace a committed archive only after its source inputs, command, toolchain, target SDK, architectures, and resulting hashes are recorded.
+The Ghostty Make rule must default to the full pinned commit above, not the mutable `custom-io` branch. OpenSSL and libssh2 versions remain pinned in the owning Make rules. A rebuilt artifact may replace a committed archive only after its source inputs, command, toolchain, target SDK, architectures, and resulting hashes are recorded.
 
 ## Committed native artifact hashes
 

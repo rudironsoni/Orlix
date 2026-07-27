@@ -31,8 +31,10 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
-    <key>LSRequiresIPhoneOS</key>
-    <true/>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>OrlixReviewModeCode</key>
+	<string>$(APP_REVIEW_CODE)</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

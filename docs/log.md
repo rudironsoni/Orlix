@@ -779,3 +779,11 @@ and zero records are incomplete. The archive is not redistributed. Its bundled
 notice grants no intellectual property license, so technical provenance does
 not establish authorization to use the corpus and grants no implementation,
 proof, runtime-capability, or product-readiness credit.
+
+## [2026-07-27] decide | Make is the sole executable developer interface
+
+ADR 0019 now forbids standalone repository command scripts. Build, test,
+release-validation, payload-staging, and TCTI artifact-refresh behavior is
+owned by component Make rules, with only non-executable source modules behind
+private targets. Generated wrappers required by upstream build systems remain
+disposable `Build/` output.

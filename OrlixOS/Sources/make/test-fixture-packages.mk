@@ -106,7 +106,7 @@ $(ORLIXOS_DIFF_BINARY): $(ORLIXOS_DIFFUTILS_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROO
 	rm -rf "$(ORLIXOS_DIFFUTILS_BUILD_DIR)"; \
 	echo "built Orlix Linux diffutils package inputs: $(ORLIXOS_DIFFUTILS_PROGRAMS)"
 
-$(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(PROJECT_DIR)/Sources/make/config.mk $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk $(ORLIXOS_PACKAGE_TOOLCHAIN_SCRIPT)
+$(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready $(ORLIXOS_MLIBC_RTLIB) $(ORLIXOS_GAWK_TOOLCHAIN_STAMP) $(PROJECT_DIR)/Sources/make/config.mk $(PROJECT_DIR)/Sources/make/test-fixture-packages.mk
 	@set -euo pipefail; \
 	sysroot="$(ORLIXOS_MLIBC_SYSROOT)"; \
 	headers="$(ORLIXOS_MLIBC_HEADERS)"; \
@@ -122,7 +122,7 @@ $(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	command -v "$(ORLIXOS_STRIP)" >/dev/null 2>&1 || { echo "llvm-strip is required to package gawk; set ORLIXOS_STRIP=/path/to/llvm-strip" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_OBJDUMP)" >/dev/null 2>&1 || { echo "llvm-objdump is required to build gawk; set ORLIXOS_OBJDUMP=/path/to/llvm-objdump" >&2; exit 1; }; \
 	command -v "$(ORLIXOS_READELF)" >/dev/null 2>&1 || { echo "llvm-readelf is required to build gawk; set ORLIXOS_READELF=/path/to/llvm-readelf" >&2; exit 1; }; \
-	rm -rf "$(ORLIXOS_GAWK_BUILD_DIR)" "$(ORLIXOS_GAWK_TOOLCHAIN_DIR)" "$(ORLIXOS_GAWK_BINARY)"; \
+	rm -rf "$(ORLIXOS_GAWK_BUILD_DIR)" "$(ORLIXOS_GAWK_BINARY)"; \
 	mkdir -p "$(ORLIXOS_GAWK_BUILD_DIR)" "$(ORLIXOS_GAWK_TOOLCHAIN_DIR)" "$(dir $(ORLIXOS_GAWK_BINARY))"; \
 	export ORLIXOS_CC="$(ORLIXOS_CC)"; \
 	export ORLIXOS_LD="$(ORLIXOS_LD)"; \
@@ -138,7 +138,6 @@ $(ORLIXOS_GAWK_BINARY): $(ORLIXOS_GAWK_SOURCE_STAMP) $(ORLIXOS_MLIBC_SYSROOT)/.o
 	export ORLIXOS_HOSTED_USER_BASE_ADDRESS="$(ORLIXOS_HOSTED_USER_BASE_ADDRESS)"; \
 	export ORLIXOS_PACKAGE_TOOLCHAIN_DIR="$(ORLIXOS_GAWK_TOOLCHAIN_DIR)"; \
 	export ORLIXOS_PACKAGE_CODE_MODEL_FLAG="-fPIE"; \
-	"$(ORLIXOS_PACKAGE_TOOLCHAIN_SCRIPT)" "$(ORLIXOS_GAWK_TOOLCHAIN_DIR)"; \
 	cd "$(ORLIXOS_GAWK_BUILD_DIR)"; \
 	export PATH="$(ORLIXOS_GAWK_TOOLCHAIN_DIR):$$PATH"; \
 	export CC="$(ORLIXOS_GAWK_TOOLCHAIN_DIR)/aarch64-linux-gnu-gcc"; \

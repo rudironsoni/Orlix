@@ -4,6 +4,7 @@ SHELL := /bin/bash
 
 PROJECT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO_ROOT := $(abspath $(PROJECT_DIR)/..)
+include $(REPO_ROOT)/make/runtime.mk
 KERNEL_MAKE := $(MAKE) -C $(REPO_ROOT) -f OrlixKernel/Makefile
 
 PROFILE ?= release
@@ -449,7 +450,7 @@ __test-run: __test-initramfs
 	os_log="$$(awk -F'"' '{ for (i = 1; i <= NF; i++) if ($$i == "osLogPath") print $$(i + 2) }' "$$run_log" | tail -n 1)"; \
 	[ -n "$$runtime_log" ] || { echo "missing Orlix runtime log path in $$run_log" >&2; exit 1; }; \
 	[ -n "$$os_log" ] || { echo "missing Orlix OS log path in $$run_log" >&2; exit 1; }; \
-	. "$(CURDIR)/tools/runtime/orlix-runtime-log-policy.sh"; \
+	$(orlix_runtime_log_policy); \
 	for _ in $$(seq 1 50); do [ -s "$$runtime_log" ] && break; sleep 0.1; done; \
 	[ -s "$$runtime_log" ] || { echo "missing Orlix runtime log: $$runtime_log" >&2; exit 1; }; \
 	[ -r "$$os_log" ] || { echo "missing Orlix OS log: $$os_log" >&2; exit 1; }; \

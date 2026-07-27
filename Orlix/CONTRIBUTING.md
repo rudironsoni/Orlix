@@ -24,7 +24,7 @@ Setup:
 ```bash
 git clone https://github.com/rudironsoni/Orlix.git
 cd orlix
-./scripts/build.sh all
+make build type=vendor vendor=all
 open Orlix.xcodeproj
 ```
 
