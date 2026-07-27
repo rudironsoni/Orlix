@@ -1928,7 +1928,7 @@ private final class OrlixOCIDerivedRunCommandRuntimeProof: @unchecked Sendable {
         }
 
         let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-        let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+        let driver = OrlixOCIRuntimeKernelSessionObservationDriver(
             timeout: Self.timeout
         )
         let result = try await installer.run(
@@ -3358,7 +3358,7 @@ thenSend: inputAfterResize
 }
 
 let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
+		let driver = OrlixOCIRuntimeKernelSessionObservationDriver(timeout: Self.timeout)
 		var runArguments = [
 			"orlix", "run",
 			"--id", terminalEnvironmentID,
@@ -6067,7 +6067,7 @@ private final class OrlixOCIDerivedSignalRuntimeProof: @unchecked Sendable {
         try registry.save(processHandle.sessionDescriptor.environment)
         try runtime.lifecycleStore.save(lifecycle)
 
-        let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: Self.timeout)
+        let driver = OrlixOCIRuntimeKernelSessionObservationDriver(timeout: Self.timeout)
         let processSession = try OrlixOCIRuntimeProcessSession(
             lifecycle: lifecycle,
             rootMount: .defaultOverlay,
@@ -6307,7 +6307,7 @@ private final class OrlixOCIDerivedStopSignalRuntimeProof: @unchecked Sendable {
 		try registry.save(processHandle.sessionDescriptor.environment)
 		try registry.save(descriptor)
 		try runtime.lifecycleStore.save(lifecycle)
-		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+		let driver = OrlixOCIRuntimeKernelSessionObservationDriver(
 			timeout: Self.timeout
 		)
 		let processSession = try OrlixOCIRuntimeProcessSession(
@@ -6581,7 +6581,7 @@ private final class OrlixOCIDerivedKillSignalRuntimeProof: @unchecked Sendable {
         try registry.save(processHandle.sessionDescriptor.environment)
         try registry.save(descriptor)
         try runtime.lifecycleStore.save(lifecycle)
-        let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+        let driver = OrlixOCIRuntimeKernelSessionObservationDriver(
             timeout: Self.timeout
         )
         let processSession = try OrlixOCIRuntimeProcessSession(
@@ -6808,7 +6808,7 @@ private final class OrlixOCIDerivedLifecycleStateRuntimeProof: @unchecked Sendab
 
 		let createdState = try runtime.lifecycleStore.stateReport(id: descriptor.id)
 		let createdList = try runtime.listPreparedEnvironments()
-		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(
+		let driver = OrlixOCIRuntimeKernelSessionObservationDriver(
 			timeout: Self.timeout
 		)
 		let processSession = try OrlixOCIRuntimeProcessSession(

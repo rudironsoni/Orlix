@@ -1139,7 +1139,7 @@ private final class OrlixEnvironmentRootRuntimeProofRunner: @unchecked Sendable 
 			.create()
 		try runtime.lifecycleStore.save(lifecycle)
 		let installer = OrlixOCIEnvironmentInstaller(registry: registry)
-		let driver = OrlixOCIRuntimeLinuxSessionObservationDriver(timeout: 60)
+		let driver = OrlixOCIRuntimeKernelSessionObservationDriver(timeout: 60)
 
 		let started = try installer.start(
 			id: descriptor.id,
