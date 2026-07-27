@@ -85,25 +85,25 @@ clean-files += inventory.h target_inventory.h target_inventory.h.tmp
 
 $(obj)/inventory.h: $(obj)/gen_inventory \
 			    $(src)/../isa/inventory.def \
-			    $(src)/../isa/source_manifest.def \
+			    $(src)/../isa/generations/current/source_manifest.def \
 			    $(src)/../isa/target_classification.def FORCE
 	$(call if_changed,orlix_tcti_inventory)
 
 $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
-			   $(src)/../isa/source_manifest.def \
+			   $(src)/../isa/generations/current/source_manifest.def \
 			   $(src)/../isa/target_classification.def \
-			   $(src)/../isa/target_system_accessor_reconciliation.def FORCE
+			   $(src)/../isa/generations/current/target_system_accessor_reconciliation.def FORCE
 	$(call if_changed,orlix_tcti_target_inventory)
 
 $(obj)/orlix_tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
 $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
-	$(src)/../isa/target_runtime_capability_cohort_artifact.def
+	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
 $(obj)/target_runtime_capability_cohort_artifact.o: \
-	$(src)/../isa/target_runtime_capability_cohort_artifact.def \
-	$(src)/../isa/target_feature_artifact.def
+	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def \
+	$(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_execution_slice_map.o: \
 	$(src)/../isa/target_execution_slice_map.def \
-	$(src)/../isa/source_manifest.def
-$(obj)/target_feature_artifact.o: $(src)/../isa/target_feature_artifact.def
+	$(src)/../isa/generations/current/source_manifest.def
+$(obj)/target_feature_artifact.o: $(src)/../isa/generations/current/target_feature_artifact.def
 
 ccflags-y += -I$(obj)

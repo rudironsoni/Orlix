@@ -5,12 +5,13 @@
 #include <stddef.h>
 
 #define ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME 128U
+#define ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION 256U
 
 /*
- * A host-only publisher for generated OrlixTCTI target artifacts.  Callers pass an
- * already-open, trusted ORLIX_BUILD_ROOT directory descriptor and one safe
- * child directory name.  The publisher owns only that child/{generation,current};
- * it never accepts a source-tree path or a caller-provided artifact path.
+ * A host-only publisher for generated OrlixTCTI target artifacts. Callers pass
+ * an already-open trusted parent descriptor and one safe child directory name.
+ * The publisher owns only child/{generation,current}; current is its one
+ * atomically replaced symlink selector.
  */
 struct orlix_tcti_target_artifact {
 	const char *name;
@@ -55,6 +56,7 @@ enum orlix_tcti_target_artifact_publish_error {
 	ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
 	ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC,
 	ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_ALREADY_EXISTS,
+	ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_STALE_GENERATION,
 };
 
 enum orlix_tcti_target_artifact_publish_stage {
@@ -69,6 +71,7 @@ enum orlix_tcti_target_artifact_publish_stage {
 	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC,
 	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION,
 	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC,
+	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_PUBLISH_GENERATION,
 	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR,
 	ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC,
 };
@@ -76,8 +79,8 @@ enum orlix_tcti_target_artifact_publish_stage {
 /*
  * Test-only deterministic fault injection.  Production callers pass NULL.
  * A failure before selector rename leaves the existing current selector
- * untouched.  SELECTOR_SYNC is deliberately post-publication: the selector
- * has already been atomically replaced and only durability is uncertain.
+ * untouched.  SELECTOR_SYNC is injected before the selector rename, so every
+ * injected failure preserves the previously selected generation.
  */
 struct orlix_tcti_target_artifact_publish_fault {
 	enum orlix_tcti_target_artifact_publish_stage stage;
@@ -89,10 +92,19 @@ struct orlix_tcti_target_artifact_publish_result {
 	enum orlix_tcti_target_artifact_publish_error error;
 	int system_error;
 	enum orlix_tcti_target_artifact_publish_stage stage;
+	char generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 };
 
+/*
+ * Publication gives one atomic process-visible commit at the current-selector
+ * rename. All fallible sync work happens before that rename, so any reported
+ * failure preserves the previous selection. The API does not claim that the
+ * new selector survives sudden power loss: a post-rename fsync could fail only
+ * after visibility changed and therefore cannot preserve that failure contract.
+ */
 int orlix_tcti_target_artifact_publish(
-	int build_root_fd, const char *publish_name, const char *generation,
+	int build_root_fd, const char *publish_name,
+	const char *generation_prefix,
 	const struct orlix_tcti_target_artifact *artifacts, size_t artifact_count,
 	const struct orlix_tcti_target_artifact_provenance *provenance,
 	const struct orlix_tcti_target_artifact_publish_fault *fault,
@@ -112,6 +124,7 @@ enum orlix_tcti_target_artifact_verify_error {
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_MANIFEST_FORMAT,
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_PROVENANCE,
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_BUNDLE_DIGEST,
+	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_GENERATION_IDENTITY,
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_OPEN,
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_TYPE,
 	ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_SIZE,

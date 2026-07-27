@@ -82,7 +82,7 @@ help:
 	@printf '%s\n' 'Owning test suites:'
 	@printf '%s\n' '  orlix-tcti-isa-host-tests    run deterministic OrlixTCTI inventory contract tests'
 	@printf '%s\n' '  orlix-tcti-isa-audit         audit the canonical C target inventory and proof ledger'
-	@printf '%s\n' '  orlix-tcti-isa-maintainer    run the explicit raw Arm-source maintainer checks'
+	@printf '%s\n' '  orlix-tcti-isa-maintainer    atomically refresh the pinned C artifact bundle'
 	@printf '%s\n' '  kernel-archive-cache-tests run deterministic archive cache freshness tests'
 	@printf '%s\n' '  orlix-tcti-kernel-tests run OrlixTCTI KUnit and app-hosted Linux kselftests'
 	@printf '%s\n' '  mlibc-tests         run the upstream mlibc suite through OrlixOS'
@@ -414,10 +414,11 @@ orlix-tcti-isa-audit: orlix-tcti-isa-host-tests
 	@'$(ORLIX_TCTI_INVENTORY_AUDITOR)'
 
 orlix-tcti-isa-maintainer:
-	@$(MAKE) -C tools/orlix-tcti-isa-maintainer ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)' check
+	@$(MAKE) -C tools/orlix-tcti-isa-maintainer ORLIX_BUILD_ROOT='$(ORLIX_BUILD_ROOT)' refresh
 
-# The explicit maintainer tool verifies pinned Arm inputs against checked C
-# artifacts. It is intentionally separate from normal kernel builds and audits.
+# The explicit maintainer tool validates pinned Arm inputs and atomically
+# selects one immutable authoritative C generation below arch/orlix.
+# It is intentionally separate from normal kernel builds and audits.
 orlix-tcti-kernel-tests:
 orlix-tcti-kernel-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

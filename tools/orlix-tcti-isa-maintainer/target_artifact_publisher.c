@@ -23,7 +23,6 @@
 #define O_NOFOLLOW 0
 #endif
 
-#define ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION 128U
 #define ORLIX_TCTI_TARGET_ARTIFACT_MAX_COUNT 4096U
 #define ORLIX_TCTI_TARGET_ARTIFACT_MAX_TOTAL_BYTES (512U * 1024U * 1024U)
 #define ORLIX_TCTI_TARGET_ARTIFACT_TEMP_ATTEMPTS 256U
@@ -34,6 +33,8 @@ struct publisher {
 	const struct orlix_tcti_target_artifact_publish_fault *fault;
 	unsigned long temporary_sequence;
 	struct orlix_tcti_target_artifact_publish_result *result;
+	bool defer_rename;
+	char deferred_temporary[NAME_MAX + 1];
 };
 
 static void set_result(struct publisher *publisher,
@@ -229,6 +230,11 @@ static int publish_file(struct publisher *publisher, const char *name,
 		goto fail;
 	}
 	fd = -1;
+	if (publisher->defer_rename) {
+		memcpy(publisher->deferred_temporary, temporary,
+		       sizeof(publisher->deferred_temporary));
+		return 0;
+	}
 	if (fail_stage(publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_RENAME)) {
 		errno = EIO;
 		goto fail;
@@ -289,6 +295,11 @@ struct verified_artifact {
 	size_t length;
 	char digest[65];
 };
+
+static int build_verified_identity(
+	const struct verified_artifact *artifacts, size_t artifact_count,
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char digest[65]);
 
 struct manifest_cursor {
 	const char *data;
@@ -629,6 +640,7 @@ const char *orlix_tcti_target_artifact_verify_error_name(
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_MANIFEST_FORMAT: return "invalid generation manifest";
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_PROVENANCE: return "generation provenance mismatch";
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_BUNDLE_DIGEST: return "generation bundle digest mismatch";
+	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_GENERATION_IDENTITY: return "generation name does not match full-bundle identity";
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_OPEN: return "open generated artifact";
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_TYPE: return "generated artifact is not regular";
 	case ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_SIZE: return "generated artifact size mismatch";
@@ -650,7 +662,6 @@ int orlix_tcti_target_artifact_verify(
 	char generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1];
 	char *selector = NULL;
 	char *manifest = NULL;
-	size_t selector_length = 0;
 	size_t manifest_length = 0;
 	size_t artifact_count = 0;
 	size_t total_bytes = 0;
@@ -682,33 +693,31 @@ int orlix_tcti_target_artifact_verify(
 				  errno, NULL);
 		goto out;
 	}
-	if (read_bounded_regular_at(root_fd, "current",
-				    ORLIX_TCTI_TARGET_ARTIFACT_MAX_SELECTOR_BYTES,
-				    &selector, &selector_length,
-				    ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_SELECTOR_OPEN,
-				    result))
+	ssize_t selected_length = readlinkat(root_fd, "current", generation,
+					 sizeof(generation) - 1U);
+
+	if (selected_length < 0) {
+		set_verify_result(result,
+				  ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_SELECTOR_OPEN,
+				  errno, NULL);
 		goto out;
-	cursor = (struct manifest_cursor) {
-		.data = selector,
-		.length = selector_length,
-	};
-	line_result = next_manifest_line(&cursor, &line, &line_length,
-					 &line_offset);
-	if (line_result != 1 ||
-	    !line_is(line, line_length, "ORLIX_TCTI_TARGET_ARTIFACT_CURRENT_V1") ||
-	    next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
-	    line_length <= strlen("generation=") ||
-	    memcmp(line, "generation=", strlen("generation=")) ||
-	    line_length - strlen("generation=") > ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION)
-		goto selector_format;
-	memcpy(generation, line + strlen("generation="),
-	       line_length - strlen("generation="));
-	generation[line_length - strlen("generation=")] = '\0';
-	if (!valid_component(generation, ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION) ||
-	    next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
-	    !line_is(line, line_length, "manifest=manifest") ||
-	    cursor.offset != cursor.length)
-		goto selector_format;
+	}
+	if ((size_t)selected_length >= sizeof(generation)) {
+		set_verify_result(result,
+				  ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_SELECTOR_FORMAT,
+				  EOVERFLOW, NULL);
+		errno = EOVERFLOW;
+		goto out;
+	}
+	generation[selected_length] = '\0';
+	if (!valid_component(generation,
+			     ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION)) {
+		set_verify_result(result,
+				  ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_SELECTOR_FORMAT,
+				  EINVAL, NULL);
+		errno = EINVAL;
+		goto out;
+	}
 	generation_fd = openat(root_fd, generation,
 			       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (generation_fd < 0) {
@@ -814,6 +823,28 @@ int orlix_tcti_target_artifact_verify(
 	}
 	if (!artifact_count)
 		goto manifest_format;
+	{
+		char identity[65];
+		size_t generation_length = strlen(generation);
+
+		if (build_verified_identity(artifacts, artifact_count,
+					    expected_provenance, identity)) {
+			set_verify_result(result,
+				ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_IO,
+				errno ? errno : ENOMEM, NULL);
+			goto out;
+		}
+		if (generation_length < 66U ||
+		    generation[generation_length - 65U] != '-' ||
+		    memcmp(generation + generation_length - 64U, identity, 64U)) {
+			set_verify_result(
+				result,
+				ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_GENERATION_IDENTITY,
+				EINVAL, generation);
+			errno = EINVAL;
+			goto out;
+		}
+	}
 	for (index = 0; index < artifact_count; index++)
 		if (hash_artifact(generation_fd, &artifacts[index], result))
 			goto out;
@@ -847,11 +878,6 @@ int orlix_tcti_target_artifact_verify(
 		}
 	}
 	return_value = 0;
-	goto out;
-selector_format:
-	set_verify_result(result, ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_SELECTOR_FORMAT,
-			  EINVAL, "current");
-	errno = EINVAL;
 	goto out;
 manifest_format:
 	set_verify_result(result, ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_MANIFEST_FORMAT,
@@ -1062,6 +1088,78 @@ void orlix_tcti_target_artifact_sha256(const void *data, size_t length,
 	digest[64] = '\0';
 }
 
+static int build_verified_identity(
+	const struct verified_artifact *artifacts, size_t artifact_count,
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char digest[65])
+{
+	char *buffer = NULL;
+	size_t length = 0;
+	size_t capacity = 0;
+	size_t index;
+
+	if (appendf(&buffer, &length, &capacity,
+		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V1\n"
+		    "schema=%s\ngenerator=%s\ninstructions_sha256=%s\n"
+		    "features_sha256=%s\nregisters_sha256=%s\n",
+		    provenance->schema, provenance->generator,
+		    provenance->instructions_sha256,
+		    provenance->features_sha256,
+		    provenance->registers_sha256))
+		goto fail;
+	for (index = 0; index < artifact_count; index++)
+		if (appendf(&buffer, &length, &capacity,
+			    "artifact=%s %zu sha256=%s\n",
+			    artifacts[index].name, artifacts[index].length,
+			    artifacts[index].digest))
+			goto fail;
+	orlix_tcti_target_artifact_sha256(buffer, length, digest);
+	free(buffer);
+	return 0;
+fail:
+	free(buffer);
+	return -1;
+}
+
+static int build_identity(
+	const struct orlix_tcti_target_artifact *artifacts, size_t artifact_count,
+	const struct orlix_tcti_target_artifact_provenance *provenance,
+	char digest[65])
+{
+	char *buffer = NULL;
+	size_t length = 0;
+	size_t capacity = 0;
+	size_t index;
+
+	if (appendf(&buffer, &length, &capacity,
+		    "ORLIX_TCTI_TARGET_ARTIFACT_IDENTITY_V1\n"
+		    "schema=%s\ngenerator=%s\ninstructions_sha256=%s\n"
+		    "features_sha256=%s\nregisters_sha256=%s\n",
+		    provenance->schema, provenance->generator,
+		    provenance->instructions_sha256,
+		    provenance->features_sha256,
+		    provenance->registers_sha256))
+		goto fail;
+	for (index = 0; index < artifact_count; index++) {
+		char artifact_digest[65];
+
+		orlix_tcti_target_artifact_sha256(artifacts[index].data,
+						 artifacts[index].length,
+						 artifact_digest);
+		if (appendf(&buffer, &length, &capacity,
+			    "artifact=%s %zu sha256=%s\n",
+			    artifacts[index].name, artifacts[index].length,
+			    artifact_digest))
+			goto fail;
+	}
+	orlix_tcti_target_artifact_sha256(buffer, length, digest);
+	free(buffer);
+	return 0;
+fail:
+	free(buffer);
+	return -1;
+}
+
 static int build_manifest(const char *generation,
 			  const struct orlix_tcti_target_artifact *artifacts,
 			  size_t artifact_count, char **manifest,
@@ -1112,6 +1210,170 @@ fail:
  * the same deterministic generation identifier can be retried. This is
  * intentionally descriptor-relative and never follows a generation symlink.
  */
+static bool exact_regular_file_at(int directory_fd, const char *name,
+				  const void *expected, size_t expected_length)
+{
+	const unsigned char *bytes = expected;
+	struct stat status;
+	size_t offset = 0;
+	int fd;
+
+	fd = openat(directory_fd, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0 || fstat(fd, &status) || !S_ISREG(status.st_mode) ||
+	    status.st_size < 0 || (uintmax_t)status.st_size != expected_length)
+		goto mismatch;
+	while (offset < expected_length) {
+		unsigned char buffer[16384];
+		size_t remaining = expected_length - offset;
+		size_t requested = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+		ssize_t count = read(fd, buffer, requested);
+
+		if (count <= 0 || memcmp(buffer, bytes + offset, (size_t)count))
+			goto mismatch;
+		offset += (size_t)count;
+	}
+	if (close(fd))
+		return false;
+	return true;
+mismatch:
+	if (fd >= 0)
+		close(fd);
+	return false;
+}
+
+static bool expected_generation_entry(
+	const char *name, const struct orlix_tcti_target_artifact *artifacts,
+	size_t artifact_count)
+{
+	size_t index;
+
+	if (!strcmp(name, "manifest"))
+		return true;
+	for (index = 0; index < artifact_count; index++)
+		if (!strcmp(name, artifacts[index].name))
+			return true;
+	return false;
+}
+
+static bool generation_matches(
+	int root_fd, const char *generation,
+	const struct orlix_tcti_target_artifact *artifacts, size_t artifact_count,
+	const char *manifest, size_t manifest_length)
+{
+	DIR *directory = NULL;
+	struct dirent *entry;
+	size_t index;
+	int generation_fd = -1;
+	int scan_fd;
+	bool matches = false;
+
+	generation_fd = openat(root_fd, generation,
+			       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (generation_fd < 0)
+		goto out;
+	{
+		struct stat status;
+
+		if (fstat(generation_fd, &status))
+			goto out;
+	}
+	for (index = 0; index < artifact_count; index++)
+		if (!exact_regular_file_at(generation_fd, artifacts[index].name,
+					   artifacts[index].data,
+					   artifacts[index].length))
+			goto out;
+	if (!exact_regular_file_at(generation_fd, "manifest", manifest,
+				   manifest_length))
+		goto out;
+	scan_fd = dup(generation_fd);
+	if (scan_fd < 0)
+		goto out;
+	directory = fdopendir(scan_fd);
+	if (!directory) {
+		close(scan_fd);
+		goto out;
+	}
+	errno = 0;
+	while ((entry = readdir(directory))) {
+		if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+			continue;
+		if (!expected_generation_entry(entry->d_name, artifacts,
+					       artifact_count))
+			goto out;
+	}
+	if (errno)
+		goto out;
+	matches = true;
+out:
+	if (directory)
+		closedir(directory);
+	if (generation_fd >= 0)
+		close(generation_fd);
+	return matches;
+}
+
+static int restore_regular_mode(struct publisher *publisher, int directory_fd,
+				const char *name)
+{
+	struct stat status;
+	int fd = openat(directory_fd, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+
+	if (fd < 0 || fstat(fd, &status) || !S_ISREG(status.st_mode))
+		goto fail;
+	if (fchmod(fd, 0444) || fsync(fd))
+		goto fail;
+	if (close(fd))
+		return -1;
+	return 0;
+fail:
+	if (fd >= 0)
+		close(fd);
+	set_result(publisher,
+		   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_FILE_LOCK_SYNC,
+		   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_FILE_LOCK_SYNC,
+		   errno ? errno : EINVAL);
+	return -1;
+}
+
+static int restore_generation_modes(
+	struct publisher *publisher, const char *generation,
+	const struct orlix_tcti_target_artifact *artifacts, size_t artifact_count)
+{
+	int generation_fd;
+	size_t index;
+
+	generation_fd = openat(publisher->root_fd, generation,
+			       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (generation_fd < 0) {
+		set_result(publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_GENERATION,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
+		return -1;
+	}
+	for (index = 0; index < artifact_count; index++)
+		if (restore_regular_mode(publisher, generation_fd,
+					 artifacts[index].name))
+			goto fail;
+	if (restore_regular_mode(publisher, generation_fd, "manifest"))
+		goto fail;
+	if (fchmod(generation_fd, 0555) || fsync(generation_fd)) {
+		set_result(publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC, errno);
+		goto fail;
+	}
+	if (close(generation_fd)) {
+		set_result(publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_FILE_CLOSE,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_FILE_CLOSE, errno);
+		return -1;
+	}
+	return 0;
+fail:
+	close(generation_fd);
+	return -1;
+}
+
 static void discard_generation(int root_fd, const char *generation,
 			       const struct orlix_tcti_target_artifact *artifacts,
 			       size_t artifact_count)
@@ -1155,12 +1417,121 @@ const char *orlix_tcti_target_artifact_publish_error_name(
 	case ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR: return "publish current selector";
 	case ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC: return "sync publish root";
 	case ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_ALREADY_EXISTS: return "generation already exists";
+	case ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_STALE_GENERATION: return "existing generation does not match bundle identity";
 	}
 	return "unknown publish error";
 }
 
+static bool selector_points_to(int root_fd, const char *generation)
+{
+	char selected[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	ssize_t length;
+
+	length = readlinkat(root_fd, "current", selected, sizeof(selected) - 1U);
+	if (length < 0 || (size_t)length >= sizeof(selected))
+		return false;
+	selected[length] = '\0';
+	return !strcmp(selected, generation);
+}
+
+static int create_staging_generation(struct publisher *publisher,
+				     char staging[NAME_MAX + 1U])
+{
+	unsigned int attempt;
+
+	for (attempt = 0; attempt < ORLIX_TCTI_TARGET_ARTIFACT_TEMP_ATTEMPTS;
+	     attempt++) {
+		int count = snprintf(staging, NAME_MAX + 1U,
+				     ".staging.%ld.%lu.tmp", (long)getpid(),
+				     publisher->temporary_sequence++);
+
+		if (count < 0 || count > NAME_MAX) {
+			errno = ENAMETOOLONG;
+			break;
+		}
+		if (!mkdirat(publisher->root_fd, staging, 0755))
+			return 0;
+		if (errno != EEXIST)
+			break;
+	}
+	set_result(publisher,
+		   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_CREATE_GENERATION,
+		   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
+	return -1;
+}
+
+static int publish_selector(struct publisher *publisher, const char *generation)
+{
+	unsigned int attempt;
+
+	if (fail_stage(publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR)) {
+		errno = EIO;
+		set_result(publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR, errno);
+		return -1;
+	}
+	for (attempt = 0;
+	     attempt < ORLIX_TCTI_TARGET_ARTIFACT_TEMP_ATTEMPTS; attempt++) {
+		int count = snprintf(publisher->deferred_temporary,
+				     sizeof(publisher->deferred_temporary),
+				     ".current.%ld.%lu.tmp", (long)getpid(),
+				     publisher->temporary_sequence++);
+
+		if (count < 0 ||
+		    (size_t)count >= sizeof(publisher->deferred_temporary)) {
+			errno = ENAMETOOLONG;
+			set_result(publisher,
+				   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
+				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR,
+				   errno);
+			return -1;
+		}
+		if (!symlinkat(generation, publisher->root_fd,
+			       publisher->deferred_temporary))
+			break;
+		if (errno != EEXIST) {
+			set_result(publisher,
+				   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
+				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR,
+				   errno);
+			return -1;
+		}
+	}
+	if (attempt == ORLIX_TCTI_TARGET_ARTIFACT_TEMP_ATTEMPTS) {
+		errno = EEXIST;
+		set_result(publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR, errno);
+		return -1;
+	}
+	if (fail_stage(publisher,
+		       ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC)) {
+		errno = EIO;
+		set_result(publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC,
+			   errno);
+		return -1;
+	}
+	if (fsync(publisher->root_fd)) {
+		set_result(publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC,
+			   errno);
+		return -1;
+	}
+	if (renameat(publisher->root_fd, publisher->deferred_temporary,
+		     publisher->root_fd, "current")) {
+		set_result(publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR, errno);
+		return -1;
+	}
+	publisher->deferred_temporary[0] = '\0';
+	return 0;
+}
+
 int orlix_tcti_target_artifact_publish(
-	int build_root_fd, const char *publish_name, const char *generation,
+	int build_root_fd, const char *publish_name,
+	const char *generation_prefix,
 	const struct orlix_tcti_target_artifact *artifacts, size_t artifact_count,
 	const struct orlix_tcti_target_artifact_provenance *provenance,
 	const struct orlix_tcti_target_artifact_publish_fault *fault,
@@ -1174,12 +1545,13 @@ int orlix_tcti_target_artifact_publish(
 	};
 	char *manifest = NULL;
 	size_t manifest_length = 0;
-	char selector[256];
-	int selector_length;
+	char identity[65];
+	char generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	char staging[NAME_MAX + 1U] = { 0 };
 	size_t index;
 	int saved_errno = 0;
 	bool generation_created = false;
-	bool selector_published = false;
+	bool staging_created = false;
 	enum orlix_tcti_target_artifact_publish_error validation;
 
 	if (result)
@@ -1189,147 +1561,259 @@ int orlix_tcti_target_artifact_publish(
 	validation = validate_artifacts(artifacts, artifact_count);
 	if (build_root_fd < 0 ||
 	    !valid_component(publish_name, ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME) ||
-	    !valid_component(generation, ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION) ||
+	    !valid_component(generation_prefix,
+			     ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION - 65U) ||
 	    !valid_provenance(provenance) ||
 	    validation != ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_INVALID_ARGUMENT,
-		   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, EINVAL);
+		set_result(&publisher,
+			   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_INVALID_ARGUMENT,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, EINVAL);
 		if (validation == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_INVALID_NAME)
 			set_result(&publisher, validation,
 				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, EINVAL);
 		errno = EINVAL;
 		return -1;
 	}
+	if (build_identity(artifacts, artifact_count, provenance, identity) ||
+	    snprintf(generation, sizeof(generation), "%s-%s",
+		     generation_prefix, identity) >= (int)sizeof(generation) ||
+	    build_manifest(generation, artifacts, artifact_count, &manifest,
+			   &manifest_length, provenance)) {
+		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST,
+			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST, ENOMEM);
+		errno = ENOMEM;
+		return -1;
+	}
+	if (result)
+		memcpy(result->generation, generation, strlen(generation) + 1U);
+
 	if (mkdirat(build_root_fd, publish_name, 0755) && errno != EEXIST) {
 		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_ROOT,
 			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
-		return -1;
+		goto fail;
 	}
 	publisher.root_fd = openat(build_root_fd, publish_name,
-		O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+				   O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (publisher.root_fd < 0) {
 		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_ROOT,
 			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
-		return -1;
-	}
-	if (mkdirat(publisher.root_fd, generation, 0755)) {
-		if (errno == EEXIST)
-			set_result(&publisher,
-				   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_ALREADY_EXISTS,
-				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
-		else
-			set_result(&publisher,
-				   ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_CREATE_GENERATION,
-				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
 		goto fail;
 	}
-	generation_created = true;
-	publisher.generation_fd = openat(publisher.root_fd, generation,
-		O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-	if (publisher.generation_fd < 0) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_GENERATION,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
-		goto fail;
-	}
-	for (index = 0; index < artifact_count; index++)
-		if (publish_file(&publisher, artifacts[index].name,
-				 artifacts[index].data, artifacts[index].length,
-				 ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK))
+	{
+		struct stat final_status;
+
+		if (!fstatat(publisher.root_fd, generation, &final_status,
+			    AT_SYMLINK_NOFOLLOW)) {
+			if (!S_ISDIR(final_status.st_mode) ||
+			    !generation_matches(publisher.root_fd, generation,
+						artifacts, artifact_count,
+						manifest, manifest_length)) {
+				errno = EEXIST;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_STALE_GENERATION,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+					errno);
+				goto fail;
+			}
+			if (restore_generation_modes(&publisher, generation,
+						     artifacts,
+						     artifact_count))
+				goto fail;
+		} else if (errno != ENOENT) {
+			set_result(
+				&publisher,
+				ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_GENERATION,
+				ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, errno);
 			goto fail;
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST, errno);
-		goto fail;
+		} else {
+			if (create_staging_generation(&publisher, staging))
+				goto fail;
+			staging_created = true;
+			publisher.generation_fd = openat(
+				publisher.root_fd, staging,
+				O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+			if (publisher.generation_fd < 0) {
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OPEN_GENERATION,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+					errno);
+				goto fail;
+			}
+			for (index = 0; index < artifact_count; index++)
+				if (publish_file(
+					    &publisher, artifacts[index].name,
+					    artifacts[index].data,
+					    artifacts[index].length,
+					    ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK))
+					goto fail;
+			if (fail_stage(
+				    &publisher,
+				    ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST)) {
+				errno = EIO;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST,
+					errno);
+				goto fail;
+			}
+			if (publish_file(
+				    &publisher, "manifest", manifest,
+				    manifest_length,
+				    ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST))
+				goto fail;
+			if (fail_stage(
+				    &publisher,
+				    ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC)) {
+				errno = EIO;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_GENERATION_SYNC,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC,
+					errno);
+				goto fail;
+			}
+			if (fsync(publisher.generation_fd)) {
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_GENERATION_SYNC,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC,
+					errno);
+				goto fail;
+			}
+			if (fail_stage(
+				    &publisher,
+				    ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION)) {
+				errno = EIO;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_GENERATION,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION,
+					errno);
+				goto fail;
+			}
+			if (fchmod(publisher.generation_fd, 0555)) {
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_GENERATION,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION,
+					errno);
+				goto fail;
+			}
+			if (fail_stage(
+				    &publisher,
+				    ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC)) {
+				errno = EIO;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC,
+					errno);
+				goto fail;
+			}
+			if (fsync(publisher.generation_fd)) {
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC,
+					errno);
+				goto fail;
+			}
+			if (close(publisher.generation_fd)) {
+				publisher.generation_fd = -1;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_FILE_CLOSE,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_FILE_CLOSE,
+					errno);
+				goto fail;
+			}
+			publisher.generation_fd = -1;
+			if (fail_stage(
+				    &publisher,
+				    ORLIX_TCTI_TARGET_ARTIFACT_STAGE_PUBLISH_GENERATION)) {
+				errno = EIO;
+				set_result(
+					&publisher,
+					ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_RENAME,
+					ORLIX_TCTI_TARGET_ARTIFACT_STAGE_PUBLISH_GENERATION,
+					errno);
+				goto fail;
+			}
+			if (renameat(publisher.root_fd, staging,
+				     publisher.root_fd, generation)) {
+				int rename_error = errno;
+
+				discard_generation(publisher.root_fd, staging,
+						   artifacts, artifact_count);
+				staging_created = false;
+				if ((rename_error != EEXIST &&
+				     rename_error != ENOTEMPTY) ||
+				    !generation_matches(
+					    publisher.root_fd, generation,
+					    artifacts, artifact_count, manifest,
+					    manifest_length)) {
+					errno = rename_error;
+					set_result(
+						&publisher,
+						(rename_error == EEXIST ||
+						 rename_error == ENOTEMPTY) ?
+							ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_STALE_GENERATION :
+							ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_RENAME,
+						ORLIX_TCTI_TARGET_ARTIFACT_STAGE_RENAME,
+						errno);
+					goto fail;
+				}
+				if (restore_generation_modes(
+					    &publisher, generation, artifacts,
+					    artifact_count))
+					goto fail;
+			} else {
+				staging_created = false;
+				generation_created = true;
+				if (fsync(publisher.root_fd)) {
+					set_result(
+						&publisher,
+						ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_GENERATION_SYNC,
+						ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC,
+						errno);
+					goto fail;
+				}
+			}
+		}
 	}
-	if (build_manifest(generation, artifacts, artifact_count, &manifest,
-			   &manifest_length, provenance) ||
-	    publish_file(&publisher, "manifest", manifest, manifest_length,
-			 ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST)) {
-		if (!publisher.result ||
-		    publisher.result->error == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK)
-			set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_MANIFEST,
-				   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_MANIFEST, errno);
-		goto fail;
+
+	if (selector_points_to(publisher.root_fd, generation)) {
+		free(manifest);
+		close(publisher.root_fd);
+		return 0;
 	}
+	if (publish_selector(&publisher, generation))
+		goto fail;
+
+	/*
+	 * renameat() above is the only visibility point. No operation after it
+	 * may turn a successful canonical selector switch into a reported
+	 * failure.
+	 */
 	free(manifest);
-	manifest = NULL;
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_GENERATION_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC, errno);
-		goto fail;
-	}
-	if (fsync(publisher.generation_fd)) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_GENERATION_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC, errno);
-		goto fail;
-	}
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_GENERATION,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION, errno);
-		goto fail;
-	}
-	if (fchmod(publisher.generation_fd, 0555)) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_GENERATION,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION, errno);
-		goto fail;
-	}
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC, errno);
-		goto fail;
-	}
-	if (fsync(publisher.generation_fd)) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC, errno);
-		goto fail;
-	}
-	selector_length = snprintf(selector, sizeof(selector),
-		"ORLIX_TCTI_TARGET_ARTIFACT_CURRENT_V1\ngeneration=%s\nmanifest=manifest\n",
-		generation);
-	if (selector_length < 0 || (size_t)selector_length >= sizeof(selector)) {
-		errno = EOVERFLOW;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR, errno);
-		goto fail;
-	}
-	/* current is published in the root, never inside the immutable generation. */
-	close(publisher.generation_fd);
-	publisher.generation_fd = publisher.root_fd;
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR, errno);
-		goto fail;
-	}
-	if (publish_file(&publisher, "current", selector, (size_t)selector_length,
-			 ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR))
-		goto fail;
-	selector_published = true;
-	if (fail_stage(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC)) {
-		errno = EIO;
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC, errno);
-		goto fail;
-	}
-	if (fsync(publisher.root_fd)) {
-		set_result(&publisher, ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC,
-			   ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC, errno);
-		goto fail;
-	}
 	close(publisher.root_fd);
 	return 0;
+
 fail:
 	saved_errno = errno;
 	free(manifest);
-	if (publisher.generation_fd >= 0 &&
-	    publisher.generation_fd != publisher.root_fd)
+	if (publisher.root_fd >= 0 && publisher.deferred_temporary[0])
+		unlinkat(publisher.root_fd, publisher.deferred_temporary, 0);
+	if (publisher.generation_fd >= 0)
 		close(publisher.generation_fd);
 	if (publisher.root_fd >= 0) {
-		if (generation_created && !selector_published)
+		if (staging_created)
+			discard_generation(publisher.root_fd, staging, artifacts,
+					   artifact_count);
+		if (generation_created)
 			discard_generation(publisher.root_fd, generation, artifacts,
 					   artifact_count);
 		close(publisher.root_fd);

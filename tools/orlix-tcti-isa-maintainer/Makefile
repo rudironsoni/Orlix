@@ -101,11 +101,11 @@ source-check:
 	@$(CC) $(CFLAGS) $(INVENTORY_CPPFLAGS) $(CONDITION_INCLUDE) $(REFRESH_TEST_DEFINES) \
 		target_refresh_test.c $(REFRESH_SOURCES) \
 		-o '$(OUT)/target_refresh_test'
-	@'$(OUT)/target_refresh_test' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
+	@'$(OUT)/target_refresh_test' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
 
 refresh: source-check
 	@mkdir -p '$(ORLIX_BUILD_ROOT)'
 	@$(CC) $(CFLAGS) $(INVENTORY_CPPFLAGS) $(CONDITION_INCLUDE) $(REFRESH_DEFINES) \
 		target_refresh.c $(filter-out target_refresh.c,$(REFRESH_SOURCES)) \
 		-o '$(OUT)/target_refresh'
-	@'$(OUT)/target_refresh' '$(ORLIX_BUILD_ROOT)' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'
+	@'$(OUT)/target_refresh' '$(CANONICAL_DIR)' '$(INSTRUCTIONS)' '$(FEATURES)' '$(REGISTERS)'

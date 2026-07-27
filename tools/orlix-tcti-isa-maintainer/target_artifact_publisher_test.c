@@ -139,34 +139,62 @@ static char *read_file(const char *path, size_t *length)
 static int selector_is(const char *root, const char *generation)
 {
 	char path[PATH_MAX];
-	char expected[256];
-	char *contents;
-	size_t length;
-	int result;
+	char selected[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	ssize_t length;
 
 	if (snprintf(path, sizeof(path), "%s/target/current", root) >=
-	    (int)sizeof(path) ||
-	    snprintf(expected, sizeof(expected),
-		     "ORLIX_TCTI_TARGET_ARTIFACT_CURRENT_V1\ngeneration=%s\nmanifest=manifest\n",
-		     generation) >= (int)sizeof(expected))
+	    (int)sizeof(path))
 		return -1;
-	contents = read_file(path, &length);
-	result = contents && length == strlen(expected) &&
-		!memcmp(contents, expected, length) ? 0 : -1;
-	free(contents);
-	return result;
+	length = readlink(path, selected, sizeof(selected) - 1U);
+	if (length < 0 || (size_t)length >= sizeof(selected))
+		return -1;
+	selected[length] = '\0';
+	return (!strcmp(selected, generation) ||
+		(!strncmp(selected, generation, strlen(generation)) &&
+		 selected[strlen(generation)] == '-')) ? 0 : -1;
+}
+
+static int staging_entry_count(const char *root)
+{
+	char path[PATH_MAX];
+	DIR *directory;
+	struct dirent *entry;
+	int count = 0;
+
+	if (snprintf(path, sizeof(path), "%s/target", root) >= (int)sizeof(path))
+		return -1;
+	directory = opendir(path);
+	if (!directory)
+		return -1;
+	while ((entry = readdir(directory)))
+		if (!strncmp(entry->d_name, ".staging.", strlen(".staging.")))
+			count++;
+	if (closedir(directory))
+		return -1;
+	return count;
 }
 
 static int file_matches(const char *root, const char *generation,
 			const struct orlix_tcti_target_artifact *artifact)
 {
 	char path[PATH_MAX];
+	char selector[PATH_MAX];
+	char selected[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	char *contents;
 	size_t length;
 	int result;
 
 	if (snprintf(path, sizeof(path), "%s/target/%s/%s", root, generation,
-		     artifact->name) >= (int)sizeof(path))
+		     artifact->name) >= (int)sizeof(path) ||
+	    (access(path, F_OK) &&
+	     (snprintf(selector, sizeof(selector), "%s/target/current", root) >=
+		      (int)sizeof(selector) ||
+	      (length = (size_t)readlink(selector, selected,
+					 sizeof(selected) - 1U)) >= sizeof(selected) ||
+	      (selected[length] = '\0',
+	       strncmp(selected, generation, strlen(generation))) ||
+	      snprintf(path, sizeof(path), "%s/target/%s/%s", root, selected,
+		       artifact->name) >= (int)sizeof(path))))
 		return -1;
 	contents = read_file(path, &length);
 	result = contents && length == artifact->length &&
@@ -262,6 +290,8 @@ static int deterministic_immutable_publication(void)
 	size_t index;
 	char left_path[PATH_MAX];
 	char right_path[PATH_MAX];
+	char left_generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	char right_generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	char *left_data;
 	char *right_data;
 	size_t left_length;
@@ -272,15 +302,18 @@ static int deterministic_immutable_publication(void)
 	EXPECT(!publish(left, "2026-06-a1", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&result));
 	EXPECT(result.error == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK);
+	memcpy(left_generation, result.generation, sizeof(left_generation));
 	EXPECT(!publish(right, "2026-06-a1", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&result));
+	memcpy(right_generation, result.generation, sizeof(right_generation));
+	EXPECT(!strcmp(left_generation, right_generation));
 	for (index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++) {
 		EXPECT(!file_matches(left, "2026-06-a1", &artifacts[index]));
 		EXPECT(snprintf(left_path, sizeof(left_path), "%s/target/%s/%s", left,
-				"2026-06-a1", artifacts[index].name) <
+				  left_generation, artifacts[index].name) <
 			(int)sizeof(left_path));
 		EXPECT(snprintf(right_path, sizeof(right_path), "%s/target/%s/%s", right,
-				"2026-06-a1", artifacts[index].name) <
+				  right_generation, artifacts[index].name) <
 			(int)sizeof(right_path));
 		left_data = read_file(left_path, &left_length);
 		right_data = read_file(right_path, &right_length);
@@ -292,8 +325,8 @@ static int deterministic_immutable_publication(void)
 		EXPECT(!stat(left_path, &status));
 		EXPECT((status.st_mode & 0222) == 0);
 	}
-	EXPECT(snprintf(left_path, sizeof(left_path), "%s/target/2026-06-a1/manifest",
-			left) < (int)sizeof(left_path));
+	EXPECT(snprintf(left_path, sizeof(left_path), "%s/target/%s/manifest",
+			left, left_generation) < (int)sizeof(left_path));
 	left_data = read_file(left_path, &left_length);
 	EXPECT(left_data);
 	EXPECT(strstr(left_data, "schema=orlix-tcti-target-artifact-v2\n"));
@@ -305,9 +338,10 @@ static int deterministic_immutable_publication(void)
 	free(left_data);
 	EXPECT(!selector_is(left, "2026-06-a1"));
 	EXPECT(!selector_is(right, "2026-06-a1"));
-	EXPECT(publish(left, "2026-06-a1", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
-		       &result) < 0);
-	EXPECT(result.error == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_ALREADY_EXISTS);
+	EXPECT(!publish(left, "2026-06-a1", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	EXPECT(result.error == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_OK);
+	EXPECT(!strcmp(result.generation, left_generation));
 	for (index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++)
 		EXPECT(!file_matches(left, "2026-06-a1", &artifacts[index]));
 	EXPECT(!selector_is(left, "2026-06-a1"));
@@ -342,6 +376,8 @@ static enum orlix_tcti_target_artifact_publish_error expected_error(
 		return ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_GENERATION;
 	case ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC:
 		return ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_LOCK_SYNC;
+	case ORLIX_TCTI_TARGET_ARTIFACT_STAGE_PUBLISH_GENERATION:
+		return ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_RENAME;
 	case ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR:
 		return ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR;
 	case ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC:
@@ -365,7 +401,9 @@ static int failures_preserve_prior_selector(void)
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_GENERATION_SYNC,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_GENERATION,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_LOCK_SYNC,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_PUBLISH_GENERATION,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC,
 	};
 	char *root = make_root();
 	struct orlix_tcti_target_artifact_publish_result result;
@@ -376,12 +414,17 @@ static int failures_preserve_prior_selector(void)
 	EXPECT(!publish(root, "prior", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, &result));
 	for (index = 0; index < sizeof(stages) / sizeof(stages[0]); index++) {
 		char generation[64];
+		char final_path[PATH_MAX];
 
 		EXPECT(snprintf(generation, sizeof(generation), "failed-%zu", index) <
 			(int)sizeof(generation));
 		EXPECT(publish(root, generation, stages[index], &result) < 0);
 		EXPECT(result.error == expected_error(stages[index]));
 		EXPECT(!selector_is(root, selected));
+		EXPECT(staging_entry_count(root) == 0);
+		EXPECT(snprintf(final_path, sizeof(final_path), "%s/target/%s",
+				root, result.generation) < (int)sizeof(final_path));
+		EXPECT(access(final_path, F_OK) < 0 && errno == ENOENT);
 		/* The unselected partial set was discarded, so retry is clean. */
 		EXPECT(!publish(root, generation, ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 				&result));
@@ -409,7 +452,7 @@ static int short_writes_publish_complete_generation(void)
 	return 0;
 }
 
-static int selector_sync_is_explicit_post_publish_boundary(void)
+static int selector_sync_preserves_prior_selector(void)
 {
 	char *root = make_root();
 	struct orlix_tcti_target_artifact_publish_result result;
@@ -419,6 +462,9 @@ static int selector_sync_is_explicit_post_publish_boundary(void)
 	EXPECT(publish(root, "new", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC,
 		       &result) < 0);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_SELECTOR_SYNC);
+	EXPECT(!selector_is(root, "prior"));
+	EXPECT(!publish(root, "new", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
 	EXPECT(!selector_is(root, "new"));
 	EXPECT(!remove_tree(root));
 	free(root);
@@ -521,8 +567,9 @@ static int artifact_content_tampering_is_rejected(void)
 	EXPECT(root);
 	EXPECT(!publish(root, "tampered", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&publish_result));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/tampered/features.h", root) <
-	       (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/features.h", root,
+			publish_result.generation) <
+		       (int)sizeof(path));
 	EXPECT(!overwrite_file(path, replacement, sizeof(replacement) - 1));
 	EXPECT(verify(root, &provenance, &verify_result) < 0);
 	EXPECT(verify_result.error ==
@@ -545,22 +592,24 @@ static int missing_and_extra_artifacts_are_rejected(void)
 	EXPECT(missing_root && extra_root);
 	EXPECT(!publish(missing_root, "missing", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&publish_result));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/missing", missing_root) <
-	       (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s", missing_root,
+			publish_result.generation) <
+		       (int)sizeof(path));
 	EXPECT(!chmod(path, 0755));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/missing/features.h",
-			missing_root) < (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/features.h",
+			missing_root, publish_result.generation) < (int)sizeof(path));
 	EXPECT(!unlink(path));
 	EXPECT(verify(missing_root, &provenance, &verify_result) < 0);
 	EXPECT(verify_result.error == ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_ARTIFACT_OPEN);
 
 	EXPECT(!publish(extra_root, "extra", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&publish_result));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/extra", extra_root) <
-	       (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s", extra_root,
+			publish_result.generation) <
+		       (int)sizeof(path));
 	EXPECT(!chmod(path, 0755));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/extra/unmanifested.h",
-			extra_root) < (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/unmanifested.h",
+			extra_root, publish_result.generation) < (int)sizeof(path));
 	fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
 	EXPECT(fd >= 0);
 	EXPECT(!close(fd));
@@ -586,8 +635,8 @@ static int artifact_symlink_is_rejected(void)
 	EXPECT(root);
 	EXPECT(!publish(root, "linked-artifact",
 			ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, &publish_result));
-	EXPECT(snprintf(directory, sizeof(directory), "%s/target/linked-artifact",
-			root) < (int)sizeof(directory));
+	EXPECT(snprintf(directory, sizeof(directory), "%s/target/%s", root,
+			publish_result.generation) < (int)sizeof(directory));
 	EXPECT(!chmod(directory, 0755));
 	EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/features.h",
 			directory) < (int)sizeof(artifact_path));
@@ -614,8 +663,8 @@ static int manifest_provenance_and_bundle_tampering_are_rejected(void)
 	EXPECT(provenance_root && bundle_root);
 	EXPECT(!publish(provenance_root, "provenance",
 			ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, &publish_result));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/provenance/manifest",
-			provenance_root) < (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/manifest",
+			provenance_root, publish_result.generation) < (int)sizeof(path));
 	manifest = read_file(path, &length);
 	EXPECT(manifest);
 	where = strstr(manifest, "instructions_sha256=");
@@ -629,8 +678,8 @@ static int manifest_provenance_and_bundle_tampering_are_rejected(void)
 
 	EXPECT(!publish(bundle_root, "bundle", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&publish_result));
-	EXPECT(snprintf(path, sizeof(path), "%s/target/bundle/manifest",
-			bundle_root) < (int)sizeof(path));
+	EXPECT(snprintf(path, sizeof(path), "%s/target/%s/manifest", bundle_root,
+			publish_result.generation) < (int)sizeof(path));
 	manifest = read_file(path, &length);
 	EXPECT(manifest);
 	where = strstr(manifest, "bundle_sha256=");
@@ -660,14 +709,181 @@ static int selected_generation_symlink_is_rejected(void)
 	EXPECT(root);
 	EXPECT(!publish(root, "selected", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
 			&publish_result));
-	EXPECT(snprintf(original, sizeof(original), "%s/target/selected", root) <
-	       (int)sizeof(original));
+	EXPECT(snprintf(original, sizeof(original), "%s/target/%s", root,
+			publish_result.generation) < (int)sizeof(original));
 	EXPECT(snprintf(renamed, sizeof(renamed), "%s/target/actual", root) <
 	       (int)sizeof(renamed));
 	EXPECT(!rename(original, renamed));
 	EXPECT(!symlink("actual", original));
 	EXPECT(verify(root, &provenance, &verify_result) < 0);
 	EXPECT(verify_result.error == ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_GENERATION_OPEN);
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
+static int stale_same_identity_generation_is_rejected(void)
+{
+	static const char replacement[] = "different bytes\n";
+	char *root = make_root();
+	char current[PATH_MAX];
+	char generation_path[PATH_MAX];
+	char artifact_path[PATH_MAX];
+	char prior_generation[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	struct orlix_tcti_target_artifact_publish_result result;
+
+	EXPECT(root);
+	EXPECT(!publish(root, "prior", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	memcpy(prior_generation, result.generation, sizeof(prior_generation));
+	EXPECT(!publish(root, "new", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	EXPECT(snprintf(generation_path, sizeof(generation_path), "%s/target/%s",
+			root, result.generation) < (int)sizeof(generation_path));
+	EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/features.h",
+			generation_path) < (int)sizeof(artifact_path));
+	EXPECT(snprintf(current, sizeof(current), "%s/target/current", root) <
+		       (int)sizeof(current));
+	EXPECT(!unlink(current));
+	EXPECT(!symlink(prior_generation, current));
+	EXPECT(!chmod(generation_path, 0755));
+	EXPECT(!overwrite_file(artifact_path, replacement,
+			       sizeof(replacement) - 1U));
+	EXPECT(publish(root, "new", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+		       &result) < 0);
+	EXPECT(result.error ==
+	       ORLIX_TCTI_TARGET_ARTIFACT_PUBLISH_STALE_GENERATION);
+	EXPECT(!selector_is(root, prior_generation));
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
+static int coherent_tamper_with_stale_generation_name_is_rejected(void)
+{
+	static const char replacement[] = "features-v2\n";
+	struct orlix_tcti_target_artifact changed[sizeof(artifacts) /
+						       sizeof(artifacts[0])];
+	char *root = make_root();
+	char generation_path[PATH_MAX];
+	char artifact_path[PATH_MAX];
+	char manifest_path[PATH_MAX];
+	char *manifest = NULL;
+	size_t manifest_length = 0;
+	struct orlix_tcti_target_artifact_publish_result publish_result;
+	struct orlix_tcti_target_artifact_verify_result verify_result;
+
+	EXPECT(root);
+	EXPECT(!publish(root, "coherent", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&publish_result));
+	memcpy(changed, artifacts, sizeof(changed));
+	changed[0].data = replacement;
+	changed[0].length = sizeof(replacement) - 1U;
+	EXPECT(!build_manifest(publish_result.generation, changed,
+			       sizeof(changed) / sizeof(changed[0]), &manifest,
+			       &manifest_length, &provenance));
+	EXPECT(snprintf(generation_path, sizeof(generation_path), "%s/target/%s",
+			root, publish_result.generation) <
+	       (int)sizeof(generation_path));
+	EXPECT(!chmod(generation_path, 0755));
+	EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/features.h",
+			generation_path) < (int)sizeof(artifact_path));
+	EXPECT(snprintf(manifest_path, sizeof(manifest_path), "%s/manifest",
+			generation_path) < (int)sizeof(manifest_path));
+	EXPECT(!overwrite_file(artifact_path, replacement,
+			       sizeof(replacement) - 1U));
+	EXPECT(!overwrite_file(manifest_path, manifest, manifest_length));
+	free(manifest);
+	EXPECT(verify(root, &provenance, &verify_result) < 0);
+	EXPECT(verify_result.error ==
+	       ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_GENERATION_IDENTITY);
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
+static int fresh_checkout_modes_and_unselected_generation_are_reused(void)
+{
+	char *root = make_root();
+	char current[PATH_MAX];
+	char generation_path[PATH_MAX];
+	char artifact_path[PATH_MAX];
+	char reusable[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	char prior[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
+	struct orlix_tcti_target_artifact_publish_result result;
+	struct stat status;
+	size_t index;
+
+	EXPECT(root);
+	EXPECT(!publish(root, "prior", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	memcpy(prior, result.generation, sizeof(prior));
+	EXPECT(!publish(root, "reusable", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	memcpy(reusable, result.generation, sizeof(reusable));
+	EXPECT(snprintf(current, sizeof(current), "%s/target/current", root) <
+	       (int)sizeof(current));
+	EXPECT(!unlink(current));
+	EXPECT(!symlink(prior, current));
+	EXPECT(snprintf(generation_path, sizeof(generation_path), "%s/target/%s",
+			root, reusable) < (int)sizeof(generation_path));
+	EXPECT(!chmod(generation_path, 0755));
+	for (index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++) {
+		EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/%s",
+				generation_path, artifacts[index].name) <
+		       (int)sizeof(artifact_path));
+		EXPECT(!chmod(artifact_path, 0644));
+	}
+	EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/manifest",
+			generation_path) < (int)sizeof(artifact_path));
+	EXPECT(!chmod(artifact_path, 0644));
+	EXPECT(!publish(root, "reusable", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	EXPECT(!selector_is(root, reusable));
+	EXPECT(!stat(generation_path, &status));
+	EXPECT((status.st_mode & 0222) == 0);
+	for (index = 0; index < sizeof(artifacts) / sizeof(artifacts[0]); index++) {
+		EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/%s",
+				generation_path, artifacts[index].name) <
+		       (int)sizeof(artifact_path));
+		EXPECT(!stat(artifact_path, &status));
+		EXPECT((status.st_mode & 0222) == 0);
+	}
+	EXPECT(snprintf(artifact_path, sizeof(artifact_path), "%s/manifest",
+			generation_path) < (int)sizeof(artifact_path));
+	EXPECT(!stat(artifact_path, &status));
+	EXPECT((status.st_mode & 0222) == 0);
+	EXPECT(!remove_tree(root));
+	free(root);
+	return 0;
+}
+
+static int orphaned_hidden_staging_directory_does_not_block_retry(void)
+{
+	char *root = make_root();
+	char target[PATH_MAX];
+	char orphan[PATH_MAX];
+	char partial[PATH_MAX];
+	struct orlix_tcti_target_artifact_publish_result result;
+	int fd;
+
+	EXPECT(root);
+	EXPECT(snprintf(target, sizeof(target), "%s/target", root) <
+	       (int)sizeof(target));
+	EXPECT(!mkdir(target, 0755));
+	EXPECT(snprintf(orphan, sizeof(orphan), "%s/.staging.crash.tmp", target) <
+	       (int)sizeof(orphan));
+	EXPECT(!mkdir(orphan, 0755));
+	EXPECT(snprintf(partial, sizeof(partial), "%s/partial", orphan) <
+	       (int)sizeof(partial));
+	fd = open(partial, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+	EXPECT(fd >= 0);
+	EXPECT(write(fd, "partial", 7) == 7);
+	EXPECT(!close(fd));
+	EXPECT(!publish(root, "retry", ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE,
+			&result));
+	EXPECT(!selector_is(root, result.generation));
+	EXPECT(staging_entry_count(root) == 1);
 	EXPECT(!remove_tree(root));
 	free(root);
 	return 0;
@@ -683,7 +899,7 @@ int main(void)
 		{ "deterministic_immutable_publication", deterministic_immutable_publication },
 		{ "failures_preserve_prior_selector", failures_preserve_prior_selector },
 		{ "short_writes_publish_complete_generation", short_writes_publish_complete_generation },
-		{ "selector_sync_is_explicit_post_publish_boundary", selector_sync_is_explicit_post_publish_boundary },
+		{ "selector_sync_preserves_prior_selector", selector_sync_preserves_prior_selector },
 		{ "names_are_not_paths_or_implicit_order", names_are_not_paths_or_implicit_order },
 		{ "symlink_publish_root_is_rejected", symlink_publish_root_is_rejected },
 		{ "valid_generation_verifies", valid_generation_verifies },
@@ -692,6 +908,10 @@ int main(void)
 		{ "artifact_symlink_is_rejected", artifact_symlink_is_rejected },
 		{ "manifest_provenance_and_bundle_tampering_are_rejected", manifest_provenance_and_bundle_tampering_are_rejected },
 		{ "selected_generation_symlink_is_rejected", selected_generation_symlink_is_rejected },
+		{ "stale_same_identity_generation_is_rejected", stale_same_identity_generation_is_rejected },
+		{ "coherent_tamper_with_stale_generation_name_is_rejected", coherent_tamper_with_stale_generation_name_is_rejected },
+		{ "fresh_checkout_modes_and_unselected_generation_are_reused", fresh_checkout_modes_and_unselected_generation_are_reused },
+		{ "orphaned_hidden_staging_directory_does_not_block_retry", orphaned_hidden_staging_directory_does_not_block_retry },
 	};
 	size_t index;
 
