@@ -71,6 +71,39 @@ static uint64_t binding_identity(
 		identity = identity_u64(identity, binding->field_source_length);
 		identity = identity_u64(identity, binding->value_relation_source_offset);
 		identity = identity_u64(identity, binding->value_relation_source_length);
+		identity = identity_u64(identity, binding->domain.fieldset_index);
+		identity = identity_u64(identity, binding->domain.equivalent_field_count);
+		identity = identity_u64(identity, binding->domain.register_width);
+		identity = identity_u64(identity, binding->domain.field_width);
+		identity = identity_u64(identity, binding->domain.range_count);
+		identity = identity_u64(identity, binding->domain.value_member_count);
+		identity = identity_u64(identity, binding->domain.range_member_count);
+		identity = identity_u64(identity, binding->domain.relation_value_count);
+		identity = identity_u64(identity,
+			binding->domain.relation_constraint_count);
+		identity = identity_u64(identity,
+			binding->domain.field_condition_expression);
+		identity = identity_u64(identity,
+			binding->domain.wrapper_condition_expression);
+		identity = identity_u64(identity,
+			binding->domain.fieldset_condition_expression);
+		identity = identity_u64(identity, binding->domain.type);
+		identity = identity_u64(identity, binding->domain.signedness);
+		identity = identity_u64(identity, binding->domain.member_kind);
+		identity = identity_u64(identity, binding->domain.semantic_identity);
+		identity = identity_u64(identity, binding->domain.resolution_identity);
+		identity = identity_u64(identity, binding->domain.fieldset_source_offset);
+		identity = identity_u64(identity, binding->domain.fieldset_source_length);
+		identity = identity_u64(identity, binding->domain.field_condition_offset);
+		identity = identity_u64(identity, binding->domain.field_condition_length);
+		identity = identity_u64(identity,
+			binding->domain.wrapper_condition_offset);
+		identity = identity_u64(identity,
+			binding->domain.wrapper_condition_length);
+		identity = identity_u64(identity,
+			binding->domain.fieldset_condition_offset);
+		identity = identity_u64(identity,
+			binding->domain.fieldset_condition_length);
 	}
 	return identity;
 }
@@ -94,6 +127,12 @@ static int emit_c_string(FILE *output, const char *string)
 		cursor++;
 	}
 	return fputc('"', output) == EOF ? -1 : 0;
+}
+
+static int emit_optional_c_string(FILE *output, const char *string)
+{
+	return string ? emit_c_string(output, string) :
+		(fputs("NULL", output) == EOF ? -1 : 0);
 }
 
 static int count_bindings(const struct orlix_tcti_feature_field_domain_bindings *bindings,
@@ -134,6 +173,159 @@ static int exact_span(size_t actual_offset, size_t actual_length,
 	return actual_offset == expected_offset && actual_length == expected_length;
 }
 
+static int exact_binding(
+	const struct orlix_tcti_feature_field_domain_binding *actual,
+	const struct orlix_tcti_feature_field_domain_binding *expected)
+{
+	return actual->feature_node_index == expected->feature_node_index &&
+		actual->identity_group_index == expected->identity_group_index &&
+		actual->occurrence_count == expected->occurrence_count &&
+		actual->register_index == expected->register_index &&
+		actual->field_index == expected->field_index &&
+		actual->value_relation_index == expected->value_relation_index &&
+		actual->first_alternative == expected->first_alternative &&
+		actual->alternative_count == expected->alternative_count &&
+		actual->disposition == expected->disposition &&
+		!memcmp(&actual->domain, &expected->domain, sizeof(actual->domain)) &&
+		!memcmp(&actual->feature_provenance, &expected->feature_provenance,
+			sizeof(actual->feature_provenance)) &&
+		actual->register_source_offset == expected->register_source_offset &&
+		actual->register_source_length == expected->register_source_length &&
+		actual->field_source_offset == expected->field_source_offset &&
+		actual->field_source_length == expected->field_source_length &&
+		actual->value_relation_source_offset ==
+			expected->value_relation_source_offset &&
+		actual->value_relation_source_length ==
+			expected->value_relation_source_length;
+}
+
+static int optional_string_equal(const char *left, const char *right)
+{
+	return (!left && !right) || (left && right && !strcmp(left, right));
+}
+
+static int exact_domain_node(
+	const struct orlix_tcti_feature_field_domain_node *left,
+	const struct orlix_tcti_feature_field_domain_node *right)
+{
+	return optional_string_equal(left->type, right->type) &&
+		optional_string_equal(left->value, right->value) &&
+		optional_string_equal(left->start, right->start) &&
+		optional_string_equal(left->end, right->end) &&
+		optional_string_equal(left->link, right->link) &&
+		optional_string_equal(left->meaning, right->meaning) &&
+		left->parent_domain == right->parent_domain &&
+		left->condition_expression == right->condition_expression &&
+		left->first_child_domain == right->first_child_domain &&
+		left->child_domain_count == right->child_domain_count &&
+		left->valueset_index == right->valueset_index &&
+		left->nested_valueset_index == right->nested_valueset_index &&
+		left->first_link == right->first_link &&
+		left->link_count == right->link_count;
+}
+
+static int exact_expression(
+	const struct orlix_tcti_feature_field_domain_expression *left,
+	const struct orlix_tcti_feature_field_domain_expression *right)
+{
+	return optional_string_equal(left->type, right->type) &&
+		optional_string_equal(left->name, right->name) &&
+		optional_string_equal(left->op, right->op) &&
+		optional_string_equal(left->value, right->value) &&
+		optional_string_equal(left->role, right->role) &&
+		optional_string_equal(left->register_state, right->register_state) &&
+		optional_string_equal(left->register_name, right->register_name) &&
+		optional_string_equal(left->field_name, right->field_name) &&
+		left->first_child == right->first_child &&
+		left->child_count == right->child_count &&
+		left->scalar_kind == right->scalar_kind &&
+		left->integer == right->integer && left->boolean == right->boolean &&
+		left->parent_expression == right->parent_expression &&
+		left->instance_offset == right->instance_offset &&
+		left->instance_length == right->instance_length &&
+		left->slices_offset == right->slices_offset &&
+		left->slices_length == right->slices_length &&
+		left->source_offset == right->source_offset &&
+		left->source_length == right->source_length;
+}
+
+static int exact_graph(
+	const struct orlix_tcti_feature_field_domain_bindings *left,
+	const struct orlix_tcti_feature_field_domain_bindings *right)
+{
+	size_t index;
+
+	if (left->alternative_count != right->alternative_count ||
+	    left->range_count != right->range_count ||
+	    left->valueset_count != right->valueset_count ||
+	    left->domain_count != right->domain_count ||
+	    left->link_count != right->link_count ||
+	    left->expression_count != right->expression_count ||
+	    left->expression_child_count != right->expression_child_count ||
+	    left->value_candidate_count != right->value_candidate_count ||
+	    left->constraint_count != right->constraint_count ||
+	    left->constraint_item_count != right->constraint_item_count ||
+	    left->constraint_candidate_count != right->constraint_candidate_count)
+		return 0;
+	for (index = 0; index < left->valueset_count; index++)
+		if (!optional_string_equal(left->valuesets[index].type,
+				right->valuesets[index].type))
+			return 0;
+	for (index = 0; index < left->domain_count; index++)
+		if (!exact_domain_node(&left->domains[index], &right->domains[index]))
+			return 0;
+	for (index = 0; index < left->link_count; index++)
+		if (!optional_string_equal(left->links[index].key,
+				right->links[index].key) ||
+		    !optional_string_equal(left->links[index].value,
+				right->links[index].value) ||
+		    left->links[index].domain_index != right->links[index].domain_index)
+			return 0;
+	for (index = 0; index < left->expression_count; index++)
+		if (!exact_expression(&left->expressions[index],
+				      &right->expressions[index]))
+			return 0;
+	return (!left->alternative_count ||
+		!memcmp(left->alternatives, right->alternatives,
+			left->alternative_count * sizeof(*left->alternatives))) &&
+		(!left->range_count ||
+		 !memcmp(left->ranges, right->ranges,
+			 left->range_count * sizeof(*left->ranges))) &&
+		(!left->expression_child_count ||
+		 !memcmp(left->expression_children, right->expression_children,
+			 left->expression_child_count * sizeof(*left->expression_children))) &&
+		(!left->value_candidate_count ||
+		 !memcmp(left->value_candidates, right->value_candidates,
+			 left->value_candidate_count * sizeof(*left->value_candidates))) &&
+		(!left->constraint_count ||
+		 !memcmp(left->constraints, right->constraints,
+			 left->constraint_count * sizeof(*left->constraints))) &&
+		(!left->constraint_item_count ||
+		 !memcmp(left->constraint_items, right->constraint_items,
+			 left->constraint_item_count * sizeof(*left->constraint_items))) &&
+		(!left->constraint_candidate_count ||
+		 !memcmp(left->constraint_candidates, right->constraint_candidates,
+			 left->constraint_candidate_count *
+			 sizeof(*left->constraint_candidates)));
+}
+
+static int graph_storage_valid(
+	const struct orlix_tcti_feature_field_domain_bindings *bindings)
+{
+	return (!bindings->alternative_count || bindings->alternatives) &&
+		(!bindings->range_count || bindings->ranges) &&
+		(!bindings->valueset_count || bindings->valuesets) &&
+		(!bindings->domain_count || bindings->domains) &&
+		(!bindings->link_count || bindings->links) &&
+		(!bindings->expression_count || bindings->expressions) &&
+		(!bindings->expression_child_count || bindings->expression_children) &&
+		(!bindings->value_candidate_count || bindings->value_candidates) &&
+		(!bindings->constraint_count || bindings->constraints) &&
+		(!bindings->constraint_item_count || bindings->constraint_items) &&
+		(!bindings->constraint_candidate_count ||
+		 bindings->constraint_candidates);
+}
+
 enum orlix_tcti_feature_field_domain_binding_artifact_error
 orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 	const struct orlix_tcti_feature_model *features, size_t feature_source_length,
@@ -142,11 +334,34 @@ orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 )
 {
 	size_t index;
+	struct orlix_tcti_feature_field_domain_bindings expected = { 0 };
+	struct orlix_tcti_feature_field_domain_binding_error error = { 0 };
 
-	if (!features || !feature_source_length || !registers ||
+	if (!features || !feature_source_length || feature_source_length > UINT32_MAX ||
+	    !registers ||
 	    !register_source_length || !bindings ||
+	    register_source_length > UINT32_MAX ||
 	    (bindings->count && !bindings->items))
 		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_ARGUMENT;
+	if (!graph_storage_valid(bindings))
+		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING;
+	if (orlix_tcti_target_feature_field_domain_bindings_build(features, registers,
+							 &expected, &error))
+		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING;
+	if (expected.count != bindings->count) {
+		orlix_tcti_target_feature_field_domain_bindings_destroy(&expected);
+		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING;
+	}
+	if (!exact_graph(bindings, &expected)) {
+		orlix_tcti_target_feature_field_domain_bindings_destroy(&expected);
+		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING;
+	}
+	for (index = 0; index < bindings->count; index++)
+		if (!exact_binding(&bindings->items[index], &expected.items[index])) {
+			orlix_tcti_target_feature_field_domain_bindings_destroy(&expected);
+			return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING;
+		}
+	orlix_tcti_target_feature_field_domain_bindings_destroy(&expected);
 	for (index = 0; index < bindings->count; index++) {
 		const struct orlix_tcti_feature_field_domain_binding *binding =
 			&bindings->items[index];
@@ -255,7 +470,9 @@ static enum orlix_tcti_feature_field_domain_binding_artifact_error emit_bindings
 	    groups != ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_IDENTITY_GROUPS ||
 	    mapped != ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_MAPPED ||
 	    ambiguous_field !=
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_AMBIGUOUS_FIELD) {
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_AMBIGUOUS_FIELD ||
+	    bindings.alternative_count !=
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_ALTERNATIVES) {
 		orlix_tcti_target_feature_field_domain_bindings_destroy(&bindings);
 		return ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_COUNT_MISMATCH;
 	}
@@ -279,18 +496,187 @@ static enum orlix_tcti_feature_field_domain_binding_artifact_error emit_bindings
 		  output) == EOF ||
 	    fprintf(output, "%zuU, \"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874\", %zuU)\n",
 		    feature_source_length, register_source_length) < 0 ||
-	    fprintf(output, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS(%zuU, %zuU, %zuU, %zuU)\n",
-		    bindings.count, groups, mapped, ambiguous_field) < 0 ||
+		    fprintf(output, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS_V3(%zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU)\n",
+			    bindings.count, groups, mapped, ambiguous_field,
+			    bindings.alternative_count, bindings.range_count,
+			    bindings.valueset_count, bindings.domain_count,
+			    bindings.link_count, bindings.expression_count,
+			    bindings.expression_child_count,
+			    bindings.value_candidate_count, bindings.constraint_count,
+			    bindings.constraint_item_count,
+			    bindings.constraint_candidate_count) < 0 ||
 	    fprintf(output, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(UINT64_C(0x%016" PRIx64 "))\n",
 		    identity) < 0)
 		goto io;
+	for (index = 0; index < bindings.range_count; index++)
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_RANGE_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U)\n",
+			index, bindings.ranges[index].start,
+			bindings.ranges[index].width) < 0)
+			goto io;
+	for (index = 0; index < bindings.valueset_count; index++) {
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUESET_V3(%zuU, ",
+			index) < 0 ||
+		    emit_optional_c_string(output, bindings.valuesets[index].type) ||
+		    fputs(")\n", output) == EOF)
+			goto io;
+	}
+	for (index = 0; index < bindings.domain_count; index++) {
+		const struct orlix_tcti_feature_field_domain_node *domain =
+			&bindings.domains[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_DOMAIN_V3(%zuU, ", index) < 0 ||
+		    emit_optional_c_string(output, domain->type) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, domain->value) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, domain->start) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, domain->end) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, domain->link) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, domain->meaning) ||
+		    fprintf(output,
+			", %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			"U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U)\n",
+			domain->parent_domain, domain->condition_expression,
+			domain->first_child_domain, domain->child_domain_count,
+			domain->valueset_index, domain->nested_valueset_index,
+			domain->first_link, domain->link_count) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.link_count; index++) {
+		const struct orlix_tcti_feature_field_domain_link *link =
+			&bindings.links[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_LINK_V3(%zuU, ", index) < 0 ||
+		    emit_optional_c_string(output, link->key) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, link->value) ||
+		    fprintf(output, ", %" PRIu32 "U)\n", link->domain_index) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.expression_count; index++) {
+		const struct orlix_tcti_feature_field_domain_expression *expression =
+			&bindings.expressions[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_V3(%zuU, ", index) < 0 ||
+		    emit_optional_c_string(output, expression->type) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->name) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->op) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->value) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->role) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->register_state) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->register_name) ||
+		    fputs(", ", output) == EOF ||
+		    emit_optional_c_string(output, expression->field_name) ||
+		    fprintf(output,
+			", %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRId64
+			", %" PRIu32 "U, %" PRIu32 "U, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU)\n",
+			expression->first_child, expression->child_count,
+			expression->scalar_kind, expression->integer, expression->boolean,
+			expression->parent_expression, expression->instance_offset,
+			expression->instance_length, expression->slices_offset,
+			expression->slices_length, expression->source_offset,
+			expression->source_length) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.expression_child_count; index++)
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_CHILD_V3(%zuU, %" PRIu32 "U)\n",
+			index, bindings.expression_children[index]) < 0)
+			goto io;
+	for (index = 0; index < bindings.value_candidate_count; index++) {
+		const struct orlix_tcti_feature_field_domain_value_candidate *candidate =
+			&bindings.value_candidates[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUE_CANDIDATE_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U)\n",
+			index, candidate->kind, candidate->valueset_index,
+			candidate->first_domain, candidate->domain_count) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.constraint_count; index++) {
+		const struct orlix_tcti_feature_field_domain_constraint *constraint =
+			&bindings.constraints[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U)\n",
+			index, constraint->kind, constraint->valueset_index,
+			constraint->first_item, constraint->item_count) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.constraint_item_count; index++) {
+		const struct orlix_tcti_feature_field_domain_constraint_item *item =
+			&bindings.constraint_items[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_ITEM_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U)\n",
+			index, item->constraint_index, item->valueset_index,
+			item->domain_index) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.constraint_candidate_count; index++) {
+		const struct orlix_tcti_feature_field_domain_constraint_candidate *candidate =
+			&bindings.constraint_candidates[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_CANDIDATE_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U)\n",
+			index, candidate->constraint_index, candidate->kind,
+			candidate->first_domain, candidate->domain_count) < 0)
+			goto io;
+	}
+	for (index = 0; index < bindings.alternative_count; index++) {
+		const struct orlix_tcti_feature_field_domain_alternative *alternative =
+			&bindings.alternatives[index];
+		if (fprintf(output,
+			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_ALTERNATIVE_V3(%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU)\n",
+			index, alternative->field_index,
+			alternative->value_relation_index, alternative->fieldset_index,
+			alternative->field_condition_expression,
+			alternative->wrapper_condition_expression,
+			alternative->fieldset_condition_expression,
+			alternative->relation_field_condition_expression,
+			alternative->relation_wrapper_condition_expression,
+			alternative->first_range, alternative->range_count,
+			alternative->first_valueset, alternative->valueset_count,
+			alternative->first_domain, alternative->domain_count,
+			alternative->first_link, alternative->link_count,
+			alternative->first_expression, alternative->expression_count,
+			alternative->first_expression_child,
+			alternative->expression_child_count,
+			alternative->first_value_candidate,
+			alternative->value_candidate_count,
+			alternative->first_constraint, alternative->constraint_count,
+			alternative->first_constraint_item,
+			alternative->constraint_item_count,
+			alternative->first_constraint_candidate,
+			alternative->constraint_candidate_count,
+			alternative->field_source_offset,
+			alternative->field_source_length,
+			alternative->value_relation_source_offset,
+			alternative->value_relation_source_length,
+			alternative->fieldset_source_offset,
+			alternative->fieldset_source_length,
+			alternative->field_condition_offset,
+			alternative->field_condition_length,
+			alternative->wrapper_condition_offset,
+			alternative->wrapper_condition_length,
+			alternative->fieldset_condition_offset,
+			alternative->fieldset_condition_length) < 0)
+			goto io;
+	}
 	for (index = 0; index < bindings.count; index++) {
 		const struct orlix_tcti_feature_field_domain_binding *binding =
 			&bindings.items[index];
 		const struct orlix_tcti_feature_node *node =
 			&features->nodes[binding->feature_node_index];
 
-		if (fprintf(output, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE("
+		if (fprintf(output, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V3("
 			    "%zuU, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
 			    "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, ", index,
 			    binding->feature_node_index, binding->identity_group_index,
@@ -302,7 +688,17 @@ static enum orlix_tcti_feature_field_domain_binding_artifact_error emit_bindings
 		    fputs(", ", output) == EOF ||
 		    emit_c_string(output, node->field.selector) ||
 		    fprintf(output, ", %uU, %zuU, %zuU, %uU, %zuU, %zuU, "
-			    "%zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU)\n",
+					     "%zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, %zuU, "
+					     "%" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%uU, %uU, %uU, UINT64_C(0x%016" PRIx64 "), "
+				     "UINT64_C(0x%016" PRIx64 "), "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, "
+				     "%" PRIu32 "U, %" PRIu32 "U)\n",
 			    (unsigned int)node->field.instance.kind,
 			    node->field.instance.provenance.offset,
 			    node->field.instance.provenance.length,
@@ -314,9 +710,36 @@ static enum orlix_tcti_feature_field_domain_binding_artifact_error emit_bindings
 			    binding->register_source_offset,
 			    binding->register_source_length,
 			    binding->field_source_offset,
-			    binding->field_source_length,
-			    binding->value_relation_source_offset,
-			    binding->value_relation_source_length) < 0)
+				     binding->field_source_length,
+					     binding->value_relation_source_offset,
+					     binding->value_relation_source_length,
+					     binding->first_alternative,
+					     binding->alternative_count,
+				     binding->domain.fieldset_index,
+				     binding->domain.equivalent_field_count,
+				     binding->domain.register_width,
+				     binding->domain.field_width,
+				     binding->domain.range_count,
+				     binding->domain.value_member_count,
+				     binding->domain.range_member_count,
+				     binding->domain.relation_value_count,
+				     binding->domain.relation_constraint_count,
+				     binding->domain.field_condition_expression,
+				     binding->domain.wrapper_condition_expression,
+				     binding->domain.fieldset_condition_expression,
+				     (unsigned int)binding->domain.type,
+				     (unsigned int)binding->domain.signedness,
+				     (unsigned int)binding->domain.member_kind,
+				     binding->domain.semantic_identity,
+				     binding->domain.resolution_identity,
+				     binding->domain.fieldset_source_offset,
+				     binding->domain.fieldset_source_length,
+				     binding->domain.field_condition_offset,
+				     binding->domain.field_condition_length,
+				     binding->domain.wrapper_condition_offset,
+				     binding->domain.wrapper_condition_length,
+				     binding->domain.fieldset_condition_offset,
+				     binding->domain.fieldset_condition_length) < 0)
 			goto io;
 	}
 	orlix_tcti_target_feature_field_domain_bindings_destroy(&bindings);

@@ -33,7 +33,7 @@
 
 static const struct orlix_tcti_target_artifact_provenance pinned_provenance = {
 	.schema = "orlix-tcti-aarchmrs-source-v2",
-	.generator = "orlix-tcti-isa-maintainer",
+	.generator = "orlix-tcti-target-refresh",
 	.instructions_sha256 =
 		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe",
 	.features_sha256 =
@@ -167,7 +167,7 @@ static int seed_prior(int canonical_fd,
 	};
 	static const struct orlix_tcti_target_artifact_provenance provenance = {
 		.schema = "orlix-tcti-aarchmrs-source-v2",
-		.generator = "orlix-tcti-isa-maintainer",
+		.generator = "orlix-tcti-target-refresh",
 		.instructions_sha256 =
 			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		.features_sha256 =
@@ -186,7 +186,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 	const char *arm_xml_archive, const char *arm_xml_release)
 {
 	static const char expected_generation[] =
-		"aarchmrs-2026-06-v2-6f9d82e8bcd3aa2471d83caae4dffdd3a43983815aec0843a5581ed05e11a877";
+		"aarchmrs-2026-06-v2-baf9c480c803b1444090e853615277544ab7f2abddcd86e05f1fe431857bb7fc";
 	char *root = make_root();
 	char first[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 	char second[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -208,6 +208,9 @@ static int full_refresh_is_authoritative_and_idempotent(
 				result.publish.error));
 	EXPECT(!refresh_status);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_OK);
+	if (strcmp(result.publish.generation, expected_generation))
+		fprintf(stderr, "unexpected full-refresh generation: %s\n",
+			result.publish.generation);
 	EXPECT(!strcmp(result.publish.generation, expected_generation));
 	EXPECT(!selected_generation(root, first));
 	EXPECT(!strcmp(first, expected_generation));
@@ -229,6 +232,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 static int injected_failure_preserves_prior(
 	enum orlix_tcti_target_refresh_fault_stage refresh_stage,
 	enum orlix_tcti_target_artifact_publish_stage publish_stage,
+	size_t validation_artifact,
 	const char *instructions, const char *features, const char *registers,
 	const char *arm_xml_archive, const char *arm_xml_release)
 {
@@ -244,6 +248,7 @@ static int injected_failure_preserves_prior(
 	struct orlix_tcti_target_refresh_result result;
 	struct orlix_tcti_target_refresh_fault fault = {
 		.stage = refresh_stage,
+		.validation_artifact = validation_artifact,
 		.publication = {
 			.stage = publish_stage,
 		},
@@ -301,7 +306,7 @@ static int all_injected_failures_are_atomic(
 
 	EXPECT(!injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE,
-		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, instructions, features,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 0U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release));
 	for (artifact = 0; artifact < 8U; artifact++) {
 		char *root = make_root();
@@ -333,9 +338,21 @@ static int all_injected_failures_are_atomic(
 	}
 	EXPECT(!injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PUBLICATION,
-		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC, instructions,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_SELECTOR_SYNC, 0U, instructions,
 		features, registers, arm_xml_archive, arm_xml_release));
 	return 0;
+}
+
+static int malformed_feature_domain_artifact_does_not_publish(
+	const char *instructions, const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
+{
+	/* Artifact 3 is the feature field-domain binding artifact. Its fault
+	 * fixture truncates the emitted V3 occurrence table after generation. */
+	return injected_failure_preserves_prior(
+		ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 3U, instructions, features,
+		registers, arm_xml_archive, arm_xml_release);
 }
 
 static int wrong_source_identity_does_not_publish(
@@ -376,6 +393,8 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	if (full_refresh_is_authoritative_and_idempotent(
+		    argv[1], argv[2], argv[3], argv[4], argv[5]) ||
+	    malformed_feature_domain_artifact_does_not_publish(
 		    argv[1], argv[2], argv[3], argv[4], argv[5]) ||
 	    all_injected_failures_are_atomic(argv[1], argv[2], argv[3],
 					     argv[4], argv[5]) ||

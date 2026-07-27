@@ -80,8 +80,9 @@ static int pinned_census_and_determinism(const char *features_path,
 	struct orlix_tcti_feature_field_domain_bindings bindings = { 0 };
 	struct orlix_tcti_feature_field_domain_binding_error binding_error = { 0 };
 	struct orlix_tcti_feature_field_domain_binding *mapped = NULL;
-	struct orlix_tcti_feature_field_domain_binding *ambiguous = NULL;
+	struct orlix_tcti_feature_field_domain_binding *mpam = NULL;
 	size_t index;
+	uint32_t original_member_kind;
 
 	CHECK(first && second);
 	features = read_file(features_path, &feature_length);
@@ -100,29 +101,99 @@ static int pinned_census_and_determinism(const char *features_path,
 		if (!mapped && bindings.items[index].disposition ==
 			    ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED)
 			mapped = &bindings.items[index];
-		if (!ambiguous && bindings.items[index].disposition ==
-			    ORLIX_TCTI_FEATURE_FIELD_DOMAIN_AMBIGUOUS_FIELD)
-			ambiguous = &bindings.items[index];
+		if (index == 292U)
+			mpam = &bindings.items[index];
 	}
-	CHECK(mapped && ambiguous);
-	CHECK(ambiguous->field_index == UINT32_MAX);
-	CHECK(ambiguous->value_relation_index == UINT32_MAX);
-	CHECK(!ambiguous->field_source_offset &&
-	      !ambiguous->field_source_length &&
-	      !ambiguous->value_relation_source_offset &&
-	      !ambiguous->value_relation_source_length);
-	ambiguous->field_index = 0U;
+	CHECK(mapped && mpam);
+	CHECK(mpam->disposition == ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED);
+	CHECK(mpam->field_index == 13637U);
+	CHECK(mpam->domain.fieldset_index == 1981U);
+	CHECK(mpam->domain.equivalent_field_count == 2U);
+	original_member_kind = mapped->domain.member_kind;
+	mpam->domain.equivalent_field_count = 1U;
 	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 		&feature_model, feature_length, &register_model, register_length,
 		&bindings) ==
 		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
-	ambiguous->field_index = UINT32_MAX;
-	ambiguous->field_source_length = 1U;
+	mpam->domain.equivalent_field_count = 2U;
+	mapped->domain.register_width++;
 	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 		&feature_model, feature_length, &register_model, register_length,
 		&bindings) ==
 		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
-	ambiguous->field_source_length = 0U;
+	mapped->domain.register_width--;
+	mapped->domain.field_width++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.field_width--;
+	mapped->domain.type = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TYPE_COUNT;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.type = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TYPE_CONSTANT;
+	mapped->domain.signedness = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_SIGNEDNESS_COUNT;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.signedness = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_UNSIGNED;
+	mapped->domain.value_member_count++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.value_member_count--;
+	mapped->domain.range_member_count++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.range_member_count--;
+	mapped->domain.member_kind = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MEMBER_KIND_COUNT;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.member_kind = original_member_kind;
+	mapped->domain.relation_value_count++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.relation_value_count--;
+	mapped->domain.relation_constraint_count++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.relation_constraint_count--;
+	mapped->domain.semantic_identity ^= UINT64_C(1);
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.semantic_identity ^= UINT64_C(1);
+	mapped->domain.resolution_identity ^= UINT64_C(1);
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.resolution_identity ^= UINT64_C(1);
+	mapped->identity_group_index++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->identity_group_index--;
+	mapped->domain.fieldset_condition_length++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	mapped->domain.fieldset_condition_length--;
 	mapped->value_relation_index = UINT32_MAX;
 	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 		&feature_model, feature_length, &register_model, register_length,
@@ -135,6 +206,36 @@ static int pinned_census_and_determinism(const char *features_path,
 		&bindings) ==
 		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
 	mapped->field_source_length--;
+	CHECK(bindings.alternative_count == 606U);
+	if (bindings.range_count) {
+		bindings.ranges[0].start ^= 1U;
+		CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+			&feature_model, feature_length, &register_model, register_length,
+			&bindings) ==
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+		bindings.ranges[0].start ^= 1U;
+	}
+	if (bindings.domain_count) {
+		const char *saved = bindings.domains[0].type;
+		bindings.domains[0].type = "mutation";
+		CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+			&feature_model, feature_length, &register_model, register_length,
+			&bindings) ==
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+		bindings.domains[0].type = saved;
+	}
+	bindings.alternatives[0].field_source_length++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	bindings.alternatives[0].field_source_length--;
+	bindings.items[0].alternative_count++;
+	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
+		&feature_model, feature_length, &register_model, register_length,
+		&bindings) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_INVALID_BINDING);
+	bindings.items[0].alternative_count--;
 	CHECK(orlix_tcti_target_feature_field_domain_binding_artifact_validate(
 		&feature_model, feature_length, &register_model, register_length,
 		&bindings) == ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_OK);
@@ -156,12 +257,15 @@ static int pinned_census_and_determinism(const char *features_path,
 	CHECK(!artifact_text(second, &second_text));
 	CHECK(!strcmp(first_text, second_text));
 	CHECK(strstr(first_text,
-		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS(605U, 362U, 604U, 1U)") != NULL);
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS_V3(605U, 362U, 605U, 0U, 606U,") != NULL);
 	CHECK(strstr(first_text, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(UINT64_C(") != NULL);
-	CHECK(strstr(first_text, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE(0U,") != NULL);
+	CHECK(strstr(first_text, "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V3(0U,") != NULL);
 	CHECK(occurrences(first_text,
-		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE(") == 605U);
-	CHECK(strstr(first_text, ", 4U,") != NULL);
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V3(") == 605U);
+	CHECK(occurrences(first_text,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_ALTERNATIVE_V3(") == 606U);
+	CHECK(strstr(first_text,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V2(") == NULL);
 	free(first_text);
 	free(second_text);
 	free(features);

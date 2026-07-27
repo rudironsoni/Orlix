@@ -52,12 +52,15 @@ static const struct orlix_tcti_target_completion_asl_provenance asl_provenance =
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, corpus, helpers) \
 	format, source_sha256, corpus, helpers
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(...)
+#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
 #include "../isa/target_asl_availability.def"
+#undef ORLIX_TCTI_A64_ASL_XML_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
 };
 
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
+#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
 					      semantic_locator, semantic_member_offset, \
 					      semantic_member_length, semantic_body_offset, \
@@ -73,6 +76,7 @@ static const struct orlix_tcti_target_completion_asl_provenance asl_provenance =
 static const struct orlix_tcti_target_completion_asl_row asl_rows[] = {
 #include "../isa/target_asl_availability.def"
 };
+#undef ORLIX_TCTI_A64_ASL_XML_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
 
@@ -419,13 +423,6 @@ int orlix_tcti_target_completion_validate_feature_field_domains(
 		result->feature_field_domain_rows++;
 		if (binding->disposition == ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED) {
 			result->mapped_feature_field_domain_rows++;
-			/*
-			 * A source span and a Registers.json value-relation index are
-			 * ownership, not satisfiability or execution proof. Keep the
-			 * entire mapped domain blocking until the typed evaluator owns
-			 * every relation.
-			 */
-			result->unresolved_feature_field_domain_rows++;
 		} else {
 			result->ambiguous_feature_field_domain_rows++;
 		}

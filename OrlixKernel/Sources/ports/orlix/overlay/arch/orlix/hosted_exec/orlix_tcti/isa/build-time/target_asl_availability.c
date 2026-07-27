@@ -167,7 +167,7 @@ orlix_tcti_target_asl_availability_emit(
 		"instruction_bodies=2656_placeholder|decodes=2656_null|"
 		"target_xml_matched=%zu|target_xml_encoding_absent=%zu|"
 		"target_xml_semantics_complete=%zu|target_xml_decode_missing=%zu|"
-		"target_xml_operation_missing=%zu\", "
+		"target_xml_operation_missing=%zu\", \"%s\", "
 		"ORLIX_TCTI_A64_ASL_CORPUS_PRESENT, "
 		"ORLIX_TCTI_A64_ASL_HELPERS_AVAILABLE)\n",
 		ORLIX_TCTI_ARM_XML_SOURCE_URL, ORLIX_TCTI_ARM_XML_ARCHIVE_SHA256,
@@ -183,7 +183,8 @@ orlix_tcti_target_asl_availability_emit(
 		ORLIX_TCTI_ARM_XML_SHARED_ANCHOR_COUNT,
 		ORLIX_TCTI_ARM_XML_INDEX_FORM_COUNT, xml_matched,
 		inventory.leaf_count - xml_matched, xml_complete,
-		xml_decode_missing, xml_operation_missing) < 0) {
+		xml_decode_missing, xml_operation_missing,
+		ORLIX_TCTI_ARM_XML_RELEASE_DIGEST) < 0) {
 		result = ORLIX_TCTI_TARGET_ASL_AVAILABILITY_IO;
 		goto out;
 	}

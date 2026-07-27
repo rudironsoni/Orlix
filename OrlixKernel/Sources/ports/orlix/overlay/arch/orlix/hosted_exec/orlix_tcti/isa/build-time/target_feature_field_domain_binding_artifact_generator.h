@@ -9,8 +9,9 @@
 
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_OCCURRENCES 605U
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_IDENTITY_GROUPS 362U
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_MAPPED 604U
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_AMBIGUOUS_FIELD 1U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_MAPPED 605U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_AMBIGUOUS_FIELD 0U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_EXPECTED_ALTERNATIVES 606U
 
 enum orlix_tcti_feature_field_domain_binding_artifact_error {
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_OK,
@@ -25,9 +26,9 @@ enum orlix_tcti_feature_field_domain_binding_artifact_error {
 };
 
 /*
- * Serializes every Types.Field occurrence in source order.  It preserves the
- * exact feature and register spans, rather than lowering a field reference to
- * a runtime capability decision.  Blocking dispositions are emitted too.
+ * Serializes every Types.Field occurrence and matching declaration in source
+ * order. V3 table rows retain the complete normalized semantic graph;
+ * occurrence rows reference their declaration-alternative slices.
  */
 enum orlix_tcti_feature_field_domain_binding_artifact_error
 orlix_tcti_target_feature_field_domain_binding_artifact_validate(

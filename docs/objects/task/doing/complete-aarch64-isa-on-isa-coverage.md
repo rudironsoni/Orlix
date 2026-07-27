@@ -139,11 +139,14 @@ an executed production-path case. Runtime HWCAP and HWCAP2 projection
 requires the complete 4,350-leaf provider and remains disabled for every
 unproved extension.
 
-The current checkpoint preserves all 605 feature-field qualifier occurrences
-in the checked feature artifact. The maintainer binding core derives 362
-identity groups, maps 604 occurrences to an explicit field-domain relation,
-and retains one ambiguous occurrence as a blocking audit failure. The runtime
-projection rejects a stale zero-profile mapping,
+The checked V3 field-domain artifact preserves all 605 qualifier occurrences
+across 362 identity groups and maps every occurrence to lossless semantics.
+The two conditional `MPAMIDR_EL1.HAS_BW_CTRL` declarations remain distinct,
+source-provenanced alternatives with one equal normalized domain, yielding 606
+alternatives with zero
+ambiguous or unresolved occurrences. Malformed tables, references, topology,
+spans, census, and publication transactions fail closed. The runtime projection
+rejects a stale zero-profile mapping,
 and archive-freshness regression coverage rejects a kernel archive that is
 older than durable `arch/orlix` inputs. A narrow typed native-observation
 comparator now records result, register, and bounded-memory observations, but
@@ -152,9 +155,8 @@ evidence. LSE128 reserved-selector and near-miss coverage remains pending
 owning run evidence and its remaining architectural obligations stay blocking.
 
 The current typed feature evaluation retains fixed-width values from 1 through
-128 bits. The checked field-domain artifact keeps all 605 occurrences, its 604
-structural mappings remain semantically unresolved, and the `MPAM` ambiguity
-remains a hard blocker. The direct denominator remains 4,350 leaves while the
+128 bits. The checked field-domain artifact resolves all 605 occurrences
+without conflation or ambiguity. The direct denominator remains 4,350 leaves while the
 supplemental alias graph records 292 instruction aliases and 171 reachable
 operation aliases without using aliases as proof or denominator substitutions.
 The official Arm `ISA_A64_xml_A_profile-2026-06` archive is now a separately
@@ -175,6 +177,6 @@ condition span. Every membership remains explicitly unresolved. The completion
 audit counts those 5,592 unresolved memberships as blocking obligations, and
 the runtime projection cannot use them to authorize HWCAP or HWCAP2 promotion.
 This structural binding does not establish feature applicability,
-satisfiability, implementation, or proof. Those obligations, the 605
-feature-field qualifier semantics, the missing shared-ASL provenance edges,
-and the per-family KUnit and applicable kselftest evidence remain open.
+satisfiability, implementation, or proof. Those obligations, the missing
+shared-ASL provenance edges, and the per-family KUnit and applicable kselftest
+evidence remain open.

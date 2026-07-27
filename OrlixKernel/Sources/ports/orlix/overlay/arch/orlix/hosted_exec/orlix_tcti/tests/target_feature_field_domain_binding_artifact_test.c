@@ -1,340 +1,385 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
+#ifdef ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TEST_DEF_ONLY
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_SOURCE("fixture-architecture", "fixture-build",
+	"fixture-reference", "fixture-schema", "fixture-feature-sha256", 1000U,
+	"fixture-register-sha256", 1000U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS_V3(1U, 1U, 1U, 0U, 1U, 1U,
+	1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(UINT64_C(0x1))
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_RANGE_V3(0U, 0U, 4U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUESET_V3(0U, "Values")
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_DOMAIN_V3(0U, "Value", "0", NULL,
+	NULL, NULL, NULL, 4294967295U, 4294967295U, 0U, 0U, 0U,
+	4294967295U, 0U, 1U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_LINK_V3(0U, "key", "value", 0U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_V3(0U, "Bool", NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, 0U, 0U, 1U, 0, 1U, 4294967295U,
+	0U, 0U, 0U, 0U, 300U, 2U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_CHILD_V3(0U, 0U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUE_CANDIDATE_V3(0U, 1U, 0U, 0U, 1U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_V3(0U, 1U, 0U, 0U, 1U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_ITEM_V3(0U, 0U, 0U, 0U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_CANDIDATE_V3(0U, 0U, 1U, 0U, 1U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_ALTERNATIVE_V3(0U, 2U, 3U, 4U,
+	4294967295U, 4294967295U, 0U, 4294967295U, 4294967295U,
+	0U, 1U, 0U, 1U, 0U, 1U, 0U, 1U, 0U, 1U, 0U, 1U,
+	0U, 1U, 0U, 1U, 0U, 1U, 0U, 1U, 120U, 20U, 140U, 20U,
+	100U, 80U, 0U, 0U, 0U, 0U, 0U, 0U)
+ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V3(0U, 0U, 0U, 1U,
+	1U, 2U, 3U, 0U, "PSTATE", "ID_AA64PFR0_EL1", "CSV2",
+	1U, 21U, 1U, 1U, 22U, 1U, 20U, 8U, 100U, 100U, 120U, 20U,
+	140U, 20U, 0U, 1U, 4U, 1U, 64U, 4U, 1U, 1U, 0U, 1U, 1U,
+	4294967295U, 4294967295U, 0U, 0U, 0U, 0U, UINT64_C(0x1),
+	UINT64_C(0x2), 100U, 80U, 0U, 0U, 0U, 0U, 0U, 0U)
+#else
 #include "target_feature_field_domain_binding_artifact.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CHECK(expression) do { \
-	if (!(expression)) { \
-		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #expression); \
-		return -1; \
-	} \
-} while (0)
+#define CHECK(x) do { if (!(x)) { \
+	fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return -1; \
+} } while (0)
 
 static struct orlix_tcti_feature_artifact_node feature_nodes[] = {
-	[0] = {
-		.kind = ORLIX_TCTI_FEATURE_ARTIFACT_IDENTIFIER,
-		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.text = "ordinary",
-		.source = { 1, 4 },
-	},
-	[1] = {
+	{
 		.kind = ORLIX_TCTI_FEATURE_ARTIFACT_FIELD,
-		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
 		.field_state = "PSTATE",
 		.field_register_name = "ID_AA64PFR0_EL1",
 		.field_selector = "CSV2",
-		.field_source = { 24, 24 },
+		.field_source = { 20, 8 },
 		.field_instance = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 28, 4 } },
+			{ 21, 1 } },
 		.field_slices = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 36, 4 } },
-		.source = { 20, 40 },
-	},
-	[2] = {
-		.kind = ORLIX_TCTI_FEATURE_ARTIFACT_FIELD,
-		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.field_state = "PSTATE",
-		.field_register_name = "ID_AA64PFR0_EL1",
-		.field_selector = "CSV2",
-		.field_source = { 124, 24 },
-		.field_instance = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 128, 4 } },
-		.field_slices = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 136, 4 } },
-		.source = { 120, 40 },
-	},
-	[3] = {
-		.kind = ORLIX_TCTI_FEATURE_ARTIFACT_FIELD,
-		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.field_state = "CurrentState",
-		.field_register_name = "ID_AA64ISAR0_EL1",
-		.field_selector = "AES",
-		.field_source = { 224, 24 },
-		.field_instance = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 228, 4 } },
-		.field_slices = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 236, 4 } },
-		.source = { 220, 40 },
+			{ 22, 1 } },
+		.source = { 16, 16 },
 	},
 };
 
 static const struct orlix_tcti_feature_artifact feature_artifact = {
-	.source = {
-		.architecture = "fixture-architecture",
-		.build = "fixture-build",
-		.reference = "fixture-reference",
-		.schema = "fixture-schema",
-		.sha256 = "fixture-feature-sha256",
-		.length = 1000,
-	},
-	.counts = { .node_count = 4 },
+	.source = { "fixture-architecture", "fixture-build", "fixture-reference",
+		"fixture-schema", "fixture-feature-sha256", 1000 },
+	.counts = { .node_count = 1 },
 	.nodes = feature_nodes,
 };
 
-#define FIELD_BINDING(_order, _node, _group, _members, _reg, _field, _value, \
-		_disposition, _state, _register, _selector, _feature_offset, \
-		_feature_length, \
-		_instance_offset, _slices_offset) \
-	{ \
-		.order = _order, .feature_node_index = _node, \
-		.identity_group_index = _group, .occurrence_count = _members, \
-		.register_index = _reg, .field_index = _field, \
-		.value_relation_index = _value, .disposition = _disposition, \
-		.field_state = _state, .field_register_name = _register, \
-		.field_selector = _selector, \
-		.field_instance = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL, \
-			{ _instance_offset, 4 } }, \
-		.field_slices = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL, \
-			{ _slices_offset, 4 } }, \
-		.feature_source = { _feature_offset, _feature_length }, \
-		.register_source = { 100, 40 }, .field_source = { 120, 12 }, \
-		.value_relation_source = { 140, 16 }, \
-	}
-
 static struct orlix_tcti_feature_field_domain_binding bindings[] = {
-	FIELD_BINDING(0, 1, 0, 2, 7, 8, 9,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED, "PSTATE", "ID_AA64PFR0_EL1", "CSV2",
-		24, 24, 28, 36),
-	FIELD_BINDING(1, 2, 0, 2, 7, 8, 9,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED, "PSTATE", "ID_AA64PFR0_EL1", "CSV2",
-		124, 24, 128, 136),
 	{
-		.order = 2, .feature_node_index = 3, .identity_group_index = 1,
-		.occurrence_count = 1, .register_index = 13,
-		.field_index = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.value_relation_index = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
-		.disposition = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_AMBIGUOUS_FIELD,
-		.field_state = "CurrentState",
-		.field_register_name = "ID_AA64ISAR0_EL1", .field_selector = "AES",
+		.order = 0, .feature_node_index = 0, .identity_group_index = 0,
+		.occurrence_count = 1, .register_index = 1, .field_index = 2,
+		.value_relation_index = 3,
+		.disposition = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED,
+		.field_state = "PSTATE", .field_register_name = "ID_AA64PFR0_EL1",
+		.field_selector = "CSV2",
 		.field_instance = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 228, 4 } },
+			{ 21, 1 } },
 		.field_slices = { ORLIX_TCTI_FEATURE_ARTIFACT_FIELD_QUALIFIER_NULL,
-			{ 236, 4 } },
-		.feature_source = { 224, 24 }, .register_source = { 100, 40 },
+			{ 22, 1 } },
+		.feature_source = { 20, 8 }, .register_source = { 100, 100 },
+		.field_source = { 120, 20 }, .value_relation_source = { 140, 20 },
+		.first_alternative = 0, .alternative_count = 1,
+		.domain = {
+			.fieldset_index = 4, .equivalent_field_count = 1,
+			.register_width = 64, .field_width = 4, .range_count = 1,
+			.value_member_count = 1, .relation_value_count = 1,
+			.relation_constraint_count = 1,
+			.type = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TYPE_CONSTANT,
+			.signedness = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_UNSIGNED,
+			.member_kind = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ENUM_MEMBERS,
+			.semantic_identity = 1, .resolution_identity = 2,
+			.fieldset_source = { 100, 80 },
+		},
 	},
 };
 
-static orlix_tcti_feature_artifact_u8 feature_node_coverage[4];
-static orlix_tcti_feature_artifact_u32 identity_group_coverage[2];
+static struct orlix_tcti_feature_field_domain_range ranges[] = {
+	{ 0, 4 }, { 2, 2 },
+};
+static struct orlix_tcti_feature_field_domain_valueset valuesets[] = { { "Values" } };
+static struct orlix_tcti_feature_field_domain_node domains[] = {
+	{ .type = "Value", .value = "0", .parent_domain =
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.condition_expression = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.first_child_domain = 1, .child_domain_count = 1, .valueset_index = 0,
+		.nested_valueset_index = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.first_link = 0, .link_count = 1 },
+	{ .type = "Meaning", .meaning = "implemented", .parent_domain = 0,
+		.condition_expression = 1,
+		.first_child_domain = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.valueset_index = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.nested_valueset_index = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.first_link = 1 },
+};
+static struct orlix_tcti_feature_field_domain_link links[] = {
+	{ "key", "value", 0 },
+};
+static struct orlix_tcti_feature_field_domain_expression expressions[] = {
+	{ .type = "Binary", .op = "==", .first_child = 0, .child_count = 1,
+		.parent_expression = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.source = { 300, 20 } },
+	{ .type = "Integer", .scalar_kind = 1, .integer = 1,
+		.first_child = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.parent_expression = 0, .source = { 305, 2 } },
+};
+static orlix_tcti_feature_artifact_u32 expression_children[] = { 1 };
+static struct orlix_tcti_feature_field_domain_value_candidate value_candidates[] = {
+	{ 1, 0, 0, 2 },
+};
+static struct orlix_tcti_feature_field_domain_constraint constraints[] = {
+	{ 1, 0, 0, 1 },
+};
+static struct orlix_tcti_feature_field_domain_constraint_item constraint_items[] = {
+	{ 0, 0, 0 },
+};
+static struct orlix_tcti_feature_field_domain_constraint_candidate
+	constraint_candidates[] = { { 0, 1, 0, 2 } };
+static struct orlix_tcti_feature_field_domain_alternative alternatives[] = {
+	{
+		.field_index = 2, .value_relation_index = 3, .fieldset_index = 4,
+		.field_condition_expression = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.wrapper_condition_expression = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.fieldset_condition_expression = 0,
+		.relation_field_condition_expression =
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.relation_wrapper_condition_expression =
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE,
+		.first_range = 0, .range_count = 1,
+		.first_valueset = 0, .valueset_count = 1,
+		.first_domain = 0, .domain_count = 2,
+		.first_link = 0, .link_count = 1,
+		.first_expression = 0, .expression_count = 2,
+		.first_expression_child = 0, .expression_child_count = 1,
+		.first_value_candidate = 0, .value_candidate_count = 1,
+		.first_constraint = 0, .constraint_count = 1,
+		.first_constraint_item = 0, .constraint_item_count = 1,
+		.first_constraint_candidate = 0, .constraint_candidate_count = 1,
+		.field_source = { 120, 20 }, .value_relation_source = { 140, 20 },
+		.fieldset_source = { 100, 80 },
+	},
+};
 
+static orlix_tcti_feature_artifact_u8 coverage[1];
+static orlix_tcti_feature_artifact_u32 groups[1];
 static struct orlix_tcti_feature_field_domain_binding_scratch scratch = {
-	.feature_node_coverage = feature_node_coverage,
-	.feature_node_coverage_count = 4,
-	.identity_group_coverage = identity_group_coverage,
-	.identity_group_coverage_count = 2,
+	coverage, 1, groups, 1,
 };
-
 static const struct orlix_tcti_feature_field_domain_binding_contract contract = {
-	.occurrence_count = 3,
-	.identity_group_count = 2,
-	.mapped_count = 2,
-	.ambiguous_field_count = 1,
-	.register_source_sha256 = "fixture-register-sha256",
-	.register_source_length = 10000,
+	1, 1, 1, 0, 1, "fixture-register-sha256", 1000,
 };
 
-static struct orlix_tcti_feature_field_domain_binding_artifact artifact(void)
+static struct orlix_tcti_feature_field_domain_binding_artifact fixture(void)
 {
-	struct orlix_tcti_feature_field_domain_binding_artifact result = {
-		.source = {
-			.architecture = "fixture-architecture",
-			.build = "fixture-build",
-			.reference = "fixture-reference",
-			.schema = "fixture-schema",
-			.sha256 = "fixture-feature-sha256",
-			.length = 1000,
-		},
+	struct orlix_tcti_feature_field_domain_binding_artifact a = {
+		.source = { "fixture-architecture", "fixture-build", "fixture-reference",
+			"fixture-schema", "fixture-feature-sha256", 1000 },
 		.register_source_sha256 = "fixture-register-sha256",
-		.register_source_length = 10000,
-		.occurrence_count = 3,
-		.identity_group_count = 2,
-		.mapped_count = 2,
-		.ambiguous_field_count = 1,
-		.bindings = bindings,
+		.register_source_length = 1000,
+		.occurrence_count = 1, .identity_group_count = 1, .mapped_count = 1,
+		.alternative_count = 1, .range_count = 1, .valueset_count = 1,
+		.domain_count = 2, .link_count = 1, .expression_count = 2,
+		.expression_child_count = 1, .value_candidate_count = 1,
+		.constraint_count = 1, .constraint_item_count = 1,
+		.constraint_candidate_count = 1,
+		.bindings = bindings, .alternatives = alternatives, .ranges = ranges,
+		.valuesets = valuesets, .domains = domains, .links = links,
+		.expressions = expressions, .expression_children = expression_children,
+		.value_candidates = value_candidates, .constraints = constraints,
+		.constraint_items = constraint_items,
+		.constraint_candidates = constraint_candidates,
 	};
-
-	result.identity = orlix_tcti_feature_field_domain_binding_identity(
-		result.bindings, result.occurrence_count);
-	return result;
+	return a;
 }
 
-static int expect_error(
-	const struct orlix_tcti_feature_field_domain_binding_artifact *candidate,
-	enum orlix_tcti_feature_field_domain_binding_error expected)
+static int expect_invalid(struct orlix_tcti_feature_field_domain_binding_artifact *a)
 {
-	struct orlix_tcti_feature_field_domain_binding_diagnostic diagnostic;
-
 	CHECK(orlix_tcti_feature_field_domain_binding_validate_with_contract(
-		&feature_artifact, candidate, &contract, &scratch, &diagnostic) == expected);
-	CHECK(diagnostic.error == expected);
-	return 0;
-}
-
-static int canonical_fixture_is_valid(void)
-{
-	struct orlix_tcti_feature_field_domain_binding_artifact candidate = artifact();
-
-	CHECK(orlix_tcti_feature_field_domain_binding_validate_with_contract(
-		&feature_artifact, &candidate, &contract, &scratch, NULL) ==
+		&feature_artifact, a, &contract, &scratch, NULL) !=
 		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
 	return 0;
 }
 
-static int checked_canonical_artifact_is_valid(void)
+static int fixture_and_structural_mutations(void)
 {
-	struct orlix_tcti_feature_field_domain_binding_diagnostic diagnostic;
-	enum orlix_tcti_feature_field_domain_binding_error error;
-	static orlix_tcti_feature_artifact_u8 coverage[
-		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
-	static orlix_tcti_feature_artifact_u32 groups[
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
-	struct orlix_tcti_feature_field_domain_binding_scratch canonical_scratch = {
-		.feature_node_coverage = coverage,
-		.feature_node_coverage_count = sizeof(coverage),
-		.identity_group_coverage = groups,
-		.identity_group_coverage_count = sizeof(groups) / sizeof(groups[0]),
-	};
+	struct orlix_tcti_feature_field_domain_binding_artifact a = fixture();
+	struct orlix_tcti_feature_field_domain_binding_contract two_alternatives =
+		contract;
+	struct orlix_tcti_feature_field_domain_alternative overlapping[2];
+	CHECK(orlix_tcti_feature_field_domain_binding_validate_with_contract(
+		&feature_artifact, &a, &contract, &scratch, NULL) ==
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
 
-	error = orlix_tcti_feature_field_domain_binding_validate(
-		orlix_tcti_feature_artifact_canonical(),
-		orlix_tcti_feature_field_domain_binding_artifact_canonical(),
-		&canonical_scratch, &diagnostic);
-	if (error != ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID) {
-		fprintf(stderr, "canonical field-domain binding: %s at %u\n",
-			orlix_tcti_feature_field_domain_binding_error_name(error),
+	ranges[0].width = 0; CHECK(expect_invalid(&a) == 0); ranges[0].width = 4;
+	a.range_count = 2; alternatives[0].range_count = 2;
+	bindings[0].domain.range_count = 2; CHECK(expect_invalid(&a) == 0);
+	a.range_count = 1; alternatives[0].range_count = 1;
+	bindings[0].domain.range_count = 1;
+	domains[1].parent_domain = 1; CHECK(expect_invalid(&a) == 0);
+	domains[1].parent_domain = 0;
+	domains[0].parent_domain = 1; CHECK(expect_invalid(&a) == 0);
+	domains[0].parent_domain = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE;
+	domains[1].condition_expression = 2; CHECK(expect_invalid(&a) == 0);
+	domains[1].condition_expression = 1;
+	expression_children[0] = 2; CHECK(expect_invalid(&a) == 0);
+	expression_children[0] = 1;
+	expressions[0].parent_expression = 1; CHECK(expect_invalid(&a) == 0);
+	expressions[0].parent_expression = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE;
+	value_candidates[0].first_domain = 2; CHECK(expect_invalid(&a) == 0);
+	value_candidates[0].first_domain = 0;
+	constraint_items[0].constraint_index = 1; CHECK(expect_invalid(&a) == 0);
+	constraint_items[0].constraint_index = 0;
+	constraint_candidates[0].constraint_index = 1; CHECK(expect_invalid(&a) == 0);
+	constraint_candidates[0].constraint_index = 0;
+	links[0].domain_index = 2; CHECK(expect_invalid(&a) == 0);
+	links[0].domain_index = 0;
+	alternatives[0].first_range = 1; CHECK(expect_invalid(&a) == 0);
+	alternatives[0].first_range = 0;
+	bindings[0].first_alternative = 1; CHECK(expect_invalid(&a) == 0);
+	bindings[0].first_alternative = 0;
+	overlapping[0] = alternatives[0];
+	overlapping[1] = alternatives[0];
+	a.alternatives = overlapping;
+	a.alternative_count = 2;
+	bindings[0].alternative_count = 2;
+	bindings[0].domain.equivalent_field_count = 2;
+	two_alternatives.alternative_count = 2;
+	CHECK(orlix_tcti_feature_field_domain_binding_validate_with_contract(
+		&feature_artifact, &a, &two_alternatives, &scratch, NULL) !=
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
+	bindings[0].alternative_count = 1;
+	bindings[0].domain.equivalent_field_count = 1;
+	return 0;
+}
+
+static int canonical_mutations_are_deeply_rejected(void)
+{
+	const struct orlix_tcti_feature_field_domain_binding_artifact *live =
+		orlix_tcti_feature_field_domain_binding_artifact_canonical();
+	struct orlix_tcti_feature_field_domain_binding_artifact a = *live;
+	struct orlix_tcti_feature_field_domain_binding *binding;
+	struct orlix_tcti_feature_field_domain_range *range;
+	struct orlix_tcti_feature_field_domain_valueset *valueset;
+	struct orlix_tcti_feature_field_domain_node *domain;
+	struct orlix_tcti_feature_field_domain_link *link;
+	struct orlix_tcti_feature_field_domain_expression *expression;
+	orlix_tcti_feature_artifact_u32 *child;
+	struct orlix_tcti_feature_field_domain_value_candidate *value_candidate;
+	struct orlix_tcti_feature_field_domain_constraint *constraint;
+	struct orlix_tcti_feature_field_domain_constraint_item *item;
+	struct orlix_tcti_feature_field_domain_constraint_candidate *candidate;
+	struct orlix_tcti_feature_field_domain_alternative *alternative;
+	struct orlix_tcti_feature_field_domain_link added_link = { "key", "value", 0 };
+	struct orlix_tcti_feature_field_domain_value_candidate added_value_candidate = {
+		0, 0, 0, 0,
+	};
+	struct orlix_tcti_feature_field_domain_constraint_candidate added_candidate = {
+		0, 0, 0, 0,
+	};
+	static orlix_tcti_feature_artifact_u8 canonical_coverage[
+		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static orlix_tcti_feature_artifact_u32 canonical_groups[
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
+	struct orlix_tcti_feature_field_domain_binding_scratch s = {
+		canonical_coverage, sizeof(canonical_coverage), canonical_groups,
+		sizeof(canonical_groups) / sizeof(canonical_groups[0]),
+	};
+	struct orlix_tcti_feature_field_domain_binding_diagnostic diagnostic;
+	enum orlix_tcti_feature_field_domain_binding_error baseline;
+	/* The isolated compile fixture proves the V3 macro contract, not production. */
+	if (live->occurrence_count !=
+	    ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_OCCURRENCE_COUNT)
+		return 0;
+#define COPY_ONE(name, member, count) do { \
+	name = malloc(live->count * sizeof(*name)); CHECK(name != NULL); \
+	memcpy(name, live->member, live->count * sizeof(*name)); \
+	a.member = name; \
+} while (0)
+#define REJECT_AND_FREE(name, member) do { \
+	CHECK(orlix_tcti_feature_field_domain_binding_validate( \
+		orlix_tcti_feature_artifact_canonical(), &a, &s, NULL) != \
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID); \
+	free(name); a.member = live->member; \
+} while (0)
+	baseline = orlix_tcti_feature_field_domain_binding_validate(
+		orlix_tcti_feature_artifact_canonical(), live, &s, &diagnostic);
+	if (baseline != ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID) {
+		fprintf(stderr, "canonical V3 validation: %s at %u\n",
+			orlix_tcti_feature_field_domain_binding_error_name(baseline),
 			diagnostic.index);
 		return -1;
 	}
-	return 0;
-}
-
-static int rejects_provenance_coverage_disposition_and_identity_drift(void)
-{
-	struct orlix_tcti_feature_field_domain_binding_artifact candidate;
-	struct orlix_tcti_feature_field_domain_binding original_binding = bindings[1];
-	struct orlix_tcti_feature_field_domain_binding original_ambiguous = bindings[2];
-	orlix_tcti_feature_artifact_u32 original_offset = bindings[0].feature_source.offset;
-	enum orlix_tcti_feature_field_domain_disposition original_disposition =
-		bindings[2].disposition;
-
-	candidate = artifact();
-	bindings[1] = bindings[0];
-	bindings[1].order = 1;
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_COVERAGE_INVALID) == 0);
-	bindings[1] = original_binding;
-
-	candidate = artifact();
-	bindings[0].feature_source.offset = 21;
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_PROVENANCE_INVALID) == 0);
-	bindings[0].feature_source.offset = original_offset;
-
-	candidate = artifact();
-	bindings[2].disposition = ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MISSING_FIELD;
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_DISPOSITION_INVALID) == 0);
-	bindings[2].disposition = original_disposition;
-
-	candidate = artifact();
-	/* Ambiguity may identify a register, never a fabricated resolved field. */
-	bindings[2].field_index = 14;
-	bindings[2].value_relation_index = 14;
-	bindings[2].field_source = (struct orlix_tcti_feature_artifact_span) { 120, 12 };
-	bindings[2].value_relation_source =
-		(struct orlix_tcti_feature_artifact_span) { 140, 16 };
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_PROVENANCE_INVALID) == 0);
-	bindings[2] = original_ambiguous;
-
-	candidate = artifact();
-	candidate.identity++;
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_INVALID) == 0);
-	return 0;
-}
-
-static int rejects_group_cardinality_and_source_pin_drift(void)
-{
-	struct orlix_tcti_feature_field_domain_binding_artifact candidate = artifact();
-	orlix_tcti_feature_artifact_u32 original_members = bindings[0].occurrence_count;
-
-	bindings[0].occurrence_count = 1;
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_INVALID) == 0);
-	bindings[0].occurrence_count = original_members;
-
-	candidate = artifact();
-	candidate.source.length--;
-	CHECK(expect_error(&candidate,
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_PIN_MISMATCH) == 0);
-	return 0;
-}
-
-static int canonical_wrapper_rejects_recomputed_relation_drift(void)
-{
-	const struct orlix_tcti_feature_field_domain_binding_artifact *live;
-	struct orlix_tcti_feature_field_domain_binding_artifact candidate;
-	struct orlix_tcti_feature_field_domain_binding *copy;
-	struct orlix_tcti_feature_field_domain_binding_diagnostic diagnostic;
-	static orlix_tcti_feature_artifact_u8 coverage[
-		ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
-	static orlix_tcti_feature_artifact_u32 groups[
-		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
-	struct orlix_tcti_feature_field_domain_binding_scratch canonical_scratch = {
-		.feature_node_coverage = coverage,
-		.feature_node_coverage_count = sizeof(coverage),
-		.identity_group_coverage = groups,
-		.identity_group_coverage_count = sizeof(groups) / sizeof(groups[0]),
-	};
-
-	live = orlix_tcti_feature_field_domain_binding_artifact_canonical();
-	copy = malloc(live->occurrence_count * sizeof(*copy));
-	CHECK(copy != NULL);
-	memcpy(copy, live->bindings, live->occurrence_count * sizeof(*copy));
-	candidate = *live;
-	candidate.bindings = copy;
-	/* This remains in range, so only the exact checked relation can reject it. */
-	copy[0].register_index++;
-	candidate.identity = orlix_tcti_feature_field_domain_binding_identity(
-		candidate.bindings, candidate.occurrence_count);
+	a.identity++;
 	CHECK(orlix_tcti_feature_field_domain_binding_validate(
-		      orlix_tcti_feature_artifact_canonical(), &candidate,
-		      &canonical_scratch, &diagnostic) ==
+		orlix_tcti_feature_artifact_canonical(), &a, &s, NULL) ==
 		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_CANONICAL_MISMATCH);
-	CHECK(diagnostic.index == 0);
-	free(copy);
+	a.identity = live->identity;
+	COPY_ONE(binding, bindings, occurrence_count);
+	binding[0].register_index++; REJECT_AND_FREE(binding, bindings);
+	COPY_ONE(range, ranges, range_count);
+	range[0].start++; REJECT_AND_FREE(range, ranges);
+	COPY_ONE(valueset, valuesets, valueset_count);
+	valueset[0].type = "mutated"; REJECT_AND_FREE(valueset, valuesets);
+	COPY_ONE(domain, domains, domain_count);
+	domain[0].value = "mutated"; REJECT_AND_FREE(domain, domains);
+	if (live->link_count) {
+		COPY_ONE(link, links, link_count);
+		link[0].key = "mutated"; REJECT_AND_FREE(link, links);
+	} else {
+		a.link_count = 1;
+		a.links = &added_link;
+		CHECK(orlix_tcti_feature_field_domain_binding_validate(
+			orlix_tcti_feature_artifact_canonical(), &a, &s, NULL) !=
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
+		a.link_count = 0;
+		a.links = live->links;
+	}
+	COPY_ONE(expression, expressions, expression_count);
+	expression[0].integer++; REJECT_AND_FREE(expression, expressions);
+	COPY_ONE(child, expression_children, expression_child_count);
+	child[0] = child[0] ? 0 : 1; REJECT_AND_FREE(child, expression_children);
+	if (live->value_candidate_count) {
+		COPY_ONE(value_candidate, value_candidates, value_candidate_count);
+		value_candidate[0].kind++;
+		REJECT_AND_FREE(value_candidate, value_candidates);
+	} else {
+		a.value_candidate_count = 1;
+		a.value_candidates = &added_value_candidate;
+		CHECK(orlix_tcti_feature_field_domain_binding_validate(
+			orlix_tcti_feature_artifact_canonical(), &a, &s, NULL) !=
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
+		a.value_candidate_count = 0;
+		a.value_candidates = live->value_candidates;
+	}
+	COPY_ONE(constraint, constraints, constraint_count);
+	constraint[0].kind++; REJECT_AND_FREE(constraint, constraints);
+	COPY_ONE(item, constraint_items, constraint_item_count);
+	item[0].valueset_index ^= 1U; REJECT_AND_FREE(item, constraint_items);
+	if (live->constraint_candidate_count) {
+		COPY_ONE(candidate, constraint_candidates, constraint_candidate_count);
+		candidate[0].kind++;
+		REJECT_AND_FREE(candidate, constraint_candidates);
+	} else {
+		a.constraint_candidate_count = 1;
+		a.constraint_candidates = &added_candidate;
+		CHECK(orlix_tcti_feature_field_domain_binding_validate(
+			orlix_tcti_feature_artifact_canonical(), &a, &s, NULL) !=
+			ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_VALID);
+		a.constraint_candidate_count = 0;
+		a.constraint_candidates = live->constraint_candidates;
+	}
+	COPY_ONE(alternative, alternatives, alternative_count);
+	alternative[0].field_index++; REJECT_AND_FREE(alternative, alternatives);
+#undef REJECT_AND_FREE
+#undef COPY_ONE
 	return 0;
 }
 
 int main(void)
 {
-	if (canonical_fixture_is_valid() ||
-	    checked_canonical_artifact_is_valid() ||
-	    rejects_provenance_coverage_disposition_and_identity_drift() ||
-	    rejects_group_cardinality_and_source_pin_drift() ||
-	    canonical_wrapper_rejects_recomputed_relation_drift())
+	if (fixture_and_structural_mutations() ||
+	    canonical_mutations_are_deeply_rejected())
 		return 1;
-	puts("PASS target feature field-domain binding artifact validator");
+	puts("PASS target feature field-domain V3 artifact validator");
 	return 0;
 }
+#endif

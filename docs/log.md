@@ -787,3 +787,12 @@ release-validation, payload-staging, and TCTI artifact-refresh behavior is
 owned by component Make rules, with only non-executable source modules behind
 private targets. Generated wrappers required by upstream build systems remain
 disposable `Build/` output.
+
+## [2026-07-27] correct | Resolve every feature-field domain losslessly
+
+[CORRECTION] The checked V3 feature-field-domain artifact now resolves all 605
+qualifier occurrences across 362 identity groups. It retains 606 declaration
+alternatives, including both conditional `MPAMIDR_EL1.HAS_BW_CTRL`
+declarations, with zero unresolved or ambiguous occurrences. The overall TCTI
+repository-wide audit remains blocked by later applicability, proof, cohort, and
+runtime work.

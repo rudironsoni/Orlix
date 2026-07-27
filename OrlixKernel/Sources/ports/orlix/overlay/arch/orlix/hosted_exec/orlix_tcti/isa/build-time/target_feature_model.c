@@ -311,12 +311,19 @@ static int node_add(struct importer *in, struct orlix_tcti_feature_node node, ui
 static int node(struct importer *in, int object, uint32_t *out);
 static int node_children(struct importer *in, int array, uint32_t *first, uint32_t *count)
 {
-	size_t i, n;
+	size_t i, n, direct_first;
+	uint32_t child;
 	if (array < 0 || (size_t)array >= in->count || in->tokens[array].kind != JSON_ARRAY || in->tokens[array].size > UINT32_MAX || in->model->child_count > UINT32_MAX - in->tokens[array].size) goto bad;
 	n = in->tokens[array].size;
 	if (grow((void **)&in->model->children, &in->model->child_capacity, in->model->child_count + n, sizeof(*in->model->children))) goto bad;
-	*first = (uint32_t)in->model->child_count; *count = (uint32_t)n;
-	for (i = 0; i < n; i++) if (node(in, array_child(in, array, i), &in->model->children[in->model->child_count++])) return -1;
+	/* Recursion may grow this array; reserve a stable direct-child slice first. */
+	direct_first = in->model->child_count;
+	in->model->child_count += n;
+	*first = (uint32_t)direct_first; *count = (uint32_t)n;
+	for (i = 0; i < n; i++) {
+		if (node(in, array_child(in, array, i), &child)) return -1;
+		in->model->children[direct_first + i] = child;
+	}
 	return 0;
 bad:
 	error(in->error, ORLIX_TCTI_FEATURE_INVALID_SOURCE, array >= 0 && (size_t)array < in->count ? in->tokens[array].start : 0, "AST children"); return -1;

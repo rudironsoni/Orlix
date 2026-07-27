@@ -1,10 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Static consumer contract for the checked feature FIELD-to-register-domain
- * binding artifact.  The maintainer lane emits the companion .def from the
- * pinned Arm source.  Normal kernel and host consumers never read that raw
- * source.
- */
 #ifndef ORLIX_TCTI_TARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_H
 #define ORLIX_TCTI_TARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_H
 
@@ -12,14 +6,14 @@
 
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_OCCURRENCE_COUNT 605U
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT 362U
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_MAPPED_COUNT 604U
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_AMBIGUOUS_FIELD_COUNT 1U
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_FNV1A_OFFSET 0x14650fb0739d0383ULL
-#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_FNV1A_PRIME 0x100000001b3ULL
-
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_MAPPED_COUNT 605U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_AMBIGUOUS_FIELD_COUNT 0U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_ALTERNATIVE_COUNT 606U
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_REGISTER_SOURCE_SHA256 \
 	"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874"
 #define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_REGISTER_SOURCE_LENGTH 96016602U
+#define ORLIX_TCTI_FEATURE_FIELD_DOMAIN_INDEX_NONE \
+	((orlix_tcti_feature_artifact_u32)-1)
 
 enum orlix_tcti_feature_field_domain_disposition {
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MAPPED,
@@ -31,12 +25,152 @@ enum orlix_tcti_feature_field_domain_disposition {
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_DISPOSITION_COUNT,
 };
 
-/*
- * Each generated record binds one feature AST.FIELD occurrence to an Arm
- * register field/value-domain relation.  `identity_group_index` coalesces
- * equal semantic relationships while every occurrence retains independent
- * raw source spans and a direct feature-node index.
- */
+enum orlix_tcti_feature_field_domain_type {
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TYPE_CONSTANT,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_TYPE_COUNT,
+};
+
+enum orlix_tcti_feature_field_domain_signedness {
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_UNSIGNED,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_SIGNEDNESS_COUNT,
+};
+
+enum orlix_tcti_feature_field_domain_member_kind {
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ENUM_MEMBERS,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_RANGE_MEMBERS,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MIXED_MEMBERS,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_MEMBER_KIND_COUNT,
+};
+
+struct orlix_tcti_feature_field_normalized_domain {
+	orlix_tcti_feature_artifact_u32 fieldset_index;
+	orlix_tcti_feature_artifact_u32 equivalent_field_count;
+	orlix_tcti_feature_artifact_u32 register_width;
+	orlix_tcti_feature_artifact_u32 field_width;
+	orlix_tcti_feature_artifact_u32 range_count;
+	orlix_tcti_feature_artifact_u32 value_member_count;
+	orlix_tcti_feature_artifact_u32 range_member_count;
+	orlix_tcti_feature_artifact_u32 relation_value_count;
+	orlix_tcti_feature_artifact_u32 relation_constraint_count;
+	orlix_tcti_feature_artifact_u32 field_condition_expression;
+	orlix_tcti_feature_artifact_u32 wrapper_condition_expression;
+	orlix_tcti_feature_artifact_u32 fieldset_condition_expression;
+	orlix_tcti_feature_artifact_u32 type;
+	orlix_tcti_feature_artifact_u32 signedness;
+	orlix_tcti_feature_artifact_u32 member_kind;
+	orlix_tcti_feature_artifact_u64 semantic_identity;
+	orlix_tcti_feature_artifact_u64 resolution_identity;
+	struct orlix_tcti_feature_artifact_span fieldset_source;
+	struct orlix_tcti_feature_artifact_span field_condition_source;
+	struct orlix_tcti_feature_artifact_span wrapper_condition_source;
+	struct orlix_tcti_feature_artifact_span fieldset_condition_source;
+};
+
+struct orlix_tcti_feature_field_domain_range {
+	orlix_tcti_feature_artifact_u32 start;
+	orlix_tcti_feature_artifact_u32 width;
+};
+
+struct orlix_tcti_feature_field_domain_valueset { const char *type; };
+
+struct orlix_tcti_feature_field_domain_node {
+	const char *type;
+	const char *value;
+	const char *start;
+	const char *end;
+	const char *link;
+	const char *meaning;
+	orlix_tcti_feature_artifact_u32 parent_domain;
+	orlix_tcti_feature_artifact_u32 condition_expression;
+	orlix_tcti_feature_artifact_u32 first_child_domain;
+	orlix_tcti_feature_artifact_u32 child_domain_count;
+	orlix_tcti_feature_artifact_u32 valueset_index;
+	orlix_tcti_feature_artifact_u32 nested_valueset_index;
+	orlix_tcti_feature_artifact_u32 first_link;
+	orlix_tcti_feature_artifact_u32 link_count;
+};
+
+struct orlix_tcti_feature_field_domain_link {
+	const char *key;
+	const char *value;
+	orlix_tcti_feature_artifact_u32 domain_index;
+};
+
+struct orlix_tcti_feature_field_domain_expression {
+	const char *type;
+	const char *name;
+	const char *op;
+	const char *value;
+	const char *role;
+	const char *register_state;
+	const char *register_name;
+	const char *field_name;
+	orlix_tcti_feature_artifact_u32 first_child;
+	orlix_tcti_feature_artifact_u32 child_count;
+	orlix_tcti_feature_artifact_u32 scalar_kind;
+	orlix_tcti_feature_artifact_s64 integer;
+	orlix_tcti_feature_artifact_u32 boolean;
+	orlix_tcti_feature_artifact_u32 parent_expression;
+	struct orlix_tcti_feature_artifact_span instance_source;
+	struct orlix_tcti_feature_artifact_span slices_source;
+	struct orlix_tcti_feature_artifact_span source;
+};
+
+struct orlix_tcti_feature_field_domain_value_candidate {
+	orlix_tcti_feature_artifact_u32 kind;
+	orlix_tcti_feature_artifact_u32 valueset_index;
+	orlix_tcti_feature_artifact_u32 first_domain;
+	orlix_tcti_feature_artifact_u32 domain_count;
+};
+
+struct orlix_tcti_feature_field_domain_constraint {
+	orlix_tcti_feature_artifact_u32 kind;
+	orlix_tcti_feature_artifact_u32 valueset_index;
+	orlix_tcti_feature_artifact_u32 first_item;
+	orlix_tcti_feature_artifact_u32 item_count;
+};
+
+struct orlix_tcti_feature_field_domain_constraint_item {
+	orlix_tcti_feature_artifact_u32 constraint_index;
+	orlix_tcti_feature_artifact_u32 valueset_index;
+	orlix_tcti_feature_artifact_u32 domain_index;
+};
+
+struct orlix_tcti_feature_field_domain_constraint_candidate {
+	orlix_tcti_feature_artifact_u32 constraint_index;
+	orlix_tcti_feature_artifact_u32 kind;
+	orlix_tcti_feature_artifact_u32 first_domain;
+	orlix_tcti_feature_artifact_u32 domain_count;
+};
+
+struct orlix_tcti_feature_field_domain_alternative {
+	orlix_tcti_feature_artifact_u32 field_index;
+	orlix_tcti_feature_artifact_u32 value_relation_index;
+	orlix_tcti_feature_artifact_u32 fieldset_index;
+	orlix_tcti_feature_artifact_u32 field_condition_expression;
+	orlix_tcti_feature_artifact_u32 wrapper_condition_expression;
+	orlix_tcti_feature_artifact_u32 fieldset_condition_expression;
+	orlix_tcti_feature_artifact_u32 relation_field_condition_expression;
+	orlix_tcti_feature_artifact_u32 relation_wrapper_condition_expression;
+	orlix_tcti_feature_artifact_u32 first_range, range_count;
+	orlix_tcti_feature_artifact_u32 first_valueset, valueset_count;
+	orlix_tcti_feature_artifact_u32 first_domain, domain_count;
+	orlix_tcti_feature_artifact_u32 first_link, link_count;
+	orlix_tcti_feature_artifact_u32 first_expression, expression_count;
+	orlix_tcti_feature_artifact_u32 first_expression_child, expression_child_count;
+	orlix_tcti_feature_artifact_u32 first_value_candidate, value_candidate_count;
+	orlix_tcti_feature_artifact_u32 first_constraint, constraint_count;
+	orlix_tcti_feature_artifact_u32 first_constraint_item, constraint_item_count;
+	orlix_tcti_feature_artifact_u32 first_constraint_candidate;
+	orlix_tcti_feature_artifact_u32 constraint_candidate_count;
+	struct orlix_tcti_feature_artifact_span field_source;
+	struct orlix_tcti_feature_artifact_span value_relation_source;
+	struct orlix_tcti_feature_artifact_span fieldset_source;
+	struct orlix_tcti_feature_artifact_span field_condition_source;
+	struct orlix_tcti_feature_artifact_span wrapper_condition_source;
+	struct orlix_tcti_feature_artifact_span fieldset_condition_source;
+};
+
 struct orlix_tcti_feature_field_domain_binding {
 	orlix_tcti_feature_artifact_u32 order;
 	orlix_tcti_feature_artifact_u32 feature_node_index;
@@ -55,25 +189,42 @@ struct orlix_tcti_feature_field_domain_binding {
 	struct orlix_tcti_feature_artifact_span register_source;
 	struct orlix_tcti_feature_artifact_span field_source;
 	struct orlix_tcti_feature_artifact_span value_relation_source;
+	orlix_tcti_feature_artifact_u32 first_alternative;
+	orlix_tcti_feature_artifact_u32 alternative_count;
+	struct orlix_tcti_feature_field_normalized_domain domain;
 };
 
 struct orlix_tcti_feature_field_domain_binding_artifact {
 	struct orlix_tcti_feature_artifact_source source;
 	const char *register_source_sha256;
 	orlix_tcti_feature_artifact_u32 register_source_length;
-	orlix_tcti_feature_artifact_u32 occurrence_count;
-	orlix_tcti_feature_artifact_u32 identity_group_count;
-	orlix_tcti_feature_artifact_u32 mapped_count;
-	orlix_tcti_feature_artifact_u32 ambiguous_field_count;
+	orlix_tcti_feature_artifact_u32 occurrence_count, identity_group_count;
+	orlix_tcti_feature_artifact_u32 mapped_count, ambiguous_field_count;
+	orlix_tcti_feature_artifact_u32 alternative_count, range_count;
+	orlix_tcti_feature_artifact_u32 valueset_count, domain_count, link_count;
+	orlix_tcti_feature_artifact_u32 expression_count, expression_child_count;
+	orlix_tcti_feature_artifact_u32 value_candidate_count, constraint_count;
+	orlix_tcti_feature_artifact_u32 constraint_item_count;
+	orlix_tcti_feature_artifact_u32 constraint_candidate_count;
 	orlix_tcti_feature_artifact_u64 identity;
 	const struct orlix_tcti_feature_field_domain_binding *bindings;
+	const struct orlix_tcti_feature_field_domain_alternative *alternatives;
+	const struct orlix_tcti_feature_field_domain_range *ranges;
+	const struct orlix_tcti_feature_field_domain_valueset *valuesets;
+	const struct orlix_tcti_feature_field_domain_node *domains;
+	const struct orlix_tcti_feature_field_domain_link *links;
+	const struct orlix_tcti_feature_field_domain_expression *expressions;
+	const orlix_tcti_feature_artifact_u32 *expression_children;
+	const struct orlix_tcti_feature_field_domain_value_candidate *value_candidates;
+	const struct orlix_tcti_feature_field_domain_constraint *constraints;
+	const struct orlix_tcti_feature_field_domain_constraint_item *constraint_items;
+	const struct orlix_tcti_feature_field_domain_constraint_candidate *constraint_candidates;
 };
 
 struct orlix_tcti_feature_field_domain_binding_contract {
-	orlix_tcti_feature_artifact_u32 occurrence_count;
-	orlix_tcti_feature_artifact_u32 identity_group_count;
-	orlix_tcti_feature_artifact_u32 mapped_count;
-	orlix_tcti_feature_artifact_u32 ambiguous_field_count;
+	orlix_tcti_feature_artifact_u32 occurrence_count, identity_group_count;
+	orlix_tcti_feature_artifact_u32 mapped_count, ambiguous_field_count;
+	orlix_tcti_feature_artifact_u32 alternative_count;
 	const char *register_source_sha256;
 	orlix_tcti_feature_artifact_u32 register_source_length;
 };
@@ -86,10 +237,10 @@ enum orlix_tcti_feature_field_domain_binding_error {
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_POINTER_MISSING,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_DISPOSITION_INVALID,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_INDEX_INVALID,
-	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_INVALID,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_PROVENANCE_INVALID,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_COVERAGE_INVALID,
-	/* Production records must match the checked canonical relation exactly. */
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_SLICE_INVALID,
+	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TOPOLOGY_INVALID,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_CANONICAL_MISMATCH,
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_SCRATCH_TOO_SMALL,
 };
@@ -106,35 +257,9 @@ struct orlix_tcti_feature_field_domain_binding_scratch {
 	size_t identity_group_coverage_count;
 };
 
-/*
- * Checked, versioned binding artifact consumed by normal kernel and host
- * audit code. The definition is generated only in the maintainer lane from
- * the pinned Arm sources.
- */
 const struct orlix_tcti_feature_field_domain_binding_artifact *
 orlix_tcti_feature_field_domain_binding_artifact_canonical(void);
 
-/*
- * The generator must emit this shape in the checked .def:
- *
- * ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_SOURCE(architecture, build, reference,
- *     schema, features_sha256, features_length, registers_sha256,
- *     registers_length)
- * ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS(occurrences, identity_groups, mapped,
- *     ambiguous_field)
- * ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(fnv1a)
- * ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE(order, feature_node_index,
- *     identity_group_index, occurrence_count, register_index, field_index,
- *     value_relation_index, disposition, state, register_name, selector,
- *     instance_kind, instance_offset, instance_length, slices_kind,
- *     slices_offset, slices_length, feature_offset, feature_length,
- *     register_offset, register_length, field_offset, field_length,
- *     value_relation_offset, value_relation_length)
- *
- * The canonical production consumer is intentionally deferred until that
- * generated checked artifact exists.  This validator is independently
- * fixture-testable and requires no raw Arm input.
- */
 enum orlix_tcti_feature_field_domain_binding_error
 orlix_tcti_feature_field_domain_binding_validate_with_contract(
 	const struct orlix_tcti_feature_artifact *feature_artifact,
@@ -143,18 +268,12 @@ orlix_tcti_feature_field_domain_binding_validate_with_contract(
 	struct orlix_tcti_feature_field_domain_binding_scratch *scratch,
 	struct orlix_tcti_feature_field_domain_binding_diagnostic *diagnostic);
 
-/* Validates the pinned 605-occurrence, 362-identity-group production contract. */
 enum orlix_tcti_feature_field_domain_binding_error
 orlix_tcti_feature_field_domain_binding_validate(
 	const struct orlix_tcti_feature_artifact *feature_artifact,
 	const struct orlix_tcti_feature_field_domain_binding_artifact *artifact,
 	struct orlix_tcti_feature_field_domain_binding_scratch *scratch,
 	struct orlix_tcti_feature_field_domain_binding_diagnostic *diagnostic);
-
-/* Canonical FNV-1a serialization for ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY. */
-orlix_tcti_feature_artifact_u64 orlix_tcti_feature_field_domain_binding_identity(
-	const struct orlix_tcti_feature_field_domain_binding *bindings,
-	orlix_tcti_feature_artifact_u32 occurrence_count);
 
 const char *orlix_tcti_feature_field_domain_binding_error_name(
 	enum orlix_tcti_feature_field_domain_binding_error error);

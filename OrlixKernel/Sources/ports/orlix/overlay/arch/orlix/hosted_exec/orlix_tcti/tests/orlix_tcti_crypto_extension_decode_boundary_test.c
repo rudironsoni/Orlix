@@ -38,6 +38,7 @@ struct crypto_asl_availability_row {
 };
 
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
+#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
 #define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
 					      semantic_locator, semantic_member_offset, \
 					      semantic_member_length, semantic_body_offset, \
@@ -50,6 +51,7 @@ struct crypto_asl_availability_row {
 static const struct crypto_asl_availability_row crypto_asl_availability[] = {
 #include "../isa/target_asl_availability.def"
 };
+#undef ORLIX_TCTI_A64_ASL_XML_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
 #undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
 

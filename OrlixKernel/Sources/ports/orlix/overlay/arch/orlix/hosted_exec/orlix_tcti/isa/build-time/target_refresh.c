@@ -37,7 +37,14 @@
 #define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_SHA256 \
 	"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874"
 #define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v2"
-#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-isa-maintainer"
+#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh"
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES 605U
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS 362U
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_MAPPED 605U
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_AMBIGUOUS 0U
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_ALTERNATIVES 606U
+#define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCE_V3 \
+	"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V3("
 
 struct source_bytes {
 	char *data;
@@ -68,6 +75,30 @@ static size_t count_token(const struct artifact_bytes *artifact,
 static int has_token(const struct artifact_bytes *artifact, const char *token)
 {
 	return count_token(artifact, token) != 0;
+}
+
+static size_t count_macro_rows(const struct artifact_bytes *artifact,
+			       const char *token)
+{
+	const char *cursor = artifact->data;
+	const char *end = artifact->data + artifact->length;
+	size_t token_length = strlen(token);
+	size_t count = 0;
+
+	while (cursor < end) {
+		const char *line_end = memchr(cursor, '\n', (size_t)(end - cursor));
+		size_t line_length = line_end ? (size_t)(line_end - cursor) :
+			(size_t)(end - cursor);
+
+		if (line_length >= token_length &&
+		    !memcmp(cursor, token, token_length)) {
+			if (line_length == token_length || cursor[line_length - 1U] != ')')
+				return SIZE_MAX;
+			count++;
+		}
+		cursor = line_end ? line_end + 1 : end;
+	}
+	return count;
 }
 
 static int parse_counts(const struct artifact_bytes *artifact,
@@ -105,6 +136,101 @@ static int parse_counts(const struct artifact_bytes *artifact,
 	return 0;
 }
 
+enum feature_field_domain_count_index {
+	FIELD_DOMAIN_OCCURRENCES,
+	FIELD_DOMAIN_GROUPS,
+	FIELD_DOMAIN_MAPPED,
+	FIELD_DOMAIN_AMBIGUOUS,
+	FIELD_DOMAIN_ALTERNATIVES,
+	FIELD_DOMAIN_RANGES,
+	FIELD_DOMAIN_VALUESETS,
+	FIELD_DOMAIN_DOMAINS,
+	FIELD_DOMAIN_LINKS,
+	FIELD_DOMAIN_EXPRESSIONS,
+	FIELD_DOMAIN_EXPRESSION_CHILDREN,
+	FIELD_DOMAIN_VALUE_CANDIDATES,
+	FIELD_DOMAIN_CONSTRAINTS,
+	FIELD_DOMAIN_CONSTRAINT_ITEMS,
+	FIELD_DOMAIN_CONSTRAINT_CANDIDATES,
+	FIELD_DOMAIN_COUNT
+};
+
+struct feature_field_domain_row_contract {
+	const char *token;
+	enum feature_field_domain_count_index count_index;
+};
+
+static int validate_feature_field_domain_artifact(
+	const struct artifact_bytes *artifact)
+{
+	static const struct feature_field_domain_row_contract rows[] = {
+		{ ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCE_V3,
+		  FIELD_DOMAIN_OCCURRENCES },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_ALTERNATIVE_V3(",
+		  FIELD_DOMAIN_ALTERNATIVES },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_RANGE_V3(",
+		  FIELD_DOMAIN_RANGES },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUESET_V3(",
+		  FIELD_DOMAIN_VALUESETS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_DOMAIN_V3(",
+		  FIELD_DOMAIN_DOMAINS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_LINK_V3(",
+		  FIELD_DOMAIN_LINKS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_V3(",
+		  FIELD_DOMAIN_EXPRESSIONS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_EXPRESSION_CHILD_V3(",
+		  FIELD_DOMAIN_EXPRESSION_CHILDREN },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_VALUE_CANDIDATE_V3(",
+		  FIELD_DOMAIN_VALUE_CANDIDATES },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_V3(",
+		  FIELD_DOMAIN_CONSTRAINTS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_ITEM_V3(",
+		  FIELD_DOMAIN_CONSTRAINT_ITEMS },
+		{ "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_CONSTRAINT_CANDIDATE_V3(",
+		  FIELD_DOMAIN_CONSTRAINT_CANDIDATES },
+	};
+	size_t counts[FIELD_DOMAIN_COUNT];
+	size_t index;
+
+	if (!artifact->data || artifact->length != strlen(artifact->data) ||
+	    count_macro_rows(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_SOURCE(") != 1U ||
+	    !has_token(artifact, ORLIX_TCTI_TARGET_REFRESH_FEATURES_SHA256) ||
+	    !has_token(artifact, ORLIX_TCTI_TARGET_REFRESH_REGISTERS_SHA256) ||
+	    count_macro_rows(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS_V3(") != 1U ||
+	    count_macro_rows(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(") != 1U ||
+	    count_token(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS(") != 0U ||
+	    count_token(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE_V2(") != 0U ||
+	    parse_counts(artifact,
+		"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS_V3(", counts,
+		ARRAY_SIZE(counts)) ||
+	    counts[FIELD_DOMAIN_OCCURRENCES] !=
+		ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES ||
+	    counts[FIELD_DOMAIN_GROUPS] !=
+		ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS ||
+	    counts[FIELD_DOMAIN_MAPPED] !=
+		ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_MAPPED ||
+	    counts[FIELD_DOMAIN_AMBIGUOUS] !=
+		ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_AMBIGUOUS ||
+	    counts[FIELD_DOMAIN_ALTERNATIVES] !=
+		ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_ALTERNATIVES)
+		return -1;
+
+	for (index = 0; index < ARRAY_SIZE(rows); index++) {
+		size_t row_count = count_macro_rows(artifact, rows[index].token);
+
+		if (row_count == SIZE_MAX ||
+		    row_count != counts[rows[index].count_index] ||
+		    count_token(artifact, rows[index].token) != row_count)
+			return -1;
+	}
+	return 0;
+}
+
 static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	const struct artifact_bytes *asl_availability,
 	const struct artifact_bytes *instruction_artifact,
@@ -114,7 +240,7 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	const struct artifact_bytes *register_artifact,
 	const struct artifact_bytes *system_accessors)
 {
-	size_t feature_counts[6], field_counts[4], cohort_counts[4];
+	size_t feature_counts[6], cohort_counts[4];
 	size_t register_counts[24], accessor_counts[8];
 	size_t index;
 	size_t accessor_outcomes = 0;
@@ -174,17 +300,7 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	    feature_counts[2] + feature_counts[5] != feature_counts[1])
 		return -1;
 
-	if (parse_counts(feature_field_domains,
-			 "ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_COUNTS(",
-			 field_counts, ARRAY_SIZE(field_counts)) ||
-	    !has_token(feature_field_domains,
-		       ORLIX_TCTI_TARGET_REFRESH_REGISTERS_SHA256) ||
-	    count_token(feature_field_domains,
-			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_OCCURRENCE(") !=
-		field_counts[0] ||
-	    field_counts[2] + field_counts[3] != field_counts[0] ||
-	    count_token(feature_field_domains,
-			"ORLIX_TCTI_A64_FEATURE_FIELD_DOMAIN_IDENTITY(") != 1U)
+	if (validate_feature_field_domain_artifact(feature_field_domains))
 		return -1;
 
 	if (parse_counts(runtime_capability_cohort,
@@ -602,6 +718,8 @@ int orlix_tcti_target_refresh_with_fault(
 		.length = system_accessors.length,
 	};
 	if (fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION) {
+		char *corruption;
+
 		if (fault->validation_artifact >= ARRAY_SIZE(artifacts) ||
 		    !artifacts[fault->validation_artifact].length) {
 			error = ORLIX_TCTI_TARGET_REFRESH_INVALID_ARGUMENT;
@@ -609,8 +727,18 @@ int orlix_tcti_target_refresh_with_fault(
 			goto out;
 		}
 		/* Deterministically corrupt one emitted artifact so tests exercise
-		 * the real validator rather than bypassing it synthetically. */
-		((char *)artifacts[fault->validation_artifact].data)[0] = '\0';
+		 * the real validator rather than bypassing it synthetically. The
+		 * field-domain fixture preserves its V3 header and removes the rows. */
+		corruption = (char *)artifacts[fault->validation_artifact].data;
+		if (fault->validation_artifact == 3U) {
+			char *occurrence = strstr(
+				corruption,
+				ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCE_V3);
+
+			if (occurrence)
+				corruption = occurrence;
+		}
+		*corruption = '\0';
 	}
 	if (validate_artifact_bundle(&manifest, &asl_availability,
 				     &instruction_artifact, &feature_artifact,

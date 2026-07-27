@@ -319,7 +319,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "921dd3aab709c395710d1def823fae09394233a2360d51463c87fc7cdd7ea659",
 	  "orlix_tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
-	  "4bdd44ae90c7eb6db0438ef012f1ef78cd4c043ab8cd76dd6efd06544acdd429",
+	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
 	  "orlix_tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
 	  "16fd4891e4f94d65682a8dcc6f9efd7f38355f340aaae41c17f2a31f540f56a1",

@@ -94,6 +94,52 @@ int main(int argc, char **argv)
 	failed |= check(model.constraint_count == ORLIX_TCTI_FEATURE_CONSTRAINT_COUNT, "constraint count");
 	failed |= check(model.node_count > model.constraint_count, "symbolic nodes");
 	{
+		size_t nested_slices = 0;
+		int slices_valid = 1;
+
+		for (i = 0; i < model.node_count; i++) {
+			const struct orlix_tcti_feature_node *parent = &model.nodes[i];
+			uint32_t child;
+			size_t prior_offset = 0;
+
+			if (!parent->child_count)
+				continue;
+			if (parent->first_child > model.child_count ||
+			    parent->child_count > model.child_count - parent->first_child) {
+				slices_valid = 0;
+				break;
+			}
+			for (child = 0; child < parent->child_count; child++) {
+				uint32_t child_index =
+					model.children[parent->first_child + child];
+				const struct orlix_tcti_feature_node *direct;
+
+				if (child_index >= model.node_count) {
+					slices_valid = 0;
+					break;
+				}
+				direct = &model.nodes[child_index];
+				if (direct->provenance.offset < parent->provenance.offset ||
+				    direct->provenance.length > parent->provenance.length ||
+				    direct->provenance.offset - parent->provenance.offset >
+					parent->provenance.length - direct->provenance.length ||
+				    (child && direct->provenance.offset <= prior_offset)) {
+					slices_valid = 0;
+					break;
+				}
+				prior_offset = direct->provenance.offset;
+				if (direct->child_count)
+					nested_slices++;
+			}
+			if (!slices_valid)
+				break;
+		}
+		failed |= check(slices_valid,
+			"direct-child slices preserve bounds and source order");
+		failed |= check(nested_slices != 0,
+			"direct-child regression covers recursive child allocation");
+	}
+	{
 		size_t field_count = 0;
 		for (i = 0; i < model.node_count; i++)
 			if (model.nodes[i].kind == ORLIX_TCTI_FEATURE_FIELD) {
