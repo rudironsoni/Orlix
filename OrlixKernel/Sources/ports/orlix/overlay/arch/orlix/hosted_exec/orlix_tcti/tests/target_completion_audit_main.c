@@ -41,6 +41,15 @@ int main(void)
 	       "runtime_capability_cohort_candidates=%zu "
 	       "unresolved_runtime_capability_cohorts=%zu "
 	       "invalid_runtime_capability_cohorts=%zu "
+	       "linux_proof_rows=%zu linux_proof_source_leaves=%zu "
+	       "linux_proof_semantic_variants=%zu "
+	       "linux_proof_kselftest_owned=%zu "
+	       "linux_proof_not_applicable=%zu linux_proof_executed=%zu "
+	       "missing_linux_proof=%zu duplicate_linux_proof=%zu "
+	       "stale_linux_proof=%zu malformed_linux_proof=%zu "
+	       "ambiguous_linux_proof=%zu "
+	       "invalid_linux_proof_provenance=%zu "
+	       "linux_proof_substitutions=%zu "
 	       "errors=%zu error_mask=0x%08x\n",
 	       result.source_rows, result.classification_rows,
 	       result.classified_rows, result.unclassified_rows,
@@ -80,6 +89,19 @@ int main(void)
 	       result.runtime_capability_cohort_candidate_membership_rows,
 	       result.unresolved_runtime_capability_cohort_membership_rows,
 	       result.invalid_runtime_capability_cohort_rows,
+	       result.linux_proof_rows,
+	       result.linux_proof_source_leaf_rows,
+	       result.linux_proof_semantic_variant_rows,
+	       result.linux_proof_kselftest_owned_rows,
+	       result.linux_proof_not_applicable_rows,
+	       result.linux_proof_executed_rows,
+	       result.missing_linux_proof_rows,
+	       result.duplicate_linux_proof_rows,
+	       result.stale_linux_proof_rows,
+	       result.malformed_linux_proof_rows,
+	       result.ambiguous_linux_proof_rows,
+	       result.invalid_linux_proof_provenance_rows,
+	       result.linux_proof_substitution_rows,
 	       result.errors,
 	       result.error_mask);
 	return status ? 1 : 0;

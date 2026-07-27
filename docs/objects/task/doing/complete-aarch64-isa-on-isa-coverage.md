@@ -177,6 +177,6 @@ condition span. Every membership remains explicitly unresolved. The completion
 audit counts those 5,592 unresolved memberships as blocking obligations, and
 the runtime projection cannot use them to authorize HWCAP or HWCAP2 promotion.
 This structural binding does not establish feature applicability,
-satisfiability, implementation, or proof. Those obligations, the missing
-shared-ASL provenance edges, and the per-family KUnit and applicable kselftest
-evidence remain open.
+satisfiability, implementation, or proof. Linux proof: 6,364 rows; 3,314
+kselftest-owned, 3,050 typed N/A, zero executed. Invalid
+rows fail closed. Execution proof remains open.

@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define EXPECT(value) do { \
@@ -1029,6 +1030,126 @@ static int integer_conditional_registry_binds_exact_source_rows(void)
 	return 0;
 }
 
+static int linux_proof_matrix_is_lossless_and_fail_closed(void)
+{
+	const struct orlix_tcti_target_linux_proof_disposition_row *canonical;
+	struct orlix_tcti_target_linux_proof_disposition_row *mutated;
+	struct orlix_tcti_target_linux_proof_matrix_result result;
+	struct orlix_tcti_target_kselftest_provenance substitution;
+	struct orlix_tcti_target_linux_proof_source_identity synthetic;
+	size_t applicable = 0;
+	size_t not_applicable = 0;
+	size_t prefetch_hints = 0;
+	size_t count;
+	size_t index;
+
+	canonical = orlix_tcti_target_linux_proof_dispositions(&count);
+	EXPECT(canonical != NULL);
+	EXPECT(count == ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS);
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(canonical, count,
+							     &result) == 0);
+	EXPECT(result.error_mask == ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_NONE);
+	EXPECT(result.source_leaf_rows == 4350U);
+	EXPECT(result.semantic_variant_rows == 2014U);
+	EXPECT(result.kselftest_owned_rows + result.not_applicable_rows == count);
+	EXPECT(result.executed_kselftest_rows == 0U);
+	for (index = 0; index < count; index++) {
+		if (canonical[index].disposition ==
+		    ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE)
+			EXPECT(canonical[index].not_applicable_reason ==
+				       ORLIX_TCTI_TARGET_LINUX_NA_PREFETCH_HINT ||
+			       canonical[index].not_applicable_reason ==
+				       ORLIX_TCTI_TARGET_LINUX_NA_ARCHITECTURAL_SEMANTICS_ONLY);
+		if (canonical[index].subject_kind ==
+			    ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF &&
+		    !strcmp(canonical[index].source.mnemonic, "PRFM")) {
+			EXPECT(canonical[index].disposition ==
+			       ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE);
+			EXPECT(canonical[index].not_applicable_reason ==
+			       ORLIX_TCTI_TARGET_LINUX_NA_PREFETCH_HINT);
+			prefetch_hints++;
+		}
+	}
+	EXPECT(prefetch_hints == 3U);
+	EXPECT(orlix_tcti_target_linux_source_policy_validate_for_test(
+		       &canonical[0].source) == 0);
+	synthetic = canonical[0].source;
+	synthetic.source_index = ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS;
+	synthetic.name = "synthetic_unclassified_leaf";
+	synthetic.mnemonic = "UNMATCHED";
+	synthetic.operation_id = "unmatched_operation";
+	EXPECT(orlix_tcti_target_linux_source_policy_validate_for_test(
+		       &synthetic) == -1);
+	synthetic = canonical[0].source;
+	synthetic.mnemonic = "UNMATCHED";
+	synthetic.operation_id = "unmatched_operation";
+	EXPECT(orlix_tcti_target_linux_source_policy_validate_for_test(
+		       &synthetic) == -1);
+	mutated = malloc(count * sizeof(*mutated));
+	EXPECT(mutated != NULL);
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count - 1,
+							     &result) == -1);
+	EXPECT(result.missing_rows == 1U);
+	EXPECT(result.error_mask & ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_COUNT);
+	EXPECT(result.error_mask & ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MISSING);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	mutated[1] = mutated[0];
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.duplicate_rows == 1U);
+	EXPECT(result.missing_rows == 1U);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	mutated[0].source.source_length++;
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.stale_rows == 1U);
+
+	for (index = 0; index < count; index++) {
+		if (!applicable && canonical[index].disposition ==
+		    ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED)
+			applicable = index + 1U;
+		if (!not_applicable && canonical[index].disposition ==
+		    ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE)
+			not_applicable = index + 1U;
+	}
+	EXPECT(applicable != 0U);
+	EXPECT(not_applicable != 0U);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	index = applicable - 1U;
+	substitution = mutated[index].kselftests[0];
+	substitution.source_sha256 =
+		"0000000000000000000000000000000000000000000000000000000000000000";
+	mutated[index].kselftests = &substitution;
+	mutated[index].kselftest_count = 1U;
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.invalid_provenance_rows == 1U);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	substitution = mutated[index].kselftests[0];
+	substitution.source =
+		"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/fabricated_kunit.c";
+	mutated[index].kselftests = &substitution;
+	mutated[index].kselftest_count = 1U;
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.substitution_rows == 1U);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	index = not_applicable - 1U;
+	mutated[index].not_applicable_reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.ambiguous_rows == 1U);
+	free(mutated);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -1077,6 +1198,8 @@ int main(void)
 		  scalar_fp_convert_registry_binds_exact_source_rows },
 		{ "integer_conditional_registry_binds_exact_source_rows",
 		  integer_conditional_registry_binds_exact_source_rows },
+		{ "linux_proof_matrix_is_lossless_and_fail_closed",
+		  linux_proof_matrix_is_lossless_and_fail_closed },
 	};
 	size_t index;
 

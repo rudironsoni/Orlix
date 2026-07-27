@@ -82,6 +82,8 @@ struct source_manifest_binding {
 	orlix_tcti_proof_u32 encoding_mask;
 	orlix_tcti_proof_u32 encoding_pattern;
 	const char *condition_tcnd_hex;
+	orlix_tcti_proof_u64 source_offset;
+	orlix_tcti_proof_u64 source_length;
 };
 
 struct source_bound_proof {
@@ -92,13 +94,59 @@ struct source_bound_proof {
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...) \
 	/* The source provenance header is consumed by the owning audit. */
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, leaf, mnemonic, operation, \
-					     mask, pattern, condition, ...) \
-	{ ordinal, leaf, mnemonic, operation, mask, pattern, condition },
+					     mask, pattern, condition, offset, length) \
+	{ ordinal, leaf, mnemonic, operation, mask, pattern, condition, offset, length },
 static const struct source_manifest_binding source_manifest_bindings[] = {
 #include "../isa/source_manifest.def"
 };
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
+
+struct system_accessor_binding {
+	orlix_tcti_proof_u32 accessor_index;
+	orlix_tcti_proof_u32 encoding_index;
+	const char *name;
+	const char *generic_leaf;
+	orlix_tcti_proof_u32 direction;
+	orlix_tcti_proof_u32 disposition;
+	orlix_tcti_proof_u32 selector_count;
+	orlix_tcti_proof_u32 condition_expression;
+	orlix_tcti_proof_u64 selector_identity;
+	orlix_tcti_proof_u64 condition_identity;
+	orlix_tcti_proof_u64 accessor_source_offset;
+	orlix_tcti_proof_u64 accessor_source_length;
+	orlix_tcti_proof_u64 encoding_source_offset;
+	orlix_tcti_proof_u64 encoding_source_length;
+	orlix_tcti_proof_u64 condition_source_offset;
+	orlix_tcti_proof_u64 condition_source_length;
+};
+
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
+				 disposition, selectors, condition, selector_identity, \
+				 condition_identity, accessor_offset, accessor_length, \
+				 encoding_offset, encoding_length, condition_offset, \
+				 condition_length) \
+	{ accessor, encoding, name, generic, direction, disposition, selectors, \
+	  condition, selector_identity, condition_identity, accessor_offset, \
+	  accessor_length, encoding_offset, encoding_length, condition_offset, \
+	  condition_length },
+static const struct system_accessor_binding system_accessor_bindings[] = {
+#include "../isa/target_system_accessor_reconciliation.def"
+};
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+
+_Static_assert(ARRAY_COUNT(source_manifest_bindings) ==
+		       ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS,
+	       "Linux proof matrix requires all 4,350 source leaves");
+_Static_assert(ARRAY_COUNT(system_accessor_bindings) ==
+		       ORLIX_TCTI_TARGET_LINUX_PROOF_VARIANT_ROWS,
+	       "Linux proof matrix requires all 2,014 retained variants");
 
 #define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
 	{ ordinal, proof_id },
@@ -276,6 +324,34 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile"
 #define KSELFTEST_BUILD_SOURCE_SHA256 \
 	"4383acf5e999267d59c0bf3035eb024e0e43180da9597ea8c15ee14d45a802fd"
+#define KSELFTEST_PROCESS_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/process_lifecycle_probe.c"
+#define KSELFTEST_PROCESS_SOURCE_SHA256 \
+	"a26c7fafc9df670e433f6e58c8bb87e6ac6c7a143170f03287beb1412e809b51"
+#define KSELFTEST_SIGNAL_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/signal_wait_probe.c"
+#define KSELFTEST_SIGNAL_SOURCE_SHA256 \
+	"f782e3e950729f96a598fea10f97b88ee31d54b7ddf91a09b161fa14a2f95b9f"
+#define KSELFTEST_STACK_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/stack_growth_probe.c"
+#define KSELFTEST_STACK_SOURCE_SHA256 \
+	"57778d4b2b5d6903f8f8bfba1a0c572ebc93951c9b63830d924cec51cda82bf8"
+#define KSELFTEST_MMAP_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/file_mmap_content_probe.c"
+#define KSELFTEST_MMAP_SOURCE_SHA256 \
+	"64307b95350c0b2dbcfb7e045074b1b3baefd0884823c4579a775f8259fa6682"
+#define KSELFTEST_PTY_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/pty_terminal_probe.c"
+#define KSELFTEST_PTY_SOURCE_SHA256 \
+	"d485075a6cc20624d6c98e06ed2ea92152327c93ddf41cfc4b3b36a3268e9024"
+#define KSELFTEST_FD_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/fd_alias_probe.c"
+#define KSELFTEST_FD_SOURCE_SHA256 \
+	"78159391394b48d1d58f1a226ae6be794b1461e1c13958e94a18b0e910a34858"
+#define KSELFTEST_SYSTEM_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_system_probe.c"
+#define KSELFTEST_SYSTEM_SOURCE_SHA256 \
+	"9bd80e30688b50056fd9400270ba068733f97115efb589c47c8f6671fa9a9693"
 
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
@@ -3476,10 +3552,39 @@ out:
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance)
 {
+	static const struct orlix_tcti_target_kselftest_provenance allowed[] = {
+		{ KSELFTEST_SOURCE, KSELFTEST_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "orlix_tcti_lse_atomic_probe", "main" },
+		{ KSELFTEST_PROCESS_SOURCE, KSELFTEST_PROCESS_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "process_lifecycle_probe", "main" },
+		{ KSELFTEST_SIGNAL_SOURCE, KSELFTEST_SIGNAL_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "signal_wait_probe", "main" },
+		{ KSELFTEST_STACK_SOURCE, KSELFTEST_STACK_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "stack_growth_probe", "main" },
+		{ KSELFTEST_MMAP_SOURCE, KSELFTEST_MMAP_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "file_mmap_content_probe", "main" },
+		{ KSELFTEST_PTY_SOURCE, KSELFTEST_PTY_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "pty_terminal_probe", "main" },
+		{ KSELFTEST_FD_SOURCE, KSELFTEST_FD_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "fd_alias_probe", "main" },
+		{ KSELFTEST_SYSTEM_SOURCE, KSELFTEST_SYSTEM_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "orlix_tcti_system_probe", "main" },
+	};
+	static bool checked[ARRAY_COUNT(allowed)];
+	static bool cached_valid[ARRAY_COUNT(allowed)];
 	char *build_source;
 	char *source;
 	size_t build_length;
 	size_t source_length;
+	size_t index;
 	bool valid;
 
 	if (!provenance || empty(provenance->source) ||
@@ -3487,14 +3592,21 @@ int orlix_tcti_target_kselftest_provenance_validate(
 	    empty(provenance->build_source) ||
 	    empty(provenance->build_source_sha256) ||
 	    empty(provenance->program) || empty(provenance->case_name) ||
-	    strcmp(provenance->source, KSELFTEST_SOURCE) ||
-	    strcmp(provenance->source_sha256, KSELFTEST_SOURCE_SHA256) ||
 	    strcmp(provenance->build_source, KSELFTEST_BUILD_SOURCE) ||
 	    strcmp(provenance->build_source_sha256,
-		   KSELFTEST_BUILD_SOURCE_SHA256) ||
-	    strcmp(provenance->program, "orlix_tcti_lse_atomic_probe") ||
-	    strcmp(provenance->case_name, "main"))
+		   KSELFTEST_BUILD_SOURCE_SHA256))
 		return -1;
+	for (index = 0; index < ARRAY_COUNT(allowed); index++)
+		if (!strcmp(provenance->source, allowed[index].source) &&
+		    !strcmp(provenance->source_sha256,
+			    allowed[index].source_sha256) &&
+		    !strcmp(provenance->program, allowed[index].program) &&
+		    !strcmp(provenance->case_name, allowed[index].case_name))
+			break;
+	if (index == ARRAY_COUNT(allowed))
+		return -1;
+	if (checked[index])
+		return cached_valid[index] ? 0 : -1;
 	build_source = read_source(provenance->build_source, &build_length);
 	if (!build_source)
 		return -1;
@@ -3510,9 +3622,11 @@ int orlix_tcti_target_kselftest_provenance_validate(
 		sha256_matches((const orlix_tcti_proof_u8 *)source, source_length,
 			       provenance->source_sha256) &&
 		strstr(build_source, provenance->program) &&
-		strstr(source, "int main(void)");
+		strstr(source, "int main(");
 	free(source);
 	free(build_source);
+	checked[index] = true;
+	cached_valid[index] = valid;
 	return valid ? 0 : -1;
 }
 
@@ -3785,4 +3899,635 @@ orlix_tcti_target_proof_registry_entries(size_t *count)
 		*count = sizeof(proof_registry_entries) /
 			 sizeof(proof_registry_entries[0]);
 	return proof_registry_entries;
+}
+
+#define KSELFTEST_PROVENANCE(source_value, digest_value, program_value) \
+	{ source_value, digest_value, KSELFTEST_BUILD_SOURCE, \
+	  KSELFTEST_BUILD_SOURCE_SHA256, program_value, "main" }
+
+static const struct orlix_tcti_target_kselftest_provenance syscall_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_PROCESS_SOURCE,
+			     KSELFTEST_PROCESS_SOURCE_SHA256,
+			     "process_lifecycle_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_SIGNAL_SOURCE,
+			     KSELFTEST_SIGNAL_SOURCE_SHA256, "signal_wait_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_STACK_SOURCE,
+			     KSELFTEST_STACK_SOURCE_SHA256, "stack_growth_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_MMAP_SOURCE,
+			     KSELFTEST_MMAP_SOURCE_SHA256,
+			     "file_mmap_content_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_FD_SOURCE, KSELFTEST_FD_SOURCE_SHA256,
+			     "fd_alias_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_PTY_SOURCE,
+			     KSELFTEST_PTY_SOURCE_SHA256, "pty_terminal_probe"),
+};
+
+static const struct orlix_tcti_target_kselftest_provenance signal_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_SIGNAL_SOURCE,
+			     KSELFTEST_SIGNAL_SOURCE_SHA256, "signal_wait_probe"),
+};
+
+static const struct orlix_tcti_target_kselftest_provenance memory_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_STACK_SOURCE,
+			     KSELFTEST_STACK_SOURCE_SHA256, "stack_growth_probe"),
+	KSELFTEST_PROVENANCE(KSELFTEST_MMAP_SOURCE,
+			     KSELFTEST_MMAP_SOURCE_SHA256,
+			     "file_mmap_content_probe"),
+};
+
+static const struct orlix_tcti_target_kselftest_provenance atomic_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_SOURCE, KSELFTEST_SOURCE_SHA256,
+			     "orlix_tcti_lse_atomic_probe"),
+};
+
+static const struct orlix_tcti_target_kselftest_provenance system_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_SYSTEM_SOURCE,
+			     KSELFTEST_SYSTEM_SOURCE_SHA256,
+			     "orlix_tcti_system_probe"),
+};
+
+#undef KSELFTEST_PROVENANCE
+
+struct linux_proof_policy {
+	enum orlix_tcti_target_linux_proof_disposition disposition;
+	enum orlix_tcti_target_linux_not_applicable_reason reason;
+	orlix_tcti_proof_u32 owner_mask;
+	const struct orlix_tcti_target_kselftest_provenance *kselftests;
+	size_t kselftest_count;
+};
+
+enum source_linux_policy_class {
+	SOURCE_LINUX_POLICY_UNCLASSIFIED,
+	SOURCE_LINUX_POLICY_SYSCALL,
+	SOURCE_LINUX_POLICY_FAULT,
+	SOURCE_LINUX_POLICY_ATOMIC,
+	SOURCE_LINUX_POLICY_MEMORY,
+	SOURCE_LINUX_POLICY_SYSTEM_ACCESS,
+	SOURCE_LINUX_POLICY_PREFETCH_HINT,
+	SOURCE_LINUX_POLICY_ARCHITECTURAL_ONLY,
+};
+
+/*
+ * One independently reviewable policy class per pinned source ordinal.
+ * This partition is deliberately separate from decoder/KUnit/HWCAP state.
+ * A new source row has no policy until this 4,350-byte canonical artifact is
+ * explicitly extended; it can never inherit a not_applicable default.
+ */
+#define SOURCE_LINUX_POLICY_CHUNK_ROWS 44U
+#define SOURCE_LINUX_POLICY_CHUNK_WIDTH 100U
+#define SOURCE_LINUX_POLICY_FINAL_WIDTH 50U
+static const char source_linux_policy_classes
+	[SOURCE_LINUX_POLICY_CHUNK_ROWS][SOURCE_LINUX_POLICY_CHUNK_WIDTH + 1U] = {
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777444444444477774444444477774",
+	"4444777777774444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+	"4444444444444444444444444444444444444444444444444444444444444444444444444477774444444444444444477774",
+	"4444444444444444444444444444777744444444444444444444444444444444444444444444444444444444444444444444",
+	"4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+	"4444444444444444444444444444444444444444444444444444444477777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777747777774777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777444444444444447777777777777777777777777777777777",
+	"7777777777777777777777777771222222277777777777777777777777777777777474777777757775555557777777777772",
+	"2272777777777777777777777777777777777777777773333333344444444444444444444444444444444444444444444444",
+	"4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+	"4444477777777777777773337773337773337773337777777777777773333333377444444444444444444444444444444444",
+	"4444444444444444444444444444444333333333333333344444444444444444444444444447777777777774444444444444",
+	"4446777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777774443444344434443444344434443444344444444444444444444444444444444444444444444",
+	"4444444444444444444444444444444444444447444444444444444444444444444444444444444444444444444444444444",
+	"4333333333777333333333777333333333777433333333377733333333377733333333377733333333377743333333337773",
+	"3333333333333333333333333343333333333333333334444333333333333333333433333333344444444444444444444444",
+	"4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+	"4444444444444444444444446744444444444444444444444444464477777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+	"77777777777777777777777777777777777777777777777777",
+};
+
+_Static_assert((SOURCE_LINUX_POLICY_CHUNK_ROWS - 1U) *
+		       SOURCE_LINUX_POLICY_CHUNK_WIDTH +
+		       SOURCE_LINUX_POLICY_FINAL_WIDTH ==
+		       ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS,
+	       "Linux policy must classify exactly 4,350 source ordinals");
+_Static_assert(sizeof(source_linux_policy_classes[0]) - 1U ==
+		       SOURCE_LINUX_POLICY_CHUNK_WIDTH,
+	       "each Linux policy chunk must hold 100 source ordinals");
+
+static enum source_linux_policy_class source_linux_policy_class(
+	const struct source_manifest_binding *source)
+{
+	char policy;
+
+	if (!source || source->ordinal >=
+			ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS)
+		return SOURCE_LINUX_POLICY_UNCLASSIFIED;
+	policy = source_linux_policy_classes[
+		source->ordinal / SOURCE_LINUX_POLICY_CHUNK_WIDTH][
+		source->ordinal % SOURCE_LINUX_POLICY_CHUNK_WIDTH];
+	if (policy < '1' || policy > '7')
+		return SOURCE_LINUX_POLICY_UNCLASSIFIED;
+	return (enum source_linux_policy_class)(policy - '0');
+}
+
+static bool source_text_starts_with(const char *text, const char *prefix)
+{
+	return text && prefix && !strncmp(text, prefix, strlen(prefix));
+}
+
+static bool source_is_fault_operation(const struct source_manifest_binding *source)
+{
+	static const char *const operations[] = {
+		"BRK", "HLT", "UDF", "HVC", "SMC", "DCPS1", "DCPS2",
+		"DCPS3", "ERET", "ERETA", "DRPS",
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(operations); index++)
+		if (!strcmp(source->operation_id, operations[index]))
+			return true;
+	return false;
+}
+
+static bool source_is_atomic_operation(
+	const struct source_manifest_binding *source)
+{
+	static const char *const prefixes[] = {
+		"CAS", "SWP", "LDADD", "LDCLR", "LDEOR", "LDSET",
+		"LDSMAX", "LDSMIN", "LDUMAX", "LDUMIN",
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(prefixes); index++)
+		if (source_text_starts_with(source->mnemonic, prefixes[index]))
+			return true;
+	return false;
+}
+
+static bool source_is_memory_operation(
+	const struct source_manifest_binding *source)
+{
+	return !source_is_atomic_operation(source) &&
+		(source_text_starts_with(source->mnemonic, "LD") ||
+		 source_text_starts_with(source->mnemonic, "ST"));
+}
+
+static bool source_is_system_access_operation(
+	const struct source_manifest_binding *source)
+{
+	return source_text_starts_with(source->operation_id, "MRS") ||
+		source_text_starts_with(source->operation_id, "MSR") ||
+		source_text_starts_with(source->operation_id, "SYS");
+}
+
+static bool source_linux_policy_class_matches_source(
+	const struct source_manifest_binding *source,
+	enum source_linux_policy_class policy)
+{
+	bool known;
+
+	switch (policy) {
+	case SOURCE_LINUX_POLICY_SYSCALL:
+		return !strcmp(source->operation_id, "SVC");
+	case SOURCE_LINUX_POLICY_FAULT:
+		return source_is_fault_operation(source);
+	case SOURCE_LINUX_POLICY_ATOMIC:
+		return source_is_atomic_operation(source);
+	case SOURCE_LINUX_POLICY_MEMORY:
+		return source_is_memory_operation(source);
+	case SOURCE_LINUX_POLICY_SYSTEM_ACCESS:
+		return source_is_system_access_operation(source);
+	case SOURCE_LINUX_POLICY_PREFETCH_HINT:
+		return !strcmp(source->mnemonic, "PRFM");
+	case SOURCE_LINUX_POLICY_ARCHITECTURAL_ONLY:
+		known = !strcmp(source->operation_id, "SVC") ||
+			source_is_fault_operation(source) ||
+			source_is_atomic_operation(source) ||
+			source_is_memory_operation(source) ||
+			source_is_system_access_operation(source) ||
+			!strcmp(source->mnemonic, "PRFM");
+		return !known;
+	case SOURCE_LINUX_POLICY_UNCLASSIFIED:
+	default:
+		return false;
+	}
+}
+
+static bool source_linux_policy_partition_valid(void)
+{
+	static const size_t expected_counts[] = {
+		[SOURCE_LINUX_POLICY_SYSCALL] = 1U,
+		[SOURCE_LINUX_POLICY_FAULT] = 11U,
+		[SOURCE_LINUX_POLICY_ATOMIC] = 196U,
+		[SOURCE_LINUX_POLICY_MEMORY] = 1085U,
+		[SOURCE_LINUX_POLICY_SYSTEM_ACCESS] = 7U,
+		[SOURCE_LINUX_POLICY_PREFETCH_HINT] = 3U,
+		[SOURCE_LINUX_POLICY_ARCHITECTURAL_ONLY] = 3047U,
+	};
+	size_t counts[ARRAY_COUNT(expected_counts)] = { 0 };
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++) {
+		const struct source_manifest_binding *source =
+			&source_manifest_bindings[index];
+		enum source_linux_policy_class policy =
+			source_linux_policy_class(source);
+
+		if (source->ordinal != index ||
+		    policy == SOURCE_LINUX_POLICY_UNCLASSIFIED ||
+		    policy >= (enum source_linux_policy_class)ARRAY_COUNT(counts) ||
+		    !source_linux_policy_class_matches_source(source, policy))
+			return false;
+		counts[policy]++;
+	}
+	for (index = SOURCE_LINUX_POLICY_SYSCALL;
+	     index < ARRAY_COUNT(expected_counts); index++)
+		if (counts[index] != expected_counts[index])
+			return false;
+	return counts[SOURCE_LINUX_POLICY_UNCLASSIFIED] == 0U;
+}
+
+static struct linux_proof_policy source_linux_policy(
+	const struct source_manifest_binding *source)
+{
+	struct linux_proof_policy policy = { 0 };
+
+	switch (source_linux_policy_class(source)) {
+	case SOURCE_LINUX_POLICY_SYSCALL:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+		policy.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_SYSCALL_PROCESS |
+			ORLIX_TCTI_TARGET_LINUX_OWNER_SIGNAL_FAULT |
+			ORLIX_TCTI_TARGET_LINUX_OWNER_MEMORY_VFS |
+			ORLIX_TCTI_TARGET_LINUX_OWNER_FD_PTY_TERMINAL;
+		policy.kselftests = syscall_kselftests;
+		policy.kselftest_count = ARRAY_COUNT(syscall_kselftests);
+		break;
+	case SOURCE_LINUX_POLICY_FAULT:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+		policy.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_SIGNAL_FAULT;
+		policy.kselftests = signal_kselftests;
+		policy.kselftest_count = ARRAY_COUNT(signal_kselftests);
+		break;
+	case SOURCE_LINUX_POLICY_ATOMIC:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+		policy.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_ATOMIC_ORDERING |
+			ORLIX_TCTI_TARGET_LINUX_OWNER_MEMORY_VFS;
+		policy.kselftests = atomic_kselftests;
+		policy.kselftest_count = ARRAY_COUNT(atomic_kselftests);
+		break;
+	case SOURCE_LINUX_POLICY_MEMORY:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+		policy.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_MEMORY_VFS;
+		policy.kselftests = memory_kselftests;
+		policy.kselftest_count = ARRAY_COUNT(memory_kselftests);
+		break;
+	case SOURCE_LINUX_POLICY_SYSTEM_ACCESS:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE;
+		policy.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_SYSTEM_ACCESS;
+		policy.kselftests = system_kselftests;
+		policy.kselftest_count = ARRAY_COUNT(system_kselftests);
+		break;
+	case SOURCE_LINUX_POLICY_PREFETCH_HINT:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE;
+		policy.reason = ORLIX_TCTI_TARGET_LINUX_NA_PREFETCH_HINT;
+		break;
+	case SOURCE_LINUX_POLICY_ARCHITECTURAL_ONLY:
+		policy.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE;
+		policy.reason =
+			ORLIX_TCTI_TARGET_LINUX_NA_ARCHITECTURAL_SEMANTICS_ONLY;
+		break;
+	case SOURCE_LINUX_POLICY_UNCLASSIFIED:
+	default:
+		break;
+	}
+	return policy;
+}
+
+static struct linux_proof_policy system_accessor_linux_policy(void)
+{
+	return (struct linux_proof_policy) {
+		.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED,
+		.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE,
+		.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_SYSTEM_ACCESS,
+		.kselftests = system_kselftests,
+		.kselftest_count = ARRAY_COUNT(system_kselftests),
+	};
+}
+
+static struct orlix_tcti_target_linux_proof_disposition_row
+linux_source_row(const struct source_manifest_binding *source)
+{
+	const struct linux_proof_policy policy = source_linux_policy(source);
+
+	return (struct orlix_tcti_target_linux_proof_disposition_row) {
+		.subject_kind = ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF,
+		.source = {
+			.source_index = source->ordinal,
+			.name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.operation_id = source->operation_id,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.source_offset = source->source_offset,
+			.source_length = source->source_length,
+		},
+		.disposition = policy.disposition,
+		.not_applicable_reason = policy.reason,
+		.linux_owner_mask = policy.owner_mask,
+		.kselftests = policy.kselftests,
+		.kselftest_count = policy.kselftest_count,
+		.execution_state = ORLIX_TCTI_TARGET_LINUX_EXECUTION_NOT_OBSERVED,
+	};
+}
+
+static struct orlix_tcti_target_linux_proof_disposition_row
+linux_variant_row(size_t ordinal, const struct system_accessor_binding *variant)
+{
+	const struct linux_proof_policy policy = system_accessor_linux_policy();
+
+	return (struct orlix_tcti_target_linux_proof_disposition_row) {
+		.subject_kind = ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT,
+		.source = {
+			.source_index = (orlix_tcti_proof_u32)ordinal,
+			.secondary_index = variant->accessor_index,
+			.tertiary_index = variant->encoding_index,
+			.name = variant->name,
+			.operation_id = variant->generic_leaf,
+			.encoding_mask = variant->direction,
+			.encoding_pattern = variant->disposition,
+			.identity = variant->selector_identity,
+			.condition_identity = variant->condition_identity,
+			.source_offset = variant->accessor_source_offset,
+			.source_length = variant->accessor_source_length,
+			.secondary_offset = variant->encoding_source_offset,
+			.secondary_length = variant->encoding_source_length,
+			.condition_offset = variant->condition_source_offset,
+			.condition_length = variant->condition_source_length,
+		},
+		.disposition = policy.disposition,
+		.not_applicable_reason = policy.reason,
+		.linux_owner_mask = policy.owner_mask,
+		.kselftests = policy.kselftests,
+		.kselftest_count = policy.kselftest_count,
+		.execution_state = ORLIX_TCTI_TARGET_LINUX_EXECUTION_NOT_OBSERVED,
+	};
+}
+
+static bool linux_source_identity_equal(
+	const struct orlix_tcti_target_linux_proof_source_identity *left,
+	const struct orlix_tcti_target_linux_proof_source_identity *right)
+{
+	return left->source_index == right->source_index &&
+		left->secondary_index == right->secondary_index &&
+		left->tertiary_index == right->tertiary_index &&
+		left->name && right->name && !strcmp(left->name, right->name) &&
+		((!left->mnemonic && !right->mnemonic) ||
+		 (left->mnemonic && right->mnemonic &&
+		  !strcmp(left->mnemonic, right->mnemonic))) &&
+		left->operation_id && right->operation_id &&
+		!strcmp(left->operation_id, right->operation_id) &&
+		left->encoding_mask == right->encoding_mask &&
+		left->encoding_pattern == right->encoding_pattern &&
+		((!left->condition_tcnd_hex && !right->condition_tcnd_hex) ||
+		 (left->condition_tcnd_hex && right->condition_tcnd_hex &&
+		  !strcmp(left->condition_tcnd_hex, right->condition_tcnd_hex))) &&
+		left->identity == right->identity &&
+		left->condition_identity == right->condition_identity &&
+		left->source_offset == right->source_offset &&
+		left->source_length == right->source_length &&
+		left->secondary_offset == right->secondary_offset &&
+		left->secondary_length == right->secondary_length &&
+		left->condition_offset == right->condition_offset &&
+		left->condition_length == right->condition_length;
+}
+
+int orlix_tcti_target_linux_source_policy_validate_for_test(
+	const struct orlix_tcti_target_linux_proof_source_identity *source)
+{
+	struct orlix_tcti_target_linux_proof_disposition_row expected;
+
+	if (!source || source->source_index >=
+			ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS ||
+	    !source_linux_policy_partition_valid())
+		return -1;
+	expected = linux_source_row(
+		&source_manifest_bindings[source->source_index]);
+	if (!expected.disposition ||
+	    !linux_source_identity_equal(source, &expected.source))
+		return -1;
+	return 0;
+}
+
+static bool linux_provenance_group_equal(
+	const struct orlix_tcti_target_linux_proof_disposition_row *row,
+	const struct linux_proof_policy *policy)
+{
+	size_t index;
+
+	if (row->kselftest_count != policy->kselftest_count ||
+	    (!row->kselftests && row->kselftest_count))
+		return false;
+	for (index = 0; index < row->kselftest_count; index++) {
+		const struct orlix_tcti_target_kselftest_provenance *left =
+			&row->kselftests[index];
+		const struct orlix_tcti_target_kselftest_provenance *right =
+			&policy->kselftests[index];
+
+		if (strcmp(left->source, right->source) ||
+		    strcmp(left->source_sha256, right->source_sha256) ||
+		    strcmp(left->build_source, right->build_source) ||
+		    strcmp(left->build_source_sha256, right->build_source_sha256) ||
+		    strcmp(left->program, right->program) ||
+		    strcmp(left->case_name, right->case_name) ||
+		    orlix_tcti_target_kselftest_provenance_validate(left))
+			return false;
+	}
+	return true;
+}
+
+static bool linux_provenance_group_is_substitution(
+	const struct orlix_tcti_target_linux_proof_disposition_row *row)
+{
+	size_t index;
+
+	for (index = 0; index < row->kselftest_count; index++) {
+		const struct orlix_tcti_target_kselftest_provenance *provenance =
+			&row->kselftests[index];
+
+		if (empty(provenance->source) || empty(provenance->program) ||
+		    strstr(provenance->source, "/hosted_exec/orlix_tcti/tests/") ||
+		    strstr(provenance->source, ".swift") ||
+		    strstr(provenance->source, ".log") ||
+		    strstr(provenance->source, "XCTest") ||
+		    strstr(provenance->program, "kunit") ||
+		    strstr(provenance->program, "audit") ||
+		    strstr(provenance->program, "report"))
+			return true;
+	}
+	return false;
+}
+
+static void linux_matrix_error(
+	struct orlix_tcti_target_linux_proof_matrix_result *result,
+	orlix_tcti_proof_u32 error)
+{
+	result->error_mask |= error;
+	result->errors++;
+}
+
+int orlix_tcti_target_linux_proof_matrix_validate(
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows,
+	size_t count, struct orlix_tcti_target_linux_proof_matrix_result *result)
+{
+	bool source_seen[ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS] = { false };
+	bool variant_seen[ORLIX_TCTI_TARGET_LINUX_PROOF_VARIANT_ROWS] = { false };
+	size_t index;
+
+	if (!result)
+		return -1;
+	memset(result, 0, sizeof(*result));
+	result->total_rows = count;
+	if (!source_linux_policy_partition_valid()) {
+		result->malformed_rows = ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS;
+		linux_matrix_error(result,
+			ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MALFORMED);
+		return -1;
+	}
+	if (!rows || count != ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS)
+		linux_matrix_error(result, ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_COUNT);
+	if (!rows)
+		return -1;
+	for (index = 0; index < count; index++) {
+		const struct orlix_tcti_target_linux_proof_disposition_row *row =
+			&rows[index];
+		struct orlix_tcti_target_linux_proof_disposition_row expected;
+		struct linux_proof_policy policy;
+		bool *seen;
+
+		if (row->subject_kind == ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF &&
+		    row->source.source_index < ARRAY_COUNT(source_manifest_bindings)) {
+			expected = linux_source_row(
+				&source_manifest_bindings[row->source.source_index]);
+			policy = source_linux_policy(
+				&source_manifest_bindings[row->source.source_index]);
+			seen = &source_seen[row->source.source_index];
+			result->source_leaf_rows++;
+		} else if (row->subject_kind ==
+			   ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT &&
+			   row->source.source_index <
+				ARRAY_COUNT(system_accessor_bindings)) {
+			expected = linux_variant_row(row->source.source_index,
+				&system_accessor_bindings[row->source.source_index]);
+			policy = system_accessor_linux_policy();
+			seen = &variant_seen[row->source.source_index];
+			result->semantic_variant_rows++;
+		} else {
+			result->malformed_rows++;
+			linux_matrix_error(result,
+				ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MALFORMED);
+			continue;
+		}
+		if (*seen) {
+			result->duplicate_rows++;
+			linux_matrix_error(result,
+				ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_DUPLICATE);
+			continue;
+		}
+		*seen = true;
+		if (!linux_source_identity_equal(&row->source, &expected.source)) {
+			result->stale_rows++;
+			linux_matrix_error(result,
+				ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_STALE);
+			continue;
+		}
+		if (row->disposition != policy.disposition ||
+		    row->not_applicable_reason != policy.reason ||
+		    row->linux_owner_mask != policy.owner_mask ||
+		    row->execution_state !=
+			ORLIX_TCTI_TARGET_LINUX_EXECUTION_NOT_OBSERVED) {
+			result->ambiguous_rows++;
+			linux_matrix_error(result,
+				ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_AMBIGUOUS);
+			continue;
+		}
+		if (row->disposition ==
+		    ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED) {
+			result->kselftest_owned_rows++;
+			if (linux_provenance_group_is_substitution(row)) {
+				result->substitution_rows++;
+				linux_matrix_error(result,
+					ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_SUBSTITUTION);
+			} else if (!linux_provenance_group_equal(row, &policy)) {
+				result->invalid_provenance_rows++;
+				linux_matrix_error(result,
+					ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_PROVENANCE);
+			}
+		} else if (row->disposition ==
+			   ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE &&
+			   row->not_applicable_reason !=
+				ORLIX_TCTI_TARGET_LINUX_NA_NONE &&
+			   !row->kselftests && !row->kselftest_count &&
+			   !row->linux_owner_mask) {
+			result->not_applicable_rows++;
+		} else {
+			result->malformed_rows++;
+			linux_matrix_error(result,
+				ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MALFORMED);
+		}
+	}
+	for (index = 0; index < ARRAY_COUNT(source_seen); index++)
+		if (!source_seen[index])
+			result->missing_rows++;
+	for (index = 0; index < ARRAY_COUNT(variant_seen); index++)
+		if (!variant_seen[index])
+			result->missing_rows++;
+	if (result->missing_rows)
+		linux_matrix_error(result, ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MISSING);
+	return result->error_mask ? -1 : 0;
+}
+
+const struct orlix_tcti_target_linux_proof_disposition_row *
+orlix_tcti_target_linux_proof_dispositions(size_t *count)
+{
+	static struct orlix_tcti_target_linux_proof_disposition_row
+		rows[ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS];
+	static bool ready;
+	size_t index;
+
+	if (!ready) {
+		for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++)
+			rows[index] = linux_source_row(&source_manifest_bindings[index]);
+		for (index = 0; index < ARRAY_COUNT(system_accessor_bindings); index++)
+			rows[ARRAY_COUNT(source_manifest_bindings) + index] =
+				linux_variant_row(index, &system_accessor_bindings[index]);
+		ready = true;
+	}
+	if (count)
+		*count = ARRAY_COUNT(rows);
+	return rows;
 }

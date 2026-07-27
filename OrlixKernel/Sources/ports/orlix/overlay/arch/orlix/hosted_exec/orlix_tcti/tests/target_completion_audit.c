@@ -171,6 +171,13 @@ static bool completion_projection_dependencies_valid(
 		!result->invalid_system_accessor_rows &&
 		!result->invalid_feature_field_domain_rows &&
 		!result->invalid_runtime_capability_cohort_rows &&
+		!result->missing_linux_proof_rows &&
+		!result->duplicate_linux_proof_rows &&
+		!result->stale_linux_proof_rows &&
+		!result->malformed_linux_proof_rows &&
+		!result->ambiguous_linux_proof_rows &&
+		!result->invalid_linux_proof_provenance_rows &&
+		!result->linux_proof_substitution_rows &&
 		!result->invalid_feature_artifact &&
 		!result->invalid_source_condition_rows;
 }
@@ -1556,6 +1563,34 @@ static void completion_project_obligation(
 	}
 }
 
+static int completion_validate_linux_proof_matrix(
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows,
+	size_t count, struct orlix_tcti_target_completion_result *result)
+{
+	struct orlix_tcti_target_linux_proof_matrix_result matrix;
+	int status;
+
+	status = orlix_tcti_target_linux_proof_matrix_validate(rows, count, &matrix);
+	result->linux_proof_rows = matrix.total_rows;
+	result->linux_proof_source_leaf_rows = matrix.source_leaf_rows;
+	result->linux_proof_semantic_variant_rows = matrix.semantic_variant_rows;
+	result->linux_proof_kselftest_owned_rows = matrix.kselftest_owned_rows;
+	result->linux_proof_not_applicable_rows = matrix.not_applicable_rows;
+	result->linux_proof_executed_rows = matrix.executed_kselftest_rows;
+	result->missing_linux_proof_rows = matrix.missing_rows;
+	result->duplicate_linux_proof_rows = matrix.duplicate_rows;
+	result->stale_linux_proof_rows = matrix.stale_rows;
+	result->malformed_linux_proof_rows = matrix.malformed_rows;
+	result->ambiguous_linux_proof_rows = matrix.ambiguous_rows;
+	result->invalid_linux_proof_provenance_rows =
+		matrix.invalid_provenance_rows;
+	result->linux_proof_substitution_rows = matrix.substitution_rows;
+	if (status)
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_LINUX_PROOF_MATRIX);
+	return status;
+}
+
 static int completion_audit_internal(
 	const struct orlix_tcti_target_completion_audit_inputs_for_test *inputs,
 	struct orlix_tcti_target_completion_result *result,
@@ -1567,6 +1602,8 @@ static int completion_audit_internal(
 		orlix_tcti_feature_artifact_canonical();
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact =
 		orlix_tcti_target_instruction_artifact_canonical();
+	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
+	size_t linux_proof_count;
 	struct orlix_tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
 	int status;
 	size_t registry_count;
@@ -1586,6 +1623,7 @@ static int completion_audit_internal(
 			    runtime, &runtime_diagnostic))
 		return -1;
 	registry = orlix_tcti_target_proof_registry_entries(&registry_count);
+	linux_proof = orlix_tcti_target_linux_proof_dispositions(&linux_proof_count);
 	if (inputs) {
 		source = inputs->source;
 		source_count = inputs->source_count;
@@ -1595,6 +1633,10 @@ static int completion_audit_internal(
 		registry_count = inputs->registry_count;
 		if (inputs->instruction_artifact)
 			instruction_artifact = inputs->instruction_artifact;
+		if (inputs->linux_proof || inputs->linux_proof_count) {
+			linux_proof = inputs->linux_proof;
+			linux_proof_count = inputs->linux_proof_count;
+		}
 	}
 	/*
 	 * Reject malformed injected dependencies before constructing staged rows.
@@ -1635,7 +1677,10 @@ static int completion_audit_internal(
 		    orlix_tcti_feature_field_domain_binding_artifact_canonical(), result))
 		status = -1;
 	if (orlix_tcti_target_completion_validate_runtime_capability_cohorts(runtime,
-								 result))
+								     result))
+		status = -1;
+	if (completion_validate_linux_proof_matrix(linux_proof, linux_proof_count,
+						   result))
 		status = -1;
 	validate_source_feature_domain(source, source_count, feature_artifact,
 			       instruction_artifact, result, obligations);

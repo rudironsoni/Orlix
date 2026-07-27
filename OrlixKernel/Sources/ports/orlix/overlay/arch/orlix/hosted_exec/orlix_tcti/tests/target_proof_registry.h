@@ -23,6 +23,12 @@ typedef uint64_t orlix_tcti_proof_u64;
 #define ORLIX_TCTI_TARGET_PROOF_CLASS_ARCH_UNDEFINED_OR_UNALLOCATED (1U << 3)
 #define ORLIX_TCTI_TARGET_PROOF_CLASS_ALIAS_OR_DUPLICATE (1U << 4)
 
+#define ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS 4350U
+#define ORLIX_TCTI_TARGET_LINUX_PROOF_VARIANT_ROWS 2014U
+#define ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS \
+	(ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS + \
+	 ORLIX_TCTI_TARGET_LINUX_PROOF_VARIANT_ROWS)
+
 enum orlix_tcti_target_proof_obligation {
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE = 1U << 0,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS = 1U << 1,
@@ -64,6 +70,102 @@ struct orlix_tcti_target_kselftest_provenance {
 	const char *build_source_sha256;
 	const char *program;
 	const char *case_name;
+};
+
+enum orlix_tcti_target_linux_proof_subject_kind {
+	ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF = 1,
+	ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT,
+};
+
+enum orlix_tcti_target_linux_proof_disposition {
+	ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED = 1,
+	ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE,
+};
+
+enum orlix_tcti_target_linux_not_applicable_reason {
+	ORLIX_TCTI_TARGET_LINUX_NA_NONE,
+	ORLIX_TCTI_TARGET_LINUX_NA_REGISTER_OR_FLAG_SEMANTICS,
+	ORLIX_TCTI_TARGET_LINUX_NA_LOCAL_CONTROL_FLOW,
+	ORLIX_TCTI_TARGET_LINUX_NA_LOCAL_BARRIER_OR_HINT,
+	ORLIX_TCTI_TARGET_LINUX_NA_ALIAS_OR_DUPLICATE,
+	ORLIX_TCTI_TARGET_LINUX_NA_PREFETCH_HINT,
+	ORLIX_TCTI_TARGET_LINUX_NA_ARCHITECTURAL_SEMANTICS_ONLY,
+};
+
+enum orlix_tcti_target_linux_interface_owner {
+	ORLIX_TCTI_TARGET_LINUX_OWNER_NONE = 0,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_SYSCALL_PROCESS = 1U << 0,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_SIGNAL_FAULT = 1U << 1,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_MEMORY_VFS = 1U << 2,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_FD_PTY_TERMINAL = 1U << 3,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_ATOMIC_ORDERING = 1U << 4,
+	ORLIX_TCTI_TARGET_LINUX_OWNER_SYSTEM_ACCESS = 1U << 5,
+};
+
+enum orlix_tcti_target_linux_execution_state {
+	ORLIX_TCTI_TARGET_LINUX_EXECUTION_NOT_OBSERVED,
+	ORLIX_TCTI_TARGET_LINUX_EXECUTION_OBSERVED,
+};
+
+struct orlix_tcti_target_linux_proof_source_identity {
+	orlix_tcti_proof_u32 source_index;
+	orlix_tcti_proof_u32 secondary_index;
+	orlix_tcti_proof_u32 tertiary_index;
+	const char *name;
+	const char *mnemonic;
+	const char *operation_id;
+	orlix_tcti_proof_u32 encoding_mask;
+	orlix_tcti_proof_u32 encoding_pattern;
+	const char *condition_tcnd_hex;
+	orlix_tcti_proof_u64 identity;
+	orlix_tcti_proof_u64 condition_identity;
+	orlix_tcti_proof_u64 source_offset;
+	orlix_tcti_proof_u64 source_length;
+	orlix_tcti_proof_u64 secondary_offset;
+	orlix_tcti_proof_u64 secondary_length;
+	orlix_tcti_proof_u64 condition_offset;
+	orlix_tcti_proof_u64 condition_length;
+};
+
+struct orlix_tcti_target_linux_proof_disposition_row {
+	enum orlix_tcti_target_linux_proof_subject_kind subject_kind;
+	struct orlix_tcti_target_linux_proof_source_identity source;
+	enum orlix_tcti_target_linux_proof_disposition disposition;
+	enum orlix_tcti_target_linux_not_applicable_reason not_applicable_reason;
+	orlix_tcti_proof_u32 linux_owner_mask;
+	const struct orlix_tcti_target_kselftest_provenance *kselftests;
+	size_t kselftest_count;
+	enum orlix_tcti_target_linux_execution_state execution_state;
+};
+
+enum orlix_tcti_target_linux_proof_matrix_error {
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_NONE = 0,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_COUNT = 1U << 0,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MISSING = 1U << 1,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_DUPLICATE = 1U << 2,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_STALE = 1U << 3,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_MALFORMED = 1U << 4,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_AMBIGUOUS = 1U << 5,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_PROVENANCE = 1U << 6,
+	ORLIX_TCTI_TARGET_LINUX_MATRIX_ERROR_SUBSTITUTION = 1U << 7,
+};
+
+struct orlix_tcti_target_linux_proof_matrix_result {
+	orlix_tcti_proof_u32 error_mask;
+	size_t errors;
+	size_t total_rows;
+	size_t source_leaf_rows;
+	size_t semantic_variant_rows;
+	size_t kselftest_owned_rows;
+	size_t not_applicable_rows;
+	size_t executed_kselftest_rows;
+	size_t missing_rows;
+	size_t duplicate_rows;
+	size_t stale_rows;
+	size_t malformed_rows;
+	size_t ambiguous_rows;
+	size_t invalid_provenance_rows;
+	size_t substitution_rows;
 };
 
 struct orlix_tcti_target_proof_registry_entry {
@@ -132,5 +234,12 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	const struct orlix_tcti_target_proof_reference *reference);
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count);
+const struct orlix_tcti_target_linux_proof_disposition_row *
+orlix_tcti_target_linux_proof_dispositions(size_t *count);
+int orlix_tcti_target_linux_proof_matrix_validate(
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows,
+	size_t count, struct orlix_tcti_target_linux_proof_matrix_result *result);
+int orlix_tcti_target_linux_source_policy_validate_for_test(
+	const struct orlix_tcti_target_linux_proof_source_identity *source);
 
 #endif /* ORLIX_TCTI_TARGET_PROOF_REGISTRY_H */

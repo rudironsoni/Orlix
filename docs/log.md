@@ -796,3 +796,12 @@ alternatives, including both conditional `MPAMIDR_EL1.HAS_BW_CTRL`
 declarations, with zero unresolved or ambiguous occurrences. The overall TCTI
 repository-wide audit remains blocked by later applicability, proof, cohort, and
 runtime work.
+
+## [2026-07-27] implement | Materialize Linux-visible proof ownership
+
+The TCTI proof registry now materializes 6,364 source-bound Linux-proof rows:
+all 4,350 direct leaves and 2,014 retained system-accessor variants. Every row
+is either owned by source-and-build-bound Linux kselftest provenance or carries
+a typed `not_applicable` reason. The completion audit rejects missing,
+duplicate, stale, malformed, ambiguous, invalid-provenance, and non-kselftest
+substitution rows. This records ownership only; executed proof remains zero.

@@ -300,6 +300,7 @@ enum orlix_tcti_target_completion_error {
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_FIELD_DOMAIN = 1U << 16,
 	/* Feature-conditioned leaves remain blocking until each cohort is proved. */
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT = 1U << 17,
+	ORLIX_TCTI_TARGET_COMPLETION_ERROR_LINUX_PROOF_MATRIX = 1U << 18,
 };
 
 struct orlix_tcti_target_completion_result {
@@ -361,6 +362,20 @@ struct orlix_tcti_target_completion_result {
 	size_t runtime_capability_cohort_candidate_membership_rows;
 	size_t unresolved_runtime_capability_cohort_membership_rows;
 	size_t invalid_runtime_capability_cohort_rows;
+	/* Static ownership dispositions only. Executed kselftest proof stays zero. */
+	size_t linux_proof_rows;
+	size_t linux_proof_source_leaf_rows;
+	size_t linux_proof_semantic_variant_rows;
+	size_t linux_proof_kselftest_owned_rows;
+	size_t linux_proof_not_applicable_rows;
+	size_t linux_proof_executed_rows;
+	size_t missing_linux_proof_rows;
+	size_t duplicate_linux_proof_rows;
+	size_t stale_linux_proof_rows;
+	size_t malformed_linux_proof_rows;
+	size_t ambiguous_linux_proof_rows;
+	size_t invalid_linux_proof_provenance_rows;
+	size_t linux_proof_substitution_rows;
 };
 
 /* Host-test-only dependency injection. It is not a kernel or runtime ABI. */
@@ -373,6 +388,8 @@ struct orlix_tcti_target_completion_audit_inputs_for_test {
 	size_t registry_count;
 	/* Optional host-only checked artifact injection for atomicity tests. */
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact;
+	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
+	size_t linux_proof_count;
 };
 
 int orlix_tcti_target_completion_validate(
