@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-26
+updated: 2026-07-27
 status: accepted
 external_id: "ADR-0029"
 summary: "Separate the complete AArch64 ISA-on-ISA target inventory from the Linux runtime HWCAP projection."
@@ -122,6 +122,19 @@ advertisement dependency. The pinned ASL corpus is part of the source
 reconciliation contract. Every leaf requires an ASL locator or an explicit
 source-backed reason that no executable ASL entry applies. An `operation`
 string alone is not ASL provenance.
+
+The current semantic-source candidate is Arm's external
+`ISA_A64_xml_A_profile-2026-06` archive, pinned by the maintainer source contract
+to archive SHA-256
+`63a01a1696483bbe2edfef9e0f0cd053d6c1c619ec0587876cb7a60bb344f354` and
+validated release SHA-256
+`bbe8309a4c746a996c84a3db7c92fa2a6a7453e6915231570f23e2d361bfdccd`.
+Its source and notice bodies remain external and must not be redistributed.
+The bundled notice grants no intellectual property license; a matching digest
+and conservative non-redistribution handling prove technical provenance, not
+authorization to use the corpus. Until traceable authorization exists, the
+corpus cannot close the semantic-source requirement or grant implementation,
+proof, runtime-capability, or product-readiness credit.
 
 `Registers.json` adds a supplemental graph for every
 `Accessors.SystemAccessor`: source span, access direction, condition,

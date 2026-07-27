@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-26
+updated: 2026-07-27
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
@@ -157,10 +157,16 @@ structural mappings remain semantically unresolved, and the `MPAM` ambiguity
 remains a hard blocker. The direct denominator remains 4,350 leaves while the
 supplemental alias graph records 292 instruction aliases and 171 reachable
 operation aliases without using aliases as proof or denominator substitutions.
-The pinned 2026-06 package has no separately pin-able official shared-ASL
-corpus, so all 4,350 shared-ASL provenance edges remain blocking. The LSE128
-production resume fault matrix has expanded its fault coverage, but it makes no
-atomicity or ordering claim. Runtime HWCAP and HWCAP2 promotion remains zero.
+The official Arm `ISA_A64_xml_A_profile-2026-06` archive is now a separately
+pinned external semantic-source input. Its validated release binds 4,332 direct
+leaves to semantic sections, records 18 leaves as encoding-absent, and leaves
+zero semantic-availability records incomplete. This is source provenance only:
+the archive is not redistributed, its bundled notice grants no intellectual
+property license, and repository evidence does not establish authorization to
+use it. Legal authorization, canonical artifact publication, implementation,
+and owning proof therefore remain blocking. LSE128 production resume fault
+matrix expanded fault coverage, but it makes no atomicity or ordering claim.
+Runtime HWCAP and HWCAP2 promotion remains zero.
 
 The checked runtime-capability cohort artifact now covers all 4,350 direct
 instruction leaves and retains 5,592 source-derived candidate memberships over

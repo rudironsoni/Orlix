@@ -767,3 +767,15 @@ unchanged.
 Direct OrlixOS resource synchronization now uses checksum comparison after a
 staging identity change, so same-size files changed within one timestamp tick
 cannot leave stale framework resources behind.
+
+## [2026-07-27] correct | Distinguish Arm semantic-source pinning from authorization
+
+[CORRECTION] The earlier entries reporting no separately pin-able official Arm
+shared-ASL corpus predated acquisition of Arm's external
+`ISA_A64_xml_A_profile-2026-06` archive. The maintainer source contract now pins
+and validates that package and records semantic availability for all 4,350
+direct leaves: 4,332 semantic sections are present, 18 encodings are absent,
+and zero records are incomplete. The archive is not redistributed. Its bundled
+notice grants no intellectual property license, so technical provenance does
+not establish authorization to use the corpus and grants no implementation,
+proof, runtime-capability, or product-readiness credit.
