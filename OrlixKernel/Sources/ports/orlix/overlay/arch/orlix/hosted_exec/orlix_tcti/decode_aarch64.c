@@ -1033,6 +1033,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_PC_RELATIVE_ADDRESS_MASK) ==
 	    AARCH64_PC_RELATIVE_ADDRESS_PATTERN) {
+		/* AARCHMRS 2026-06 source ordinals 2171 ADR and 2172 ADRP. */
 		u64 imm = (orlix_tcti_bits(instruction, 5, 19) << 2) |
 			  orlix_tcti_bits(instruction, 29, 2);
 

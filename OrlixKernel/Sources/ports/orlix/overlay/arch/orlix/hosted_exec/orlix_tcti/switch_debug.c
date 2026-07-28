@@ -7510,6 +7510,26 @@ static int orlix_tcti_execute_fp_int_convert(
 	return -EINVAL;
 }
 
+int orlix_tcti_execute_pc_relative_address(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u64 instruction_pc;
+	u64 base;
+
+	if (!regs || !decoded ||
+	    decoded->decode_class != ORLIX_TCTI_DECODE_PC_RELATIVE_ADDRESS)
+		return -EINVAL;
+
+	instruction_pc = regs->pc;
+	base = decoded->page_relative ?
+		(instruction_pc & AARCH64_ADRP_PAGE_MASK) : instruction_pc;
+	if (decoded->rd != 31)
+		regs->regs[decoded->rd] = base + (u64)decoded->pc_relative_imm;
+	regs->pc = instruction_pc + sizeof(u32);
+	return 0;
+}
+
 int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 				   struct pt_regs *regs,
 				 const struct orlix_tcti_decoded_instruction *decoded,
@@ -7547,16 +7567,7 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		 */
 		return -EOPNOTSUPP;
 	case ORLIX_TCTI_DECODE_PC_RELATIVE_ADDRESS:
-		if (decoded->rd != 31) {
-			u64 base = decoded->page_relative ?
-				   (regs->pc & AARCH64_ADRP_PAGE_MASK) :
-				   regs->pc;
-
-			regs->regs[decoded->rd] =
-				base + decoded->pc_relative_imm;
-		}
-		regs->pc += sizeof(u32);
-		return 0;
+		return orlix_tcti_execute_pc_relative_address(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_IMMEDIATE:
 		immediate = (u64)decoded->imm12 << (decoded->shift ? 12 : 0);
 		source = orlix_tcti_read_add_sub_immediate_source(regs, decoded);

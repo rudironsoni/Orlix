@@ -503,6 +503,11 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define MOVE_WIDE_SUITE "orlix-tcti-move-wide-source-bound"
 #define MOVE_WIDE_SUITE_SYMBOL "orlix_tcti_move_wide_source_bound_test_suite"
 #define MOVE_WIDE_CASE_ARRAY "orlix_tcti_move_wide_source_bound_test_cases"
+#define PC_RELATIVE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_pc_relative_source_bound_test.c"
+#define PC_RELATIVE_SUITE "orlix-tcti-pc-relative-source-bound"
+#define PC_RELATIVE_SUITE_SYMBOL "pcrel_suite"
+#define PC_RELATIVE_CASE_ARRAY "pcrel_cases"
 #define SCALAR_BITOPS_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c"
 #define SCALAR_BITOPS_SUITE "orlix-tcti-scalar-bitops-source-bound"
@@ -630,7 +635,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"10e58fbe7aa8ac5e9bed7df97fcb6378d4ee505a04cde84fa5cf35f8a748bd39"
+	"7f8a7f6616fdfec8050070526c51b6f6e4b84dcce897fb8a72a21c7b37ce25fd"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -694,6 +699,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ MOVE_WIDE_SOURCE,
 	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
 	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
+	{ PC_RELATIVE_SOURCE,
+	  "ccefd0ea0bbdeace7ef82dda30cf3ec9867b56b87f15d3ddee05151bed7e9536",
+	  "orlix_tcti_pc_relative_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_BITOPS_SOURCE,
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
 	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL },
@@ -967,6 +975,28 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  MOVE_WIDE_CASE_ARRAY, "orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ PC_RELATIVE_SOURCE, PC_RELATIVE_SUITE, PC_RELATIVE_SUITE_SYMBOL,
+	  PC_RELATIVE_CASE_ARRAY, "pcrel_source_provenance_and_classification",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ PC_RELATIVE_SOURCE, PC_RELATIVE_SUITE, PC_RELATIVE_SUITE_SYMBOL,
+	  PC_RELATIVE_CASE_ARRAY, "pcrel_all_immediates_and_destinations_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ PC_RELATIVE_SOURCE, PC_RELATIVE_SUITE, PC_RELATIVE_SUITE_SYMBOL,
+	  PC_RELATIVE_CASE_ARRAY, "pcrel_fixed_bit_neighbours_reject_without_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ PC_RELATIVE_SOURCE, PC_RELATIVE_SUITE, PC_RELATIVE_SUITE_SYMBOL,
+	  PC_RELATIVE_CASE_ARRAY, "pcrel_production_resume_pc_page_and_destination",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ PC_RELATIVE_SOURCE, PC_RELATIVE_SUITE, PC_RELATIVE_SUITE_SYMBOL,
+	  PC_RELATIVE_CASE_ARRAY, "pcrel_lowered_gadget_wraparound_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
 	  SCALAR_BITOPS_SUITE_SYMBOL, SCALAR_BITOPS_CASE_ARRAY,
 	  "orlix_tcti_scalar_bitops_source_bindings",
@@ -1178,6 +1208,8 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
 static const struct operation_requirements operation_requirements[] = {
+	{ "ADR", SCALAR_BASE_OBLIGATIONS },
+	{ "ADRP", SCALAR_BASE_OBLIGATIONS },
 	{ "ADD_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -2113,8 +2145,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 45U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 73U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 47U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 75U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
@@ -2597,6 +2629,26 @@ static const struct orlix_tcti_target_proof_case move_wide_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case pc_relative_cases[] = {
+	{ "pcrel_source_provenance_and_classification",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "pcrel_all_immediates_and_destinations_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "pcrel_fixed_bit_neighbours_reject_without_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "pcrel_production_resume_pc_page_and_destination",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "pcrel_lowered_gadget_wraparound_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
 static const struct orlix_tcti_target_proof_case scalar_bitops_cases[] = {
 	{ "orlix_tcti_scalar_bitops_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2679,6 +2731,10 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
 	SCALAR_OPERATION("MOVK", "kunit:move-wide-movk", MOVE_WIDE_SOURCE,
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	SCALAR_OPERATION("ADR", "kunit:pc-relative-adr", PC_RELATIVE_SOURCE,
+		PC_RELATIVE_SUITE, pc_relative_cases, 2171U, 2171U, 1),
+	SCALAR_OPERATION("ADRP", "kunit:pc-relative-adrp", PC_RELATIVE_SOURCE,
+		PC_RELATIVE_SUITE, pc_relative_cases, 2172U, 2172U, 1),
 	SCALAR_OPERATION("RBIT_int", "kunit:scalar-bitops-rbit",
 		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
 		scalar_bitops_cases, 3389U, 3397U, 2),

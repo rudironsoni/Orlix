@@ -1072,6 +1072,7 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_variable_shift_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_immediate_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_move_wide_source_bound_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_pc_relative_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_register_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_bitfield_extract_source_bound_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c \
