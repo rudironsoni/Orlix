@@ -288,6 +288,8 @@ int orlix_tcti_target_proof_registry_validate(
 int orlix_tcti_target_proof_registry_source_bound_projection_validate(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
 	enum orlix_tcti_target_proof_registry_error *error);
+int orlix_tcti_target_kunit_dependency_validate_for_test(
+	const char *source, const char *dependency, const char *dependency_sha256);
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance);
 int orlix_tcti_target_proof_source_evidence_validate(

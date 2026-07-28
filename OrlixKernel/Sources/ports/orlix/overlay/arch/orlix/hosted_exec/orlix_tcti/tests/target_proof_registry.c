@@ -349,6 +349,9 @@ struct kunit_source_provenance {
 	const char *source;
 	const char *sha256;
 	const char *object;
+	const char *dependency;
+	const char *dependency_sha256;
+	const char *include_directive;
 };
 
 struct kunit_case_provenance {
@@ -565,6 +568,12 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"orlix_tcti_source_leaf_classification_test_suite"
 #define SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY \
 	"orlix_tcti_source_leaf_classification_test_cases"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
+	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
+#define SYSTEM_ACCESSOR_PARTITION_INCLUDE \
+	"#include \"orlix_tcti_system_accessor_partition_test.h\""
 #define BRANCH_CONTROL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c"
 #define BRANCH_CONTROL_SUITE "orlix-tcti-branch-control-source-bound"
@@ -621,7 +630,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"75a8415bd716bd7f163c75e02fb2f1b5472bfafa00ec4f649dc7067e98086a56"
+	"10e58fbe7aa8ac5e9bed7df97fcb6378d4ee505a04cde84fa5cf35f8a748bd39"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -663,64 +672,68 @@ static const struct source_bound_proof source_bound_proofs[] = {
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ LSE_SOURCE,
 	  "909b0b8965d9cb90c095c8baa1c48c118116cb658be090a354f03b3acdbbe970",
-	  "orlix_tcti_lse_decode_test.o" },
+	  "orlix_tcti_lse_decode_test.o", NULL, NULL, NULL },
 	{ LSE_SOURCE_BOUND_SOURCE,
 	  "22559391c3da9cdcef9fbeb53d2707b712f592fd1d9bfa7c37f6458c632ce2e0",
-	  "orlix_tcti_lse_source_bound_test.o" },
+	  "orlix_tcti_lse_source_bound_test.o", NULL, NULL, NULL },
 	{ LSE128_SOURCE,
 	  "a5bd42cc32291145e9115b41715fef59d93fb0bb34c0ec445805017503153a5f",
-	  "orlix_tcti_lse128_resume_test.o" },
+	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "4f042bd635beaf8ce0a7c9ae9d55d04b1e56e4c93a3a50508ce94afcc454953d",
-	  "orlix_tcti_logical_shifted_register_test.o" },
+	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
 	{ CSSC_SOURCE,
 	  "df3c9b2debd3cc9dc9de78b0a3e48e0c1ad4ab9b046d6390c70be49576f55607",
-	  "orlix_tcti_cssc_min_max_immediate_test.o" },
+	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
-	  "orlix_tcti_add_sub_immediate_test.o" },
+	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL },
 	{ LOGICAL_IMMEDIATE_SOURCE,
 	  "2870f5ec26ff59f7f9d1c95997a1badbb95c0099aace28ebf487853c418ac7c2",
-	  "orlix_tcti_logical_immediate_source_bound_test.o" },
+	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL },
 	{ MOVE_WIDE_SOURCE,
 	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
-	  "orlix_tcti_move_wide_source_bound_test.o" },
+	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_BITOPS_SOURCE,
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
-	  "orlix_tcti_scalar_bitops_source_bound_test.o" },
+	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL },
 	{ VARIABLE_SHIFT_SOURCE,
 	  "a7d8f93e3319c1175ae940763d7c044e9e73a95b8ed01b7d641cdc54cadee181",
-	  "orlix_tcti_variable_shift_source_bound_test.o" },
+	  "orlix_tcti_variable_shift_source_bound_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_REGISTER_SOURCE,
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
-	  "orlix_tcti_add_sub_register_source_bound_test.o" },
+	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "6fbe8cfcbfb448a20ea521f25438f4152509013d23949d0ebc33f4b33064ac7e",
-	  "orlix_tcti_source_leaf_classification_test.o" },
+	  "204da86599452c221e3f5c08ba35ac8f84b8e534e67bb5cc81d97db3c467ec8a",
+	  "orlix_tcti_source_leaf_classification_test.o",
+	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
+	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
+	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
 	{ BRANCH_CONTROL_SOURCE,
 	  "921dd3aab709c395710d1def823fae09394233a2360d51463c87fc7cdd7ea659",
-	  "orlix_tcti_branch_control_source_bound_test.o" },
+	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
-	  "orlix_tcti_decode_test.o" },
+	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
-	  "orlix_tcti_scalar_fp_semantics_test.o" },
+	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
 	  "c1e420d4451b386a8d8af24740bf445c4fbef8701b4a02f4f882416e26f4e1ed",
-	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o" },
+	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_HALVING_SOURCE,
 	  "a0889b69d1cafddf5088b800e00d89b7a123b02ee847645e9a0a8583c1819d62",
-	  "orlix_tcti_advsimd_halving_source_bound_test.o" },
+	  "orlix_tcti_advsimd_halving_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_MUL_SOURCE,
 	  "93e647a701efdf32967ddc75229e6c56e081d1dd0d534f4a9de41803d93ea558",
-	  "orlix_tcti_advsimd_mul_source_bound_test.o" },
+	  "orlix_tcti_advsimd_mul_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
 	  "0458c2ac841380d2e535e55e6a766268d86de4e42c82c66e9ede5ebd1558581e",
-	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o" },
+	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
+	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
-	  "orlix_tcti_integer_conditional_source_bound_test.o" },
+	  "orlix_tcti_integer_conditional_source_bound_test.o", NULL, NULL, NULL },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -3807,6 +3820,42 @@ find_kunit_case(const struct orlix_tcti_target_proof_registry_entry *entry,
 	return NULL;
 }
 
+static bool valid_kunit_dependency(
+	const struct kunit_source_provenance *source_metadata,
+	const char *dependency_sha256)
+{
+	char *dependency;
+	size_t dependency_length;
+	bool valid;
+
+	if (empty(source_metadata->dependency) || empty(dependency_sha256))
+		return false;
+	dependency = read_source(source_metadata->dependency, &dependency_length);
+	if (!dependency)
+		return false;
+	valid = !memchr(dependency, '\0', dependency_length) &&
+		sha256_matches((const orlix_tcti_proof_u8 *)dependency,
+			       dependency_length, dependency_sha256);
+	free(dependency);
+	return valid;
+}
+
+int orlix_tcti_target_kunit_dependency_validate_for_test(
+	const char *source, const char *dependency, const char *dependency_sha256)
+{
+	const struct kunit_source_provenance *source_metadata;
+
+	if (empty(source) || empty(dependency) || empty(dependency_sha256))
+		return -1;
+	source_metadata = find_kunit_source(source);
+	if (!source_metadata || empty(source_metadata->dependency) ||
+	    empty(source_metadata->dependency_sha256) ||
+	    empty(source_metadata->include_directive) ||
+	    strcmp(dependency, source_metadata->dependency))
+		return -1;
+	return valid_kunit_dependency(source_metadata, dependency_sha256) ? 0 : -1;
+}
+
 static bool valid_kunit_provenance(
 	const struct orlix_tcti_target_proof_registry_entry *entry)
 {
@@ -3838,6 +3887,14 @@ static bool valid_kunit_provenance(
 	    !sha256_matches((const orlix_tcti_proof_u8 *)source, source_length,
 			    source_metadata->sha256) ||
 	    !source_registers_suite(source, entry->kunit_suite))
+		goto out;
+	if (!!source_metadata->dependency != !!source_metadata->dependency_sha256 ||
+	    !!source_metadata->dependency != !!source_metadata->include_directive)
+		goto out;
+	if (source_metadata->dependency &&
+	    (!strstr(source, source_metadata->include_directive) ||
+	     !valid_kunit_dependency(source_metadata,
+				     source_metadata->dependency_sha256)))
 		goto out;
 	for (index = 0; index < entry->kunit_case_count; index++) {
 		const struct kunit_case_provenance *case_metadata =

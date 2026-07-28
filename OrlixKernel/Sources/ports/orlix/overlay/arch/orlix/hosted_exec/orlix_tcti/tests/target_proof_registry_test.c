@@ -109,6 +109,12 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 #define ADD_SUB_IMMEDIATE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c"
 #define ADD_SUB_IMMEDIATE_SUITE "orlix-tcti-add-sub-immediate"
+#define SOURCE_LEAF_CLASSIFICATION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_source_leaf_classification_test.c"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
+	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
 #define CSSC_CONDITION \
 	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
 #define BASELINE \
@@ -330,6 +336,24 @@ static int kunit_provenance_must_be_registered(void)
 	invalid.kunit_source = "/private/tmp/fabricated-kunit-source.c";
 	EXPECT(orlix_tcti_target_proof_registry_validate(&invalid, 1, &error) == -1);
 	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_INVALID_KUNIT_PROVENANCE);
+	return 0;
+}
+
+static int kunit_transitive_header_drift_fails_closed(void)
+{
+	char mutated_sha256[] = SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256;
+
+	EXPECT(orlix_tcti_target_kunit_dependency_validate_for_test(
+		       SOURCE_LEAF_CLASSIFICATION_SOURCE,
+		       SYSTEM_ACCESSOR_PARTITION_SOURCE,
+		       SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256) == 0);
+	mutated_sha256[0] = mutated_sha256[0] == '0' ? '1' : '0';
+	EXPECT(orlix_tcti_target_kunit_dependency_validate_for_test(
+		       SOURCE_LEAF_CLASSIFICATION_SOURCE,
+		       SYSTEM_ACCESSOR_PARTITION_SOURCE, mutated_sha256) == -1);
+	EXPECT(orlix_tcti_target_kunit_dependency_validate_for_test(
+		       ADD_SUB_IMMEDIATE_SOURCE, SYSTEM_ACCESSOR_PARTITION_SOURCE,
+		       SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256) == -1);
 	return 0;
 }
 
@@ -1452,6 +1476,8 @@ int main(void)
 		{ "lse_cannot_omit_atomicity", lse_cannot_omit_atomicity },
 		{ "kunit_provenance_must_be_registered",
 		  kunit_provenance_must_be_registered },
+		{ "kunit_transitive_header_drift_fails_closed",
+		  kunit_transitive_header_drift_fails_closed },
 		{ "registered_case_cannot_overclaim_obligations",
 		  registered_case_cannot_overclaim_obligations },
 		{ "typed_kselftest_provenance_is_source_and_build_bound",

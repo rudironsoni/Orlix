@@ -101,6 +101,7 @@ $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 	$(call if_changed,orlix_tcti_target_inventory)
 
 $(obj)/orlix_tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
+$(obj)/orlix_tcti_source_leaf_classification_test.o: $(obj)/target_inventory.h
 $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
 	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
 $(obj)/target_runtime_capability_cohort_artifact.o: \
