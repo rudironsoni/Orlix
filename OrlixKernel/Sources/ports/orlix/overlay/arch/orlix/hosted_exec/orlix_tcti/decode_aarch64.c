@@ -1756,6 +1756,8 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		if (option != 2 && option != 3 && option != 6 && option != 7)
 			return decoded;
 		if (!simd_fp && size == 3 && opc == 2) {
+			if ((instruction & 0x1fU) >= 24)
+				return decoded;
 			decoded.decode_class =
 				ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET;
 			decoded.rt = instruction & 0x1fU;

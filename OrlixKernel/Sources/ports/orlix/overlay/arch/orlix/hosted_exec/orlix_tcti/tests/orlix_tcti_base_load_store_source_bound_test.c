@@ -496,6 +496,7 @@ static void bls_reserved_and_invalid_encodings_fail_closed(struct kunit *test)
 		0xf8c00420U, /* signed-immediate size=11 opc=11 is reserved. */
 		0x38200820U, /* register offset option=000 is reserved. */
 		0x38201820U, /* register offset option=000 with S=1 is reserved. */
+		0xf8a26838U, /* register-offset PRFM Rt=24 fails Rt<24. */
 	};
 	size_t index;
 

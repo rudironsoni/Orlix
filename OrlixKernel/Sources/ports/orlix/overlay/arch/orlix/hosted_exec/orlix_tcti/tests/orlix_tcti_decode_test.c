@@ -1597,13 +1597,12 @@ static u32 orlix_tcti_test_encode_load_store_pair(bool simd_fp, u8 opc, u8 mode,
 static bool orlix_tcti_test_load_store_pair_shape_is_valid(bool simd_fp, u8 opc,
 	u8 mode, bool load)
 {
-	if (opc == 3)
-		return false;
+	(void)load;
 	if (simd_fp)
 		return true;
 	if (opc != 1)
 		return true;
-	return load && mode != 0;
+	return mode != 0;
 }
 
 static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *test)
@@ -1628,6 +1627,8 @@ static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *te
 						struct orlix_tcti_decoded_instruction decoded =
 							orlix_tcti_decode_aarch64(instruction);
 						u8 access_size;
+						bool memory_tag_store_pair;
+						bool sign_extend_load;
 
 						if (!orlix_tcti_test_load_store_pair_shape_is_valid(
 							    simd_fp, opc, mode, load)) {
@@ -1636,9 +1637,14 @@ static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *te
 								decoded.decode_class);
 							continue;
 						}
-						access_size = simd_fp ? BIT(opc + 2) :
-							(opc == 2 ? sizeof(u64) :
-							 sizeof(u32));
+						memory_tag_store_pair =
+							!simd_fp && opc == 1 && !load;
+						sign_extend_load =
+							!simd_fp && opc == 1 && load;
+						access_size = simd_fp ?
+							(opc == 3 ? 16 : BIT(opc + 2)) :
+							(opc == 0 || sign_extend_load ?
+							 sizeof(u32) : sizeof(u64));
 						KUNIT_EXPECT_EQ(test,
 							ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
 							decoded.decode_class);
@@ -1651,14 +1657,21 @@ static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *te
 						KUNIT_EXPECT_EQ(test, access_size,
 							decoded.access_size);
 						KUNIT_EXPECT_EQ(test,
-							!simd_fp && opc == 1,
+							sign_extend_load,
 							decoded.sign_extend_load);
 						KUNIT_EXPECT_EQ(test,
-							!simd_fp && opc == 1 ?
+							memory_tag_store_pair,
+							decoded.memory_tag_store_pair);
+						KUNIT_EXPECT_EQ(test, opc == 3,
+							decoded.unprivileged);
+						KUNIT_EXPECT_EQ(test,
+							sign_extend_load ?
 								sizeof(u64) : access_size,
 							decoded.result_size);
 						KUNIT_EXPECT_EQ(test,
-							(s64)immediate * access_size,
+							(s64)immediate *
+								(memory_tag_store_pair ? 16 :
+								 access_size),
 							decoded.memory_offset);
 						KUNIT_EXPECT_EQ(test,
 							mode == 1 ? ORLIX_TCTI_MEMORY_INDEX_POST :
