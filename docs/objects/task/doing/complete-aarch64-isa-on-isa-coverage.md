@@ -6,6 +6,8 @@ tags:
 updated: 2026-07-28
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
+sources:
+  - "https://github.com/rudironsoni/Orlix/issues/134"
 task_of:
   - "[Prove TCTI product execution](../../story/doing/prove-tcti-product-execution.md)"
 blocks:
@@ -181,3 +183,14 @@ rows fail closed. Execution proof remains open.
 Feature-domain SAT: 4,350 applicable, zero impossible or unresolved. The
 checked certificate has 377 common and 364 leaf-scoped operand values;
 canonical replay passes and a source-bound valid-shape mutation fails.
+
+GitHub issue #134 owns the exact 209-leaf base A64 load, store, and prefetch
+cohort selected by the canonical execution-slice map. Its durable production
+owners are the OrlixTCTI decoder and execution semantics under `arch/orlix`;
+its focused evidence owner is
+`orlix_tcti_base_load_store_source_bound_test.c`. Source-bound inventory,
+implementation presence, KUnit compilation, and a narrower runtime profile do
+not close those leaves. Promotion still requires the corrected issue #120
+native-proof schema to bind every legal and rejected encoding, complete
+architectural before/after state, fault observations, feature identity,
+applicable atomicity and ordering, and executed production-path evidence.

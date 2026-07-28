@@ -127,6 +127,10 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs);
 int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 		       enum orlix_tcti_access access,
 		       struct orlix_tcti_user_page *out);
+int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,
+				unsigned long user_va,
+				enum orlix_tcti_access access,
+				struct orlix_tcti_user_page *page);
 void orlix_tcti_unpin_user_page(struct orlix_tcti_user_page *page);
 int orlix_tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 			   u32 *instruction);

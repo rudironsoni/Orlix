@@ -876,3 +876,8 @@ Removed the machine-specific external-storage recovery procedure from the
 repository agent rules. Orlix verification now relies on repository-owned Make
 targets and reports unavailable app-hosted evidence directly instead of
 requiring a machine-local recovery helper.
+## 2026-07-28
+
+- Bound GitHub issue #134's exact 209-leaf base A64 load/store/prefetch cohort
+  to its durable OrlixTCTI production and focused-evidence owners while keeping
+  issue #120's corrected executed-proof contract as the promotion boundary.
