@@ -892,6 +892,115 @@ static int source_registration_discharges_zero_semantic_obligations(void)
 	return 0;
 }
 
+static int advsimd_table_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		uint32_t ordinal;
+		const char *proof_id;
+		const char *leaf_name;
+		const char *mnemonic;
+		const char *operation_id;
+	} expected[] = {
+		{ 3672U, "kunit:advsimd-table-tbl-source-leaves",
+		  "TBL_asimdtbl_L1_1", "TBL", "TBL_advsimd" },
+		{ 3673U, "kunit:advsimd-table-tbx-source-leaves",
+		  "TBX_asimdtbl_L1_1", "TBX", "TBX_advsimd" },
+		{ 3674U, "kunit:advsimd-table-tbl-source-leaves",
+		  "TBL_asimdtbl_L2_2", "TBL", "TBL_advsimd" },
+		{ 3675U, "kunit:advsimd-table-tbx-source-leaves",
+		  "TBX_asimdtbl_L2_2", "TBX", "TBX_advsimd" },
+		{ 3676U, "kunit:advsimd-table-tbl-source-leaves",
+		  "TBL_asimdtbl_L3_3", "TBL", "TBL_advsimd" },
+		{ 3677U, "kunit:advsimd-table-tbx-source-leaves",
+		  "TBX_asimdtbl_L3_3", "TBX", "TBX_advsimd" },
+		{ 3678U, "kunit:advsimd-table-tbl-source-leaves",
+		  "TBL_asimdtbl_L4_4", "TBL", "TBL_advsimd" },
+		{ 3679U, "kunit:advsimd-table-tbx-source-leaves",
+		  "TBX_asimdtbl_L4_4", "TBX", "TBX_advsimd" },
+	};
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *mutation_source = NULL;
+	struct orlix_tcti_target_proof_registry_entry mutation;
+	struct orlix_tcti_target_proof_binding mutated_bindings[4];
+	enum orlix_tcti_target_proof_registry_error error;
+	bool seen[sizeof(expected) / sizeof(expected[0])] = {};
+	size_t binding_count = 0;
+	size_t entry_count = 0;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	EXPECT(orlix_tcti_target_proof_registry_validate(entries, count, &error) == 0);
+	EXPECT(orlix_tcti_target_proof_registry_source_bound_projection_validate(
+		       entries, count, &error) == 0);
+	for (index = 0; index < count; index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			&entries[index];
+		size_t binding;
+
+		if (strncmp(entry->id, "kunit:advsimd-table-", 20))
+			continue;
+		EXPECT(entry->classification_mask ==
+		       ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
+		EXPECT(entry->obligations ==
+		       (ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS));
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->linux_interface ==
+		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		EXPECT(!strcmp(entry->kunit_source,
+		       "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_table_lookup_source_bound_test.c"));
+		EXPECT(!strcmp(entry->kunit_suite,
+		       "orlix-tcti-advsimd-table-source-bound"));
+		EXPECT(entry->kunit_case_count == 3U);
+		EXPECT(entry->binding_count == 4U);
+		entry_count++;
+		binding_count += entry->binding_count;
+		if (!strcmp(entry->operation_id, "TBL_advsimd"))
+			mutation_source = entry;
+		for (binding = 0; binding < entry->binding_count; binding++) {
+			const struct orlix_tcti_target_proof_binding *item =
+				&entry->bindings[binding];
+			size_t expected_index;
+
+			EXPECT(item->kunit_case_mask == UINT64_C(0x7));
+			for (expected_index = 0;
+			     expected_index < sizeof(expected) / sizeof(expected[0]);
+			     expected_index++)
+				if (expected[expected_index].ordinal ==
+				    item->source_ordinal)
+					break;
+			EXPECT(expected_index < sizeof(expected) / sizeof(expected[0]));
+			EXPECT(!seen[expected_index]);
+			seen[expected_index] = true;
+			EXPECT(!strcmp(entry->id, expected[expected_index].proof_id));
+			EXPECT(!strcmp(item->leaf_name,
+				       expected[expected_index].leaf_name));
+			EXPECT(!strcmp(item->mnemonic,
+				       expected[expected_index].mnemonic));
+			EXPECT(!strcmp(entry->operation_id,
+				       expected[expected_index].operation_id));
+		}
+	}
+	EXPECT(entry_count == 2U);
+	EXPECT(binding_count == sizeof(expected) / sizeof(expected[0]));
+	for (index = 0; index < sizeof(seen) / sizeof(seen[0]); index++)
+		EXPECT(seen[index]);
+
+	EXPECT(mutation_source != NULL);
+	mutation = *mutation_source;
+	memcpy(mutated_bindings, mutation.bindings, sizeof(mutated_bindings));
+	mutated_bindings[0].source_ordinal++;
+	mutation.bindings = mutated_bindings;
+	EXPECT(orlix_tcti_target_proof_registry_validate(&mutation, 1, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+	return 0;
+}
+
 static int scalar_bitops_registry_binds_exact_source_rows(void)
 {
 	static const struct {
@@ -1504,6 +1613,8 @@ int main(void)
 		  branch_control_registry_binds_exact_source_rows },
 		{ "source_registration_discharges_zero_semantic_obligations",
 		  source_registration_discharges_zero_semantic_obligations },
+		{ "advsimd_table_registry_binds_exact_source_rows",
+		  advsimd_table_registry_binds_exact_source_rows },
 		{ "scalar_fp_convert_registry_binds_exact_source_rows",
 		  scalar_fp_convert_registry_binds_exact_source_rows },
 		{ "integer_conditional_registry_binds_exact_source_rows",
