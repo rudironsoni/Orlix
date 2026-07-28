@@ -421,7 +421,7 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 static void orlix_tcti_issue_130_non_el0_typed_native_production_records(
 	struct kunit *test)
 {
-	static const u32 ordinals[] = { 2299U, 2300U, 2301U, 2302U, 2303U };
+	static const u32 ordinals[] = { 2299U, 2300U, 2301U, 2303U };
 	static const enum orlix_tcti_native_obligation obligations[] = {
 		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
 		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,

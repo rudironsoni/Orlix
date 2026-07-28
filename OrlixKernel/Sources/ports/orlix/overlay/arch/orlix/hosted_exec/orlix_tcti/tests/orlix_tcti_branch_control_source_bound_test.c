@@ -23,6 +23,7 @@
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "../isa/base_a64_control_flow_semantic_blockers.h"
 #include "../switch_debug.h"
 #include "orlix_tcti_native_observation.h"
 #include "orlix_tcti_branch_control_production_capture.h"
@@ -30,7 +31,10 @@
 #include "orlix_tcti_test_suites.h"
 #include "target_proof_ingestion_private.h"
 #include "target_native_proof_contract_private.h"
+#include "target_completion_audit.h"
 #include "target_execution_slice_map.h"
+#include "target_proof_ingestion.h"
+#include "target_proof_registry.h"
 
 struct bcs_ingest_racer {
 	struct completion *start;
@@ -258,24 +262,63 @@ static const struct bcs_leaf bcs_leaves[] = {
 	  BCS_TBNZ, false },
 };
 
+enum bcs_issue_130_disposition {
+	BCS_ISSUE_130_REQUIRED_EL0,
+	BCS_ISSUE_130_NON_EL0,
+	BCS_ISSUE_130_SEMANTIC_BLOCKER,
+};
+
 struct bcs_issue_130_leaf {
 	u16 ordinal;
 	const char *name;
-	bool required_el0;
+	enum bcs_issue_130_disposition disposition;
 };
 
 static const struct bcs_issue_130_leaf bcs_issue_130_leaves[] = {
-	{ 2288, "BR_64_branch_reg", true },
-	{ 2291, "BLR_64_branch_reg", true },
-	{ 2294, "RET_64R_branch_reg", true },
-	{ 2299, "ERET_64E_branch_reg", false },
-	{ 2300, "ERETAA_64E_branch_reg", false },
-	{ 2301, "ERETAB_64E_branch_reg", false },
-	{ 2302, "TEXIT_te_branch_reg", false },
-	{ 2303, "DRPS_64E_branch_reg", false },
-	{ 2312, "B_only_branch_imm", true },
-	{ 2313, "BL_only_branch_imm", true },
+	{ 2288, "BR_64_branch_reg", BCS_ISSUE_130_REQUIRED_EL0 },
+	{ 2291, "BLR_64_branch_reg", BCS_ISSUE_130_REQUIRED_EL0 },
+	{ 2294, "RET_64R_branch_reg", BCS_ISSUE_130_REQUIRED_EL0 },
+	{ 2299, "ERET_64E_branch_reg", BCS_ISSUE_130_NON_EL0 },
+	{ 2300, "ERETAA_64E_branch_reg", BCS_ISSUE_130_NON_EL0 },
+	{ 2301, "ERETAB_64E_branch_reg", BCS_ISSUE_130_NON_EL0 },
+	{ 2302, "TEXIT_te_branch_reg", BCS_ISSUE_130_SEMANTIC_BLOCKER },
+	{ 2303, "DRPS_64E_branch_reg", BCS_ISSUE_130_NON_EL0 },
+	{ 2312, "B_only_branch_imm", BCS_ISSUE_130_REQUIRED_EL0 },
+	{ 2313, "BL_only_branch_imm", BCS_ISSUE_130_REQUIRED_EL0 },
 };
+
+struct bcs_semantic_blocker {
+	u16 ordinal;
+	const char *name;
+	enum orlix_tcti_a64_semantic_provenance_disposition disposition;
+	const char *operation_locator;
+	const char *operation_sha256;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, name, \
+		locator, offset, length, digest) \
+	{ ordinal, name, \
+	  ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED, \
+	  locator, digest },
+static const struct bcs_semantic_blocker bcs_semantic_blockers[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
+static const struct bcs_semantic_blocker *
+bcs_semantic_blocker_for_ordinal(u16 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(bcs_semantic_blockers); index++)
+		if (bcs_semantic_blockers[index].ordinal == ordinal)
+			return &bcs_semantic_blockers[index];
+	return NULL;
+}
 
 static const struct bcs_leaf *bcs_leaf_for_ordinal(u16 ordinal)
 {
@@ -357,20 +400,68 @@ static void bcs_issue_130_exact_cohort_accounting(struct kunit *test)
 
 		KUNIT_EXPECT_TRUE_MSG(test, seen[index], "missing ordinal %u",
 				      expected->ordinal);
-		if (expected->required_el0) {
+		if (expected->disposition == BCS_ISSUE_130_REQUIRED_EL0) {
 			const struct bcs_leaf *leaf =
 				bcs_leaf_for_ordinal(expected->ordinal);
 
 			KUNIT_ASSERT_NOT_NULL(test, leaf);
 			KUNIT_EXPECT_STREQ(test, expected->name, leaf->name);
-		} else {
+		} else if (expected->disposition == BCS_ISSUE_130_NON_EL0) {
 			struct orlix_tcti_source_leaf_rejection entry;
 			const struct orlix_tcti_source_leaf_rejection *leaf =
 				bcs_rejection_for_ordinal(expected->ordinal, &entry);
 
 			KUNIT_ASSERT_NOT_NULL(test, leaf);
 			KUNIT_EXPECT_STREQ(test, expected->name, leaf->name);
+		} else {
+			const struct bcs_semantic_blocker *blocker =
+				bcs_semantic_blocker_for_ordinal(expected->ordinal);
+			struct orlix_tcti_source_leaf_rejection entry;
+
+			KUNIT_ASSERT_NOT_NULL(test, blocker);
+			KUNIT_EXPECT_STREQ(test, expected->name, blocker->name);
+			KUNIT_EXPECT_EQ(test,
+				ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED,
+				blocker->disposition);
+			KUNIT_EXPECT_STREQ(test,
+				"Instructions.json#operations/TEXIT/operation",
+				blocker->operation_locator);
+			KUNIT_EXPECT_STREQ(test,
+				"28fb16d9885379aa6e05267c659d8b7dab31e819051d85e1dbde8347bc2fdce8",
+				blocker->operation_sha256);
+			KUNIT_EXPECT_PTR_EQ(test, NULL,
+				bcs_rejection_for_ordinal(expected->ordinal, &entry));
 		}
+	}
+}
+
+static void bcs_issue_130_bti_variants_remain_source_blocked(struct kunit *test)
+{
+	u32 required = ORLIX_TCTI_BASE_CONTROL_FLOW_BRANCH_TYPE_STATE |
+		ORLIX_TCTI_BASE_CONTROL_FLOW_GUARDED_PAGE |
+		ORLIX_TCTI_BASE_CONTROL_FLOW_TARGET_COMPATIBILITY;
+	size_t index;
+
+	KUNIT_ASSERT_EQ(test, 3U,
+		ARRAY_SIZE(orlix_tcti_base_control_flow_semantic_blockers));
+	for (index = 0;
+	     index < ARRAY_SIZE(orlix_tcti_base_control_flow_semantic_blockers);
+	     index++) {
+		const struct orlix_tcti_base_control_flow_semantic_blocker *blocker =
+			&orlix_tcti_base_control_flow_semantic_blockers[index];
+		const struct bcs_leaf *leaf = bcs_leaf_for_ordinal(
+			blocker->source_ordinal);
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		KUNIT_EXPECT_STREQ(test, leaf->name, blocker->source_id);
+		KUNIT_EXPECT_STREQ(test, "FEAT_BTI", blocker->feature);
+		KUNIT_EXPECT_TRUE(test, blocker->external_locator[0]);
+		KUNIT_EXPECT_EQ(test, 64U,
+			strlen(blocker->external_execute_sha256));
+		KUNIT_EXPECT_EQ(test, required, blocker->obligations);
+		KUNIT_EXPECT_EQ(test,
+			ORLIX_TCTI_BASE_CONTROL_FLOW_EXTERNAL_SEMANTICS_UNAVAILABLE,
+			blocker->status);
 	}
 }
 
@@ -738,7 +829,7 @@ static void bcs_issue_130_legal_encoding_boundaries(struct kunit *test)
 			&bcs_issue_130_leaves[index];
 		const struct bcs_leaf *leaf;
 
-		if (!expected->required_el0)
+		if (expected->disposition != BCS_ISSUE_130_REQUIRED_EL0)
 			continue;
 		leaf = bcs_leaf_for_ordinal(expected->ordinal);
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
@@ -866,63 +957,91 @@ static void bcs_issue_130_direct_branch_unmapped_target_production(
 
 static void bcs_issue_130_typed_native_production_records(struct kunit *test)
 {
-	static const enum orlix_tcti_native_obligation obligations[] = {
-		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
-		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
-	};
 	size_t index;
 
 	for (index = 0; index < ARRAY_SIZE(bcs_issue_130_leaves); index++) {
 		const struct bcs_issue_130_leaf *expected =
 			&bcs_issue_130_leaves[index];
 		const struct bcs_leaf *leaf;
-		size_t obligation_index;
+		struct pt_regs regs;
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+		unsigned long address;
 
-		if (!expected->required_el0)
+		if (expected->disposition != BCS_ISSUE_130_REQUIRED_EL0)
 			continue;
 		leaf = bcs_leaf_for_ordinal(expected->ordinal);
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
-		for (obligation_index = 0;
-		     obligation_index < ARRAY_SIZE(obligations);
-		     obligation_index++) {
-			struct orlix_tcti_native_observation_spec spec = {
-				.source_ordinal = expected->ordinal,
-				.obligation = obligations[obligation_index],
-			};
-			struct orlix_tcti_native_observation *observation;
-			struct orlix_tcti_target_native_result_record *record = NULL;
-			struct pt_regs regs;
-			struct pt_regs expected_regs;
-			unsigned long address = bcs_map_program(
-				test, bcs_instruction(leaf, true));
+		address = bcs_map_program(test, bcs_instruction(leaf, true));
+		bcs_seed_regs(&regs, address, leaf, true);
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL,
+			result.reason, "%s ordinal %u", expected->name,
+			expected->ordinal);
+		KUNIT_EXPECT_EQ(test, BCS_SVC_TAKEN, result.instruction);
+		KUNIT_EXPECT_EQ(test, address + 3 * sizeof(u32), regs.pc);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		bcs_expect_register_effects(test, leaf, &before, &regs, address);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
 
-			bcs_seed_regs(&regs, address, leaf, true);
-			expected_regs = regs;
-			expected_regs.pc = address + 2 * sizeof(u32);
-			if (leaf->kind == BCS_BL || leaf->kind == BCS_BLR)
-				expected_regs.regs[30] = address + sizeof(u32);
-			spec.result = (struct orlix_tcti_result) {
-				.reason = ORLIX_TCTI_EXIT_SYSCALL,
-				.status = 0,
-				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
-				.pc = address + 2 * sizeof(u32),
-				.instruction = BCS_SVC_TAKEN,
-			};
-			orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
-			observation = orlix_tcti_native_observation_create(&spec);
-			KUNIT_ASSERT_NOT_NULL(test, observation);
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_execute(
-					observation, current, &regs, current->mm));
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_compare(observation));
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_export(observation, &record));
-			KUNIT_EXPECT_NOT_NULL(test, record);
-			orlix_tcti_target_native_result_record_destroy(record);
-			orlix_tcti_native_observation_destroy(observation);
-			KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
-		}
+static void bcs_issue_130_typed_native_fault_records(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(bcs_issue_130_leaves); index++) {
+		const struct bcs_issue_130_leaf *expected =
+			&bcs_issue_130_leaves[index];
+		const struct bcs_leaf *leaf;
+		struct pt_regs regs;
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+		u32 instruction;
+		unsigned long address;
+		unsigned long target;
+		unsigned long expected_regs[ARRAY_SIZE(regs.regs)];
+		int ret;
+
+		if (expected->disposition != BCS_ISSUE_130_REQUIRED_EL0)
+			continue;
+		leaf = bcs_leaf_for_ordinal(expected->ordinal);
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		address = ksys_mmap_pgoff(
+			0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+		target = address + PAGE_SIZE;
+		instruction = leaf->kind == BCS_B || leaf->kind == BCS_BL ?
+			leaf->pattern | (PAGE_SIZE / sizeof(u32)) :
+			leaf->pattern | (5U << 5);
+		ret = orlix_tcti_write_user_data(current->mm, address, &instruction,
+						 sizeof(instruction));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_ASSERT_EQ(test, 0, vm_munmap(target, PAGE_SIZE));
+		KUNIT_ASSERT_EQ(test, 0,
+			sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC));
+		bcs_seed_regs(&regs, address, leaf, true);
+		regs.regs[5] = target;
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_USER_FAULT,
+			result.reason, "%s ordinal %u", expected->name,
+			expected->ordinal);
+		KUNIT_EXPECT_EQ(test, -EFAULT, result.status);
+		KUNIT_EXPECT_EQ(test, target, result.fault_address);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_FETCH, result.fault_access);
+		KUNIT_EXPECT_EQ(test, target, result.pc);
+		KUNIT_EXPECT_EQ(test, target, regs.pc);
+		KUNIT_EXPECT_EQ(test, 0U, result.instruction);
+		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		memcpy(expected_regs, before.regs, sizeof(expected_regs));
+		if (leaf->kind == BCS_BL || leaf->kind == BCS_BLR)
+			expected_regs[30] = address + sizeof(u32);
+		KUNIT_EXPECT_MEMEQ(test, expected_regs, regs.regs,
+			 sizeof(expected_regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 	}
 }
 
@@ -1556,6 +1675,7 @@ static void cbe_narrow_sf_encodings_fail_closed(struct kunit *test)
 
 static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_issue_130_exact_cohort_accounting),
+	KUNIT_CASE(bcs_issue_130_bti_variants_remain_source_blocked),
 	KUNIT_CASE(bcs_source_decode),
 	KUNIT_CASE(bcs_issue_130_legal_encoding_boundaries),
 	KUNIT_CASE(bcs_issue_130_reserved_register_encodings_fail_closed),
@@ -1566,6 +1686,7 @@ static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_register_branch_out_of_range_target_production),
 	KUNIT_CASE(bcs_issue_130_direct_branch_unmapped_target_production),
 	KUNIT_CASE(bcs_issue_130_typed_native_production_records),
+	KUNIT_CASE(bcs_issue_130_typed_native_fault_records),
 	KUNIT_CASE(bcs_al_nv_condition_production),
 	KUNIT_CASE(cbe_source_decode),
 	KUNIT_CASE(cbe_production_resume),
