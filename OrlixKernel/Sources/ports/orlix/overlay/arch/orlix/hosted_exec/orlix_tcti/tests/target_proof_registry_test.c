@@ -1458,7 +1458,8 @@ static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
 	const char *operation_id, unsigned int ordinal)
 {
 	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
-		ORLIX_TCTI_PROOF_U64_C(1) << 1;
+		ORLIX_TCTI_PROOF_U64_C(1) << 1 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 14;
 
 	if (strstr(operation_id, "_advsimd_mult"))
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
@@ -1468,7 +1469,8 @@ static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 4;
 	switch (ordinal) {
 	case 2496U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 5 |
-		ORLIX_TCTI_PROOF_U64_C(1) << 9; break;
+		ORLIX_TCTI_PROOF_U64_C(1) << 9 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 12; break;
 	case 2432U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 6; break;
 	case 2365U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 7; break;
 	case 2358U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 8; break;
@@ -1477,9 +1479,10 @@ static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
 	case 2364U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 10; break;
 	case 2366U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 11; break;
 	case 2403U:
-	case 2422U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12; break;
-	case 2353U:
-	case 2399U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13; break;
+	case 2422U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13; break;
+	case 2450U:
+	case 2465U:
+	case 2486U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12; break;
 	default: break;
 	}
 	return mask;

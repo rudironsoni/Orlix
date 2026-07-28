@@ -743,7 +743,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ ADVSIMD_STRUCTURE_SOURCE,
-	  "056ffc47eac0e97a9c9dd9819d241e67ec1b16825d9d4ff5084fba2c14dc4f8e",
+	  "1234dafb6bee8f416ede141a3665f490df71db781d73e334e0af2e3600d4b4a0",
 	  "orlix_tcti_advsimd_structure_load_store_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
@@ -1264,6 +1264,12 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_register_writeback_boundaries_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
 	  "orlix_tcti_advsimd_structure_ordered_lane_variants_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -1273,10 +1279,11 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
-	  "orlix_tcti_advsimd_structure_reserved_encodings_reject",
+	  "orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 
 };
@@ -3248,6 +3255,10 @@ static const struct orlix_tcti_target_proof_case advsimd_structure_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_structure_register_writeback_boundaries_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ "orlix_tcti_advsimd_structure_ordered_lane_variants_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -3255,10 +3266,11 @@ static const struct orlix_tcti_target_proof_case advsimd_structure_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "orlix_tcti_advsimd_structure_reserved_encodings_reject",
+	{ "orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
@@ -3284,7 +3296,8 @@ static orlix_tcti_proof_u64 advsimd_structure_case_mask(
 	const struct source_manifest_binding *source)
 {
 	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
-		ORLIX_TCTI_PROOF_U64_C(1) << 1;
+		ORLIX_TCTI_PROOF_U64_C(1) << 1 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 14;
 
 	if (strstr(source->operation_id, "_advsimd_mult"))
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
@@ -3296,7 +3309,8 @@ static orlix_tcti_proof_u64 advsimd_structure_case_mask(
 	switch (source->ordinal) {
 	case 2496U:
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 5 |
-			ORLIX_TCTI_PROOF_U64_C(1) << 9;
+			ORLIX_TCTI_PROOF_U64_C(1) << 9 |
+			ORLIX_TCTI_PROOF_U64_C(1) << 12;
 		break;
 	case 2432U:
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 6;
@@ -3319,11 +3333,12 @@ static orlix_tcti_proof_u64 advsimd_structure_case_mask(
 		break;
 	case 2403U:
 	case 2422U:
-		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12;
-		break;
-	case 2353U:
-	case 2399U:
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13;
+		break;
+	case 2450U:
+	case 2465U:
+	case 2486U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12;
 		break;
 	default:
 		break;
