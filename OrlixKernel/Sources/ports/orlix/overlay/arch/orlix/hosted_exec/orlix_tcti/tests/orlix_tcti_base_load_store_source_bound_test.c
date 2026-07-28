@@ -632,6 +632,44 @@ static void bls_metadata_does_not_survive_virtual_address_reuse(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(replacement, PAGE_SIZE));
 }
 
+static void bls_tcti_metadata_does_not_survive_virtual_address_reuse(
+	struct kunit *test)
+{
+	const u64 pair[] = {
+		0x0123456789abcdefULL,
+		0xfedcba9876543210ULL,
+	};
+	u8 byte = 0x5a;
+	u8 tag = 0;
+	unsigned long address = bls_map(test, PAGE_SIZE,
+		PROT_READ | PROT_WRITE);
+	unsigned long replacement;
+	int ret;
+
+	ret = orlix_tcti_store_tagged_pair(current->mm,
+		address | (0xbULL << 56), pair, sizeof(pair));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_set_gcs_memory(current->mm, address, 16, true));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_load_allocation_tag(current->mm, address, &tag));
+	KUNIT_ASSERT_EQ(test, (u8)0xb, tag);
+	KUNIT_ASSERT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+
+	replacement = ksys_mmap_pgoff(address, PAGE_SIZE,
+		PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	KUNIT_ASSERT_EQ(test, address, replacement);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		replacement, &byte, sizeof(byte)));
+	KUNIT_EXPECT_EQ(test, -ENOENT,
+		orlix_tcti_load_allocation_tag(current->mm, replacement, &tag));
+	KUNIT_EXPECT_EQ(test, -EACCES,
+		orlix_tcti_write_gcs_user_data(current->mm, replacement,
+			&byte, sizeof(byte)));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(replacement, PAGE_SIZE));
+}
+
 static void bls_non_el0_and_sp_alignment_fail_closed(struct kunit *test)
 {
 	static const u32 class_representatives[] = {
@@ -838,6 +876,7 @@ static struct kunit_case bls_cases[] = {
 	KUNIT_CASE(bls_gcs_permissions_and_stgp_tag_are_architectural_state),
 	KUNIT_CASE(bls_prefetch_never_reads_the_target),
 	KUNIT_CASE(bls_metadata_does_not_survive_virtual_address_reuse),
+	KUNIT_CASE(bls_tcti_metadata_does_not_survive_virtual_address_reuse),
 	KUNIT_CASE(bls_non_el0_and_sp_alignment_fail_closed),
 	KUNIT_CASE(bls_zr_sp_and_register_offsets_follow_architecture),
 	KUNIT_CASE(bls_faults_report_access_and_preserve_register_state),
