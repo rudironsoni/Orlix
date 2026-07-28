@@ -22,7 +22,9 @@ struct native_fixture {
 	struct orlix_tcti_target_kunit_provenance_identity provenance;
 };
 
-static int fixture_init(struct native_fixture *fixture)
+static int fixture_init_for(struct native_fixture *fixture,
+	orlix_tcti_proof_u32 obligation,
+	enum orlix_tcti_target_native_result_kind kind)
 {
 	const struct orlix_tcti_target_instruction_artifact *artifact;
 	const struct orlix_tcti_target_proof_registry_entry *entries;
@@ -49,10 +51,9 @@ static int fixture_init(struct native_fixture *fixture)
 			     index < entries[entry_index].kunit_case_count && index < 64;
 			     index++)
 			if ((mask & (ORLIX_TCTI_PROOF_U64_C(1) << index)) &&
-			    (entries[entry_index].unproved_obligations &
-			     ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS) &&
+			    (entries[entry_index].unproved_obligations & obligation) &&
 			    (entries[entry_index].kunit_cases[index].obligations &
-			     ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS)) {
+			     obligation)) {
 					selected_case = (int)index;
 					break;
 				}
@@ -72,7 +73,7 @@ static int fixture_init(struct native_fixture *fixture)
 	fixture->input.encoding_mask = fixture->binding.encoding_mask;
 	fixture->input.encoding_pattern = fixture->binding.encoding_pattern;
 	fixture->input.entry_instruction = fixture->binding.encoding_pattern;
-	fixture->input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
+	fixture->input.kind = kind;
 	fixture->input.artifact_architecture = artifact->architecture;
 	fixture->input.artifact_build = artifact->build;
 	fixture->input.artifact_reference = artifact->reference;
@@ -98,6 +99,13 @@ static int fixture_init(struct native_fixture *fixture)
 	fixture->selector.kunit_case = fixture->provenance.case_name;
 	fixture->selector.executing_kernel_identity = "host-fixture-build";
 	return 0;
+}
+
+static int fixture_init(struct native_fixture *fixture)
+{
+	return fixture_init_for(fixture,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR);
 }
 
 static int ingest_once(const struct native_fixture *fixture,
@@ -177,6 +185,33 @@ static int native_mutation_matrix(void)
 	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_NON_PRODUCTION;
 	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
 		ORLIX_TCTI_TARGET_PROOF_INGEST_NON_PRODUCTION));
+	return 0;
+}
+
+static int typed_native_result_kinds_map_to_architectural_obligations(void)
+{
+	static const struct {
+		enum orlix_tcti_target_native_result_kind kind;
+		orlix_tcti_proof_u32 obligation;
+	} cases[] = {
+		{ ORLIX_TCTI_TARGET_NATIVE_RESULT_MEMORY,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+		{ ORLIX_TCTI_TARGET_NATIVE_RESULT_FP_SIMD,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+		{ ORLIX_TCTI_TARGET_NATIVE_RESULT_FAULT,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+		{ ORLIX_TCTI_TARGET_NATIVE_RESULT_ORDERING,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	};
+	struct native_fixture fixture;
+	size_t index;
+
+	for (index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
+		EXPECT(!fixture_init_for(&fixture, cases[index].obligation,
+			cases[index].kind));
+		EXPECT(!ingest_once(&fixture, &fixture.input, &fixture.selector,
+			ORLIX_TCTI_TARGET_PROOF_INGEST_OK));
+	}
 	return 0;
 }
 
@@ -335,12 +370,13 @@ static int kselftest_typed_results_fail_closed(void)
 int main(void)
 {
 	if (native_mutation_matrix() ||
+	    typed_native_result_kinds_map_to_architectural_obligations() ||
 	    canonical_registry_cannot_be_replaced_by_caller_copy() ||
 	    null_selector_fields_fail_closed() || replay_is_rejected() ||
 	    ledger_capacity_covers_complete_contract() ||
 	    kselftest_typed_results_fail_closed())
 		return 1;
-	puts("target proof ingestion tests passed: canonical-registry "
-	     "null-selectors cross-ledger-replay");
+	puts("target proof ingestion tests passed: typed-obligations "
+	     "canonical-registry null-selectors cross-ledger-replay");
 	return 0;
 }
