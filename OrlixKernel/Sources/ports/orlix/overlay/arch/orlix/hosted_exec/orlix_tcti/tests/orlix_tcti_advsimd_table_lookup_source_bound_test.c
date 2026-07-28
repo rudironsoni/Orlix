@@ -32,6 +32,7 @@
 	"orlix_tcti_advsimd_table_typed_obligations_resume"
 #define ORLIX_TCTI_ADVSIMD_TABLE_REJECTION_CASE \
 	"orlix_tcti_advsimd_table_fixed_bit_neighbors_resume"
+#define ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER	U16_MAX
 
 struct orlix_tcti_advsimd_table_leaf {
 	u16 source_ordinal;
@@ -165,13 +166,14 @@ orlix_tcti_advsimd_table_union_leaf(u32 instruction)
 	return NULL;
 }
 
-static size_t orlix_tcti_advsimd_table_source_owner_count(
+static size_t orlix_tcti_advsimd_table_source_owner(
 	const struct orlix_tcti_target_instruction_artifact *artifact,
-	u32 instruction)
+	u32 instruction, u16 *owner_ordinal)
 {
 	size_t owners = 0;
 	u32 ordinal;
 
+	*owner_ordinal = ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
 	for (ordinal = 0; ordinal < artifact->leaf_count; ordinal++) {
 		u32 mask;
 		u32 pattern;
@@ -179,10 +181,72 @@ static size_t orlix_tcti_advsimd_table_source_owner_count(
 		if (orlix_tcti_advsimd_table_effective_encoding(
 				artifact, ordinal, &mask, &pattern))
 			return SIZE_MAX;
-		if ((instruction & mask) == pattern)
+		if ((instruction & mask) == pattern) {
+			if (!owners)
+				*owner_ordinal = ordinal;
 			owners++;
+		}
 	}
 	return owners;
+}
+
+static u16 orlix_tcti_advsimd_table_expected_neighbor_owner(
+	size_t leaf_index, u8 bit)
+{
+	static const u16 bit_22_owners[] = {
+		ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER, 3680U, 3681U, 3680U,
+		ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER, 3680U, 3681U, 3680U,
+	};
+	static const u16 bit_24_owners[] = {
+		4033U, 4034U, 4023U, 4024U,
+		ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER, 4035U, 4025U, 4026U,
+	};
+
+	switch (bit) {
+	case 10:
+		return leaf_index == 0U ? 3691U :
+			ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
+	case 11:
+		if (leaf_index == 0U || leaf_index == 4U)
+			return ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
+		return 3683U + leaf_index - (leaf_index > 4U ? 1U : 0U);
+	case 12:
+	case 13:
+	case 14:
+		return 3672U + (leaf_index ^ BIT(bit - 12U));
+	case 21:
+		return 3869U + leaf_index;
+	case 22:
+		return bit_22_owners[leaf_index];
+	case 23:
+		return leaf_index & 1U ? 3682U :
+			ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
+	case 24:
+		return bit_24_owners[leaf_index];
+	case 26:
+		return 3438U;
+	case 28:
+		return leaf_index < 7U ? 3511U + leaf_index :
+			ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
+	case 29:
+		return 3690U;
+	case 31:
+		return 4078U;
+	default:
+		return ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER;
+	}
+}
+
+static enum orlix_tcti_decode_class
+orlix_tcti_advsimd_table_expected_neighbor_class(u16 owner_ordinal)
+{
+	if (owner_ordinal >= 3672U && owner_ordinal <= 3682U)
+		return ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP;
+	if (owner_ordinal >= 3684U && owner_ordinal <= 3691U)
+		return ORLIX_TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE;
+	if (owner_ordinal == 3438U)
+		return ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER;
+	return ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 }
 
 static int orlix_tcti_advsimd_table_test_init(struct kunit *test)
@@ -772,6 +836,12 @@ static void orlix_tcti_advsimd_table_typed_obligations_resume(
 	size_t record_count = 0;
 	size_t leaf_index;
 
+	/* Export is valid only after these exact exhaustive matrices complete. */
+	orlix_tcti_advsimd_table_legal_fields_decode(test);
+	orlix_tcti_advsimd_table_source_leaves_resume(test);
+	if (READ_ONCE(test->status) == KUNIT_FAILURE)
+		return;
+
 	ledger = orlix_tcti_target_proof_ingestion_ledger_create(
 		ARRAY_SIZE(records));
 	KUNIT_ASSERT_NOT_NULL(test, ledger);
@@ -860,6 +930,9 @@ static void orlix_tcti_advsimd_table_fixed_bit_neighbors_resume(
 			const struct orlix_tcti_advsimd_table_leaf *union_leaf;
 			struct orlix_tcti_target_native_result_record *record = NULL;
 			struct orlix_tcti_decoded_instruction decoded;
+			enum orlix_tcti_decode_class expected_class;
+			u16 expected_owner;
+			u16 owner_ordinal;
 			size_t owners;
 			u32 instruction;
 
@@ -868,29 +941,39 @@ static void orlix_tcti_advsimd_table_fixed_bit_neighbors_resume(
 			fixed_mutations++;
 			instruction = canonical ^ BIT(bit);
 			union_leaf = orlix_tcti_advsimd_table_union_leaf(instruction);
-			owners = orlix_tcti_advsimd_table_source_owner_count(
-				artifact, instruction);
+			expected_owner =
+				orlix_tcti_advsimd_table_expected_neighbor_owner(
+					leaf_index, bit);
+			owners = orlix_tcti_advsimd_table_source_owner(
+				artifact, instruction, &owner_ordinal);
 			KUNIT_ASSERT_NE(test, SIZE_MAX, owners);
 			decoded = orlix_tcti_decode_aarch64(instruction);
-			if (union_leaf) {
-				union_neighbors++;
-				KUNIT_EXPECT_GT(test, owners, 0U);
-				KUNIT_EXPECT_EQ(test,
-					ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP,
+			if (expected_owner != ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER) {
+				KUNIT_ASSERT_EQ(test, 1U, owners);
+				KUNIT_ASSERT_EQ(test, expected_owner, owner_ordinal);
+				expected_class =
+					orlix_tcti_advsimd_table_expected_neighbor_class(
+						expected_owner);
+				KUNIT_ASSERT_NE(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, expected_class,
+					decoded.decode_class);
+				if (!union_leaf) {
+					owned_neighbors++;
+					continue;
+				}
+				union_neighbors++;
+				KUNIT_EXPECT_EQ(test, union_leaf->source_ordinal,
+					expected_owner);
 				KUNIT_EXPECT_EQ(test, union_leaf->operation,
 					decoded.simd_table_lookup_op);
 				KUNIT_EXPECT_EQ(test, union_leaf->table_count,
 					decoded.simd_table_count);
 				continue;
 			}
-			if (owners) {
-				owned_neighbors++;
-				KUNIT_EXPECT_NE(test,
-					ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP,
-					decoded.decode_class);
-				continue;
-			}
+			KUNIT_ASSERT_EQ(test, 0U, owners);
+			KUNIT_ASSERT_EQ(test,
+				ORLIX_TCTI_ADVSIMD_TABLE_NO_OWNER, owner_ordinal);
 			rejected_neighbors++;
 			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 				decoded.decode_class);

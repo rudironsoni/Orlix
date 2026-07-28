@@ -1242,6 +1242,7 @@ endif
 
 include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk
+include OrlixKernel/Sources/ports/orlix/kbuild/disposable-tree.mk
 include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/rules.mk
 
 .PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
@@ -1282,7 +1283,7 @@ kselftest: kselftest-install __kselftest-initramfs
 test:
 	@set -euo pipefail; \
 	if [ -z "$(TEST_TYPES)" ]; then \
-		echo "type must name at least one test class: kunit,kselftest,archive-cache" >&2; \
+		echo "type must name at least one test class: kunit,kselftest,archive-cache,disposable-tree" >&2; \
 		exit 1; \
 	fi; \
 	for selected in $(TEST_TYPES); do \
@@ -1290,7 +1291,8 @@ test:
 			kunit) $(MAKE) kunit PROFILE="$(PROFILE)" ;; \
 			kselftest) $(MAKE) kselftest PROFILE="$(PROFILE)" libc="$(libc)" ;; \
 			archive-cache) $(MAKE) -f OrlixKernel/Makefile __archive-cache-tests ;; \
-			*) echo "unsupported test type: $$selected (expected kunit, kselftest, or archive-cache)" >&2; exit 1 ;; \
+			disposable-tree) $(MAKE) -f OrlixKernel/Makefile __disposable-tree-tests ;; \
+			*) echo "unsupported test type: $$selected (expected kunit, kselftest, archive-cache, or disposable-tree)" >&2; exit 1 ;; \
 		esac; \
 	done
 
@@ -1409,10 +1411,9 @@ run: __ios-simulator-framework xcodeproj
 clean:
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
-	for path in "$(ORLIX_BUILD_ROOT)/OrlixKernel" "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)"; do \
-		if [ -L "$$path" ]; then echo "refusing to clean symlinked path: $$path" >&2; exit 1; fi; \
-		rm -rf "$$path"; \
-	done; \
+	$(orlix_disposable_tree_removal) \
+	orlix_remove_disposable_tree "$(ORLIX_BUILD_ROOT)/OrlixKernel" "generated OrlixKernel output"; \
+	orlix_remove_disposable_tree "$(ORLIX_IOS_SIMULATOR_DERIVED_DATA)" "generated OrlixKernel simulator DerivedData"; \
 	echo "cleaned generated OrlixKernel outputs"
 
 mrproper: clean
@@ -1542,12 +1543,9 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		echo "prepared Orlix kernel port tree: $$port_dir (profile $(PROFILE))"; \
 		exit 0; \
 	fi; \
-	for attempt in 1 2 3; do \
-		rm -rf "$$port_dir" "$$port_tmp_dir" && break; \
-		sleep 1; \
-	done; \
-	[ ! -e "$$port_dir" ] || { echo "failed to remove disposable Orlix kernel port tree: $$port_dir" >&2; exit 1; }; \
-	[ ! -e "$$port_tmp_dir" ] || { echo "failed to remove disposable Orlix kernel port staging tree: $$port_tmp_dir" >&2; exit 1; }; \
+	$(orlix_disposable_tree_removal) \
+	orlix_remove_disposable_tree "$$port_dir" "disposable Orlix kernel port tree"; \
+	orlix_remove_disposable_tree "$$port_tmp_dir" "disposable Orlix kernel port staging tree"; \
 	mkdir -p "$$port_tmp_dir" "$$(dirname "$$port_filelist")"; \
 	rm -f "$$port_filelist"; \
 	for archive_path in $(ORLIX_KERNEL_PORT_ARCHIVE_PATHS); do \

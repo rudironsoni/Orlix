@@ -217,6 +217,25 @@ enum orlix_tcti_target_completion_system_accessor_disposition {
 	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_INVALID,
 };
 
+enum orlix_tcti_target_completion_system_accessor_applicability {
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_EL0_BEHAVIOR_REQUIRED = 1,
+};
+
+enum orlix_tcti_target_completion_system_accessor_semantics {
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_SOURCE_ACCESS_SEMANTICS = 1,
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_GENERIC_LEAF_SEMANTICS,
+};
+
+enum orlix_tcti_target_completion_system_accessor_implementation {
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_IMPLEMENTED = 1,
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_ARCHITECTURAL_REJECTION,
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_UNIMPLEMENTED_REJECTION,
+};
+
+enum orlix_tcti_target_completion_system_accessor_proof_state {
+	ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_PROOF_NOT_OBSERVED = 1,
+};
+
 struct orlix_tcti_target_completion_system_accessor_provenance {
 	const char *architecture;
 	const char *build;
@@ -232,6 +251,15 @@ struct orlix_tcti_target_completion_system_accessor_provenance {
 	size_t ambiguous_count;
 	size_t contradictory_count;
 	size_t invalid_count;
+	size_t semantic_count;
+	size_t source_access_semantics_count;
+	size_t generic_leaf_semantics_count;
+	size_t implemented_count;
+	size_t architectural_rejection_count;
+	size_t unimplemented_rejection_count;
+	size_t concrete_selector_count;
+	size_t symbolic_selector_count;
+	size_t proof_not_observed_count;
 	orlix_tcti_completion_u64 reconciliation_identity;
 };
 
@@ -239,19 +267,33 @@ struct orlix_tcti_target_completion_system_accessor_row {
 	orlix_tcti_completion_u32 accessor_index;
 	orlix_tcti_completion_u32 encoding_index;
 	const char *name;
+	const char *variant_name;
 	const char *generic_leaf;
 	enum orlix_tcti_target_completion_system_accessor_direction direction;
 	enum orlix_tcti_target_completion_system_accessor_disposition disposition;
 	orlix_tcti_completion_u32 selector_count;
 	orlix_tcti_completion_u32 condition_expression;
+	orlix_tcti_completion_u32 access_expression;
+	orlix_tcti_completion_u32 concrete_selector;
+	enum orlix_tcti_target_completion_system_accessor_applicability applicability;
+	enum orlix_tcti_target_completion_system_accessor_semantics semantics;
+	enum orlix_tcti_target_completion_system_accessor_implementation implementation;
+	enum orlix_tcti_target_completion_system_accessor_proof_state proof_state;
 	orlix_tcti_completion_u64 selector_identity;
 	orlix_tcti_completion_u64 condition_identity;
+	orlix_tcti_completion_u64 access_identity;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
 	orlix_tcti_completion_u64 accessor_source_offset;
 	orlix_tcti_completion_u64 accessor_source_length;
 	orlix_tcti_completion_u64 encoding_source_offset;
 	orlix_tcti_completion_u64 encoding_source_length;
 	orlix_tcti_completion_u64 condition_source_offset;
 	orlix_tcti_completion_u64 condition_source_length;
+	orlix_tcti_completion_u64 access_source_offset;
+	orlix_tcti_completion_u64 access_source_length;
 };
 
 enum orlix_tcti_target_completion_error {
@@ -345,6 +387,9 @@ struct orlix_tcti_target_completion_result {
 	size_t mapped_system_accessor_rows;
 	size_t nonmapped_system_accessor_rows;
 	size_t invalid_system_accessor_rows;
+	size_t implemented_system_accessor_rows;
+	size_t rejected_system_accessor_rows;
+	size_t unobserved_system_accessor_proof_rows;
 	/* Checked feature AST.FIELD-to-register-domain relationships. */
 	size_t feature_field_domain_rows;
 	size_t mapped_feature_field_domain_rows;

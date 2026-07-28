@@ -1,73 +1,36 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Explicit EL0 partition for concrete system-register accessors currently
- * accepted by the production decoder. Register source identities are TREG_REG
- * identifiers from target_register_artifact.def, generated from the pinned
- * Arm AARCHMRS 2026-06 register source.
- *
- * The partition remains incomplete. A selector absent from this table is an
- * unresolved completion blocker. It cannot become an implicit EL0 acceptance.
- * Generic system-move leaves retain their AARCHMRS source ordinals here, while
- * SYS, SYSP, MSRR, and MRRS feature-conditioned variants remain explicitly
- * pending in system_leaf_classification.def.
- *
- * Arguments: source leaf ordinal, instruction source name, generic operation,
- * direction, selector, register source identity, register name, feature
- * predicate, disposition.
+ * Runtime/KUnit adapter for the immutable AARCHMRS system-accessor ledger.
+ * The generated ledger is the sole row source; this file adds no variants and
+ * grants no execution credit.
  */
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xde82U, 1033U, "TPIDR_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xde82U, 1033U, "TPIDR_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xda10U, 711U, "NZCV", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xda10U, 711U, "NZCV", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xda20U, 467U, "FPCR", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xda20U, 467U, "FPCR", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xda21U, 470U, "FPSR", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xda21U, 470U, "FPSR", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xde83U, 1037U, "TPIDRRO_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xd801U, 405U, "CTR_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xd807U, 440U, "DCZID_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xdf00U, 365U, "CNTFRQ_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2284U, "A64.MRS", "MRS", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_READ, 0xdf02U, 389U, "CNTVCT_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_IMPLEMENTED)
-
-/* Writes to the read-only accessors are rejected at EL0 by current OrlixTCTI. */
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xde83U, 1037U, "TPIDRRO_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_PRIVILEGED_REJECTION)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xd801U, 405U, "CTR_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_PRIVILEGED_REJECTION)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xd807U, 440U, "DCZID_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_PRIVILEGED_REJECTION)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xdf00U, 365U, "CNTFRQ_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_PRIVILEGED_REJECTION)
-ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(2283U, "A64.MSRregister", "MSR_reg", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_WRITE, 0xdf02U, 389U, "CNTVCT_EL0", "true", \
-	ORLIX_TCTI_SYSTEM_ACCESSOR_PRIVILEGED_REJECTION)
+#ifndef UINT64_C
+#define UINT64_C(value) value##ULL
+#define ORLIX_TCTI_SYSTEM_ACCESSOR_LOCAL_UINT64_C
+#endif
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
+		direction, disposition, selectors, condition, access, concrete, \
+		applicability, semantics, implementation, proof, selector_identity, \
+		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		accessor_offset, accessor_length, encoding_offset, encoding_length, \
+		condition_offset, condition_length, access_offset, access_length) \
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(accessor, encoding, name, variant, generic, \
+		direction, disposition, selectors, condition, access, concrete, \
+		applicability, semantics, implementation, proof, selector_identity, \
+		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		accessor_offset, accessor_length, encoding_offset, encoding_length, \
+		condition_offset, condition_length, access_offset, access_length)
+#include "target_system_accessor_reconciliation.def"
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+#ifdef ORLIX_TCTI_SYSTEM_ACCESSOR_LOCAL_UINT64_C
+#undef ORLIX_TCTI_SYSTEM_ACCESSOR_LOCAL_UINT64_C
+#undef UINT64_C
+#endif

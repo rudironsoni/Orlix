@@ -8,7 +8,9 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
+#include <target_inventory.h>
 
 #include "../decode_aarch64.h"
 #include "orlix_tcti_test_suites.h"

@@ -105,10 +105,15 @@ system_accessor_provenance = {
 					invalid) \
 	total, mapped, reserved, privileged, unsupported, ambiguous, \
 	contradictory, invalid,
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(total, source, generic, \
+		implemented, architectural, unimplemented, concrete, symbolic, proof) \
+	total, source, generic, implemented, architectural, unimplemented, concrete, \
+	symbolic, proof,
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity) identity,
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(...)
 #include "../isa/target_system_accessor_reconciliation.def"
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -116,22 +121,26 @@ system_accessor_provenance = {
 
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
-#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
-				 disposition, selectors, condition, \
-				 selector_identity, condition_identity, \
-				 accessor_offset, accessor_length, \
-				 encoding_offset, encoding_length, condition_offset, \
-				 condition_length) \
-	{ accessor, encoding, name, generic, direction, disposition, selectors, \
-	  condition, selector_identity, condition_identity, accessor_offset, \
-	  accessor_length, encoding_offset, encoding_length, condition_offset, \
-	  condition_length },
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
+		direction, disposition, selectors, condition, access, concrete, \
+		applicability, semantics, implementation, proof, selector_identity, \
+		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		accessor_offset, accessor_length, encoding_offset, encoding_length, \
+		condition_offset, condition_length, access_offset, access_length) \
+	{ accessor, encoding, name, variant, generic, direction, disposition, selectors, \
+	  condition, access, concrete, applicability, semantics, implementation, proof, \
+	  selector_identity, condition_identity, access_identity, decoder, executor, \
+	  suite, test_case, accessor_offset, accessor_length, encoding_offset, \
+	  encoding_length, condition_offset, condition_length, access_offset, \
+	  access_length },
 static const struct orlix_tcti_target_completion_system_accessor_row
 system_accessor_rows[] = {
 #include "../isa/target_system_accessor_reconciliation.def"
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -903,13 +912,25 @@ static orlix_tcti_completion_u64 system_accessor_identity(
 		identity = accessor_identity_u64(identity, row->accessor_index);
 		identity = accessor_identity_u64(identity, row->encoding_index);
 		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->variant_name);
 		identity = accessor_identity_text(identity, row->generic_leaf);
 		identity = accessor_identity_u64(identity, row->direction);
 		identity = accessor_identity_u64(identity, row->disposition);
 		identity = accessor_identity_u64(identity, row->selector_count);
 		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->access_expression);
+		identity = accessor_identity_u64(identity, row->concrete_selector);
 		identity = accessor_identity_u64(identity, row->selector_identity);
 		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity, row->access_identity);
+		identity = accessor_identity_u64(identity, row->applicability);
+		identity = accessor_identity_u64(identity, row->semantics);
+		identity = accessor_identity_u64(identity, row->implementation);
+		identity = accessor_identity_u64(identity, row->proof_state);
+		identity = accessor_identity_text(identity, row->decoder_owner);
+		identity = accessor_identity_text(identity, row->execution_owner);
+		identity = accessor_identity_text(identity, row->kunit_suite);
+		identity = accessor_identity_text(identity, row->kunit_case);
 		identity = accessor_identity_u64(identity,
 			row->accessor_source_offset);
 		identity = accessor_identity_u64(identity,
@@ -922,6 +943,8 @@ static orlix_tcti_completion_u64 system_accessor_identity(
 			row->condition_source_offset);
 		identity = accessor_identity_u64(identity,
 			row->condition_source_length);
+		identity = accessor_identity_u64(identity, row->access_source_offset);
+		identity = accessor_identity_u64(identity, row->access_source_length);
 	}
 	return identity;
 }
@@ -935,6 +958,11 @@ int orlix_tcti_target_completion_validate_system_accessors(
 	struct orlix_tcti_target_completion_result *result)
 {
 	size_t actual[7] = { 0 };
+	size_t semantic_actual[8] = { 0 };
+	size_t rndr = 0;
+	size_t rndrrs = 0;
+	size_t mrs = 0, msr = 0, sys = 0, pstate = 0;
+	size_t msrr = 0, mrrs = 0, sysp = 0, sysl = 0;
 	size_t index;
 
 	if (!result)
@@ -955,6 +983,15 @@ int orlix_tcti_target_completion_validate_system_accessors(
 	    provenance->accessor_count !=
 		    ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
 	    accessor_count != ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS ||
+	    provenance->semantic_count != accessor_count ||
+	    provenance->source_access_semantics_count +
+		    provenance->generic_leaf_semantics_count != accessor_count ||
+	    provenance->implemented_count +
+		    provenance->architectural_rejection_count +
+		    provenance->unimplemented_rejection_count != accessor_count ||
+	    provenance->concrete_selector_count +
+		    provenance->symbolic_selector_count != accessor_count ||
+	    provenance->proof_not_observed_count != accessor_count ||
 	    provenance->mapped_count + provenance->reserved_count +
 			    provenance->privileged_count +
 			    provenance->unsupported_count +
@@ -973,7 +1010,9 @@ int orlix_tcti_target_completion_validate_system_accessors(
 		const struct orlix_tcti_target_completion_system_accessor_row *row =
 			&accessors[index];
 		size_t previous;
-		bool valid = !empty(row->name) &&
+		bool implemented = false;
+		bool architectural_rejection = false;
+		bool valid = !empty(row->name) && !empty(row->variant_name) &&
 			!strncmp(row->name, "A64.", 4U) &&
 			row->direction >=
 				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ &&
@@ -984,7 +1023,60 @@ int orlix_tcti_target_completion_validate_system_accessors(
 			row->disposition <=
 				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_INVALID &&
 			register_source_span_valid(row->accessor_source_offset,
-						   row->accessor_source_length);
+						   row->accessor_source_length) &&
+			row->applicability ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_EL0_BEHAVIOR_REQUIRED &&
+			row->proof_state ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_PROOF_NOT_OBSERVED &&
+			row->access_identity &&
+			!empty(row->decoder_owner) &&
+			!strcmp(row->decoder_owner, "orlix_tcti_decode_aarch64") &&
+			!empty(row->execution_owner) && !empty(row->kunit_suite) &&
+			!strcmp(row->kunit_suite,
+				"orlix-tcti-source-leaf-classification") &&
+			!empty(row->kunit_case) &&
+			!strcmp(row->kunit_case,
+				"orlix_tcti_system_accessor_partition_binds_source_metadata");
+
+		implemented = (!strcmp(row->variant_name, "TPIDR_EL0") ||
+			!strcmp(row->variant_name, "NZCV") ||
+			!strcmp(row->variant_name, "FPCR") ||
+			!strcmp(row->variant_name, "FPSR")) &&
+			(row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ ||
+			 row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_WRITE);
+		implemented = implemented ||
+			((!strcmp(row->variant_name, "TPIDRRO_EL0") ||
+			  !strcmp(row->variant_name, "CTR_EL0") ||
+			  !strcmp(row->variant_name, "DCZID_EL0") ||
+			  !strcmp(row->variant_name, "CNTFRQ_EL0") ||
+			  !strcmp(row->variant_name, "CNTVCT_EL0")) &&
+			 row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ);
+		architectural_rejection =
+			(!strcmp(row->variant_name, "TPIDRRO_EL0") ||
+			 !strcmp(row->variant_name, "CTR_EL0") ||
+			 !strcmp(row->variant_name, "DCZID_EL0") ||
+			 !strcmp(row->variant_name, "CNTFRQ_EL0") ||
+			 !strcmp(row->variant_name, "CNTVCT_EL0")) &&
+			row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_WRITE;
+		valid = valid && row->implementation ==
+			(implemented ? ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_IMPLEMENTED :
+			 architectural_rejection ?
+			 ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_ARCHITECTURAL_REJECTION :
+			 ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_UNIMPLEMENTED_REJECTION) &&
+			!strcmp(row->execution_owner, implemented ?
+				"orlix_tcti_execute_system_register" :
+				"orlix_tcti_resume_user");
+		if (row->access_expression == UINT32_MAX)
+			valid = valid && row->semantics ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_GENERIC_LEAF_SEMANTICS &&
+				((!row->access_source_offset && !row->access_source_length) ||
+				 register_source_span_valid(row->access_source_offset,
+							    row->access_source_length));
+		else
+			valid = valid && row->semantics ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_SOURCE_ACCESS_SEMANTICS &&
+				register_source_span_valid(row->access_source_offset,
+							   row->access_source_length);
 
 		if (valid && row->disposition ==
 				     ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED)
@@ -1015,6 +1107,51 @@ int orlix_tcti_target_completion_validate_system_accessors(
 			continue;
 		}
 		actual[row->disposition]++;
+		semantic_actual[row->semantics ==
+			ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_SOURCE_ACCESS_SEMANTICS ? 0 : 1]++;
+		semantic_actual[implemented ? 2 : architectural_rejection ? 3 : 4]++;
+		semantic_actual[row->concrete_selector == UINT32_MAX ? 6 : 5]++;
+		semantic_actual[7]++;
+		if (!strcmp(row->generic_leaf, "MRS_RS_systemmove"))
+			mrs++;
+		else if (!strcmp(row->generic_leaf, "MSR_SR_systemmove"))
+			msr++;
+		else if (!strcmp(row->generic_leaf, "SYS_CR_systeminstrs"))
+			sys++;
+		else if (!strcmp(row->generic_leaf, "MSR_SI_pstate"))
+			pstate++;
+		else if (!strcmp(row->generic_leaf, "MSRR_SR_systemmovepr"))
+			msrr++;
+		else if (!strcmp(row->generic_leaf, "MRRS_RS_systemmovepr"))
+			mrrs++;
+		else if (!strcmp(row->generic_leaf, "SYSP_CR_syspairinstrs"))
+			sysp++;
+		else if (!strcmp(row->generic_leaf, "SYSL_RC_systeminstrs"))
+			sysl++;
+		if (!strcmp(row->variant_name, "RNDR")) {
+			valid = !strcmp(row->generic_leaf, "MRS_RS_systemmove") &&
+				row->direction ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ &&
+				row->concrete_selector == 0x5920U;
+			rndr++;
+		} else if (!strcmp(row->variant_name, "RNDRRS")) {
+			valid = !strcmp(row->generic_leaf, "MRS_RS_systemmove") &&
+				row->direction ==
+				ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ &&
+				row->concrete_selector == 0x5921U;
+			rndrrs++;
+		}
+		if (!valid) {
+			result->invalid_system_accessor_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+			continue;
+		}
+		if (implemented)
+			result->implemented_system_accessor_rows++;
+		else
+			result->rejected_system_accessor_rows++;
+		result->unobserved_system_accessor_proof_rows++;
 		if (row->disposition ==
 		    ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_MAPPED) {
 			result->mapped_system_accessor_rows++;
@@ -1038,6 +1175,21 @@ int orlix_tcti_target_completion_validate_system_accessors(
 		    provenance->contradictory_count ||
 	    actual[ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_INVALID] !=
 	    provenance->invalid_count) {
+		result->invalid_system_accessor_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);
+	}
+	if (semantic_actual[0] != provenance->source_access_semantics_count ||
+	    semantic_actual[1] != provenance->generic_leaf_semantics_count ||
+	    semantic_actual[2] != provenance->implemented_count ||
+	    semantic_actual[3] != provenance->architectural_rejection_count ||
+	    semantic_actual[4] != provenance->unimplemented_rejection_count ||
+	    semantic_actual[5] != provenance->concrete_selector_count ||
+	    semantic_actual[6] != provenance->symbolic_selector_count ||
+	    semantic_actual[7] != provenance->proof_not_observed_count ||
+	    mrs != 830U || msr != 698U || sys != 445U || pstate != 13U ||
+	    msrr != 13U || mrrs != 13U || sysp != 1U || sysl != 1U ||
+	    rndr != 1U || rndrrs != 1U) {
 		result->invalid_system_accessor_rows++;
 		record_error(result,
 			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR);

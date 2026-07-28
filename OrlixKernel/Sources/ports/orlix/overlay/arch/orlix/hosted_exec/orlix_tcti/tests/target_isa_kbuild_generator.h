@@ -98,6 +98,15 @@ struct orlix_tcti_a64_kbuild_system_accessor_metadata {
 	uint32_t ambiguous_count;
 	uint32_t contradictory_count;
 	uint32_t invalid_count;
+	uint32_t semantic_count;
+	uint32_t source_access_semantics_count;
+	uint32_t generic_leaf_semantics_count;
+	uint32_t implemented_count;
+	uint32_t architectural_rejection_count;
+	uint32_t unimplemented_rejection_count;
+	uint32_t concrete_selector_count;
+	uint32_t symbolic_selector_count;
+	uint32_t proof_not_observed_count;
 	uint64_t reconciliation_identity;
 };
 
@@ -105,19 +114,33 @@ struct orlix_tcti_a64_kbuild_system_accessor_row {
 	uint32_t accessor_index;
 	uint32_t encoding_index;
 	const char *name;
+	const char *variant_name;
 	const char *generic_leaf;
 	enum orlix_tcti_a64_kbuild_system_accessor_direction direction;
 	enum orlix_tcti_a64_kbuild_system_accessor_disposition disposition;
 	uint32_t selector_count;
 	uint32_t condition_expression;
+	uint32_t access_expression;
+	uint32_t concrete_selector;
+	uint32_t applicability;
+	uint32_t semantics;
+	uint32_t implementation;
+	uint32_t proof_state;
 	uint64_t selector_identity;
 	uint64_t condition_identity;
+	uint64_t access_identity;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
 	uint32_t accessor_source_offset;
 	uint32_t accessor_source_length;
 	uint32_t encoding_source_offset;
 	uint32_t encoding_source_length;
 	uint32_t condition_source_offset;
 	uint32_t condition_source_length;
+	uint32_t access_source_offset;
+	uint32_t access_source_length;
 };
 
 enum orlix_tcti_a64_kbuild_generator_error {

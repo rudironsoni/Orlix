@@ -110,6 +110,25 @@ enum orlix_tcti_target_linux_execution_state {
 	ORLIX_TCTI_TARGET_LINUX_EXECUTION_OBSERVED,
 };
 
+enum orlix_tcti_target_system_accessor_applicability {
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_EL0_BEHAVIOR_REQUIRED = 1,
+};
+
+enum orlix_tcti_target_system_accessor_semantics {
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_SOURCE_ACCESS_SEMANTICS = 1,
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_GENERIC_LEAF_SEMANTICS,
+};
+
+enum orlix_tcti_target_system_accessor_implementation {
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_IMPLEMENTED = 1,
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_ARCHITECTURAL_REJECTION,
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_UNIMPLEMENTED_REJECTION,
+};
+
+enum orlix_tcti_target_system_accessor_proof_state {
+	ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_PROOF_NOT_OBSERVED = 1,
+};
+
 struct orlix_tcti_target_linux_proof_source_identity {
 	orlix_tcti_proof_u32 source_index;
 	orlix_tcti_proof_u32 secondary_index;
@@ -120,14 +139,30 @@ struct orlix_tcti_target_linux_proof_source_identity {
 	orlix_tcti_proof_u32 encoding_mask;
 	orlix_tcti_proof_u32 encoding_pattern;
 	const char *condition_tcnd_hex;
+	const char *variant_name;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
+	orlix_tcti_proof_u32 access_expression;
+	orlix_tcti_proof_u32 selector_count;
+	orlix_tcti_proof_u32 condition_expression;
+	orlix_tcti_proof_u32 concrete_selector;
+	enum orlix_tcti_target_system_accessor_applicability applicability;
+	enum orlix_tcti_target_system_accessor_semantics semantics;
+	enum orlix_tcti_target_system_accessor_implementation implementation;
+	enum orlix_tcti_target_system_accessor_proof_state proof_state;
 	orlix_tcti_proof_u64 identity;
 	orlix_tcti_proof_u64 condition_identity;
+	orlix_tcti_proof_u64 access_identity;
 	orlix_tcti_proof_u64 source_offset;
 	orlix_tcti_proof_u64 source_length;
 	orlix_tcti_proof_u64 secondary_offset;
 	orlix_tcti_proof_u64 secondary_length;
 	orlix_tcti_proof_u64 condition_offset;
 	orlix_tcti_proof_u64 condition_length;
+	orlix_tcti_proof_u64 access_offset;
+	orlix_tcti_proof_u64 access_length;
 };
 
 struct orlix_tcti_target_linux_proof_disposition_row {
@@ -253,6 +288,8 @@ int orlix_tcti_target_proof_registry_validate(
 int orlix_tcti_target_proof_registry_source_bound_projection_validate(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
 	enum orlix_tcti_target_proof_registry_error *error);
+int orlix_tcti_target_kunit_dependency_validate_for_test(
+	const char *source, const char *dependency, const char *dependency_sha256);
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance);
 int orlix_tcti_target_proof_source_evidence_validate(

@@ -28,7 +28,12 @@ struct classification_string_offsets {
 
 struct system_accessor_string_offsets {
 	uint32_t name;
+	uint32_t variant_name;
 	uint32_t generic_leaf;
+	uint32_t decoder_owner;
+	uint32_t execution_owner;
+	uint32_t kunit_suite;
+	uint32_t kunit_case;
 };
 
 struct generated_offsets {
@@ -117,13 +122,25 @@ uint64_t orlix_tcti_a64_kbuild_system_accessor_identity(
 		identity = accessor_identity_u64(identity, row->accessor_index);
 		identity = accessor_identity_u64(identity, row->encoding_index);
 		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->variant_name);
 		identity = accessor_identity_text(identity, row->generic_leaf);
 		identity = accessor_identity_u64(identity, row->direction);
 		identity = accessor_identity_u64(identity, row->disposition);
 		identity = accessor_identity_u64(identity, row->selector_count);
 		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->access_expression);
+		identity = accessor_identity_u64(identity, row->concrete_selector);
 		identity = accessor_identity_u64(identity, row->selector_identity);
 		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity, row->access_identity);
+		identity = accessor_identity_u64(identity, row->applicability);
+		identity = accessor_identity_u64(identity, row->semantics);
+		identity = accessor_identity_u64(identity, row->implementation);
+		identity = accessor_identity_u64(identity, row->proof_state);
+		identity = accessor_identity_text(identity, row->decoder_owner);
+		identity = accessor_identity_text(identity, row->execution_owner);
+		identity = accessor_identity_text(identity, row->kunit_suite);
+		identity = accessor_identity_text(identity, row->kunit_case);
 		identity = accessor_identity_u64(identity,
 			row->accessor_source_offset);
 		identity = accessor_identity_u64(identity,
@@ -136,6 +153,8 @@ uint64_t orlix_tcti_a64_kbuild_system_accessor_identity(
 			row->condition_source_offset);
 		identity = accessor_identity_u64(identity,
 			row->condition_source_length);
+		identity = accessor_identity_u64(identity, row->access_source_offset);
+		identity = accessor_identity_u64(identity, row->access_source_length);
 	}
 	return identity;
 }
@@ -293,6 +312,15 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 	if (accessor_metadata->accessor_count !=
 			ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
 	    accessor_count != ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
+	    accessor_metadata->semantic_count != accessor_count ||
+	    accessor_metadata->source_access_semantics_count +
+		    accessor_metadata->generic_leaf_semantics_count != accessor_count ||
+	    accessor_metadata->implemented_count +
+		    accessor_metadata->architectural_rejection_count +
+		    accessor_metadata->unimplemented_rejection_count != accessor_count ||
+	    accessor_metadata->concrete_selector_count +
+		    accessor_metadata->symbolic_selector_count != accessor_count ||
+	    accessor_metadata->proof_not_observed_count != accessor_count ||
 	    accessor_metadata->mapped_count +
 		    accessor_metadata->reserved_count +
 		    accessor_metadata->privileged_count +
@@ -316,6 +344,7 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 		int generic_leaf_found = 0;
 
 		if (!row->name || strncmp(row->name, "A64.", 4U) ||
+		    !row->variant_name || !row->variant_name[0] ||
 		    !row->generic_leaf || !row->generic_leaf[0] ||
 		    row->direction <
 			    ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_READ ||
@@ -324,6 +353,11 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 		    row->disposition != ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_MAPPED ||
 		    row->encoding_index == UINT32_MAX || !row->selector_count ||
 		    !row->selector_identity || !row->condition_identity ||
+		    !row->access_identity || row->applicability != 1U ||
+		    (row->semantics != 1U && row->semantics != 2U) ||
+		    (row->implementation < 1U || row->implementation > 3U) ||
+		    row->proof_state != 1U || !row->decoder_owner ||
+		    !row->execution_owner || !row->kunit_suite || !row->kunit_case ||
 		    row->condition_expression == UINT32_MAX ||
 		    !row->accessor_source_length || !row->encoding_source_length ||
 		    !row->condition_source_length)
@@ -423,8 +457,18 @@ static int build_offsets(
 	for (index = 0; index < accessor_count; index++)
 		if (add_string_offset(&pool_size, accessors[index].name,
 				      &offsets->accessors[index].name) ||
+		    add_string_offset(&pool_size, accessors[index].variant_name,
+				      &offsets->accessors[index].variant_name) ||
 		    add_string_offset(&pool_size, accessors[index].generic_leaf,
-				      &offsets->accessors[index].generic_leaf))
+				      &offsets->accessors[index].generic_leaf) ||
+		    add_string_offset(&pool_size, accessors[index].decoder_owner,
+				      &offsets->accessors[index].decoder_owner) ||
+		    add_string_offset(&pool_size, accessors[index].execution_owner,
+				      &offsets->accessors[index].execution_owner) ||
+		    add_string_offset(&pool_size, accessors[index].kunit_suite,
+				      &offsets->accessors[index].kunit_suite) ||
+		    add_string_offset(&pool_size, accessors[index].kunit_case,
+				      &offsets->accessors[index].kunit_case))
 			return -1;
 	offsets->pool_size = (uint32_t)pool_size;
 	return 0;
@@ -529,16 +573,26 @@ static int emit_header(
 		  "\tu32 mapped_count; u32 reserved_count; u32 privileged_count;\n"
 		  "\tu32 unsupported_count; u32 ambiguous_count;\n"
 		  "\tu32 contradictory_count; u32 invalid_count;\n"
+		  "\tu32 semantic_count; u32 source_access_semantics_count;\n"
+		  "\tu32 generic_leaf_semantics_count; u32 implemented_count;\n"
+		  "\tu32 architectural_rejection_count;\n"
+		  "\tu32 unimplemented_rejection_count;\n"
+		  "\tu32 concrete_selector_count; u32 symbolic_selector_count;\n"
+		  "\tu32 proof_not_observed_count;\n"
 		  "\tu64 reconciliation_identity;\n"
 		  "};\n"
 		  "struct orlix_tcti_a64_generated_system_accessor_row {\n"
-		  "\tu32 accessor_index; u32 encoding_index; u32 name;\n"
+		  "\tu32 accessor_index; u32 encoding_index; u32 name; u32 variant_name;\n"
 		  "\tu32 generic_leaf; u32 selector_count; u32 condition_expression;\n"
-		  "\tu64 selector_identity; u64 condition_identity;\n"
+		  "\tu32 access_expression; u32 concrete_selector;\n"
+		  "\tu64 selector_identity; u64 condition_identity; u64 access_identity;\n"
+		  "\tu32 decoder_owner; u32 execution_owner; u32 kunit_suite; u32 kunit_case;\n"
 		  "\tu32 accessor_source_offset; u32 accessor_source_length;\n"
 		  "\tu32 encoding_source_offset; u32 encoding_source_length;\n"
 		  "\tu32 condition_source_offset; u32 condition_source_length;\n"
-		  "\tu8 direction; u8 disposition; u8 reserved[2];\n"
+		  "\tu32 access_source_offset; u32 access_source_length;\n"
+		  "\tu8 direction; u8 disposition; u8 applicability; u8 semantics;\n"
+		  "\tu8 implementation; u8 proof_state; u8 reserved[2];\n"
 		  "};\n"
 		  "static const u8 orlix_tcti_a64_generated_strings[] = {\n",
 		  output) == EOF)
@@ -567,7 +621,12 @@ static int emit_header(
 			return -1;
 	for (index = 0; index < accessor_count; index++)
 		if (emit_pool_text(output, accessors[index].name, &column) ||
-		    emit_pool_text(output, accessors[index].generic_leaf, &column))
+		    emit_pool_text(output, accessors[index].variant_name, &column) ||
+		    emit_pool_text(output, accessors[index].generic_leaf, &column) ||
+		    emit_pool_text(output, accessors[index].decoder_owner, &column) ||
+		    emit_pool_text(output, accessors[index].execution_owner, &column) ||
+		    emit_pool_text(output, accessors[index].kunit_suite, &column) ||
+		    emit_pool_text(output, accessors[index].kunit_case, &column))
 			return -1;
 	if (column && fputc('\n', output) == EOF)
 		return -1;
@@ -614,7 +673,8 @@ static int emit_header(
 		    "orlix_tcti_a64_generated_system_accessor_metadata = {\n"
 		    "\t%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %"
 		    PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU, %uU, "
-		    "%uU, %uU, %uU, %uU, %uU, 0x%016" PRIx64 "ULL,\n};\n"
+		    "%uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, "
+		    "%uU, %uU, %uU, %uU, 0x%016" PRIx64 "ULL,\n};\n"
 		    "static const struct orlix_tcti_a64_generated_system_accessor_row "
 		    "orlix_tcti_a64_generated_system_accessors[2014] = {\n",
 		    offsets->accessor_metadata[0], offsets->accessor_metadata[1],
@@ -628,6 +688,15 @@ static int emit_header(
 		    accessor_metadata->ambiguous_count,
 		    accessor_metadata->contradictory_count,
 		    accessor_metadata->invalid_count,
+		    accessor_metadata->semantic_count,
+		    accessor_metadata->source_access_semantics_count,
+		    accessor_metadata->generic_leaf_semantics_count,
+		    accessor_metadata->implemented_count,
+		    accessor_metadata->architectural_rejection_count,
+		    accessor_metadata->unimplemented_rejection_count,
+		    accessor_metadata->concrete_selector_count,
+		    accessor_metadata->symbolic_selector_count,
+		    accessor_metadata->proof_not_observed_count,
 		    accessor_metadata->reconciliation_identity) < 0)
 		return -1;
 	for (index = 0; index < accessor_count; index++) {
@@ -639,22 +708,34 @@ static int emit_header(
 		if (fprintf(output,
 			    "\t{ %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
 			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
-		    "U, 0x%016" PRIx64 "ULL, 0x%016" PRIx64
-		    "ULL, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
-		    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
-		    "U, %uU, %uU, { 0U, 0U } },\n",
+			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			    "U, 0x%016" PRIx64 "ULL, 0x%016" PRIx64
+			    "ULL, 0x%016" PRIx64 "ULL, %" PRIu32 "U, %" PRIu32
+			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			    "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+			    "U, %" PRIu32 "U, %uU, %uU, %uU, %uU, %uU, %uU, "
+			    "{ 0U, 0U } },\n",
 			    row->accessor_index, row->encoding_index,
-			    strings->name, strings->generic_leaf,
-		    row->selector_count, row->condition_expression,
-		    row->selector_identity, row->condition_identity,
+			    strings->name, strings->variant_name, strings->generic_leaf,
+			    row->selector_count, row->condition_expression,
+			    row->access_expression, row->concrete_selector,
+			    row->selector_identity, row->condition_identity,
+			    row->access_identity, strings->decoder_owner,
+			    strings->execution_owner, strings->kunit_suite,
+			    strings->kunit_case,
 			    row->accessor_source_offset,
 			    row->accessor_source_length,
 			    row->encoding_source_offset,
-		    row->encoding_source_length,
-		    row->condition_source_offset,
-		    row->condition_source_length,
+			    row->encoding_source_length,
+			    row->condition_source_offset,
+			    row->condition_source_length,
+			    row->access_source_offset,
+			    row->access_source_length,
 			    (unsigned int)row->direction,
-			    (unsigned int)row->disposition) < 0)
+			    (unsigned int)row->disposition,
+			    row->applicability, row->semantics, row->implementation,
+			    row->proof_state) < 0)
 			return -1;
 	}
 	return fputs("};\n"
@@ -810,11 +891,18 @@ builtin_classification[] = {
 		total, mapped, reserved, privileged, unsupported, ambiguous, \
 		contradictory, invalid \
 	};
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(total, source, generic, \
+		implemented, architectural, unimplemented, concrete, symbolic, proof) \
+	static const uint32_t builtin_accessor_semantic_counts[] = { \
+		total, source, generic, implemented, architectural, unimplemented, \
+		concrete, symbolic, proof \
+	};
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity_value) \
 	static const uint64_t builtin_accessor_identity = identity_value;
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(...)
 #include "../isa/target_system_accessor_reconciliation.def"
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -828,26 +916,36 @@ builtin_accessor_metadata = {
 	builtin_accessor_counts[2], builtin_accessor_counts[3],
 	builtin_accessor_counts[4], builtin_accessor_counts[5],
 	builtin_accessor_counts[6], builtin_accessor_counts[7],
+	builtin_accessor_semantic_counts[0], builtin_accessor_semantic_counts[1],
+	builtin_accessor_semantic_counts[2], builtin_accessor_semantic_counts[3],
+	builtin_accessor_semantic_counts[4], builtin_accessor_semantic_counts[5],
+	builtin_accessor_semantic_counts[6], builtin_accessor_semantic_counts[7],
+	builtin_accessor_semantic_counts[8],
 	builtin_accessor_identity,
 };
 
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
-#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, generic, \
-				 direction_value, disposition_value, selectors, \
-				 condition, selector_identity_value, \
-				 condition_identity_value, accessor_offset, accessor_length, \
-				 encoding_offset, encoding_length, condition_offset, \
-				 condition_length) \
-	{ accessor, encoding, name_value, generic, direction_value, \
-	  disposition_value, selectors, condition, selector_identity_value, \
-	  condition_identity_value, accessor_offset, accessor_length, \
-	  encoding_offset, encoding_length, condition_offset, condition_length },
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, variant, \
+		generic, direction_value, disposition_value, selectors, condition, access, \
+		concrete, applicability, semantics, implementation, proof, \
+		selector_identity_value, condition_identity_value, access_identity, \
+		decoder, executor, suite, test_case, accessor_offset, accessor_length, \
+		encoding_offset, encoding_length, condition_offset, condition_length, \
+		access_offset, access_length) \
+	{ accessor, encoding, name_value, variant, generic, direction_value, \
+	  disposition_value, selectors, condition, access, concrete, applicability, \
+	  semantics, implementation, proof, selector_identity_value, \
+	  condition_identity_value, access_identity, decoder, executor, suite, \
+	  test_case, accessor_offset, accessor_length, encoding_offset, encoding_length, \
+	  condition_offset, condition_length, access_offset, access_length },
 static const struct orlix_tcti_a64_kbuild_system_accessor_row builtin_accessors[] = {
 #include "../isa/target_system_accessor_reconciliation.def"
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE

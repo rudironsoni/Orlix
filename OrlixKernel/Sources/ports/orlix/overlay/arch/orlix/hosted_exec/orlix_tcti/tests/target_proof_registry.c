@@ -349,6 +349,9 @@ struct kunit_source_provenance {
 	const char *source;
 	const char *sha256;
 	const char *object;
+	const char *dependency;
+	const char *dependency_sha256;
+	const char *include_directive;
 };
 
 struct kunit_case_provenance {
@@ -393,37 +396,56 @@ struct system_accessor_binding {
 	orlix_tcti_proof_u32 accessor_index;
 	orlix_tcti_proof_u32 encoding_index;
 	const char *name;
+	const char *variant_name;
 	const char *generic_leaf;
 	orlix_tcti_proof_u32 direction;
 	orlix_tcti_proof_u32 disposition;
 	orlix_tcti_proof_u32 selector_count;
 	orlix_tcti_proof_u32 condition_expression;
+	orlix_tcti_proof_u32 access_expression;
+	orlix_tcti_proof_u32 concrete_selector;
+	enum orlix_tcti_target_system_accessor_applicability applicability;
+	enum orlix_tcti_target_system_accessor_semantics semantics;
+	enum orlix_tcti_target_system_accessor_implementation implementation;
+	enum orlix_tcti_target_system_accessor_proof_state proof_state;
 	orlix_tcti_proof_u64 selector_identity;
 	orlix_tcti_proof_u64 condition_identity;
+	orlix_tcti_proof_u64 access_identity;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
 	orlix_tcti_proof_u64 accessor_source_offset;
 	orlix_tcti_proof_u64 accessor_source_length;
 	orlix_tcti_proof_u64 encoding_source_offset;
 	orlix_tcti_proof_u64 encoding_source_length;
 	orlix_tcti_proof_u64 condition_source_offset;
 	orlix_tcti_proof_u64 condition_source_length;
+	orlix_tcti_proof_u64 access_source_offset;
+	orlix_tcti_proof_u64 access_source_length;
 };
 
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
-#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
-				 disposition, selectors, condition, selector_identity, \
-				 condition_identity, accessor_offset, accessor_length, \
-				 encoding_offset, encoding_length, condition_offset, \
-				 condition_length) \
-	{ accessor, encoding, name, generic, direction, disposition, selectors, \
-	  condition, selector_identity, condition_identity, accessor_offset, \
-	  accessor_length, encoding_offset, encoding_length, condition_offset, \
-	  condition_length },
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
+		direction, disposition, selectors, condition, access, concrete, \
+		applicability, semantics, implementation, proof, selector_identity, \
+		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		accessor_offset, accessor_length, encoding_offset, encoding_length, \
+		condition_offset, condition_length, access_offset, access_length) \
+	{ accessor, encoding, name, variant, generic, direction, disposition, selectors, \
+	  condition, access, concrete, applicability, semantics, implementation, proof, \
+	  selector_identity, condition_identity, access_identity, decoder, executor, \
+	  suite, test_case, accessor_offset, accessor_length, encoding_offset, \
+	  encoding_length, condition_offset, condition_length, access_offset, \
+	  access_length },
 static const struct system_accessor_binding system_accessor_bindings[] = {
 #include "../isa/target_system_accessor_reconciliation.def"
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -553,6 +575,12 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"orlix_tcti_source_leaf_classification_test_suite"
 #define SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY \
 	"orlix_tcti_source_leaf_classification_test_cases"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
+#define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
+	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
+#define SYSTEM_ACCESSOR_PARTITION_INCLUDE \
+	"#include \"orlix_tcti_system_accessor_partition_test.h\""
 #define BRANCH_CONTROL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c"
 #define BRANCH_CONTROL_SUITE "orlix-tcti-branch-control-source-bound"
@@ -616,7 +644,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"75a8415bd716bd7f163c75e02fb2f1b5472bfafa00ec4f649dc7067e98086a56"
+	"10e58fbe7aa8ac5e9bed7df97fcb6378d4ee505a04cde84fa5cf35f8a748bd39"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -658,67 +686,72 @@ static const struct source_bound_proof source_bound_proofs[] = {
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ LSE_SOURCE,
 	  "909b0b8965d9cb90c095c8baa1c48c118116cb658be090a354f03b3acdbbe970",
-	  "orlix_tcti_lse_decode_test.o" },
+	  "orlix_tcti_lse_decode_test.o", NULL, NULL, NULL },
 	{ LSE_SOURCE_BOUND_SOURCE,
 	  "22559391c3da9cdcef9fbeb53d2707b712f592fd1d9bfa7c37f6458c632ce2e0",
-	  "orlix_tcti_lse_source_bound_test.o" },
+	  "orlix_tcti_lse_source_bound_test.o", NULL, NULL, NULL },
 	{ LSE128_SOURCE,
 	  "a5bd42cc32291145e9115b41715fef59d93fb0bb34c0ec445805017503153a5f",
-	  "orlix_tcti_lse128_resume_test.o" },
+	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "4f042bd635beaf8ce0a7c9ae9d55d04b1e56e4c93a3a50508ce94afcc454953d",
-	  "orlix_tcti_logical_shifted_register_test.o" },
+	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
 	{ CSSC_SOURCE,
 	  "df3c9b2debd3cc9dc9de78b0a3e48e0c1ad4ab9b046d6390c70be49576f55607",
-	  "orlix_tcti_cssc_min_max_immediate_test.o" },
+	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
-	  "orlix_tcti_add_sub_immediate_test.o" },
+	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL },
 	{ LOGICAL_IMMEDIATE_SOURCE,
 	  "2870f5ec26ff59f7f9d1c95997a1badbb95c0099aace28ebf487853c418ac7c2",
-	  "orlix_tcti_logical_immediate_source_bound_test.o" },
+	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL },
 	{ MOVE_WIDE_SOURCE,
 	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
-	  "orlix_tcti_move_wide_source_bound_test.o" },
+	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_BITOPS_SOURCE,
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
-	  "orlix_tcti_scalar_bitops_source_bound_test.o" },
+	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL },
 	{ VARIABLE_SHIFT_SOURCE,
 	  "a7d8f93e3319c1175ae940763d7c044e9e73a95b8ed01b7d641cdc54cadee181",
-	  "orlix_tcti_variable_shift_source_bound_test.o" },
+	  "orlix_tcti_variable_shift_source_bound_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_REGISTER_SOURCE,
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
-	  "orlix_tcti_add_sub_register_source_bound_test.o" },
+	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "6fbe8cfcbfb448a20ea521f25438f4152509013d23949d0ebc33f4b33064ac7e",
-	  "orlix_tcti_source_leaf_classification_test.o" },
+	  "204da86599452c221e3f5c08ba35ac8f84b8e534e67bb5cc81d97db3c467ec8a",
+	  "orlix_tcti_source_leaf_classification_test.o",
+	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
+	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
+	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
 	{ BRANCH_CONTROL_SOURCE,
 	  "921dd3aab709c395710d1def823fae09394233a2360d51463c87fc7cdd7ea659",
-	  "orlix_tcti_branch_control_source_bound_test.o" },
+	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
-	  "orlix_tcti_decode_test.o" },
+	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
-	  "orlix_tcti_scalar_fp_semantics_test.o" },
+	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
 	  "c1e420d4451b386a8d8af24740bf445c4fbef8701b4a02f4f882416e26f4e1ed",
-	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o" },
+	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_HALVING_SOURCE,
 	  "a0889b69d1cafddf5088b800e00d89b7a123b02ee847645e9a0a8583c1819d62",
-	  "orlix_tcti_advsimd_halving_source_bound_test.o" },
+	  "orlix_tcti_advsimd_halving_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_MUL_SOURCE,
 	  "93e647a701efdf32967ddc75229e6c56e081d1dd0d534f4a9de41803d93ea558",
-	  "orlix_tcti_advsimd_mul_source_bound_test.o" },
+	  "orlix_tcti_advsimd_mul_source_bound_test.o", NULL, NULL, NULL },
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
 	  "0458c2ac841380d2e535e55e6a766268d86de4e42c82c66e9ede5ebd1558581e",
-	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o" },
+	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
+	  NULL, NULL, NULL },
 	{ ADVSIMD_TABLE_SOURCE,
-	  "f1c0214d763ea52bccf22dba6d821150c357a5e8dfee4968e4ef4cf67b9dd26a",
-	  "orlix_tcti_advsimd_table_lookup_source_bound_test.o" },
+	  "ed0a3189d95289b4e0696a95e4455443b451721f189b748ff8e856ba83aa8560",
+	  "orlix_tcti_advsimd_table_lookup_source_bound_test.o",
+	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
-	  "orlix_tcti_integer_conditional_source_bound_test.o" },
+	  "orlix_tcti_integer_conditional_source_bound_test.o", NULL, NULL, NULL },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -3863,6 +3896,42 @@ find_kunit_case(const struct orlix_tcti_target_proof_registry_entry *entry,
 	return NULL;
 }
 
+static bool valid_kunit_dependency(
+	const struct kunit_source_provenance *source_metadata,
+	const char *dependency_sha256)
+{
+	char *dependency;
+	size_t dependency_length;
+	bool valid;
+
+	if (empty(source_metadata->dependency) || empty(dependency_sha256))
+		return false;
+	dependency = read_source(source_metadata->dependency, &dependency_length);
+	if (!dependency)
+		return false;
+	valid = !memchr(dependency, '\0', dependency_length) &&
+		sha256_matches((const orlix_tcti_proof_u8 *)dependency,
+			       dependency_length, dependency_sha256);
+	free(dependency);
+	return valid;
+}
+
+int orlix_tcti_target_kunit_dependency_validate_for_test(
+	const char *source, const char *dependency, const char *dependency_sha256)
+{
+	const struct kunit_source_provenance *source_metadata;
+
+	if (empty(source) || empty(dependency) || empty(dependency_sha256))
+		return -1;
+	source_metadata = find_kunit_source(source);
+	if (!source_metadata || empty(source_metadata->dependency) ||
+	    empty(source_metadata->dependency_sha256) ||
+	    empty(source_metadata->include_directive) ||
+	    strcmp(dependency, source_metadata->dependency))
+		return -1;
+	return valid_kunit_dependency(source_metadata, dependency_sha256) ? 0 : -1;
+}
+
 static bool valid_kunit_provenance(
 	const struct orlix_tcti_target_proof_registry_entry *entry)
 {
@@ -3894,6 +3963,14 @@ static bool valid_kunit_provenance(
 	    !sha256_matches((const orlix_tcti_proof_u8 *)source, source_length,
 			    source_metadata->sha256) ||
 	    !source_registers_suite(source, entry->kunit_suite))
+		goto out;
+	if (!!source_metadata->dependency != !!source_metadata->dependency_sha256 ||
+	    !!source_metadata->dependency != !!source_metadata->include_directive)
+		goto out;
+	if (source_metadata->dependency &&
+	    (!strstr(source, source_metadata->include_directive) ||
+	     !valid_kunit_dependency(source_metadata,
+				     source_metadata->dependency_sha256)))
 		goto out;
 	for (index = 0; index < entry->kunit_case_count; index++) {
 		const struct kunit_case_provenance *case_metadata =
@@ -4691,17 +4768,33 @@ linux_variant_row(size_t ordinal, const struct system_accessor_binding *variant)
 			.secondary_index = variant->accessor_index,
 			.tertiary_index = variant->encoding_index,
 			.name = variant->name,
+			.variant_name = variant->variant_name,
 			.operation_id = variant->generic_leaf,
 			.encoding_mask = variant->direction,
 			.encoding_pattern = variant->disposition,
+			.selector_count = variant->selector_count,
+			.condition_expression = variant->condition_expression,
+			.access_expression = variant->access_expression,
+			.concrete_selector = variant->concrete_selector,
+			.applicability = variant->applicability,
+			.semantics = variant->semantics,
+			.implementation = variant->implementation,
+			.proof_state = variant->proof_state,
 			.identity = variant->selector_identity,
 			.condition_identity = variant->condition_identity,
+			.access_identity = variant->access_identity,
+			.decoder_owner = variant->decoder_owner,
+			.execution_owner = variant->execution_owner,
+			.kunit_suite = variant->kunit_suite,
+			.kunit_case = variant->kunit_case,
 			.source_offset = variant->accessor_source_offset,
 			.source_length = variant->accessor_source_length,
 			.secondary_offset = variant->encoding_source_offset,
 			.secondary_length = variant->encoding_source_length,
 			.condition_offset = variant->condition_source_offset,
 			.condition_length = variant->condition_source_length,
+			.access_offset = variant->access_source_offset,
+			.access_length = variant->access_source_length,
 		},
 		.disposition = policy.disposition,
 		.not_applicable_reason = policy.reason,
@@ -4727,17 +4820,43 @@ static bool linux_source_identity_equal(
 		!strcmp(left->operation_id, right->operation_id) &&
 		left->encoding_mask == right->encoding_mask &&
 		left->encoding_pattern == right->encoding_pattern &&
+		left->selector_count == right->selector_count &&
+		left->condition_expression == right->condition_expression &&
+		left->access_expression == right->access_expression &&
+		left->concrete_selector == right->concrete_selector &&
+		left->applicability == right->applicability &&
+		left->semantics == right->semantics &&
+		left->implementation == right->implementation &&
+		left->proof_state == right->proof_state &&
 		((!left->condition_tcnd_hex && !right->condition_tcnd_hex) ||
 		 (left->condition_tcnd_hex && right->condition_tcnd_hex &&
 		  !strcmp(left->condition_tcnd_hex, right->condition_tcnd_hex))) &&
 		left->identity == right->identity &&
 		left->condition_identity == right->condition_identity &&
+		left->access_identity == right->access_identity &&
+		((!left->variant_name && !right->variant_name) ||
+		 (left->variant_name && right->variant_name &&
+		  !strcmp(left->variant_name, right->variant_name))) &&
+		((!left->decoder_owner && !right->decoder_owner) ||
+		 (left->decoder_owner && right->decoder_owner &&
+		  !strcmp(left->decoder_owner, right->decoder_owner))) &&
+		((!left->execution_owner && !right->execution_owner) ||
+		 (left->execution_owner && right->execution_owner &&
+		  !strcmp(left->execution_owner, right->execution_owner))) &&
+		((!left->kunit_suite && !right->kunit_suite) ||
+		 (left->kunit_suite && right->kunit_suite &&
+		  !strcmp(left->kunit_suite, right->kunit_suite))) &&
+		((!left->kunit_case && !right->kunit_case) ||
+		 (left->kunit_case && right->kunit_case &&
+		  !strcmp(left->kunit_case, right->kunit_case))) &&
 		left->source_offset == right->source_offset &&
 		left->source_length == right->source_length &&
 		left->secondary_offset == right->secondary_offset &&
 		left->secondary_length == right->secondary_length &&
 		left->condition_offset == right->condition_offset &&
-		left->condition_length == right->condition_length;
+		left->condition_length == right->condition_length &&
+		left->access_offset == right->access_offset &&
+		left->access_length == right->access_length;
 }
 
 int orlix_tcti_target_linux_source_policy_validate_for_test(

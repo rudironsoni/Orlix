@@ -94,6 +94,15 @@ static int fixture_init(struct fixture *fixture)
 			.registers_sha256 = ORLIX_TCTI_A64_KBUILD_REGISTERS_SHA256,
 			.accessor_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
 			.mapped_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.semantic_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.source_access_semantics_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.unimplemented_rejection_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.concrete_selector_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.proof_not_observed_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
 		};
 	for (index = 0; index < ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT; index++) {
 		CHECK(snprintf(fixture->accessor_names[index],
@@ -104,6 +113,7 @@ static int fixture_init(struct fixture *fixture)
 				.accessor_index = (uint32_t)index,
 				.encoding_index = (uint32_t)index,
 				.name = fixture->accessor_names[index],
+				.variant_name = fixture->accessor_names[index],
 				.generic_leaf = fixture->source[index].name,
 				.direction =
 					ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_READ,
@@ -111,14 +121,28 @@ static int fixture_init(struct fixture *fixture)
 					ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_MAPPED,
 				.selector_count = 5U,
 				.condition_expression = (uint32_t)index,
+				.access_expression = (uint32_t)index,
+				.concrete_selector = (uint32_t)index,
+				.applicability = 1U,
+				.semantics = 1U,
+				.implementation = 3U,
+				.proof_state = 1U,
 				.selector_identity = UINT64_C(0x1000000000000000) + index,
 				.condition_identity = UINT64_C(0x2000000000000000) + index,
+				.access_identity = UINT64_C(0x3000000000000000) + index,
+				.decoder_owner = "orlix_tcti_decode_aarch64",
+				.execution_owner = "orlix_tcti_resume_user",
+				.kunit_suite = "orlix-tcti-source-leaf-classification",
+				.kunit_case =
+					"orlix_tcti_system_accessor_partition_binds_source_metadata",
 				.accessor_source_offset = (uint32_t)(index + 1U),
 				.accessor_source_length = 1U,
 				.encoding_source_offset = (uint32_t)(index + 2U),
 				.encoding_source_length = 1U,
 				.condition_source_offset = (uint32_t)(index + 3U),
 				.condition_source_length = 1U,
+				.access_source_offset = (uint32_t)(index + 4U),
+				.access_source_length = 1U,
 			};
 	}
 	fixture->accessor_metadata.reconciliation_identity =
@@ -335,10 +359,123 @@ static int emitted_string_offsets_resolve_exact_source_strings(void)
 			offsets.accessors[index].name,
 			fixture.accessors[index].name));
 		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].variant_name,
+			fixture.accessors[index].variant_name));
+		CHECK(!emitted_string_equals(pool, pool_size,
 			offsets.accessors[index].generic_leaf,
 			fixture.accessors[index].generic_leaf));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].decoder_owner,
+			fixture.accessors[index].decoder_owner));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].execution_owner,
+			fixture.accessors[index].execution_owner));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].kunit_suite,
+			fixture.accessors[index].kunit_suite));
+		CHECK(!emitted_string_equals(pool, pool_size,
+			offsets.accessors[index].kunit_case,
+			fixture.accessors[index].kunit_case));
 	}
 	free(pool);
+	free(offsets.source);
+	free(offsets.classification);
+	free(offsets.accessors);
+	fclose(output);
+	fixture_destroy(&fixture);
+	return 0;
+}
+
+static int emitted_accessor_projection_round_trips_all_fields(void)
+{
+	struct fixture fixture = { 0 };
+	struct generated_offsets offsets = { 0 };
+	const struct orlix_tcti_a64_kbuild_system_accessor_row *row;
+	const struct system_accessor_string_offsets *strings;
+	char expected_metadata[1024];
+	char expected_row[2048];
+	char *header;
+	long length;
+	size_t index = 17U;
+	FILE *output;
+
+	CHECK(!fixture_init(&fixture));
+	CHECK(!build_offsets(&fixture.metadata, fixture.source,
+		ORLIX_TCTI_A64_KBUILD_SOURCE_COUNT, fixture.classification,
+		&fixture.accessor_metadata, fixture.accessors,
+		ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT, &offsets));
+	output = tmpfile();
+	CHECK(output != NULL);
+	CHECK(orlix_tcti_a64_kbuild_generate_header(
+		      &fixture.metadata, fixture.source,
+		      ORLIX_TCTI_A64_KBUILD_SOURCE_COUNT, fixture.classification,
+		      ORLIX_TCTI_A64_KBUILD_SOURCE_COUNT,
+		      &fixture.accessor_metadata, fixture.accessors,
+		      ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT, output) ==
+	      ORLIX_TCTI_A64_KBUILD_GENERATOR_OK);
+	length = stream_length(output);
+	CHECK(length >= 0);
+	CHECK(!fseek(output, 0, SEEK_SET));
+	header = malloc((size_t)length + 1U);
+	CHECK(header != NULL);
+	CHECK(fread(header, 1, (size_t)length, output) == (size_t)length);
+	header[length] = '\0';
+	CHECK(snprintf(expected_metadata, sizeof(expected_metadata),
+		"\t%" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU, %uU, %uU, "
+		"%uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, %uU, "
+		"%uU, %uU, %uU, 0x%016" PRIx64 "ULL,\n",
+		offsets.accessor_metadata[0], offsets.accessor_metadata[1],
+		offsets.accessor_metadata[2], offsets.accessor_metadata[3],
+		offsets.accessor_metadata[4], offsets.accessor_metadata[5],
+		fixture.accessor_metadata.accessor_count,
+		fixture.accessor_metadata.mapped_count,
+		fixture.accessor_metadata.reserved_count,
+		fixture.accessor_metadata.privileged_count,
+		fixture.accessor_metadata.unsupported_count,
+		fixture.accessor_metadata.ambiguous_count,
+		fixture.accessor_metadata.contradictory_count,
+		fixture.accessor_metadata.invalid_count,
+		fixture.accessor_metadata.semantic_count,
+		fixture.accessor_metadata.source_access_semantics_count,
+		fixture.accessor_metadata.generic_leaf_semantics_count,
+		fixture.accessor_metadata.implemented_count,
+		fixture.accessor_metadata.architectural_rejection_count,
+		fixture.accessor_metadata.unimplemented_rejection_count,
+		fixture.accessor_metadata.concrete_selector_count,
+		fixture.accessor_metadata.symbolic_selector_count,
+		fixture.accessor_metadata.proof_not_observed_count,
+		fixture.accessor_metadata.reconciliation_identity) > 0);
+	CHECK(strstr(header, expected_metadata) != NULL);
+
+	row = &fixture.accessors[index];
+	strings = &offsets.accessors[index];
+	CHECK(snprintf(expected_row, sizeof(expected_row),
+		"\t{ %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, 0x%016" PRIx64 "ULL, 0x%016" PRIx64
+		"ULL, 0x%016" PRIx64 "ULL, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+		"U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU, %uU, %uU, %uU, %uU, "
+		"{ 0U, 0U } },\n",
+		row->accessor_index, row->encoding_index, strings->name,
+		strings->variant_name, strings->generic_leaf, row->selector_count,
+		row->condition_expression, row->access_expression,
+		row->concrete_selector, row->selector_identity,
+		row->condition_identity, row->access_identity,
+		strings->decoder_owner, strings->execution_owner,
+		strings->kunit_suite, strings->kunit_case,
+		row->accessor_source_offset, row->accessor_source_length,
+		row->encoding_source_offset, row->encoding_source_length,
+		row->condition_source_offset, row->condition_source_length,
+		row->access_source_offset, row->access_source_length,
+		(unsigned int)row->direction, (unsigned int)row->disposition,
+		row->applicability, row->semantics, row->implementation,
+		row->proof_state) > 0);
+	CHECK(strstr(header, expected_row) != NULL);
+
+	free(header);
 	free(offsets.source);
 	free(offsets.classification);
 	free(offsets.accessors);
@@ -404,9 +541,23 @@ static int deterministic_fixed_width_artifact(void)
 		"orlix_tcti_a64_generated_system_accessors[2014]"));
 	CHECK(!stream_contains(first, "u64 reconciliation_identity;"));
 	CHECK(!stream_contains(first,
-		"u64 selector_identity; u64 condition_identity;"));
+		"u32 semantic_count; u32 source_access_semantics_count;"));
+	CHECK(!stream_contains(first,
+		"u32 proof_not_observed_count;"));
+	CHECK(!stream_contains(first,
+		"u32 accessor_index; u32 encoding_index; u32 name; u32 variant_name;"));
+	CHECK(!stream_contains(first,
+		"u64 selector_identity; u64 condition_identity; u64 access_identity;"));
+	CHECK(!stream_contains(first,
+		"u32 decoder_owner; u32 execution_owner; u32 kunit_suite; u32 kunit_case;"));
 	CHECK(!stream_contains(first,
 		"u32 condition_source_offset; u32 condition_source_length;"));
+	CHECK(!stream_contains(first,
+		"u32 access_source_offset; u32 access_source_length;"));
+	CHECK(!stream_contains(first,
+		"u8 direction; u8 disposition; u8 applicability; u8 semantics;"));
+	CHECK(!stream_contains(first,
+		"u8 implementation; u8 proof_state; u8 reserved[2];"));
 	fclose(first);
 	fclose(second);
 	fixture_destroy(&fixture);
@@ -416,6 +567,8 @@ static int deterministic_fixed_width_artifact(void)
 static int adversarial_c_fixtures(void)
 {
 	struct fixture fixture = { 0 };
+	struct orlix_tcti_a64_kbuild_system_accessor_metadata saved_accessor_metadata;
+	struct orlix_tcti_a64_kbuild_system_accessor_row saved_accessor;
 	const char *saved_name;
 	uint32_t saved_ordinal;
 	enum orlix_tcti_a64_kbuild_classification saved_classification;
@@ -571,6 +724,31 @@ static int adversarial_c_fixtures(void)
 		&fixture, ORLIX_TCTI_A64_KBUILD_GENERATOR_ACCESSOR_METADATA_MISMATCH));
 	fixture.accessor_metadata.registers_sha256 = saved_registers_sha256;
 
+#define EXPECT_ACCESSOR_COUNT_MUTATION(statement) do { \
+	saved_accessor_metadata = fixture.accessor_metadata; \
+	statement; \
+	CHECK(!expect_failure(&fixture, \
+		ORLIX_TCTI_A64_KBUILD_GENERATOR_ACCESSOR_COUNT_MISMATCH)); \
+	fixture.accessor_metadata = saved_accessor_metadata; \
+} while (0)
+	EXPECT_ACCESSOR_COUNT_MUTATION(fixture.accessor_metadata.semantic_count--);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.source_access_semantics_count--);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.generic_leaf_semantics_count++);
+	EXPECT_ACCESSOR_COUNT_MUTATION(fixture.accessor_metadata.implemented_count++);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.architectural_rejection_count++);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.unimplemented_rejection_count--);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.concrete_selector_count--);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.symbolic_selector_count++);
+	EXPECT_ACCESSOR_COUNT_MUTATION(
+		fixture.accessor_metadata.proof_not_observed_count--);
+#undef EXPECT_ACCESSOR_COUNT_MUTATION
+
 #define EXPECT_ACCESSOR_BLOCKER(field) do { \
 	fixture.accessor_metadata.mapped_count--; \
 	fixture.accessor_metadata.field = 1U; \
@@ -592,6 +770,60 @@ static int adversarial_c_fixtures(void)
 	CHECK(!expect_failure(&fixture,
 		ORLIX_TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW));
 	fixture.accessors[0].generic_leaf = saved_generic_leaf;
+
+#define EXPECT_ACCESSOR_IDENTITY_MUTATION(statement) do { \
+	saved_accessor = fixture.accessors[0]; \
+	statement; \
+	CHECK(!expect_failure(&fixture, \
+		ORLIX_TCTI_A64_KBUILD_GENERATOR_ACCESSOR_METADATA_MISMATCH)); \
+	fixture.accessors[0] = saved_accessor; \
+} while (0)
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].accessor_index = 5000U);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].encoding_index = 5001U);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].name = "A64.changed");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].variant_name = "changed-variant");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].generic_leaf = fixture.source[2014].name);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].direction =
+		ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_WRITE);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].selector_count++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].condition_expression++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].access_expression++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].concrete_selector ^= 1U);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].semantics = 2U);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].implementation = 2U);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].selector_identity++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].condition_identity++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].access_identity++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].decoder_owner = "changed-decoder-owner");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].execution_owner = "changed-execution-owner");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].kunit_suite = "changed-kunit-suite");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(
+		fixture.accessors[0].kunit_case = "changed-kunit-case");
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].accessor_source_offset++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].accessor_source_length++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].encoding_source_offset++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].encoding_source_length++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].condition_source_offset++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].condition_source_length++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].access_source_offset++);
+	EXPECT_ACCESSOR_IDENTITY_MUTATION(fixture.accessors[0].access_source_length++);
+#undef EXPECT_ACCESSOR_IDENTITY_MUTATION
+
+	saved_accessor = fixture.accessors[0];
+	fixture.accessors[0].applicability = 0U;
+	CHECK(!expect_failure(&fixture,
+		ORLIX_TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW));
+	fixture.accessors[0] = saved_accessor;
+	saved_accessor = fixture.accessors[0];
+	fixture.accessors[0].proof_state = 0U;
+	CHECK(!expect_failure(&fixture,
+		ORLIX_TCTI_A64_KBUILD_GENERATOR_BAD_ACCESSOR_ROW));
+	fixture.accessors[0] = saved_accessor;
 
 	saved_identity = fixture.accessors[0].selector_identity;
 	fixture.accessors[0].selector_identity = 0U;
@@ -658,6 +890,7 @@ int main(void)
 {
 	CHECK(!deterministic_fixed_width_artifact());
 	CHECK(!emitted_string_offsets_resolve_exact_source_strings());
+	CHECK(!emitted_accessor_projection_round_trips_all_fields());
 	CHECK(!adversarial_c_fixtures());
 	puts("target ISA Kbuild generator C-fixture tests: passed");
 	return 0;
