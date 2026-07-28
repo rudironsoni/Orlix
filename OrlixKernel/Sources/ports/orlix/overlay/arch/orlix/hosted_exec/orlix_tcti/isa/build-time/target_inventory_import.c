@@ -1352,6 +1352,131 @@ static int add_inherited_operands(struct importer *importer, uint32_t leaf_index
 	return 0;
 }
 
+static int json_hex_nibble(char byte)
+{
+	if (byte >= '0' && byte <= '9')
+		return byte - '0';
+	if (byte >= 'a' && byte <= 'f')
+		return byte - 'a' + 10;
+	if (byte >= 'A' && byte <= 'F')
+		return byte - 'A' + 10;
+	return -1;
+}
+
+static bool operational_note_codepoint_is_whitespace(uint32_t codepoint)
+{
+	return (codepoint >= 0x09U && codepoint <= 0x0dU) ||
+		codepoint == 0x20U || codepoint == 0x85U || codepoint == 0xa0U ||
+		codepoint == 0x1680U ||
+		(codepoint >= 0x2000U && codepoint <= 0x200aU) ||
+		codepoint == 0x2028U || codepoint == 0x2029U ||
+		codepoint == 0x202fU || codepoint == 0x205fU ||
+		codepoint == 0x3000U;
+}
+
+static bool operational_note_utf8_scalar(const char *json, size_t end,
+					 size_t *cursor, unsigned char first,
+					 uint32_t *codepoint)
+{
+	size_t continuation_count;
+	size_t index;
+	uint32_t minimum;
+
+	if (first < 0x80U) {
+		*codepoint = first;
+		return true;
+	}
+	if (first >= 0xc2U && first <= 0xdfU) {
+		*codepoint = first & 0x1fU;
+		continuation_count = 1U;
+		minimum = 0x80U;
+	} else if (first >= 0xe0U && first <= 0xefU) {
+		*codepoint = first & 0x0fU;
+		continuation_count = 2U;
+		minimum = 0x800U;
+	} else if (first >= 0xf0U && first <= 0xf4U) {
+		*codepoint = first & 0x07U;
+		continuation_count = 3U;
+		minimum = 0x10000U;
+	} else {
+		return false;
+	}
+	if (continuation_count > end - *cursor)
+		return false;
+	for (index = 0; index < continuation_count; index++) {
+		unsigned char byte = (unsigned char)json[(*cursor)++];
+
+		if ((byte & 0xc0U) != 0x80U)
+			return false;
+		*codepoint = (*codepoint << 6) | (byte & 0x3fU);
+	}
+	return *codepoint >= minimum && *codepoint <= 0x10ffffU &&
+		!(*codepoint >= 0xd800U && *codepoint <= 0xdfffU);
+}
+
+static bool operational_note_string_non_whitespace(const struct importer *importer,
+						     int token_index)
+{
+	const struct json_token *token = &importer->tokens[token_index];
+	size_t cursor = token->start;
+	bool has_non_whitespace = false;
+
+	while (cursor < token->end) {
+		unsigned char byte = (unsigned char)importer->json[cursor++];
+		uint32_t codepoint = byte;
+
+		if (byte >= 0x80U) {
+			if (!operational_note_utf8_scalar(importer->json, token->end,
+							  &cursor, byte, &codepoint))
+				return false;
+		} else if (byte == '\\') {
+			char escape = importer->json[cursor++];
+
+			switch (escape) {
+			case 'b': codepoint = 0x08U; break;
+			case 'f': codepoint = 0x0cU; break;
+			case 'n': codepoint = 0x0aU; break;
+			case 'r': codepoint = 0x0dU; break;
+			case 't': codepoint = 0x09U; break;
+			case 'u': {
+				size_t digit;
+
+				codepoint = 0;
+				for (digit = 0; digit < 4U; digit++)
+					codepoint = (codepoint << 4) |
+						(uint32_t)json_hex_nibble(importer->json[cursor++]);
+				break;
+			}
+			default:
+				codepoint = (unsigned char)escape;
+				break;
+			}
+		}
+		if (!operational_note_codepoint_is_whitespace(codepoint))
+			has_non_whitespace = true;
+	}
+	return has_non_whitespace;
+}
+
+static bool operational_note_text_valid(const struct importer *importer,
+					 int token_index)
+{
+	const struct json_token *token = &importer->tokens[token_index];
+	size_t index;
+
+	if (token->kind == JSON_STRING)
+		return operational_note_string_non_whitespace(importer, token_index);
+	if (token->kind != JSON_ARRAY || !token->size)
+		return false;
+	for (index = 0; index < token->size; index++) {
+		int child = array_element(importer, token_index, index);
+
+		if (child < 0 || !operational_note_text_valid(importer, child))
+			return false;
+	}
+	return true;
+}
+
 static int source_mnemonic(const struct importer *importer, int node_index)
 {
 	int assembly = object_find(importer, node_index, "assembly");
@@ -1373,7 +1498,7 @@ static int source_mnemonic(const struct importer *importer, int node_index)
 }
 
 static int add_leaf(struct importer *importer, int node_index,
-			    uint32_t condition)
+		    uint32_t condition)
 {
 	struct orlix_tcti_target_inventory *inventory = importer->inventory;
 	struct orlix_tcti_target_leaf leaf = {0};
@@ -1382,6 +1507,7 @@ static int add_leaf(struct importer *importer, int node_index,
 	int operation = object_find(importer, node_index, "operation_id");
 	int condition_object = object_find(importer, node_index, "condition");
 	int preferred = object_find(importer, node_index, "preferred");
+	int operational_note = object_find(importer, node_index, "operational_note");
 	size_t first_operand = inventory->operand_count;
 	size_t first_fixed_operand = inventory->fixed_operand_count;
 	size_t first_condition_operand = inventory->condition_operand_count;
@@ -1391,6 +1517,32 @@ static int add_leaf(struct importer *importer, int node_index,
 	leaf.mnemonic = copy_token(importer, mnemonic);
 	leaf.operation_id = copy_token(importer, operation);
 	leaf.condition = condition;
+	if (operational_note < 0) {
+		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  importer->tokens[node_index].start,
+			  "Instruction.Instruction lacks operational_note");
+		goto fail;
+	}
+	leaf.operational_note_source_offset = importer->tokens[operational_note].start;
+	leaf.operational_note_source_length = importer->tokens[operational_note].end -
+		leaf.operational_note_source_offset;
+	if (importer->tokens[operational_note].kind == JSON_PRIMITIVE &&
+	    leaf.operational_note_source_length == 4U &&
+	    !memcmp(importer->json + leaf.operational_note_source_offset, "null", 4U)) {
+		leaf.operational_note_state = ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_ABSENT;
+	} else if (operational_note_text_valid(importer, operational_note)) {
+		leaf.operational_note_state =
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION;
+		orlix_tcti_target_inventory_sha256(
+			importer->json + leaf.operational_note_source_offset,
+			leaf.operational_note_source_length,
+			leaf.operational_note_sha256);
+	} else {
+		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  leaf.operational_note_source_offset,
+			  "Instruction.Instruction has malformed operational_note Text");
+		goto fail;
+	}
 	leaf.source_offset = importer->tokens[node_index].start;
 	leaf.source_length = importer->tokens[node_index].end -
 		leaf.source_offset;
@@ -1446,6 +1598,9 @@ static int add_leaf(struct importer *importer, int node_index,
 		goto fail;
 	}
 	inventory->leaves[inventory->leaf_count++] = leaf;
+	if (leaf.operational_note_state ==
+	    ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION)
+		inventory->operational_note_obligation_count++;
 	return 0;
 fail:
 	discard_operands_from(inventory, first_operand);
@@ -1798,26 +1953,6 @@ static int import_operations(struct importer *importer, int root)
 		operation.source_offset = importer->tokens[value].start;
 		operation.source_length = importer->tokens[value].end -
 			operation.source_offset;
-		{
-			int note = object_find(importer, value, "operational_note");
-
-			if (note >= 0) {
-				operation.operational_note_present = true;
-				operation.operational_note_source_offset =
-					importer->tokens[note].start;
-				operation.operational_note_source_length =
-					importer->tokens[note].end -
-					operation.operational_note_source_offset;
-				if (!operation.operational_note_source_length) {
-					free(operation.id);
-					set_error(importer->error,
-						  ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE,
-						  importer->tokens[note].start,
-						  "Instructions.json has an empty operational_note token");
-					return -1;
-				}
-			}
-		}
 		if (import_operation_semantic_member(importer, value, "operation", true,
 						     &operation) ||
 		    import_operation_semantic_member(importer, value, "decode", false,
@@ -2158,9 +2293,10 @@ void orlix_tcti_target_inventory_destroy(struct orlix_tcti_target_inventory *inv
 	memset(inventory, 0, sizeof(*inventory));
 }
 
-int orlix_tcti_target_inventory_import(const char *json, size_t length,
-				 struct orlix_tcti_target_inventory *inventory,
-				 struct orlix_tcti_target_import_error *error)
+int orlix_tcti_target_inventory_import_expected(
+	const char *json, size_t length, const char *expected_source_sha256,
+	struct orlix_tcti_target_inventory *inventory,
+	struct orlix_tcti_target_import_error *error)
 {
 	struct orlix_tcti_target_import_error local_error = {0};
 	struct parser parser = {0};
@@ -2173,7 +2309,8 @@ int orlix_tcti_target_inventory_import(const char *json, size_t length,
 	if (!error)
 		error = &local_error;
 	memset(error, 0, sizeof(*error));
-	if (!json || !length || !inventory) {
+	if (!json || !length || !expected_source_sha256 ||
+	    strlen(expected_source_sha256) != 64U || !inventory) {
 		set_error(error, ORLIX_TCTI_TARGET_IMPORT_INVALID_ARGUMENT, 0,
 			  "json bytes and inventory are required");
 		return -1;
@@ -2223,7 +2360,7 @@ int orlix_tcti_target_inventory_import(const char *json, size_t length,
 	    validate_leaf_operations(&importer))
 		goto out_inventory;
 	orlix_tcti_target_inventory_sha256(json, length, digest);
-	if (strcmp(digest, source_sha256)) {
+	if (strcmp(digest, expected_source_sha256)) {
 		set_error(error, ORLIX_TCTI_TARGET_IMPORT_HASH_MISMATCH, 0,
 			  "Instructions.json SHA-256 does not match the pinned source");
 		goto out_inventory;
@@ -2236,4 +2373,13 @@ out_inventory:
 out:
 	free(parser.tokens);
 	return status;
+}
+
+int orlix_tcti_target_inventory_import(
+	const char *json, size_t length,
+	struct orlix_tcti_target_inventory *inventory,
+	struct orlix_tcti_target_import_error *error)
+{
+	return orlix_tcti_target_inventory_import_expected(
+		json, length, source_sha256, inventory, error);
 }

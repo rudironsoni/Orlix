@@ -69,7 +69,7 @@ ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-harness-check agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework
 
@@ -306,6 +306,20 @@ orlix-tcti-semantic-provenance-tests:
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_completion_semantic_provenance_test.c \
 		-o '$(ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST)'
 	@'$(ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST)'
+
+orlix-tcti-operational-note-pipeline-test: orlix-tcti-isa-maintainer-source-check
+	@$(KERNEL_MAKE) __tcti-operational-note-pipeline-test
+
+orlix-tcti-isa-maintainer-source-check:
+	@test -n '$(ORLIX_AARCHMRS_INSTRUCTIONS)' || { \
+		echo 'ORLIX_AARCHMRS_INSTRUCTIONS must point to the pinned AARCHMRS Instructions.json' >&2; \
+		exit 2; \
+	}
+	@test -f '$(ORLIX_AARCHMRS_INSTRUCTIONS)' || { \
+		echo 'missing pinned AARCHMRS input: $(ORLIX_AARCHMRS_INSTRUCTIONS)' >&2; \
+		exit 2; \
+	}
+	@$(KERNEL_MAKE) __tcti-instruction-source-check
 
 orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'

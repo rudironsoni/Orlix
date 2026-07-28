@@ -29,6 +29,8 @@ typedef uint64_t orlix_tcti_proof_u64;
 	(ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS + \
 	 ORLIX_TCTI_TARGET_LINUX_PROOF_VARIANT_ROWS)
 
+struct orlix_tcti_target_instruction_artifact;
+
 enum orlix_tcti_target_proof_obligation {
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE = 1U << 0,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS = 1U << 1,
@@ -41,6 +43,7 @@ enum orlix_tcti_target_proof_obligation {
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING = 1U << 8,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS = 1U << 9,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE = 1U << 10,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE = 1U << 11,
 };
 
 enum orlix_tcti_target_proof_linux_interface {
@@ -200,6 +203,35 @@ struct orlix_tcti_target_proof_reference {
 	unsigned int classification;
 };
 
+struct orlix_tcti_target_operational_note_proof_mapping {
+	orlix_tcti_proof_u32 leaf_index;
+	const char *source_identity;
+	const char *source_sha256;
+	const char *proof_id;
+	const char *kunit_case_name;
+};
+
+enum orlix_tcti_target_operational_note_mapping_error {
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_OK,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MISSING,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_STALE,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DUPLICATE,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_PROOF,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_NATIVE_CASE,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_INSUFFICIENT_OBLIGATIONS,
+	ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DIGEST_MISMATCH,
+};
+
+struct orlix_tcti_target_operational_note_mapping_result {
+	enum orlix_tcti_target_operational_note_mapping_error error;
+	size_t note_index;
+	size_t mapping_index;
+	size_t mapped_count;
+};
+
 enum orlix_tcti_target_proof_registry_error {
 	ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK,
 	ORLIX_TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY,
@@ -234,6 +266,15 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	const struct orlix_tcti_target_proof_reference *reference);
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count);
+const struct orlix_tcti_target_operational_note_proof_mapping *
+orlix_tcti_target_operational_note_proof_mappings(size_t *count);
+int orlix_tcti_target_operational_note_proof_mappings_validate(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	const struct orlix_tcti_target_operational_note_proof_mapping *mappings,
+	size_t mapping_count,
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count,
+	struct orlix_tcti_target_operational_note_mapping_result *result);
 const struct orlix_tcti_target_linux_proof_disposition_row *
 orlix_tcti_target_linux_proof_dispositions(size_t *count);
 int orlix_tcti_target_linux_proof_matrix_validate(

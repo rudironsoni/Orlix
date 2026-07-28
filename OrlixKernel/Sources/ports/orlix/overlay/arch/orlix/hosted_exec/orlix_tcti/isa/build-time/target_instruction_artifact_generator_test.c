@@ -57,7 +57,7 @@ static char *read_stream(FILE *file, size_t *length)
 }
 
 static int emit_is_empty_after_failure(const char *source, size_t length,
-	enum orlix_tcti_target_instruction_artifact_error expected)
+	enum orlix_tcti_target_instruction_artifact_generator_error expected)
 {
 	FILE *output = tmpfile();
 
@@ -98,14 +98,14 @@ static int model_is_lossless(const char *source, size_t source_length)
 	struct orlix_tcti_target_inventory inventory = { 0 };
 	struct orlix_tcti_target_import_error import_error = { 0 };
 	struct artifact_model model = { 0 };
-	enum orlix_tcti_target_instruction_artifact_error error;
+	enum orlix_tcti_target_instruction_artifact_generator_error error;
 	size_t index;
 
 	CHECK(orlix_tcti_target_inventory_import(source, source_length, &inventory,
 					 &import_error) == 0);
 	CHECK(inventory.leaf_count == ORLIX_TCTI_A64_TARGET_LEAF_COUNT);
-	error = build_model(&inventory, &model);
-	CHECK(error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK);
+	error = build_model(&inventory, source_sha256, &model);
+	CHECK(error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK);
 	CHECK(model.operand_count == inventory.operand_count);
 	CHECK(model.fixed_operand_count == inventory.fixed_operand_count);
 	CHECK(model.fixed_operand_count == 16675U);
@@ -338,9 +338,9 @@ static int deterministic_emission(const char *source, size_t source_length)
 
 	CHECK(first != NULL && second != NULL);
 	CHECK(orlix_tcti_target_instruction_artifact_emit(source, source_length, first) ==
-	      ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK);
+	      ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK);
 	CHECK(orlix_tcti_target_instruction_artifact_emit(source, source_length, second) ==
-	      ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK);
+	      ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK);
 	first_bytes = read_stream(first, &first_length);
 	second_bytes = read_stream(second, &second_length);
 	CHECK(first_bytes != NULL && second_bytes != NULL);
@@ -367,38 +367,39 @@ static int no_partial_output_contract(const char *source, size_t source_length)
 	char *mutation;
 	size_t mutation_length;
 	size_t original_operand_count;
-	enum orlix_tcti_target_instruction_artifact_error artifact_error;
+	enum orlix_tcti_target_instruction_artifact_generator_error artifact_error;
 
 	CHECK(emit_is_empty_after_failure("{", 1U,
-		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE) == 0);
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE) == 0);
 	CHECK(emit_is_empty_after_failure("\\u0000", 6U,
-		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE) == 0);
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE) == 0);
 	{
 		static const char raw_nul[] = { '{', '\0', '}' };
 
 		CHECK(emit_is_empty_after_failure(raw_nul, sizeof(raw_nul),
-			ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE) == 0);
+			ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE) == 0);
 	}
 	mutation = replace_once(source, source_length, "ADD_32_addsub_imm",
 				"BDD_32_addsub_imm", &mutation_length);
 	CHECK(mutation != NULL);
 	CHECK(emit_is_empty_after_failure(mutation, mutation_length,
-		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_DIGEST) == 0);
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_DIGEST) == 0);
 	free(mutation);
 
 	CHECK(orlix_tcti_target_inventory_import(source, source_length, &inventory,
 					 &import_error) == 0);
 	inventory.leaf_count = ORLIX_TCTI_A64_TARGET_LEAF_COUNT - 1U;
-	CHECK(generate_from_inventory(&inventory, &generated) ==
-		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT);
+	CHECK(generate_from_inventory(&inventory, source_sha256, &generated) ==
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT);
 	CHECK(generated.data == NULL && generated.length == 0);
 	inventory.leaf_count = ORLIX_TCTI_A64_TARGET_LEAF_COUNT;
 	original_operand_count = inventory.operand_count;
 	inventory.operand_count = (size_t)UINT32_MAX + 1U;
-	artifact_error = generate_from_inventory(&inventory, &generated);
+	artifact_error = generate_from_inventory(&inventory, source_sha256,
+					 &generated);
 	/* destroy walks the imported operand allocation, not a synthetic count. */
 	inventory.operand_count = original_operand_count;
-	CHECK(artifact_error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW);
+	CHECK(artifact_error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW);
 	CHECK(generated.data == NULL && generated.length == 0);
 	orlix_tcti_target_inventory_destroy(&inventory);
 	return 0;

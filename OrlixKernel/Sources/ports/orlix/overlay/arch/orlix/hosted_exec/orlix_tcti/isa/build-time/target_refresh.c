@@ -1122,7 +1122,7 @@ static int emit_instructions(const struct source_bytes *source,
 	if (!output)
 		return -1;
 	result = orlix_tcti_target_instruction_artifact_emit(source->data, source->length,
-			output) == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK &&
+			output) == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK &&
 		!capture(output, artifact) ? 0 : -1;
 	fclose(output);
 	return result;

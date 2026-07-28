@@ -35,7 +35,49 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_arm_xml_package.c target_asl_availability.c \
 	target_system_accessor_reconciliation.c
 
-.PHONY: __tcti-isa-check __tcti-isa-refresh
+.PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
+
+__tcti-instruction-source-check:
+	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		target_inventory_import.c target_inventory_import_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test' \
+		'$(ORLIX_AARCHMRS_INSTRUCTIONS)'
+
+__tcti-operational-note-pipeline-test:
+	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'
+	@$(RM) \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/operational-note-Instructions.json' \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_instruction_artifact_generated.h'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) \
+		-DTARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MAIN \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		target_inventory_import.c target_condition_serialization.c \
+		target_instruction_artifact_generator.c \
+		target_operational_note_pipeline_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_generate_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_generate_test' \
+		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/operational-note-Instructions.json' \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_instruction_artifact_generated.h'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) \
+		-DORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_EXTERNAL_GENERATED \
+		-I'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)' \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		target_inventory_import.c \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_instruction_artifact.c' \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_proof_registry.c' \
+		target_operational_note_pipeline_validate_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_validate_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_validate_test' \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/operational-note-Instructions.json'
+	@$(RM) \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/operational-note-Instructions.json' \
+		'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_instruction_artifact_generated.h'
 
 __tcti-isa-check:
 	@set -eu; \

@@ -861,3 +861,17 @@ suite and case, source and build provenance, kernel identity, and obligation;
 replay and mismatch cases fail closed. Kselftest results and the ledger are also
 opaque, and production has no kselftest PASS constructor until its owning Linux
 execution issue supplies one. Canonical execution counts therefore remain zero.
+
+## [2026-07-28] implement | Bind AARCHMRS operational notes to typed proof obligations
+
+Corrected the A64 inventory importer to read `operational_note` from each
+`Instruction.Instruction` leaf instead of the unrelated top-level operation
+objects. Instruction artifact V5 now preserves exact source-bound note rows and
+rejects malformed Arm `Text`, stale identities, duplicate or ambiguous proof
+mappings, and unknown proof or native-case owners. The pinned source contains
+4,350 absent notes and zero non-empty behavior obligations, so the generated
+artifact publishes zero rows without a sentinel. Static mapping grants no
+execution credit; the completion audit remains expected-red with zero executed
+Linux proof rows. Host and direct KUnit gates pass. App-hosted KUnit remains
+unrun because Xcode cannot resolve the configured simulator, and
+`xcode-offload` is unavailable on this machine.

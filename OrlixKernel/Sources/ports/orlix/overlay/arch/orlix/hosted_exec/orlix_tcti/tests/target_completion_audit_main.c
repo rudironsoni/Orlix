@@ -16,7 +16,10 @@ int main(void)
 	       "invalid_relationships=%zu "
 	       "invalid_source=%zu invalid_source_provenance=%zu "
 	       "invalid_registry=%zu "
-	       "stale_proof_bindings=%zu unproved_obligation_bindings=%zu "
+		"stale_proof_bindings=%zu unproved_obligation_bindings=%zu "
+		"operational_notes=%zu mapped_operational_notes=%zu "
+		"invalid_operational_note_mappings=%zu "
+		"unproved_operational_notes=%zu "
 	       "source_condition_domain_bound=%zu "
 	       "invalid_source_conditions=%zu "
 		"unresolved_feature_applicability=%zu "
@@ -66,8 +69,12 @@ int main(void)
 	       result.source_unbound_rows, result.invalid_relationship_rows,
 	       result.invalid_source_rows, result.invalid_source_provenance,
 	       result.invalid_registry_entries,
-	       result.stale_proof_bindings,
-	       result.unproved_obligation_bindings,
+	 result.stale_proof_bindings,
+	 result.unproved_obligation_bindings,
+	 result.operational_note_rows,
+	 result.mapped_operational_note_rows,
+	 result.invalid_operational_note_mappings,
+	 result.unproved_operational_note_rows,
 	       result.source_condition_domain_bound_rows,
 	       result.invalid_source_condition_rows,
 		result.unresolved_feature_applicability_rows,

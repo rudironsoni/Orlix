@@ -1761,6 +1761,8 @@ static int completion_audit_internal(
 	struct orlix_tcti_target_completion_obligation *obligations)
 {
 	const struct orlix_tcti_target_proof_registry_entry *registry;
+	const struct orlix_tcti_target_operational_note_proof_mapping
+		*operational_note_mappings;
 	const struct orlix_tcti_runtime_capability_cohort_artifact *runtime;
 	const struct orlix_tcti_feature_artifact *feature_artifact =
 		orlix_tcti_feature_artifact_canonical();
@@ -1779,8 +1781,11 @@ static int completion_audit_internal(
 		sizeof(semantic_provenance_rows) /
 		sizeof(semantic_provenance_rows[0]);
 	struct orlix_tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
+	struct orlix_tcti_target_operational_note_mapping_result
+		operational_note_mapping_result;
 	int status;
 	size_t registry_count;
+	size_t operational_note_mapping_count;
 	size_t index;
 	const struct orlix_tcti_target_completion_source_row *source = source_rows;
 	const struct orlix_tcti_target_completion_classification_row *classification =
@@ -1797,6 +1802,9 @@ static int completion_audit_internal(
 			    runtime, &runtime_diagnostic))
 		return -1;
 	registry = orlix_tcti_target_proof_registry_entries(&registry_count);
+	operational_note_mappings =
+		orlix_tcti_target_operational_note_proof_mappings(
+			&operational_note_mapping_count);
 	linux_proof = orlix_tcti_target_linux_proof_dispositions(&linux_proof_count);
 	if (inputs) {
 		source = inputs->source;
@@ -1805,6 +1813,9 @@ static int completion_audit_internal(
 		classification_count = inputs->classification_count;
 		registry = inputs->registry;
 		registry_count = inputs->registry_count;
+		operational_note_mappings = inputs->operational_note_mappings;
+		operational_note_mapping_count =
+			inputs->operational_note_mapping_count;
 		if (inputs->instruction_artifact)
 			instruction_artifact = inputs->instruction_artifact;
 		if (inputs->feature_applicability)
@@ -1833,8 +1844,29 @@ static int completion_audit_internal(
 	if (!source || !classification)
 		return -1;
 	if (!validate_completion_feature_dependencies(feature_artifact,
-		instruction_artifact, source_count, result))
+					      instruction_artifact, source_count, result))
 		return -1;
+	result->operational_note_rows = instruction_artifact->operational_note_count;
+	if (orlix_tcti_target_operational_note_proof_mappings_validate(
+		instruction_artifact, operational_note_mappings,
+		operational_note_mapping_count, registry, registry_count,
+		&operational_note_mapping_result)) {
+		result->invalid_operational_note_mappings = 1U;
+		record_error(result,
+			ORLIX_TCTI_TARGET_COMPLETION_ERROR_OPERATIONAL_NOTE);
+		status = -1;
+	} else {
+		result->mapped_operational_note_rows =
+			operational_note_mapping_result.mapped_count;
+	}
+	/* Static mapping cannot grant native execution credit. */
+	result->unproved_operational_note_rows =
+		instruction_artifact->operational_note_count;
+	if (result->unproved_operational_note_rows) {
+		record_error(result,
+			ORLIX_TCTI_TARGET_COMPLETION_ERROR_OPERATIONAL_NOTE);
+		status = -1;
+	}
 	if (!completion_projection_dependencies_valid(result) ||
 	    source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
 	    classification_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS)
@@ -1902,6 +1934,7 @@ int orlix_tcti_target_completion_audit_with_inputs_for_test(
 	struct orlix_tcti_target_completion_obligation *staging;
 	int status;
 	size_t registry_count;
+	size_t operational_note_mapping_count;
 
 	if (!result || (obligations &&
 			obligation_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) ||
@@ -1917,6 +1950,11 @@ int orlix_tcti_target_completion_audit_with_inputs_for_test(
 					sizeof(classification_rows[0]),
 				.registry = orlix_tcti_target_proof_registry_entries(&registry_count),
 				.registry_count = registry_count,
+				.operational_note_mappings =
+					orlix_tcti_target_operational_note_proof_mappings(
+						&operational_note_mapping_count),
+				.operational_note_mapping_count =
+					operational_note_mapping_count,
 			};
 		effective = &canonical_inputs;
 	}

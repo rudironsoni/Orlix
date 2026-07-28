@@ -241,7 +241,7 @@ static int all_pinned_conditions_roundtrip(const char *source, size_t source_len
 					 &import_error) == 0);
 	CHECK(inventory.leaf_count == ORLIX_TCTI_A64_TARGET_LEAF_COUNT);
 	error = build_model(&inventory, &model);
-	CHECK(error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK);
+	CHECK(error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK);
 	source_counts = calloc(inventory.leaf_count, sizeof(*source_counts));
 	source_cursors = calloc(inventory.leaf_count, sizeof(*source_cursors));
 	source_ordered = calloc(inventory.operand_count, sizeof(*source_ordered));

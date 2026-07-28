@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
+#include "target_instruction_artifact.h"
 
 #include <stdbool.h>
 #include <pthread.h>
@@ -1231,12 +1232,199 @@ static int linux_proof_matrix_is_lossless_and_fail_closed(void)
 	return 0;
 }
 
+static int operational_note_mapping_is_exact_and_fail_closed(void)
+{
+	static const char identity[] =
+		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe:12:7";
+	static const char digest[] =
+		"0000000000000000000000000000000000000000000000000000000000000000";
+	static const u8 strings[] =
+		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe:12:7\0"
+		"0000000000000000000000000000000000000000000000000000000000000000\0";
+	static const struct orlix_tcti_target_instruction_artifact_operational_note note = {
+		.leaf_index = 2U,
+		.source_offset = 12U,
+		.source_length = 7U,
+		.source_identity_offset = 0U,
+		.source_sha256_offset = sizeof(identity),
+		.kind = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION,
+	};
+	static const struct orlix_tcti_target_instruction_artifact artifact = {
+		.leaf_count = 3U,
+		.operational_notes = &note,
+		.operational_note_count = 1U,
+		.string_pool = strings,
+		.string_pool_size = sizeof(strings),
+	};
+	static const struct orlix_tcti_target_proof_case proof_case = {
+		.name = "note_case",
+		.obligations = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE,
+	};
+	static const struct orlix_tcti_target_proof_binding proof_binding = {
+		.kunit_case_mask = ORLIX_TCTI_PROOF_U64_C(1),
+		.source_ordinal = 2U,
+	};
+	static const struct orlix_tcti_target_proof_registry_entry registry = {
+		.id = "note-proof",
+		.obligations = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE,
+		.kunit_cases = &proof_case,
+		.kunit_case_count = 1U,
+		.bindings = &proof_binding,
+		.binding_count = 1U,
+	};
+	struct orlix_tcti_target_operational_note_proof_mapping mappings[2] = { {
+		.leaf_index = 2U,
+		.source_identity = identity,
+		.source_sha256 = digest,
+		.proof_id = "note-proof",
+		.kunit_case_name = "note_case",
+	} };
+	struct orlix_tcti_target_operational_note_mapping_result result;
+
+	EXPECT(!orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result));
+	EXPECT(result.mapped_count == 1U);
+	mappings[0].source_sha256 =
+		"1111111111111111111111111111111111111111111111111111111111111111";
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result) == -1);
+	EXPECT(result.error ==
+		ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DIGEST_MISMATCH);
+	mappings[0].source_sha256 = digest;
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, NULL, 0U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MISSING);
+	mappings[1] = mappings[0];
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 2U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DUPLICATE);
+	mappings[0].leaf_index = 1U;
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS);
+	mappings[0].leaf_index = 2U;
+	mappings[1] = (struct orlix_tcti_target_operational_note_proof_mapping) {
+		.leaf_index = 0U,
+		.source_identity = "stale",
+		.source_sha256 = digest,
+		.proof_id = "note-proof",
+		.kunit_case_name = "note_case",
+	};
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 2U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_STALE);
+	mappings[0].proof_id = "unknown";
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_PROOF);
+	mappings[0].proof_id = "note-proof";
+	mappings[0].kunit_case_name = "unknown";
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result) == -1);
+	EXPECT(result.error ==
+		ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_NATIVE_CASE);
+	mappings[0].kunit_case_name = NULL;
+	EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+		&artifact, mappings, 1U, &registry, 1U, &result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED);
+	{
+		struct orlix_tcti_target_proof_binding wrong_ordinal = proof_binding;
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		mappings[0].kunit_case_name = "note_case";
+		wrong_ordinal.source_ordinal = 1U;
+		mutated.bindings = &wrong_ordinal;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error ==
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH);
+	}
+	{
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		mutated.bindings = NULL;
+		mutated.binding_count = 0U;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error ==
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH);
+	}
+	{
+		struct orlix_tcti_target_proof_binding unrelated_case = proof_binding;
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		unrelated_case.kunit_case_mask = 0U;
+		mutated.bindings = &unrelated_case;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error ==
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH);
+	}
+	{
+		struct orlix_tcti_target_proof_case unrelated_case = proof_case;
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		unrelated_case.obligations =
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
+		mutated.kunit_cases = &unrelated_case;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error ==
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_INSUFFICIENT_OBLIGATIONS);
+	}
+	{
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		mutated.obligations = 0U;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error ==
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_INSUFFICIENT_OBLIGATIONS);
+	}
+	{
+		struct orlix_tcti_target_proof_case duplicate_cases[] = {
+			proof_case, proof_case,
+		};
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		mutated.kunit_cases = duplicate_cases;
+		mutated.kunit_case_count = 2U;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS);
+	}
+	{
+		struct orlix_tcti_target_proof_binding duplicate_bindings[] = {
+			proof_binding, proof_binding,
+		};
+		struct orlix_tcti_target_proof_registry_entry mutated = registry;
+
+		mutated.bindings = duplicate_bindings;
+		mutated.binding_count = 2U;
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, &mutated, 1U, &result) == -1);
+		EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS);
+	}
+	{
+		struct orlix_tcti_target_proof_registry_entry duplicate_proofs[] = {
+			registry, registry,
+		};
+
+		EXPECT(orlix_tcti_target_operational_note_proof_mappings_validate(
+			&artifact, mappings, 1U, duplicate_proofs, 2U, &result) == -1);
+		EXPECT(result.error == ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS);
+	}
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
+		{ "operational_note_mapping_is_exact_and_fail_closed",
+		 operational_note_mapping_is_exact_and_fail_closed },
 		{ "canonical_first_use_is_concurrent_and_immutable",
 		  canonical_first_use_is_concurrent_and_immutable },
 		{ "real_manifest_bindings_are_exact",

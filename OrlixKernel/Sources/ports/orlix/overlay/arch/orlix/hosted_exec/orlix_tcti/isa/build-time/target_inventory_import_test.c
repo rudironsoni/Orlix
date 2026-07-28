@@ -27,6 +27,7 @@ void fixture_inventory_sha256(const void *data, size_t length, char digest[65]);
 
 #define orlix_tcti_target_inventory_destroy fixture_inventory_destroy
 #define orlix_tcti_target_inventory_import fixture_inventory_import
+#define orlix_tcti_target_inventory_import_expected fixture_inventory_import_expected
 #define orlix_tcti_target_inventory_operation fixture_inventory_operation
 #define orlix_tcti_target_inventory_sha256 fixture_inventory_sha256
 #define source_sha256 fixture_source_sha256
@@ -37,6 +38,7 @@ void fixture_inventory_sha256(const void *data, size_t length, char digest[65]);
 #undef orlix_tcti_target_inventory_sha256
 #undef orlix_tcti_target_inventory_operation
 #undef orlix_tcti_target_inventory_import
+#undef orlix_tcti_target_inventory_import_expected
 #undef orlix_tcti_target_inventory_destroy
 
 #define EXPECT_EQ(expected, actual)                                            \
@@ -320,7 +322,7 @@ static int named_fixed_and_partial_fields_use_distinct_planes(void)
 			"%s{\"_type\":\"Instruction.Instruction\","
 			"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
 			"\"name\":\"fixture_leaf_%u\",\"operation_id\":\"fixture_op\","
-			"\"preferred\":null,"
+				"\"preferred\":null,\"operational_note\":null,"
 			"\"assembly\":{\"symbols\":[{\"_type\":"
 			"\"Instruction.Symbols.Literal\",\"value\":\"OP\"}]},"
 			"\"encoding\":{\"width\":32,\"values\":%s}}",
@@ -353,7 +355,6 @@ out:
 	free(json);
 	return status;
 }
-
 static int expect_operand(const struct orlix_tcti_target_inventory *inventory,
 			  size_t leaf_index, uint32_t condition, const char *name,
 			  uint8_t start, uint8_t width, uint32_t variable_mask)
@@ -684,6 +685,130 @@ static int reachable_operation_alias_cycle_is_rejected(
 	return -1;
 }
 
+static int compact_operational_note_fixture(const char *note,
+					     size_t expected_obligations,
+					     bool expected_valid)
+{
+	static const char prefix[] =
+		"{\"_meta\":{\"version\":{\"architecture\":\"vFATAp1-A\","
+		"\"build\":\"818\",\"ref\":\"2026-06_rel\",\"schema\":\"2.9.5\","
+		"\"timestamp\":\"2026-06-24 17:12:14\"}},"
+		"\"instructions\":[{\"name\":\"A64\","
+		"\"_type\":\"Instruction.InstructionSet\","
+		"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
+		"\"children\":[";
+	static const char values[] =
+		"[{\"_type\":\"Instruction.Encodeset.Bits\","
+		"\"range\":{\"start\":0,\"width\":1},"
+		"\"value\":{\"value\":\"'0'\"}}]";
+	static const char suffix[] =
+		"]}],\"operations\":{\"fixture_op\":{"
+		"\"_type\":\"Instruction.Operation\"}}}";
+	struct orlix_tcti_target_inventory inventory = { 0 };
+	struct orlix_tcti_target_import_error error = { 0 };
+	size_t capacity = 4U * 1024U * 1024U;
+	size_t remaining = capacity;
+	char *json = malloc(capacity);
+	char *cursor = json;
+	size_t index;
+	int imported;
+	int status = -1;
+
+	if (!json || append_fixture(&cursor, &remaining, "%s", prefix))
+		goto out;
+	for (index = 0; index < ORLIX_TCTI_A64_TARGET_LEAF_COUNT; index++) {
+		if (append_fixture(&cursor, &remaining,
+			"%s{\"_type\":\"Instruction.Instruction\","
+			"\"condition\":{\"_type\":\"AST.Bool\",\"value\":true},"
+			"\"name\":\"note_fixture_%zu\",\"operation_id\":\"fixture_op\","
+			"\"preferred\":null,\"operational_note\":%s,"
+			"\"assembly\":{\"symbols\":[{\"_type\":"
+			"\"Instruction.Symbols.Literal\",\"value\":\"OP\"}]},"
+			"\"encoding\":{\"width\":32,\"values\":%s}}",
+			index ? "," : "", index, index ? "null" : note, values))
+			goto out;
+	}
+	if (append_fixture(&cursor, &remaining, "%s", suffix))
+		goto out;
+	fixture_pinned_hash = fixture_source_sha256;
+	imported = fixture_inventory_import(json, (size_t)(cursor - json),
+					    &inventory, &error);
+	fixture_pinned_hash = NULL;
+	if (expected_valid) {
+		if (imported || inventory.leaf_count !=
+			ORLIX_TCTI_A64_TARGET_LEAF_COUNT ||
+		    inventory.operational_note_obligation_count != expected_obligations)
+			goto out;
+	} else if (!imported || error.code != ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE) {
+		goto out;
+	}
+	status = 0;
+out:
+	fixture_pinned_hash = NULL;
+	fixture_inventory_destroy(&inventory);
+	free(json);
+	return status;
+}
+
+static int compact_operational_note_contract_is_enforced(void)
+{
+	static const struct {
+		const char *escaped;
+		const char *raw;
+	} unicode_whitespace[] = {
+		{ "\"\\u0085\"", "\"\xc2\x85\"" },
+		{ "\"\\u00a0\"", "\"\xc2\xa0\"" },
+		{ "\"\\u1680\"", "\"\xe1\x9a\x80\"" },
+		{ "\"\\u2000\"", "\"\xe2\x80\x80\"" },
+		{ "\"\\u2001\"", "\"\xe2\x80\x81\"" },
+		{ "\"\\u2002\"", "\"\xe2\x80\x82\"" },
+		{ "\"\\u2003\"", "\"\xe2\x80\x83\"" },
+		{ "\"\\u2004\"", "\"\xe2\x80\x84\"" },
+		{ "\"\\u2005\"", "\"\xe2\x80\x85\"" },
+		{ "\"\\u2006\"", "\"\xe2\x80\x86\"" },
+		{ "\"\\u2007\"", "\"\xe2\x80\x87\"" },
+		{ "\"\\u2008\"", "\"\xe2\x80\x88\"" },
+		{ "\"\\u2009\"", "\"\xe2\x80\x89\"" },
+		{ "\"\\u200a\"", "\"\xe2\x80\x8a\"" },
+		{ "\"\\u2028\"", "\"\xe2\x80\xa8\"" },
+		{ "\"\\u2029\"", "\"\xe2\x80\xa9\"" },
+		{ "\"\\u202f\"", "\"\xe2\x80\xaf\"" },
+		{ "\"\\u205f\"", "\"\xe2\x81\x9f\"" },
+		{ "\"\\u3000\"", "\"\xe3\x80\x80\"" },
+	};
+	static const char *const valid[] = {
+		"\"Execute precisely\"",
+		"[\"First\",[\"Second\"]]",
+	};
+	static const char *const malformed[] = {
+		"\"\"", "\" \\t \\u0020\"", "[]", "[\"ok\",[]]",
+		"42", "true", "{}", "[\"ok\",null]", "\"\xc2\"",
+		"\"\xc0\xaf\"", "\"\xe2\x28\xa1\"", "\"\xed\xa0\x80\"",
+		"\"\xf4\x90\x80\x80\"", "\"text\xc0\xaf\"",
+		"\"text\xe2\x28\xa1\"", "\"text\\n\xc2\"",
+		"\"text\\t\xed\xa0\x80\"",
+	};
+	size_t index;
+
+	if (compact_operational_note_fixture("null", 0U, true))
+		return -1;
+	for (index = 0; index < sizeof(valid) / sizeof(valid[0]); index++)
+		if (compact_operational_note_fixture(valid[index], 1U, true))
+			return -1;
+	for (index = 0; index < sizeof(malformed) / sizeof(malformed[0]); index++)
+		if (compact_operational_note_fixture(malformed[index], 0U, false))
+			return -1;
+	for (index = 0;
+	     index < sizeof(unicode_whitespace) / sizeof(unicode_whitespace[0]);
+	     index++)
+		if (compact_operational_note_fixture(
+				unicode_whitespace[index].escaped, 0U, false) ||
+		    compact_operational_note_fixture(
+				unicode_whitespace[index].raw, 0U, false))
+			return -1;
+	return 0;
+}
+
 static int import_pinned_source(const char *path)
 {
 	FILE *file;
@@ -767,27 +892,51 @@ static int import_pinned_source(const char *path)
 			goto out_json;
 		}
 	}
-	if (pinned_leaf_source_spans_are_exact(&inventory, json, (size_t)length))
+	if (pinned_leaf_source_spans_are_exact(&inventory, json, (size_t)length)) {
+		fprintf(stderr, "pinned leaf source span validation failed\n");
 		goto out_json;
+	}
 	if (pinned_instruction_aliases_are_exact(&inventory, json,
-					       (size_t)length))
+					       (size_t)length)) {
+		fprintf(stderr, "pinned instruction alias validation failed\n");
 		goto out_json;
-	if (alias_effective_condition_inherits_parent(&inventory))
+	}
+	if (alias_effective_condition_inherits_parent(&inventory)) {
+		fprintf(stderr, "alias inherited-condition validation failed\n");
 		goto out_json;
+	}
 	if (reachable_operation_alias_rejection_is_bounded(json, (size_t)length,
-						   &inventory))
+						   &inventory)) {
+		fprintf(stderr, "bounded alias rejection validation failed\n");
 		goto out_json;
+	}
 	if (reachable_operation_alias_cycle_is_rejected(json, (size_t)length,
-						     &inventory))
+						     &inventory)) {
+		fprintf(stderr, "alias-cycle validation failed\n");
 		goto out_json;
-	if (pinned_operand_provenance_is_exact(&inventory))
+	}
+	EXPECT_EQ(0, inventory.operational_note_obligation_count);
+	for (size_t index = 0; index < inventory.leaf_count; index++)
+		EXPECT_EQ(ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_ABSENT,
+			  inventory.leaves[index].operational_note_state);
+	if (pinned_operand_provenance_is_exact(&inventory)) {
+		fprintf(stderr, "operand provenance validation failed\n");
 		goto out_json;
+	}
 	if (pinned_inherited_fixed_operand_provenance_is_exact(
-		    &inventory, json, (size_t)length))
+		    &inventory, json, (size_t)length)) {
+		fprintf(stderr, "inherited fixed-operand validation failed\n");
 		goto out_json;
-	if (named_fixed_and_partial_fields_use_distinct_planes())
+	}
+	if (named_fixed_and_partial_fields_use_distinct_planes()) {
+		fprintf(stderr, "named fixed/partial fixture failed\n");
 		goto out_json;
-	if (fixed_and_partially_variable_fields_are_disjoint(&inventory))
+	}
+	if (fixed_and_partially_variable_fields_are_disjoint(&inventory)) {
+		fprintf(stderr, "fixed/partial disjoint validation failed\n");
+		goto out_json;
+	}
+	if (compact_operational_note_contract_is_enforced())
 		goto out_json;
 	orlix_tcti_target_inventory_destroy(&inventory);
 	memset(&error, 0, sizeof(error));

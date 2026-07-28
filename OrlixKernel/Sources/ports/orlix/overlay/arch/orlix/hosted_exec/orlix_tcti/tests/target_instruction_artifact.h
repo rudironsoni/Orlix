@@ -21,7 +21,7 @@ typedef uint8_t u8;
  * untrusted C pointers, because C cannot validate pointer provenance before
  * dereferencing the fixed-width view.
  */
-#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 4U
+#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 5U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT 4350U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT 292U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT 171U
@@ -133,6 +133,19 @@ struct orlix_tcti_target_instruction_artifact_operation_alias {
 	u8 predicate_kind;
 };
 
+enum orlix_tcti_target_instruction_artifact_operational_note_kind {
+	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION = 1,
+};
+
+struct orlix_tcti_target_instruction_artifact_operational_note {
+	u32 leaf_index;
+	u32 source_offset;
+	u32 source_length;
+	u32 source_identity_offset;
+	u32 source_sha256_offset;
+	u8 kind;
+};
+
 struct orlix_tcti_target_instruction_artifact {
 	u32 version;
 	const char *architecture;
@@ -152,6 +165,9 @@ struct orlix_tcti_target_instruction_artifact {
 	const struct orlix_tcti_target_instruction_artifact_operation_alias
 		*operation_aliases;
 	size_t operation_alias_count;
+	const struct orlix_tcti_target_instruction_artifact_operational_note
+		*operational_notes;
+	size_t operational_note_count;
 	const u8 *string_pool;
 	size_t string_pool_size;
 	const u8 *condition_pool;
@@ -173,6 +189,8 @@ enum orlix_tcti_target_instruction_artifact_validation_error {
 	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_SPAN_INVALID,
 	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
 	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID,
+	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_INVALID,
+	ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_IDENTITY_INVALID,
 };
 
 struct orlix_tcti_target_instruction_artifact_validation_result {
@@ -180,6 +198,7 @@ struct orlix_tcti_target_instruction_artifact_validation_result {
 	u32 leaf_index;
 	u32 operand_index;
 	u32 alias_index;
+	u32 operational_note_index;
 };
 
 /*
@@ -194,6 +213,11 @@ struct orlix_tcti_target_instruction_artifact_validation_result {
  */
 int orlix_tcti_target_instruction_artifact_validate(
 	const struct orlix_tcti_target_instruction_artifact *artifact,
+	struct orlix_tcti_target_instruction_artifact_validation_result *result);
+
+int orlix_tcti_target_instruction_artifact_validate_expected(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	const char *expected_source_sha256,
 	struct orlix_tcti_target_instruction_artifact_validation_result *result);
 
 const struct orlix_tcti_target_instruction_artifact *

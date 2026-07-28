@@ -497,6 +497,58 @@ static void test_operand_rejections(void)
 	expect_error(&fixture, ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERAND_INVALID);
 }
 
+static void test_operational_note_rejections(void)
+{
+	struct fixture fixture;
+	struct orlix_tcti_target_instruction_artifact_operational_note notes[2];
+	struct orlix_tcti_target_instruction_artifact_validation_result result;
+	uint32_t identity_offset;
+	uint32_t digest_offset;
+
+	fixture_initialize(&fixture);
+	identity_offset = add_string(&fixture,
+		"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe:12:7");
+	digest_offset = add_string(&fixture,
+		"0000000000000000000000000000000000000000000000000000000000000000");
+	fixture.artifact.string_pool_size = fixture.strings_used;
+	notes[0] = (struct orlix_tcti_target_instruction_artifact_operational_note) {
+		.leaf_index = 2U,
+		.source_offset = 12U,
+		.source_length = 7U,
+		.source_identity_offset = identity_offset,
+		.source_sha256_offset = digest_offset,
+		.kind = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION,
+	};
+	fixture.artifact.operational_notes = notes;
+	fixture.artifact.operational_note_count = 1U;
+	EXPECT(!orlix_tcti_target_instruction_artifact_validate(&fixture.artifact,
+		&result));
+
+	fixture.artifact.operational_notes = NULL;
+	EXPECT(orlix_tcti_target_instruction_artifact_validate(&fixture.artifact,
+		&result) == -1);
+	EXPECT(result.error == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH);
+	fixture.artifact.operational_notes = notes;
+	notes[0].leaf_index = ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT;
+	EXPECT(orlix_tcti_target_instruction_artifact_validate(&fixture.artifact,
+		&result) == -1);
+	EXPECT(result.error ==
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_INVALID);
+	notes[0].leaf_index = 2U;
+	notes[0].source_length++;
+	EXPECT(orlix_tcti_target_instruction_artifact_validate(&fixture.artifact,
+		&result) == -1);
+	EXPECT(result.error ==
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_IDENTITY_INVALID);
+	notes[0].source_length--;
+	notes[1] = notes[0];
+	fixture.artifact.operational_note_count = 2U;
+	EXPECT(orlix_tcti_target_instruction_artifact_validate(&fixture.artifact,
+		&result) == -1);
+	EXPECT(result.error ==
+		ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_INVALID);
+}
+
 static void test_alias_rejections_and_denominator(void)
 {
 	struct fixture fixture;
@@ -619,6 +671,7 @@ int main(void)
 	test_condition_bytecode_depth_limit();
 	test_leaf_and_span_rejections();
 	test_operand_rejections();
+	test_operational_note_rejections();
 	test_alias_rejections_and_denominator();
 	if (failures) {
 		fprintf(stderr, "%u target instruction artifact test(s) failed\n",

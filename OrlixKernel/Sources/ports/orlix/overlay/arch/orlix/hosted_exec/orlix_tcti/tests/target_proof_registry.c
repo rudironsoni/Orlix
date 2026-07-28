@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
 #include "target_proof_ingestion.h"
+#include "target_instruction_artifact.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -8,6 +9,249 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE ((size_t)-1)
+
+static void operational_note_mapping_fail(
+	struct orlix_tcti_target_operational_note_mapping_result *result,
+	enum orlix_tcti_target_operational_note_mapping_error error,
+	size_t note_index, size_t mapping_index)
+{
+	if (result)
+		*result = (struct orlix_tcti_target_operational_note_mapping_result) {
+			.error = error,
+			.note_index = note_index,
+			.mapping_index = mapping_index,
+			.mapped_count = 0,
+		};
+}
+
+static const char *operational_note_identity(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	size_t note_index)
+{
+	u32 offset = artifact->operational_notes[note_index].source_identity_offset;
+	const u8 *nul;
+
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+	nul = memchr(artifact->string_pool + offset, '\0',
+		artifact->string_pool_size - offset);
+	return nul && nul != artifact->string_pool + offset ?
+		(const char *)artifact->string_pool + offset : NULL;
+}
+
+static const char *operational_note_digest(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	size_t note_index)
+{
+	u32 offset = artifact->operational_notes[note_index].source_sha256_offset;
+	const u8 *nul;
+
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+	nul = memchr(artifact->string_pool + offset, '\0',
+		artifact->string_pool_size - offset);
+	return nul && nul != artifact->string_pool + offset ?
+		(const char *)artifact->string_pool + offset : NULL;
+}
+
+const struct orlix_tcti_target_operational_note_proof_mapping *
+orlix_tcti_target_operational_note_proof_mappings(size_t *count)
+{
+	if (count)
+		*count = 0;
+	return NULL;
+}
+
+int orlix_tcti_target_operational_note_proof_mappings_validate(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	const struct orlix_tcti_target_operational_note_proof_mapping *mappings,
+	size_t mapping_count,
+	const struct orlix_tcti_target_proof_registry_entry *registry,
+	size_t registry_count,
+	struct orlix_tcti_target_operational_note_mapping_result *result)
+{
+	size_t note_index;
+	size_t mapping_index;
+	size_t mapped_count = 0;
+
+	operational_note_mapping_fail(result,
+		ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_OK,
+		ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE,
+		ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE);
+	if (!artifact || (mapping_count && !mappings) ||
+	    (registry_count && !registry)) {
+		operational_note_mapping_fail(result,
+			ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+			ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE,
+			ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE);
+		return -1;
+	}
+	for (note_index = 0; note_index < artifact->operational_note_count;
+	     note_index++) {
+		const struct orlix_tcti_target_instruction_artifact_operational_note *note =
+			&artifact->operational_notes[note_index];
+		const char *identity = operational_note_identity(artifact, note_index);
+		const char *digest = operational_note_digest(artifact, note_index);
+		size_t exact_count = 0;
+		size_t partial_count = 0;
+		size_t exact_index = ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE;
+
+		if (!identity || !digest) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+				note_index, ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE);
+			return -1;
+		}
+		for (mapping_index = 0; mapping_index < mapping_count; mapping_index++) {
+			const struct orlix_tcti_target_operational_note_proof_mapping *mapping =
+				&mappings[mapping_index];
+			bool same_leaf = mapping->leaf_index == note->leaf_index;
+			bool same_identity = mapping->source_identity &&
+				!strcmp(mapping->source_identity, identity);
+
+			if (same_leaf && same_identity) {
+				exact_count++;
+				exact_index = mapping_index;
+			} else if (same_leaf || same_identity) {
+				partial_count++;
+			}
+		}
+		if (exact_count > 1U) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DUPLICATE,
+				note_index, exact_index);
+			return -1;
+		}
+		if (!exact_count) {
+			operational_note_mapping_fail(result, partial_count ?
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS :
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MISSING,
+				note_index, ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE);
+			return -1;
+		}
+		if (!mappings[exact_index].source_sha256 ||
+		    strcmp(mappings[exact_index].source_sha256, digest)) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_DIGEST_MISMATCH,
+				note_index, exact_index);
+			return -1;
+		}
+		mapped_count++;
+	}
+	for (mapping_index = 0; mapping_index < mapping_count; mapping_index++) {
+		const struct orlix_tcti_target_operational_note_proof_mapping *mapping =
+			&mappings[mapping_index];
+		const struct orlix_tcti_target_proof_registry_entry *entry = NULL;
+		size_t registry_index;
+		size_t case_index;
+		size_t selected_case = ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE;
+		size_t case_count = 0;
+		size_t proof_count = 0;
+		size_t binding_index;
+		size_t binding_count = 0;
+		const struct orlix_tcti_target_proof_binding *binding = NULL;
+		bool source_exists = false;
+
+		if (!mapping->source_identity || !mapping->source_sha256 ||
+		    !mapping->proof_id ||
+		    !mapping->kunit_case_name) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		for (note_index = 0; note_index < artifact->operational_note_count;
+		     note_index++)
+			if (mapping->leaf_index == artifact->operational_notes[note_index].leaf_index &&
+			    !strcmp(mapping->source_identity,
+				operational_note_identity(artifact, note_index)))
+				source_exists = true;
+		if (!source_exists) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_STALE,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		for (registry_index = 0; registry_index < registry_count; registry_index++)
+			if (!strcmp(registry[registry_index].id, mapping->proof_id)) {
+				entry = &registry[registry_index];
+				proof_count++;
+			}
+		if (!entry) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_PROOF,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		if (proof_count != 1U) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		if ((entry->binding_count && !entry->bindings) ||
+		    (entry->kunit_case_count && !entry->kunit_cases)) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		for (case_index = 0; case_index < entry->kunit_case_count; case_index++)
+			if (!strcmp(entry->kunit_cases[case_index].name,
+				    mapping->kunit_case_name)) {
+				case_count++;
+				selected_case = case_index;
+			}
+		if (case_count != 1U) {
+			operational_note_mapping_fail(result,
+				case_count ? ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS :
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_UNKNOWN_NATIVE_CASE,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		if (!(entry->obligations &
+		      ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE) ||
+		    !(entry->kunit_cases[selected_case].obligations &
+		      ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE)) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_INSUFFICIENT_OBLIGATIONS,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		if (selected_case >= sizeof(orlix_tcti_proof_u64) * CHAR_BIT) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++)
+			if (entry->bindings[binding_index].source_ordinal ==
+			    mapping->leaf_index) {
+				binding = &entry->bindings[binding_index];
+				binding_count++;
+			}
+		if (binding_count != 1U) {
+			operational_note_mapping_fail(result, binding_count ?
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_AMBIGUOUS :
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+		if (!(binding->kunit_case_mask &
+		      (ORLIX_TCTI_PROOF_U64_C(1) << selected_case))) {
+			operational_note_mapping_fail(result,
+				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_BINDING_MISMATCH,
+				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
+			return -1;
+		}
+	}
+	if (result)
+		result->mapped_count = mapped_count;
+	return 0;
+}
 
 enum canonical_initialization_state {
 	CANONICAL_UNINITIALIZED,
@@ -65,7 +309,8 @@ static void canonical_initialization_publish(unsigned int *state, bool success)
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE)
 #define BASELINE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \

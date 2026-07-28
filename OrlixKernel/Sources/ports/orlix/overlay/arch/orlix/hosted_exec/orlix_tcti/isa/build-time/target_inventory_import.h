@@ -45,6 +45,13 @@ struct orlix_tcti_target_leaf {
 	uint32_t encoding_mask;
 	uint32_t encoding_pattern;
 	uint32_t condition;
+	enum {
+		ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_ABSENT = 0,
+		ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION,
+	} operational_note_state;
+	size_t operational_note_source_offset;
+	size_t operational_note_source_length;
+	char operational_note_sha256[65];
 	/* Raw byte span of this Instruction.Instruction object in Instructions.json. */
 	size_t source_offset;
 	size_t source_length;
@@ -127,10 +134,6 @@ struct orlix_tcti_target_operation {
 	bool alias_predicate_unconditional;
 	size_t source_offset;
 	size_t source_length;
-	/* Raw source provenance of the operation's optional operational_note. */
-	bool operational_note_present;
-	size_t operational_note_source_offset;
-	size_t operational_note_source_length;
 	/*
 	 * Exact source witnesses for the operation and decode members.  These are
 	 * availability facts only.  They cannot supply semantic provenance without
@@ -199,6 +202,7 @@ struct orlix_tcti_target_inventory {
 	size_t instruction_alias_count;
 	size_t instruction_alias_capacity;
 	size_t reachable_operation_alias_count;
+	size_t operational_note_obligation_count;
 };
 
 enum orlix_tcti_target_import_error_code {
@@ -224,6 +228,11 @@ struct orlix_tcti_target_import_error {
 int orlix_tcti_target_inventory_import(const char *json, size_t length,
 				 struct orlix_tcti_target_inventory *inventory,
 				 struct orlix_tcti_target_import_error *error);
+
+int orlix_tcti_target_inventory_import_expected(
+	const char *json, size_t length, const char *expected_source_sha256,
+	struct orlix_tcti_target_inventory *inventory,
+	struct orlix_tcti_target_import_error *error);
 
 void orlix_tcti_target_inventory_destroy(struct orlix_tcti_target_inventory *inventory);
 

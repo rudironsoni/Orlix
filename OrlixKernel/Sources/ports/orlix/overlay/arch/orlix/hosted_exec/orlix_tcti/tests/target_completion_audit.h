@@ -282,6 +282,7 @@ enum orlix_tcti_target_completion_error {
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT = 1U << 17,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_LINUX_PROOF_MATRIX = 1U << 18,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_OFFICIAL_SEMANTICS_NOT_SPECIFIED = 1U << 19,
+	ORLIX_TCTI_TARGET_COMPLETION_ERROR_OPERATIONAL_NOTE = 1U << 20,
 };
 
 struct orlix_tcti_target_completion_result {
@@ -307,6 +308,11 @@ struct orlix_tcti_target_completion_result {
 	size_t stale_proof_bindings;
 	/* Required duties still lacking native execution evidence. */
 	size_t unproved_obligation_bindings;
+	/* Authored operational notes are additional, never substitute, obligations. */
+	size_t operational_note_rows;
+	size_t mapped_operational_note_rows;
+	size_t invalid_operational_note_mappings;
+	size_t unproved_operational_note_rows;
 	/* Source conditions that bind to the checked Arm feature-domain artifact. */
 	size_t source_condition_domain_bound_rows;
 	size_t invalid_source_condition_rows;
@@ -376,6 +382,9 @@ struct orlix_tcti_target_completion_audit_inputs_for_test {
 	size_t classification_count;
 	const struct orlix_tcti_target_proof_registry_entry *registry;
 	size_t registry_count;
+	const struct orlix_tcti_target_operational_note_proof_mapping
+		*operational_note_mappings;
+	size_t operational_note_mapping_count;
 	/* Optional host-only checked artifact injection for atomicity tests. */
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact;
 	const struct orlix_tcti_target_feature_applicability_artifact *feature_applicability;

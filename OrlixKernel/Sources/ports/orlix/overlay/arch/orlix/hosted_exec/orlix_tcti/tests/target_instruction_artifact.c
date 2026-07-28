@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_instruction_artifact.h"
 #include "target_condition_format.h"
+#ifdef ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_EXTERNAL_GENERATED
+#include <target_instruction_artifact_generated.h>
+#else
 #include "../isa/target_instruction_artifact_generated.h"
+#endif
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
@@ -40,6 +44,7 @@ static int fail(struct orlix_tcti_target_instruction_artifact_validation_result 
 			.leaf_index = leaf_index,
 			.operand_index = operand_index,
 			.alias_index = ORLIX_TCTI_U32_NONE,
+			.operational_note_index = ORLIX_TCTI_U32_NONE,
 		};
 	return -1;
 }
@@ -171,11 +176,12 @@ static bool pool_string(const u8 *pool, size_t pool_size, u32 offset,
 	return true;
 }
 
-static bool span_identity_matches(const u8 *pool, size_t pool_size,
+static bool span_identity_matches(const char *source_sha256,
+				  const u8 *pool, size_t pool_size,
 				  u32 identity_offset, u32 source_offset,
 				  u32 source_length)
 {
-	char expected[sizeof(pinned_source_sha256) + 2U + 20U + 20U];
+	char expected[64U + 2U + 20U + 20U + 1U];
 	const char *actual;
 	int count;
 
@@ -183,7 +189,7 @@ static bool span_identity_matches(const u8 *pool, size_t pool_size,
 	    !pool_string(pool, pool_size, identity_offset, &actual))
 		return false;
 	count = snprintf(expected, sizeof(expected), "%s:%u:%u",
-		pinned_source_sha256, source_offset, source_length);
+			 source_sha256, source_offset, source_length);
 	return count > 0 && (size_t)count < sizeof(expected) &&
 		!strcmp(actual, expected);
 }
@@ -371,8 +377,78 @@ static int fail_alias(
 			.leaf_index = ORLIX_TCTI_U32_NONE,
 			.operand_index = ORLIX_TCTI_U32_NONE,
 			.alias_index = alias_index,
+			.operational_note_index = ORLIX_TCTI_U32_NONE,
 		};
 	return -1;
+}
+
+static int fail_operational_note(
+	struct orlix_tcti_target_instruction_artifact_validation_result *result,
+	enum orlix_tcti_target_instruction_artifact_validation_error error,
+	u32 note_index)
+{
+	if (result)
+		*result = (struct orlix_tcti_target_instruction_artifact_validation_result) {
+			.error = error,
+			.leaf_index = ORLIX_TCTI_U32_NONE,
+			.operand_index = ORLIX_TCTI_U32_NONE,
+			.alias_index = ORLIX_TCTI_U32_NONE,
+			.operational_note_index = note_index,
+		};
+	return -1;
+}
+
+static bool sha256_string(const struct orlix_tcti_target_instruction_artifact *artifact,
+			  u32 offset)
+{
+	const char *digest;
+	size_t index;
+
+	if (!pool_string(artifact->string_pool, artifact->string_pool_size,
+			offset, &digest) || strlen(digest) != 64U)
+		return false;
+	for (index = 0; index < 64U; index++)
+		if (!((digest[index] >= '0' && digest[index] <= '9') ||
+		      (digest[index] >= 'a' && digest[index] <= 'f')))
+			return false;
+	return true;
+}
+
+static int validate_operational_notes(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	struct orlix_tcti_target_instruction_artifact_validation_result *result)
+{
+	size_t index;
+	u32 previous_leaf = ORLIX_TCTI_U32_NONE;
+
+	if (artifact->operational_note_count > artifact->leaf_count ||
+	    (artifact->operational_note_count && !artifact->operational_notes) ||
+	    (!artifact->operational_note_count && artifact->operational_notes))
+		return fail_operational_note(result,
+			ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT_MISMATCH,
+			ORLIX_TCTI_U32_NONE);
+	for (index = 0; index < artifact->operational_note_count; index++) {
+		const struct orlix_tcti_target_instruction_artifact_operational_note *note =
+			&artifact->operational_notes[index];
+
+		if (note->leaf_index >= artifact->leaf_count ||
+		    (index && note->leaf_index <= previous_leaf) ||
+		    note->kind !=
+			ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION ||
+		    !valid_source_span(note->source_offset, note->source_length) ||
+		    !sha256_string(artifact, note->source_sha256_offset))
+			return fail_operational_note(result,
+				ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_INVALID,
+				(u32)index);
+		if (!span_identity_matches(artifact->source_sha256, artifact->string_pool,
+			artifact->string_pool_size, note->source_identity_offset,
+			note->source_offset, note->source_length))
+			return fail_operational_note(result,
+				ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_IDENTITY_INVALID,
+				(u32)index);
+		previous_leaf = note->leaf_index;
+	}
+	return 0;
 }
 
 static bool artifact_string(const struct orlix_tcti_target_instruction_artifact *artifact,
@@ -537,13 +613,13 @@ static int validate_aliases(const struct orlix_tcti_target_instruction_artifact 
 			alias->condition_length, alias->predicate_sha256_offset))
 			return fail_alias(result, ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID,
 				(u32)index);
-		if (!span_identity_matches(artifact->string_pool,
+		if (!span_identity_matches(artifact->source_sha256, artifact->string_pool,
 			artifact->string_pool_size, alias->source_identity_offset,
 			alias->source_offset, alias->source_length) ||
-		    !span_identity_matches(artifact->string_pool,
+		    !span_identity_matches(artifact->source_sha256, artifact->string_pool,
 			artifact->string_pool_size, alias->condition_identity_offset,
 			alias->condition_source_offset, alias->condition_source_length) ||
-		    !span_identity_matches(artifact->string_pool,
+		    !span_identity_matches(artifact->source_sha256, artifact->string_pool,
 			artifact->string_pool_size, alias->preferred_identity_offset,
 			alias->preferred_source_offset, alias->preferred_source_length))
 			return fail_alias(result,
@@ -568,7 +644,7 @@ static int validate_aliases(const struct orlix_tcti_target_instruction_artifact 
 		    !artifact_string(artifact, alias->declared_operation_offset, &declared) ||
 		    !artifact_string(artifact, alias->target_operation_offset, NULL) ||
 		    !artifact_string(artifact, alias->resolved_operation_offset, &resolved) ||
-		    !span_identity_matches(artifact->string_pool,
+		    !span_identity_matches(artifact->source_sha256, artifact->string_pool,
 			artifact->string_pool_size, alias->source_identity_offset,
 			alias->source_offset, alias->source_length) ||
 		    !unconditional_predicate(artifact, alias->predicate_offset,
@@ -616,8 +692,9 @@ static int validate_aliases(const struct orlix_tcti_target_instruction_artifact 
 	return 0;
 }
 
-int orlix_tcti_target_instruction_artifact_validate(
+int orlix_tcti_target_instruction_artifact_validate_expected(
 	const struct orlix_tcti_target_instruction_artifact *artifact,
+	const char *expected_source_sha256,
 	struct orlix_tcti_target_instruction_artifact_validation_result *result)
 {
 	u32 expected_operand = 0;
@@ -630,8 +707,10 @@ int orlix_tcti_target_instruction_artifact_validate(
 			.leaf_index = ORLIX_TCTI_U32_NONE,
 			.operand_index = ORLIX_TCTI_U32_NONE,
 			.alias_index = ORLIX_TCTI_U32_NONE,
+			.operational_note_index = ORLIX_TCTI_U32_NONE,
 		};
-	if (!artifact)
+	if (!artifact || !expected_source_sha256 ||
+	    strlen(expected_source_sha256) != 64U)
 		return fail(result, ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_INVALID_ARGUMENT,
 				    ORLIX_TCTI_U32_NONE, ORLIX_TCTI_U32_NONE);
 	if (artifact->version != ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION)
@@ -641,7 +720,7 @@ int orlix_tcti_target_instruction_artifact_validate(
 	    !exact_string(artifact->build, pinned_build) ||
 	    !exact_string(artifact->reference, pinned_reference) ||
 	    !exact_string(artifact->schema, pinned_schema) ||
-	    !exact_string(artifact->source_sha256, pinned_source_sha256))
+	    !exact_string(artifact->source_sha256, expected_source_sha256))
 		return fail(result, ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PROVENANCE_MISMATCH,
 				    ORLIX_TCTI_U32_NONE, ORLIX_TCTI_U32_NONE);
 	if (artifact->leaf_count != ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT ||
@@ -770,7 +849,7 @@ int orlix_tcti_target_instruction_artifact_validate(
 			    operand->condition_length != leaf->condition_length ||
 			    !valid_source_span(operand->source_offset,
 				operand->source_length) ||
-			    !span_identity_matches(artifact->string_pool,
+			    !span_identity_matches(artifact->source_sha256, artifact->string_pool,
 				artifact->string_pool_size, operand->source_identity_offset,
 				operand->source_offset, operand->source_length) ||
 			    !valid_fixed_operand_shape(leaf, operand) ||
@@ -805,7 +884,17 @@ int orlix_tcti_target_instruction_artifact_validate(
 			    ORLIX_TCTI_U32_NONE, expected_fixed_operand);
 	if (validate_aliases(artifact, result))
 		return -1;
+	if (validate_operational_notes(artifact, result))
+		return -1;
 	return 0;
+}
+
+int orlix_tcti_target_instruction_artifact_validate(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	struct orlix_tcti_target_instruction_artifact_validation_result *result)
+{
+	return orlix_tcti_target_instruction_artifact_validate_expected(
+		artifact, pinned_source_sha256, result);
 }
 
 const char *orlix_tcti_target_instruction_artifact_validation_error_name(
@@ -828,6 +917,10 @@ const char *orlix_tcti_target_instruction_artifact_validation_error_name(
 	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_INVALID: return "invalid alias";
 	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_ALIAS_IDENTITY_INVALID:
 		return "invalid alias identity";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_INVALID:
+		return "invalid operational note";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_IDENTITY_INVALID:
+		return "invalid operational note identity";
 	}
 	return "unknown validation error";
 }

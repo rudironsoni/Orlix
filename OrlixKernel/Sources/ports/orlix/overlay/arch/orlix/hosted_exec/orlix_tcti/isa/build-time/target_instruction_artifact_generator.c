@@ -122,7 +122,17 @@ struct artifact_operation_alias {
 	uint8_t predicate_kind;
 };
 
+struct artifact_operational_note {
+	uint32_t leaf_index;
+	uint32_t source_offset;
+	uint32_t source_length;
+	uint32_t source_identity_offset;
+	uint32_t source_sha256_offset;
+	uint8_t kind;
+};
+
 struct artifact_model {
+	const char *source_sha256;
 	struct artifact_bytes strings;
 	struct artifact_bytes conditions;
 	struct artifact_condition *condition_map;
@@ -135,6 +145,8 @@ struct artifact_model {
 	size_t instruction_alias_count;
 	struct artifact_operation_alias *operation_aliases;
 	size_t operation_alias_count;
+	struct artifact_operational_note *operational_notes;
+	size_t operational_note_count;
 };
 
 struct sha256_state {
@@ -328,23 +340,24 @@ static void artifact_model_destroy(struct artifact_model *model)
 	free(model->fixed_operands);
 	free(model->instruction_aliases);
 	free(model->operation_aliases);
+	free(model->operational_notes);
 	memset(model, 0, sizeof(*model));
 }
 
-static enum orlix_tcti_target_instruction_artifact_error import_category(
+static enum orlix_tcti_target_instruction_artifact_generator_error import_category(
 	const struct orlix_tcti_target_import_error *error)
 {
 	if (error->code == ORLIX_TCTI_TARGET_IMPORT_COUNT_MISMATCH)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
 	if (error->code == ORLIX_TCTI_TARGET_IMPORT_HASH_MISMATCH)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_DIGEST;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_DIGEST;
 	if (error->code == ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE &&
 	    !strcmp(error->message,
 	    "Instructions.json metadata does not match the pinned Arm AARCHMRS 2026-06 source"))
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_METADATA;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_METADATA;
 	if (error->code == ORLIX_TCTI_TARGET_IMPORT_NO_MEMORY)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
-	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
+	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE;
 }
 
 /* Imported names are C strings. Reject the JSON spelling that would decode
@@ -361,50 +374,104 @@ static int source_has_embedded_nul(const char *source, size_t length)
 	return 0;
 }
 
-static enum orlix_tcti_target_instruction_artifact_error build_conditions(
+static enum orlix_tcti_target_instruction_artifact_generator_error build_conditions(
 	const struct orlix_tcti_target_inventory *inventory, struct artifact_model *model)
 {
 	size_t index;
 
 	if (inventory->expression_count > SIZE_MAX / sizeof(*model->condition_map))
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 	model->condition_map = calloc(inventory->expression_count,
 				      sizeof(*model->condition_map));
 	if (inventory->expression_count && !model->condition_map)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
 	for (index = 0; index < inventory->expression_count; index++) {
 		struct orlix_tcti_target_condition_bytes bytes = { 0 };
 		enum orlix_tcti_target_condition_serialize_error error;
 
 		if (orlix_tcti_target_condition_serialize(inventory, (uint32_t)index,
 					     &bytes, &error))
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_CONDITION;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_CONDITION;
 		if (model->conditions.length > UINT32_MAX ||
 		    bytes.length > UINT32_MAX ||
 		    bytes_append(&model->conditions, bytes.data, bytes.length)) {
 			orlix_tcti_target_condition_bytes_destroy(&bytes);
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 		}
 		model->condition_map[index].offset = (uint32_t)(model->conditions.length - bytes.length);
 		model->condition_map[index].length = (uint32_t)bytes.length;
 		orlix_tcti_target_condition_bytes_destroy(&bytes);
 	}
-	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
+	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK;
 }
 
 static int append_span_identity(struct artifact_bytes *strings,
+				 const char *expected_source_sha256,
 				 size_t offset, size_t length, uint32_t *identity_offset)
 {
-	char identity[sizeof(source_sha256) + 2U + 20U + 20U];
+	char identity[64U + 2U + 20U + 20U + 1U];
 	int count;
 
 	if (!length || offset > UINT32_MAX || length > UINT32_MAX)
 		return -1;
-	count = snprintf(identity, sizeof(identity), "%s:%zu:%zu", source_sha256,
-			 offset, length);
+	count = snprintf(identity, sizeof(identity), "%s:%zu:%zu",
+			 expected_source_sha256, offset, length);
 	if (count < 0 || (size_t)count >= sizeof(identity))
 		return -1;
 	return bytes_append_string(strings, identity, identity_offset);
+}
+
+static enum orlix_tcti_target_instruction_artifact_generator_error
+build_operational_notes(const struct orlix_tcti_target_inventory *inventory,
+			struct artifact_model *model)
+{
+	size_t leaf_index;
+	size_t note_index = 0;
+
+	if (inventory->operational_note_obligation_count > UINT32_MAX ||
+	    inventory->operational_note_obligation_count >
+		SIZE_MAX / sizeof(*model->operational_notes))
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
+	if (inventory->operational_note_obligation_count) {
+		model->operational_notes = calloc(
+			inventory->operational_note_obligation_count,
+			sizeof(*model->operational_notes));
+		if (!model->operational_notes)
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
+	}
+	for (leaf_index = 0; leaf_index < inventory->leaf_count; leaf_index++) {
+		const struct orlix_tcti_target_leaf *leaf = &inventory->leaves[leaf_index];
+		struct artifact_operational_note *note;
+
+		if (leaf->operational_note_state ==
+		    ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_ABSENT)
+			continue;
+		if (leaf->operational_note_state !=
+		    ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_BEHAVIOR_OBLIGATION ||
+		    note_index >= inventory->operational_note_obligation_count ||
+		    leaf_index > UINT32_MAX ||
+		    leaf->operational_note_source_offset > UINT32_MAX ||
+		    !leaf->operational_note_source_length ||
+		    leaf->operational_note_source_length > UINT32_MAX)
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE;
+		note = &model->operational_notes[note_index++];
+		note->leaf_index = (uint32_t)leaf_index;
+		note->source_offset = (uint32_t)leaf->operational_note_source_offset;
+		note->source_length = (uint32_t)leaf->operational_note_source_length;
+		note->kind = 1U;
+		if (append_span_identity(&model->strings, model->source_sha256,
+			leaf->operational_note_source_offset,
+			leaf->operational_note_source_length,
+			&note->source_identity_offset) ||
+		    bytes_append_string(&model->strings,
+			leaf->operational_note_sha256,
+			&note->source_sha256_offset))
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
+	}
+	if (note_index != inventory->operational_note_obligation_count)
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
+	model->operational_note_count = note_index;
+	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK;
 }
 
 static int append_predicate_sha256(struct artifact_model *model,
@@ -421,7 +488,7 @@ static int append_predicate_sha256(struct artifact_model *model,
 	return bytes_append_string(&model->strings, digest, digest_offset);
 }
 
-static enum orlix_tcti_target_instruction_artifact_error build_aliases(
+static enum orlix_tcti_target_instruction_artifact_generator_error build_aliases(
 	const struct orlix_tcti_target_inventory *inventory, struct artifact_model *model)
 {
 	static const unsigned char unconditional_predicate[] = {
@@ -436,17 +503,17 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		ORLIX_TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT ||
 	    inventory->reachable_operation_alias_count !=
 		ORLIX_TCTI_A64_TARGET_REACHABLE_OPERATION_ALIAS_COUNT)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
 	model->instruction_aliases = calloc(inventory->instruction_alias_count,
 					  sizeof(*model->instruction_aliases));
 	model->operation_aliases = calloc(inventory->reachable_operation_alias_count,
 					 sizeof(*model->operation_aliases));
 	if (!model->instruction_aliases || !model->operation_aliases)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
 	if (model->conditions.length > UINT32_MAX ||
 	    bytes_append(&model->conditions, unconditional_predicate,
 		 sizeof(unconditional_predicate)))
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 	unconditional_offset = (uint32_t)(model->conditions.length -
 		sizeof(unconditional_predicate));
 	for (index = 0; index < inventory->instruction_alias_count; index++) {
@@ -457,12 +524,12 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 
 		if (source->ordinal != index ||
 		    source->condition >= inventory->expression_count ||
-		    append_span_identity(&model->strings, source->source_offset,
+		    append_span_identity(&model->strings, model->source_sha256, source->source_offset,
 				source->source_length, &alias->source_identity_offset) ||
-		    append_span_identity(&model->strings, source->condition_source_offset,
+		    append_span_identity(&model->strings, model->source_sha256, source->condition_source_offset,
 				source->condition_source_length,
 				&alias->condition_identity_offset) ||
-		    append_span_identity(&model->strings, source->preferred_source_offset,
+		    append_span_identity(&model->strings, model->source_sha256, source->preferred_source_offset,
 				source->preferred_source_length,
 				&alias->preferred_identity_offset) ||
 		    bytes_append_string(&model->strings, source->name, &alias->name_offset) ||
@@ -474,7 +541,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 			model->condition_map[source->condition].offset,
 			model->condition_map[source->condition].length,
 			&alias->predicate_sha256_offset))
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 		alias->ordinal = source->ordinal;
 		alias->condition_offset = model->condition_map[source->condition].offset;
 		alias->condition_length = model->condition_map[source->condition].length;
@@ -495,11 +562,11 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		if (!source->is_alias || !source->canonical_operation_id)
 			continue;
 		if (!source->alias_predicate_unconditional)
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE;
 		if (operation_alias_index >= inventory->reachable_operation_alias_count)
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
 		alias = &model->operation_aliases[operation_alias_index];
-		if (append_span_identity(&model->strings, source->source_offset,
+		if (append_span_identity(&model->strings, model->source_sha256, source->source_offset,
 				source->source_length, &alias->source_identity_offset) ||
 		    bytes_append_string(&model->strings, source->id,
 				&alias->declared_operation_offset) ||
@@ -510,7 +577,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		    append_predicate_sha256(model, unconditional_offset,
 			sizeof(unconditional_predicate),
 			&alias->predicate_sha256_offset))
-			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 		alias->source_offset = (uint32_t)source->source_offset;
 		alias->source_length = (uint32_t)source->source_length;
 		alias->predicate_offset = unconditional_offset;
@@ -520,14 +587,15 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		operation_alias_index++;
 	}
 	if (operation_alias_index != inventory->reachable_operation_alias_count)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
 	model->instruction_alias_count = inventory->instruction_alias_count;
 	model->operation_alias_count = operation_alias_index;
-	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
+	return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK;
 }
 
-static enum orlix_tcti_target_instruction_artifact_error build_model(
-	const struct orlix_tcti_target_inventory *inventory, struct artifact_model *model)
+static enum orlix_tcti_target_instruction_artifact_generator_error build_model(
+	const struct orlix_tcti_target_inventory *inventory,
+	const char *expected_source_sha256, struct artifact_model *model)
 {
 	uint32_t *counts = NULL;
 	uint32_t *cursors = NULL;
@@ -536,7 +604,9 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 	size_t index;
 	size_t total_operands = inventory->operand_count;
 	size_t total_fixed_operands = inventory->fixed_operand_count;
-	enum orlix_tcti_target_instruction_artifact_error result;
+	enum orlix_tcti_target_instruction_artifact_generator_error result;
+
+	model->source_sha256 = expected_source_sha256;
 
 	if (inventory->leaf_count != ORLIX_TCTI_A64_TARGET_LEAF_COUNT ||
 	    inventory->leaf_count > UINT32_MAX || total_operands > UINT32_MAX ||
@@ -544,7 +614,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 	    inventory->leaf_count > SIZE_MAX / sizeof(*model->leaves) ||
 	    total_operands > SIZE_MAX / sizeof(*model->operands) ||
 	    total_fixed_operands > SIZE_MAX / sizeof(*model->fixed_operands))
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 	model->leaves = calloc(inventory->leaf_count, sizeof(*model->leaves));
 	model->operands = calloc(total_operands, sizeof(*model->operands));
 	model->fixed_operands = calloc(total_fixed_operands,
@@ -556,7 +626,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 	if (!model->leaves || (total_operands && !model->operands) ||
 	    (total_fixed_operands && !model->fixed_operands) || !counts || !cursors ||
 	    !fixed_counts || !fixed_cursors) {
-		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
 		goto out;
 	}
 	for (index = 0; index < total_operands; index++) {
@@ -565,7 +635,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		if (operand->leaf_index >= inventory->leaf_count ||
 		    operand->condition >= inventory->expression_count ||
 		    counts[operand->leaf_index] == UINT32_MAX) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 		counts[operand->leaf_index]++;
@@ -577,7 +647,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		if (operand->leaf_index >= inventory->leaf_count ||
 		    operand->condition >= inventory->expression_count ||
 		    fixed_counts[operand->leaf_index] == UINT32_MAX) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 		fixed_counts[operand->leaf_index]++;
@@ -591,7 +661,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 			model->leaves[index - 1].operand_count ||
 		     model->leaves[index - 1].fixed_operand_first > UINT32_MAX -
 			model->leaves[index - 1].fixed_operand_count))) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 		leaf->operand_first = index ? model->leaves[index - 1].operand_first +
@@ -608,15 +678,18 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		if (bytes_append_string(&model->strings, source->name, &leaf->name_offset) ||
 		    bytes_append_string(&model->strings, source->mnemonic, &leaf->mnemonic_offset) ||
 		    bytes_append_string(&model->strings, source->operation_id, &leaf->operation_offset)) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 	}
 	result = build_conditions(inventory, model);
-	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK)
+	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK)
 		goto out;
 	result = build_aliases(inventory, model);
-	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK)
+	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK)
+		goto out;
+	result = build_operational_notes(inventory, model);
+	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK)
 		goto out;
 	for (index = 0; index < inventory->leaf_count; index++) {
 		const struct orlix_tcti_target_leaf *source = &inventory->leaves[index];
@@ -632,7 +705,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		uint32_t slot = cursors[source->leaf_index]++;
 
 		if (slot >= total_operands) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 		operand = &model->operands[slot];
@@ -643,7 +716,7 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		operand->condition_offset = model->condition_map[source->condition].offset;
 		operand->condition_length = model->condition_map[source->condition].length;
 		if (bytes_append_string(&model->strings, source->name, &operand->name_offset)) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 	}
@@ -656,9 +729,9 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		if (slot >= total_fixed_operands ||
 		    source->source_offset > UINT32_MAX ||
 		    source->source_length > UINT32_MAX ||
-		    append_span_identity(&model->strings, source->source_offset,
+		    append_span_identity(&model->strings, model->source_sha256, source->source_offset,
 			 source->source_length, &model->fixed_operands[slot].source_identity_offset)) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 		operand = &model->fixed_operands[slot];
@@ -673,13 +746,13 @@ static enum orlix_tcti_target_instruction_artifact_error build_model(
 		operand->condition_length = model->condition_map[source->condition].length;
 		if (bytes_append_string(&model->strings, source->name,
 			&operand->name_offset)) {
-			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+			result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 			goto out;
 		}
 	}
 	model->operand_count = total_operands;
 	model->fixed_operand_count = total_fixed_operands;
-	result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
+	result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK;
 out:
 	free(counts);
 	free(cursors);
@@ -742,7 +815,7 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#include \"target_instruction_artifact.h\"\n\n"
-		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 4U\n"
+		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 5U\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_ARCHITECTURE \"%s\"\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_BUILD \"%s\"\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_REFERENCE \"%s\"\n"
@@ -752,7 +825,8 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERAND_COUNT %zuU\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_FIXED_OPERAND_COUNT %zuU\n\n",
 		source_architecture, source_build, source_reference, source_schema,
-		source_sha256, ORLIX_TCTI_A64_TARGET_LEAF_COUNT, model->operand_count,
+		model->source_sha256, ORLIX_TCTI_A64_TARGET_LEAF_COUNT,
+		model->operand_count,
 		model->fixed_operand_count))
 		return -1;
 	if (outputf(output,
@@ -807,10 +881,12 @@ static int emit_artifact(struct artifact_bytes *output,
 		return -1;
 	if (outputf(output,
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT %zuU\n"
-		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT %zuU\n\n"
+		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT %zuU\n"
+		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_COUNT %zuU\n\n"
 		"static const struct orlix_tcti_target_instruction_artifact_instruction_alias "
 		"orlix_tcti_a64_instruction_artifact_instruction_aliases[%zu] = {\n",
 		model->instruction_alias_count, model->operation_alias_count,
+		model->operational_note_count,
 		model->instruction_alias_count))
 		return -1;
 	for (index = 0; index < model->instruction_alias_count; index++) {
@@ -855,6 +931,32 @@ static int emit_artifact(struct artifact_bytes *output,
 	}
 	if (outputf(output, "};\n\n"))
 		return -1;
+	if (model->operational_note_count) {
+		if (outputf(output,
+			"static const struct orlix_tcti_target_instruction_artifact_operational_note "
+			"orlix_tcti_a64_instruction_artifact_operational_notes[%zu] = {\n",
+			model->operational_note_count))
+			return -1;
+		for (index = 0; index < model->operational_note_count; index++) {
+			const struct artifact_operational_note *note =
+				&model->operational_notes[index];
+
+			if (outputf(output,
+				" { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32
+				"U, %" PRIu32 "U, %" PRIu32 "U, %uU },\n",
+				note->leaf_index, note->source_offset,
+				note->source_length, note->source_identity_offset,
+				note->source_sha256_offset, (unsigned int)note->kind))
+				return -1;
+		}
+		if (outputf(output,
+			"};\n#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTES "
+			"orlix_tcti_a64_instruction_artifact_operational_notes\n\n"))
+			return -1;
+	} else if (outputf(output,
+		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTES NULL\n\n")) {
+		return -1;
+	}
 	if (emit_u8_array(output, "orlix_tcti_a64_instruction_artifact_string_pool",
 			  &model->strings) ||
 	    emit_u8_array(output, "orlix_tcti_a64_instruction_artifact_condition_pool",
@@ -879,6 +981,8 @@ static int emit_artifact(struct artifact_bytes *output,
 		"    .instruction_alias_count = ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT,\n"
 		"    .operation_aliases = orlix_tcti_a64_instruction_artifact_operation_aliases,\n"
 		"    .operation_alias_count = ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT,\n"
+		"    .operational_notes = ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTES,\n"
+		"    .operational_note_count = ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATIONAL_NOTE_COUNT,\n"
 		"    .string_pool = orlix_tcti_a64_instruction_artifact_string_pool,\n"
 		"    .string_pool_size = sizeof(orlix_tcti_a64_instruction_artifact_string_pool),\n"
 		"    .condition_pool = orlix_tcti_a64_instruction_artifact_condition_pool,\n"
@@ -887,20 +991,20 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#endif /* ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H */\n");
 }
 
-const char *orlix_tcti_target_instruction_artifact_error_name(
-	enum orlix_tcti_target_instruction_artifact_error error)
+const char *orlix_tcti_target_instruction_artifact_generator_error_name(
+	enum orlix_tcti_target_instruction_artifact_generator_error error)
 {
 	switch (error) {
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK: return "success";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_INVALID_ARGUMENT: return "invalid argument";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE: return "parse failure";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_METADATA: return "metadata failure";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT: return "count failure";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_DIGEST: return "digest failure";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_CONDITION: return "condition serialization failure";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW: return "size overflow";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY: return "out of memory";
-	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_IO: return "I/O failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK: return "success";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_INVALID_ARGUMENT: return "invalid argument";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE: return "parse failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_METADATA: return "metadata failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT: return "count failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_DIGEST: return "digest failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_CONDITION: return "condition serialization failure";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW: return "size overflow";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY: return "out of memory";
+	case ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_IO: return "I/O failure";
 	}
 	return "unknown failure";
 }
@@ -910,60 +1014,75 @@ const char *orlix_tcti_target_instruction_artifact_error_name(
  * tests include this translation unit and exercise this boundary with count
  * and size-overflow mutations that cannot be encoded in the pinned source.
  */
-static enum orlix_tcti_target_instruction_artifact_error generate_from_inventory(
-	const struct orlix_tcti_target_inventory *inventory, struct artifact_bytes *generated)
+static enum orlix_tcti_target_instruction_artifact_generator_error generate_from_inventory(
+	const struct orlix_tcti_target_inventory *inventory,
+	const char *expected_source_sha256, struct artifact_bytes *generated)
 {
 	struct artifact_model model = { 0 };
-	enum orlix_tcti_target_instruction_artifact_error result;
+	enum orlix_tcti_target_instruction_artifact_generator_error result;
 
 	if (!inventory || !generated)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_INVALID_ARGUMENT;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_INVALID_ARGUMENT;
 	if (inventory->leaf_count != ORLIX_TCTI_A64_TARGET_LEAF_COUNT)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
-	result = build_model(inventory, &model);
-	if (result == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK &&
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_COUNT;
+	result = build_model(inventory, expected_source_sha256, &model);
+	if (result == ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK &&
 	    emit_artifact(generated, &model))
-		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MEMORY;
 	artifact_model_destroy(&model);
 	return result;
 }
 
-enum orlix_tcti_target_instruction_artifact_error
-orlix_tcti_target_instruction_artifact_emit(const char *source, size_t length,
-				      FILE *output)
+
+enum orlix_tcti_target_instruction_artifact_generator_error
+orlix_tcti_target_instruction_artifact_emit_expected(
+	const char *source, size_t length, const char *expected_source_sha256,
+	FILE *output)
 {
 	struct orlix_tcti_target_inventory inventory = { 0 };
 	struct orlix_tcti_target_import_error import_error = { 0 };
 	struct artifact_bytes generated = { 0 };
 	char digest[65];
-	enum orlix_tcti_target_instruction_artifact_error result;
+	enum orlix_tcti_target_instruction_artifact_generator_error result;
 
-	if (!source || !output)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_INVALID_ARGUMENT;
+	if (!source || !expected_source_sha256 ||
+	    strlen(expected_source_sha256) != 64U || !output)
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_INVALID_ARGUMENT;
 	if (length > ORLIX_TCTI_ARTIFACT_MAX_SOURCE_BYTES)
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OVERFLOW;
 	if (source_has_embedded_nul(source, length))
-		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE;
-	if (orlix_tcti_target_inventory_import(source, length, &inventory, &import_error)) {
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_PARSE;
+	if (orlix_tcti_target_inventory_import_expected(
+		    source, length, expected_source_sha256, &inventory,
+		    &import_error)) {
 		result = import_category(&import_error);
 		goto out;
 	}
 	sha256_hex(source, length, digest);
-	if (strcmp(digest, source_sha256)) {
-		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_DIGEST;
+	if (strcmp(digest, expected_source_sha256)) {
+		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_DIGEST;
 		goto out;
 	}
-	result = generate_from_inventory(&inventory, &generated);
-	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK)
+	result = generate_from_inventory(&inventory, expected_source_sha256,
+					 &generated);
+	if (result != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK)
 		goto out;
 	if (generated.length && fwrite(generated.data, 1, generated.length, output) != generated.length)
-		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_IO;
+		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_IO;
 	else
-		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK;
+		result = ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK;
 	out:
 	free(generated.data);
 	orlix_tcti_target_inventory_destroy(&inventory);
 	return result;
+}
+
+enum orlix_tcti_target_instruction_artifact_generator_error
+orlix_tcti_target_instruction_artifact_emit(const char *source, size_t length,
+				      FILE *output)
+{
+	return orlix_tcti_target_instruction_artifact_emit_expected(
+		source, length, source_sha256, output);
 }
 
 #ifndef TARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MAIN
@@ -998,7 +1117,7 @@ int main(int argc, char **argv)
 {
 	char *source;
 	size_t length;
-	enum orlix_tcti_target_instruction_artifact_error error;
+	enum orlix_tcti_target_instruction_artifact_generator_error error;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s Instructions.json > generated.h\n", argv[0]);
@@ -1009,9 +1128,9 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	error = orlix_tcti_target_instruction_artifact_emit(source, length, stdout);
-	if (error != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OK) {
+	if (error != ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_GENERATOR_OK) {
 		fprintf(stderr, "target instruction artifact generator: %s\n",
-			orlix_tcti_target_instruction_artifact_error_name(error));
+			orlix_tcti_target_instruction_artifact_generator_error_name(error));
 		free(source);
 		return EXIT_FAILURE;
 	}
