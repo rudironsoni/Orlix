@@ -746,7 +746,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ ADVSIMD_TABLE_SOURCE,
-	  "f1c0214d763ea52bccf22dba6d821150c357a5e8dfee4968e4ef4cf67b9dd26a",
+	  "db90ed541374d98b6be0c1ee5922486d1996381f8e9aea536d1a8434fd4965dc",
 	  "orlix_tcti_advsimd_table_lookup_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
@@ -1193,16 +1193,13 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE,
 	  ADVSIMD_TABLE_SUITE_SYMBOL, ADVSIMD_TABLE_CASE_ARRAY,
-	  "orlix_tcti_advsimd_table_typed_obligations_resume",
+	  "orlix_tcti_advsimd_table_complete_typed_proof_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE,
-	  ADVSIMD_TABLE_SUITE_SYMBOL, ADVSIMD_TABLE_CASE_ARRAY,
-	  "orlix_tcti_advsimd_table_fixed_bit_neighbors_resume",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 
 };
 
@@ -1687,20 +1684,19 @@ ADVSIMD_MINMAX_REDUCTION_BINDING(advsimd_minmax_reduction_uminv, 3864U,
 #undef ADVSIMD_MINMAX_REDUCTION_BINDING
 
 static const struct orlix_tcti_target_proof_case advsimd_table_cases[] = {
-	{ "orlix_tcti_advsimd_table_typed_obligations_resume",
+	{ "orlix_tcti_advsimd_table_complete_typed_proof_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ "orlix_tcti_advsimd_table_fixed_bit_neighbors_resume",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
 #define ADVSIMD_TABLE_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xbfe0fc00U, pattern, \
 	  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
-	  ORLIX_TCTI_PROOF_U64_C(0x3), ordinal }
+	  ORLIX_TCTI_PROOF_U64_C(0x1), ordinal }
 
 static const struct orlix_tcti_target_proof_binding advsimd_table_tbl_bindings[] = {
 	ADVSIMD_TABLE_BINDING(3672U, "TBL_asimdtbl_L1_1", "TBL", 0x0e000000U),
