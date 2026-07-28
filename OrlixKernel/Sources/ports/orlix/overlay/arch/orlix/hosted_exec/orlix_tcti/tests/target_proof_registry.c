@@ -531,6 +531,13 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"orlix-tcti-advsimd-integer-minmax-reduction-source-bound"
 #define ADVSIMD_MINMAX_REDUCTION_SUITE_SYMBOL "orlix_tcti_minmaxv_suite"
 #define ADVSIMD_MINMAX_REDUCTION_CASE_ARRAY "orlix_tcti_minmaxv_cases"
+#define ADVSIMD_TABLE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_table_lookup_source_bound_test.c"
+#define ADVSIMD_TABLE_SUITE "orlix-tcti-advsimd-table-source-bound"
+#define ADVSIMD_TABLE_SUITE_SYMBOL \
+	"orlix_tcti_advsimd_table_source_bound_suite"
+#define ADVSIMD_TABLE_CASE_ARRAY \
+	"orlix_tcti_advsimd_table_source_bound_cases"
 #define INTEGER_CONDITIONAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_integer_conditional_source_bound_test.c"
 #define INTEGER_CONDITIONAL_SUITE "orlix-tcti-integer-conditional-source-bound"
@@ -587,6 +594,12 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ADVSIMD_MUL_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS \
 	ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
+#define ADVSIMD_TABLE_OBLIGATIONS \
+	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define INTEGER_CONDITIONAL_BASE_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -699,6 +712,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
 	  "0458c2ac841380d2e535e55e6a766268d86de4e42c82c66e9ede5ebd1558581e",
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o" },
+	{ ADVSIMD_TABLE_SOURCE,
+	  "07895900d64a2b51552e314ccd87da971596a5df44b7e860e239d641740b2151",
+	  "orlix_tcti_advsimd_table_lookup_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
 	  "orlix_tcti_integer_conditional_source_bound_test.o" },
@@ -1141,6 +1157,22 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE,
+	  ADVSIMD_TABLE_SUITE_SYMBOL, ADVSIMD_TABLE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_table_source_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE,
+	  ADVSIMD_TABLE_SUITE_SYMBOL, ADVSIMD_TABLE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_table_legal_fields_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE,
+	  ADVSIMD_TABLE_SUITE_SYMBOL, ADVSIMD_TABLE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_table_source_leaves_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 
 };
 
@@ -1318,6 +1350,8 @@ static const struct operation_requirements operation_requirements[] = {
 			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UMINV_advsimd",
 			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TBL_advsimd", ADVSIMD_TABLE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TBX_advsimd", ADVSIMD_TABLE_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -1621,6 +1655,40 @@ ADVSIMD_MINMAX_REDUCTION_BINDING(advsimd_minmax_reduction_umaxv, 3863U,
 ADVSIMD_MINMAX_REDUCTION_BINDING(advsimd_minmax_reduction_uminv, 3864U,
 	"UMINV_asimdall_only", "UMINV", 0x2e31a800U);
 #undef ADVSIMD_MINMAX_REDUCTION_BINDING
+
+static const struct orlix_tcti_target_proof_case advsimd_table_cases[] = {
+	{ "orlix_tcti_advsimd_table_source_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_table_legal_fields_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_table_source_leaves_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
+#define ADVSIMD_TABLE_BINDING(ordinal, leaf, mnemonic, pattern) \
+	{ leaf, mnemonic, 0xbfe0fc00U, pattern, \
+	  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
+	  ORLIX_TCTI_PROOF_U64_C(0x7), ordinal }
+
+static const struct orlix_tcti_target_proof_binding advsimd_table_tbl_bindings[] = {
+	ADVSIMD_TABLE_BINDING(3672U, "TBL_asimdtbl_L1_1", "TBL", 0x0e000000U),
+	ADVSIMD_TABLE_BINDING(3674U, "TBL_asimdtbl_L2_2", "TBL", 0x0e002000U),
+	ADVSIMD_TABLE_BINDING(3676U, "TBL_asimdtbl_L3_3", "TBL", 0x0e004000U),
+	ADVSIMD_TABLE_BINDING(3678U, "TBL_asimdtbl_L4_4", "TBL", 0x0e006000U),
+};
+
+static const struct orlix_tcti_target_proof_binding advsimd_table_tbx_bindings[] = {
+	ADVSIMD_TABLE_BINDING(3673U, "TBX_asimdtbl_L1_1", "TBX", 0x0e001000U),
+	ADVSIMD_TABLE_BINDING(3675U, "TBX_asimdtbl_L2_2", "TBX", 0x0e003000U),
+	ADVSIMD_TABLE_BINDING(3677U, "TBX_asimdtbl_L3_3", "TBX", 0x0e005000U),
+	ADVSIMD_TABLE_BINDING(3679U, "TBX_asimdtbl_L4_4", "TBX", 0x0e007000U),
+};
+
+#undef ADVSIMD_TABLE_BINDING
 
 #define LOGICAL_BINDING(ordinal, leaf, mnemonic, pattern, cases) \
 	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
@@ -2076,7 +2144,14 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 62U
+#define ADVSIMD_TABLE_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  ADVSIMD_TABLE_OBLIGATIONS, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  ADVSIMD_TABLE_SOURCE, ADVSIMD_TABLE_SUITE, advsimd_table_cases, \
+	  ARRAY_COUNT(advsimd_table_cases), bindings, ARRAY_COUNT(bindings), NULL, \
+	  ADVSIMD_TABLE_OBLIGATIONS }
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -2252,6 +2327,10 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	ADVSIMD_MINMAX_REDUCTION_ENTRY(
 		"kunit:advsimd-minmax-reduction-uminv-source-leaf",
 		"UMINV_advsimd", advsimd_minmax_reduction_uminv_bindings),
+	ADVSIMD_TABLE_ENTRY("kunit:advsimd-table-tbl-source-leaves",
+		"TBL_advsimd", advsimd_table_tbl_bindings),
+	ADVSIMD_TABLE_ENTRY("kunit:advsimd-table-tbx-source-leaves",
+		"TBX_advsimd", advsimd_table_tbx_bindings),
 };
 
 #undef LOGICAL_ENTRY
@@ -2260,6 +2339,7 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 #undef CSSC_ENTRY
 #undef ADD_SUB_IMMEDIATE_ENTRY
 #undef ADVSIMD_MUL_ENTRY
+#undef ADVSIMD_TABLE_ENTRY
 #undef CSSC_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS
