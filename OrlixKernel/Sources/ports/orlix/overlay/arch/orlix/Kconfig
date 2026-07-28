@@ -63,7 +63,7 @@ config ORLIX_TCTI_HOSTED_EXEC
 config ORLIX_TCTI_FEAT_THE
 	bool "Enable FEAT_THE execution in OrlixTCTI"
 	depends on ORLIX_TCTI_HOSTED_EXEC
-	default n
+	default y
 	help
 	  Select the production architectural domain for Translation Hardening
 	  Extension RCW and RCWS instructions. Runtime EL0 entry remains gated by

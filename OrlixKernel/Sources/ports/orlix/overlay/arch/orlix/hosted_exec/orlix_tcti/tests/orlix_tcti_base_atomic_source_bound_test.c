@@ -542,12 +542,20 @@ static void orlix_tcti_base_atomic_executes_every_fp_leaf(struct kunit *test)
 static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	struct kunit *test)
 {
-	const struct orlix_tcti_test_atomic_source *source;
-	struct orlix_tcti_rcw_el1_state state = {
+	static const struct orlix_tcti_rcw_el1_state protected_scalar = {
 		.feat_the = true,
 		.tcr2_el1_enabled = true,
 		.tcr2_el1_pnch = true,
 	};
+	static const struct orlix_tcti_rcw_el1_state unprotected_scalar = {
+		.feat_the = true,
+	};
+	static const struct orlix_tcti_rcw_el1_state d128 = {
+		.rcwmask_el1 = { 0, BIT_ULL(63) },
+		.feat_the = true,
+		.feat_d128 = true,
+	};
+	const struct orlix_tcti_test_atomic_source *source;
 	struct orlix_tcti_decoded_instruction decoded;
 	u64 old[2] = {};
 	u64 expected[2] = {};
@@ -562,7 +570,8 @@ static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
 	old[0] = BIT_ULL(52) | BIT_ULL(0);
 	operand[0] = BIT_ULL(2);
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded,
+		&protected_scalar, old,
 		expected, operand, result, &nzcv, &wrote_new));
 	KUNIT_EXPECT_EQ(test, old[0], result[0]);
 	KUNIT_EXPECT_EQ(test, 0x6, nzcv);
@@ -575,9 +584,8 @@ static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	memset(old, 0, sizeof(old));
 	memset(result, 0, sizeof(result));
 	operand[0] = BIT_ULL(0);
-	state.tcr2_el1_enabled = false;
-	state.tcr2_el1_pnch = false;
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded,
+		&unprotected_scalar, old,
 		expected, operand, result, &nzcv, &wrote_new));
 	KUNIT_EXPECT_EQ(test, 0ULL, result[0]);
 	KUNIT_EXPECT_EQ(test, 0, nzcv);
@@ -590,7 +598,8 @@ static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	old[0] = 0x44;
 	expected[0] = 0x33;
 	operand[0] = 0x55;
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded,
+		&unprotected_scalar, old,
 		expected, operand, result, &nzcv, &wrote_new));
 	KUNIT_EXPECT_EQ(test, old[0], result[0]);
 	KUNIT_EXPECT_EQ(test, 0xa, nzcv);
@@ -600,13 +609,11 @@ static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	source = orlix_tcti_test_base_atomic_operation("RCWSETP");
 	KUNIT_ASSERT_NOT_NULL(test, source);
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
-	state.feat_d128 = true;
-	state.rcwmask_el1[1] = BIT_ULL(63);
 	old[0] = BIT_ULL(0);
 	old[1] = BIT_ULL(50);
 	operand[0] = 0;
 	operand[1] = BIT_ULL(63);
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &d128, old,
 		expected, operand, result, &nzcv, &wrote_new));
 	KUNIT_EXPECT_EQ(test, old[0], result[0]);
 	KUNIT_EXPECT_EQ(test, old[1] | BIT_ULL(63), result[1]);
@@ -684,31 +691,150 @@ static void orlix_tcti_base_atomic_executes_ls64_state(struct kunit *test)
 
 static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 {
+	const struct orlix_tcti_decoded_instruction clrex =
+		orlix_tcti_decode_aarch64(0xd503305fU);
+	struct orlix_tcti_rcw_el1_state rcw_state;
+	unsigned long read_only;
+	u8 initial[64];
 	size_t index;
-	size_t checked = 0;
+	size_t unmapped_checked = 0;
+	size_t alignment_checked = 0;
+	size_t read_only_checked = 0;
+
+	memset(initial, 0xa5, sizeof(initial));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&rcw_state));
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
+		clrex.decode_class);
+	read_only = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(read_only));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		read_only, initial, sizeof(initial)));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(read_only, PAGE_SIZE, PROT_READ));
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
 		const struct orlix_tcti_test_atomic_source *source =
 			&orlix_tcti_test_sources[index];
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
+		struct pt_regs before;
 		unsigned long fault_address = 0;
+		u8 observed[sizeof(initial)] = {};
+		u8 total_size;
+		bool rcw_available;
+		bool exclusive_store;
+		bool read_only_access;
 		int ret;
 
 		if (!orlix_tcti_test_is_base_atomic(source))
 			continue;
 		decoded = orlix_tcti_decode_aarch64(
 			orlix_tcti_test_legal_instruction(source));
+		total_size = decoded.access_size * (decoded.pair ? 2U : 1U);
+		rcw_available = !decoded.atomic_rcw ||
+			(rcw_state.feat_the && decoded.pair == rcw_state.feat_d128);
+		exclusive_store = decoded.exclusive && !decoded.load;
+		read_only_access = decoded.load &&
+			(decoded.decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE ||
+			 decoded.decode_class == ORLIX_TCTI_DECODE_LS64);
+
+		/* Unmapped access: feature-disabled RCW is Undefined before memory. */
 		regs.regs[decoded.rn] = TASK_SIZE;
+		regs.regs[decoded.rs] = 0x1122334455667788ULL;
+		regs.regs[decoded.rt] = 0x8877665544332211ULL;
+		regs.sp = TASK_SIZE;
 		regs.pc = 0x4000;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
+		before = regs;
 		ret = orlix_tcti_switch_debug_execute_decoded(current->mm, &regs,
 			&decoded, &fault_address);
-		KUNIT_EXPECT_LT_MSG(test, ret, 0, "%s", source->name);
-		KUNIT_EXPECT_EQ_MSG(test, 0x4000ULL, regs.pc, "%s", source->name);
+		if (!rcw_available) {
+			KUNIT_EXPECT_TRUE_MSG(test, ret == -EOPNOTSUPP || ret == -ENOEXEC,
+				"%s ret=%d", source->name, ret);
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(&before, &regs, sizeof(regs)),
+				"%s", source->name);
+		} else if (exclusive_store) {
+			KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 1ULL, regs.regs[decoded.rs], "%s",
+				source->name);
+			KUNIT_EXPECT_EQ_MSG(test, before.pc + sizeof(u32), regs.pc, "%s",
+				source->name);
+		} else {
+			KUNIT_EXPECT_LT_MSG(test, ret, 0, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(&before, &regs, sizeof(regs)),
+				"%s", source->name);
+		}
 		KUNIT_EXPECT_EQ_MSG(test, TASK_SIZE, fault_address, "%s", source->name);
-		checked++;
+		unmapped_checked++;
+
+		/* Natural-alignment failure is precise and commits no architectural state. */
+		if (total_size > 1U) {
+			memset(&regs, 0, sizeof(regs));
+			regs.regs[decoded.rn] = read_only + 1U;
+			regs.sp = read_only + 1U;
+			regs.pc = 0x5000;
+			regs.pstate = PSR_MODE_EL0t | PSR_Z_BIT | PSR_V_BIT;
+			before = regs;
+			fault_address = 0;
+			ret = orlix_tcti_switch_debug_execute_decoded(current->mm, &regs,
+				&decoded, &fault_address);
+			KUNIT_EXPECT_EQ_MSG(test, -EFAULT, ret, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(&before, &regs, sizeof(regs)),
+				"%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, read_only + 1U, fault_address, "%s",
+				source->name);
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+				read_only, observed, sizeof(observed)));
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(initial, observed,
+				sizeof(initial)), "%s", source->name);
+			alignment_checked++;
+		}
+
+		/* Read-only mappings admit loads and reject writes without partial state. */
+		memset(&regs, 0, sizeof(regs));
+		regs.regs[decoded.rn] = read_only;
+		regs.regs[decoded.rs] = 0x0102030405060708ULL;
+		regs.regs[decoded.rt] = 0x1112131415161718ULL;
+		regs.sp = read_only;
+		regs.pc = 0x6000;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_V_BIT;
+		before = regs;
+		fault_address = 0;
+		ret = orlix_tcti_switch_debug_execute_decoded(current->mm, &regs,
+			&decoded, &fault_address);
+		if (!rcw_available) {
+			KUNIT_EXPECT_TRUE_MSG(test, ret == -EOPNOTSUPP || ret == -ENOEXEC,
+				"%s ret=%d", source->name, ret);
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(&before, &regs, sizeof(regs)),
+				"%s", source->name);
+		} else if (read_only_access) {
+			KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, before.pc + sizeof(u32), regs.pc, "%s",
+				source->name);
+		} else if (exclusive_store) {
+			KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 1ULL, regs.regs[decoded.rs], "%s",
+				source->name);
+		} else {
+			KUNIT_EXPECT_LT_MSG(test, ret, 0, "%s", source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(&before, &regs, sizeof(regs)),
+				"%s", source->name);
+		}
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			read_only, observed, sizeof(observed)));
+		KUNIT_EXPECT_EQ_MSG(test, 0, memcmp(initial, observed, sizeof(initial)),
+			"%s", source->name);
+		read_only_checked++;
+
+		/* CLREX production semantics isolate every exclusive-monitor row. */
+		memset(&regs, 0, sizeof(regs));
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(
+			current->mm, &regs, &clrex, NULL));
 	}
-	KUNIT_EXPECT_EQ(test, 498U, checked);
+	KUNIT_EXPECT_EQ(test, 498U, unmapped_checked);
+	KUNIT_EXPECT_GT(test, alignment_checked, 0U);
+	KUNIT_EXPECT_EQ(test, 498U, read_only_checked);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(read_only, PAGE_SIZE));
 }
 
 static void orlix_tcti_base_atomic_atomicity_is_page_serialized(struct kunit *test)
