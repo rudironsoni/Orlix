@@ -5,21 +5,26 @@
 #include <linux/string.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
+#include <asm/elf.h>
 #include <linux/err.h>
 #include <linux/errno.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/syscalls.h>
-#include <linux/utsname.h>
 
 #include "target_instruction_artifact.h"
 #include "target_execution_slice_map.h"
-#include "target_proof_ingestion.h"
+#include "target_native_proof_registry_private.h"
 #include "target_proof_registry.h"
-#include "orlix_tcti_native_observation.h"
 #include "../decode_aarch64.h"
+#include "../engine.h"
 #include "../switch_debug.h"
+
+static const struct orlix_tcti_test_feature_profile cssc_test_profile = {
+	.hwcap = ELF_HWCAP,
+	.hwcap2 = ELF_HWCAP2 | HWCAP2_CSSC,
+};
 
 struct source_row {
 	u32 ordinal;
@@ -115,25 +120,33 @@ struct alias_case {
 };
 
 static const struct alias_case aliases[] = {
-	{ "ASR32", false, 0, 5, 31, 4, 7 },
-	{ "ASR64", true, 0, 9, 63, 4, 7 },
-	{ "SBFIZ", true, 0, 56, 7, 4, 7 },
-	{ "SBFX", true, 0, 8, 15, 4, 7 },
-	{ "SXTB", false, 0, 0, 7, 4, 7 },
-	{ "SXTH", true, 0, 0, 15, 4, 7 },
-	{ "SXTW", true, 0, 0, 31, 4, 7 },
-	{ "BFC", true, 1, 56, 7, 31, 7 },
-	{ "BFI", true, 1, 56, 7, 4, 7 },
-	{ "BFI_OVERLAP", true, 1, 56, 7, 7, 7 },
-	{ "BFXIL", true, 1, 8, 15, 4, 7 },
-	{ "LSL", false, 2, 24, 23, 4, 7 },
-	{ "LSR", true, 2, 9, 63, 4, 7 },
-	{ "UBFIZ", true, 2, 56, 7, 4, 7 },
-	{ "UBFX", true, 2, 8, 15, 4, 7 },
-	{ "UXTB", false, 2, 0, 7, 4, 7 },
-	{ "UXTH", false, 2, 0, 15, 4, 7 },
-	{ "UBFX_XZR_SOURCE", true, 2, 8, 15, 31, 7 },
-	{ "SBFX_XZR_DEST", true, 0, 8, 15, 4, 31 },
+	{ "ASR_W", false, 0, 5, 31, 4, 7 },
+	{ "ASR_X", true, 0, 9, 63, 4, 7 },
+	{ "SBFIZ_W", false, 0, 24, 7, 4, 7 },
+	{ "SBFIZ_X", true, 0, 56, 7, 4, 7 },
+	{ "SBFX_W", false, 0, 8, 15, 4, 7 },
+	{ "SBFX_X", true, 0, 8, 15, 4, 7 },
+	{ "SXTB_W", false, 0, 0, 7, 4, 7 },
+	{ "SXTB_X", true, 0, 0, 7, 4, 7 },
+	{ "SXTH_W", false, 0, 0, 15, 4, 7 },
+	{ "SXTH_X", true, 0, 0, 15, 4, 7 },
+	{ "SXTW_X", true, 0, 0, 31, 4, 7 },
+	{ "BFC_W", false, 1, 24, 7, 31, 7 },
+	{ "BFC_X", true, 1, 56, 7, 31, 7 },
+	{ "BFI_W", false, 1, 24, 7, 4, 7 },
+	{ "BFI_X", true, 1, 56, 7, 4, 7 },
+	{ "BFXIL_W", false, 1, 8, 15, 4, 7 },
+	{ "BFXIL_X", true, 1, 8, 15, 4, 7 },
+	{ "LSL_W", false, 2, 24, 23, 4, 7 },
+	{ "LSL_X", true, 2, 56, 55, 4, 7 },
+	{ "LSR_W", false, 2, 9, 31, 4, 7 },
+	{ "LSR_X", true, 2, 9, 63, 4, 7 },
+	{ "UBFIZ_W", false, 2, 24, 7, 4, 7 },
+	{ "UBFIZ_X", true, 2, 56, 7, 4, 7 },
+	{ "UBFX_W", false, 2, 8, 15, 4, 7 },
+	{ "UBFX_X", true, 2, 8, 15, 4, 7 },
+	{ "UXTB_W", false, 2, 0, 7, 4, 7 },
+	{ "UXTH_W", false, 2, 0, 15, 4, 7 },
 };
 
 static u32 encode_bitfield(bool sf, u8 opc, bool n, u8 immr, u8 imms,
@@ -651,6 +664,119 @@ static void bitfield_alias_state(struct kunit *test)
 	}
 }
 
+struct canonical_alias_relation {
+	const char *declared;
+	const char *resolved;
+};
+
+static const struct canonical_alias_relation canonical_alias_relations[] = {
+	{ "ASR", "SBFM" }, { "SBFIZ", "SBFM" },
+	{ "SBFX", "SBFM" }, { "SXTB", "SBFM" },
+	{ "SXTH", "SBFM" }, { "SXTW", "SBFM" },
+	{ "BFC", "BFM" }, { "BFI", "BFM" }, { "BFXIL", "BFM" },
+	{ "LSL", "UBFM" }, { "LSR", "UBFM" },
+	{ "UBFIZ", "UBFM" }, { "UBFX", "UBFM" },
+	{ "UXTB", "UBFM" }, { "UXTH", "UBFM" },
+	{ "ROR", "EXTR" },
+};
+
+static bool bitfield_alias_resolved_operation(const char *operation)
+{
+	return !strcmp(operation, "SBFM") || !strcmp(operation, "BFM") ||
+		!strcmp(operation, "UBFM") || !strcmp(operation, "EXTR");
+}
+
+static void bitfield_alias_matrix_and_canonical_relations(struct kunit *test)
+{
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	size_t index;
+	size_t canonical_count = 0;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 27U, ARRAY_SIZE(aliases));
+	KUNIT_ASSERT_EQ(test, 16U, ARRAY_SIZE(canonical_alias_relations));
+	for (index = 0; index < ARRAY_SIZE(aliases); index++) {
+		const struct alias_case *alias = &aliases[index];
+		u8 width = alias->sf ? 64 : 32;
+		size_t name_length = strlen(alias->name);
+
+		KUNIT_ASSERT_GT(test, name_length, 2U);
+		KUNIT_EXPECT_EQ_MSG(test, alias->sf ? 'X' : 'W',
+			alias->name[name_length - 1], "%s", alias->name);
+		if (!strncmp(alias->name, "ASR_", 4) ||
+		    !strncmp(alias->name, "LSR_", 4))
+			KUNIT_EXPECT_EQ_MSG(test, width - 1, alias->imms,
+				"%s", alias->name);
+		if (!strncmp(alias->name, "SBFIZ_", 6) ||
+		    !strncmp(alias->name, "UBFIZ_", 6) ||
+		    !strncmp(alias->name, "BFC_", 4) ||
+		    !strncmp(alias->name, "BFI_", 4))
+			KUNIT_EXPECT_LT_MSG(test, alias->imms, alias->immr,
+				"%s", alias->name);
+		if (!strncmp(alias->name, "SBFX_", 5) ||
+		    !strncmp(alias->name, "UBFX_", 5) ||
+		    !strncmp(alias->name, "BFXIL_", 6))
+			KUNIT_EXPECT_GE_MSG(test, alias->imms, alias->immr,
+				"%s", alias->name);
+		if (!strncmp(alias->name, "BFC_", 4))
+			KUNIT_EXPECT_EQ(test, 31, alias->rn);
+		if (!strncmp(alias->name, "BFI_", 4))
+			KUNIT_EXPECT_NE(test, 31, alias->rn);
+		if (!strncmp(alias->name, "LSL_", 4))
+			KUNIT_EXPECT_EQ_MSG(test, alias->imms + 1, alias->immr,
+				"%s", alias->name);
+		if (!strncmp(alias->name, "SXTB_", 5) ||
+		    !strncmp(alias->name, "UXTB_", 5)) {
+			KUNIT_EXPECT_EQ(test, 0, alias->immr);
+			KUNIT_EXPECT_EQ(test, 7, alias->imms);
+		}
+		if (!strncmp(alias->name, "SXTH_", 5) ||
+		    !strncmp(alias->name, "UXTH_", 5)) {
+			KUNIT_EXPECT_EQ(test, 0, alias->immr);
+			KUNIT_EXPECT_EQ(test, 15, alias->imms);
+		}
+		if (!strcmp(alias->name, "SXTW_X")) {
+			KUNIT_EXPECT_EQ(test, 0, alias->immr);
+			KUNIT_EXPECT_EQ(test, 31, alias->imms);
+		}
+	}
+	for (index = 0; index < artifact->instruction_alias_count; index++) {
+		const struct orlix_tcti_target_instruction_artifact_instruction_alias
+			*alias = &artifact->instruction_aliases[index];
+		const char *declared = bitfield_extract_artifact_string(artifact,
+			alias->declared_operation_offset);
+		const char *resolved = bitfield_extract_artifact_string(artifact,
+			alias->resolved_operation_offset);
+		size_t relation;
+		bool matched = false;
+
+		KUNIT_ASSERT_NOT_NULL(test, declared);
+		KUNIT_ASSERT_NOT_NULL(test, resolved);
+		if (!bitfield_alias_resolved_operation(resolved))
+			continue;
+		for (relation = 0;
+		     relation < ARRAY_SIZE(canonical_alias_relations); relation++)
+			if (!strcmp(declared,
+				    canonical_alias_relations[relation].declared) &&
+			    !strcmp(resolved,
+				    canonical_alias_relations[relation].resolved)) {
+				matched = true;
+				break;
+			}
+		KUNIT_ASSERT_TRUE_MSG(test, matched, "%s -> %s", declared, resolved);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_ALIAS_RELATION_SEMANTIC,
+			alias->relation_kind);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_ALIAS_PREDICATE_SOURCE_CONDITION,
+			alias->predicate_kind);
+		KUNIT_EXPECT_GT(test, alias->condition_length, 0U);
+		KUNIT_EXPECT_GT(test, alias->source_length, 0U);
+		canonical_count++;
+	}
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(canonical_alias_relations),
+		canonical_count);
+}
+
 static void extract_ror_alias_state(struct kunit *test)
 {
 	u8 sf, shift;
@@ -715,6 +841,8 @@ static void extract_overlap_xzr_state(struct kunit *test)
 }
 
 #define BITFIELD_EXTRACT_SVC 0xd4000001U
+#define BITFIELD_UNARY_SOURCE_PATH \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_bitfield_extract_source_bound_test.c"
 
 static unsigned long bitfield_extract_map_rx(struct kunit *test, u32 instruction)
 {
@@ -878,37 +1006,28 @@ static void bitfield_extract_production_path_leaves(struct kunit *test)
 
 static void bitfield_extract_production_path_aliases(struct kunit *test)
 {
-	static const struct {
-		u16 ordinal;
-		u8 immr;
-		u8 imms;
-		u8 rn;
-		u8 rd;
-	} cases[] = {
-		{ 2205U, 5, 31, 4, 7 }, /* ASR */
-		{ 2205U, 0, 7, 4, 7 },  /* SXTB */
-		{ 2206U, 56, 7, 31, 7 }, /* BFC */
-		{ 2206U, 56, 7, 7, 7 },  /* BFI overlap */
-		{ 2207U, 24, 23, 4, 7 }, /* LSL */
-		{ 2207U, 0, 7, 31, 7 },  /* UXTB XZR */
-		{ 2208U, 8, 15, 4, 7 }, /* SBFX */
-		{ 2209U, 8, 15, 4, 7 }, /* BFXIL */
-		{ 2210U, 9, 63, 4, 7 }, /* LSR */
-	};
 	size_t index;
 
-	for (index = 0; index < ARRAY_SIZE(cases); index++) {
+	KUNIT_ASSERT_EQ(test, 27U, ARRAY_SIZE(aliases));
+	for (index = 0; index < ARRAY_SIZE(aliases); index++) {
+		const struct alias_case *alias = &aliases[index];
+		u32 ordinal = 2205U + alias->opc + (alias->sf ? 3U : 0U);
 		const struct source_row *row = NULL;
 		size_t source;
 
 		for (source = 0; source < ARRAY_SIZE(source_rows); source++)
-			if (source_rows[source].ordinal == cases[index].ordinal)
+			if (source_rows[source].ordinal == ordinal)
 				row = &source_rows[source];
 		KUNIT_ASSERT_NOT_NULL(test, row);
 		bitfield_extract_resume_one(test, row,
-			encode_bitfield(cases[index].ordinal >= 2208U, row->op,
-				cases[index].ordinal >= 2208U, cases[index].immr,
-				cases[index].imms, cases[index].rn, cases[index].rd));
+			encode_bitfield(alias->sf, row->op, alias->sf, alias->immr,
+				alias->imms, alias->rn, alias->rd));
+	}
+	for (index = 0; index < 2; index++) {
+		bool sf = index != 0;
+
+		bitfield_extract_resume_one(test, &source_rows[index],
+			encode_extract(sf, sf, false, 4, sf ? 9 : 5, 4, 7));
 	}
 }
 
@@ -966,6 +1085,9 @@ static void bitfield_unary_production_path_leaves(struct kunit *test)
 
 	for (row = 0; row < ARRAY_SIZE(dp1_source_rows); row++) {
 		const struct scalar_source_row *source = &dp1_source_rows[row];
+		bool cssc = source->op == ORLIX_TCTI_DP1_CTZ ||
+			source->op == ORLIX_TCTI_DP1_CNT ||
+			source->op == ORLIX_TCTI_DP1_ABS;
 
 		for (variant = 0; variant < ARRAY_SIZE(cases); variant++) {
 			u32 instruction = source->pattern |
@@ -992,7 +1114,10 @@ static void bitfield_unary_production_path_leaves(struct kunit *test)
 			expected = scalar_dp1_expected(source->op,
 				input & width_mask(decoded.is_64bit), width) &
 				width_mask(decoded.is_64bit);
-			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			result = cssc ?
+				orlix_tcti_resume_user_with_feature_profile_for_tests(
+					current, &regs, current->mm, &cssc_test_profile) :
+				orlix_tcti_resume_user(current, &regs, current->mm);
 			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL,
 				result.reason, "%s ordinal %u", source->leaf,
 				source->ordinal);
@@ -1014,178 +1139,54 @@ static void bitfield_unary_reserved_rejection(struct kunit *test)
 		0x5ac00c00U | (4U << 5) | 7U);
 }
 
-static const struct orlix_tcti_target_proof_registry_entry *
-bitfield_unary_registry_entry(struct kunit *test, u32 ordinal,
-	const struct orlix_tcti_target_proof_binding **selected_binding)
+static bool bitfield_unary_source_ordinal(u32 ordinal)
 {
-	const struct orlix_tcti_target_proof_registry_entry *entries;
-	const struct orlix_tcti_target_proof_registry_entry *selected = NULL;
+	return (ordinal >= 2169U && ordinal <= 2170U) ||
+		(ordinal >= 2205U && ordinal <= 2210U) ||
+		(ordinal >= 3389U && ordinal <= 3405U);
+}
+
+static bool bitfield_unary_producer_capture_rows_present(void)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
 	size_t count;
-	size_t entry_index;
+	size_t index;
 
-	entries = orlix_tcti_target_proof_registry_entries(&count);
-	if (!entries) {
-		KUNIT_FAIL(test, "proof registry is unavailable");
-		return NULL;
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++) {
+		const struct orlix_tcti_native_proof_registry_entry *entry =
+			&entries[index];
+
+		if (entry->production_capture &&
+			entry->source.subject_kind ==
+				ORLIX_TCTI_NATIVE_SUBJECT_SOURCE_LEAF &&
+			bitfield_unary_source_ordinal(entry->source.source_ordinal) &&
+			!strcmp(entry->kunit_source, BITFIELD_UNARY_SOURCE_PATH))
+			return true;
 	}
-	for (entry_index = 0; entry_index < count; entry_index++) {
-		size_t binding_index;
-
-		for (binding_index = 0;
-		     binding_index < entries[entry_index].binding_count;
-		     binding_index++) {
-			const struct orlix_tcti_target_proof_binding *binding =
-				&entries[entry_index].bindings[binding_index];
-
-			if (binding->source_ordinal != ordinal)
-				continue;
-			KUNIT_EXPECT_PTR_EQ(test, NULL, selected);
-			selected = &entries[entry_index];
-			*selected_binding = binding;
-		}
-	}
-	return selected;
+	return false;
 }
 
-static const char *bitfield_unary_native_case(
-	const struct orlix_tcti_target_proof_registry_entry *entry)
+static void bitfield_unary_typed_proof_ingestion_unavailable(
+	struct kunit *test)
 {
-	if (!strcmp(entry->kunit_suite,
-		    "orlix-tcti-bitfield-extract-source-bound"))
-		return "bitfield_extract_production_path_leaves";
-	if (!strcmp(entry->kunit_suite,
-		    "orlix-tcti-scalar-bitops-source-bound"))
-		return "orlix_tcti_scalar_bitops_production_path_semantics";
-	return "orlix_tcti_cssc_data_processing_execute_boundaries";
+	if (bitfield_unary_producer_capture_rows_present()) {
+		KUNIT_FAIL(test,
+			"#129 producer-capture rows appeared without a reviewed migration");
+		return;
+	}
+	kunit_skip(test,
+		"current #120 native registry lacks #129 producer-capture rows");
 }
 
-static void bitfield_unary_typed_one(struct kunit *test,
-	struct orlix_tcti_target_proof_ingestion_ledger *ledger, u32 ordinal,
-	u32 instruction, u64 expected)
+static void bitfield_unary_base_typed_proof_ingestion(struct kunit *test)
 {
-	const struct orlix_tcti_target_proof_registry_entry *entry;
-	const struct orlix_tcti_target_proof_binding *binding = NULL;
-	struct orlix_tcti_target_kunit_provenance_identity provenance;
-	struct orlix_tcti_target_native_ingestion_selector selector;
-	struct orlix_tcti_target_native_result_record *record = NULL;
-	struct orlix_tcti_native_observation_spec spec = {};
-	struct orlix_tcti_native_observation *observation;
-	enum orlix_tcti_target_proof_ingestion_error error;
-	struct pt_regs regs, expected_regs;
-	char build_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
-	unsigned long mapped = bitfield_extract_map_rx(test, instruction);
-	u8 rd = instruction & 31;
-	const char *case_name;
-
-	bitfield_extract_seed_resume_regs(&regs, mapped, instruction);
-	expected_regs = regs;
-	if (rd != 31)
-		expected_regs.regs[rd] = expected;
-	expected_regs.pc = mapped + sizeof(u32);
-	spec.source_ordinal = ordinal;
-	spec.obligation = ORLIX_TCTI_NATIVE_OBLIGATION_GPR;
-	spec.result.reason = ORLIX_TCTI_EXIT_SYSCALL;
-	spec.result.status = 0;
-	spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
-	spec.result.pc = mapped + sizeof(u32);
-	spec.result.instruction = BITFIELD_EXTRACT_SVC;
-	orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
-	observation = orlix_tcti_native_observation_create(&spec);
-	KUNIT_ASSERT_NOT_NULL(test, observation);
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
-		observation, current, &regs, current->mm));
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_native_observation_compare(observation));
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_native_observation_export(observation, &record));
-	KUNIT_ASSERT_NOT_NULL(test, record);
-
-	entry = bitfield_unary_registry_entry(test, ordinal, &binding);
-	KUNIT_ASSERT_NOT_NULL(test, entry);
-	KUNIT_ASSERT_NOT_NULL(test, binding);
-	case_name = bitfield_unary_native_case(entry);
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_target_kunit_provenance_identity(
-		entry, case_name, &provenance));
-	scnprintf(build_identity, sizeof(build_identity), "%s|%s|%s",
-		init_utsname()->release, init_utsname()->version,
-		init_utsname()->machine);
-	selector = (struct orlix_tcti_target_native_ingestion_selector) {
-		.proof_id = entry->id,
-		.classification_mask = entry->classification_mask,
-		.condition_tcnd_hex = binding->condition_tcnd_hex,
-		.kunit_source = provenance.source,
-		.kunit_source_sha256 = provenance.source_sha256,
-		.kunit_build_source = provenance.build_source,
-		.kunit_build_source_sha256 = provenance.build_source_sha256,
-		.kunit_suite = provenance.suite,
-		.kunit_case = provenance.case_name,
-		.executing_kernel_identity = build_identity,
-	};
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
-		ledger, record, &selector, &error));
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
-	orlix_tcti_target_native_result_record_destroy(record);
-	orlix_tcti_native_observation_destroy(observation);
-	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	bitfield_unary_typed_proof_ingestion_unavailable(test);
 }
 
-static void bitfield_unary_typed_proof_ingestion(struct kunit *test)
+static void bitfield_unary_cssc_typed_proof_ingestion(struct kunit *test)
 {
-	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
-	struct orlix_tcti_target_proof_ingestion_summary summary;
-	size_t row;
-
-	ledger = orlix_tcti_target_proof_ingestion_ledger_create(25);
-	KUNIT_ASSERT_NOT_NULL(test, ledger);
-	for (row = 0; row < ARRAY_SIZE(source_rows); row++) {
-		const struct source_row *source = &source_rows[row];
-		bool sf = source->ordinal == 2170U || source->ordinal >= 2208U;
-		u32 instruction;
-		struct orlix_tcti_decoded_instruction decoded;
-		struct pt_regs seeded;
-		u64 expected;
-
-		instruction = source->class == ORLIX_TCTI_DECODE_EXTRACT ?
-			encode_extract(sf, sf, false, 5, sf ? 37 : 19, 4, 7) :
-			encode_bitfield(sf, source->op, sf, sf ? 56 : 24,
-				sf ? 7 : 23, 4, 7);
-		decoded = orlix_tcti_decode_aarch64(instruction);
-		bitfield_extract_seed_resume_regs(&seeded, 0, instruction);
-		if (source->class == ORLIX_TCTI_DECODE_EXTRACT) {
-			u8 width = sf ? 64 : 32;
-			u64 high = seeded.regs[4] & width_mask(sf);
-			u64 low = seeded.regs[5] & width_mask(sf);
-
-			expected = ((low >> decoded.shift_amount) |
-				(high << (width - decoded.shift_amount))) &
-				width_mask(sf);
-		} else {
-			expected = bitfield_expected(&decoded, seeded.regs[4],
-				seeded.regs[7]);
-		}
-		bitfield_unary_typed_one(test, ledger, source->ordinal,
-			instruction, expected);
-	}
-	for (row = 0; row < ARRAY_SIZE(dp1_source_rows); row++) {
-		const struct scalar_source_row *source = &dp1_source_rows[row];
-		u32 instruction = source->pattern | (4U << 5) | 7U;
-		struct pt_regs seeded;
-		bool sf = instruction & BIT(31);
-		u8 width = sf ? 64 : 32;
-		u64 expected;
-
-		bitfield_extract_seed_resume_regs(&seeded, 0, instruction);
-		expected = scalar_dp1_expected(source->op,
-			seeded.regs[4] & width_mask(sf), width) & width_mask(sf);
-		bitfield_unary_typed_one(test, ledger, source->ordinal,
-			instruction, expected);
-	}
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
-	KUNIT_EXPECT_EQ(test, 25U, summary.accepted_records);
-	KUNIT_EXPECT_EQ(test, 25U, summary.native_passed);
-	KUNIT_EXPECT_EQ(test, 0U, summary.rejected);
-	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	bitfield_unary_typed_proof_ingestion_unavailable(test);
 }
 
 static void bitfield_unary_linux_disposition(struct kunit *test)
@@ -1232,6 +1233,7 @@ static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(exhaustive_bitfield_semantics),
 	KUNIT_CASE(exhaustive_extract_semantics),
 	KUNIT_CASE(bitfield_alias_state),
+	KUNIT_CASE(bitfield_alias_matrix_and_canonical_relations),
 	KUNIT_CASE(extract_ror_alias_state),
 	KUNIT_CASE(extract_overlap_xzr_state),
 	KUNIT_CASE(bitfield_extract_production_path_leaves),
@@ -1240,7 +1242,8 @@ static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(bitfield_extract_production_path_reserved_rejection),
 	KUNIT_CASE(bitfield_unary_production_path_leaves),
 	KUNIT_CASE(bitfield_unary_reserved_rejection),
-	KUNIT_CASE(bitfield_unary_typed_proof_ingestion),
+	KUNIT_CASE(bitfield_unary_base_typed_proof_ingestion),
+	KUNIT_CASE(bitfield_unary_cssc_typed_proof_ingestion),
 	KUNIT_CASE(bitfield_unary_linux_disposition),
 	{}
 };

@@ -1013,19 +1013,17 @@ static int scalar_bitops_registry_binds_exact_source_rows(void)
 		EXPECT(entry != NULL);
 		EXPECT(!strcmp(entry->operation_id, expected[index].operation_id));
 		EXPECT(!strcmp(entry->kunit_source,
-			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c"));
+			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_bitfield_extract_source_bound_test.c"));
 		EXPECT(!strcmp(entry->kunit_suite,
-			"orlix-tcti-scalar-bitops-source-bound"));
-		EXPECT(entry->kunit_case_count == 2);
+			"orlix-tcti-bitfield-extract-source-bound"));
+		EXPECT(entry->kunit_case_count == 1);
 		EXPECT(!strcmp(entry->kunit_cases[0].name,
-			"orlix_tcti_scalar_bitops_source_bindings"));
+			"bitfield_unary_base_typed_proof_ingestion"));
 		EXPECT(entry->kunit_cases[0].obligations ==
 			(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS));
-		EXPECT(!strcmp(entry->kunit_cases[1].name,
-			"orlix_tcti_scalar_bitops_production_path_semantics"));
-		EXPECT(entry->kunit_cases[1].obligations ==
-			(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC));
 		EXPECT(entry->unproved_obligations == entry->obligations);
 		EXPECT(entry->obligations &

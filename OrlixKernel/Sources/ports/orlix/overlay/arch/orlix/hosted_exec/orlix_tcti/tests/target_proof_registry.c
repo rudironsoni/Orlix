@@ -732,7 +732,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "4f042bd635beaf8ce0a7c9ae9d55d04b1e56e4c93a3a50508ce94afcc454953d",
 	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
 	{ CSSC_SOURCE,
-	  "ca0b8c52c373adb536307e555565bf8e6d89328d187f86cfeb6664c2b07ddbed",
+	  "6c20c79b01c941626d3505e2164bbb5ac405ef1c2fa34ec70ac0aaa5db84d5b8",
 	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
@@ -747,7 +747,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
 	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL },
 	{ BITFIELD_UNARY_SOURCE,
-	  "5112c326982a4755882a0bc28b410b8321777581b7301fd603c6d9d02b463cbc",
+	  "551fc519a58a991ea118b14e32551db858442d736cf77669f046458fa835a939",
 	  "orlix_tcti_bitfield_extract_source_bound_test.o", NULL, NULL, NULL },
 	{ VARIABLE_SHIFT_SOURCE,
 	  "a7d8f93e3319c1175ae940763d7c044e9e73a95b8ed01b7d641cdc54cadee181",
@@ -1066,9 +1066,21 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
 	  BITFIELD_UNARY_SUITE_SYMBOL, BITFIELD_UNARY_CASE_ARRAY,
-	  "bitfield_extract_production_path_leaves",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  "bitfield_unary_base_typed_proof_ingestion",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+	  BITFIELD_UNARY_SUITE_SYMBOL, BITFIELD_UNARY_CASE_ARRAY,
+	  "bitfield_unary_cssc_typed_proof_ingestion",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ VARIABLE_SHIFT_SOURCE, VARIABLE_SHIFT_SUITE,
 	  VARIABLE_SHIFT_SUITE_SYMBOL, VARIABLE_SHIFT_CASE_ARRAY,
 	  "orlix_tcti_variable_shift_source_bindings",
@@ -1980,6 +1992,25 @@ static const struct orlix_tcti_target_proof_case cssc_data_processing_cases[] = 
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case bitfield_unary_base_cases[] = {
+	{ "bitfield_unary_base_typed_proof_ingestion",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct orlix_tcti_target_proof_case bitfield_unary_cssc_cases[] = {
+	{ "bitfield_unary_cssc_typed_proof_ingestion",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
 #define ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
@@ -2139,7 +2170,7 @@ static const struct orlix_tcti_target_proof_binding cssc_umin_bindings[] = {
 #define CSSC_DP2_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
 #define CSSC_DP1_BINDING(ordinal, leaf, mnemonic, pattern) \
-	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
+	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1), ordinal }
 
 static const struct orlix_tcti_target_proof_binding cssc_smax_reg_bindings[] = {
 	CSSC_DP2_BINDING(3368U, "SMAX_32_dp_2src", "SMAX", 0x1ac06000U),
@@ -2337,6 +2368,12 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  CSSC_SOURCE, CSSC_SUITE, cssc_data_processing_cases, \
 	  ARRAY_COUNT(cssc_data_processing_cases), bindings, ARRAY_COUNT(bindings), \
 	  NULL, CSSC_OBLIGATIONS }
+#define BITFIELD_UNARY_CSSC_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  CSSC_OBLIGATIONS, ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE, bitfield_unary_cssc_cases, \
+	  ARRAY_COUNT(bitfield_unary_cssc_cases), bindings, ARRAY_COUNT(bindings), \
+	  NULL, CSSC_OBLIGATIONS }
 #define INTEGER_CONDITIONAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
 	  obligations, ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
@@ -2467,11 +2504,11 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 			cssc_smin_reg_bindings),
 	CSSC_DATA_ENTRY("kunit:cssc-data-processing-umin", "UMIN_reg",
 			cssc_umin_reg_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-ctz", "CTZ",
+	BITFIELD_UNARY_CSSC_ENTRY("kunit:cssc-data-processing-ctz", "CTZ",
 			cssc_ctz_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-cnt", "CNT",
+	BITFIELD_UNARY_CSSC_ENTRY("kunit:cssc-data-processing-cnt", "CNT",
 			cssc_cnt_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-abs", "ABS",
+	BITFIELD_UNARY_CSSC_ENTRY("kunit:cssc-data-processing-abs", "ABS",
 			cssc_abs_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
@@ -2898,21 +2935,6 @@ static const struct orlix_tcti_target_proof_case move_wide_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
-static const struct orlix_tcti_target_proof_case scalar_bitops_cases[] = {
-	{ "orlix_tcti_scalar_bitops_source_bindings",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "orlix_tcti_scalar_bitops_production_path_semantics",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-};
-
-static const struct orlix_tcti_target_proof_case bitfield_unary_cases[] = {
-	{ "bitfield_extract_production_path_leaves",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-};
-
 static const struct orlix_tcti_target_proof_case variable_shift_cases[] = {
 	{ "orlix_tcti_variable_shift_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2995,34 +3017,34 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
 	SCALAR_CONDITION_OPERATION("EXTR", "kunit:bitfield-unary-extr",
 		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
-		EXTR_CONDITION, bitfield_unary_cases, 2169U, 2170U, 2),
+		EXTR_CONDITION, bitfield_unary_base_cases, 2169U, 2170U, 2),
 	SCALAR_OPERATION("SBFM", "kunit:bitfield-unary-sbfm",
 		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
-		bitfield_unary_cases, 2205U, 2208U, 2),
+		bitfield_unary_base_cases, 2205U, 2208U, 2),
 	SCALAR_OPERATION("BFM", "kunit:bitfield-unary-bfm",
 		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
-		bitfield_unary_cases, 2206U, 2209U, 2),
+		bitfield_unary_base_cases, 2206U, 2209U, 2),
 	SCALAR_OPERATION("UBFM", "kunit:bitfield-unary-ubfm",
 		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
-		bitfield_unary_cases, 2207U, 2210U, 2),
+		bitfield_unary_base_cases, 2207U, 2210U, 2),
 	SCALAR_OPERATION("RBIT_int", "kunit:scalar-bitops-rbit",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3389U, 3397U, 2),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3389U, 3397U, 2),
 	SCALAR_OPERATION("REV16_int", "kunit:scalar-bitops-rev16",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3390U, 3398U, 2),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3390U, 3398U, 2),
 	SCALAR_OPERATION("REV", "kunit:scalar-bitops-rev",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3391U, 3400U, 2),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3391U, 3400U, 2),
 	SCALAR_OPERATION("CLZ_int", "kunit:scalar-bitops-clz",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3392U, 3401U, 2),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3392U, 3401U, 2),
 	SCALAR_OPERATION("CLS_int", "kunit:scalar-bitops-cls",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3393U, 3402U, 2),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3393U, 3402U, 2),
 	SCALAR_OPERATION("REV32_int", "kunit:scalar-bitops-rev32",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3399U, 3399U, 1),
+		BITFIELD_UNARY_SOURCE, BITFIELD_UNARY_SUITE,
+		bitfield_unary_base_cases, 3399U, 3399U, 1),
 	SCALAR_OPERATION("LSLV", "kunit:variable-shift-lslv",
 		VARIABLE_SHIFT_SOURCE, VARIABLE_SHIFT_SUITE,
 		variable_shift_cases, 3358U, 3377U, 2),

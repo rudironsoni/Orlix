@@ -55,10 +55,9 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
 /*
  * The decoder retains feature-conditioned leaves so the complete target
  * inventory can audit them.  Execution is a separate contract: a decoded
- * FEAT_CSSC instruction may enter a guest only after its owning execution
- * slice is proved.  The proved CTZ, CNT, and ABS one-source leaves execute
- * without advertising the wider CSSC feature; the still-unproved min/max
- * forms remain unavailable while ORLIX_EL0_HWCAP2 is zero.
+ * FEAT_CSSC instruction may enter a guest only after Linux advertises CSSC.
+ * ORLIX_EL0_HWCAP2 is currently zero, so all CSSC forms take the normal
+ * unsupported-instruction exit without changing guest architectural state.
  * Scalar FP16 uses HWCAP_FPHP and AdvSIMD FP16 uses HWCAP_ASIMDHP. Both are
  * likewise zero until their owning complete-target proof authorizes them.
  */
@@ -71,6 +70,10 @@ static bool orlix_tcti_decoded_requires_cssc(
 	switch (decoded->decode_class) {
 	case ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE:
 		return true;
+	case ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE:
+		return decoded->dp1_op == ORLIX_TCTI_DP1_CTZ ||
+			decoded->dp1_op == ORLIX_TCTI_DP1_CNT ||
+			decoded->dp1_op == ORLIX_TCTI_DP1_ABS;
 	case ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE:
 		return decoded->dp2_op == ORLIX_TCTI_DP2_SMAX ||
 			decoded->dp2_op == ORLIX_TCTI_DP2_UMAX ||
@@ -90,18 +93,21 @@ static bool orlix_tcti_decoded_requires_fp16(
 }
 
 static bool orlix_tcti_decoded_runtime_available(
-	const struct orlix_tcti_decoded_instruction *decoded)
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct orlix_tcti_test_feature_profile *test_profile)
 {
+	unsigned long hwcap = test_profile ? test_profile->hwcap : ELF_HWCAP;
+	unsigned long hwcap2 = test_profile ? test_profile->hwcap2 : ELF_HWCAP2;
+
 	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return false;
 	if (orlix_tcti_decoded_requires_fp16(decoded))
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
-			(ELF_HWCAP & HWCAP_ASIMDHP) :
-			(ELF_HWCAP & HWCAP_FPHP);
+			(hwcap & HWCAP_ASIMDHP) : (hwcap & HWCAP_FPHP);
 	return !orlix_tcti_decoded_requires_cssc(decoded) ||
-		(ELF_HWCAP2 & HWCAP2_CSSC);
+		(hwcap2 & HWCAP2_CSSC);
 }
 
 static bool orlix_tcti_address_has_vma(struct mm_struct *mm, unsigned long address,
@@ -626,6 +632,7 @@ orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *deco
 
 static int orlix_tcti_build_straight_line_block(struct mm_struct *mm,
 					  unsigned long start_pc,
+					  const struct orlix_tcti_test_feature_profile *test_profile,
 					  struct orlix_tcti_gadget_word *program,
 					  size_t capacity,
 					  size_t *word_count,
@@ -668,7 +675,7 @@ static int orlix_tcti_build_straight_line_block(struct mm_struct *mm,
 			return count ? 0 : -EINTR;
 		}
 		if (decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED ||
-		    !orlix_tcti_decoded_runtime_available(&decoded))
+		    !orlix_tcti_decoded_runtime_available(&decoded, test_profile))
 			return count ? 0 : -EOPNOTSUPP;
 
 		ret = orlix_tcti_append_decoded_instruction(&decoded, program,
@@ -801,12 +808,14 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 				    struct pt_regs *regs,
 				    struct mm_struct *mm,
 				    struct orlix_tcti_native_capture *capture,
-				    bool normal_resume)
+				    bool normal_resume,
+				    const struct orlix_tcti_test_feature_profile *test_profile)
 {
 	unsigned long long instruction_count = 0;
 	struct orlix_tcti_hot_block hot_blocks[ORLIX_TCTI_LOCAL_HOT_BLOCKS] = {};
 	u32 hot_block_cursor = 0;
 	bool successful_gadget_execution = false;
+	bool cache_allowed = !test_profile;
 	struct orlix_tcti_result result = {
 		.reason = ORLIX_TCTI_EXIT_TASK_EXIT,
 		.status = -EINVAL,
@@ -848,9 +857,9 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 					    regs->pstate);
 
 		code_generation = orlix_tcti_code_generation(mm);
-		block = orlix_tcti_hot_blocks_lookup(hot_blocks, block_pc,
-					       code_generation);
-		if (!block) {
+		block = cache_allowed ? orlix_tcti_hot_blocks_lookup(
+			hot_blocks, block_pc, code_generation) : NULL;
+		if (cache_allowed && !block) {
 			block = orlix_tcti_block_cache_lookup(mm, block_pc,
 							code_generation);
 			if (block) {
@@ -950,7 +959,8 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						       successful_gadget_execution);
 		}
 
-		ret = orlix_tcti_build_straight_line_block(mm, regs->pc, program,
+		ret = orlix_tcti_build_straight_line_block(mm, regs->pc,
+						     test_profile, program,
 						     ARRAY_SIZE(program),
 						     &word_count,
 						     &block_instruction_count,
@@ -1008,11 +1018,11 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 		}
 
 		decoded = orlix_tcti_decode_aarch64(instruction);
-		ret = orlix_tcti_block_cache_insert(
+		ret = cache_allowed ? orlix_tcti_block_cache_insert(
 			mm, block_pc,
 			block_pc + block_instruction_count * sizeof(u32),
 			code_generation, block_instruction_count, program,
-			word_count, &block);
+			word_count, &block) : -EOPNOTSUPP;
 		if (ret == -ESTALE)
 			continue;
 		if (!ret && block) {
@@ -1102,15 +1112,31 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				    struct pt_regs *regs, struct mm_struct *mm)
 {
 	return orlix_tcti_resume_user_internal(task, regs, mm,
-		orlix_tcti_native_capture_claim_resume(task), true);
+		orlix_tcti_native_capture_claim_resume(task), true, NULL);
 }
 
 struct orlix_tcti_result orlix_tcti_resume_user_captured(
 	struct task_struct *task, struct pt_regs *regs, struct mm_struct *mm,
 	struct orlix_tcti_native_capture *capture)
 {
-	return orlix_tcti_resume_user_internal(task, regs, mm, capture, false);
+	return orlix_tcti_resume_user_internal(task, regs, mm, capture, false,
+		NULL);
 }
+
+#if IS_ENABLED(CONFIG_ORLIX_TCTI_KUNIT_TEST)
+struct orlix_tcti_result orlix_tcti_resume_user_with_feature_profile_for_tests(
+	struct task_struct *task, struct pt_regs *regs, struct mm_struct *mm,
+	const struct orlix_tcti_test_feature_profile *profile)
+{
+	if (!profile)
+		return (struct orlix_tcti_result) {
+			.reason = ORLIX_TCTI_EXIT_TASK_EXIT,
+			.status = -EINVAL,
+		};
+	return orlix_tcti_resume_user_internal(task, regs, mm, NULL, false,
+		profile);
+}
+#endif
 
 void orlix_tcti_prepare_syscall_handoff(struct pt_regs *regs)
 {
