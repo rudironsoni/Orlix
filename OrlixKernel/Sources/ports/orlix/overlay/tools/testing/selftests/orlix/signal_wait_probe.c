@@ -2,10 +2,16 @@
 
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/wait.h>
+#include <ucontext.h>
 #include <unistd.h>
 
 #include "orlix_kselftest_user.h"
+
+#ifndef TRAP_BRKPT
+#define TRAP_BRKPT 1 /* Linux UAPI asm-generic/siginfo.h */
+#endif
 
 static volatile sig_atomic_t usr1_count;
 static volatile sig_atomic_t usr2_count;
@@ -93,42 +99,9 @@ static bool waitpid_observes_signal_termination(void)
 	return WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM;
 }
 
-static bool waitpid_observes_brk_as_sigtrap(void)
-{
-	pid_t child;
-	int status = 0;
-
-	child = fork();
-	if (child == 0) {
-		__asm__ volatile("brk #1");
-		_exit(127);
-	}
-	if (child < 0)
-		return false;
-	if (waitpid(child, &status, 0) != child)
-		return false;
-	return WIFSIGNALED(status) && WTERMSIG(status) == SIGTRAP;
-}
-
-static bool waitpid_observes_hlt_as_sigill(void)
-{
-	pid_t child;
-	int status = 0;
-
-	child = fork();
-	if (child == 0) {
-		__asm__ volatile("hlt #0");
-		_exit(127);
-	}
-	if (child < 0)
-		return false;
-	if (waitpid(child, &status, 0) != child)
-		return false;
-
-	return WIFSIGNALED(status) && WTERMSIG(status) == SIGILL;
-}
-
 enum undefined_instruction {
+	UNDEFINED_BRK,
+	UNDEFINED_HLT,
 	UNDEFINED_UDF,
 	UNDEFINED_HVC,
 	UNDEFINED_SMC,
@@ -137,46 +110,118 @@ enum undefined_instruction {
 	UNDEFINED_DCPS3,
 };
 
-static void execute_undefined_instruction(enum undefined_instruction instruction)
+static volatile sig_atomic_t exact_signal_seen;
+static volatile sig_atomic_t exact_signal_error;
+static int exact_expected_signal;
+static int exact_expected_code;
+static uintptr_t exact_expected_pc;
+
+static void exact_instruction_handler(int signal_number, siginfo_t *info,
+				      void *context)
+{
+	ucontext_t *ucontext = context;
+	uintptr_t observed_pc;
+
+	if (!ucontext) {
+		exact_signal_error = 1;
+		return;
+	}
+	observed_pc = (uintptr_t)ucontext->uc_mcontext.pc;
+	if (signal_number != exact_expected_signal)
+		exact_signal_error = 2;
+	else if (!info)
+		exact_signal_error = 3;
+	else if (info->si_code != exact_expected_code)
+		exact_signal_error = 4;
+	else if ((uintptr_t)info->si_addr != exact_expected_pc)
+		exact_signal_error = 5;
+	else if (observed_pc != exact_expected_pc)
+		exact_signal_error = 6;
+	exact_signal_seen++;
+	ucontext->uc_mcontext.pc = observed_pc + sizeof(uint32_t);
+}
+
+static bool install_exact_instruction_handler(int signal_number)
+{
+	struct sigaction action = {};
+
+	action.sa_sigaction = exact_instruction_handler;
+	action.sa_flags = SA_SIGINFO;
+	if (sigemptyset(&action.sa_mask))
+		return false;
+	return sigaction(signal_number, &action, NULL) == 0;
+}
+
+static void execute_exact_instruction(enum undefined_instruction instruction)
 {
 	switch (instruction) {
+	case UNDEFINED_BRK:
+		exact_expected_pc = (uintptr_t)&&brk_instruction;
+brk_instruction:
+		__asm__ volatile("brk #1");
+		return;
+	case UNDEFINED_HLT:
+		exact_expected_pc = (uintptr_t)&&hlt_instruction;
+hlt_instruction:
+		__asm__ volatile("hlt #0");
+		return;
 	case UNDEFINED_UDF:
+		exact_expected_pc = (uintptr_t)&&udf_instruction;
+udf_instruction:
 		__asm__ volatile(".inst 0x00001234");
-		break;
+		return;
 	case UNDEFINED_HVC:
+		exact_expected_pc = (uintptr_t)&&hvc_instruction;
+hvc_instruction:
 		__asm__ volatile(".inst 0xd4024682");
-		break;
+		return;
 	case UNDEFINED_SMC:
+		exact_expected_pc = (uintptr_t)&&smc_instruction;
+smc_instruction:
 		__asm__ volatile(".inst 0xd4024683");
-		break;
+		return;
 	case UNDEFINED_DCPS1:
+		exact_expected_pc = (uintptr_t)&&dcps1_instruction;
+dcps1_instruction:
 		__asm__ volatile(".inst 0xd4a24681");
-		break;
+		return;
 	case UNDEFINED_DCPS2:
+		exact_expected_pc = (uintptr_t)&&dcps2_instruction;
+dcps2_instruction:
 		__asm__ volatile(".inst 0xd4a24682");
-		break;
+		return;
 	case UNDEFINED_DCPS3:
+		exact_expected_pc = (uintptr_t)&&dcps3_instruction;
+dcps3_instruction:
 		__asm__ volatile(".inst 0xd4a24683");
-		break;
+		return;
 	}
 }
 
-static bool waitpid_observes_undefined_as_sigill(
-	enum undefined_instruction instruction)
+static bool observes_exact_catchable_instruction_signal(
+	enum undefined_instruction instruction, int signal_number, int signal_code)
 {
 	pid_t child;
 	int status = 0;
 
 	child = fork();
 	if (child == 0) {
-		execute_undefined_instruction(instruction);
-		_exit(127);
+		exact_signal_seen = 0;
+		exact_signal_error = 0;
+		exact_expected_signal = signal_number;
+		exact_expected_code = signal_code;
+		if (!install_exact_instruction_handler(signal_number))
+			_exit(10);
+		execute_exact_instruction(instruction);
+		if (exact_signal_seen != 1 || exact_signal_error)
+			_exit(11 + exact_signal_error);
+		_exit(0);
 	}
 	if (child < 0)
 		return false;
 	if (waitpid(child, &status, 0) != child)
 		return false;
-	return WIFSIGNALED(status) && WTERMSIG(status) == SIGILL;
+	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
 int main(void)
@@ -194,22 +239,30 @@ int main(void)
 			  "unblocked pending signal runs handler");
 	orlix_test_result(waitpid_observes_signal_termination(),
 			  "waitpid observes signal termination status");
-	orlix_test_result(waitpid_observes_brk_as_sigtrap(),
-			  "AArch64 BRK is delivered as SIGTRAP");
-	orlix_test_result(waitpid_observes_hlt_as_sigill(),
-			  "AArch64 HLT is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_UDF),
-			  "AArch64 UDF is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_HVC),
-			  "AArch64 HVC at EL0 is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_SMC),
-			  "AArch64 SMC at EL0 is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS1),
-			  "AArch64 DCPS1 outside Debug state is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS2),
-			  "AArch64 DCPS2 outside Debug state is delivered as SIGILL");
-	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS3),
-			  "AArch64 DCPS3 outside Debug state is delivered as SIGILL");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_BRK, SIGTRAP, TRAP_BRKPT),
+			  "AArch64 BRK delivers resumable TRAP_BRKPT with exact PC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_HLT, SIGILL, ILL_ILLOPC),
+			  "AArch64 HLT delivers resumable ILL_ILLOPC with exact PC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_UDF, SIGILL, ILL_ILLOPC),
+			  "AArch64 UDF delivers resumable ILL_ILLOPC with exact PC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_HVC, SIGILL, ILL_ILLOPC),
+			  "AArch64 HVC at EL0 delivers resumable ILL_ILLOPC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_SMC, SIGILL, ILL_ILLOPC),
+			  "AArch64 SMC at EL0 delivers resumable ILL_ILLOPC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_DCPS1, SIGILL, ILL_ILLOPC),
+			  "AArch64 DCPS1 outside Debug delivers resumable ILL_ILLOPC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_DCPS2, SIGILL, ILL_ILLOPC),
+			  "AArch64 DCPS2 outside Debug delivers resumable ILL_ILLOPC");
+	orlix_test_result(observes_exact_catchable_instruction_signal(
+			  UNDEFINED_DCPS3, SIGILL, ILL_ILLOPC),
+			  "AArch64 DCPS3 outside Debug delivers resumable ILL_ILLOPC");
 
 	orlix_test_exit();
 }

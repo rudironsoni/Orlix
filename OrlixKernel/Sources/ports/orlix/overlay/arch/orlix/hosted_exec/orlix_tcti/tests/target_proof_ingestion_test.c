@@ -257,7 +257,8 @@ static int ledger_capacity_covers_complete_contract(void)
 	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
 
 	EXPECT(ORLIX_TCTI_TARGET_PROOF_LEDGER_MAX_RECORDS ==
-	       (size_t)ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS * 11U);
+	       (size_t)ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS *
+	       ORLIX_TCTI_TARGET_PROOF_OBLIGATION_BITS);
 	ledger = orlix_tcti_target_proof_ingestion_ledger_create(
 		ORLIX_TCTI_TARGET_PROOF_LEDGER_MAX_RECORDS);
 	EXPECT(ledger);
