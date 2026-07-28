@@ -193,6 +193,7 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 #define ADD_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
@@ -704,8 +705,8 @@ static int add_sub_immediate_registry_is_source_bound(void)
 					break;
 				}
 			EXPECT(entry != NULL);
-			EXPECT(entry->kunit_case_count == 9);
-			EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x1ff));
+			EXPECT(entry->kunit_case_count == 10);
+			EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x3ff));
 		}
 		reference.encoding_pattern ^= 0x1000000U;
 		EXPECT(orlix_tcti_target_proof_registry_lookup(entries, count, &reference) ==

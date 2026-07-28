@@ -595,6 +595,106 @@ orlix_tcti_add_sub_immediate_sme_absent(void)
 	};
 }
 
+static void orlix_tcti_add_sub_immediate_native_rejected_record(
+	struct kunit *test,
+	const struct orlix_tcti_add_sub_immediate_leaf *leaf,
+	const char *case_name, u32 instruction)
+{
+	struct orlix_tcti_native_observation_spec *spec =
+		kunit_kzalloc(test, sizeof(*spec), GFP_KERNEL);
+	struct orlix_tcti_native_observation *observation;
+	struct pt_regs regs = {};
+	unsigned long mapped;
+	unsigned int reg;
+
+	KUNIT_ASSERT_NOT_NULL(test, spec);
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+		orlix_tcti_decode_aarch64(instruction).decode_class);
+	mapped = orlix_tcti_add_sub_immediate_map_program(test, instruction);
+	KUNIT_ASSERT_NE(test, 0UL, mapped);
+	for (reg = 0; reg < 31; reg++)
+		regs.regs[reg] = 0x8300000000000000ULL + reg;
+	regs.sp = 0x00000003fffffff0ULL;
+	regs.pc = mapped;
+	regs.pstate = PSR_MODE_EL0t | ADD_SUB_IMMEDIATE_NZCV;
+	regs.syscallno = NO_SYSCALL;
+	*spec = (struct orlix_tcti_native_observation_spec) {
+		.source_ordinal = leaf->source_ordinal,
+		.obligation = ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING,
+		.result = {
+			.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			.status = -EOPNOTSUPP,
+			.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+			.pc = mapped,
+			.instruction = instruction,
+		},
+	};
+	orlix_tcti_native_gpr_capture(&spec->gpr, &regs);
+	observation = orlix_tcti_native_observation_create(spec);
+	KUNIT_ASSERT_NOT_NULL(test, observation);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_compare(observation));
+	orlix_tcti_add_sub_immediate_ingest(test, leaf, case_name, observation);
+	orlix_tcti_native_observation_destroy(observation);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void orlix_tcti_add_sub_immediate_native_rejected_records(
+	struct kunit *test)
+{
+	const char *case_name = __func__;
+	size_t leaf_index;
+
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_add_sub_immediate_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_add_sub_immediate_leaf *leaf =
+			&orlix_tcti_add_sub_immediate_leaves[leaf_index];
+		u32 canonical[2];
+		u32 rejected = 0;
+		u8 shift;
+		u8 bit;
+
+		canonical[0] = orlix_tcti_add_sub_immediate_instruction(
+			leaf, false, 0x555, 7, 3);
+		canonical[1] = orlix_tcti_add_sub_immediate_instruction(
+			leaf, true, 0x555, 7, 3);
+
+		/* The DDI shift<1> == 1 reservations are shift values 2 and 3. */
+		for (shift = 0; shift < ARRAY_SIZE(canonical); shift++) {
+			u32 instruction = canonical[shift] | BIT(23);
+
+			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				orlix_tcti_decode_aarch64(instruction).decode_class,
+				"%s reserved shift %u", leaf->source_name,
+				shift + 2);
+			orlix_tcti_add_sub_immediate_native_rejected_record(
+				test, leaf, case_name, instruction);
+			rejected++;
+		}
+
+		/* Bind every unsupported one-bit neighbour of the fixed source row. */
+		for (bit = 0; bit < 32; bit++) {
+			u32 instruction;
+
+			if (!(ADD_SUB_IMMEDIATE_SOURCE_MASK & BIT(bit)) || bit == 23)
+				continue;
+			instruction = canonical[0] ^ BIT(bit);
+			if (orlix_tcti_add_sub_immediate_source_leaf(instruction) ||
+			    orlix_tcti_decode_aarch64(instruction).decode_class !=
+				    ORLIX_TCTI_DECODE_UNSUPPORTED)
+				continue;
+			orlix_tcti_add_sub_immediate_native_rejected_record(
+				test, leaf, case_name, instruction);
+			rejected++;
+		}
+		KUNIT_EXPECT_GT_MSG(test, rejected, 1U, "%s rejected neighbours",
+			leaf->source_name);
+	}
+}
+
 static void orlix_tcti_add_sub_immediate_native_records(
 	struct kunit *test, enum orlix_tcti_native_obligation obligation,
 	const char *case_name)
@@ -719,6 +819,7 @@ ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_decode_records
 	ORLIX_TCTI_NATIVE_OBLIGATION_DECODE)
 ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_legal_records,
 	ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODING)
+/* Rejection needs the complete reserved-shift and fixed-neighbour matrix. */
 ADD_SUB_IMMEDIATE_NATIVE_CASE(
 	orlix_tcti_add_sub_immediate_native_register_records,
 	ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
@@ -746,6 +847,7 @@ static struct kunit_case orlix_tcti_add_sub_immediate_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_source_mask_boundaries),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_decode_records),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_legal_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_rejected_records),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_register_records),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_pc_records),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_flags_records),
