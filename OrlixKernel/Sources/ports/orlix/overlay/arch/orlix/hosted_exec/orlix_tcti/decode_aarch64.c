@@ -45,6 +45,21 @@
 #define AARCH64_PC_RELATIVE_ADDRESS_PATTERN 0x10000000U
 #define AARCH64_ADD_SUB_IMM_MASK 0x1f000000U
 #define AARCH64_ADD_SUB_IMM_PATTERN 0x11000000U
+#define AARCH64_ADDG_MASK 0xffc0c000U
+#define AARCH64_ADDG_PATTERN 0x91800000U
+#define AARCH64_SUBG_PATTERN 0xd1800000U
+#define AARCH64_MTE_TAG_MEMORY_MASK 0xffe00c00U
+#define AARCH64_STG_PATTERN 0xd9200400U
+#define AARCH64_STZGM_PATTERN 0xd9200000U
+#define AARCH64_LDG_PATTERN 0xd9600000U
+#define AARCH64_STZG_PATTERN 0xd9600400U
+#define AARCH64_ST2G_PATTERN 0xd9a00400U
+#define AARCH64_STGM_PATTERN 0xd9a00000U
+#define AARCH64_STZ2G_PATTERN 0xd9e00400U
+#define AARCH64_LDGM_PATTERN 0xd9e00000U
+#define AARCH64_MTE_DP2_MASK 0xffe0fc00U
+#define AARCH64_IRG_PATTERN 0x9ac01000U
+#define AARCH64_GMI_PATTERN 0x9ac01400U
 #define AARCH64_MIN_MAX_IMM_MASK 0x7ff00000U
 #define AARCH64_MIN_MAX_IMM_PATTERN 0x11c00000U
 #define AARCH64_ADD_SUB_SHIFTED_REG_MASK 0x1f200000U
@@ -1107,6 +1122,79 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.page_relative = instruction & BIT(31);
 		decoded.pc_relative_imm = decoded.page_relative ?
 			sign_extend64(imm << 12, 32) : sign_extend64(imm, 20);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_ADDG_MASK) == AARCH64_ADDG_PATTERN ||
+	    (instruction & AARCH64_ADDG_MASK) == AARCH64_SUBG_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_MEMORY_TAGGING;
+		decoded.memory_tagging_op =
+			(instruction & BIT(30)) ? ORLIX_TCTI_MTE_SUBG : ORLIX_TCTI_MTE_ADDG;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.tag_offset = (instruction >> 10) & 0xfU;
+		decoded.imm6 = (instruction >> 16) & 0x3fU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STG_PATTERN ||
+	    (instruction & 0xfffffc00U) == AARCH64_STZGM_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_LDG_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZG_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_ST2G_PATTERN ||
+	    (instruction & 0xfffffc00U) == AARCH64_STGM_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZ2G_PATTERN ||
+	    (instruction & 0xfffffc00U) == AARCH64_LDGM_PATTERN) {
+		u32 pattern = instruction & AARCH64_MTE_TAG_MEMORY_MASK;
+
+		decoded.decode_class = ORLIX_TCTI_DECODE_MEMORY_TAGGING;
+		decoded.rt = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.memory_offset = sign_extend64(
+			(u64)((instruction >> 12) & 0x1ffU) << 4, 12);
+		decoded.memory_index_mode = ((instruction >> 10) & 0x3U) == 1 ?
+			ORLIX_TCTI_MEMORY_INDEX_POST :
+			((instruction >> 10) & 0x3U) == 3 ? ORLIX_TCTI_MEMORY_INDEX_PRE :
+			ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+		switch (pattern) {
+		case AARCH64_STG_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STG;
+			break;
+		case AARCH64_STZGM_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STZGM;
+			break;
+		case AARCH64_LDG_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_LDG;
+			decoded.load = true;
+			break;
+		case AARCH64_STZG_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STZG;
+			break;
+		case AARCH64_ST2G_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_ST2G;
+			break;
+		case AARCH64_STGM_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STGM;
+			break;
+		case AARCH64_STZ2G_PATTERN:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STZ2G;
+			break;
+		default:
+			decoded.memory_tagging_op = ORLIX_TCTI_MTE_LDGM;
+			decoded.load = true;
+			break;
+		}
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_MTE_DP2_MASK) == AARCH64_IRG_PATTERN ||
+	    (instruction & AARCH64_MTE_DP2_MASK) == AARCH64_GMI_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_MEMORY_TAGGING;
+		decoded.memory_tagging_op =
+			(instruction & BIT(10)) ? ORLIX_TCTI_MTE_GMI : ORLIX_TCTI_MTE_IRG;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
 		return decoded;
 	}
 

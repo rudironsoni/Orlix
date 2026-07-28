@@ -17,6 +17,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_CACHE_MAINTENANCE,
 	ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE,
 	ORLIX_TCTI_DECODE_ADD_SUB_IMMEDIATE,
+	ORLIX_TCTI_DECODE_MEMORY_TAGGING,
 	ORLIX_TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
 	ORLIX_TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER,
 	ORLIX_TCTI_DECODE_ADD_SUB_WITH_CARRY,
@@ -81,6 +82,21 @@ enum orlix_tcti_memory_index_mode {
 	ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET = 0,
 	ORLIX_TCTI_MEMORY_INDEX_PRE,
 	ORLIX_TCTI_MEMORY_INDEX_POST,
+};
+
+enum orlix_tcti_memory_tagging_op {
+	ORLIX_TCTI_MTE_ADDG = 0,
+	ORLIX_TCTI_MTE_SUBG,
+	ORLIX_TCTI_MTE_STG,
+	ORLIX_TCTI_MTE_STZGM,
+	ORLIX_TCTI_MTE_LDG,
+	ORLIX_TCTI_MTE_STZG,
+	ORLIX_TCTI_MTE_ST2G,
+	ORLIX_TCTI_MTE_STGM,
+	ORLIX_TCTI_MTE_STZ2G,
+	ORLIX_TCTI_MTE_LDGM,
+	ORLIX_TCTI_MTE_IRG,
+	ORLIX_TCTI_MTE_GMI,
 };
 
 enum orlix_tcti_logical_op {
@@ -601,6 +617,7 @@ struct orlix_tcti_decoded_instruction {
 	u8 condition;
 	u8 nzcv;
 	u8 imm6;
+	u8 tag_offset;
 	bool nonzero;
 	bool compare_branch_immediate;
 	u8 compare_branch_access_size;
@@ -622,6 +639,7 @@ struct orlix_tcti_decoded_instruction {
 	bool invert_second_operand;
 	u64 logical_immediate;
 	enum orlix_tcti_memory_index_mode memory_index_mode;
+	enum orlix_tcti_memory_tagging_op memory_tagging_op;
 	enum orlix_tcti_logical_op logical_op;
 	enum orlix_tcti_simd_modified_immediate_op simd_modified_immediate_op;
 	enum orlix_tcti_simd_vector_arithmetic_op simd_arithmetic_op;

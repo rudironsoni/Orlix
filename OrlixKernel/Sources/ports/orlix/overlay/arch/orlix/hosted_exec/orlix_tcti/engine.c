@@ -545,6 +545,10 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_REPLICATE:
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
 		return decoded->load ? ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
+	case ORLIX_TCTI_DECODE_MEMORY_TAGGING:
+		return decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG ||
+		       decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDGM ?
+			ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
 	}
@@ -622,6 +626,13 @@ orlix_tcti_memory_alignment_fault(const struct orlix_tcti_decoded_instruction *d
 
 	if (!decoded)
 		return false;
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_MEMORY_TAGGING) {
+		if (decoded->rn == 31 && !IS_ALIGNED(address, 16))
+			return true;
+		return (decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZG ||
+			decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G) &&
+			!IS_ALIGNED(address, 16);
+	}
 	if (decoded->rn == 31 && !IS_ALIGNED(address, 16))
 		return true;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_PAIR &&
