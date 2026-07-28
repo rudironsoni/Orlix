@@ -1740,6 +1740,8 @@ static int orlix_tcti_execute_simd_single_structure(
 	     decoded->access_size != sizeof(u64)) ||
 	    (decoded->simd_replicate && !decoded->load))
 		return -EOPNOTSUPP;
+	if (decoded->release)
+		smp_mb();
 
 	for (index = 0; index < decoded->simd_structure_count; index++) {
 		u8 reg = (decoded->rd + index) & 0x1fU;
@@ -1773,6 +1775,8 @@ static int orlix_tcti_execute_simd_single_structure(
 				return ret;
 		}
 	}
+	if (decoded->acquire)
+		smp_mb();
 
 	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST) {
 		increment = decoded->rm == 31 ?
