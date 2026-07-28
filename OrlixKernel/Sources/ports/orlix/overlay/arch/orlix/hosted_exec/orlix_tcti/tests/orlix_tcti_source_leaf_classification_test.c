@@ -269,6 +269,9 @@ static void source_leaf_emit_observation(
 	regs.regs[0] = 0x123456789abcdef0ULL;
 	spec.source_ordinal = leaf->ordinal;
 	spec.obligation = obligation;
+	spec.expected_decode_class = leaf->ordinal == 2166U ?
+		ORLIX_TCTI_DECODE_UNDEFINED : ORLIX_TCTI_DECODE_UNSUPPORTED;
+	spec.expected_decode_class_valid = true;
 	spec.result.reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
 	spec.result.status = 0;
 	spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;

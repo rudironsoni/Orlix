@@ -61,6 +61,35 @@ struct orlix_tcti_native_encoding_domain {
 	bool valid;
 };
 
+#ifdef CONFIG_KUNIT
+static enum orlix_tcti_decode_class orlix_tcti_native_decode_mutation;
+static bool orlix_tcti_native_decode_mutation_active;
+
+void orlix_tcti_native_observation_test_mutate_decode_class(
+		enum orlix_tcti_decode_class decode_class)
+{
+	orlix_tcti_native_decode_mutation = decode_class;
+	orlix_tcti_native_decode_mutation_active = true;
+}
+
+void orlix_tcti_native_observation_test_clear_decode_mutation(void)
+{
+	orlix_tcti_native_decode_mutation_active = false;
+}
+#endif
+
+static enum orlix_tcti_decode_class orlix_tcti_native_observed_decode(u32 instruction)
+{
+	enum orlix_tcti_decode_class decode_class =
+		orlix_tcti_decode_aarch64(instruction).decode_class;
+
+#ifdef CONFIG_KUNIT
+	if (orlix_tcti_native_decode_mutation_active)
+		return orlix_tcti_native_decode_mutation;
+#endif
+	return decode_class;
+}
+
 union orlix_tcti_native_owned_witness {
 	struct orlix_tcti_native_encoding_domain encoding;
 	struct orlix_tcti_native_flags_state flags;
@@ -83,6 +112,8 @@ struct orlix_tcti_native_observation {
 	enum orlix_tcti_native_observation_state state;
 	u32 expected_source_ordinal;
 	enum orlix_tcti_native_obligation expected_obligation;
+	enum orlix_tcti_decode_class expected_decode_class;
+	bool expected_decode_class_valid;
 	enum orlix_tcti_native_internal_path execution_path;
 	u32 execution_count;
 	bool execution_attempted;
@@ -429,6 +460,9 @@ orlix_tcti_native_observation_create(
 	observation->state = ORLIX_TCTI_NATIVE_OBSERVATION_UNVERIFIED;
 	observation->expected_source_ordinal = spec->source_ordinal;
 	observation->expected_obligation = spec->obligation;
+	observation->expected_decode_class = spec->expected_decode_class;
+	observation->expected_decode_class_valid =
+		spec->expected_decode_class_valid;
 	observation->expected_result = spec->result;
 	observation->expected_gpr = spec->gpr;
 	observation->expected_mask = ORLIX_TCTI_NATIVE_HAVE_EXECUTION;
@@ -619,6 +653,9 @@ int orlix_tcti_native_observation_add_encoding_domain(
 	struct orlix_tcti_native_encoding_domain domain = {
 		.digest = 1469598103934665603ULL,
 	};
+	struct orlix_tcti_native_encoding_domain expected_domain = {
+		.digest = 1469598103934665603ULL,
+	};
 	u32 mask;
 	u32 pattern;
 	u32 variable_mask;
@@ -650,30 +687,39 @@ int orlix_tcti_native_observation_add_encoding_domain(
 	variable_mask = ~mask;
 	if (hweight32(variable_mask) > 16)
 		return orlix_tcti_native_poison(observation, -E2BIG);
-	canonical_class = orlix_tcti_decode_aarch64(pattern).decode_class;
+	canonical_class = observation->expected_decode_class;
+	if (!observation->expected_decode_class_valid)
+		return orlix_tcti_native_poison(observation, -EINVAL);
 
 	if (observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_DECODE) {
-		struct orlix_tcti_decoded_instruction decoded =
-			orlix_tcti_decode_aarch64(
+		enum orlix_tcti_decode_class observed_class =
+			orlix_tcti_native_observed_decode(
 				observation->observed_result.entry_instruction);
 
 		domain.legal_count = 1;
+		expected_domain.legal_count = 1;
+		expected_domain.digest = orlix_tcti_native_encoding_hash(
+			expected_domain.digest,
+			observation->observed_result.entry_instruction, canonical_class);
 		domain.digest = orlix_tcti_native_encoding_hash(
 			domain.digest, observation->observed_result.entry_instruction,
-			decoded.decode_class);
+			observed_class);
 	} else if (observation->expected_obligation ==
 		   ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS) {
 		do {
 			u32 instruction = pattern | variable_fields;
-			struct orlix_tcti_decoded_instruction decoded =
-				orlix_tcti_decode_aarch64(instruction);
+			enum orlix_tcti_decode_class observed_class =
+				orlix_tcti_native_observed_decode(instruction);
 
 			if ((instruction & mask) != pattern ||
-			    decoded.decode_class != canonical_class)
+			    observed_class != canonical_class)
 				return orlix_tcti_native_poison(observation, -EBADMSG);
 			domain.legal_count++;
 			domain.digest = orlix_tcti_native_encoding_hash(
-				domain.digest, instruction, decoded.decode_class);
+				domain.digest, instruction, observed_class);
+			expected_domain.legal_count++;
+			expected_domain.digest = orlix_tcti_native_encoding_hash(
+				expected_domain.digest, instruction, canonical_class);
 			variable_fields =
 				(variable_fields - variable_mask) & variable_mask;
 		} while (variable_fields);
@@ -684,7 +730,7 @@ int orlix_tcti_native_observation_add_encoding_domain(
 			u32 instruction;
 			u32 ordinal;
 			bool allocated = false;
-			struct orlix_tcti_decoded_instruction decoded;
+			enum orlix_tcti_decode_class observed_class;
 
 			if (!(mask & BIT(bit)))
 				continue;
@@ -706,17 +752,25 @@ int orlix_tcti_native_observation_add_encoding_domain(
 			}
 			if (allocated)
 				continue;
-			decoded = orlix_tcti_decode_aarch64(instruction);
+			observed_class = orlix_tcti_native_observed_decode(instruction);
+			if (observed_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
+			    observed_class != ORLIX_TCTI_DECODE_UNDEFINED)
+				return orlix_tcti_native_poison(observation, -EBADMSG);
 			domain.rejected_count++;
+			expected_domain.rejected_count++;
 			domain.digest = orlix_tcti_native_encoding_hash(
-				domain.digest, instruction, decoded.decode_class);
+				domain.digest, instruction, ORLIX_TCTI_DECODE_UNSUPPORTED);
+			expected_domain.digest = orlix_tcti_native_encoding_hash(
+				expected_domain.digest, instruction,
+				ORLIX_TCTI_DECODE_UNSUPPORTED);
 		}
 		if (!domain.rejected_count)
 			return orlix_tcti_native_poison(observation, -EBADMSG);
 	}
 	domain.valid = true;
+	expected_domain.valid = true;
+	observation->expected.encoding = expected_domain;
 	observation->observed.encoding = domain;
-	observation->expected.encoding = domain;
 	observation->observed_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
 	return 0;
 }

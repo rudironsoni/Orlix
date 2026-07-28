@@ -28,6 +28,7 @@
 #include "orlix_tcti_test_suites.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
 #include "orlix_tcti_native_observation.h"
+#include "target_feature_applicability_artifact.h"
 #include "target_proof_registry.h"
 #include "target_execution_slice_map.h"
 
@@ -63,12 +64,17 @@ struct bcs_leaf {
 struct bcs_semantics_gap {
 	u32 ordinal;
 	const char *name;
+	const char *operation_locator;
+	u64 source_offset;
+	u64 source_length;
+	const char *source_sha256;
 };
 
 #define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
 #define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
-#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, name, ...) \
-	{ ordinal, name },
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, name, \
+		locator, offset, length, sha256) \
+	{ ordinal, name, locator, offset, length, sha256 },
 static const struct bcs_semantics_gap bcs_semantics_gaps[] = {
 #include "../isa/generations/current/target_asl_availability.def"
 };
@@ -148,6 +154,9 @@ static void bcs_issue_132_exact_source_cohort(struct kunit *test)
 	const struct orlix_tcti_execution_slice_map *map =
 		orlix_tcti_execution_slice_map_canonical();
 	const struct orlix_tcti_source_leaf_manifest_row *tenter;
+	const struct bcs_semantics_gap *tenter_semantics = NULL;
+	const struct orlix_tcti_target_feature_applicability_artifact *applicability;
+	const struct orlix_tcti_target_feature_applicability_row *tenter_feature;
 	size_t family_index;
 	size_t expected_index = 0;
 	size_t gap_index;
@@ -181,15 +190,38 @@ static void bcs_issue_132_exact_source_cohort(struct kunit *test)
 	     gap_index++)
 		if (bcs_semantics_gaps[gap_index].ordinal == 2235U &&
 		    !strcmp(bcs_semantics_gaps[gap_index].name,
-			    "TENTER_te_exception"))
+			    "TENTER_te_exception")) {
 			found_gap = true;
+			tenter_semantics = &bcs_semantics_gaps[gap_index];
+		}
 	KUNIT_EXPECT_TRUE(test, found_gap);
+	KUNIT_ASSERT_NOT_NULL(test, tenter_semantics);
+	KUNIT_EXPECT_STREQ(test, "Instructions.json#operations/TENTER/operation",
+			   tenter_semantics->operation_locator);
+	KUNIT_EXPECT_EQ(test, 115113790ULL, tenter_semantics->source_offset);
+	KUNIT_EXPECT_EQ(test, 16ULL, tenter_semantics->source_length);
+	KUNIT_EXPECT_STREQ(test,
+		"28fb16d9885379aa6e05267c659d8b7dab31e819051d85e1dbde8347bc2fdce8",
+		tenter_semantics->source_sha256);
 
 	tenter = orlix_tcti_source_leaf_manifest_row(2235U);
 	KUNIT_ASSERT_NOT_NULL(test, tenter);
 	KUNIT_EXPECT_STREQ(test, "TENTER_te_exception", tenter->name);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			orlix_tcti_decode_aarch64(tenter->pattern).decode_class);
+	KUNIT_EXPECT_STREQ(test, "TENTER", tenter->operation);
+
+	applicability = orlix_tcti_target_feature_applicability_artifact();
+	KUNIT_ASSERT_NOT_NULL(test, applicability);
+	KUNIT_ASSERT_LT(test, 2235U, applicability->row_count);
+	tenter_feature = &applicability->rows[2235U];
+	KUNIT_EXPECT_EQ(test, 2235U, tenter_feature->ordinal);
+	KUNIT_EXPECT_STREQ(test, "TENTER_te_exception", tenter_feature->name);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_FEATURE_APPLICABLE,
+			tenter_feature->status);
+	KUNIT_EXPECT_STREQ(test,
+		"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f544556",
+		tenter_feature->condition_tcnd_hex);
+	KUNIT_EXPECT_EQ(test, 0x5ec8d296a01919edULL,
+			tenter_feature->formula_identity);
 }
 
 static u32 bcs_instruction(const struct bcs_leaf *leaf, bool taken)
@@ -423,6 +455,8 @@ static void bcs_emit_observation(
 	bcs_seed_regs(&regs, mapped, leaf, true);
 	spec.source_ordinal = leaf->ordinal;
 	spec.obligation = obligation;
+	spec.expected_decode_class = bcs_decode_class(leaf);
+	spec.expected_decode_class_valid = true;
 	spec.result.reason = leaf->kind == BCS_SVC ? ORLIX_TCTI_EXIT_SYSCALL :
 		(leaf->kind == BCS_BRK ? ORLIX_TCTI_EXIT_BREAKPOINT :
 		 ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION);

@@ -7,6 +7,7 @@
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
 
+#include "../decode_aarch64.h"
 #include "target_proof_ingestion.h"
 
 #define ORLIX_TCTI_NATIVE_OBSERVATION_MAX_MEMORY 128U
@@ -143,6 +144,8 @@ struct orlix_tcti_native_ordering_witness {
 struct orlix_tcti_native_observation_spec {
 	u32 source_ordinal;
 	enum orlix_tcti_native_obligation obligation;
+	enum orlix_tcti_decode_class expected_decode_class;
+	bool expected_decode_class_valid;
 	struct orlix_tcti_result result;
 	struct orlix_tcti_native_gpr_state gpr;
 	union {
@@ -215,5 +218,11 @@ int orlix_tcti_native_observation_compare(
 int orlix_tcti_native_observation_export(
 		struct orlix_tcti_native_observation *observation,
 		struct orlix_tcti_target_native_result_record **record);
+
+#ifdef CONFIG_KUNIT
+void orlix_tcti_native_observation_test_mutate_decode_class(
+		enum orlix_tcti_decode_class decode_class);
+void orlix_tcti_native_observation_test_clear_decode_mutation(void);
+#endif
 
 #endif /* ORLIX_TCTI_NATIVE_OBSERVATION_H */

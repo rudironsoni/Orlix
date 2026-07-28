@@ -75,6 +75,8 @@ static void native_seed_execution(
 	expected.pc = mapped + sizeof(u32);
 	spec->source_ordinal = NATIVE_NOP_ORDINAL;
 	spec->obligation = obligation;
+	spec->expected_decode_class = ORLIX_TCTI_DECODE_HINT;
+	spec->expected_decode_class_valid = true;
 	spec->result.reason = ORLIX_TCTI_EXIT_SYSCALL;
 	spec->result.status = 0;
 	spec->result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
@@ -207,6 +209,19 @@ static void native_encoding_domains_and_flags_require_typed_witnesses(
 			orlix_tcti_native_observation_compare(observation));
 		orlix_tcti_native_observation_destroy(observation);
 	}
+
+	native_seed_execution(&spec, &regs,
+			      ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS,
+			      mapped);
+	observation = native_create_and_execute(test, &spec, &regs);
+	orlix_tcti_native_observation_test_mutate_decode_class(
+		ORLIX_TCTI_DECODE_HINT);
+	KUNIT_EXPECT_EQ(test, -EBADMSG,
+		orlix_tcti_native_observation_add_encoding_domain(observation));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_POISONED,
+		orlix_tcti_native_observation_state(observation));
+	orlix_tcti_native_observation_test_clear_decode_mutation();
+	orlix_tcti_native_observation_destroy(observation);
 
 	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
 			      mapped);
