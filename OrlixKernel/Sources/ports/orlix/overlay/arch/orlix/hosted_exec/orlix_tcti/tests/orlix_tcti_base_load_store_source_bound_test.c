@@ -791,6 +791,7 @@ static void bls_faults_report_access_and_preserve_register_state(
 		{ 0xf8626820U, ORLIX_TCTI_ACCESS_READ },  /* LDR X0, [X1,X2] */
 		{ 0xa9400820U, ORLIX_TCTI_ACCESS_READ },  /* LDP X0,X2,[X1] */
 		{ 0xa9000820U, ORLIX_TCTI_ACCESS_WRITE }, /* STP X0,X2,[X1] */
+		{ 0x69000820U, ORLIX_TCTI_ACCESS_WRITE }, /* STGP X0,X2,[X1] */
 		{ 0xf8408420U, ORLIX_TCTI_ACCESS_READ },  /* LDR X0,[X1],#8 */
 	};
 	const unsigned long target = TASK_SIZE + PAGE_SIZE;

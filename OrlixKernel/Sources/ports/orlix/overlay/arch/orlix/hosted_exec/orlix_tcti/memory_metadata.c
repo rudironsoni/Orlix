@@ -225,22 +225,19 @@ int orlix_tcti_store_tagged_pair(struct mm_struct *mm,
 	mutex_lock(&metadata->lock);
 	old_value = orlix_tcti_metadata_value(xa_load(
 		&metadata->entries, index));
-	ret = xa_reserve(&metadata->entries,
-			 index, GFP_KERNEL);
-	if (ret)
-		goto out;
-	ret = orlix_tcti_write_user_data(mm, address, buffer, size);
-	if (ret) {
-		if (!old_value)
-			xa_erase(&metadata->entries, index);
-		goto out;
-	}
 	new_value = (old_value & ORLIX_TCTI_METADATA_GCS) |
 		ORLIX_TCTI_METADATA_TAG_VALID |
 		FIELD_PREP(ORLIX_TCTI_METADATA_TAG_MASK,
 			   (tagged_user_va >> ORLIX_TCTI_LOGICAL_TAG_SHIFT) & 0xfU);
 	ret = orlix_tcti_metadata_store_locked(metadata, index, pinned.page,
-					       new_value, GFP_NOWAIT);
+					       new_value, GFP_KERNEL);
+	if (ret)
+		goto out;
+	ret = orlix_tcti_write_user_data(mm, address, buffer, size);
+	if (ret)
+		WARN_ON_ONCE(orlix_tcti_metadata_store_locked(metadata, index,
+							pinned.page, old_value,
+							GFP_NOWAIT));
 out:
 	mutex_unlock(&metadata->lock);
 	orlix_tcti_unpin_user_page(&pinned);
