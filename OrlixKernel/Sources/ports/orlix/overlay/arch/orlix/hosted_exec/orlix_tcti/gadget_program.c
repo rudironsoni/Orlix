@@ -4,6 +4,7 @@
 #include <linux/string.h>
 
 #include "block_cache.h"
+#include "crc32.h"
 #include "decode_aarch64.h"
 #include "gadget_program.h"
 #include "native_capture.h"
@@ -58,6 +59,35 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 		orlix_tcti_native_capture_after_decoded(capture, mm, regs, &decoded);
 	}
 	return ret;
+}
+
+static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
+				     struct pt_regs *regs,
+				     const struct orlix_tcti_gadget_word **cursor,
+				     unsigned long *fault_address)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	(void)mm;
+	(void)fault_address;
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	return orlix_tcti_execute_crc32(regs, &decoded);
+}
+
+static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
+{
+	return gadget == orlix_tcti_gadget_execute_decoded ||
+		gadget == orlix_tcti_gadget_execute_crc32;
+}
+
+enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
+	const struct orlix_tcti_gadget_word *program, size_t word_count)
+{
+	if (!program || word_count < ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS)
+		return ORLIX_TCTI_GADGET_PROGRAM_GENERIC;
+	return program[0].value == (unsigned long)orlix_tcti_gadget_execute_crc32 ?
+		ORLIX_TCTI_GADGET_PROGRAM_CRC32 : ORLIX_TCTI_GADGET_PROGRAM_GENERIC;
 }
 
 static int orlix_tcti_gadget_halt(struct mm_struct *mm, struct pt_regs *regs,
@@ -119,7 +149,11 @@ int orlix_tcti_append_decoded_instruction(
 	if (capacity < words)
 		return -ENOSPC;
 
-	program[start].value = (unsigned long)orlix_tcti_gadget_execute_decoded;
+	program[start].value = (unsigned long)
+		(decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
+		 (decoded->dp2_op == ORLIX_TCTI_DP2_CRC32 ||
+		  decoded->dp2_op == ORLIX_TCTI_DP2_CRC32C) ?
+		 orlix_tcti_gadget_execute_crc32 : orlix_tcti_gadget_execute_decoded);
 	memcpy(&program[start + 1], decoded, sizeof(*decoded));
 	program[start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)orlix_tcti_gadget_halt;
@@ -159,7 +193,7 @@ static int orlix_tcti_execute_gadget_program_checked(
 		cursor++;
 		if (!gadget)
 			return -EINVAL;
-		if (gadget == orlix_tcti_gadget_execute_decoded && entry_valid &&
+		if (orlix_tcti_gadget_has_decoded_payload(gadget) && entry_valid &&
 		    !*entry_valid) {
 			memcpy(&entry_decoded, cursor, sizeof(entry_decoded));
 			candidate = true;

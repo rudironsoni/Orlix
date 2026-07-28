@@ -134,6 +134,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sme_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_decode.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/decode_aarch64.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/crc32.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tls_repair.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/gadget_program.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/block_cache.c \

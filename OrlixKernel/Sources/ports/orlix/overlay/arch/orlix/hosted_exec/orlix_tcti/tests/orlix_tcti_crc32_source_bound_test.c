@@ -16,6 +16,7 @@
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "../gadget_program.h"
 
 #define CRC_SOURCE_SVC 0xd4000001U
 #define CRC_SOURCE_RD 17U
@@ -41,6 +42,29 @@ static const struct crc_source_manifest_leaf crc_source_manifest[] = {
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
 
+struct crc_semantic_provenance_row {
+	u32 ordinal;
+	const char *name;
+	const char *execute_locator;
+	const char *execute_digest;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(ordinal, name, relative_file, \
+	decode_locator, decode_digest, decode_sections, decode_helpers, \
+	decode_helper_digest, execute_locator, execute_digest, execute_sections, \
+	execute_helpers, execute_helper_digest) \
+	{ ordinal, name, execute_locator, execute_digest },
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, name, \
+	operation_locator, operation_offset, operation_length, operation_digest) \
+	{ ordinal, name, NULL, NULL },
+static const struct crc_semantic_provenance_row crc_semantic_provenance[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
 struct crc_source_leaf {
 	u16 ordinal;
 	const char *name;
@@ -51,25 +75,58 @@ struct crc_source_leaf {
 	u8 access_size;
 	bool source_is_64bit;
 	bool castagnoli;
+	u32 expected_crc;
+	enum {
+		CRC_SOURCE_APPLICABLE_EL0,
+	} applicability;
+	enum {
+		CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	} linux_proof;
+	const char *semantic_locator;
+	const char *semantic_digest;
 };
 
 static const struct crc_source_leaf crc_source_leaves[] = {
 	{ 3362U, "CRC32B_32C_dp_2src", "CRC32B", "CRC32",
-	  0xffe0fc00U, 0x1ac04000U, 1, false, false },
+	  0xffe0fc00U, 0x1ac04000U, 1, false, false, 0x347cedaaU,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32.xml#A64.dpreg.dp_2src.CRC32B_32C_dp_2src/execute",
+	  "25080a86ba3dfce8bb02f09fc089723bc5d27047964f2e9e242d159b53eb582f" },
 	{ 3363U, "CRC32H_32C_dp_2src", "CRC32H", "CRC32",
-	  0xffe0fc00U, 0x1ac04400U, 2, false, false },
+	  0xffe0fc00U, 0x1ac04400U, 2, false, false, 0xe35777ffU,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32.xml#A64.dpreg.dp_2src.CRC32B_32C_dp_2src/execute",
+	  "25080a86ba3dfce8bb02f09fc089723bc5d27047964f2e9e242d159b53eb582f" },
 	{ 3364U, "CRC32W_32C_dp_2src", "CRC32W", "CRC32",
-	  0xffe0fc00U, 0x1ac04800U, 4, false, false },
+	  0xffe0fc00U, 0x1ac04800U, 4, false, false, 0xd89f1a03U,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32.xml#A64.dpreg.dp_2src.CRC32B_32C_dp_2src/execute",
+	  "25080a86ba3dfce8bb02f09fc089723bc5d27047964f2e9e242d159b53eb582f" },
 	{ 3382U, "CRC32X_64C_dp_2src", "CRC32X", "CRC32",
-	  0xffe0fc00U, 0x9ac04c00U, 8, true, false },
+	  0xffe0fc00U, 0x9ac04c00U, 8, true, false, 0x4e41e95aU,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32.xml#A64.dpreg.dp_2src.CRC32B_32C_dp_2src/execute",
+	  "25080a86ba3dfce8bb02f09fc089723bc5d27047964f2e9e242d159b53eb582f" },
 	{ 3365U, "CRC32CB_32C_dp_2src", "CRC32CB", "CRC32C",
-	  0xffe0fc00U, 0x1ac05000U, 1, false, true },
+	  0xffe0fc00U, 0x1ac05000U, 1, false, true, 0x19667cf8U,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32c.xml#A64.dpreg.dp_2src.CRC32CB_32C_dp_2src/execute",
+	  "ec0eef18847be33ab1c039472107adb370909c84b126b27678dc74c6a3609ca2" },
 	{ 3366U, "CRC32CH_32C_dp_2src", "CRC32CH", "CRC32C",
-	  0xffe0fc00U, 0x1ac05400U, 2, false, true },
+	  0xffe0fc00U, 0x1ac05400U, 2, false, true, 0xb828afefU,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32c.xml#A64.dpreg.dp_2src.CRC32CB_32C_dp_2src/execute",
+	  "ec0eef18847be33ab1c039472107adb370909c84b126b27678dc74c6a3609ca2" },
 	{ 3367U, "CRC32CW_32C_dp_2src", "CRC32CW", "CRC32C",
-	  0xffe0fc00U, 0x1ac05800U, 4, false, true },
+	  0xffe0fc00U, 0x1ac05800U, 4, false, true, 0x9236d411U,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32c.xml#A64.dpreg.dp_2src.CRC32CB_32C_dp_2src/execute",
+	  "ec0eef18847be33ab1c039472107adb370909c84b126b27678dc74c6a3609ca2" },
 	{ 3383U, "CRC32CX_64C_dp_2src", "CRC32CX", "CRC32C",
-	  0xffe0fc00U, 0x9ac05c00U, 8, true, true },
+	  0xffe0fc00U, 0x9ac05c00U, 8, true, true, 0x12237ce0U,
+	  CRC_SOURCE_APPLICABLE_EL0, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+	  "crc32c.xml#A64.dpreg.dp_2src.CRC32CB_32C_dp_2src/execute",
+	  "ec0eef18847be33ab1c039472107adb370909c84b126b27678dc74c6a3609ca2" },
 };
 
 static const struct crc_source_manifest_leaf *
@@ -80,6 +137,17 @@ crc_source_manifest_leaf(u16 ordinal)
 	for (index = 0; index < ARRAY_SIZE(crc_source_manifest); index++)
 		if (crc_source_manifest[index].ordinal == ordinal)
 			return &crc_source_manifest[index];
+	return NULL;
+}
+
+static const struct crc_semantic_provenance_row *
+crc_semantic_provenance_row(u16 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(crc_semantic_provenance); index++)
+		if (crc_semantic_provenance[index].ordinal == ordinal)
+			return &crc_semantic_provenance[index];
 	return NULL;
 }
 
@@ -94,10 +162,16 @@ static const struct crc_source_leaf *crc_source_leaf_for_instruction(u32 instruc
 	return NULL;
 }
 
+static u32 crc_source_instruction_with_registers(
+	const struct crc_source_leaf *leaf, u8 rd, u8 rn, u8 rm)
+{
+	return leaf->pattern | ((u32)rm << 16) | ((u32)rn << 5) | rd;
+}
+
 static u32 crc_source_instruction(const struct crc_source_leaf *leaf)
 {
-	return leaf->pattern | ((u32)CRC_SOURCE_RM << 16) |
-	       ((u32)CRC_SOURCE_RN << 5) | CRC_SOURCE_RD;
+	return crc_source_instruction_with_registers(leaf, CRC_SOURCE_RD,
+		CRC_SOURCE_RN, CRC_SOURCE_RM);
 }
 
 static unsigned long crc_source_map_program(struct kunit *test, u32 instruction)
@@ -161,10 +235,13 @@ static void crc_source_leaves_bind_canonical_artifacts(struct kunit *test)
 		const struct crc_source_leaf *leaf = &crc_source_leaves[index];
 		const struct crc_source_manifest_leaf *source =
 			crc_source_manifest_leaf(leaf->ordinal);
+		const struct crc_semantic_provenance_row *semantic =
+			crc_semantic_provenance_row(leaf->ordinal);
 		struct orlix_tcti_decoded_instruction decoded =
 			orlix_tcti_decode_aarch64(crc_source_instruction(leaf));
 
 		KUNIT_ASSERT_NOT_NULL(test, source);
+		KUNIT_ASSERT_NOT_NULL(test, semantic);
 		KUNIT_EXPECT_STREQ(test, leaf->name, source->name);
 		KUNIT_EXPECT_STREQ(test, leaf->mnemonic, source->mnemonic);
 		KUNIT_EXPECT_STREQ(test, leaf->operation, source->operation);
@@ -180,6 +257,37 @@ static void crc_source_leaves_bind_canonical_artifacts(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, leaf->access_size, decoded.access_size);
 		KUNIT_EXPECT_EQ(test, sizeof(u32), decoded.result_size);
 		KUNIT_EXPECT_EQ(test, leaf->source_is_64bit, decoded.is_64bit);
+		KUNIT_EXPECT_EQ(test, CRC_SOURCE_APPLICABLE_EL0,
+				leaf->applicability);
+		KUNIT_EXPECT_EQ(test, CRC_SOURCE_LINUX_NA_REGISTER_SEMANTICS,
+				leaf->linux_proof);
+		KUNIT_EXPECT_STREQ(test, leaf->name, semantic->name);
+		KUNIT_EXPECT_STREQ(test, leaf->semantic_locator,
+				semantic->execute_locator);
+		KUNIT_EXPECT_STREQ(test, leaf->semantic_digest,
+				semantic->execute_digest);
+	}
+}
+
+static void crc_source_leaves_use_dedicated_production_lowering(
+	struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(crc_source_leaves); index++) {
+		const struct crc_source_leaf *leaf = &crc_source_leaves[index];
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(crc_source_instruction(leaf));
+		struct orlix_tcti_gadget_word
+			program[ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS] = {};
+		size_t word_count = 0;
+
+		KUNIT_ASSERT_EQ_MSG(test, 0, orlix_tcti_lower_decoded_instruction(
+			&decoded, program, ARRAY_SIZE(program), &word_count),
+			"%s", leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_GADGET_PROGRAM_CRC32,
+			orlix_tcti_gadget_program_first_kind(program, word_count),
+			"%s", leaf->name);
 	}
 }
 
@@ -200,6 +308,8 @@ static void crc_source_leaves_execute_from_mapped_rx(struct kunit *test)
 		expected = regs;
 		expected_crc = crc_source_expected((u32)regs.regs[CRC_SOURCE_RN],
 			regs.regs[CRC_SOURCE_RM], leaf->access_size, leaf->castagnoli);
+		KUNIT_ASSERT_EQ_MSG(test, leaf->expected_crc, expected_crc,
+				    "%s", leaf->name);
 		expected.regs[CRC_SOURCE_RD] = expected_crc;
 		expected.pc = address + sizeof(u32);
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
@@ -215,6 +325,61 @@ static void crc_source_leaves_execute_from_mapped_rx(struct kunit *test)
 				regs.regs[CRC_SOURCE_RD]);
 		KUNIT_EXPECT_MEMEQ(test, &expected, &regs, sizeof(regs));
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+	}
+}
+
+static void crc_source_leaves_preserve_zero_register_semantics(
+	struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(crc_source_leaves); index++) {
+		const struct crc_source_leaf *leaf = &crc_source_leaves[index];
+		static const struct {
+			u8 rd;
+			u8 rn;
+			u8 rm;
+		} cases[] = {
+			{ CRC_SOURCE_RD, 31U, CRC_SOURCE_RM },
+			{ CRC_SOURCE_RD, CRC_SOURCE_RN, 31U },
+			{ 31U, CRC_SOURCE_RN, CRC_SOURCE_RM },
+		};
+		size_t case_index;
+
+		for (case_index = 0; case_index < ARRAY_SIZE(cases); case_index++) {
+			const u8 rd = cases[case_index].rd;
+			const u8 rn = cases[case_index].rn;
+			const u8 rm = cases[case_index].rm;
+			struct pt_regs regs;
+			struct pt_regs expected;
+			struct orlix_tcti_result result;
+			unsigned long address;
+			u32 expected_crc;
+
+			address = crc_source_map_program(test,
+				crc_source_instruction_with_registers(leaf, rd, rn, rm));
+			crc_source_seed_regs(&regs, address);
+			expected = regs;
+			expected_crc = crc_source_expected(
+				rn == 31U ? 0 : (u32)regs.regs[rn],
+				rm == 31U ? 0 : regs.regs[rm], leaf->access_size,
+				leaf->castagnoli);
+			if (rd != 31U)
+				expected.regs[rd] = expected_crc;
+			expected.pc = address + sizeof(u32);
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL,
+				result.reason, "%s case=%zu", leaf->name, case_index);
+			KUNIT_EXPECT_EQ(test, 0L, result.status);
+			KUNIT_EXPECT_EQ(test, 0UL, result.fault_address);
+			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_FETCH,
+				result.fault_access);
+			KUNIT_EXPECT_EQ(test, address + sizeof(u32), result.pc);
+			KUNIT_EXPECT_EQ(test, CRC_SOURCE_SVC, result.instruction);
+			KUNIT_EXPECT_MEMEQ(test, &expected, &regs, sizeof(regs));
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+		}
 	}
 }
 
@@ -267,7 +432,9 @@ static void crc_source_reserved_neighbours_reject_from_mapped_rx(
 
 static struct kunit_case crc_source_bound_cases[] = {
 	KUNIT_CASE(crc_source_leaves_bind_canonical_artifacts),
+	KUNIT_CASE(crc_source_leaves_use_dedicated_production_lowering),
 	KUNIT_CASE(crc_source_leaves_execute_from_mapped_rx),
+	KUNIT_CASE(crc_source_leaves_preserve_zero_register_semantics),
 	KUNIT_CASE(crc_source_reserved_neighbours_reject_from_mapped_rx),
 	{}
 };
