@@ -284,6 +284,12 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS)
+#define MTE_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define NON_EL0_REJECTION_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
@@ -475,6 +481,11 @@ proof_registry_projection[] = {
 #define CSSC_SUITE "orlix-tcti-cssc-min-max-immediate"
 #define CSSC_SUITE_SYMBOL "orlix_tcti_cssc_min_max_immediate_test_suite"
 #define CSSC_CASE_ARRAY "orlix_tcti_cssc_min_max_immediate_test_cases"
+#define MTE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_memory_tagging_source_bound_test.c"
+#define MTE_SUITE "orlix-tcti-memory-tagging-source-bound"
+#define MTE_SUITE_SYMBOL "orlix_tcti_memory_tagging_source_bound_test_suite"
+#define MTE_CASE_ARRAY "orlix_tcti_memory_tagging_source_bound_test_cases"
 #define ADD_SUB_IMMEDIATE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c"
 #define ADD_SUB_IMMEDIATE_SUITE "orlix-tcti-add-sub-immediate"
@@ -610,6 +621,10 @@ production_capture_bindings[] = {
 #define DECODE_CASE_ARRAY "orlix_tcti_decode_test_cases"
 #define CSSC_CONDITION \
 	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
+#define MTE_CONDITION \
+	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4d5445"
+#define MTE2_CONDITION \
+	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f4d544532"
 #define ADD_SUB_IMMEDIATE_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
 #define LOGICAL_SHIFT_CONDITION \
@@ -726,6 +741,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ CSSC_SOURCE,
 	  "0b6ca93fe5268d8f2f67e9559d6472ad5f9fe45e56c3e23316937d0f5bf72466",
 	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
+	{ MTE_SOURCE,
+	  "d907ddb7935fb5a3c689297c0ffa6f9cfe35d33b85e9e792cdbac310cefb2b53",
+	  "orlix_tcti_memory_tagging_source_bound_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
 	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL },
@@ -910,6 +928,44 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_cssc_min_max_immediate_source_fingerprints",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_source_cohort_is_exact",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_all_legal_free_fields_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_fixed_bit_neighbours_are_not_the_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_reserved_bulk_immediates_are_undefined",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_register_semantics_and_non_el0",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_memory_tags_data_writeback_and_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_production_resume_all_el0_leaves", MTE_OBLIGATIONS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_production_resume_register_memory_and_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_production_resume_non_el0_is_undefined",
+	  NON_EL0_REJECTION_OBLIGATIONS },
 	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
 	  "orlix_tcti_cssc_min_max_immediate_all_legal_fields",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1353,6 +1409,15 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 static const struct operation_requirements operation_requirements[] = {
 	{ "RMIF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
 	{ "SETF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "ADDG", MTE_OBLIGATIONS },
+	{ "SUBG", MTE_OBLIGATIONS },
+	{ "STG", MTE_OBLIGATIONS },
+	{ "LDG", MTE_OBLIGATIONS },
+	{ "STZG", MTE_OBLIGATIONS },
+	{ "ST2G", MTE_OBLIGATIONS },
+	{ "STZ2G", MTE_OBLIGATIONS },
+	{ "IRG", MTE_OBLIGATIONS },
+	{ "GMI", MTE_OBLIGATIONS },
 	{ "ADD_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -1929,6 +1994,47 @@ static const struct orlix_tcti_target_proof_case cssc_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case mte_cases[] = {
+	{ "mte_source_cohort_is_exact", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "mte_all_legal_free_fields_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "mte_fixed_bit_neighbours_are_not_the_leaf",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "mte_reserved_bulk_immediates_are_undefined",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "mte_register_semantics_and_non_el0",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mte_memory_tags_data_writeback_and_faults",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mte_production_resume_all_el0_leaves", MTE_OBLIGATIONS },
+	{ "mte_production_resume_register_memory_and_faults",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
+static const struct orlix_tcti_target_proof_case mte_non_el0_cases[] = {
+	{ "mte_source_cohort_is_exact", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "mte_all_legal_free_fields_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "mte_fixed_bit_neighbours_are_not_the_leaf",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "mte_reserved_bulk_immediates_are_undefined",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "mte_production_resume_non_el0_is_undefined",
+		NON_EL0_REJECTION_OBLIGATIONS },
+};
+
 static const struct orlix_tcti_target_proof_case cssc_data_processing_cases[] = {
 	{ "orlix_tcti_integer_minmax_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2110,6 +2216,36 @@ static const struct orlix_tcti_target_proof_binding cssc_umin_bindings[] = {
 };
 
 #undef CSSC_BINDING
+
+#define MTE_BINDING(ordinal, leaf, mnemonic, mask, pattern, condition, cases) \
+	{ leaf, mnemonic, mask, pattern, condition, cases, ordinal }
+
+static const struct orlix_tcti_target_proof_binding mte_bindings[] = {
+	MTE_BINDING(2181U, "ADDG_64_addsub_immtags", "ADDG", 0xffc0c000U, 0x91800000U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	MTE_BINDING(2182U, "SUBG_64_addsub_immtags", "SUBG", 0xffc0c000U, 0xd1800000U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	MTE_BINDING(2567U, "STG_64Spost_ldsttags", "STG", 0xffe00c00U, 0xd9200400U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2568U, "STG_64Soffset_ldsttags", "STG", 0xffe00c00U, 0xd9200800U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2569U, "STG_64Spre_ldsttags", "STG", 0xffe00c00U, 0xd9200c00U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2571U, "LDG_64Loffset_ldsttags", "LDG", 0xffe00c00U, 0xd9600000U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2572U, "STZG_64Spost_ldsttags", "STZG", 0xffe00c00U, 0xd9600400U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2573U, "STZG_64Soffset_ldsttags", "STZG", 0xffe00c00U, 0xd9600800U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2574U, "STZG_64Spre_ldsttags", "STZG", 0xffe00c00U, 0xd9600c00U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2575U, "ST2G_64Spost_ldsttags", "ST2G", 0xffe00c00U, 0xd9a00400U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2576U, "ST2G_64Soffset_ldsttags", "ST2G", 0xffe00c00U, 0xd9a00800U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2577U, "ST2G_64Spre_ldsttags", "ST2G", 0xffe00c00U, 0xd9a00c00U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2579U, "STZ2G_64Spost_ldsttags", "STZ2G", 0xffe00c00U, 0xd9e00400U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2580U, "STZ2G_64Soffset_ldsttags", "STZ2G", 0xffe00c00U, 0xd9e00800U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(2581U, "STZ2G_64Spre_ldsttags", "STZ2G", 0xffe00c00U, 0xd9e00c00U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x17)),
+	MTE_BINDING(3375U, "IRG_64I_dp_2src", "IRG", 0xffe0fc00U, 0x9ac01000U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	MTE_BINDING(3376U, "GMI_64G_dp_2src", "GMI", 0xffe0fc00U, 0x9ac01400U, MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+};
+
+static const struct orlix_tcti_target_proof_binding mte_non_el0_bindings[] = {
+	MTE_BINDING(2570U, "STZGM_64bulk_ldsttags", "STZGM", 0xfffffc00U, 0xd9200000U, MTE2_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x0f)),
+	MTE_BINDING(2578U, "STGM_64bulk_ldsttags", "STGM", 0xfffffc00U, 0xd9a00000U, MTE2_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x0f)),
+	MTE_BINDING(2582U, "LDGM_64bulk_ldsttags", "LDGM", 0xfffffc00U, 0xd9e00000U, MTE2_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x0f)),
+};
+#undef MTE_BINDING
 
 #define CSSC_DP2_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
@@ -2306,6 +2442,12 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  CSSC_SOURCE, CSSC_SUITE, cssc_cases, ARRAY_COUNT(cssc_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, CSSC_OBLIGATIONS }
 
+#define MTE_ENTRY(proof_id, operation, proof_class, obligations, cases, bindings, count) \
+	{ proof_id, operation, proof_class, obligations, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  MTE_SOURCE, MTE_SUITE, cases, ARRAY_COUNT(cases), \
+	  bindings, count, NULL, obligations }
+
 #define CSSC_DATA_ENTRY(proof_id, operation, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
 	  CSSC_OBLIGATIONS, ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
@@ -2364,6 +2506,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
 #define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 74U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -2448,6 +2591,42 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 			cssc_cnt_bindings),
 	CSSC_DATA_ENTRY("kunit:cssc-data-processing-abs", "ABS",
 			cssc_abs_bindings),
+	MTE_ENTRY("kunit:memory-tagging-addg", "ADDG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[0], 1U),
+	MTE_ENTRY("kunit:memory-tagging-subg", "SUBG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[1], 1U),
+	MTE_ENTRY("kunit:memory-tagging-stg", "STG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[2], 3U),
+	MTE_ENTRY("kunit:memory-tagging-stzgm-non-el0", "STZGM",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_NON_EL0, NON_EL0_REJECTION_OBLIGATIONS, mte_non_el0_cases,
+		  &mte_non_el0_bindings[0], 1U),
+	MTE_ENTRY("kunit:memory-tagging-ldg", "LDG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[5], 1U),
+	MTE_ENTRY("kunit:memory-tagging-stzg", "STZG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[6], 3U),
+	MTE_ENTRY("kunit:memory-tagging-st2g", "ST2G",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[9], 3U),
+	MTE_ENTRY("kunit:memory-tagging-stgm-non-el0", "STGM",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_NON_EL0, NON_EL0_REJECTION_OBLIGATIONS, mte_non_el0_cases,
+		  &mte_non_el0_bindings[1], 1U),
+	MTE_ENTRY("kunit:memory-tagging-stz2g", "STZ2G",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[12], 3U),
+	MTE_ENTRY("kunit:memory-tagging-ldgm-non-el0", "LDGM",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_NON_EL0, NON_EL0_REJECTION_OBLIGATIONS, mte_non_el0_cases,
+		  &mte_non_el0_bindings[2], 1U),
+	MTE_ENTRY("kunit:memory-tagging-irg", "IRG",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[15], 1U),
+	MTE_ENTRY("kunit:memory-tagging-gmi", "GMI",
+		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
+		  &mte_bindings[16], 1U),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
 		integer_udiv_bindings),
