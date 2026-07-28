@@ -10,5 +10,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 				   struct pt_regs *regs,
 				   const struct orlix_tcti_decoded_instruction *decoded,
 				   unsigned long *fault_address);
+int orlix_tcti_execute_logical_immediate_semantics(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded);
 
 #endif /* ORLIX_TCTI_SEMANTICS_H */

@@ -869,8 +869,9 @@ static int orlix_tcti_execute_logical_shifted_register(struct pt_regs *regs,
 	return 0;
 }
 
-static int orlix_tcti_execute_logical_immediate(struct pt_regs *regs,
-					  const struct orlix_tcti_decoded_instruction *decoded)
+int orlix_tcti_execute_logical_immediate_semantics(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded)
 {
 	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
 	u64 left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
@@ -7674,7 +7675,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER:
 		return orlix_tcti_execute_logical_shifted_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE:
-		return orlix_tcti_execute_logical_immediate(regs, decoded);
+		return orlix_tcti_execute_logical_immediate_semantics(regs,
+							       decoded);
 	case ORLIX_TCTI_DECODE_BITFIELD:
 		return orlix_tcti_execute_bitfield(regs, decoded);
 	case ORLIX_TCTI_DECODE_EXTRACT:

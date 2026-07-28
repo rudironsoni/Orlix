@@ -51,6 +51,37 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 					      fault_address);
 }
 
+static int orlix_tcti_gadget_execute_logical_immediate(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	(void)mm;
+	(void)fault_address;
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	if (decoded.decode_class != ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE)
+		return -EINVAL;
+
+	return orlix_tcti_execute_logical_immediate_semantics(regs, &decoded);
+}
+
+static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE)
+		return orlix_tcti_gadget_execute_logical_immediate;
+	return orlix_tcti_gadget_execute_decoded;
+}
+
+static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
+{
+	return gadget == orlix_tcti_gadget_execute_decoded ||
+		gadget == orlix_tcti_gadget_execute_logical_immediate;
+}
+
 static int orlix_tcti_gadget_halt(struct mm_struct *mm, struct pt_regs *regs,
 			    const struct orlix_tcti_gadget_word **cursor,
 			    unsigned long *fault_address)
@@ -108,7 +139,8 @@ int orlix_tcti_append_decoded_instruction(
 	if (capacity < words)
 		return -ENOSPC;
 
-	program[start].value = (unsigned long)orlix_tcti_gadget_execute_decoded;
+	program[start].value =
+		(unsigned long)orlix_tcti_gadget_for_decoded(decoded);
 	memcpy(&program[start + 1], decoded, sizeof(*decoded));
 	program[start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)orlix_tcti_gadget_halt;
@@ -147,7 +179,7 @@ static int orlix_tcti_execute_gadget_program_checked(
 		cursor++;
 		if (!gadget)
 			return -EINVAL;
-		if (gadget == orlix_tcti_gadget_execute_decoded && entry_valid &&
+		if (orlix_tcti_gadget_has_decoded_payload(gadget) && entry_valid &&
 		    !*entry_valid) {
 			memcpy(&entry_decoded, cursor, sizeof(entry_decoded));
 			candidate = true;
