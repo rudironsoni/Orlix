@@ -401,6 +401,18 @@ int orlix_tcti_target_proof_ingest_native(
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
 	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR)
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_DECODE)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_LEGAL_ENCODINGS)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_REJECTED_ENCODINGS)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_REGISTERS)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_PC)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
+	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_FLAGS)
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS;
 	else {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_NON_PRODUCTION, error);
 		return -1;
@@ -414,9 +426,23 @@ int orlix_tcti_target_proof_ingest_native(
 	if (!binding || strcmp(binding->leaf_name, record->leaf_name) ||
 	    strcmp(binding->mnemonic, record->mnemonic) ||
 	    binding->encoding_mask != record->encoding_mask ||
-	    binding->encoding_pattern != record->encoding_pattern ||
-	    (record->entry_instruction & binding->encoding_mask) !=
-		    binding->encoding_pattern) {
+	    binding->encoding_pattern != record->encoding_pattern) {
+		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_STALE_SOURCE, error);
+		return -1;
+	}
+	if (record->kind ==
+	    ORLIX_TCTI_TARGET_NATIVE_RESULT_REJECTED_ENCODINGS) {
+		orlix_tcti_proof_u32 mismatch =
+			(record->entry_instruction ^ binding->encoding_pattern) &
+			binding->encoding_mask;
+
+		if (!mismatch || (mismatch & (mismatch - 1U))) {
+			reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_STALE_SOURCE,
+			       error);
+			return -1;
+		}
+	} else if ((record->entry_instruction & binding->encoding_mask) !=
+		   binding->encoding_pattern) {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_STALE_SOURCE, error);
 		return -1;
 	}
