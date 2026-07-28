@@ -910,6 +910,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			return result;
 		}
 		if (ret) {
+			if (ret == -EOPNOTSUPP && !result.entry_valid) {
+				result.entry_valid = true;
+				result.entry_pc = regs->pc;
+				result.entry_instruction = instruction;
+			}
 			result.status = ret;
 			result.pc = regs->pc;
 			result.instruction = instruction;

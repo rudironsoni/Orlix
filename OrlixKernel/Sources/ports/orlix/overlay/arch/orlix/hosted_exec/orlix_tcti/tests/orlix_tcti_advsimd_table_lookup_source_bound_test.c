@@ -12,16 +12,26 @@
 #include <linux/sched/mm.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
 
 #include "../decode_aarch64.h"
+#include "orlix_tcti_native_observation.h"
 #include "target_instruction_artifact.h"
+#include "target_proof_ingestion.h"
+#include "target_proof_registry.h"
 
 #define ORLIX_TCTI_ADVSIMD_TABLE_SVC	0xd4000001U
 #define ORLIX_TCTI_ADVSIMD_TABLE_VARIABLE_MASK	0x401f03ffU
+#define ORLIX_TCTI_ADVSIMD_TABLE_CONDITION \
+	"54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44"
+#define ORLIX_TCTI_ADVSIMD_TABLE_TYPED_CASE \
+	"orlix_tcti_advsimd_table_typed_obligations_resume"
+#define ORLIX_TCTI_ADVSIMD_TABLE_REJECTION_CASE \
+	"orlix_tcti_advsimd_table_fixed_bit_neighbors_resume"
 
 struct orlix_tcti_advsimd_table_leaf {
 	u16 source_ordinal;
@@ -78,6 +88,25 @@ orlix_tcti_advsimd_table_overlap_cases[] = {
 	{ 4U, 31U, 7U },		/* L2-L4 table register wraps V31 to V0 */
 };
 
+struct orlix_tcti_advsimd_table_typed_obligation {
+	enum orlix_tcti_native_obligation native;
+	u32 proof;
+};
+
+static const struct orlix_tcti_advsimd_table_typed_obligation
+orlix_tcti_advsimd_table_typed_obligations[] = {
+	{ ORLIX_TCTI_NATIVE_OBLIGATION_DECODE,
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+	{ ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS,
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ORLIX_TCTI_NATIVE_OBLIGATION_REGISTERS,
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ ORLIX_TCTI_NATIVE_OBLIGATION_PC,
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
 static const char *orlix_tcti_advsimd_table_artifact_string(
 	const struct orlix_tcti_target_instruction_artifact *artifact, u32 offset)
 {
@@ -85,6 +114,75 @@ static const char *orlix_tcti_advsimd_table_artifact_string(
 		return NULL;
 
 	return (const char *)artifact->string_pool + offset;
+}
+
+static int orlix_tcti_advsimd_table_effective_encoding(
+	const struct orlix_tcti_target_instruction_artifact *artifact, u32 ordinal,
+	u32 *mask, u32 *pattern)
+{
+	const struct orlix_tcti_target_instruction_artifact_leaf *leaf;
+	u32 index;
+
+	if (!artifact || ordinal >= artifact->leaf_count || !mask || !pattern)
+		return -EINVAL;
+	leaf = &artifact->leaves[ordinal];
+	if (leaf->fixed_operand_first > artifact->fixed_operand_count ||
+	    leaf->fixed_operand_count >
+		artifact->fixed_operand_count - leaf->fixed_operand_first)
+		return -EBADMSG;
+	*mask = leaf->encoding_mask;
+	*pattern = leaf->encoding_pattern;
+	for (index = leaf->fixed_operand_first;
+	     index < leaf->fixed_operand_first + leaf->fixed_operand_count;
+	     index++) {
+		const struct orlix_tcti_target_instruction_artifact_fixed_operand *fixed =
+			&artifact->fixed_operands[index];
+
+		if (fixed->leaf_index != ordinal ||
+		    (fixed->fixed_value & ~fixed->fixed_mask) ||
+		    ((*pattern ^ fixed->fixed_value) &
+		     (*mask & fixed->fixed_mask)))
+			return -EBADMSG;
+		*pattern = (*pattern & ~fixed->fixed_mask) | fixed->fixed_value;
+		*mask |= fixed->fixed_mask;
+	}
+	return (*pattern & ~*mask) ? -EBADMSG : 0;
+}
+
+static const struct orlix_tcti_advsimd_table_leaf *
+orlix_tcti_advsimd_table_union_leaf(u32 instruction)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_table_leaves);
+	     index++) {
+		const struct orlix_tcti_advsimd_table_leaf *leaf =
+			&orlix_tcti_advsimd_table_leaves[index];
+
+		if ((instruction & leaf->source_mask) == leaf->source_pattern)
+			return leaf;
+	}
+	return NULL;
+}
+
+static size_t orlix_tcti_advsimd_table_source_owner_count(
+	const struct orlix_tcti_target_instruction_artifact *artifact,
+	u32 instruction)
+{
+	size_t owners = 0;
+	u32 ordinal;
+
+	for (ordinal = 0; ordinal < artifact->leaf_count; ordinal++) {
+		u32 mask;
+		u32 pattern;
+
+		if (orlix_tcti_advsimd_table_effective_encoding(
+				artifact, ordinal, &mask, &pattern))
+			return SIZE_MAX;
+		if ((instruction & mask) == pattern)
+			owners++;
+	}
+	return owners;
 }
 
 static int orlix_tcti_advsimd_table_test_init(struct kunit *test)
@@ -245,6 +343,233 @@ static void orlix_tcti_advsimd_table_expected(unsigned long expected[],
 			value = orlix_tcti_advsimd_table_byte(before, registers->rd, lane);
 		orlix_tcti_advsimd_table_set_byte(expected, registers->rd, lane, value);
 	}
+}
+
+static const char *orlix_tcti_advsimd_table_proof_id(
+	const struct orlix_tcti_advsimd_table_leaf *leaf)
+{
+	return leaf->operation == ORLIX_TCTI_SIMD_TABLE_LOOKUP_TBX ?
+		"kunit:advsimd-table-tbx-source-leaves" :
+		"kunit:advsimd-table-tbl-source-leaves";
+}
+
+static const struct orlix_tcti_target_proof_registry_entry *
+orlix_tcti_advsimd_table_registry_entry(
+	const struct orlix_tcti_advsimd_table_leaf *leaf)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const char *proof_id = orlix_tcti_advsimd_table_proof_id(leaf);
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++)
+		if (!strcmp(entries[index].id, proof_id))
+			return &entries[index];
+	return NULL;
+}
+
+static void orlix_tcti_advsimd_table_capture_fp_simd(
+	struct orlix_tcti_native_fp_simd_state *state,
+	const unsigned long simd[], unsigned long fpcr, unsigned long fpsr,
+	bool valid)
+{
+	memset(state, 0, sizeof(*state));
+	memcpy(state->v, simd, sizeof(state->v));
+	state->fpcr = fpcr;
+	state->fpsr = fpsr;
+	state->valid = valid;
+}
+
+static void orlix_tcti_advsimd_table_ingest_record(
+	struct kunit *test, const struct orlix_tcti_advsimd_table_leaf *leaf,
+	const char *case_name,
+	struct orlix_tcti_target_native_result_record *record,
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entry =
+		orlix_tcti_advsimd_table_registry_entry(leaf);
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	struct orlix_tcti_target_native_ingestion_selector selector;
+	enum orlix_tcti_target_proof_ingestion_error error;
+	char build_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	KUNIT_ASSERT_NOT_NULL(test, record);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_kunit_provenance_identity(
+			entry, case_name, &provenance));
+	scnprintf(build_identity, sizeof(build_identity), "%s|%s|%s",
+		 init_utsname()->release, init_utsname()->version,
+		 init_utsname()->machine);
+	selector = (struct orlix_tcti_target_native_ingestion_selector) {
+		.proof_id = entry->id,
+		.classification_mask = ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+		.condition_tcnd_hex = ORLIX_TCTI_ADVSIMD_TABLE_CONDITION,
+		.kunit_source = provenance.source,
+		.kunit_source_sha256 = provenance.source_sha256,
+		.kunit_build_source = provenance.build_source,
+		.kunit_build_source_sha256 = provenance.build_source_sha256,
+		.kunit_suite = provenance.suite,
+		.kunit_case = provenance.case_name,
+		.executing_kernel_identity = build_identity,
+	};
+	ret = orlix_tcti_target_proof_ingest_native(
+		ledger, record, &selector, &error);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s ordinal=%u error=%u",
+		case_name, leaf->source_ordinal, error);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+}
+
+static void orlix_tcti_advsimd_table_observe_legal(
+	struct kunit *test, const struct orlix_tcti_advsimd_table_leaf *leaf,
+	enum orlix_tcti_native_obligation obligation,
+	struct orlix_tcti_target_native_result_record **record)
+{
+	static const struct orlix_tcti_advsimd_table_registers registers = {
+		4U, 31U, 7U,
+	};
+	struct orlix_tcti_advsimd_table_context *context = test->priv;
+	struct orlix_tcti_native_observation_spec spec = {};
+	struct orlix_tcti_native_observation *observation;
+	struct orlix_tcti_native_fp_simd_state observed_fp_simd;
+	unsigned long *before_simd;
+	unsigned long *expected_simd;
+	struct pt_regs regs;
+	struct pt_regs expected_regs;
+	u32 instruction = orlix_tcti_advsimd_table_instruction(
+		leaf, 1U, registers.rd, registers.rn, registers.rm);
+	int ret;
+
+	*record = NULL;
+	before_simd = kunit_kcalloc(test,
+		ARRAY_SIZE(current->thread.user_simd), sizeof(*before_simd),
+		GFP_KERNEL);
+	expected_simd = kunit_kcalloc(test,
+		ARRAY_SIZE(current->thread.user_simd), sizeof(*expected_simd),
+		GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, before_simd);
+	KUNIT_ASSERT_NOT_NULL(test, expected_simd);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_advsimd_table_load_instruction(test, instruction));
+	orlix_tcti_advsimd_table_seed_simd(leaf, &registers);
+	memcpy(before_simd, current->thread.user_simd,
+	       sizeof(*before_simd) * ARRAY_SIZE(current->thread.user_simd));
+	orlix_tcti_advsimd_table_expected(
+		expected_simd, before_simd, leaf, &registers, 16U);
+	current->thread.user_simd_valid = 0;
+	current->thread.user_fpcr = BIT(22) | BIT(24);
+	current->thread.user_fpsr = BIT(27) | BIT(4);
+	orlix_tcti_advsimd_table_seed_regs(
+		&regs, context->instructions, instruction);
+	expected_regs = regs;
+	expected_regs.pc += sizeof(u32);
+	spec.source_ordinal = leaf->source_ordinal;
+	spec.obligation = obligation;
+	spec.result = (struct orlix_tcti_result) {
+		.reason = ORLIX_TCTI_EXIT_SYSCALL,
+		.status = 0,
+		.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+		.pc = context->instructions + sizeof(u32),
+		.instruction = ORLIX_TCTI_ADVSIMD_TABLE_SVC,
+	};
+	orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
+	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REGISTERS ||
+	    obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS)
+		orlix_tcti_advsimd_table_capture_fp_simd(
+			&spec.expected.fp_simd, expected_simd,
+			BIT(22) | BIT(24), BIT(27) | BIT(4), true);
+	observation = orlix_tcti_native_observation_create(&spec);
+	KUNIT_ASSERT_NOT_NULL(test, observation);
+	ret = orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REGISTERS ||
+	    obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS) {
+		orlix_tcti_advsimd_table_capture_fp_simd(
+			&observed_fp_simd, current->thread.user_simd,
+			current->thread.user_fpcr, current->thread.user_fpsr,
+			current->thread.user_simd_valid);
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_fp_simd(
+				observation, &observed_fp_simd));
+	}
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_compare(observation));
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_MATCH,
+		orlix_tcti_native_observation_state(observation));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, record));
+	orlix_tcti_native_observation_destroy(observation);
+}
+
+static void orlix_tcti_advsimd_table_observe_rejection(
+	struct kunit *test, const struct orlix_tcti_advsimd_table_leaf *leaf,
+	u32 instruction,
+	struct orlix_tcti_target_native_result_record **record)
+{
+	struct orlix_tcti_advsimd_table_context *context = test->priv;
+	struct orlix_tcti_native_observation_spec spec = {};
+	struct orlix_tcti_native_observation *observation;
+	struct orlix_tcti_native_fp_simd_state observed_fp_simd;
+	unsigned long *before_simd;
+	struct pt_regs regs;
+	struct pt_regs before_regs;
+	int ret;
+
+	*record = NULL;
+	before_simd = kunit_kcalloc(test,
+		ARRAY_SIZE(current->thread.user_simd), sizeof(*before_simd),
+		GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, before_simd);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_advsimd_table_load_instruction(test, instruction));
+	orlix_tcti_advsimd_table_seed_simd(
+		leaf, &orlix_tcti_advsimd_table_overlap_cases[0]);
+	memcpy(before_simd, current->thread.user_simd,
+	       sizeof(*before_simd) * ARRAY_SIZE(current->thread.user_simd));
+	current->thread.user_simd_valid = 1;
+	current->thread.user_fpcr = BIT(22) | BIT(24);
+	current->thread.user_fpsr = BIT(27) | BIT(4);
+	orlix_tcti_advsimd_table_seed_regs(
+		&regs, context->instructions, instruction);
+	before_regs = regs;
+	spec.source_ordinal = leaf->source_ordinal;
+	spec.obligation = ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS;
+	spec.result = (struct orlix_tcti_result) {
+		.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+		.status = -EOPNOTSUPP,
+		.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+		.pc = context->instructions,
+		.instruction = instruction,
+	};
+	orlix_tcti_native_gpr_capture(&spec.gpr, &before_regs);
+	orlix_tcti_advsimd_table_capture_fp_simd(
+		&spec.expected.fp_simd, before_simd, BIT(22) | BIT(24),
+		BIT(27) | BIT(4), true);
+	observation = orlix_tcti_native_observation_create(&spec);
+	KUNIT_ASSERT_NOT_NULL(test, observation);
+	ret = orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	orlix_tcti_advsimd_table_capture_fp_simd(
+		&observed_fp_simd, current->thread.user_simd,
+		current->thread.user_fpcr, current->thread.user_fpsr,
+		current->thread.user_simd_valid);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_add_fp_simd(
+			observation, &observed_fp_simd));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_compare(observation));
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_MATCH,
+		orlix_tcti_native_observation_state(observation));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, record));
+	KUNIT_EXPECT_MEMEQ(test, &before_regs, &regs, sizeof(regs));
+	KUNIT_EXPECT_MEMEQ(test, before_simd, current->thread.user_simd,
+		sizeof(*before_simd) * ARRAY_SIZE(current->thread.user_simd));
+	orlix_tcti_native_observation_destroy(observation);
 }
 
 static void orlix_tcti_advsimd_table_source_bindings(struct kunit *test)
@@ -435,10 +760,182 @@ static void orlix_tcti_advsimd_table_source_leaves_resume(struct kunit *test)
 	}
 }
 
+static void orlix_tcti_advsimd_table_typed_obligations_resume(
+	struct kunit *test)
+{
+	struct orlix_tcti_target_native_result_record *records[
+		ARRAY_SIZE(orlix_tcti_advsimd_table_leaves) *
+		ARRAY_SIZE(orlix_tcti_advsimd_table_typed_obligations)] = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary;
+	u32 covered = 0;
+	size_t record_count = 0;
+	size_t leaf_index;
+
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(
+		ARRAY_SIZE(records));
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_advsimd_table_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_advsimd_table_leaf *leaf =
+			&orlix_tcti_advsimd_table_leaves[leaf_index];
+		size_t obligation_index;
+
+		for (obligation_index = 0;
+		     obligation_index <
+			ARRAY_SIZE(orlix_tcti_advsimd_table_typed_obligations);
+		     obligation_index++) {
+			const struct orlix_tcti_advsimd_table_typed_obligation *typed =
+				&orlix_tcti_advsimd_table_typed_obligations[
+					obligation_index];
+
+			orlix_tcti_advsimd_table_observe_legal(
+				test, leaf, typed->native, &records[record_count]);
+			KUNIT_ASSERT_NOT_NULL(test, records[record_count]);
+			orlix_tcti_advsimd_table_ingest_record(
+				test, leaf, ORLIX_TCTI_ADVSIMD_TABLE_TYPED_CASE,
+				records[record_count], ledger);
+			covered |= typed->proof;
+			record_count++;
+		}
+	}
+	KUNIT_EXPECT_EQ(test,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS,
+		covered);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.native_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.kselftest_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.rejected);
+	while (record_count)
+		orlix_tcti_target_native_result_record_destroy(
+			records[--record_count]);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+}
+
+static void orlix_tcti_advsimd_table_fixed_bit_neighbors_resume(
+	struct kunit *test)
+{
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	struct orlix_tcti_target_instruction_artifact_validation_result validation;
+	struct orlix_tcti_target_native_result_record *records[
+		ARRAY_SIZE(orlix_tcti_advsimd_table_leaves)] = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary;
+	size_t record_count = 0;
+	size_t leaf_index;
+
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_instruction_artifact_validate(
+			artifact, &validation));
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(
+		ARRAY_SIZE(records));
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_advsimd_table_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_advsimd_table_leaf *leaf =
+			&orlix_tcti_advsimd_table_leaves[leaf_index];
+		const struct orlix_tcti_advsimd_table_registers registers = {
+			4U, 20U, 6U,
+		};
+		u32 canonical = orlix_tcti_advsimd_table_instruction(
+			leaf, 1U, registers.rd, registers.rn, registers.rm);
+		u32 fixed_mutations = 0;
+		u32 union_neighbors = 0;
+		u32 owned_neighbors = 0;
+		u32 rejected_neighbors = 0;
+		bool exported = false;
+		u8 bit;
+
+		for (bit = 0; bit < 32U; bit++) {
+			const struct orlix_tcti_advsimd_table_leaf *union_leaf;
+			struct orlix_tcti_target_native_result_record *record = NULL;
+			struct orlix_tcti_decoded_instruction decoded;
+			size_t owners;
+			u32 instruction;
+
+			if (!(leaf->source_mask & BIT(bit)))
+				continue;
+			fixed_mutations++;
+			instruction = canonical ^ BIT(bit);
+			union_leaf = orlix_tcti_advsimd_table_union_leaf(instruction);
+			owners = orlix_tcti_advsimd_table_source_owner_count(
+				artifact, instruction);
+			KUNIT_ASSERT_NE(test, SIZE_MAX, owners);
+			decoded = orlix_tcti_decode_aarch64(instruction);
+			if (union_leaf) {
+				union_neighbors++;
+				KUNIT_EXPECT_GT(test, owners, 0U);
+				KUNIT_EXPECT_EQ(test,
+					ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP,
+					decoded.decode_class);
+				KUNIT_EXPECT_EQ(test, union_leaf->operation,
+					decoded.simd_table_lookup_op);
+				KUNIT_EXPECT_EQ(test, union_leaf->table_count,
+					decoded.simd_table_count);
+				continue;
+			}
+			if (owners) {
+				owned_neighbors++;
+				KUNIT_EXPECT_NE(test,
+					ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP,
+					decoded.decode_class);
+				continue;
+			}
+			rejected_neighbors++;
+			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+			orlix_tcti_advsimd_table_observe_rejection(
+				test, leaf, instruction, &record);
+			KUNIT_ASSERT_NOT_NULL(test, record);
+			if (!exported) {
+				records[record_count] = record;
+				orlix_tcti_advsimd_table_ingest_record(
+					test, leaf,
+					ORLIX_TCTI_ADVSIMD_TABLE_REJECTION_CASE,
+					records[record_count], ledger);
+				record_count++;
+				exported = true;
+			} else {
+				orlix_tcti_target_native_result_record_destroy(record);
+			}
+		}
+		KUNIT_EXPECT_EQ(test, 16U, fixed_mutations);
+		KUNIT_EXPECT_EQ(test, 3U, union_neighbors);
+		KUNIT_EXPECT_GT(test, owned_neighbors, 0U);
+		KUNIT_EXPECT_GT(test, rejected_neighbors, 0U);
+		KUNIT_EXPECT_EQ(test, fixed_mutations,
+			union_neighbors + owned_neighbors + rejected_neighbors);
+		KUNIT_EXPECT_TRUE(test, exported);
+	}
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), record_count);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.native_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.kselftest_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.rejected);
+	while (record_count)
+		orlix_tcti_target_native_result_record_destroy(
+			records[--record_count]);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+}
+
 static struct kunit_case orlix_tcti_advsimd_table_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_table_source_bindings),
 	KUNIT_CASE(orlix_tcti_advsimd_table_legal_fields_decode),
 	KUNIT_CASE(orlix_tcti_advsimd_table_source_leaves_resume),
+	KUNIT_CASE(orlix_tcti_advsimd_table_typed_obligations_resume),
+	KUNIT_CASE(orlix_tcti_advsimd_table_fixed_bit_neighbors_resume),
 	{}
 };
 

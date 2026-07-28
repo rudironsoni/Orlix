@@ -946,6 +946,7 @@ static int advsimd_table_registry_binds_exact_source_rows(void)
 		EXPECT(entry->obligations ==
 		       (ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS));
@@ -956,7 +957,19 @@ static int advsimd_table_registry_binds_exact_source_rows(void)
 		       "OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_table_lookup_source_bound_test.c"));
 		EXPECT(!strcmp(entry->kunit_suite,
 		       "orlix-tcti-advsimd-table-source-bound"));
-		EXPECT(entry->kunit_case_count == 3U);
+		EXPECT(entry->kunit_case_count == 2U);
+		EXPECT(!strcmp(entry->kunit_cases[0].name,
+		       "orlix_tcti_advsimd_table_typed_obligations_resume"));
+		EXPECT(entry->kunit_cases[0].obligations ==
+		       (ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS));
+		EXPECT(!strcmp(entry->kunit_cases[1].name,
+		       "orlix_tcti_advsimd_table_fixed_bit_neighbors_resume"));
+		EXPECT(entry->kunit_cases[1].obligations ==
+		       ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS);
 		EXPECT(entry->binding_count == 4U);
 		entry_count++;
 		binding_count += entry->binding_count;
@@ -967,7 +980,7 @@ static int advsimd_table_registry_binds_exact_source_rows(void)
 				&entry->bindings[binding];
 			size_t expected_index;
 
-			EXPECT(item->kunit_case_mask == UINT64_C(0x7));
+			EXPECT(item->kunit_case_mask == UINT64_C(0x3));
 			for (expected_index = 0;
 			     expected_index < sizeof(expected) / sizeof(expected[0]);
 			     expected_index++)
