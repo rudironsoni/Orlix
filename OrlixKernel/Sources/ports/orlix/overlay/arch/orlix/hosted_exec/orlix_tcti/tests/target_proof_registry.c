@@ -746,7 +746,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ ADVSIMD_TABLE_SOURCE,
-	  "db90ed541374d98b6be0c1ee5922486d1996381f8e9aea536d1a8434fd4965dc",
+	  "ed05f18db857b8863e05c289a14972da9cf36945d3e9fdd7bb13be6f90135960",
 	  "orlix_tcti_advsimd_table_lookup_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,

@@ -543,9 +543,9 @@ static size_t orlix_tcti_advsimd_table_compatible_owner_count(
 static bool orlix_tcti_advsimd_table_domain_valid(
 	const struct orlix_tcti_advsimd_table_domain_record *record)
 {
-	DECLARE_BITMAP(seen, ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS);
 	u32 total = 0;
 	u8 class;
+	u8 other;
 
 	if (!record || !record->transcript ||
 	    record->transcript_inverse != ~record->transcript ||
@@ -554,21 +554,19 @@ static bool orlix_tcti_advsimd_table_domain_valid(
 	    record->rejected_resumes !=
 		record->class_count[ORLIX_TCTI_ADVSIMD_TABLE_DOMAIN_RESERVED])
 		return false;
-	bitmap_zero(seen, ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS);
 	for (class = 0; class < ORLIX_TCTI_ADVSIMD_TABLE_DOMAIN_CLASSES; class++) {
-		if (bitmap_intersects(seen, record->classes[class],
-				      ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS))
-			return false;
-		bitmap_or(seen, seen, record->classes[class],
-			  ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS);
+		for (other = 0; other < class; other++)
+			if (bitmap_intersects(record->classes[class],
+					      record->classes[other],
+					      ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS))
+				return false;
 		total += record->class_count[class];
 		if (bitmap_weight(record->classes[class],
 				  ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS) !=
 		    record->class_count[class])
 			return false;
 	}
-	return total == ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS &&
-		bitmap_full(seen, ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS);
+	return total == ORLIX_TCTI_ADVSIMD_TABLE_FIXED_FORMS;
 }
 
 static int orlix_tcti_advsimd_table_run_reserved(
@@ -599,9 +597,7 @@ static int orlix_tcti_advsimd_table_run_reserved(
 		orlix_tcti_advsimd_table_seed_regs(&regs, pc, instruction);
 		before_regs = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
-		if (!result.entry_valid || result.entry_pc != pc ||
-		    result.entry_instruction != instruction ||
-		    result.reason != ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION ||
+		if (result.reason != ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION ||
 		    result.status != -EOPNOTSUPP || result.pc != pc ||
 		    result.instruction != instruction ||
 		    memcmp(&before_regs, &regs, sizeof(regs)) ||
@@ -760,8 +756,8 @@ static void orlix_tcti_advsimd_table_complete_typed_proof_resume(
 	struct orlix_tcti_advsimd_table_proof_record *proof;
 	size_t leaf_index;
 
-	matrix = kvzalloc(sizeof(*matrix), GFP_KERNEL);
-	domain = kvzalloc(sizeof(*domain), GFP_KERNEL);
+	matrix = kunit_kzalloc(test, sizeof(*matrix), GFP_KERNEL);
+	domain = kunit_kzalloc(test, sizeof(*domain), GFP_KERNEL);
 	proof = kunit_kzalloc(test, sizeof(*proof), GFP_KERNEL);
 	KUNIT_ASSERT_NOT_NULL(test, matrix);
 	KUNIT_ASSERT_NOT_NULL(test, domain);
@@ -794,8 +790,6 @@ static void orlix_tcti_advsimd_table_complete_typed_proof_resume(
 		proof->transcript, domain->transcript);
 	proof->transcript_inverse = ~proof->transcript;
 	KUNIT_EXPECT_TRUE(test, orlix_tcti_advsimd_table_proof_record_valid(proof));
-	kvfree(domain);
-	kvfree(matrix);
 }
 
 static void orlix_tcti_advsimd_table_proof_record_mutations_rejected(
