@@ -595,9 +595,9 @@ int orlix_tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 }
 
 int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,
-				unsigned long user_va,
-				enum orlix_tcti_access access,
-				struct orlix_tcti_user_page *page)
+					unsigned long user_va,
+					enum orlix_tcti_access access,
+					struct orlix_tcti_user_page *page)
 {
 	int ret;
 
