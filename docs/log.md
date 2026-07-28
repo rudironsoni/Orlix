@@ -848,3 +848,16 @@ edges; operation aliases are semantic redirects with an explicit unconditional
 predicate. Encoding and decode kinds remain reserved because the pinned source
 declares no such duplicate rows. Graph mutations fail closed and aliases grant
 no classification, implementation, execution, proof, or runtime credit.
+
+## [2026-07-28] implement | Finalize native proof ingestion contract
+
+The TCTI proof registry now accepts execution credit only through opaque,
+single-use result capabilities. Native records can be exported only after one
+production `orlix_tcti_resume_user()` path, exact source binding, and a matching
+internally captured RESULT or GPR observation. Caller-supplied memory, SIMD,
+SVE, SME, fault, atomicity, and ordering witnesses remain ineligible. The
+registry validates the exact source, condition, classification, owner, KUnit
+suite and case, source and build provenance, kernel identity, and obligation;
+replay and mismatch cases fail closed. Kselftest results and the ledger are also
+opaque, and production has no kselftest PASS constructor until its owning Linux
+execution issue supplies one. Canonical execution counts therefore remain zero.

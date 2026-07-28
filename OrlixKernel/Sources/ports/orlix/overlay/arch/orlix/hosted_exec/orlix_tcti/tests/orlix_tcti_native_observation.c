@@ -5,9 +5,11 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/utsname.h>
 
 #include "orlix_tcti_native_observation.h"
 #include "target_instruction_artifact.h"
+#include "target_proof_ingestion_private.h"
 
 #define ORLIX_TCTI_NATIVE_OBSERVATION_MAGIC 0x54434f42U
 
@@ -76,6 +78,7 @@ struct orlix_tcti_native_observation {
 	bool execution_attempted;
 	bool source_bound;
 	bool poisoned;
+	bool exported;
 	struct orlix_tcti_result expected_result;
 	struct orlix_tcti_result observed_result;
 	struct orlix_tcti_native_gpr_state expected_gpr;
@@ -931,4 +934,121 @@ int orlix_tcti_native_observation_compare(
 		return ret;
 	observation->state = ORLIX_TCTI_NATIVE_OBSERVATION_MATCH;
 	return 0;
+}
+
+int orlix_tcti_native_observation_export(
+		struct orlix_tcti_native_observation *observation,
+		struct orlix_tcti_target_native_result_record **record)
+{
+	const struct orlix_tcti_target_instruction_artifact_leaf *leaf;
+	const struct orlix_tcti_target_instruction_artifact *artifact;
+	struct orlix_tcti_target_native_result_record *exported;
+	char build_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	u32 mask;
+	u32 pattern;
+	int ret;
+
+	if (!record)
+		return -EINVAL;
+	*record = NULL;
+	if (!orlix_tcti_native_observation_valid(observation))
+		return -EINVAL;
+	if (observation->exported)
+		return orlix_tcti_native_poison(observation, -EALREADY);
+	if (observation->state != ORLIX_TCTI_NATIVE_OBSERVATION_MATCH ||
+	    !observation->source_bound || observation->execution_count != 1 ||
+	    observation->execution_path !=
+		    ORLIX_TCTI_NATIVE_INTERNAL_PATH_RESUME_USER)
+		return -EPERM;
+	if (observation->expected_obligation !=
+		    ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
+	    observation->expected_obligation != ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
+		return -EOPNOTSUPP;
+	artifact = orlix_tcti_target_instruction_artifact_canonical();
+	if (!artifact || observation->expected_source_ordinal >= artifact->leaf_count)
+		return -EBADMSG;
+	ret = orlix_tcti_native_effective_encoding(
+		artifact, observation->expected_source_ordinal, &mask, &pattern);
+	if (ret)
+		return ret;
+	leaf = &artifact->leaves[observation->expected_source_ordinal];
+	scnprintf(build_identity, sizeof(build_identity), "%s|%s|%s",
+		 init_utsname()->release, init_utsname()->version,
+		 init_utsname()->machine);
+	exported = kzalloc(sizeof(*exported), GFP_KERNEL);
+	if (!exported)
+		return -ENOMEM;
+	exported->source_ordinal = observation->expected_source_ordinal;
+	exported->encoding_mask = mask;
+	exported->encoding_pattern = pattern;
+	exported->entry_instruction = observation->observed_result.entry_instruction;
+	exported->kind = observation->expected_obligation ==
+			     ORLIX_TCTI_NATIVE_OBLIGATION_RESULT ?
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT :
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
+	exported->production_resume = true;
+	exported->source_bound = true;
+	exported->match = true;
+	exported->resume_count = 1;
+#define COPY_EXPORT_FIELD(field, source) \
+	do { \
+		if (strscpy(exported->field, (source), sizeof(exported->field)) < 0) \
+			goto invalid_export; \
+	} while (0)
+	COPY_EXPORT_FIELD(leaf_name,
+		(const char *)&artifact->string_pool[leaf->name_offset]);
+	COPY_EXPORT_FIELD(mnemonic,
+		(const char *)&artifact->string_pool[leaf->mnemonic_offset]);
+	COPY_EXPORT_FIELD(operation_id,
+		(const char *)&artifact->string_pool[leaf->operation_offset]);
+	COPY_EXPORT_FIELD(artifact_architecture, artifact->architecture);
+	COPY_EXPORT_FIELD(artifact_build, artifact->build);
+	COPY_EXPORT_FIELD(artifact_reference, artifact->reference);
+	COPY_EXPORT_FIELD(artifact_schema, artifact->schema);
+	COPY_EXPORT_FIELD(artifact_source_sha256, artifact->source_sha256);
+	COPY_EXPORT_FIELD(executing_kernel_identity, build_identity);
+	COPY_EXPORT_FIELD(implementation_owner, "orlix_tcti_resume_user");
+	COPY_EXPORT_FIELD(decoder_owner, "orlix_tcti_decode_aarch64");
+	COPY_EXPORT_FIELD(lowering_owner, "orlix_tcti_execute_decoded_semantics");
+#undef COPY_EXPORT_FIELD
+	/* Stable replay key over internally captured execution and build identity. */
+	exported->identity = ORLIX_TCTI_PROOF_U64_C(1469598103934665603);
+#define HASH_EXPORT_BYTES(pointer, length) \
+	do { \
+		const u8 *cursor = (const u8 *)(pointer); \
+		size_t byte_index; \
+		for (byte_index = 0; byte_index < (length); byte_index++) { \
+			exported->identity ^= cursor[byte_index]; \
+			exported->identity *= ORLIX_TCTI_PROOF_U64_C(1099511628211); \
+		} \
+	} while (0)
+	HASH_EXPORT_BYTES(&exported->source_ordinal,
+			  sizeof(exported->source_ordinal));
+	HASH_EXPORT_BYTES(&exported->entry_instruction,
+			  sizeof(exported->entry_instruction));
+	HASH_EXPORT_BYTES(&exported->kind, sizeof(exported->kind));
+	HASH_EXPORT_BYTES(exported->artifact_source_sha256,
+			  strlen(exported->artifact_source_sha256));
+	HASH_EXPORT_BYTES(exported->executing_kernel_identity,
+			  strlen(exported->executing_kernel_identity));
+#undef HASH_EXPORT_BYTES
+	if (!exported->identity)
+		exported->identity = 1;
+	exported->magic = ORLIX_TCTI_TARGET_NATIVE_RECORD_MAGIC;
+	*record = exported;
+	observation->exported = true;
+	return 0;
+
+invalid_export:
+	kfree(exported);
+	return -EOVERFLOW;
+}
+
+void orlix_tcti_target_native_result_record_destroy(
+	struct orlix_tcti_target_native_result_record *record)
+{
+	if (!record)
+		return;
+	record->magic = 0;
+	kfree(record);
 }

@@ -7,6 +7,8 @@
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
 
+#include "target_proof_ingestion.h"
+
 #define ORLIX_TCTI_NATIVE_OBSERVATION_MAX_MEMORY 128U
 #define ORLIX_TCTI_NATIVE_OBSERVATION_SIMD_REGS 32U
 #define ORLIX_TCTI_NATIVE_OBSERVATION_SIMD_BYTES 16U
@@ -198,5 +200,8 @@ int orlix_tcti_native_observation_add_ordering(
 		const struct orlix_tcti_native_ordering_witness *ordering);
 int orlix_tcti_native_observation_compare(
 		struct orlix_tcti_native_observation *observation);
+int orlix_tcti_native_observation_export(
+		struct orlix_tcti_native_observation *observation,
+		struct orlix_tcti_target_native_result_record **record);
 
 #endif /* ORLIX_TCTI_NATIVE_OBSERVATION_H */

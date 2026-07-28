@@ -622,6 +622,47 @@ static void native_negative_witnesses_are_typed_mismatches_not_malformed(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(fault_mapped, PAGE_SIZE));
 }
 
+static void native_export_is_opaque_single_use_and_production_only(
+		struct kunit *test)
+{
+	struct orlix_tcti_target_native_result_record *record = NULL;
+	struct orlix_tcti_target_native_result_record *replay = NULL;
+	struct orlix_tcti_native_observation_spec spec;
+	struct orlix_tcti_native_observation *observation;
+	struct pt_regs regs;
+	unsigned long mapped = native_map_program(test, NATIVE_NOP);
+
+	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
+			      mapped);
+	observation = native_create_and_execute(test, &spec, &regs);
+	KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+	KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_ASSERT_NOT_NULL(test, record);
+	KUNIT_EXPECT_EQ(test, -EALREADY,
+			orlix_tcti_native_observation_export(observation, &replay));
+	KUNIT_EXPECT_PTR_EQ(test, NULL, replay);
+	orlix_tcti_target_native_result_record_destroy(record);
+	orlix_tcti_native_observation_destroy(observation);
+
+	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY,
+			      mapped);
+	spec.expected.memory.address = mapped;
+	spec.expected.memory.size = 1;
+	spec.expected.memory.bytes = (const u8[]){ NATIVE_NOP & 0xffU };
+	observation = native_create_and_execute(test, &spec, &regs);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_add_memory(
+		observation, &spec.expected.memory));
+	KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP,
+			orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_EXPECT_PTR_EQ(test, NULL, record);
+	orlix_tcti_native_observation_destroy(observation);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
 static struct kunit_case orlix_tcti_native_observation_test_cases[] = {
 	KUNIT_CASE(native_no_synthetic_or_recoverable_match),
 	KUNIT_CASE(native_result_and_gpr_are_captured_not_injected),
@@ -629,6 +670,7 @@ static struct kunit_case orlix_tcti_native_observation_test_cases[] = {
 	KUNIT_CASE(native_sve_uses_heap_owned_complete_state),
 	KUNIT_CASE(native_sme_optional_state_is_explicit_and_unavailable),
 	KUNIT_CASE(native_negative_witnesses_are_typed_mismatches_not_malformed),
+	KUNIT_CASE(native_export_is_opaque_single_use_and_production_only),
 	{}
 };
 

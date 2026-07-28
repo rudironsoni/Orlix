@@ -2,6 +2,9 @@
 #include "target_proof_registry.h"
 
 #include <stdbool.h>
+#include <pthread.h>
+#include <sched.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +15,84 @@
 		return -1; \
 	} \
 } while (0)
+
+#define CONCURRENT_FIRST_USE_THREADS 16U
+
+struct concurrent_first_use_result {
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows;
+	size_t entry_count;
+	size_t row_count;
+	bool stable;
+};
+
+static atomic_uint registry_waiters;
+static atomic_uint row_waiters;
+static atomic_bool release_registry_waiters;
+static atomic_bool release_row_waiters;
+
+static void *concurrent_first_use_worker(void *context)
+{
+	struct concurrent_first_use_result *result = context;
+	unsigned int iteration;
+
+	atomic_fetch_add_explicit(&registry_waiters, 1U, memory_order_release);
+	while (!atomic_load_explicit(&release_registry_waiters,
+				     memory_order_acquire))
+		sched_yield();
+	result->entries = orlix_tcti_target_proof_registry_entries(
+		&result->entry_count);
+	atomic_fetch_add_explicit(&row_waiters, 1U, memory_order_release);
+	while (!atomic_load_explicit(&release_row_waiters, memory_order_acquire))
+		sched_yield();
+	result->rows = orlix_tcti_target_linux_proof_dispositions(
+		&result->row_count);
+	result->stable = result->entries && result->rows;
+	for (iteration = 0; iteration < 128U && result->stable; iteration++) {
+		size_t entry_count;
+		size_t row_count;
+
+		result->stable =
+			orlix_tcti_target_proof_registry_entries(&entry_count) ==
+				result->entries &&
+			entry_count == result->entry_count &&
+			orlix_tcti_target_linux_proof_dispositions(&row_count) ==
+				result->rows &&
+			row_count == result->row_count;
+	}
+	return NULL;
+}
+
+static int canonical_first_use_is_concurrent_and_immutable(void)
+{
+	pthread_t threads[CONCURRENT_FIRST_USE_THREADS];
+	struct concurrent_first_use_result results[CONCURRENT_FIRST_USE_THREADS] = { 0 };
+	unsigned int index;
+
+	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++)
+		EXPECT(!pthread_create(&threads[index], NULL,
+				       concurrent_first_use_worker, &results[index]));
+	while (atomic_load_explicit(&registry_waiters, memory_order_acquire) !=
+	       CONCURRENT_FIRST_USE_THREADS)
+		sched_yield();
+	atomic_store_explicit(&release_registry_waiters, true,
+			      memory_order_release);
+	while (atomic_load_explicit(&row_waiters, memory_order_acquire) !=
+	       CONCURRENT_FIRST_USE_THREADS)
+		sched_yield();
+	atomic_store_explicit(&release_row_waiters, true, memory_order_release);
+	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++)
+		EXPECT(!pthread_join(threads[index], NULL));
+	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++) {
+		EXPECT(results[index].stable);
+		EXPECT(results[index].entries == results[0].entries);
+		EXPECT(results[index].entry_count == results[0].entry_count);
+		EXPECT(results[index].rows == results[0].rows);
+		EXPECT(results[index].row_count ==
+		       ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS);
+	}
+	return 0;
+}
 
 #define TRUE_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
@@ -1156,6 +1237,8 @@ int main(void)
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
+		{ "canonical_first_use_is_concurrent_and_immutable",
+		  canonical_first_use_is_concurrent_and_immutable },
 		{ "real_manifest_bindings_are_exact",
 		  real_manifest_bindings_are_exact },
 		{ "registry_fails_closed_on_unknown_operations_and_bits",

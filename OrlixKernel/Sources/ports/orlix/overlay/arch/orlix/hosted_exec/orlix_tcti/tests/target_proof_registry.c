@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
+#include "target_proof_ingestion.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -7,6 +8,47 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+enum canonical_initialization_state {
+	CANONICAL_UNINITIALIZED,
+	CANONICAL_INITIALIZING,
+	CANONICAL_READY,
+	CANONICAL_FAILED,
+};
+
+static bool canonical_initialization_enter(unsigned int *state,
+					   bool *initialize)
+{
+	unsigned int observed;
+
+	if (!state || !initialize)
+		return false;
+	for (;;) {
+		observed = __atomic_load_n(state, __ATOMIC_ACQUIRE);
+		if (observed == CANONICAL_READY) {
+			*initialize = false;
+			return true;
+		}
+		if (observed == CANONICAL_FAILED)
+			return false;
+		if (observed == CANONICAL_UNINITIALIZED) {
+			unsigned int expected = CANONICAL_UNINITIALIZED;
+
+			if (__atomic_compare_exchange_n(state, &expected,
+						CANONICAL_INITIALIZING, false,
+						__ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+				*initialize = true;
+				return true;
+			}
+		}
+	}
+}
+
+static void canonical_initialization_publish(unsigned int *state, bool success)
+{
+	__atomic_store_n(state, success ? CANONICAL_READY : CANONICAL_FAILED,
+			 __ATOMIC_RELEASE);
+}
 
 #define KNOWN_CLASS_MASK \
 	(ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0 | \
@@ -1803,6 +1845,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 13U
 #define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 15U
 
+static unsigned int proof_registry_initialization_state;
 static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
 	ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT +
@@ -3549,6 +3592,43 @@ out:
 	return valid;
 }
 
+int orlix_tcti_target_kunit_provenance_identity(
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	const char *case_name,
+	struct orlix_tcti_target_kunit_provenance_identity *identity)
+{
+	const struct kunit_source_provenance *source;
+	const struct kunit_case_provenance *proof_case = NULL;
+	size_t index;
+
+	if (!entry || empty(case_name) || !identity)
+		return -1;
+	source = find_kunit_source(entry->kunit_source);
+	if (!source)
+		return -1;
+	for (index = 0; index < ARRAY_COUNT(kunit_case_provenance); index++) {
+		const struct kunit_case_provenance *candidate =
+			&kunit_case_provenance[index];
+
+		if (!strcmp(candidate->source, entry->kunit_source) &&
+		    !strcmp(candidate->suite, entry->kunit_suite) &&
+		    !strcmp(candidate->name, case_name)) {
+			if (proof_case)
+				return -1;
+			proof_case = candidate;
+		}
+	}
+	if (!proof_case)
+		return -1;
+	identity->source = source->source;
+	identity->source_sha256 = source->sha256;
+	identity->build_source = KUNIT_BUILD_SOURCE;
+	identity->build_source_sha256 = KUNIT_BUILD_SOURCE_SHA256;
+	identity->suite = proof_case->suite;
+	identity->case_name = proof_case->name;
+	return 0;
+}
+
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance)
 {
@@ -3886,14 +3966,28 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count)
 {
-	if (!build_lse_registry() || !build_scalar_registry() ||
-	    !build_exclusive_registry() ||
-	    !build_ordinary_load_store_registry() ||
-	    !build_source_leaf_rejection_registry() ||
-	    !build_branch_control_registry()) {
+	bool initialize;
+	bool success;
+
+	if (!canonical_initialization_enter(
+		    &proof_registry_initialization_state, &initialize)) {
 		if (count)
 			*count = 0;
 		return NULL;
+	}
+	if (initialize) {
+		success = build_lse_registry() && build_scalar_registry() &&
+			  build_exclusive_registry() &&
+			  build_ordinary_load_store_registry() &&
+			  build_source_leaf_rejection_registry() &&
+			  build_branch_control_registry();
+		canonical_initialization_publish(
+			&proof_registry_initialization_state, success);
+		if (!success) {
+			if (count)
+				*count = 0;
+			return NULL;
+		}
 	}
 	if (count)
 		*count = sizeof(proof_registry_entries) /
@@ -4516,16 +4610,22 @@ orlix_tcti_target_linux_proof_dispositions(size_t *count)
 {
 	static struct orlix_tcti_target_linux_proof_disposition_row
 		rows[ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS];
-	static bool ready;
+	static unsigned int initialization_state;
+	bool initialize;
 	size_t index;
 
-	if (!ready) {
+	if (!canonical_initialization_enter(&initialization_state, &initialize)) {
+		if (count)
+			*count = 0;
+		return NULL;
+	}
+	if (initialize) {
 		for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++)
 			rows[index] = linux_source_row(&source_manifest_bindings[index]);
 		for (index = 0; index < ARRAY_COUNT(system_accessor_bindings); index++)
 			rows[ARRAY_COUNT(source_manifest_bindings) + index] =
 				linux_variant_row(index, &system_accessor_bindings[index]);
-		ready = true;
+		canonical_initialization_publish(&initialization_state, true);
 	}
 	if (count)
 		*count = ARRAY_COUNT(rows);

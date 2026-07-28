@@ -49,6 +49,7 @@ ORLIX_TCTI_INVENTORY_AUDITOR := $(ORLIX_BUILD_ROOT)/AgentHarness/orlix-tcti/audi
 ORLIX_TCTI_INVENTORY_CONTRACT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/inventory_contract_test
 ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/host_lane_boundary_test
 ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_registry_test
+ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_ingestion_test
 ORLIX_TCTI_RUNTIME_PROJECTION_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_runtime_projection_test
 ORLIX_TCTI_SYSTEM_ACCESS_SELECTOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_system_access_selector_test
 ORLIX_TCTI_SCALAR_OPERATION_CATALOG_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_scalar_operation_catalog_test
@@ -317,11 +318,19 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/host_lane_boundary_test.c \
 		-o '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)'
 	@env -i PATH="$(PATH)" '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)' .
-	@$(CC) -std=c11 -Wall -Wextra -Werror \
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pthread \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry_test.c \
 		-o '$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
 	@'$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
+	@$(CC) -DORLIX_TCTI_PROOF_INGESTION_HOST_TEST -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_ingestion_test.c \
+		-o '$(ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST)'
+	@'$(ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST)'
 	@$(CC) -DORLIX_TCTI_RUNTIME_PROJECTION_HOST_TEST -std=c11 \
 		-Wall -Wextra -Werror -pedantic \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/runtime_projection.c \
