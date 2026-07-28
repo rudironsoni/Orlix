@@ -177,6 +177,16 @@ static int native_mutation_matrix(void)
 	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_NON_PRODUCTION;
 	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
 		ORLIX_TCTI_TARGET_PROOF_INGEST_NON_PRODUCTION));
+	input = fixture.input;
+	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_DECODE;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID));
+	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_LEGAL_ENCODINGS;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID));
+	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_REJECTED_ENCODINGS;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID));
 	return 0;
 }
 

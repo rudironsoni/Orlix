@@ -72,6 +72,8 @@ static orlix_tcti_proof_u64 native_identity(
 	value = hash_bytes(value, &record->entry_instruction,
 			   sizeof(record->entry_instruction));
 	value = hash_bytes(value, &record->kind, sizeof(record->kind));
+	value = hash_bytes(value, &record->encoding_domain_digest,
+			   sizeof(record->encoding_domain_digest));
 	value = hash_bytes(value, record->artifact_source_sha256,
 			   strlen(record->artifact_source_sha256));
 	value = hash_bytes(value, record->executing_kernel_identity,
@@ -97,6 +99,9 @@ orlix_tcti_target_native_result_record_create_for_test(
 	record->encoding_pattern = input->encoding_pattern;
 	record->entry_instruction = input->entry_instruction;
 	record->kind = input->kind;
+	record->legal_encoding_count = input->legal_encoding_count;
+	record->rejected_encoding_count = input->rejected_encoding_count;
+	record->encoding_domain_digest = input->encoding_domain_digest;
 	record->production_resume = input->production_resume;
 	record->source_bound = input->source_bound;
 	record->match = input->match;
@@ -369,6 +374,7 @@ int orlix_tcti_target_proof_ingest_native(
 	size_t entry_count;
 	int selected_case;
 	const struct orlix_tcti_target_instruction_artifact *artifact;
+	bool unavailable;
 
 	if (error)
 		*error = ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID;
@@ -392,7 +398,10 @@ int orlix_tcti_target_proof_ingest_native(
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_STALE_SOURCE, error);
 		return -1;
 	}
-	if (!record->production_resume || !record->source_bound || !record->match ||
+	unavailable = record->kind ==
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_SME_UNAVAILABLE;
+	if (!record->production_resume || !record->source_bound ||
+	    (unavailable ? record->match : !record->match) ||
 	    record->resume_count != 1) {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_PATH_MISMATCH, error);
 		return -1;
@@ -404,13 +413,32 @@ int orlix_tcti_target_proof_ingest_native(
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR:
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
 		break;
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_FLAGS:
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS;
+		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_DECODE:
+		if (record->legal_encoding_count != 1 ||
+		    record->rejected_encoding_count ||
+		    !record->encoding_domain_digest) {
+			reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID, error);
+			return -1;
+		}
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE;
 		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_LEGAL_ENCODINGS:
+		if (!record->legal_encoding_count || record->rejected_encoding_count ||
+		    !record->encoding_domain_digest) {
+			reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID, error);
+			return -1;
+		}
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS;
 		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_REJECTED_ENCODINGS:
+		if (record->legal_encoding_count || !record->rejected_encoding_count ||
+		    !record->encoding_domain_digest) {
+			reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_INVALID, error);
+			return -1;
+		}
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS;
 		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_MEMORY:
@@ -423,6 +451,9 @@ int orlix_tcti_target_proof_ingest_native(
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE;
 		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_SME:
+		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME;
+		break;
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_SME_UNAVAILABLE:
 		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME;
 		break;
 	case ORLIX_TCTI_TARGET_NATIVE_RESULT_FAULT:
@@ -501,6 +532,10 @@ int orlix_tcti_target_proof_ingest_native(
 		   provenance.build_source_sha256) ||
 	    strcmp(selector->kunit_suite, provenance.suite)) {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_SUITE_MISMATCH, error);
+		return -1;
+	}
+	if (unavailable) {
+		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_NOT_APPLICABLE, error);
 		return -1;
 	}
 	if (!ledger || !ledger->slots || !ledger->capacity ||

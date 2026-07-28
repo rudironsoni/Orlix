@@ -177,7 +177,7 @@ static void source_leaf_capture_sve(struct orlix_tcti_native_sve_state *state)
 
 static void source_leaf_ingest_observation(
 	struct kunit *test, const char *proof_id, u32 ordinal,
-	struct orlix_tcti_target_native_result_record *record)
+	struct orlix_tcti_target_native_result_record *record, bool unavailable)
 {
 	const char *case_name =
 		"orlix_tcti_source_leaf_base_exceptions_emit_typed_observations";
@@ -229,13 +229,17 @@ static void source_leaf_ingest_observation(
 	};
 	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1);
 	KUNIT_ASSERT_NOT_NULL(test, ledger);
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
-		ledger, record, &selector, &error));
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+	KUNIT_EXPECT_EQ(test, unavailable ? -1 : 0,
+		orlix_tcti_target_proof_ingest_native(
+			ledger, record, &selector, &error));
+	KUNIT_EXPECT_EQ(test, unavailable ?
+		ORLIX_TCTI_TARGET_PROOF_INGEST_NOT_APPLICABLE :
+		ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
 	KUNIT_ASSERT_EQ(test, 0,
 		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
-	KUNIT_EXPECT_EQ(test, 1UL, summary.accepted_records);
-	KUNIT_EXPECT_EQ(test, 1UL, summary.native_passed);
+	KUNIT_EXPECT_EQ(test, unavailable ? 0UL : 1UL, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, unavailable ? 0UL : 1UL, summary.native_passed);
+	KUNIT_EXPECT_EQ(test, unavailable ? 1UL : 0UL, summary.rejected);
 	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
 }
 
@@ -248,8 +252,11 @@ static void source_leaf_emit_observation(
 	struct orlix_tcti_target_native_result_record *record = NULL;
 	struct orlix_tcti_native_fp_simd_state fp_simd;
 	struct orlix_tcti_native_sve_state sve;
+	struct orlix_tcti_native_sme_state sme = {
+		.valid = true,
+		.production_available = false,
+	};
 	struct orlix_tcti_native_memory_state memory;
-	struct orlix_tcti_native_fault_witness fault;
 	struct pt_regs regs = {};
 	u32 observed_instruction = 0;
 	unsigned long mapped = source_leaf_map(test, leaf->pattern);
@@ -276,20 +283,19 @@ static void source_leaf_emit_observation(
 		source_leaf_capture_fp_simd(&spec.expected.fp_simd);
 	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
 		source_leaf_capture_sve(&spec.expected.sve);
-	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FAULT) {
-		spec.expected.fault = (struct orlix_tcti_native_fault_witness) {
-			.address = mapped,
-			.access = ORLIX_TCTI_ACCESS_FETCH,
-			.valid = true,
-			.occurred = true,
-			.precise = true,
-		};
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
+		spec.expected.sme = sme;
 	}
 	observation = orlix_tcti_native_observation_create(&spec);
 	KUNIT_ASSERT_NOT_NULL(test, observation);
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
 		observation, current, &regs, current->mm));
-	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
+	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_DECODE ||
+	    obligation == ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS ||
+	    obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS) {
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_encoding_domain(observation));
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
 		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(
 			current->mm, mapped, &observed_instruction,
 			sizeof(observed_instruction)));
@@ -309,18 +315,19 @@ static void source_leaf_emit_observation(
 		source_leaf_capture_sve(&sve);
 		KUNIT_ASSERT_EQ(test, 0,
 			orlix_tcti_native_observation_add_sve(observation, &sve));
-	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FAULT) {
-		fault = spec.expected.fault;
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
 		KUNIT_ASSERT_EQ(test, 0,
-			orlix_tcti_native_observation_add_fault(observation, &fault));
+			orlix_tcti_native_observation_add_sme(observation, &sme));
 	}
-	KUNIT_ASSERT_EQ(test, 0,
+	KUNIT_ASSERT_EQ(test, obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME ?
+		-EOPNOTSUPP : 0,
 		orlix_tcti_native_observation_compare(observation));
 	KUNIT_ASSERT_EQ(test, 0,
 		orlix_tcti_native_observation_export(observation, &record));
 	KUNIT_ASSERT_NOT_NULL(test, record);
 	KUNIT_ASSERT_NOT_NULL(test, proof_id);
-	source_leaf_ingest_observation(test, proof_id, leaf->ordinal, record);
+	source_leaf_ingest_observation(test, proof_id, leaf->ordinal, record,
+		obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME);
 	orlix_tcti_target_native_result_record_destroy(record);
 	orlix_tcti_native_observation_destroy(observation);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
@@ -334,11 +341,13 @@ static void orlix_tcti_source_leaf_base_exceptions_emit_typed_observations(
 		ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS,
 		ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS,
 		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
+		ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
 		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
 		ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY,
 		ORLIX_TCTI_NATIVE_OBLIGATION_FAULT,
 		ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD,
 		ORLIX_TCTI_NATIVE_OBLIGATION_SVE,
+		ORLIX_TCTI_NATIVE_OBLIGATION_SME,
 	};
 	struct orlix_tcti_sve_state *saved_sve;
 	unsigned long *saved_simd;

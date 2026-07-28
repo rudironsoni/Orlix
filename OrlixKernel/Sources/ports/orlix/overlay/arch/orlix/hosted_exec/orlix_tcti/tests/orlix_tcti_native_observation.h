@@ -22,6 +22,7 @@ enum orlix_tcti_native_obligation {
 	ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS,
 	ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
 	ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
+	ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
 	ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY,
 	ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD,
 	ORLIX_TCTI_NATIVE_OBLIGATION_SVE,
@@ -38,6 +39,7 @@ enum orlix_tcti_native_observation_state {
 	ORLIX_TCTI_NATIVE_OBSERVATION_IDENTITY_MISMATCH,
 	ORLIX_TCTI_NATIVE_OBSERVATION_RESULT_MISMATCH,
 	ORLIX_TCTI_NATIVE_OBSERVATION_GPR_MISMATCH,
+	ORLIX_TCTI_NATIVE_OBSERVATION_FLAGS_MISMATCH,
 	ORLIX_TCTI_NATIVE_OBSERVATION_MEMORY_MISMATCH,
 	ORLIX_TCTI_NATIVE_OBSERVATION_FP_SIMD_MISMATCH,
 	ORLIX_TCTI_NATIVE_OBSERVATION_SVE_MISMATCH,
@@ -61,6 +63,11 @@ struct orlix_tcti_native_memory_state {
 	unsigned long address;
 	size_t size;
 	const u8 *bytes;
+};
+
+struct orlix_tcti_native_flags_state {
+	u64 nzcv;
+	bool valid;
 };
 
 struct orlix_tcti_native_fp_simd_state {
@@ -180,6 +187,8 @@ orlix_tcti_native_observation_state(
 int orlix_tcti_native_observation_execute(
 		struct orlix_tcti_native_observation *observation,
 		struct task_struct *task, struct pt_regs *regs, struct mm_struct *mm);
+int orlix_tcti_native_observation_add_encoding_domain(
+		struct orlix_tcti_native_observation *observation);
 int orlix_tcti_native_observation_add_memory(
 		struct orlix_tcti_native_observation *observation,
 		const struct orlix_tcti_native_memory_state *memory);
