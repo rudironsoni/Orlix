@@ -90,14 +90,14 @@ struct orlix_tcti_native_observation {
 static bool orlix_tcti_native_obligation_valid(
 		enum orlix_tcti_native_obligation obligation)
 {
-	return obligation >= ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
+	return obligation >= ORLIX_TCTI_NATIVE_OBLIGATION_DECODE &&
 	       obligation <= ORLIX_TCTI_NATIVE_OBLIGATION_ORDERING;
 }
 
 static bool orlix_tcti_native_reason_valid(enum orlix_tcti_exit_reason reason)
 {
 	return reason >= ORLIX_TCTI_EXIT_SYSCALL &&
-	       reason <= ORLIX_TCTI_EXIT_ALIGNMENT_FAULT;
+	       reason <= ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
 }
 
 static bool orlix_tcti_native_access_valid(enum orlix_tcti_access access)
@@ -336,6 +336,9 @@ static int orlix_tcti_native_copy_expected_witness(
 		const struct orlix_tcti_native_observation_spec *spec)
 {
 	switch (spec->obligation) {
+	case ORLIX_TCTI_NATIVE_OBLIGATION_DECODE:
+	case ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS:
+	case ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
 		return 0;
@@ -362,10 +365,21 @@ static int orlix_tcti_native_copy_expected_witness(
 						   &spec->expected.sme);
 	case ORLIX_TCTI_NATIVE_OBLIGATION_FAULT:
 		if (!orlix_tcti_native_fault_success(&spec->expected.fault) ||
-		    (spec->result.reason != ORLIX_TCTI_EXIT_USER_FAULT &&
-		     spec->result.reason != ORLIX_TCTI_EXIT_ALIGNMENT_FAULT) ||
-		    spec->expected.fault.address != spec->result.fault_address ||
 		    spec->expected.fault.access != spec->result.fault_access)
+			return -EINVAL;
+		if ((spec->result.reason == ORLIX_TCTI_EXIT_USER_FAULT ||
+		     spec->result.reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT) &&
+		    spec->expected.fault.address != spec->result.fault_address)
+			return -EINVAL;
+		if ((spec->result.reason == ORLIX_TCTI_EXIT_BREAKPOINT ||
+		     spec->result.reason == ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION) &&
+		    (spec->expected.fault.address != spec->result.pc ||
+		     spec->expected.fault.access != ORLIX_TCTI_ACCESS_FETCH))
+			return -EINVAL;
+		if (spec->result.reason != ORLIX_TCTI_EXIT_USER_FAULT &&
+		    spec->result.reason != ORLIX_TCTI_EXIT_ALIGNMENT_FAULT &&
+		    spec->result.reason != ORLIX_TCTI_EXIT_BREAKPOINT &&
+		    spec->result.reason != ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION)
 			return -EINVAL;
 		observation->expected.fault = spec->expected.fault;
 		return 0;
@@ -405,7 +419,10 @@ orlix_tcti_native_observation_create(
 	observation->expected_result = spec->result;
 	observation->expected_gpr = spec->gpr;
 	observation->expected_mask = ORLIX_TCTI_NATIVE_HAVE_EXECUTION;
-	if (spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
+	if (spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_DECODE &&
+	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS &&
+	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS &&
+	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
 	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
 		observation->expected_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
 	ret = orlix_tcti_native_copy_expected_witness(observation, spec);
@@ -793,6 +810,9 @@ static int orlix_tcti_native_compare_witness(
 		struct orlix_tcti_native_observation *observation)
 {
 	switch (observation->expected_obligation) {
+	case ORLIX_TCTI_NATIVE_OBLIGATION_DECODE:
+	case ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS:
+	case ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
 		return 0;
@@ -960,10 +980,6 @@ int orlix_tcti_native_observation_export(
 	    observation->execution_path !=
 		    ORLIX_TCTI_NATIVE_INTERNAL_PATH_RESUME_USER)
 		return -EPERM;
-	if (observation->expected_obligation !=
-		    ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
-	    observation->expected_obligation != ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
-		return -EOPNOTSUPP;
 	artifact = orlix_tcti_target_instruction_artifact_canonical();
 	if (!artifact || observation->expected_source_ordinal >= artifact->leaf_count)
 		return -EBADMSG;
@@ -982,10 +998,47 @@ int orlix_tcti_native_observation_export(
 	exported->encoding_mask = mask;
 	exported->encoding_pattern = pattern;
 	exported->entry_instruction = observation->observed_result.entry_instruction;
-	exported->kind = observation->expected_obligation ==
-			     ORLIX_TCTI_NATIVE_OBLIGATION_RESULT ?
-		ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT :
-		ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
+	switch (observation->expected_obligation) {
+	case ORLIX_TCTI_NATIVE_OBLIGATION_DECODE:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_DECODE;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_LEGAL_ENCODINGS;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_REJECTED_ENCODINGS;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_MEMORY;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FP_SIMD;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_SVE:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_SVE;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_SME:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_SME;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_FAULT:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FAULT;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_ATOMICITY:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_ATOMICITY;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_ORDERING:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_ORDERING;
+		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_INVALID:
+		kfree(exported);
+		return -EINVAL;
+	}
 	exported->production_resume = true;
 	exported->source_bound = true;
 	exported->match = true;
