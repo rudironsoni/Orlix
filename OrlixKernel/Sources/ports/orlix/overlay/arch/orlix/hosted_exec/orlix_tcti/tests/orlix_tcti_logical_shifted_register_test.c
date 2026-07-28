@@ -16,14 +16,18 @@
 #include "../decode_aarch64.h"
 #include "../gadget_program.h"
 #include "orlix_tcti_test_suites.h"
+#include "target_execution_slice_map.h"
+#include "target_instruction_artifact.h"
 
 #define LOGICAL_SHIFTED_REGISTER_SOURCE_MASK 0xff200000U
+#define LOGICAL_SHIFTED_REGISTER_SVC 0xd4000001U
 #define LOGICAL_SHIFTED_REGISTER_NZCV \
 	(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
 
 struct orlix_tcti_logical_shifted_register_leaf {
 	u16 source_ordinal;
 	const char *source_name;
+	const char *source_mnemonic;
 	const char *operation_id;
 	u32 source_pattern;
 	enum orlix_tcti_logical_op operation;
@@ -39,37 +43,37 @@ struct orlix_tcti_logical_shifted_register_leaf {
  */
 static const struct orlix_tcti_logical_shifted_register_leaf
 orlix_tcti_logical_shifted_register_leaves[] = {
-	{ 3434, "AND_32_log_shift", "AND_log_shift", 0x0a000000U,
+	{ 3434, "AND_32_log_shift", "AND", "AND_log_shift", 0x0a000000U,
 	  ORLIX_TCTI_LOGICAL_AND, false, false, false },
-	{ 3435, "BIC_32_log_shift", "BIC_log_shift", 0x0a200000U,
+	{ 3435, "BIC_32_log_shift", "BIC", "BIC_log_shift", 0x0a200000U,
 	  ORLIX_TCTI_LOGICAL_AND, false, true, false },
-	{ 3436, "ORR_32_log_shift", "ORR_log_shift", 0x2a000000U,
+	{ 3436, "ORR_32_log_shift", "ORR", "ORR_log_shift", 0x2a000000U,
 	  ORLIX_TCTI_LOGICAL_ORR, false, false, false },
-	{ 3437, "ORN_32_log_shift", "ORN_log_shift", 0x2a200000U,
+	{ 3437, "ORN_32_log_shift", "ORN", "ORN_log_shift", 0x2a200000U,
 	  ORLIX_TCTI_LOGICAL_ORR, false, true, false },
-	{ 3438, "EOR_32_log_shift", "EOR_log_shift", 0x4a000000U,
+	{ 3438, "EOR_32_log_shift", "EOR", "EOR_log_shift", 0x4a000000U,
 	  ORLIX_TCTI_LOGICAL_EOR, false, false, false },
-	{ 3439, "EON_32_log_shift", "EON", 0x4a200000U,
+	{ 3439, "EON_32_log_shift", "EON", "EON", 0x4a200000U,
 	  ORLIX_TCTI_LOGICAL_EOR, false, true, false },
-	{ 3440, "ANDS_32_log_shift", "ANDS_log_shift", 0x6a000000U,
+	{ 3440, "ANDS_32_log_shift", "ANDS", "ANDS_log_shift", 0x6a000000U,
 	  ORLIX_TCTI_LOGICAL_AND, false, false, true },
-	{ 3441, "BICS_32_log_shift", "BICS", 0x6a200000U,
+	{ 3441, "BICS_32_log_shift", "BICS", "BICS", 0x6a200000U,
 	  ORLIX_TCTI_LOGICAL_AND, false, true, true },
-	{ 3442, "AND_64_log_shift", "AND_log_shift", 0x8a000000U,
+	{ 3442, "AND_64_log_shift", "AND", "AND_log_shift", 0x8a000000U,
 	  ORLIX_TCTI_LOGICAL_AND, true, false, false },
-	{ 3443, "BIC_64_log_shift", "BIC_log_shift", 0x8a200000U,
+	{ 3443, "BIC_64_log_shift", "BIC", "BIC_log_shift", 0x8a200000U,
 	  ORLIX_TCTI_LOGICAL_AND, true, true, false },
-	{ 3444, "ORR_64_log_shift", "ORR_log_shift", 0xaa000000U,
+	{ 3444, "ORR_64_log_shift", "ORR", "ORR_log_shift", 0xaa000000U,
 	  ORLIX_TCTI_LOGICAL_ORR, true, false, false },
-	{ 3445, "ORN_64_log_shift", "ORN_log_shift", 0xaa200000U,
+	{ 3445, "ORN_64_log_shift", "ORN", "ORN_log_shift", 0xaa200000U,
 	  ORLIX_TCTI_LOGICAL_ORR, true, true, false },
-	{ 3446, "EOR_64_log_shift", "EOR_log_shift", 0xca000000U,
+	{ 3446, "EOR_64_log_shift", "EOR", "EOR_log_shift", 0xca000000U,
 	  ORLIX_TCTI_LOGICAL_EOR, true, false, false },
-	{ 3447, "EON_64_log_shift", "EON", 0xca200000U,
+	{ 3447, "EON_64_log_shift", "EON", "EON", 0xca200000U,
 	  ORLIX_TCTI_LOGICAL_EOR, true, true, false },
-	{ 3448, "ANDS_64_log_shift", "ANDS_log_shift", 0xea000000U,
+	{ 3448, "ANDS_64_log_shift", "ANDS", "ANDS_log_shift", 0xea000000U,
 	  ORLIX_TCTI_LOGICAL_AND, true, false, true },
-	{ 3449, "BICS_64_log_shift", "BICS", 0xea200000U,
+	{ 3449, "BICS_64_log_shift", "BICS", "BICS", 0xea200000U,
 	  ORLIX_TCTI_LOGICAL_AND, true, true, true },
 };
 
@@ -98,6 +102,15 @@ orlix_tcti_logical_shifted_register_source_leaf(u32 instruction)
 			return leaf;
 	}
 	return NULL;
+}
+
+static const char *orlix_tcti_logical_shifted_register_artifact_string(
+	const struct orlix_tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+
+	return (const char *)artifact->string_pool + offset;
 }
 
 static u64 orlix_tcti_logical_shifted_register_mask(bool is_64bit)
@@ -244,9 +257,35 @@ static void orlix_tcti_logical_shifted_register_execute(
 
 static void orlix_tcti_logical_shifted_register_source_bindings(struct kunit *test)
 {
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	const struct orlix_tcti_execution_slice_map *slice_map =
+		orlix_tcti_execution_slice_map_canonical();
+	struct orlix_tcti_target_instruction_artifact_validation_result
+		artifact_result;
+	struct orlix_tcti_execution_slice_map_validation_result slice_result;
+	u32 family_index = U32_MAX;
 	size_t index;
 	size_t previous;
 
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_instruction_artifact_validate(
+			artifact, &artifact_result));
+	KUNIT_ASSERT_NOT_NULL(test, slice_map);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_execution_slice_map_validate(slice_map, &slice_result));
+	for (index = 0; index < slice_map->counts.family_count; index++) {
+		if (!strcmp(slice_map->families[index].stable_id,
+			    "base-residual-logical-shift")) {
+			family_index = index;
+			break;
+		}
+	}
+	KUNIT_ASSERT_NE(test, U32_MAX, family_index);
+	KUNIT_EXPECT_EQ(test, 176U, slice_map->families[family_index].issue_id);
+	KUNIT_EXPECT_EQ(test, 16U,
+			slice_map->families[family_index].declared_member_count);
 	KUNIT_ASSERT_EQ(test, 16U,
 			ARRAY_SIZE(orlix_tcti_logical_shifted_register_leaves));
 	for (index = 0;
@@ -254,11 +293,37 @@ static void orlix_tcti_logical_shifted_register_source_bindings(struct kunit *te
 	     index++) {
 		const struct orlix_tcti_logical_shifted_register_leaf *leaf =
 			&orlix_tcti_logical_shifted_register_leaves[index];
+		const struct orlix_tcti_target_instruction_artifact_leaf *source;
+		const struct orlix_tcti_execution_slice_member *slice_member;
 		u32 instruction = orlix_tcti_logical_shifted_register_instruction(
 			leaf, 3, 7, leaf->is_64bit ? 63 : 31, 5, 3);
 
 		KUNIT_EXPECT_EQ(test, 3434U + index, leaf->source_ordinal);
+		KUNIT_ASSERT_LT(test, (size_t)leaf->source_ordinal,
+				artifact->leaf_count);
+		KUNIT_ASSERT_LT(test, (size_t)leaf->source_ordinal,
+				slice_map->counts.leaf_count);
+		source = &artifact->leaves[leaf->source_ordinal];
+		slice_member = &slice_map->members[leaf->source_ordinal];
+		KUNIT_EXPECT_STREQ(test, leaf->source_name,
+			orlix_tcti_logical_shifted_register_artifact_string(
+				artifact, source->name_offset));
+		KUNIT_EXPECT_STREQ(test, leaf->source_mnemonic,
+			orlix_tcti_logical_shifted_register_artifact_string(
+				artifact, source->mnemonic_offset));
+		KUNIT_EXPECT_STREQ(test, leaf->operation_id,
+			orlix_tcti_logical_shifted_register_artifact_string(
+				artifact, source->operation_offset));
+		KUNIT_EXPECT_EQ(test, LOGICAL_SHIFTED_REGISTER_SOURCE_MASK,
+				source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, leaf->source_pattern,
+				source->encoding_pattern);
+		KUNIT_EXPECT_EQ(test, leaf->source_ordinal, slice_member->ordinal);
+		KUNIT_EXPECT_STREQ(test, leaf->source_name,
+				   slice_member->source_name);
+		KUNIT_EXPECT_EQ(test, family_index, slice_member->family_index);
 		KUNIT_EXPECT_TRUE(test, leaf->source_name[0]);
+		KUNIT_EXPECT_TRUE(test, leaf->source_mnemonic[0]);
 		KUNIT_EXPECT_TRUE(test, leaf->operation_id[0]);
 		KUNIT_EXPECT_EQ(test, leaf->source_pattern,
 				leaf->source_pattern &
@@ -449,17 +514,195 @@ static void orlix_tcti_logical_shifted_register_aliases(struct kunit *test)
 static unsigned long orlix_tcti_logical_shifted_register_map_instructions(
 	struct kunit *test, const u32 *instructions, size_t count)
 {
+	size_t mapped_size = PAGE_ALIGN(count * sizeof(*instructions));
 	unsigned long mapped;
 	int ret;
 
-	KUNIT_ASSERT_LE(test, count * sizeof(*instructions), PAGE_SIZE);
-	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+	KUNIT_ASSERT_GT(test, mapped_size, 0U);
+	mapped = ksys_mmap_pgoff(0, mapped_size, PROT_READ | PROT_WRITE,
 				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
 	ret = orlix_tcti_write_user_data(current->mm, mapped, instructions,
 				   count * sizeof(*instructions));
 	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, mapped_size, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
 	return mapped;
+}
+
+static void orlix_tcti_logical_shifted_register_expect_resume(
+	struct kunit *test,
+	const struct orlix_tcti_logical_shifted_register_leaf *leaf,
+	unsigned long pc, u8 shift, u8 amount, u8 rn, u8 rm, u8 rd)
+{
+	struct orlix_tcti_result exit;
+	struct pt_regs regs = {};
+	struct pt_regs before;
+	u64 expected_registers[31];
+	u64 expected_pstate;
+	u64 left;
+	u64 right;
+	u64 result;
+	u64 sign_bit = leaf->is_64bit ? BIT_ULL(63) : BIT_ULL(31);
+	u32 instruction = orlix_tcti_logical_shifted_register_instruction(
+		leaf, shift, rm, amount, rn, rd);
+	unsigned int reg;
+
+	for (reg = 0; reg < 31; reg++)
+		regs.regs[reg] = 0x96a5c3e17b4d2f08ULL ^
+			((u64)instruction << (reg & 7)) ^ reg;
+	regs.sp = 0x706a865abcULL;
+	regs.pc = pc;
+	regs.pstate = PSR_MODE_EL0t | LOGICAL_SHIFTED_REGISTER_NZCV |
+		PSR_D_BIT;
+	regs.syscallno = NO_SYSCALL;
+	before = regs;
+	memcpy(expected_registers, before.regs, sizeof(expected_registers));
+	left = rn == 31 ? 0 : before.regs[rn];
+	right = rm == 31 ? 0 : before.regs[rm];
+	result = orlix_tcti_logical_shifted_register_result(
+		leaf, left, right, shift, amount);
+	if (rd < 31)
+		expected_registers[rd] = result;
+	expected_pstate = before.pstate;
+	if (leaf->set_flags) {
+		u64 flags = 0;
+
+		if (result & sign_bit)
+			flags |= PSR_N_BIT;
+		if (!result)
+			flags |= PSR_Z_BIT;
+		expected_pstate =
+			(before.pstate & ~LOGICAL_SHIFTED_REGISTER_NZCV) | flags;
+	}
+
+	exit = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, exit.reason,
+			    "%s %#x", leaf->source_name, instruction);
+	KUNIT_EXPECT_EQ(test, LOGICAL_SHIFTED_REGISTER_SVC, exit.instruction);
+	KUNIT_EXPECT_EQ(test, pc + sizeof(u32), exit.pc);
+	KUNIT_EXPECT_MEMEQ(test, expected_registers, regs.regs,
+			   sizeof(expected_registers));
+	KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
+	KUNIT_EXPECT_EQ(test, pc + sizeof(u32), regs.pc);
+	KUNIT_EXPECT_EQ(test, expected_pstate, regs.pstate);
+}
+
+static void orlix_tcti_logical_shifted_register_resume_all_legal_forms(
+	struct kunit *test)
+{
+	const size_t exhaustive_count = 3072U;
+	const size_t alias_count = 6U;
+	const size_t form_count = exhaustive_count + alias_count;
+	const size_t word_count = form_count * 2U;
+	size_t mapped_size = PAGE_ALIGN(word_count * sizeof(u32));
+	u32 *program;
+	unsigned long mapped;
+	size_t instruction_index = 0;
+	size_t leaf_index;
+
+	program = kcalloc(word_count, sizeof(*program), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, program);
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_logical_shifted_register_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_logical_shifted_register_leaf *leaf =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index];
+		u8 shift;
+
+		for (shift = 0; shift < 4; shift++) {
+			u8 amount;
+
+			for (amount = 0; amount < (leaf->is_64bit ? 64 : 32);
+			     amount++) {
+				u8 rn = (amount + leaf_index) & 0x1fU;
+				u8 rm = (31 - amount + shift) & 0x1fU;
+				u8 rd = (amount + 3 * leaf_index + shift) & 0x1fU;
+
+				program[instruction_index * 2U] =
+					orlix_tcti_logical_shifted_register_instruction(
+						leaf, shift, rm, amount, rn, rd);
+				program[instruction_index * 2U + 1U] =
+					LOGICAL_SHIFTED_REGISTER_SVC;
+				instruction_index++;
+			}
+		}
+	}
+	KUNIT_ASSERT_EQ(test, exhaustive_count, instruction_index);
+	for (leaf_index = 0; leaf_index < 2; leaf_index++) {
+		const struct orlix_tcti_logical_shifted_register_leaf *orr =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 10 : 2];
+		const struct orlix_tcti_logical_shifted_register_leaf *orn =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 11 : 3];
+		const struct orlix_tcti_logical_shifted_register_leaf *ands =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 14 : 6];
+
+		program[instruction_index++ * 2U] =
+			orlix_tcti_logical_shifted_register_instruction(
+				orr, 0, 5, 0, 31, 3);
+		program[(instruction_index - 1U) * 2U + 1U] =
+			LOGICAL_SHIFTED_REGISTER_SVC;
+		program[instruction_index++ * 2U] =
+			orlix_tcti_logical_shifted_register_instruction(
+				orn, 0, 5, 0, 31, 3);
+		program[(instruction_index - 1U) * 2U + 1U] =
+			LOGICAL_SHIFTED_REGISTER_SVC;
+		program[instruction_index++ * 2U] =
+			orlix_tcti_logical_shifted_register_instruction(
+				ands, 0, 7, 0, 5, 31);
+		program[(instruction_index - 1U) * 2U + 1U] =
+			LOGICAL_SHIFTED_REGISTER_SVC;
+	}
+	KUNIT_ASSERT_EQ(test, form_count, instruction_index);
+	mapped = orlix_tcti_logical_shifted_register_map_instructions(
+		test, program, word_count);
+	instruction_index = 0;
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_logical_shifted_register_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_logical_shifted_register_leaf *leaf =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index];
+		u8 shift;
+
+		for (shift = 0; shift < 4; shift++) {
+			u8 amount;
+
+			for (amount = 0; amount < (leaf->is_64bit ? 64 : 32);
+			     amount++) {
+				u8 rn = (amount + leaf_index) & 0x1fU;
+				u8 rm = (31 - amount + shift) & 0x1fU;
+				u8 rd = (amount + 3 * leaf_index + shift) & 0x1fU;
+
+				orlix_tcti_logical_shifted_register_expect_resume(
+					test, leaf,
+					mapped + instruction_index * 2U * sizeof(u32),
+					shift, amount, rn, rm, rd);
+				instruction_index++;
+			}
+		}
+	}
+	KUNIT_ASSERT_EQ(test, exhaustive_count, instruction_index);
+	for (leaf_index = 0; leaf_index < 2; leaf_index++) {
+		const struct orlix_tcti_logical_shifted_register_leaf *orr =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 10 : 2];
+		const struct orlix_tcti_logical_shifted_register_leaf *orn =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 11 : 3];
+		const struct orlix_tcti_logical_shifted_register_leaf *ands =
+			&orlix_tcti_logical_shifted_register_leaves[leaf_index ? 14 : 6];
+
+		orlix_tcti_logical_shifted_register_expect_resume(
+			test, orr, mapped + instruction_index++ * 2U * sizeof(u32),
+			0, 0, 31, 5, 3);
+		orlix_tcti_logical_shifted_register_expect_resume(
+			test, orn, mapped + instruction_index++ * 2U * sizeof(u32),
+			0, 0, 31, 5, 3);
+		orlix_tcti_logical_shifted_register_expect_resume(
+			test, ands, mapped + instruction_index++ * 2U * sizeof(u32),
+			0, 0, 5, 7, 31);
+	}
+	KUNIT_EXPECT_EQ(test, form_count, instruction_index);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, mapped_size));
+	kfree(program);
 }
 
 static void orlix_tcti_logical_shifted_register_reserved_structured_exits(
@@ -530,6 +773,7 @@ static struct kunit_case orlix_tcti_logical_shifted_register_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_source_bindings),
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_fixed_bit_neighbours),
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_complete_field_matrix),
+	KUNIT_CASE(orlix_tcti_logical_shifted_register_resume_all_legal_forms),
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_register_and_overlap_matrix),
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_aliases),
 	KUNIT_CASE(orlix_tcti_logical_shifted_register_reserved_structured_exits),

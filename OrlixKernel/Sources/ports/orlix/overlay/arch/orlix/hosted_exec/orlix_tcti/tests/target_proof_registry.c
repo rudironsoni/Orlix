@@ -680,7 +680,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "a5bd42cc32291145e9115b41715fef59d93fb0bb34c0ec445805017503153a5f",
 	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
-	  "4f042bd635beaf8ce0a7c9ae9d55d04b1e56e4c93a3a50508ce94afcc454953d",
+	  "50218fcf8b43e895dfbc35e25bd24b84478fbe252084fb99edc5238e9d3fe66d",
 	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
 	{ CSSC_SOURCE,
 	  "df3c9b2debd3cc9dc9de78b0a3e48e0c1ad4ab9b046d6390c70be49576f55607",
@@ -820,6 +820,10 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
 	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
 	  "orlix_tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
+	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
+	  "orlix_tcti_logical_shifted_register_resume_all_legal_forms",
 	  LOGICAL_FLAGS_OBLIGATIONS },
 	{ LOGICAL_SHIFT_SOURCE, LOGICAL_SHIFT_SUITE,
 	  LOGICAL_SHIFT_SUITE_SYMBOL, LOGICAL_SHIFT_CASE_ARRAY,
@@ -1460,6 +1464,8 @@ static const struct orlix_tcti_target_proof_case logical_base_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "orlix_tcti_logical_shifted_register_complete_field_matrix",
 	  LOGICAL_BASE_OBLIGATIONS },
+	{ "orlix_tcti_logical_shifted_register_resume_all_legal_forms",
+	  LOGICAL_BASE_OBLIGATIONS },
 	{ "orlix_tcti_logical_shifted_register_register_and_overlap_matrix",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
@@ -1477,6 +1483,8 @@ static const struct orlix_tcti_target_proof_case logical_base_alias_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "orlix_tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_BASE_OBLIGATIONS },
+	{ "orlix_tcti_logical_shifted_register_resume_all_legal_forms",
 	  LOGICAL_BASE_OBLIGATIONS },
 	{ "orlix_tcti_logical_shifted_register_register_and_overlap_matrix",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -1500,6 +1508,8 @@ static const struct orlix_tcti_target_proof_case logical_flags_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "orlix_tcti_logical_shifted_register_complete_field_matrix",
 	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ "orlix_tcti_logical_shifted_register_resume_all_legal_forms",
+	  LOGICAL_FLAGS_OBLIGATIONS },
 	{ "orlix_tcti_logical_shifted_register_register_and_overlap_matrix",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
@@ -1518,6 +1528,8 @@ static const struct orlix_tcti_target_proof_case logical_flags_alias_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ "orlix_tcti_logical_shifted_register_complete_field_matrix",
+	  LOGICAL_FLAGS_OBLIGATIONS },
+	{ "orlix_tcti_logical_shifted_register_resume_all_legal_forms",
 	  LOGICAL_FLAGS_OBLIGATIONS },
 	{ "orlix_tcti_logical_shifted_register_register_and_overlap_matrix",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -1658,43 +1670,43 @@ ADVSIMD_MINMAX_REDUCTION_BINDING(advsimd_minmax_reduction_uminv, 3864U,
 	{ leaf, mnemonic, 0xff200000U, pattern, LOGICAL_SHIFT_CONDITION, cases, ordinal }
 
 static const struct orlix_tcti_target_proof_binding logical_and_bindings[] = {
-	LOGICAL_BINDING(3434U, "AND_32_log_shift", "AND", 0x0a000000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
-	LOGICAL_BINDING(3442U, "AND_64_log_shift", "AND", 0x8a000000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3434U, "AND_32_log_shift", "AND", 0x0a000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3442U, "AND_64_log_shift", "AND", 0x8a000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_bic_bindings[] = {
-	LOGICAL_BINDING(3435U, "BIC_32_log_shift", "BIC", 0x0a200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
-	LOGICAL_BINDING(3443U, "BIC_64_log_shift", "BIC", 0x8a200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3435U, "BIC_32_log_shift", "BIC", 0x0a200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3443U, "BIC_64_log_shift", "BIC", 0x8a200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_orr_bindings[] = {
-	LOGICAL_BINDING(3436U, "ORR_32_log_shift", "ORR", 0x2a000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
-	LOGICAL_BINDING(3444U, "ORR_64_log_shift", "ORR", 0xaa000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3436U, "ORR_32_log_shift", "ORR", 0x2a000000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
+	LOGICAL_BINDING(3444U, "ORR_64_log_shift", "ORR", 0xaa000000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_orn_bindings[] = {
-	LOGICAL_BINDING(3437U, "ORN_32_log_shift", "ORN", 0x2a200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
-	LOGICAL_BINDING(3445U, "ORN_64_log_shift", "ORN", 0xaa200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3437U, "ORN_32_log_shift", "ORN", 0x2a200000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
+	LOGICAL_BINDING(3445U, "ORN_64_log_shift", "ORN", 0xaa200000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_eor_bindings[] = {
-	LOGICAL_BINDING(3438U, "EOR_32_log_shift", "EOR", 0x4a000000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
-	LOGICAL_BINDING(3446U, "EOR_64_log_shift", "EOR", 0xca000000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3438U, "EOR_32_log_shift", "EOR", 0x4a000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3446U, "EOR_64_log_shift", "EOR", 0xca000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_eon_bindings[] = {
-	LOGICAL_BINDING(3439U, "EON_32_log_shift", "EON", 0x4a200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
-	LOGICAL_BINDING(3447U, "EON_64_log_shift", "EON", 0xca200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3439U, "EON_32_log_shift", "EON", 0x4a200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3447U, "EON_64_log_shift", "EON", 0xca200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_ands_bindings[] = {
-	LOGICAL_BINDING(3440U, "ANDS_32_log_shift", "ANDS", 0x6a000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
-	LOGICAL_BINDING(3448U, "ANDS_64_log_shift", "ANDS", 0xea000000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3440U, "ANDS_32_log_shift", "ANDS", 0x6a000000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
+	LOGICAL_BINDING(3448U, "ANDS_64_log_shift", "ANDS", 0xea000000U, ORLIX_TCTI_PROOF_U64_C(0x7f)),
 };
 
 static const struct orlix_tcti_target_proof_binding logical_bics_bindings[] = {
-	LOGICAL_BINDING(3441U, "BICS_32_log_shift", "BICS", 0x6a200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
-	LOGICAL_BINDING(3449U, "BICS_64_log_shift", "BICS", 0xea200000U, ORLIX_TCTI_PROOF_U64_C(0x1f)),
+	LOGICAL_BINDING(3441U, "BICS_32_log_shift", "BICS", 0x6a200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
+	LOGICAL_BINDING(3449U, "BICS_64_log_shift", "BICS", 0xea200000U, ORLIX_TCTI_PROOF_U64_C(0x3f)),
 };
 
 #undef LOGICAL_BINDING
