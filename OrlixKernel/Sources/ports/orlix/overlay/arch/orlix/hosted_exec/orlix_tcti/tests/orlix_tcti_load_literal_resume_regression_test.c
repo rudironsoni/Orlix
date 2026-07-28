@@ -2,8 +2,8 @@
 /*
  * Production-path regression coverage for the pinned AARCHMRS 2026-06
  * load-literal leaves at ordinals 2700 through 2703. These ordinal traces
- * are diagnostic only. The pinned package lacks the official shared-ASL
- * corpus, so this suite remains an unregistered regression only.
+ * are diagnostic only. External DDI0602 provenance is independent from this
+ * production regression and grants no source-bound proof credit.
  */
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>

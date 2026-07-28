@@ -59,7 +59,9 @@ Completion requires:
   ASL grants no implementation or proof credit, and no Arm XML or ASL body may
   enter repository artifacts under ADR 0031. Inapplicable edges require typed
   `not_applicable`; each `operational_note` retains its digest and explicit
-  behavior and proof obligation;
+  behavior and proof obligation. A matching-release DDI0602 omission is valid
+  source accounting only when AARCHMRS records `// Not specified` and the row
+  retains that exact locator and digest; it remains a semantic blocker;
 - explicit applicability and ownership statuses for every leaf and every
   feature-conditioned semantic variant. Applicability is one of
   `applicable_el0`, `non_el0`, `undefined_or_unallocated`,
@@ -160,6 +162,7 @@ Normal proof graphs remain JSON-free. Official XML provenance is pinned. ADR
 0031 records that no applicable authorization is verified, so the corpus stays
 external and non-redistributed. Independently authored OrlixTCTI semantics and
 owning production-path proof remain open.
+
 LSE128 production resume fault
 matrix expanded fault coverage, but it makes no atomicity or ordering claim.
 Runtime HWCAP and HWCAP2 promotion remains zero.

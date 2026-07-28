@@ -14,8 +14,8 @@
 
 /*
  * Pinned AARCHMRS 2026-06 direct leaves in the AdvSIMD modified-immediate
- * family. The shared ASL provenance ledger remains an explicit completion
- * blocker for this regression coverage.
+ * family. External DDI0602 provenance remains orthogonal to this regression
+ * coverage and grants no implementation or proof credit.
  */
 #define ORLIX_TCTI_ADVSIMD_MODIMM_SVC 0xd4000001U
 #define ORLIX_TCTI_ADVSIMD_MODIMM_RD 4U

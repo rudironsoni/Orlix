@@ -29,8 +29,13 @@ int main(void)
 		"invalid_feature_applicability=%zu "
 		"invalid_feature_applicability_artifact=%zu "
 	       "invalid_feature_artifact=%zu "
-	       "asl_availability=%zu invalid_asl_availability=%zu "
-	       "unavailable_asl=%zu "
+		"semantic_provenance=%zu ddi0602_provenance=%zu "
+		"official_semantics_not_specified=%zu "
+		"missing_semantic_provenance=%zu stale_semantic_provenance=%zu "
+		"incompatible_semantic_provenance=%zu "
+		"malformed_semantic_provenance=%zu dangling_semantic_provenance=%zu "
+		"ambiguous_semantic_provenance=%zu "
+		"first_invalid_semantic_provenance_ordinal_plus_one=%zu "
 	       "system_accessors=%zu mapped_system_accessors=%zu "
 	       "nonmapped_system_accessors=%zu "
 	       "invalid_system_accessors=%zu "
@@ -75,9 +80,16 @@ int main(void)
 		result.invalid_feature_applicability_rows,
 		result.invalid_feature_applicability_artifact,
 	       result.invalid_feature_artifact,
-	       result.asl_availability_rows,
-	       result.invalid_asl_availability_rows,
-	       result.unavailable_asl_rows,
+		result.semantic_provenance_rows,
+		result.external_ddi0602_semantic_provenance_rows,
+		result.official_semantics_not_specified_rows,
+		result.missing_semantic_provenance_rows,
+		result.stale_semantic_provenance_rows,
+		result.incompatible_semantic_provenance_rows,
+		result.malformed_semantic_provenance_rows,
+		result.dangling_semantic_provenance_rows,
+		result.ambiguous_semantic_provenance_rows,
+		result.first_invalid_semantic_provenance_ordinal_plus_one,
 	       result.system_accessor_rows,
 	       result.mapped_system_accessor_rows,
 	       result.nonmapped_system_accessor_rows,

@@ -5,12 +5,21 @@
 #include <linux/types.h>
 
 /*
- * MOPS must remain visible while the pinned AARCHMRS package lacks its shared
- * ASL bodies.  This is provenance only.  It is deliberately not an executor
- * and cannot be used to advertise FEAT_MOPS or FEAT_MOPS_GO.
+ * MOPS semantic provenance, implementation state, and proof state are
+ * orthogonal. This ledger is deliberately not an executor and cannot be used
+ * to advertise FEAT_MOPS or FEAT_MOPS_GO.
  */
-enum orlix_tcti_mops_semantics_status {
-	ORLIX_TCTI_MOPS_SEMANTICS_SHARED_ASL_ABSENT_BLOCKING = 0,
+enum orlix_tcti_mops_semantic_provenance {
+	ORLIX_TCTI_MOPS_PROVENANCE_EXTERNAL_DDI0602 = 0,
+	ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED,
+};
+
+enum orlix_tcti_mops_implementation_status {
+	ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED = 0,
+};
+
+enum orlix_tcti_mops_proof_status {
+	ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN = 0,
 };
 
 enum orlix_tcti_mops_phase {
@@ -35,7 +44,9 @@ struct orlix_tcti_mops_leaf_provenance {
 	const char *operation;
 	const char *asl_operation;
 	enum orlix_tcti_mops_phase phase;
-	enum orlix_tcti_mops_semantics_status semantics_status;
+	enum orlix_tcti_mops_semantic_provenance semantic_provenance;
+	enum orlix_tcti_mops_implementation_status implementation_status;
+	enum orlix_tcti_mops_proof_status proof_status;
 };
 
 #define ORLIX_TCTI_MOPS_GO_LEAF_COUNT	12U

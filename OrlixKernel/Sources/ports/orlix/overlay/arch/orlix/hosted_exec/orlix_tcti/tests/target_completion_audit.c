@@ -48,37 +48,52 @@ static const struct orlix_tcti_target_completion_source_row source_rows[] = {
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
 
-static const struct orlix_tcti_target_completion_asl_provenance asl_provenance = {
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(format, source_sha256, corpus, helpers) \
-	format, source_sha256, corpus, helpers
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(...)
-#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
+static const struct orlix_tcti_target_completion_semantic_provenance
+semantic_provenance = {
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(identity_value) identity_value
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
 #include "../isa/target_asl_availability.def"
-#undef ORLIX_TCTI_A64_ASL_XML_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
 };
 
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
-#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
-					      semantic_locator, semantic_member_offset, \
-					      semantic_member_length, semantic_body_offset, \
-					      semantic_body_length, semantic_body_digest, semantic_body_state, \
-					      decode_locator, decode_member_offset, decode_member_length, \
-					      decode_offset, decode_length, decode_digest, decode_state, \
-					      corpus_state, helper_state) \
-	{ ordinal, name, operation, semantic_operation, semantic_locator, \
-	  semantic_member_offset, semantic_member_length, semantic_body_offset, \
-	  semantic_body_length, semantic_body_digest, semantic_body_state, \
-	  decode_locator, decode_member_offset, decode_member_length, decode_offset, \
-	  decode_length, decode_digest, decode_state, corpus_state, helper_state },
-static const struct orlix_tcti_target_completion_asl_row asl_rows[] = {
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(ordinal_value, leaf_name_value, \
+		relative_file_value, decode_locator_value, decode_digest_value, \
+		decode_sections_value, decode_helpers_value, decode_closure_value, \
+		execute_locator_value, execute_digest_value, execute_sections_value, \
+		execute_helpers_value, execute_closure_value) \
+	{ .ordinal = ordinal_value, .name = leaf_name_value, \
+	  .disposition = ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602, \
+	  .relative_file = relative_file_value, \
+	  .decode_locator = decode_locator_value, .decode_sha256 = decode_digest_value, \
+	  .decode_section_count = decode_sections_value, \
+	  .decode_helper_count = decode_helpers_value, \
+	  .decode_helper_closure_sha256 = decode_closure_value, \
+	  .execute_locator = execute_locator_value, \
+	  .execute_sha256 = execute_digest_value, \
+	  .execute_section_count = execute_sections_value, \
+	  .execute_helper_count = execute_helpers_value, \
+	  .execute_helper_closure_sha256 = execute_closure_value },
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal_value, \
+		leaf_name_value, locator_value, source_offset_value, source_length_value, \
+		digest_value) \
+	{ .ordinal = ordinal_value, .name = leaf_name_value, \
+	  .disposition = \
+		ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED, \
+	  .aarchmrs_operation_locator = locator_value, \
+	  .aarchmrs_operation_source_offset = source_offset_value, \
+	  .aarchmrs_operation_source_length = source_length_value, \
+	  .aarchmrs_operation_sha256 = digest_value },
+static const struct orlix_tcti_target_completion_semantic_provenance_row
+semantic_provenance_rows[] = {
 #include "../isa/target_asl_availability.def"
 };
-#undef ORLIX_TCTI_A64_ASL_XML_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
 
 static const struct orlix_tcti_target_completion_system_accessor_provenance
 system_accessor_provenance = {
@@ -136,9 +151,10 @@ _Static_assert(sizeof(source_rows) / sizeof(source_rows[0]) ==
 _Static_assert(sizeof(classification_rows) / sizeof(classification_rows[0]) ==
 		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS,
 	       "classification ledger must contain exactly 4,350 rows");
-_Static_assert(sizeof(asl_rows) / sizeof(asl_rows[0]) ==
+_Static_assert(sizeof(semantic_provenance_rows) /
+		       sizeof(semantic_provenance_rows[0]) ==
 		       ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS,
-	       "ASL availability ledger must contain exactly 4,350 rows");
+	       "semantic provenance ledger must contain exactly 4,350 rows");
 _Static_assert(sizeof(system_accessor_rows) / sizeof(system_accessor_rows[0]) ==
 		       ORLIX_TCTI_TARGET_COMPLETION_SYSTEM_ACCESSOR_ROWS,
 	       "system accessor ledger must contain exactly 2,014 rows");
@@ -167,7 +183,12 @@ static bool completion_projection_dependencies_valid(
 		!result->invalid_relationship_rows &&
 		!result->invalid_source_provenance &&
 		!result->invalid_registry_entries &&
-		!result->invalid_asl_availability_rows &&
+		!result->missing_semantic_provenance_rows &&
+		!result->stale_semantic_provenance_rows &&
+		!result->incompatible_semantic_provenance_rows &&
+		!result->malformed_semantic_provenance_rows &&
+		!result->dangling_semantic_provenance_rows &&
+		!result->ambiguous_semantic_provenance_rows &&
 		!result->invalid_system_accessor_rows &&
 		!result->invalid_feature_field_domain_rows &&
 		!result->invalid_runtime_capability_cohort_rows &&
@@ -523,23 +544,6 @@ static bool source_row_matches_canonical(
 		row->source_length == canonical->source_length;
 }
 
-static bool asl_member_locator_is_valid(const char *operation_id,
-					const char *semantic_operation_id,
-					const char *locator, const char *member)
-{
-	static const char prefix[] = "operations/";
-	size_t prefix_length = sizeof(prefix) - 1U;
-	size_t operation_length;
-
-	if (empty(operation_id) || empty(semantic_operation_id) || !locator ||
-	    strncmp(locator, prefix, prefix_length))
-		return false;
-	operation_length = strlen(semantic_operation_id);
-	return !strncmp(locator + prefix_length, semantic_operation_id,
-			operation_length) &&
-		!strcmp(locator + prefix_length + operation_length, member);
-}
-
 static bool sha256_hex_is_valid(const char *value)
 {
 	size_t index;
@@ -553,141 +557,281 @@ static bool sha256_hex_is_valid(const char *value)
 	return true;
 }
 
-static bool asl_raw_member_provenance_is_valid(
-	const char *locator, const char *operation_id,
-	const char *semantic_operation_id, const char *member,
-	orlix_tcti_completion_u32 member_offset, orlix_tcti_completion_u32 member_length,
-	orlix_tcti_completion_u32 value_offset, orlix_tcti_completion_u32 value_length, const char *digest)
+static bool semantic_provenance_identity_is_valid(
+	const struct orlix_tcti_target_completion_semantic_provenance *provenance)
 {
-	return asl_member_locator_is_valid(operation_id, semantic_operation_id,
-					  locator, member) &&
-		member_length != 0U && value_length != 0U &&
-		member_offset < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
-		member_length <= ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
-			member_offset &&
-		value_offset < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
-		value_length <= ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
-			value_offset &&
-		member_offset <= value_offset &&
-		value_offset - member_offset < member_length &&
-		sha256_hex_is_valid(digest);
+	static const char archive[] =
+		"archive_sha256=63a01a1696483bbe2edfef9e0f0cd053d6c1c619ec0587876cb7a60bb344f354";
+	static const char release[] =
+		"release_digest=bbe8309a4c746a996c84a3db7c92fa2a6a7453e6915231570f23e2d361bfdccd";
+	static const char aarchmrs[] =
+		"aarchmrs=vFATAp1-A/build=818/ref=2026-06_rel";
+	static const char instructions[] =
+		"instructions_sha256=a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe";
+	static const char shared[] =
+		"shared_pseudocode_sha256=21edeadbc26408a35bcf7315bfbcbb8a69e9e6d86d952c80b153d273f0f2349f";
+	static const char notice[] =
+		"notice_sha256=9c2cc480e9706819e0d295329cf7f94f9256c610dfa9bc8f055a05389f74704a";
+	static const char index[] =
+		"index_sha256=905dd3dd5537ff89514e21ce0d43bf180b84d2c45e5e498dfdcc502165185b93";
+
+	return provenance && !empty(provenance->identity) &&
+		!empty(semantic_provenance.identity) &&
+		!strcmp(provenance->identity, semantic_provenance.identity) &&
+		strstr(provenance->identity,
+		       "authority=Arm_DDI0602_2026_06") &&
+		strstr(provenance->identity,
+		       "distribution=external_non_redistributed") &&
+		strstr(provenance->identity, archive) &&
+		strstr(provenance->identity, release) &&
+		strstr(provenance->identity, aarchmrs) &&
+		strstr(provenance->identity, instructions) &&
+		strstr(provenance->identity, shared) &&
+		strstr(provenance->identity, notice) &&
+		strstr(provenance->identity, index) &&
+		strstr(provenance->identity, "ddi0602_rows=4332") &&
+		strstr(provenance->identity,
+		       "official_semantics_not_specified_rows=18");
 }
 
-static bool asl_absence_provenance_is_valid(
-	const struct orlix_tcti_target_completion_asl_row *row)
+static bool semantic_provenance_identity_is_compatible(
+	const struct orlix_tcti_target_completion_semantic_provenance *provenance)
 {
-	return row &&
-		row->semantic_body_state == ORLIX_TCTI_A64_ASL_BODY_PLACEHOLDER &&
-		row->decode_state == ORLIX_TCTI_A64_ASL_DECODE_NULL &&
-		row->corpus_state == ORLIX_TCTI_A64_ASL_CORPUS_ABSENT &&
-		row->helper_state == ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE &&
-		asl_raw_member_provenance_is_valid(row->semantic_member_locator,
-			row->operation_id, row->semantic_operation_id, "/operation",
-			row->semantic_member_source_offset,
-			row->semantic_member_source_length,
-			row->semantic_body_source_offset,
-			row->semantic_body_source_length, row->semantic_body_sha256) &&
-		asl_raw_member_provenance_is_valid(row->decode_member_locator,
-			row->operation_id, row->semantic_operation_id, "/decode",
-			row->decode_member_source_offset,
-			row->decode_member_source_length,
-			row->decode_source_offset, row->decode_source_length,
-			row->decode_sha256);
+	return provenance && !empty(provenance->identity) &&
+		strstr(provenance->identity, "authority=Arm_DDI0602_2026_06") &&
+		strstr(provenance->identity,
+		       "distribution=external_non_redistributed") &&
+		strstr(provenance->identity,
+		       "aarchmrs=vFATAp1-A/build=818/ref=2026-06_rel");
 }
 
-int orlix_tcti_target_completion_validate_asl_availability(
+static bool nullable_string_equal(const char *left, const char *right)
+{
+	if (!left || !right)
+		return left == right;
+	return !strcmp(left, right);
+}
+
+static bool segment_has_suffix(const char *segment, size_t segment_length,
+			       const char *suffix)
+{
+	size_t suffix_length = strlen(suffix);
+
+	return segment_length >= suffix_length &&
+		!strncmp(segment + segment_length - suffix_length, suffix,
+			 suffix_length);
+}
+
+static bool external_locator_list_is_valid(const char *relative_file,
+					   const char *locators,
+					   orlix_tcti_completion_u32 section_count,
+					   bool decode)
+{
+	const char *cursor;
+	size_t file_length;
+	orlix_tcti_completion_u32 observed = 0;
+
+	if (empty(relative_file) || empty(locators) || !section_count ||
+	    relative_file[0] == '/' || strstr(relative_file, ".."))
+		return false;
+	file_length = strlen(relative_file);
+	if (file_length <= 4U ||
+	    strcmp(relative_file + file_length - 4U, ".xml"))
+		return false;
+	for (cursor = locators; *cursor;) {
+		const char *end = strchr(cursor, ';');
+		size_t length = end ? (size_t)(end - cursor) : strlen(cursor);
+
+		if (length <= file_length ||
+		    strncmp(cursor, relative_file, file_length) ||
+		    cursor[file_length] != '#')
+			return false;
+		if (decode) {
+			if (!segment_has_suffix(cursor, length, "/decode") &&
+			    !segment_has_suffix(cursor, length, "/postdecode"))
+				return false;
+		} else if (!segment_has_suffix(cursor, length, "/execute")) {
+			return false;
+		}
+		observed++;
+		if (!end)
+			break;
+		cursor = end + 1;
+		if (!*cursor)
+			return false;
+	}
+	return observed == section_count;
+}
+
+static bool semantic_provenance_row_is_well_formed(
+	const struct orlix_tcti_target_completion_semantic_provenance_row *row)
+{
+	if (!row || empty(row->name))
+		return false;
+	if (row->disposition ==
+	    ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602)
+		return external_locator_list_is_valid(
+				row->relative_file, row->decode_locator,
+				row->decode_section_count, true) &&
+			external_locator_list_is_valid(
+					row->relative_file, row->execute_locator,
+					row->execute_section_count, false) &&
+			strcmp(row->decode_locator, row->execute_locator) &&
+			sha256_hex_is_valid(row->decode_sha256) &&
+			sha256_hex_is_valid(row->decode_helper_closure_sha256) &&
+			sha256_hex_is_valid(row->execute_sha256) &&
+			sha256_hex_is_valid(row->execute_helper_closure_sha256) &&
+			empty(row->aarchmrs_operation_locator) &&
+			!row->aarchmrs_operation_source_offset &&
+			!row->aarchmrs_operation_source_length &&
+			empty(row->aarchmrs_operation_sha256);
+	if (row->disposition ==
+	    ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED)
+		return empty(row->relative_file) && empty(row->decode_locator) &&
+			empty(row->decode_sha256) && !row->decode_section_count &&
+			!row->decode_helper_count &&
+			empty(row->decode_helper_closure_sha256) &&
+			empty(row->execute_locator) && empty(row->execute_sha256) &&
+			!row->execute_section_count && !row->execute_helper_count &&
+			empty(row->execute_helper_closure_sha256) &&
+			!empty(row->aarchmrs_operation_locator) &&
+			row->aarchmrs_operation_source_length &&
+			row->aarchmrs_operation_source_offset <
+				ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH &&
+			row->aarchmrs_operation_source_length <=
+				ORLIX_TCTI_TARGET_COMPLETION_SOURCE_BYTE_LENGTH -
+				row->aarchmrs_operation_source_offset &&
+			sha256_hex_is_valid(row->aarchmrs_operation_sha256);
+	return false;
+}
+
+static bool semantic_provenance_row_matches_canonical(
+	const struct orlix_tcti_target_completion_semantic_provenance_row *row,
+	const struct orlix_tcti_target_completion_semantic_provenance_row *canonical)
+{
+	return row->ordinal == canonical->ordinal &&
+		!strcmp(row->name, canonical->name) &&
+		row->disposition == canonical->disposition &&
+		nullable_string_equal(row->relative_file, canonical->relative_file) &&
+		nullable_string_equal(row->decode_locator, canonical->decode_locator) &&
+		nullable_string_equal(row->decode_sha256, canonical->decode_sha256) &&
+		row->decode_section_count == canonical->decode_section_count &&
+		row->decode_helper_count == canonical->decode_helper_count &&
+		nullable_string_equal(row->decode_helper_closure_sha256,
+				      canonical->decode_helper_closure_sha256) &&
+		nullable_string_equal(row->execute_locator, canonical->execute_locator) &&
+		nullable_string_equal(row->execute_sha256, canonical->execute_sha256) &&
+		row->execute_section_count == canonical->execute_section_count &&
+		row->execute_helper_count == canonical->execute_helper_count &&
+		nullable_string_equal(row->execute_helper_closure_sha256,
+				      canonical->execute_helper_closure_sha256) &&
+		nullable_string_equal(row->aarchmrs_operation_locator,
+				      canonical->aarchmrs_operation_locator) &&
+		row->aarchmrs_operation_source_offset ==
+			canonical->aarchmrs_operation_source_offset &&
+		row->aarchmrs_operation_source_length ==
+			canonical->aarchmrs_operation_source_length &&
+		nullable_string_equal(row->aarchmrs_operation_sha256,
+				      canonical->aarchmrs_operation_sha256);
+}
+
+int orlix_tcti_target_completion_validate_semantic_provenance(
 	const struct orlix_tcti_target_completion_source_row *source,
 	size_t source_count,
-	const struct orlix_tcti_target_completion_asl_provenance *provenance,
-	const struct orlix_tcti_target_completion_asl_row *availability,
-	size_t availability_count,
+	const struct orlix_tcti_target_completion_semantic_provenance *provenance,
+	const struct orlix_tcti_target_completion_semantic_provenance_row *rows,
+	size_t row_count,
 	struct orlix_tcti_target_completion_result *result)
 {
+	bool seen[ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS] = { false };
 	size_t index;
 
 	if (!result)
 		return -1;
 	if (!source || source_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
-	    !availability ||
-	    availability_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
-	    !provenance || empty(provenance->format) ||
-	    empty(provenance->source_sha256) ||
-	    strcmp(provenance->format, "inline_aarchmrs_operations_v3") ||
-	    strcmp(provenance->source_sha256,
-		   "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe") ||
-	    provenance->corpus_state != ORLIX_TCTI_A64_ASL_CORPUS_ABSENT ||
-	    provenance->helper_state != ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
-		record_error(result, ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
-		if (!source || !availability)
-			return -1;
+	    !rows) {
+		result->missing_semantic_provenance_rows +=
+			ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
+		return -1;
+	}
+	if (!semantic_provenance_identity_is_valid(provenance)) {
+		if (!provenance || empty(provenance->identity))
+			result->malformed_semantic_provenance_rows++;
+		else if (!semantic_provenance_identity_is_compatible(provenance))
+			result->incompatible_semantic_provenance_rows++;
+		else
+			result->stale_semantic_provenance_rows++;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
 	}
 
-	for (index = 0; index < source_count; index++) {
-		const struct orlix_tcti_target_completion_asl_row *row;
-		const struct orlix_tcti_target_completion_asl_row *canonical;
-		bool valid;
+	for (index = 0; index < row_count; index++) {
+		const struct orlix_tcti_target_completion_semantic_provenance_row *row =
+			&rows[index];
 
-		if (index >= availability_count) {
-			result->invalid_asl_availability_rows++;
+		if (row->ordinal >= ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS) {
+			result->dangling_semantic_provenance_rows++;
 			record_error(result,
-				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
 			continue;
 		}
-		row = &availability[index];
-		/* The checked artifact is the source-derived absence witness. */
-		canonical = &asl_rows[index];
-		valid = source_row_well_formed(&source[index], index) &&
-			row->ordinal == index && !empty(row->name) &&
-			!empty(row->semantic_operation_id) &&
-			asl_absence_provenance_is_valid(row) &&
-			!strcmp(row->name, source[index].name) &&
-			!strcmp(row->operation_id, source[index].operation_id) &&
-			row->ordinal == canonical->ordinal &&
-			!strcmp(row->name, canonical->name) &&
-			!strcmp(row->operation_id, canonical->operation_id) &&
-			!strcmp(row->semantic_operation_id,
-				canonical->semantic_operation_id) &&
-			!strcmp(row->semantic_member_locator,
-				canonical->semantic_member_locator) &&
-			row->semantic_member_source_offset ==
-				canonical->semantic_member_source_offset &&
-			row->semantic_member_source_length ==
-				canonical->semantic_member_source_length &&
-			row->semantic_body_source_offset ==
-				canonical->semantic_body_source_offset &&
-			row->semantic_body_source_length ==
-				canonical->semantic_body_source_length &&
-			!strcmp(row->semantic_body_sha256,
-				canonical->semantic_body_sha256) &&
-			row->semantic_body_state == canonical->semantic_body_state &&
-			!strcmp(row->decode_member_locator,
-				canonical->decode_member_locator) &&
-			row->decode_member_source_offset ==
-				canonical->decode_member_source_offset &&
-			row->decode_member_source_length ==
-				canonical->decode_member_source_length &&
-			row->decode_source_offset == canonical->decode_source_offset &&
-			row->decode_source_length == canonical->decode_source_length &&
-			!strcmp(row->decode_sha256, canonical->decode_sha256) &&
-			row->decode_state == canonical->decode_state &&
-			row->corpus_state == canonical->corpus_state &&
-			row->helper_state == canonical->helper_state;
-		if (!valid) {
-			result->invalid_asl_availability_rows++;
+		if (seen[row->ordinal]) {
+			result->ambiguous_semantic_provenance_rows++;
 			record_error(result,
-				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
 			continue;
 		}
-		result->asl_availability_rows++;
-		if (row->corpus_state == ORLIX_TCTI_A64_ASL_CORPUS_ABSENT ||
-		    row->helper_state == ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE) {
-			result->unavailable_asl_rows++;
+		seen[row->ordinal] = true;
+		if (!source_row_well_formed(&source[row->ordinal], row->ordinal) ||
+		    strcmp(row->name, source[row->ordinal].name)) {
+			result->dangling_semantic_provenance_rows++;
 			record_error(result,
-				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY);
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
+			continue;
+		}
+		if (!semantic_provenance_row_is_well_formed(row)) {
+			result->malformed_semantic_provenance_rows++;
+			if (!result->first_invalid_semantic_provenance_ordinal_plus_one)
+				result->first_invalid_semantic_provenance_ordinal_plus_one =
+					row->ordinal + 1U;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
+			continue;
+		}
+		if (!semantic_provenance_row_matches_canonical(
+			    row, &semantic_provenance_rows[row->ordinal])) {
+			result->stale_semantic_provenance_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
+			continue;
+		}
+		result->semantic_provenance_rows++;
+		if (row->disposition ==
+		    ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602) {
+			result->external_ddi0602_semantic_provenance_rows++;
+		} else {
+			result->official_semantics_not_specified_rows++;
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_OFFICIAL_SEMANTICS_NOT_SPECIFIED);
 		}
 	}
-	return result->invalid_asl_availability_rows ||
-		result->unavailable_asl_rows ? -1 : 0;
+	for (index = 0; index < ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS; index++)
+		if (!seen[index])
+			result->missing_semantic_provenance_rows++;
+	if (row_count != ORLIX_TCTI_TARGET_COMPLETION_SOURCE_ROWS ||
+	    result->missing_semantic_provenance_rows) {
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE);
+	}
+	return result->missing_semantic_provenance_rows ||
+		result->stale_semantic_provenance_rows ||
+		result->incompatible_semantic_provenance_rows ||
+		result->malformed_semantic_provenance_rows ||
+		result->dangling_semantic_provenance_rows ||
+		result->ambiguous_semantic_provenance_rows ||
+		result->official_semantics_not_specified_rows ? -1 : 0;
 }
 
 static void record_error(struct orlix_tcti_target_completion_result *result,
@@ -1381,18 +1525,19 @@ orlix_tcti_target_completion_source_provenance(void)
 	return &source_provenance;
 }
 
-const struct orlix_tcti_target_completion_asl_provenance *
-orlix_tcti_target_completion_asl_provenance(void)
+const struct orlix_tcti_target_completion_semantic_provenance *
+orlix_tcti_target_completion_semantic_provenance(void)
 {
-	return &asl_provenance;
+	return &semantic_provenance;
 }
 
-const struct orlix_tcti_target_completion_asl_row *
-orlix_tcti_target_completion_asl_availability(size_t *count)
+const struct orlix_tcti_target_completion_semantic_provenance_row *
+orlix_tcti_target_completion_semantic_provenance_rows(size_t *count)
 {
 	if (count)
-		*count = sizeof(asl_rows) / sizeof(asl_rows[0]);
-	return asl_rows;
+		*count = sizeof(semantic_provenance_rows) /
+			sizeof(semantic_provenance_rows[0]);
+	return semantic_provenance_rows;
 }
 
 const struct orlix_tcti_target_completion_system_accessor_provenance *
@@ -1484,7 +1629,8 @@ static void completion_project_obligation(
 	const struct orlix_tcti_target_completion_source_row *source = &source_rows[ordinal];
 	const struct orlix_tcti_target_completion_classification_row *classification =
 		&classification_rows[ordinal];
-	const struct orlix_tcti_target_completion_asl_row *asl = &asl_rows[ordinal];
+	const struct orlix_tcti_target_completion_semantic_provenance_row *semantic =
+		&semantic_provenance_rows[ordinal];
 	const struct orlix_tcti_target_proof_registry_entry *entry;
 	const struct orlix_tcti_runtime_capability_cohort_leaf *runtime_leaf;
 	bool proof_resolves = false;
@@ -1497,7 +1643,17 @@ static void completion_project_obligation(
 	obligation->classification = classification->classification;
 	obligation->relation = classification->relation;
 	obligation->canonical_name = classification->canonical_name;
-	obligation->asl_operation_object = asl->semantic_member_locator;
+	obligation->semantic_provenance_disposition = semantic->disposition;
+	obligation->semantic_provenance_row = semantic;
+	obligation->semantic_relative_file = semantic->relative_file;
+	obligation->semantic_decode_locator = semantic->decode_locator;
+	obligation->semantic_decode_sha256 = semantic->decode_sha256;
+	obligation->semantic_execute_locator = semantic->execute_locator;
+	obligation->semantic_execute_sha256 = semantic->execute_sha256;
+	obligation->aarchmrs_operation_locator =
+		semantic->aarchmrs_operation_locator;
+	obligation->aarchmrs_operation_sha256 =
+		semantic->aarchmrs_operation_sha256;
 	obligation->proof_id = classification->proof_id;
 
 	if (classification->classification ==
@@ -1516,13 +1672,10 @@ static void completion_project_obligation(
 			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP;
 	}
 
-	if (asl_absence_provenance_is_valid(asl)) {
-		obligation->asl_state =
-			ORLIX_TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING;
-	} else {
-		obligation->asl_state = ORLIX_TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE;
-	}
-	obligation->blocker_mask |= ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_ASL;
+	if (semantic->disposition ==
+	    ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED)
+		obligation->blocker_mask |=
+			ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_SEMANTIC_PROVENANCE;
 
 	entry = completion_registry_entry(registry, registry_count,
 					 obligation->proof_id);
@@ -1618,6 +1771,13 @@ static int completion_audit_internal(
 			orlix_tcti_target_feature_applicability_artifact();
 	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
 	size_t linux_proof_count;
+	const struct orlix_tcti_target_completion_semantic_provenance
+		*checked_semantic_provenance = &semantic_provenance;
+	const struct orlix_tcti_target_completion_semantic_provenance_row
+		*checked_semantic_provenance_rows = semantic_provenance_rows;
+	size_t checked_semantic_provenance_count =
+		sizeof(semantic_provenance_rows) /
+		sizeof(semantic_provenance_rows[0]);
 	struct orlix_tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
 	int status;
 	size_t registry_count;
@@ -1653,6 +1813,15 @@ static int completion_audit_internal(
 			linux_proof = inputs->linux_proof;
 			linux_proof_count = inputs->linux_proof_count;
 		}
+		if (inputs->semantic_provenance ||
+		    inputs->semantic_provenance_rows ||
+		    inputs->semantic_provenance_count) {
+			checked_semantic_provenance = inputs->semantic_provenance;
+			checked_semantic_provenance_rows =
+				inputs->semantic_provenance_rows;
+			checked_semantic_provenance_count =
+				inputs->semantic_provenance_count;
+		}
 	}
 	/*
 	 * Reject malformed injected dependencies before constructing staged rows.
@@ -1677,10 +1846,10 @@ static int completion_audit_internal(
 	if (orlix_tcti_target_completion_validate_source_provenance(
 		    &source_provenance, result))
 		status = -1;
-	if (orlix_tcti_target_completion_validate_asl_availability(
-		    source, source_count,
-		    &asl_provenance, asl_rows,
-		    sizeof(asl_rows) / sizeof(asl_rows[0]), result))
+	if (orlix_tcti_target_completion_validate_semantic_provenance(
+		    source, source_count, checked_semantic_provenance,
+		    checked_semantic_provenance_rows,
+		    checked_semantic_provenance_count, result))
 		status = -1;
 	if (orlix_tcti_target_completion_validate_system_accessors(
 		    source, source_count,

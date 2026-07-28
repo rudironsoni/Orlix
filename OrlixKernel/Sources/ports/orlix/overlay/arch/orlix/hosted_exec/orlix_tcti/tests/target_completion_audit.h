@@ -50,7 +50,7 @@ enum orlix_tcti_target_completion_obligation_blocker {
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_NONE = 0,
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_UNCLASSIFIED = 1U << 0,
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_RELATIONSHIP = 1U << 1,
-	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_ASL = 1U << 2,
+	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_SEMANTIC_PROVENANCE = 1U << 2,
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION = 1U << 3,
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_PROOF = 1U << 4,
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_UNPROVED_OBLIGATIONS = 1U << 5,
@@ -61,33 +61,12 @@ enum orlix_tcti_target_completion_obligation_blocker {
 	ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_SOURCE_CONDITION = 1U << 9,
 };
 
-enum orlix_tcti_target_completion_asl_state {
-	ORLIX_TCTI_TARGET_COMPLETION_ASL_INVALID,
-	ORLIX_TCTI_TARGET_COMPLETION_ASL_ABSENT_BLOCKING,
-	ORLIX_TCTI_TARGET_COMPLETION_ASL_UNAVAILABLE,
+enum orlix_tcti_a64_semantic_provenance_disposition {
+	ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602,
+	ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED,
 };
 
-enum orlix_tcti_target_completion_asl_body_state {
-	ORLIX_TCTI_A64_ASL_BODY_ABSENT,
-	ORLIX_TCTI_A64_ASL_BODY_PLACEHOLDER,
-	ORLIX_TCTI_A64_ASL_BODY_PRESENT,
-};
-
-enum orlix_tcti_target_completion_asl_decode_state {
-	ORLIX_TCTI_A64_ASL_DECODE_ABSENT,
-	ORLIX_TCTI_A64_ASL_DECODE_NULL,
-	ORLIX_TCTI_A64_ASL_DECODE_PRESENT,
-};
-
-enum orlix_tcti_target_completion_asl_corpus_state {
-	ORLIX_TCTI_A64_ASL_CORPUS_ABSENT,
-	ORLIX_TCTI_A64_ASL_CORPUS_PRESENT,
-};
-
-enum orlix_tcti_target_completion_asl_helper_state {
-	ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE,
-	ORLIX_TCTI_A64_ASL_HELPERS_AVAILABLE,
-};
+struct orlix_tcti_target_completion_semantic_provenance_row;
 
 enum orlix_tcti_target_completion_feature_union_state {
 	ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID,
@@ -167,8 +146,17 @@ struct orlix_tcti_target_completion_obligation {
 	enum orlix_tcti_target_completion_class classification;
 	enum orlix_tcti_target_completion_relation relation;
 	const char *canonical_name;
-	const char *asl_operation_object;
-	enum orlix_tcti_target_completion_asl_state asl_state;
+	enum orlix_tcti_a64_semantic_provenance_disposition
+		semantic_provenance_disposition;
+	const struct orlix_tcti_target_completion_semantic_provenance_row
+		*semantic_provenance_row;
+	const char *semantic_relative_file;
+	const char *semantic_decode_locator;
+	const char *semantic_decode_sha256;
+	const char *semantic_execute_locator;
+	const char *semantic_execute_sha256;
+	const char *aarchmrs_operation_locator;
+	const char *aarchmrs_operation_sha256;
 	enum orlix_tcti_target_completion_feature_union_state feature_union_state;
 	/* Diagnostic order is retained only as a first-failure locator. */
 	enum orlix_tcti_feature_domain_tcnd_error first_unsupported_error;
@@ -186,39 +174,30 @@ struct orlix_tcti_target_completion_obligation {
 	orlix_tcti_completion_u32 runtime_candidate_count;
 };
 
-/*
- * Provenance for the authoritative ASL relationship of every pinned source
- * leaf.  Availability is deliberately separate from implementation proof:
- * an absent shared ASL corpus blocks semantic-completeness claims.
- */
-struct orlix_tcti_target_completion_asl_provenance {
-	const char *format;
-	const char *source_sha256;
-	enum orlix_tcti_target_completion_asl_corpus_state corpus_state;
-	enum orlix_tcti_target_completion_asl_helper_state helper_state;
+/* External Arm source identity. It is provenance only and grants no credit. */
+struct orlix_tcti_target_completion_semantic_provenance {
+	const char *identity;
 };
 
-struct orlix_tcti_target_completion_asl_row {
+struct orlix_tcti_target_completion_semantic_provenance_row {
 	orlix_tcti_completion_u32 ordinal;
 	const char *name;
-	const char *operation_id;
-	const char *semantic_operation_id;
-	const char *semantic_member_locator;
-	orlix_tcti_completion_u32 semantic_member_source_offset;
-	orlix_tcti_completion_u32 semantic_member_source_length;
-	orlix_tcti_completion_u32 semantic_body_source_offset;
-	orlix_tcti_completion_u32 semantic_body_source_length;
-	const char *semantic_body_sha256;
-	enum orlix_tcti_target_completion_asl_body_state semantic_body_state;
-	const char *decode_member_locator;
-	orlix_tcti_completion_u32 decode_member_source_offset;
-	orlix_tcti_completion_u32 decode_member_source_length;
-	orlix_tcti_completion_u32 decode_source_offset;
-	orlix_tcti_completion_u32 decode_source_length;
+	enum orlix_tcti_a64_semantic_provenance_disposition disposition;
+	const char *relative_file;
+	const char *decode_locator;
 	const char *decode_sha256;
-	enum orlix_tcti_target_completion_asl_decode_state decode_state;
-	enum orlix_tcti_target_completion_asl_corpus_state corpus_state;
-	enum orlix_tcti_target_completion_asl_helper_state helper_state;
+	orlix_tcti_completion_u32 decode_section_count;
+	orlix_tcti_completion_u32 decode_helper_count;
+	const char *decode_helper_closure_sha256;
+	const char *execute_locator;
+	const char *execute_sha256;
+	orlix_tcti_completion_u32 execute_section_count;
+	orlix_tcti_completion_u32 execute_helper_count;
+	const char *execute_helper_closure_sha256;
+	const char *aarchmrs_operation_locator;
+	orlix_tcti_completion_u64 aarchmrs_operation_source_offset;
+	orlix_tcti_completion_u64 aarchmrs_operation_source_length;
+	const char *aarchmrs_operation_sha256;
 };
 
 enum orlix_tcti_target_completion_system_accessor_direction {
@@ -291,7 +270,7 @@ enum orlix_tcti_target_completion_error {
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN = 1U << 11,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY = 1U << 12,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_UNPROVED_OBLIGATIONS = 1U << 13,
-	ORLIX_TCTI_TARGET_COMPLETION_ERROR_ASL_AVAILABILITY = 1U << 14,
+	ORLIX_TCTI_TARGET_COMPLETION_ERROR_SEMANTIC_PROVENANCE = 1U << 14,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR = 1U << 15,
 	/*
 	 * Every checked AST.FIELD occurrence must bind to an authoritative
@@ -302,6 +281,7 @@ enum orlix_tcti_target_completion_error {
 	/* Feature-conditioned leaves remain blocking until each cohort is proved. */
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_RUNTIME_CAPABILITY_COHORT = 1U << 17,
 	ORLIX_TCTI_TARGET_COMPLETION_ERROR_LINUX_PROOF_MATRIX = 1U << 18,
+	ORLIX_TCTI_TARGET_COMPLETION_ERROR_OFFICIAL_SEMANTICS_NOT_SPECIFIED = 1U << 19,
 };
 
 struct orlix_tcti_target_completion_result {
@@ -342,10 +322,18 @@ struct orlix_tcti_target_completion_result {
 	size_t invalid_feature_applicability_rows;
 	size_t invalid_feature_applicability_artifact;
 	size_t invalid_feature_artifact;
-	/* ASL provenance must bind every leaf and remain unavailable until present. */
-	size_t asl_availability_rows;
-	size_t invalid_asl_availability_rows;
-	size_t unavailable_asl_rows;
+	/* External semantic provenance is source identity only and grants no credit. */
+	size_t semantic_provenance_rows;
+	size_t external_ddi0602_semantic_provenance_rows;
+	size_t official_semantics_not_specified_rows;
+	size_t missing_semantic_provenance_rows;
+	size_t stale_semantic_provenance_rows;
+	size_t incompatible_semantic_provenance_rows;
+	size_t malformed_semantic_provenance_rows;
+	size_t dangling_semantic_provenance_rows;
+	size_t ambiguous_semantic_provenance_rows;
+	/* Zero means none; otherwise this is the first invalid ordinal plus one. */
+	size_t first_invalid_semantic_provenance_ordinal_plus_one;
 	/* Supplemental Registers.json relationships never alter source_rows. */
 	size_t system_accessor_rows;
 	size_t mapped_system_accessor_rows;
@@ -393,6 +381,11 @@ struct orlix_tcti_target_completion_audit_inputs_for_test {
 	const struct orlix_tcti_target_feature_applicability_artifact *feature_applicability;
 	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
 	size_t linux_proof_count;
+	const struct orlix_tcti_target_completion_semantic_provenance
+		*semantic_provenance;
+	const struct orlix_tcti_target_completion_semantic_provenance_row
+		*semantic_provenance_rows;
+	size_t semantic_provenance_count;
 };
 
 int orlix_tcti_target_completion_validate(
@@ -427,12 +420,12 @@ int orlix_tcti_target_completion_validate_source_provenance(
 	const struct orlix_tcti_target_completion_source_provenance *provenance,
 	struct orlix_tcti_target_completion_result *result);
 
-int orlix_tcti_target_completion_validate_asl_availability(
+int orlix_tcti_target_completion_validate_semantic_provenance(
 	const struct orlix_tcti_target_completion_source_row *source,
 	size_t source_count,
-	const struct orlix_tcti_target_completion_asl_provenance *provenance,
-	const struct orlix_tcti_target_completion_asl_row *availability,
-	size_t availability_count,
+	const struct orlix_tcti_target_completion_semantic_provenance *provenance,
+	const struct orlix_tcti_target_completion_semantic_provenance_row *rows,
+	size_t row_count,
 	struct orlix_tcti_target_completion_result *result);
 
 int orlix_tcti_target_completion_validate_system_accessors(
@@ -455,11 +448,11 @@ int orlix_tcti_target_completion_validate_runtime_capability_cohorts(
 const struct orlix_tcti_target_completion_source_provenance *
 orlix_tcti_target_completion_source_provenance(void);
 
-const struct orlix_tcti_target_completion_asl_provenance *
-orlix_tcti_target_completion_asl_provenance(void);
+const struct orlix_tcti_target_completion_semantic_provenance *
+orlix_tcti_target_completion_semantic_provenance(void);
 
-const struct orlix_tcti_target_completion_asl_row *
-orlix_tcti_target_completion_asl_availability(size_t *count);
+const struct orlix_tcti_target_completion_semantic_provenance_row *
+orlix_tcti_target_completion_semantic_provenance_rows(size_t *count);
 
 const struct orlix_tcti_target_completion_system_accessor_provenance *
 orlix_tcti_target_completion_system_accessor_provenance(void);

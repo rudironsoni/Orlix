@@ -3,40 +3,35 @@
 
 #include "target_inventory_import.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#define ORLIX_TCTI_TARGET_LEAF_COUNT 4350U
+#define ORLIX_TCTI_DDI0602_PROVENANCE_COUNT 4332U
+#define ORLIX_TCTI_NOT_SPECIFIED_PROVENANCE_COUNT 18U
+
+static const char not_specified_body[] = "// Not specified";
 
 static int emit_string(FILE *output, const char *text)
 {
 	return fprintf(output, "\"%s\"", text) < 0 ? -1 : 0;
 }
 
-static const char *body_state_symbol(
-	enum orlix_tcti_target_operation_body_state state)
+static int valid_sha256(const char digest[65])
 {
-	switch (state) {
-	case ORLIX_TCTI_TARGET_OPERATION_BODY_ABSENT:
-		return "ORLIX_TCTI_A64_ASL_BODY_ABSENT";
-	case ORLIX_TCTI_TARGET_OPERATION_BODY_PLACEHOLDER:
-		return "ORLIX_TCTI_A64_ASL_BODY_PLACEHOLDER";
-	case ORLIX_TCTI_TARGET_OPERATION_BODY_PRESENT:
-		return "ORLIX_TCTI_A64_ASL_BODY_PRESENT";
-	}
-	return NULL;
-}
+	size_t index;
 
-static const char *decode_state_symbol(
-	enum orlix_tcti_target_operation_decode_state state)
-{
-	switch (state) {
-	case ORLIX_TCTI_TARGET_OPERATION_DECODE_ABSENT:
-		return "ORLIX_TCTI_A64_ASL_DECODE_ABSENT";
-	case ORLIX_TCTI_TARGET_OPERATION_DECODE_NULL:
-		return "ORLIX_TCTI_A64_ASL_DECODE_NULL";
-	case ORLIX_TCTI_TARGET_OPERATION_DECODE_PRESENT:
-		return "ORLIX_TCTI_A64_ASL_DECODE_PRESENT";
+	if (!digest || digest[64] != '\0')
+		return 0;
+	for (index = 0; index < 64U; index++) {
+		const char character = digest[index];
+
+		if (!((character >= '0' && character <= '9') ||
+		      (character >= 'a' && character <= 'f')))
+			return 0;
 	}
-	return NULL;
+	return 1;
 }
 
 static const struct orlix_tcti_target_operation *semantic_operation(
@@ -53,190 +48,187 @@ static const struct orlix_tcti_target_operation *semantic_operation(
 		inventory, operation->canonical_operation_id);
 }
 
-static const char *xml_state_symbol(
-	const struct orlix_tcti_arm_xml_semantic_entry *entry)
+static int official_semantics_not_specified_ordinal(size_t ordinal)
 {
-	if (!entry)
-		return "ORLIX_TCTI_A64_ASL_XML_ENCODING_ABSENT";
-	if (!entry->decode.locator || !entry->operation.locator)
-		return "ORLIX_TCTI_A64_ASL_XML_SEMANTICS_INCOMPLETE";
-	return "ORLIX_TCTI_A64_ASL_XML_SEMANTICS_PRESENT";
+	static const uint16_t ordinals[] = {
+		2235U, 2302U, 2308U, 2309U, 2310U, 2311U,
+		2675U, 2676U, 2677U, 2678U, 2679U, 2680U,
+		2681U, 2682U, 2683U, 2684U, 2685U, 2686U,
+	};
+	size_t index;
+
+	for (index = 0; index < sizeof(ordinals) / sizeof(ordinals[0]); index++)
+		if (ordinal == ordinals[index])
+			return 1;
+	return 0;
 }
 
-static int emit_xml_section(
+static int valid_external_section(
+	const struct orlix_tcti_arm_xml_semantic_section *section)
+{
+	return section && section->locator && section->locator[0] &&
+		section->section_count && valid_sha256(section->normalized_sha256) &&
+		valid_sha256(section->shared_helpers_sha256);
+}
+
+static int emit_external_section(
 	FILE *output, const struct orlix_tcti_arm_xml_semantic_section *section)
 {
-	const char *locator = section && section->locator ? section->locator : "";
-	const char *digest = section && section->locator ?
-		section->normalized_sha256 : "";
-	const char *helper_digest = section && section->locator ?
-		section->shared_helpers_sha256 : "";
-	size_t section_count = section ? section->section_count : 0U;
-	size_t helper_count = section ? section->shared_helper_count : 0U;
-
-	return fprintf(output, "%zuU, ", section_count) < 0 ||
-		emit_string(output, locator) || fputs(", ", output) == EOF ||
-		emit_string(output, digest) ||
-		fprintf(output, ", %zuU, ", helper_count) < 0 ||
-		emit_string(output, helper_digest) ? -1 : 0;
+	return emit_string(output, section->locator) ||
+		fputs(", ", output) == EOF ||
+		emit_string(output, section->normalized_sha256) ||
+		fprintf(output, ", %zuU, %zuU, ", section->section_count,
+			section->shared_helper_count) < 0 ||
+		emit_string(output, section->shared_helpers_sha256) ? -1 : 0;
 }
 
-enum orlix_tcti_target_asl_availability_error
-orlix_tcti_target_asl_availability_emit(
+static int valid_not_specified_operation(
+	const char *source, size_t length,
+	const struct orlix_tcti_target_operation *operation)
+{
+	const size_t body_length = sizeof(not_specified_body) - 1U;
+
+	return operation &&
+		operation->semantic_body_state ==
+			ORLIX_TCTI_TARGET_OPERATION_BODY_PLACEHOLDER &&
+		operation->semantic_body_source_length == body_length &&
+		operation->semantic_body_source_offset <= length &&
+		body_length <= length - operation->semantic_body_source_offset &&
+		!memcmp(source + operation->semantic_body_source_offset,
+			not_specified_body, body_length) &&
+		valid_sha256(operation->semantic_body_sha256);
+}
+
+static int emit_ddi0602_row(
+	FILE *output, size_t ordinal, const struct orlix_tcti_target_leaf *leaf,
+	const struct orlix_tcti_arm_xml_semantic_entry *entry)
+{
+	if (fprintf(output, "ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(%zuU, ",
+		    ordinal) < 0 ||
+	    emit_string(output, leaf->name) || fputs(", ", output) == EOF ||
+	    emit_string(output, entry->relative_file) ||
+	    fputs(", ", output) == EOF ||
+	    emit_external_section(output, &entry->decode) ||
+	    fputs(", ", output) == EOF ||
+	    emit_external_section(output, &entry->operation) ||
+	    fputs(")\n", output) == EOF)
+		return -1;
+	return 0;
+}
+
+static int emit_not_specified_row(
+	FILE *output, size_t ordinal, const struct orlix_tcti_target_leaf *leaf,
+	const struct orlix_tcti_target_operation *operation)
+{
+	if (fprintf(output,
+		    "ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(%zuU, ",
+		    ordinal) < 0 ||
+	    emit_string(output, leaf->name) ||
+	    fputs(", \"Instructions.json#operations/", output) == EOF ||
+	    fputs(operation->id, output) == EOF ||
+	    fprintf(output, "/operation\", %zuU, %zuU, ",
+		    operation->semantic_body_source_offset,
+		    operation->semantic_body_source_length) < 0 ||
+	    emit_string(output, operation->semantic_body_sha256) ||
+	    fputs(")\n", output) == EOF)
+		return -1;
+	return 0;
+}
+
+enum orlix_tcti_target_semantic_provenance_error
+orlix_tcti_target_semantic_provenance_emit(
 	const char *source, size_t length,
 	const struct orlix_tcti_arm_xml_package *package, FILE *output)
 {
 	struct orlix_tcti_target_inventory inventory = { 0 };
 	struct orlix_tcti_target_import_error import_error = { 0 };
-	size_t concrete_operations = 0;
-	size_t operation_aliases = 0;
-	size_t xml_matched = 0;
-	size_t xml_complete = 0;
-	size_t xml_decode_missing = 0;
-	size_t xml_operation_missing = 0;
-	size_t index;
 	char source_digest[65];
-	enum orlix_tcti_target_asl_availability_error result =
-		ORLIX_TCTI_TARGET_ASL_AVAILABILITY_SOURCE;
+	size_t ddi0602_count = 0;
+	size_t not_specified_count = 0;
+	size_t index;
+	enum orlix_tcti_target_semantic_provenance_error result =
+		ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_SOURCE;
 
 	if (!source || !length || !package || !output ||
 	    package->shared_ps_count != ORLIX_TCTI_ARM_XML_SHARED_PS_COUNT ||
 	    package->shared_anchor_count != ORLIX_TCTI_ARM_XML_SHARED_ANCHOR_COUNT ||
-	    package->index_form_count != ORLIX_TCTI_ARM_XML_INDEX_FORM_COUNT ||
-	    package->entry_count != ORLIX_TCTI_ARM_XML_ENCODING_COUNT)
-		return ORLIX_TCTI_TARGET_ASL_AVAILABILITY_INVALID_ARGUMENT;
-	if (orlix_tcti_target_inventory_import(source, length, &inventory,
-					       &import_error))
-		goto out;
+	    package->index_form_count != ORLIX_TCTI_ARM_XML_INDEX_FORM_COUNT)
+		return ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_INVALID_ARGUMENT;
+
 	orlix_tcti_target_inventory_sha256(source, length, source_digest);
-	for (index = 0; index < inventory.operation_count; index++) {
+	if (orlix_tcti_target_inventory_import(source, length, &inventory,
+					       &import_error) ||
+	    inventory.leaf_count != ORLIX_TCTI_TARGET_LEAF_COUNT)
+		return ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_SOURCE;
+
+	for (index = 0; index < inventory.leaf_count; index++) {
+		const struct orlix_tcti_target_leaf *leaf = &inventory.leaves[index];
 		const struct orlix_tcti_target_operation *operation =
-			&inventory.operations[index];
-
-		if (operation->is_alias) {
-			operation_aliases++;
-			continue;
-		}
-		concrete_operations++;
-		if (operation->semantic_body_state !=
-				ORLIX_TCTI_TARGET_OPERATION_BODY_PLACEHOLDER ||
-		    operation->decode_state !=
-				ORLIX_TCTI_TARGET_OPERATION_DECODE_NULL)
-			goto out;
-	}
-	if (inventory.operation_count != 2871U || concrete_operations != 2656U ||
-	    operation_aliases != 215U)
-		goto out;
-	for (index = 0; index < inventory.leaf_count; index++) {
-		const struct orlix_tcti_target_leaf *leaf = &inventory.leaves[index];
-		const struct orlix_tcti_target_operation *semantic =
 			semantic_operation(&inventory,
 				orlix_tcti_target_inventory_operation(
 					&inventory, leaf->operation_id));
 		const struct orlix_tcti_arm_xml_semantic_entry *entry =
 			orlix_tcti_arm_xml_package_entry(package, leaf->name);
 
-		if (!semantic || semantic->semantic_body_state !=
-				ORLIX_TCTI_TARGET_OPERATION_BODY_PLACEHOLDER ||
-		    semantic->decode_state !=
-				ORLIX_TCTI_TARGET_OPERATION_DECODE_NULL) {
-			result = ORLIX_TCTI_TARGET_ASL_AVAILABILITY_MISSING_OPERATION;
+		if (entry) {
+			if (official_semantics_not_specified_ordinal(index) ||
+			    !entry->relative_file || !entry->relative_file[0] ||
+			    !valid_external_section(&entry->decode) ||
+			    !valid_external_section(&entry->operation))
+				goto out;
+			ddi0602_count++;
+			continue;
+		}
+		if (!official_semantics_not_specified_ordinal(index) ||
+		    !valid_not_specified_operation(source, length, operation)) {
+			result = ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_MISSING_OPERATION;
 			goto out;
 		}
-		if (!entry)
-			continue;
-		xml_matched++;
-		if (!entry->decode.locator)
-			xml_decode_missing++;
-		if (!entry->operation.locator)
-			xml_operation_missing++;
-		if (entry->decode.locator && entry->operation.locator)
-			xml_complete++;
+		not_specified_count++;
 	}
+
+	if (ddi0602_count != ORLIX_TCTI_DDI0602_PROVENANCE_COUNT ||
+	    not_specified_count != ORLIX_TCTI_NOT_SPECIFIED_PROVENANCE_COUNT)
+		goto out;
+
 	if (fprintf(output,
-		"ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(\""
-		"arm_a64_isa_xml_a_profile_2026_06|url=%s|archive_sha256=%s|"
-		"release_path=%s|release_digest=%s|release_files=%u|xml_files=%u|"
-		"encodings=%u|instruction_semantic_sections=%u|"
-		"shared_pseudocode.xml=%s|notice.xml=%s|index.xml=%s|"
-		"license=%s|"
-		"aarchmrs=vFATAp1-A/build=818/ref=2026-06_rel|instructions_sha256=%s|"
-		"compatibility=both_arm_2026_06_a_profile|shared_ps=%u|"
-		"shared_anchors=%u|index_forms=%u|aarchmrs_operations=2871|"
-		"concrete_operations=2656|operation_aliases=215|"
-		"instruction_bodies=2656_placeholder|decodes=2656_null|"
-		"target_xml_matched=%zu|target_xml_encoding_absent=%zu|"
-		"target_xml_semantics_complete=%zu|target_xml_decode_missing=%zu|"
-		"target_xml_operation_missing=%zu\", \"%s\", "
-		"ORLIX_TCTI_A64_ASL_CORPUS_PRESENT, "
-		"ORLIX_TCTI_A64_ASL_HELPERS_AVAILABLE)\n",
-		ORLIX_TCTI_ARM_XML_SOURCE_URL, ORLIX_TCTI_ARM_XML_ARCHIVE_SHA256,
-		ORLIX_TCTI_ARM_XML_RELEASE_NAME, ORLIX_TCTI_ARM_XML_RELEASE_DIGEST,
-		ORLIX_TCTI_ARM_XML_RELEASE_FILE_COUNT,
-		ORLIX_TCTI_ARM_XML_INSTRUCTION_FILE_COUNT,
-		ORLIX_TCTI_ARM_XML_ENCODING_COUNT,
-		ORLIX_TCTI_ARM_XML_INSTRUCTION_PS_COUNT,
-		ORLIX_TCTI_ARM_XML_SHARED_SHA256, ORLIX_TCTI_ARM_XML_NOTICE_SHA256,
-		ORLIX_TCTI_ARM_XML_INDEX_SHA256, ORLIX_TCTI_ARM_XML_LICENSE_CLASS,
-		source_digest,
-		ORLIX_TCTI_ARM_XML_SHARED_PS_COUNT,
-		ORLIX_TCTI_ARM_XML_SHARED_ANCHOR_COUNT,
-		ORLIX_TCTI_ARM_XML_INDEX_FORM_COUNT, xml_matched,
-		inventory.leaf_count - xml_matched, xml_complete,
-		xml_decode_missing, xml_operation_missing,
-		ORLIX_TCTI_ARM_XML_RELEASE_DIGEST) < 0) {
-		result = ORLIX_TCTI_TARGET_ASL_AVAILABILITY_IO;
+		    "ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(\""
+		    "authority=Arm_DDI0602_2026_06|distribution=external_non_redistributed|"
+		    "url=%s|archive_sha256=%s|release=%s|release_digest=%s|"
+		    "shared_pseudocode_sha256=%s|notice_sha256=%s|index_sha256=%s|"
+		    "aarchmrs=vFATAp1-A/build=818/ref=2026-06_rel|"
+		    "instructions_sha256=%s|ddi0602_rows=%zu|"
+		    "official_semantics_not_specified_rows=%zu\")\n",
+		    ORLIX_TCTI_ARM_XML_SOURCE_URL,
+		    ORLIX_TCTI_ARM_XML_ARCHIVE_SHA256,
+		    ORLIX_TCTI_ARM_XML_RELEASE_NAME,
+		    ORLIX_TCTI_ARM_XML_RELEASE_DIGEST,
+		    ORLIX_TCTI_ARM_XML_SHARED_SHA256,
+		    ORLIX_TCTI_ARM_XML_NOTICE_SHA256,
+		    ORLIX_TCTI_ARM_XML_INDEX_SHA256,
+		    source_digest, ddi0602_count, not_specified_count) < 0) {
+		result = ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_IO;
 		goto out;
 	}
+
 	for (index = 0; index < inventory.leaf_count; index++) {
 		const struct orlix_tcti_target_leaf *leaf = &inventory.leaves[index];
-		const struct orlix_tcti_target_operation *semantic =
+		const struct orlix_tcti_target_operation *operation =
 			semantic_operation(&inventory,
 				orlix_tcti_target_inventory_operation(
 					&inventory, leaf->operation_id));
 		const struct orlix_tcti_arm_xml_semantic_entry *entry =
 			orlix_tcti_arm_xml_package_entry(package, leaf->name);
-		const char *body_state = body_state_symbol(semantic->semantic_body_state);
-		const char *decode_state = decode_state_symbol(semantic->decode_state);
 
-		if (!body_state || !decode_state ||
-		    fputs("ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(", output) == EOF ||
-		    fprintf(output, "%zuU, ", index) < 0 ||
-		    emit_string(output, leaf->name) || fputs(", ", output) == EOF ||
-		    emit_string(output, leaf->operation_id) ||
-		    fputs(", ", output) == EOF || emit_string(output, semantic->id) ||
-		    fprintf(output,
-			", \"operations/%s/operation\", %zuU, %zuU, %zuU, %zuU, ",
-			semantic->id, semantic->semantic_member_source_offset,
-			semantic->semantic_member_source_length,
-			semantic->semantic_body_source_offset,
-			semantic->semantic_body_source_length) < 0 ||
-		    emit_string(output, semantic->semantic_body_sha256) ||
-		    fprintf(output,
-			", %s, \"operations/%s/decode\", %zuU, %zuU, %zuU, %zuU, ",
-			body_state, semantic->id, semantic->decode_member_source_offset,
-			semantic->decode_member_source_length,
-			semantic->decode_source_offset,
-			semantic->decode_source_length) < 0 ||
-		    emit_string(output, semantic->decode_sha256) ||
-		    fprintf(output, ", %s, ORLIX_TCTI_A64_ASL_CORPUS_PRESENT, "
-			"ORLIX_TCTI_A64_ASL_HELPERS_AVAILABLE)\n", decode_state) < 0 ||
-		    fputs("ORLIX_TCTI_A64_ASL_XML_ROW(", output) == EOF ||
-		    fprintf(output, "%zuU, ", index) < 0 ||
-		    emit_string(output, leaf->name) ||
-		    fprintf(output, ", %s, ", xml_state_symbol(entry)) < 0 ||
-		    emit_string(output, entry ? entry->relative_file : "") ||
-		    fputs(", ", output) == EOF ||
-		    emit_xml_section(output, entry ? &entry->decode : NULL) ||
-		    fputs(", ", output) == EOF ||
-		    emit_xml_section(output, entry ? &entry->operation : NULL) ||
-		    fputs(")\n", output) == EOF) {
-			result = ORLIX_TCTI_TARGET_ASL_AVAILABILITY_IO;
+		if ((entry && emit_ddi0602_row(output, index, leaf, entry)) ||
+		    (!entry && emit_not_specified_row(output, index, leaf, operation))) {
+			result = ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_IO;
 			goto out;
 		}
 	}
-	result = ferror(output) ? ORLIX_TCTI_TARGET_ASL_AVAILABILITY_IO :
-		ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK;
+
+	result = ferror(output) ? ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_IO :
+		ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_OK;
 out:
 	orlix_tcti_target_inventory_destroy(&inventory);
 	return result;

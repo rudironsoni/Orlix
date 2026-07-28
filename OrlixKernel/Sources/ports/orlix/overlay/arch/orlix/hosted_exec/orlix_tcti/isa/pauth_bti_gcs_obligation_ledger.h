@@ -3,10 +3,10 @@
  * Pinned Arm AARCHMRS 2026-06 obligations for the pointer-authentication,
  * branch-target-identification, and guarded-control-stack families.
  *
- * These rows deliberately retain feature-conditioned EL0 obligations while
- * their official shared ASL operations are unavailable locally.  A generic
- * unsupported decoder result is the current fail-closed implementation state,
- * not a classification of the architectural behavior.
+ * These rows retain feature-conditioned EL0 obligations independently from
+ * their external DDI0602 provenance, which grants no implementation or proof
+ * credit. A generic unsupported decoder result is the current fail-closed
+ * implementation state, not a classification of architectural behavior.
  */
 #ifndef __ORLIX_TCTI_PAUTH_BTI_GCS_OBLIGATION_LEDGER_H
 #define __ORLIX_TCTI_PAUTH_BTI_GCS_OBLIGATION_LEDGER_H
@@ -18,6 +18,18 @@ enum orlix_tcti_pauth_bti_gcs_obligation {
 	ORLIX_TCTI_PAUTH_BTI_GCS_NON_EL0_REJECTION,
 };
 
+enum orlix_tcti_pauth_bti_gcs_semantic_provenance {
+	ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602,
+};
+
+enum orlix_tcti_pauth_bti_gcs_implementation_status {
+	ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
+};
+
+enum orlix_tcti_pauth_bti_gcs_proof_status {
+	ORLIX_TCTI_PAUTH_BTI_GCS_PROOF_REQUIRED_UNPROVEN,
+};
+
 struct orlix_tcti_pauth_bti_gcs_obligation_record {
 	u16 source_ordinal;
 	const char *source_id;
@@ -27,6 +39,9 @@ struct orlix_tcti_pauth_bti_gcs_obligation_record {
 	u32 mask;
 	u32 pattern;
 	enum orlix_tcti_pauth_bti_gcs_obligation required_behavior;
+	enum orlix_tcti_pauth_bti_gcs_semantic_provenance semantic_provenance;
+	enum orlix_tcti_pauth_bti_gcs_implementation_status implementation_status;
+	enum orlix_tcti_pauth_bti_gcs_proof_status proof_status;
 };
 
 #define ORLIX_TCTI_PAUTH_BTI_GCS_OBLIGATION_ROWS(_record) \

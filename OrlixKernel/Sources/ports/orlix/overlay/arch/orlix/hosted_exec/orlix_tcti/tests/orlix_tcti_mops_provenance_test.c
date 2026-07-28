@@ -19,14 +19,38 @@ static void orlix_tcti_mops_provenance_covers_every_pinned_leaf(struct kunit *te
 		KUNIT_EXPECT_EQ(test, leaf.source_ordinal, ordinal);
 		KUNIT_EXPECT_STREQ(test, leaf.feature,
 				  ordinal <= 2686U ? "FEAT_MOPS_GO" : "FEAT_MOPS");
-		KUNIT_EXPECT_EQ(test, leaf.semantics_status,
-				ORLIX_TCTI_MOPS_SEMANTICS_SHARED_ASL_ABSENT_BLOCKING);
+		KUNIT_EXPECT_EQ(test, leaf.semantic_provenance,
+				ordinal <= 2686U ?
+				ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED :
+				ORLIX_TCTI_MOPS_PROVENANCE_EXTERNAL_DDI0602);
+		KUNIT_EXPECT_EQ(test, leaf.implementation_status,
+				ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED);
+		KUNIT_EXPECT_EQ(test, leaf.proof_status,
+				ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN);
 		KUNIT_ASSERT_NOT_NULL(test, leaf.operation);
 		KUNIT_ASSERT_NOT_NULL(test, leaf.asl_operation);
 		count++;
 	}
 
 	KUNIT_EXPECT_EQ(test, count, ORLIX_TCTI_MOPS_TOTAL_LEAF_COUNT);
+}
+
+static void orlix_tcti_mops_go_semantics_remain_officially_unspecified(
+	struct kunit *test)
+{
+	struct orlix_tcti_mops_leaf_provenance leaf;
+	u32 ordinal;
+
+	for (ordinal = 2675U; ordinal <= 2686U; ordinal++) {
+		KUNIT_ASSERT_TRUE(test,
+			orlix_tcti_mops_leaf_provenance(ordinal, &leaf));
+		KUNIT_EXPECT_EQ(test, leaf.semantic_provenance,
+			ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED);
+		KUNIT_EXPECT_EQ(test, leaf.implementation_status,
+			ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED);
+		KUNIT_EXPECT_EQ(test, leaf.proof_status,
+			ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN);
+	}
 }
 
 static void orlix_tcti_mops_provenance_preserves_phase_partitions(struct kunit *test)
@@ -65,6 +89,7 @@ static void orlix_tcti_mops_provenance_preserves_phase_partitions(struct kunit *
 
 static struct kunit_case orlix_tcti_mops_provenance_cases[] = {
 	KUNIT_CASE(orlix_tcti_mops_provenance_covers_every_pinned_leaf),
+	KUNIT_CASE(orlix_tcti_mops_go_semantics_remain_officially_unspecified),
 	KUNIT_CASE(orlix_tcti_mops_provenance_preserves_phase_partitions),
 	{}
 };

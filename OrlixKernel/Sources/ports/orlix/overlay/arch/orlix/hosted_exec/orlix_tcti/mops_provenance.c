@@ -7,9 +7,10 @@
  * The groups below are the exact contiguous source-ordinal partitions in the
  * pinned AARCHMRS 2026-06 artifact.  `operation` is selected from the source
  * operation sequence, so a caller cannot accidentally treat every phase as
- * the same instruction.  `asl_operation` identifies the semantic body
- * recorded as operations/<asl_operation> by target_asl_availability.def.
- * That file currently marks each body absent.
+ * the same instruction. `asl_operation` identifies the external architecture
+ * semantic locator. The 12 FEAT_MOPS_GO leaves are explicitly "Not specified"
+ * by their official operation source; the remaining 120 leaves have external
+ * DDI0602 provenance. Neither disposition grants implementation or proof.
  */
 struct orlix_tcti_mops_leaf_group {
 	u32 first_ordinal;
@@ -172,8 +173,14 @@ bool orlix_tcti_mops_leaf_provenance(u32 source_ordinal,
 		provenance->asl_operation =
 			group->asl_operations[index % group->asl_operation_count];
 		provenance->phase = group->phase;
-		provenance->semantics_status =
-			ORLIX_TCTI_MOPS_SEMANTICS_SHARED_ASL_ABSENT_BLOCKING;
+		provenance->semantic_provenance =
+			group->phase == ORLIX_TCTI_MOPS_PHASE_SET_GO ?
+			ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED :
+			ORLIX_TCTI_MOPS_PROVENANCE_EXTERNAL_DDI0602;
+		provenance->implementation_status =
+			ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED;
+		provenance->proof_status =
+			ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN;
 		return true;
 	}
 

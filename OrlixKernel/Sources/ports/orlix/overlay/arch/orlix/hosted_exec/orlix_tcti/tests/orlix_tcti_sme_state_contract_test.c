@@ -25,6 +25,13 @@ static void orlix_tcti_sme_pstate_contract_covers_each_decoder_alias(struct kuni
 		KUNIT_EXPECT_EQ(test, contract->za, decoded.sme_za);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SME_STATE_EXECUTION_PREREQUISITES,
 				contract->prerequisites);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SME_PROVENANCE_EXTERNAL_DDI0602,
+				contract->semantic_provenance);
+		KUNIT_EXPECT_EQ(test,
+				ORLIX_TCTI_SME_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
+				contract->implementation_status);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SME_PROOF_REQUIRED_UNPROVEN,
+				contract->proof_status);
 	}
 }
 

@@ -24,36 +24,40 @@ static const char *crypto_artifact_string(
 	return (const char *)artifact->string_pool + offset;
 }
 
-struct crypto_asl_availability_row {
+struct crypto_semantic_provenance_row {
 	u32 source_ordinal;
-	const char *source_id;
-	const char *operation;
-	const char *semantic_operation;
-	const char *semantic_member_locator;
-	enum orlix_tcti_target_completion_asl_body_state semantic_body_state;
-	const char *decode_member_locator;
-	enum orlix_tcti_target_completion_asl_decode_state decode_state;
-	enum orlix_tcti_target_completion_asl_corpus_state corpus_state;
-	enum orlix_tcti_target_completion_asl_helper_state helper_state;
+	const char *leaf_name;
+	enum orlix_tcti_a64_semantic_provenance_disposition disposition;
+	const char *relative_file;
+	const char *decode_locator;
+	const char *decode_digest;
+	u32 decode_section_count;
+	u32 decode_helper_count;
+	const char *execute_locator;
+	const char *execute_digest;
+	u32 execute_section_count;
+	u32 execute_helper_count;
 };
 
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(...)
-#define ORLIX_TCTI_A64_ASL_XML_ROW(...)
-#define ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(ordinal, name, operation, semantic_operation, \
-					      semantic_locator, semantic_member_offset, \
-					      semantic_member_length, semantic_body_offset, \
-					      semantic_body_length, semantic_body_digest, semantic_body_state, \
-					      decode_locator, decode_member_offset, decode_member_length, \
-					      decode_offset, decode_length, decode_digest, decode_state, \
-					      corpus_state, helper_state) \
-	{ ordinal, name, operation, semantic_operation, semantic_locator, \
-	  semantic_body_state, decode_locator, decode_state, corpus_state, helper_state },
-static const struct crypto_asl_availability_row crypto_asl_availability[] = {
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(ordinal, leaf_name, relative_file, \
+		decode_locator, decode_digest, decode_sections, decode_helpers, \
+		decode_helper_digest, execute_locator, execute_digest, execute_sections, \
+		execute_helpers, execute_helper_digest) \
+	{ ordinal, leaf_name, ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602, \
+	  relative_file, decode_locator, decode_digest, decode_sections, decode_helpers, \
+	  execute_locator, execute_digest, execute_sections, execute_helpers },
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, leaf_name, \
+		operation_locator, operation_offset, operation_length, operation_digest) \
+	{ ordinal, leaf_name, \
+	  ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_OFFICIAL_SEMANTICS_NOT_SPECIFIED, \
+	  NULL, NULL, NULL, 0U, 0U, operation_locator, operation_digest, 0U, 0U },
+static const struct crypto_semantic_provenance_row crypto_semantic_provenance[] = {
 #include "../isa/target_asl_availability.def"
 };
-#undef ORLIX_TCTI_A64_ASL_XML_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW
-#undef ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
 
 static const struct orlix_tcti_crypto_target_contract_row *
 crypto_target_contract_row(u32 source_ordinal)
@@ -68,14 +72,14 @@ crypto_target_contract_row(u32 source_ordinal)
 	return NULL;
 }
 
-static const struct crypto_asl_availability_row *
-crypto_asl_availability_row(u32 source_ordinal)
+static const struct crypto_semantic_provenance_row *
+crypto_semantic_provenance_row(u32 source_ordinal)
 {
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(crypto_asl_availability); i++)
-		if (crypto_asl_availability[i].source_ordinal == source_ordinal)
-			return &crypto_asl_availability[i];
+	for (i = 0; i < ARRAY_SIZE(crypto_semantic_provenance); i++)
+		if (crypto_semantic_provenance[i].source_ordinal == source_ordinal)
+			return &crypto_semantic_provenance[i];
 
 	return NULL;
 }
@@ -186,6 +190,7 @@ static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
 		const struct orlix_tcti_crypto_target_contract_row *row =
 			&orlix_tcti_crypto_sve_sme_target_contract[i];
 		const struct orlix_tcti_target_instruction_artifact_leaf *leaf;
+		const struct crypto_semantic_provenance_row *provenance;
 		const char *source_id;
 		const char *mnemonic;
 
@@ -206,15 +211,24 @@ static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
 			"source ordinal=%u must retain its pinned feature predicate",
 			row->source_ordinal);
 		KUNIT_EXPECT_NOT_NULL_MSG(test, row->asl_operation,
-			"source ordinal=%u must retain its ASL locator",
+			"source ordinal=%u must retain its semantic locator",
 			row->source_ordinal);
 		KUNIT_EXPECT_NE_MSG(test, '\0', row->asl_operation[0],
-			"source ordinal=%u must retain its ASL locator",
+			"source ordinal=%u must retain its semantic locator",
+			row->source_ordinal);
+		provenance = crypto_semantic_provenance_row(row->source_ordinal);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, provenance, "source ordinal=%u",
+			row->source_ordinal);
+		KUNIT_EXPECT_STREQ_MSG(test, row->source_id, provenance->leaf_name,
+			"source ordinal=%u", row->source_ordinal);
+		KUNIT_EXPECT_EQ_MSG(test,
+			ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602,
+			provenance->disposition, "source ordinal=%u",
 			row->source_ordinal);
 		if (row->family == ORLIX_TCTI_CRYPTO_TARGET_ADVSIMD)
 			KUNIT_EXPECT_EQ_MSG(test,
-				ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED, row->status,
-				"classic leaf %s must remain ASL-blocked", row->source_id);
+				ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING, row->status,
+				"classic leaf %s must remain proof-pending", row->source_id);
 		else
 			KUNIT_EXPECT_EQ_MSG(test,
 				ORLIX_TCTI_CRYPTO_TARGET_REQUIRED_UNIMPLEMENTED, row->status,
@@ -223,8 +237,8 @@ static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
 }
 
 /*
- * Reachability only.  The pinned public package has no shared ASL body for
- * PMUL, so this establishes neither arithmetic semantics nor proof credit.
+ * Reachability only. External DDI0602 provenance for PMUL is independent from
+ * this production implementation, so this establishes no proof credit.
  */
 static void crypto_pmul_source_contract_and_decoder_reachability(
 	struct kunit *test)
@@ -239,7 +253,7 @@ static void crypto_pmul_source_contract_and_decoder_reachability(
 		orlix_tcti_target_instruction_artifact_canonical();
 	const struct orlix_tcti_target_instruction_artifact_leaf *leaf;
 	const struct orlix_tcti_crypto_target_contract_row *contract;
-	const struct crypto_asl_availability_row *asl;
+	const struct crypto_semantic_provenance_row *provenance;
 	struct orlix_tcti_decoded_instruction decoded;
 	struct pt_regs regs = { .pc = 0x4000 };
 	const char *source_id;
@@ -276,24 +290,21 @@ static void crypto_pmul_source_contract_and_decoder_reachability(
 	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd",
 		contract->asl_operation);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_CRYPTO_TARGET_ADVSIMD, contract->family);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING,
 		contract->status);
 
-	asl = crypto_asl_availability_row(3955U);
-	KUNIT_ASSERT_NOT_NULL(test, asl);
-	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", asl->source_id);
-	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", asl->operation);
-	KUNIT_EXPECT_STREQ(test, "PMUL_advsimd", asl->semantic_operation);
-	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd/operation",
-			   asl->semantic_member_locator);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_A64_ASL_BODY_PLACEHOLDER,
-			asl->semantic_body_state);
-	KUNIT_EXPECT_STREQ(test, "operations/PMUL_advsimd/decode",
-			   asl->decode_member_locator);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_A64_ASL_DECODE_NULL, asl->decode_state);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_A64_ASL_CORPUS_ABSENT, asl->corpus_state);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_A64_ASL_HELPERS_UNAVAILABLE,
-			asl->helper_state);
+	provenance = crypto_semantic_provenance_row(3955U);
+	KUNIT_ASSERT_NOT_NULL(test, provenance);
+	KUNIT_EXPECT_STREQ(test, "PMUL_asimdsame_only", provenance->leaf_name);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602,
+			provenance->disposition);
+	KUNIT_ASSERT_NOT_NULL(test, provenance->relative_file);
+	KUNIT_ASSERT_NOT_NULL(test, provenance->decode_locator);
+	KUNIT_ASSERT_NOT_NULL(test, provenance->decode_digest);
+	KUNIT_ASSERT_NOT_NULL(test, provenance->execute_locator);
+	KUNIT_ASSERT_NOT_NULL(test, provenance->execute_digest);
+	KUNIT_EXPECT_GT(test, provenance->decode_section_count, 0U);
+	KUNIT_EXPECT_GT(test, provenance->execute_section_count, 0U);
 
 	decoded = orlix_tcti_decode_aarch64(0x2e239d31U);
 	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
@@ -539,11 +550,11 @@ static int crypto_resume_write_program(unsigned long text, u32 instruction)
 }
 
 /*
- * Production-path regression coverage only. The pinned public AARCHMRS
- * package does not provide the shared ASL bodies required for authoritative
- * semantic proof. These vectors must not discharge source-bound proof or
+ * Production-path regression coverage only. External DDI0602 provenance is
+ * independent from implementation evidence. These vectors must not discharge
+ * source-bound proof or
  * enable runtime capability advertisement, and every exercised leaf remains
- * ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED.
+ * ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING.
  */
 static void crypto_resume_production_path_regression(struct kunit *test)
 {
@@ -581,8 +592,8 @@ static void crypto_resume_production_path_regression(struct kunit *test)
 		contract = crypto_target_contract_row(leaf->source_ordinal);
 		KUNIT_ASSERT_NOT_NULL(test, contract);
 		KUNIT_EXPECT_EQ_MSG(test,
-				    ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_ASL_BLOCKED,
-				    contract->status, "%s source=%u must remain ASL-blocked",
+				    ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING,
+				    contract->status, "%s source=%u must remain proof-pending",
 				    leaf->name, leaf->source_ordinal);
 		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
 				decoded.decode_class);

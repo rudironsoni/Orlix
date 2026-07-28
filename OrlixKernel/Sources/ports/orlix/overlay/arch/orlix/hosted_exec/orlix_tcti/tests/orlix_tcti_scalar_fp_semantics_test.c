@@ -474,9 +474,9 @@ static void orlix_tcti_simd_fp16_three_same_pairwise_and_compare_lanes(
 
 /*
  * These source leaves are intentionally still rejected.  They stay visible as
- * blocking AARCHMRS 2026-06 obligations until their decoder and exact ASL
- * semantics are owned.  The ASL paths identify the authoritative operation
- * entry, not a host-side semantic substitute.
+ * blocking AARCHMRS 2026-06 obligations until their decoder and exact
+ * architecture semantics are owned. The external DDI0602 locators identify
+ * provenance, not a host-side semantic substitute or proof credit.
  */
 static void orlix_tcti_advsimd_fp16_unimplemented_source_leaves_are_rejected(
 	struct kunit *test)
@@ -632,8 +632,8 @@ static void orlix_tcti_scalar_fp16_reserved_width_is_rejected(struct kunit *test
 /*
  * These rows bind the direct scalar conversion encodings to the production
  * resume path.  The pinned source exposes the operation identifier and
- * encoding, while the shared-ASL corpus is still absent, so this is execution
- * evidence only and must not discharge the scalar FP semantic obligation.
+ * encoding. External DDI0602 provenance remains orthogonal, so this execution
+ * evidence must not discharge the scalar FP semantic obligation.
  */
 struct orlix_tcti_scalar_fp_convert_source_row {
 	u16 ordinal;
@@ -1064,7 +1064,7 @@ static void orlix_tcti_scalar_fp_binary_resume_source_rows(struct kunit *test)
 
 /*
  * This is production-path execution evidence for the pinned compare leaves.
- * The absent shared-ASL corpus remains a separate semantic-proof blocker.
+ * External DDI0602 provenance grants no semantic-proof credit.
  */
 struct orlix_tcti_scalar_fp_compare_source_row {
 	u16 ordinal;

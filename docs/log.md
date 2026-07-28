@@ -823,3 +823,16 @@ authorization is verified. The 4,350-leaf AARCHMRS target remains unchanged;
 independently authored OrlixTCTI behavior and source-bound production-path
 KUnit and Linux kselftest evidence now own semantic completion. OpenMinis and
 other implementations remain non-authoritative implementation references.
+
+## [2026-07-28] implement | Publish complete external semantic provenance
+
+The canonical OrlixTCTI artifact now classifies external semantic provenance
+for all 4,350 direct AARCHMRS leaves. 4,332 rows bind exact matching-release
+DDI0602 locators and digests; the remaining 18 bind exact AARCHMRS operation
+locators and digests whose official operation is `// Not specified`. The audit
+rejects missing, stale, incompatible, malformed, dangling, or ambiguous
+provenance. Those 18 rows remain semantic blockers, while valid provenance
+grants no implementation, proof, runtime-capability, or readiness credit. A
+pinned OpenMinis AArch64 gadget map records reusable algorithms, edge cases,
+test ideas, and rejected iOS-incompatible patterns for independent Orlix-owned
+implementation without copying or adopting the external runtime.

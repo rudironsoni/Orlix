@@ -2,7 +2,8 @@
 /*
  * This KUnit is intentionally fail-closed.  It proves that every pinned
  * feature-conditioned PAuth, BTI, and GCS leaf remains explicit and cannot
- * fall through to a baseline decoder class while shared ASL is absent.
+ * fall through to a baseline decoder class. External DDI0602 provenance does
+ * not discharge any implementation, rejection, or proof obligation.
  */
 #include <asm/processor.h>
 #include <asm/ptrace.h>
@@ -20,7 +21,10 @@
 #include "orlix_tcti_test_suites.h"
 
 #define PAUTH_BTI_GCS_RECORD(ordinal, source_id, operation, feature, asl, mask, pattern, behavior) \
-	{ ordinal, source_id, operation, feature, asl, mask, pattern, behavior },
+	{ ordinal, source_id, operation, feature, asl, mask, pattern, behavior, \
+	  ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602, \
+	  ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED, \
+	  ORLIX_TCTI_PAUTH_BTI_GCS_PROOF_REQUIRED_UNPROVEN },
 
 static const struct orlix_tcti_pauth_bti_gcs_obligation_record pauth_bti_gcs_rows[] = {
 	ORLIX_TCTI_PAUTH_BTI_GCS_OBLIGATION_ROWS(PAUTH_BTI_GCS_RECORD)
@@ -43,6 +47,15 @@ static void pauth_bti_gcs_inventory_is_complete_and_explicit(struct kunit *test)
 				      "%s", row->source_id);
 		KUNIT_EXPECT_TRUE_MSG(test, !strncmp(row->asl_operation,
 				    "operations/", 11), "%s", row->source_id);
+		KUNIT_EXPECT_EQ_MSG(test,
+			ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602,
+			row->semantic_provenance, "%s", row->source_id);
+		KUNIT_EXPECT_EQ_MSG(test,
+			ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
+			row->implementation_status, "%s", row->source_id);
+		KUNIT_EXPECT_EQ_MSG(test,
+			ORLIX_TCTI_PAUTH_BTI_GCS_PROOF_REQUIRED_UNPROVEN,
+			row->proof_status, "%s", row->source_id);
 		for (prior = 0; prior < index; prior++)
 			KUNIT_EXPECT_NE_MSG(test, row->source_ordinal,
 					    pauth_bti_gcs_rows[prior].source_ordinal,

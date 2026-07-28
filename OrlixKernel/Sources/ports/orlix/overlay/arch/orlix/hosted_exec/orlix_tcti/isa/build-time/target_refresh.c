@@ -885,19 +885,20 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	if (!has_token(manifest, "ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(") ||
 	    !has_token(manifest, ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256) ||
 	    count_token(manifest, "ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(") != 4350U ||
-	    !has_token(asl_availability, "ORLIX_TCTI_A64_ASL_AVAILABILITY_SOURCE(") ||
+	    count_token(asl_availability,
+			"ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(") != 1U ||
 	    !has_token(asl_availability,
 		       ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256) ||
 	    count_token(asl_availability,
-			"ORLIX_TCTI_A64_ASL_AVAILABILITY_ROW(") != 4350U ||
+			"ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(") != 4332U ||
 	    count_token(asl_availability,
-			"ORLIX_TCTI_A64_ASL_XML_ROW(") != 4350U ||
+			"ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(") != 18U ||
 	    count_token(asl_availability,
-			"ORLIX_TCTI_A64_ASL_XML_SEMANTICS_PRESENT") != 4332U ||
-	    count_token(asl_availability,
-			"ORLIX_TCTI_A64_ASL_XML_ENCODING_ABSENT") != 18U ||
-	    count_token(asl_availability,
-			"ORLIX_TCTI_A64_ASL_XML_SEMANTICS_INCOMPLETE") != 0U ||
+			"ORLIX_TCTI_A64_ASL_AVAILABILITY") != 0U ||
+	    count_token(asl_availability, "ORLIX_TCTI_A64_ASL_BODY_") != 0U ||
+	    count_token(asl_availability, "ORLIX_TCTI_A64_ASL_DECODE_") != 0U ||
+	    count_token(asl_availability, "ORLIX_TCTI_A64_ASL_CORPUS_") != 0U ||
+	    count_token(asl_availability, "ORLIX_TCTI_A64_ASL_HELPERS_") != 0U ||
 	    !has_token(instruction_artifact,
 		       "ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_SOURCE_SHA256 \"") ||
 	    !has_token(instruction_artifact,
@@ -998,7 +999,7 @@ const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_
 	case ORLIX_TCTI_TARGET_REFRESH_PARSE: return "injected parse failure";
 	case ORLIX_TCTI_TARGET_REFRESH_VALIDATION: return "injected cross-artifact validation failure";
 	case ORLIX_TCTI_TARGET_REFRESH_MANIFEST: return "manifest generation failed";
-	case ORLIX_TCTI_TARGET_REFRESH_ASL_AVAILABILITY: return "ASL availability generation failed";
+	case ORLIX_TCTI_TARGET_REFRESH_SEMANTIC_PROVENANCE: return "external semantic provenance generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS: return "instruction artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_FEATURES: return "feature artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_FEATURE_FIELD_DOMAINS:
@@ -1095,17 +1096,18 @@ static int emit_manifest(const struct source_bytes *source,
 	return result;
 }
 
-static int emit_asl_availability(const struct source_bytes *source,
-				 const struct orlix_tcti_arm_xml_package *package,
-				 struct artifact_bytes *artifact)
+static int emit_semantic_provenance(const struct source_bytes *source,
+				    const struct orlix_tcti_arm_xml_package *package,
+				    struct artifact_bytes *artifact)
 {
 	FILE *output = tmpfile();
 	int result;
 
 	if (!output)
 		return -1;
-	result = orlix_tcti_target_asl_availability_emit(source->data, source->length,
-			package, output) == ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK &&
+	result = orlix_tcti_target_semantic_provenance_emit(
+			source->data, source->length, package, output) ==
+		ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_OK &&
 		!capture(output, artifact) ? 0 : -1;
 	fclose(output);
 	return result;
@@ -1382,9 +1384,9 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_MANIFEST;
 		goto out;
 	}
-	if (emit_asl_availability(&instructions, &arm_xml_package,
+	if (emit_semantic_provenance(&instructions, &arm_xml_package,
 				  &asl_availability)) {
-		error = ORLIX_TCTI_TARGET_REFRESH_ASL_AVAILABILITY;
+		error = ORLIX_TCTI_TARGET_REFRESH_SEMANTIC_PROVENANCE;
 		goto out;
 	}
 	if (emit_instructions(&instructions, &instruction_artifact)) {

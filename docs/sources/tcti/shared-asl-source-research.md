@@ -85,6 +85,21 @@ treated as an implementation license.
 I cannot verify any redistributable license for this official shared-ASL corpus
 from the package or Arm's versioned public documentation.
 
+## Coverage limitation
+
+The matching DDI0602 XML archive has semantic encoding entries for 4,332 of the
+4,350 pinned AARCHMRS leaves. It has no instruction XML entry for ordinals
+2235, 2302, 2308 through 2311, and 2675 through 2686. These are `TENTER`,
+`TEXIT`, `TCHANGEB`, `TCHANGEF`, and `SETGO*` encodings. Their AARCHMRS
+operation objects explicitly contain `operation: "// Not specified"` and a
+null decode. They are feature-applicable leaves, not typed inapplicability.
+
+The exact AARCHMRS operation source span and digest can prove that Arm omitted
+the semantics from this release. It cannot define the missing expected behavior
+or grant implementation, proof, or runtime-capability credit. Those 18 rows
+remain semantic-completion blockers until an official compatible semantic
+source exists.
+
 ## Recommended source identity
 
 Use the Arm archive URL, archive SHA-256, release directory, and

@@ -5,8 +5,12 @@
 #include "target_feature_field_domain_binding_artifact.h"
 #include "target_instruction_artifact.h"
 
+#ifdef __KERNEL__
+#include <linux/string.h>
+#else
 #include <stdbool.h>
 #include <string.h>
+#endif
 
 #define APPLICABILITY_ARCHITECTURE "vFAPA2-A"
 #define APPLICABILITY_RELEASE "2026-06_rel"

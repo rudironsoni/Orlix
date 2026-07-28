@@ -8,16 +8,16 @@
 #include "target_arm_xml_package.h"
 
 /* This is source availability only. It is never semantic provenance. */
-enum orlix_tcti_target_asl_availability_error {
-	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_OK = 0,
-	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_INVALID_ARGUMENT,
-	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_SOURCE,
-	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_MISSING_OPERATION,
-	ORLIX_TCTI_TARGET_ASL_AVAILABILITY_IO,
+enum orlix_tcti_target_semantic_provenance_error {
+	ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_OK = 0,
+	ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_INVALID_ARGUMENT,
+	ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_SOURCE,
+	ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_MISSING_OPERATION,
+	ORLIX_TCTI_TARGET_SEMANTIC_PROVENANCE_IO,
 };
 
-enum orlix_tcti_target_asl_availability_error
-orlix_tcti_target_asl_availability_emit(
+enum orlix_tcti_target_semantic_provenance_error
+orlix_tcti_target_semantic_provenance_emit(
 	const char *source, size_t length,
 	const struct orlix_tcti_arm_xml_package *package, FILE *output);
 
