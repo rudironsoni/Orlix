@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
+#include <linux/completion.h>
 #include <linux/err.h>
+#include <linux/jiffies.h>
+#include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
+#include <linux/sched/mm.h>
 #include <linux/syscalls.h>
 #include <asm/orlix_tcti.h>
 #include <asm/processor.h>
@@ -81,6 +85,18 @@ orlix_tcti_test_base_atomic_operation(const char *operation)
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++)
 		if (orlix_tcti_test_is_base_atomic(&orlix_tcti_test_sources[index]) &&
 		    !strcmp(orlix_tcti_test_sources[index].operation, operation))
+			return &orlix_tcti_test_sources[index];
+	return NULL;
+}
+
+static const struct orlix_tcti_test_atomic_source *
+orlix_tcti_test_base_atomic_name(const char *name)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++)
+		if (orlix_tcti_test_is_base_atomic(&orlix_tcti_test_sources[index]) &&
+		    !strcmp(orlix_tcti_test_sources[index].name, name))
 			return &orlix_tcti_test_sources[index];
 	return NULL;
 }
@@ -837,56 +853,361 @@ static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(read_only, PAGE_SIZE));
 }
 
-static void orlix_tcti_base_atomic_atomicity_is_page_serialized(struct kunit *test)
+struct orlix_tcti_base_atomic_pair {
+	u64 low;
+	u64 high;
+};
+
+struct orlix_tcti_base_atomic_concurrent {
+	struct mm_struct *mm;
+	unsigned long address;
+	const struct orlix_tcti_decoded_instruction *decoded;
+	const struct orlix_tcti_base_atomic_pair *first;
+	const struct orlix_tcti_base_atomic_pair *second;
+	struct completion start;
+	struct completion reader_ready;
+	struct completion writer_done;
+	struct completion reader_done;
+	atomic_t writer_running;
+	int writer_ret;
+	int reader_ret;
+	bool torn;
+};
+
+static int orlix_tcti_base_atomic_pair_writer(void *data)
 {
-	size_t index;
-	size_t atomic = 0;
+	struct orlix_tcti_base_atomic_concurrent *state = data;
+	struct orlix_tcti_base_atomic_pair expected = *state->first;
+	unsigned int iteration;
+	struct pt_regs regs = {};
 
-	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
-		const struct orlix_tcti_test_atomic_source *source =
-			&orlix_tcti_test_sources[index];
-		struct orlix_tcti_decoded_instruction decoded;
+	kthread_use_mm(state->mm);
+	wait_for_completion(&state->start);
+	for (iteration = 0; iteration < 512U && !kthread_should_stop(); iteration++) {
+		const struct orlix_tcti_base_atomic_pair *desired =
+			!memcmp(&expected, state->first, sizeof(expected)) ?
+				state->second : state->first;
 
-		if (!orlix_tcti_test_is_base_atomic(source))
-			continue;
-		decoded = orlix_tcti_decode_aarch64(
-			orlix_tcti_test_legal_instruction(source));
-		if (decoded.decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC ||
-		    decoded.exclusive)
-			atomic++;
+		regs.regs[state->decoded->rn] = state->address;
+		regs.regs[state->decoded->rs] = expected.low;
+		regs.regs[state->decoded->rs + 1U] = expected.high;
+		regs.regs[state->decoded->rt] = desired->low;
+		regs.regs[state->decoded->rt + 1U] = desired->high;
+		state->writer_ret = orlix_tcti_switch_debug_execute_decoded(
+			state->mm, &regs, state->decoded, NULL);
+		if (state->writer_ret)
+			break;
+		if (regs.regs[state->decoded->rs] != expected.low ||
+		    regs.regs[state->decoded->rs + 1U] != expected.high) {
+			state->writer_ret = -EAGAIN;
+			break;
+		}
+		expected = *desired;
+		cond_resched();
 	}
-	KUNIT_EXPECT_GT(test, atomic, 0U);
+	atomic_set(&state->writer_running, 0);
+	kthread_unuse_mm(state->mm);
+	complete(&state->writer_done);
+	return 0;
 }
 
-static void orlix_tcti_base_atomic_order_classes_are_exact(struct kunit *test)
+static int orlix_tcti_base_atomic_pair_reader(void *data)
 {
+	struct orlix_tcti_base_atomic_concurrent *state = data;
+	struct orlix_tcti_base_atomic_pair observed;
+
+	kthread_use_mm(state->mm);
+	complete(&state->reader_ready);
+	wait_for_completion(&state->start);
+	while (atomic_read(&state->writer_running) && !kthread_should_stop()) {
+		state->reader_ret = orlix_tcti_read_user_data(state->mm,
+			state->address, &observed, sizeof(observed));
+		if (state->reader_ret ||
+		    (memcmp(&observed, state->first, sizeof(observed)) &&
+		     memcmp(&observed, state->second, sizeof(observed)))) {
+			state->torn = true;
+			break;
+		}
+		cond_resched();
+	}
+	kthread_unuse_mm(state->mm);
+	complete(&state->reader_done);
+	return 0;
+}
+
+static void orlix_tcti_base_atomic_concurrent_no_tearing(struct kunit *test)
+{
+	static const struct orlix_tcti_base_atomic_pair first = {
+		.low = 0x0123456789abcdefULL,
+		.high = 0xfedcba9876543210ULL,
+	};
+	static const struct orlix_tcti_base_atomic_pair second = {
+		.low = 0x1122334455667788ULL,
+		.high = 0x8877665544332211ULL,
+	};
+	const struct orlix_tcti_test_atomic_source *source = NULL;
+	struct orlix_tcti_decoded_instruction decoded;
+	struct orlix_tcti_base_atomic_concurrent state;
+	struct task_struct *writer = NULL;
+	struct task_struct *reader = NULL;
+	unsigned long mapped;
 	size_t index;
-	size_t rcsc = 0;
-	size_t rcpc = 0;
-	size_t limited = 0;
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
-		const struct orlix_tcti_test_atomic_source *source =
-			&orlix_tcti_test_sources[index];
-		struct orlix_tcti_decoded_instruction decoded;
-
-		if (!orlix_tcti_test_is_base_atomic(source))
-			continue;
-		decoded = orlix_tcti_decode_aarch64(
-			orlix_tcti_test_legal_instruction(source));
-		KUNIT_EXPECT_FALSE_MSG(test,
-			decoded.rcpc_acquire && decoded.limited_ordering, "%s",
-			source->name);
-		if (decoded.rcpc_acquire)
-			rcpc++;
-		else if (decoded.limited_ordering)
-			limited++;
-		else if (decoded.acquire || decoded.release)
-			rcsc++;
+		if (orlix_tcti_test_is_base_atomic(&orlix_tcti_test_sources[index]) &&
+		    !strcmp(orlix_tcti_test_sources[index].name,
+			    "CASPAL_CP64_comswappr")) {
+			source = &orlix_tcti_test_sources[index];
+			break;
+		}
 	}
-	KUNIT_EXPECT_GT(test, rcsc, 0U);
-	KUNIT_EXPECT_GT(test, rcpc, 0U);
-	KUNIT_EXPECT_GT(test, limited, 0U);
+	KUNIT_ASSERT_NOT_NULL(test, source);
+	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_LSE_ATOMIC, decoded.decode_class);
+	KUNIT_ASSERT_TRUE(test, decoded.pair);
+	KUNIT_ASSERT_TRUE(test, decoded.acquire);
+	KUNIT_ASSERT_TRUE(test, decoded.release);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, mapped,
+		&first, sizeof(first)));
+	memset(&state, 0, sizeof(state));
+	state.mm = current->mm;
+	state.address = mapped;
+	state.decoded = &decoded;
+	state.first = &first;
+	state.second = &second;
+	init_completion(&state.start);
+	init_completion(&state.reader_ready);
+	init_completion(&state.writer_done);
+	init_completion(&state.reader_done);
+	atomic_set(&state.writer_running, 1);
+	writer = kthread_run(orlix_tcti_base_atomic_pair_writer, &state,
+		"orlix-tcti-base-pair-writer");
+	if (IS_ERR(writer)) {
+		KUNIT_FAIL(test, "failed to create pair writer");
+		writer = NULL;
+		goto out_unmap;
+	}
+	reader = kthread_run(orlix_tcti_base_atomic_pair_reader, &state,
+		"orlix-tcti-base-pair-reader");
+	if (IS_ERR(reader)) {
+		KUNIT_FAIL(test, "failed to create pair reader");
+		reader = NULL;
+		goto out_stop;
+	}
+	if (!wait_for_completion_timeout(&state.reader_ready,
+		msecs_to_jiffies(5000))) {
+		KUNIT_FAIL(test, "pair reader did not become ready");
+		goto out_stop;
+	}
+	complete_all(&state.start);
+	if (!wait_for_completion_timeout(&state.writer_done,
+		msecs_to_jiffies(5000)))
+		KUNIT_FAIL(test, "pair writer timed out");
+
+out_stop:
+	complete_all(&state.start);
+	if (writer)
+		kthread_stop(writer);
+	if (reader)
+		kthread_stop(reader);
+	KUNIT_EXPECT_EQ(test, 0, state.writer_ret);
+	KUNIT_EXPECT_EQ(test, 0, state.reader_ret);
+	KUNIT_EXPECT_FALSE(test, state.torn);
+
+out_unmap:
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void orlix_tcti_base_atomic_exclusive_monitor_is_exact(struct kunit *test)
+{
+	const struct orlix_tcti_test_atomic_source *load =
+		orlix_tcti_test_base_atomic_name("LDXR_LR64_ldstexclr");
+	const struct orlix_tcti_test_atomic_source *store =
+		orlix_tcti_test_base_atomic_name("STXR_SR64_ldstexclr");
+	struct orlix_tcti_decoded_instruction load_decoded;
+	struct orlix_tcti_decoded_instruction store_decoded;
+	struct pt_regs regs = {};
+	unsigned long mapped;
+	u64 initial = 0x1122334455667788ULL;
+	u64 interference = 0xaabbccddeeff0011ULL;
+	u64 desired = 0x8877665544332211ULL;
+	u64 observed = 0;
+
+	KUNIT_ASSERT_NOT_NULL(test, load);
+	KUNIT_ASSERT_NOT_NULL(test, store);
+	load_decoded = orlix_tcti_decode_aarch64(
+		orlix_tcti_test_legal_instruction(load));
+	store_decoded = orlix_tcti_decode_aarch64(
+		orlix_tcti_test_legal_instruction(store));
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, mapped,
+		&initial, load_decoded.access_size));
+	regs.regs[load_decoded.rn] = mapped;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(current->mm,
+		&regs, &load_decoded, NULL));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, mapped,
+		&interference, load_decoded.access_size));
+	regs.regs[store_decoded.rn] = mapped;
+	regs.regs[store_decoded.rt] = desired;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(current->mm,
+		&regs, &store_decoded, NULL));
+	KUNIT_EXPECT_EQ(test, 1ULL, regs.regs[store_decoded.rs]);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, mapped,
+		&observed, load_decoded.access_size));
+	KUNIT_EXPECT_EQ(test, interference, observed);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+struct orlix_tcti_base_atomic_ordering_state {
+	struct mm_struct *mm;
+	unsigned long data_address;
+	unsigned long flag_address;
+	const struct orlix_tcti_decoded_instruction *store;
+	const struct orlix_tcti_decoded_instruction *load;
+	struct completion start;
+	struct completion producer_done;
+	struct completion consumer_done;
+	int producer_ret;
+	int consumer_ret;
+	bool forbidden;
+};
+
+static int orlix_tcti_base_atomic_ordering_producer(void *data)
+{
+	struct orlix_tcti_base_atomic_ordering_state *state = data;
+	struct pt_regs regs = {};
+	u64 payload = 1;
+
+	kthread_use_mm(state->mm);
+	wait_for_completion(&state->start);
+	state->producer_ret = orlix_tcti_write_user_data(state->mm,
+		state->data_address, &payload, sizeof(payload));
+	if (!state->producer_ret) {
+		regs.regs[state->store->rn] = state->flag_address;
+		regs.regs[state->store->rt] = 1;
+		state->producer_ret = orlix_tcti_switch_debug_execute_decoded(
+			state->mm, &regs, state->store, NULL);
+	}
+	kthread_unuse_mm(state->mm);
+	complete(&state->producer_done);
+	return 0;
+}
+
+static int orlix_tcti_base_atomic_ordering_consumer(void *data)
+{
+	struct orlix_tcti_base_atomic_ordering_state *state = data;
+	struct pt_regs regs = {};
+	u64 payload = 0;
+	unsigned int spin;
+
+	kthread_use_mm(state->mm);
+	wait_for_completion(&state->start);
+	for (spin = 0; spin < 100000U && !kthread_should_stop(); spin++) {
+		regs.regs[state->load->rn] = state->flag_address;
+		state->consumer_ret = orlix_tcti_switch_debug_execute_decoded(
+			state->mm, &regs, state->load, NULL);
+		if (state->consumer_ret || regs.regs[state->load->rt])
+			break;
+		cpu_relax();
+		cond_resched();
+	}
+	if (!state->consumer_ret && regs.regs[state->load->rt]) {
+		state->consumer_ret = orlix_tcti_read_user_data(state->mm,
+			state->data_address, &payload, sizeof(payload));
+		state->forbidden = !state->consumer_ret && !payload;
+	} else if (!state->consumer_ret) {
+		state->consumer_ret = -ETIMEDOUT;
+	}
+	kthread_unuse_mm(state->mm);
+	complete(&state->consumer_done);
+	return 0;
+}
+
+static void orlix_tcti_base_atomic_forbidden_ordering_outcomes(struct kunit *test)
+{
+	static const struct {
+		const char *store;
+		const char *load;
+		bool rcpc;
+		bool limited;
+	} profiles[] = {
+		{ "STLR_SL64_ldstord", "LDAR_LR64_ldstord", false, false },
+		{ "STLR_SL64_ldstord", "LDAPR_64L_memop", true, false },
+		{ "STLLR_SL64_ldstord", "LDLAR_LR64_ldstord", false, true },
+	};
+	unsigned long mapped;
+	size_t index;
+
+	mapped = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	for (index = 0; index < ARRAY_SIZE(profiles); index++) {
+		const struct orlix_tcti_test_atomic_source *store_source =
+			orlix_tcti_test_base_atomic_name(profiles[index].store);
+		const struct orlix_tcti_test_atomic_source *load_source =
+			orlix_tcti_test_base_atomic_name(profiles[index].load);
+		struct orlix_tcti_decoded_instruction store;
+		struct orlix_tcti_decoded_instruction load;
+		struct orlix_tcti_base_atomic_ordering_state state = {};
+		struct task_struct *producer;
+		struct task_struct *consumer;
+		u64 zero = 0;
+
+		KUNIT_ASSERT_NOT_NULL(test, store_source);
+		KUNIT_ASSERT_NOT_NULL(test, load_source);
+		store = orlix_tcti_decode_aarch64(
+			orlix_tcti_test_legal_instruction(store_source));
+		load = orlix_tcti_decode_aarch64(
+			orlix_tcti_test_legal_instruction(load_source));
+		KUNIT_ASSERT_TRUE(test, store.release);
+		KUNIT_ASSERT_TRUE(test, load.acquire);
+		KUNIT_EXPECT_EQ(test, profiles[index].rcpc, load.rcpc_acquire);
+		KUNIT_EXPECT_EQ(test, profiles[index].limited,
+			load.limited_ordering);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			mapped, &zero, sizeof(zero)));
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			mapped + PAGE_SIZE, &zero, sizeof(zero)));
+		state.mm = current->mm;
+		state.data_address = mapped;
+		state.flag_address = mapped + PAGE_SIZE;
+		state.store = &store;
+		state.load = &load;
+		init_completion(&state.start);
+		init_completion(&state.producer_done);
+		init_completion(&state.consumer_done);
+		producer = kthread_run(orlix_tcti_base_atomic_ordering_producer,
+			&state, "orlix-tcti-order-producer");
+		KUNIT_ASSERT_FALSE(test, IS_ERR(producer));
+		consumer = kthread_run(orlix_tcti_base_atomic_ordering_consumer,
+			&state, "orlix-tcti-order-consumer");
+		if (IS_ERR(consumer)) {
+			complete_all(&state.start);
+			kthread_stop(producer);
+			KUNIT_FAIL(test, "failed to create ordering consumer");
+			break;
+		}
+		complete_all(&state.start);
+		if (!wait_for_completion_timeout(&state.producer_done,
+			msecs_to_jiffies(5000)))
+			KUNIT_FAIL(test, "ordering producer timed out");
+		if (!wait_for_completion_timeout(&state.consumer_done,
+			msecs_to_jiffies(5000)))
+			KUNIT_FAIL(test, "ordering consumer timed out");
+		kthread_stop(producer);
+		kthread_stop(consumer);
+		KUNIT_EXPECT_EQ_MSG(test, 0, state.producer_ret, "profile=%zu",
+			index);
+		KUNIT_EXPECT_EQ_MSG(test, 0, state.consumer_ret, "profile=%zu",
+			index);
+		KUNIT_EXPECT_FALSE_MSG(test, state.forbidden, "profile=%zu", index);
+	}
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, 2 * PAGE_SIZE));
 }
 
 static struct kunit_case orlix_tcti_base_atomic_source_bound_cases[] = {
@@ -901,8 +1222,9 @@ static struct kunit_case orlix_tcti_base_atomic_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_base_atomic_rcw_conditional_writes_and_flags),
 	KUNIT_CASE(orlix_tcti_base_atomic_executes_ls64_state),
 	KUNIT_CASE(orlix_tcti_base_atomic_faults_are_precise),
-	KUNIT_CASE(orlix_tcti_base_atomic_atomicity_is_page_serialized),
-	KUNIT_CASE(orlix_tcti_base_atomic_order_classes_are_exact),
+	KUNIT_CASE(orlix_tcti_base_atomic_concurrent_no_tearing),
+	KUNIT_CASE(orlix_tcti_base_atomic_exclusive_monitor_is_exact),
+	KUNIT_CASE(orlix_tcti_base_atomic_forbidden_ordering_outcomes),
 	{}
 };
 
