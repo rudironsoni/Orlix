@@ -94,6 +94,15 @@ ORLIX_IOS_TARGET := arm64-apple-ios
 ORLIX_IOS_SIMULATOR_TARGET := arm64-apple-ios-simulator
 ORLIX_HOSTED_SYSCALL_GATE_ADDRESS ?= 0x00000001fff00000
 ORLIX_KERNEL_HOSTCFLAGS = -I$(LINUX_HOST_COMPAT_INCLUDE_ROOT) -I$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/include/uapi -include linux_arm_elf_compat.h -D_UUID_T
+ORLIX_KERNEL_HOST_TOOL_ENV = /usr/bin/env \
+	-u MAKEFLAGS \
+	-u MFLAGS \
+	-u GNUMAKEFLAGS \
+	-u MACOSX_DEPLOYMENT_TARGET \
+	-u IPHONEOS_DEPLOYMENT_TARGET \
+	-u TVOS_DEPLOYMENT_TARGET \
+	-u WATCHOS_DEPLOYMENT_TARGET \
+	-u XROS_DEPLOYMENT_TARGET
 
 define orlix_kernel_acquire_profile_lock
 if [ "$${ORLIX_KERNEL_PROFILE_LOCK_HELD:-0}" != 1 ]; then \
@@ -1866,11 +1875,11 @@ __prepare-kbuild: __prepare-port
 		mkdir -p "$$build_dir"; \
 	fi; \
 	[ -n "$(ORLIX_KERNEL_HOST_SDKROOT)" ] || { echo "macOS SDK is required for Linux Kbuild host tools; set ORLIX_KERNEL_HOST_SDKROOT=/path/to/MacOSX.sdk" >&2; exit 1; }; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
+	$(ORLIX_KERNEL_HOST_TOOL_ENV) SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
 	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
 		"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$$build_dir" "$$build_dir/.config" "$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" olddefconfig prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o security/selinux/avc.o; \
+	$(ORLIX_KERNEL_HOST_TOOL_ENV) SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$build_dir" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" prepare scripts dtbs arch/$(ORLIX_PORT_ARCH)/kernel/vmlinux.lds drivers/of/empty_root.dtb.o lib/crc32.o security/selinux/avc.o; \
 	for dtb in release development; do \
 		[ -f "$$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" ] || { echo "missing profile DTB: $$build_dir/arch/$(ORLIX_PORT_ARCH)/boot/dts/$$dtb.dtb" >&2; exit 1; }; \
 	done; \
@@ -1878,7 +1887,7 @@ __prepare-kbuild: __prepare-port
 	mkdir -p "$$build_dir/usr"; \
 	gen_init_cpio="$$build_dir/usr/gen_init_cpio"; \
 	initramfs_list="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" $(ORLIX_KERNEL_KBUILD_HOSTCC) -O2 -Wall -Wmissing-prototypes -Wstrict-prototypes -o "$$gen_init_cpio" "$(ORLIX_KERNEL_PORT_ABS)/usr/gen_init_cpio.c"; \
+	$(ORLIX_KERNEL_HOST_TOOL_ENV) SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" $(ORLIX_KERNEL_KBUILD_HOSTCC) -O2 -Wall -Wmissing-prototypes -Wstrict-prototypes -o "$$gen_init_cpio" "$(ORLIX_KERNEL_PORT_ABS)/usr/gen_init_cpio.c"; \
 	[ -x "$$gen_init_cpio" ] || { echo "missing executable Linux gen_init_cpio: $$gen_init_cpio" >&2; exit 1; }; \
 	[ -s "$$initramfs_list" ] || { echo "missing Orlix no-init initramfs list: $$initramfs_list" >&2; exit 1; }; \
 	grep -Fxq 'CONFIG_INITRAMFS_SOURCE="$$(srctree)/arch/$(ORLIX_PORT_ARCH)/boot/initramfs/no-init.list"' "$$build_dir/.config" || { echo "unexpected CONFIG_INITRAMFS_SOURCE; update Orlix initramfs generation policy" >&2; exit 1; }; \
@@ -1975,7 +1984,7 @@ __headers-install: __prepare-port
 		done; \
 	done; \
 	mkdir -p "$$uapi_build_dir"; \
-	env -u MAKEFLAGS -u MFLAGS -u GNUMAKEFLAGS -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
+	$(ORLIX_KERNEL_HOST_TOOL_ENV) -u DYLD_ROOT_PATH -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FALLBACK_FRAMEWORK_PATH SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -j"$(ORLIX_HEADERS_INSTALL_JOBS)" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$$uapi_build_dir" ARCH="$(LINUX_UAPI_ARCH)" LLVM=1 HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" INSTALL_HDR_PATH="$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)" headers_install; \
 	[ -d "$(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" ] || { echo "missing installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include" >&2; exit 1; }; \
 	printf 'profile=%s\nlinux_version=%s\nlinux_uapi_arch=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(LINUX_UAPI_ARCH)" > "$$header_install_stamp"; \
 	echo "installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include"
@@ -2021,7 +2030,7 @@ __kunit: __prepare-kbuild
 	kunit_config="$(ORLIX_KUNIT_BUILD_DIR)/.config"; \
 	kunit_fragment="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/.kunitconfig"; \
 	if [ ! -s "$$kunit_config" ] || [ "$(ORLIX_PROFILE_CONFIG)" -nt "$$kunit_config" ] || [ "$(ORLIX_KERNEL_PORT_DIR)/.orlix-port-profile" -nt "$$kunit_config" ] || [ "$$kunit_fragment" -nt "$$kunit_config" ]; then \
-		env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
+		$(ORLIX_KERNEL_HOST_TOOL_ENV) SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" defconfig; \
 		"$(ORLIX_KERNEL_PORT_ABS)/scripts/kconfig/merge_config.sh" -m -O "$(ORLIX_KUNIT_BUILD_DIR)" "$$kunit_config" "$$kunit_fragment"; \
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
@@ -2037,7 +2046,7 @@ __kunit: __prepare-kbuild
 	proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$$kunit_config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk)" || exit 1; \
 	$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
 	proof_kcflags="-DORLIX_APP_HOSTED_BOOT=1 -DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\\\"$$proof_archive_sha256\\\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\\\"$$proof_config_sha256\\\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\\\"$$proof_profile_sha256\\\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\\\"$$proof_source_revision\\\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\\\"$$proof_artifact_sha256\\\""; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS="$$proof_kcflags" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/vdso.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET); \
+	$(ORLIX_KERNEL_HOST_TOOL_ENV) SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS="$$proof_kcflags" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/vdso.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET); \
 	[ -s "$(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" ] || { echo "missing OrlixTCTI KUnit archive: $(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" >&2; exit 1; }; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
@@ -2108,8 +2117,7 @@ __kernel-archive: __prepare-kbuild
 		$(call orlix_tcti_write_proof_registry_provenance,$$target_proof_registry_provenance_header,$$target_proof_registry_decode_source,$$target_proof_registry_partition_source,$$target_proof_registry_build_source); \
 		if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
 			if [ ! -x "$$inventory_tool" ] || [ "$$inventory_generator" -nt "$$inventory_tool" ] || [ "$$inventory_definition" -nt "$$inventory_tool" ]; then \
-			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
-				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+			$(ORLIX_KERNEL_HOST_TOOL_ENV) \
 				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
 				"$$hostcc" -std=c11 -Wall -Wextra -Werror \
 				"$$inventory_generator" -o "$$inventory_tool"; \
@@ -2123,8 +2131,7 @@ __kernel-archive: __prepare-kbuild
 			[ "$$target_inventory_source_manifest" -nt "$$target_inventory_tool" ] || \
 			[ "$$target_inventory_classification" -nt "$$target_inventory_tool" ] || \
 			[ "$$target_inventory_system_accessors" -nt "$$target_inventory_tool" ]; then \
-			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
-				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
+			$(ORLIX_KERNEL_HOST_TOOL_ENV) \
 				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
 				"$$hostcc" -std=c11 -Wall -Wextra -Werror \
 				"$$target_inventory_generator" \
