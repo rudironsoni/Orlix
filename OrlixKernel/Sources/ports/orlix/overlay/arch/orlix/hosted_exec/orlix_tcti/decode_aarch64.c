@@ -86,6 +86,10 @@
 #define AARCH64_LOAD_STORE_SIGNED_IMM_PATTERN 0x38000000U
 #define AARCH64_LOAD_STORE_REGISTER_OFFSET_MASK 0x3b200c00U
 #define AARCH64_LOAD_STORE_REGISTER_OFFSET_PATTERN 0x38200800U
+#define AARCH64_GCS_STORE_MASK 0xffffec00U
+#define AARCH64_GCS_STORE_PATTERN 0xd91f0c00U
+#define AARCH64_RPRFM_MASK 0xffe04c18U
+#define AARCH64_RPRFM_PATTERN 0xf8a04818U
 #define AARCH64_LOGICAL_SHIFTED_REGISTER_MASK 0x1f000000U
 #define AARCH64_LOGICAL_SHIFTED_REGISTER_PATTERN 0x0a000000U
 #define AARCH64_LOGICAL_IMMEDIATE_MASK 0x1f800000U
@@ -1381,11 +1385,20 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			decoded.sign_extend_load = true;
 			break;
 		case 3:
-			decoded.load = false;
 			decoded.prefetch = true;
 			break;
 		}
 
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_GCS_STORE_MASK) == AARCH64_GCS_STORE_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_GCS_STORE;
+		decoded.rt = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.access_size = sizeof(u64);
+		decoded.result_size = sizeof(u64);
+		decoded.unprivileged = instruction & BIT(12);
 		return decoded;
 	}
 
@@ -1395,25 +1408,38 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		u8 mode = (instruction >> 23) & 0x3U;
 		bool simd_fp = instruction & BIT(26);
 		u8 scale;
+		u8 offset_scale;
 
 		if (simd_fp) {
-			if (opc == 3)
-				return decoded;
-			scale = opc + 2;
+			if (opc == 3) {
+				scale = 4;
+				decoded.unprivileged = true;
+			} else {
+				scale = opc + 2;
+			}
 		} else {
 			if (opc == 0) {
 				scale = 2;
 			} else if (opc == 1) {
-				if (!(instruction & BIT(22)) || mode == 0)
+				if (mode == 0)
 					return decoded;
-				scale = 2;
-				decoded.sign_extend_load = true;
+				if (instruction & BIT(22)) {
+					scale = 2;
+					decoded.sign_extend_load = true;
+				} else {
+					scale = 3;
+					decoded.memory_tag_store_pair = true;
+				}
 			} else if (opc == 2) {
 				scale = 3;
+			} else if (opc == 3) {
+				scale = 3;
+				decoded.unprivileged = true;
 			} else {
 				return decoded;
 			}
 		}
+		offset_scale = decoded.memory_tag_store_pair ? 4 : scale;
 
 		decoded.decode_class = ORLIX_TCTI_DECODE_LOAD_STORE_PAIR;
 		decoded.rt = instruction & 0x1fU;
@@ -1425,7 +1451,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = decoded.sign_extend_load ?
 				      sizeof(u64) : decoded.access_size;
 		decoded.memory_offset =
-			sign_extend64((instruction >> 15) & 0x7fU, 6) << scale;
+			sign_extend64((instruction >> 15) & 0x7fU, 6) << offset_scale;
 		decoded.memory_index_mode =
 			mode == 1 ? ORLIX_TCTI_MEMORY_INDEX_POST :
 			(mode == 0 || mode == 2) ?
@@ -1580,7 +1606,16 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		u8 scale = size;
 
 		if (!simd_fp && size == 3 && opc == 2) {
-			decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+			decoded.decode_class = ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.rt = instruction & 0x1fU;
+			decoded.prefetch = true;
+			decoded.load = true;
+			decoded.access_size = sizeof(u64);
+			decoded.memory_offset =
+				((instruction >> 10) & 0xfffU) << size;
+			decoded.memory_index_mode =
+				ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 			return decoded;
 		}
 
@@ -1627,8 +1662,19 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		bool simd_fp = instruction & BIT(26);
 
 		if (!simd_fp && size == 3 && opc == 2) {
-			if (mode == 0)
-				decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+			if (mode != 0)
+				return decoded;
+			decoded.decode_class =
+				ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.rt = instruction & 0x1fU;
+			decoded.prefetch = true;
+			decoded.load = true;
+			decoded.access_size = sizeof(u64);
+			decoded.memory_offset =
+				sign_extend64((instruction >> 12) & 0x1ffU, 8);
+			decoded.memory_index_mode =
+				ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 			return decoded;
 		}
 
@@ -1664,6 +1710,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.decode_class = ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE;
 		decoded.rt = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.unprivileged = mode == 2;
 		decoded.memory_offset =
 			sign_extend64((instruction >> 12) & 0x1ffU, 8);
 		decoded.memory_index_mode =
@@ -1694,12 +1741,31 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		u8 option = (instruction >> 13) & 0x7U;
 		bool simd_fp = instruction & BIT(26);
 
+		if ((instruction & AARCH64_RPRFM_MASK) == AARCH64_RPRFM_PATTERN) {
+			decoded.decode_class =
+				ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.rm = (instruction >> 16) & 0x1fU;
+			decoded.rt = instruction & 0x1fU;
+			decoded.prefetch = true;
+			decoded.load = true;
+			decoded.range_prefetch = true;
+			decoded.access_size = 1;
+			return decoded;
+		}
 		if (option != 2 && option != 3 && option != 6 && option != 7)
 			return decoded;
 		if (!simd_fp && size == 3 && opc == 2) {
-			if ((instruction & 0x1fU) >= 24)
-				return decoded;
-			decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+			decoded.decode_class =
+				ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET;
+			decoded.rt = instruction & 0x1fU;
+			decoded.rn = (instruction >> 5) & 0x1fU;
+			decoded.rm = (instruction >> 16) & 0x1fU;
+			decoded.offset_extend = option;
+			decoded.offset_shift = instruction & BIT(12);
+			decoded.prefetch = true;
+			decoded.load = true;
+			decoded.access_size = sizeof(u64);
 			return decoded;
 		}
 

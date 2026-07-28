@@ -538,6 +538,7 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	case ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
+	case ORLIX_TCTI_DECODE_GCS_STORE:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
 	case ORLIX_TCTI_DECODE_LSE_ATOMIC:
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
@@ -614,15 +615,20 @@ static bool orlix_tcti_decoded_for_program_pc(
 }
 
 static bool
-orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *decoded,
+orlix_tcti_memory_alignment_fault(const struct orlix_tcti_decoded_instruction *decoded,
 			 unsigned long address)
 {
 	u8 size;
 
-	if (!decoded || decoded->decode_class != ORLIX_TCTI_DECODE_LSE_ATOMIC)
+	if (!decoded)
 		return false;
 	if (decoded->rn == 31 && !IS_ALIGNED(address, 16))
 		return true;
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_PAIR &&
+	    decoded->memory_tag_store_pair && !IS_ALIGNED(address, 16))
+		return true;
+	if (decoded->decode_class != ORLIX_TCTI_DECODE_LSE_ATOMIC)
+		return false;
 	size = decoded->access_size * (decoded->pair ? 2 : 1);
 	return size && !IS_ALIGNED(address, size);
 }
@@ -819,6 +825,15 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 		orlix_tcti_native_capture_finalize(capture, &result, regs);
 		return result;
 	}
+	if (!user_mode(regs)) {
+		result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
+		result.status = -EPERM;
+		result.pc = regs->pc;
+		(void)orlix_tcti_fetch_instruction(mm, regs->pc,
+					      &result.instruction);
+		orlix_tcti_native_capture_finalize(capture, &result, regs);
+		return result;
+	}
 
 	for (;;) {
 		struct orlix_tcti_gadget_word program[ORLIX_TCTI_BLOCK_PROGRAM_WORDS];
@@ -930,7 +945,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 					block_program_words);
 				result.reason =
 					ret == -EFAULT && block_decoded_valid &&
-					orlix_tcti_lse_alignment_fault(
+					orlix_tcti_memory_alignment_fault(
 						&block_decoded, fault_address) ?
 					ORLIX_TCTI_EXIT_ALIGNMENT_FAULT :
 					ORLIX_TCTI_EXIT_USER_FAULT;
@@ -1077,7 +1092,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 				instruction = decoded.instruction;
 			result.reason =
 				ret == -EFAULT && fault_decoded &&
-				orlix_tcti_lse_alignment_fault(&decoded,
+				orlix_tcti_memory_alignment_fault(&decoded,
 							 fault_address) ?
 				ORLIX_TCTI_EXIT_ALIGNMENT_FAULT :
 				ORLIX_TCTI_EXIT_USER_FAULT;

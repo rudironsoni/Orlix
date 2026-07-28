@@ -87,6 +87,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_scalar_bitops_source_bound_test.o \
 	orlix_tcti_variable_shift_source_bound_test.o \
 	orlix_tcti_advsimd_narrow_widen_source_bound_test.o \
+	orlix_tcti_base_load_store_source_bound_test.o \
 	orlix_tcti_ordinary_single_load_store_source_bound_test.o \
 	orlix_tcti_pair_load_store_source_bound_test.o \
 	orlix_tcti_load_literal_resume_regression_test.o \

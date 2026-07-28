@@ -1925,6 +1925,18 @@ static void orlix_tcti_apply_memory_writeback(struct pt_regs *regs,
 	orlix_tcti_write_memory_base(regs, decoded->rn, base + decoded->memory_offset);
 }
 
+static int orlix_tcti_check_memory_sp_alignment(
+	const struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded,
+	unsigned long *fault_address)
+{
+	if (decoded->rn != 31 || IS_ALIGNED(regs->sp, 16))
+		return 0;
+	if (fault_address)
+		*fault_address = regs->sp;
+	return -EFAULT;
+}
+
 static int orlix_tcti_execute_load_literal(struct mm_struct *mm,
 				     struct pt_regs *regs,
 				     const struct orlix_tcti_decoded_instruction *decoded,
@@ -1971,10 +1983,34 @@ static int orlix_tcti_execute_load_store_pair(struct mm_struct *mm,
 	u64 second;
 	int ret;
 
+	ret = orlix_tcti_check_memory_sp_alignment(regs, decoded, fault_address);
+	if (ret)
+		return ret;
 	if (!mm)
 		return -EINVAL;
 	if (fault_address)
 		*fault_address = address;
+	if (decoded->memory_tag_store_pair) {
+		u8 pair[2 * sizeof(u64)];
+
+		if (decoded->load || decoded->simd_fp ||
+		    decoded->access_size != sizeof(u64))
+			return -EOPNOTSUPP;
+		if (!IS_ALIGNED(address, 2 * sizeof(u64)))
+			return -EFAULT;
+		put_unaligned_le64(orlix_tcti_read_gpr_or_zero(
+			regs, decoded->rt, sizeof(u64)), pair);
+		put_unaligned_le64(orlix_tcti_read_gpr_or_zero(
+			regs, decoded->rt2, sizeof(u64)), pair + sizeof(u64));
+		ret = orlix_tcti_store_tagged_pair(mm, address, pair,
+						 sizeof(pair));
+		if (ret)
+			return ret;
+		orlix_tcti_clear_exclusive_monitor();
+		orlix_tcti_apply_memory_writeback(regs, decoded);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->load) {
 		if (decoded->simd_fp) {
@@ -2065,6 +2101,13 @@ static int orlix_tcti_execute_load_store_immediate(struct mm_struct *mm,
 	u64 value;
 	int ret;
 
+	ret = orlix_tcti_check_memory_sp_alignment(regs, decoded, fault_address);
+	if (ret)
+		return ret;
+	if (decoded->prefetch) {
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	if (!mm)
 		return -EINVAL;
 	if (fault_address)
@@ -2147,6 +2190,13 @@ static int orlix_tcti_execute_load_store_register_offset(struct mm_struct *mm,
 	u64 value;
 	int ret;
 
+	ret = orlix_tcti_check_memory_sp_alignment(regs, decoded, fault_address);
+	if (ret)
+		return ret;
+	if (decoded->prefetch) {
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	if (!mm)
 		return -EINVAL;
 	if (fault_address)
@@ -2185,6 +2235,33 @@ static int orlix_tcti_execute_load_store_register_offset(struct mm_struct *mm,
 			return ret;
 	}
 
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int orlix_tcti_execute_gcs_store(struct mm_struct *mm,
+				 struct pt_regs *regs,
+				 const struct orlix_tcti_decoded_instruction *decoded,
+				 unsigned long *fault_address)
+{
+	unsigned long address = orlix_tcti_memory_base(regs, decoded->rn);
+	u64 value;
+	u8 buffer[sizeof(u64)];
+	int ret;
+
+	ret = orlix_tcti_check_memory_sp_alignment(regs, decoded, fault_address);
+	if (ret)
+		return ret;
+	if (!mm)
+		return -EINVAL;
+	if (fault_address)
+		*fault_address = address;
+	value = orlix_tcti_read_gpr_or_zero(regs, decoded->rt, sizeof(value));
+	put_unaligned_le64(value, buffer);
+	ret = orlix_tcti_write_gcs_user_data(mm, address, buffer, sizeof(buffer));
+	if (ret)
+		return ret;
+	orlix_tcti_clear_exclusive_monitor();
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -7735,6 +7812,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 		return orlix_tcti_execute_load_store_register_offset(mm, regs, decoded,
 							       fault_address);
+	case ORLIX_TCTI_DECODE_GCS_STORE:
+		return orlix_tcti_execute_gcs_store(mm, regs, decoded, fault_address);
 	case ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER:
 		return orlix_tcti_execute_logical_shifted_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE:

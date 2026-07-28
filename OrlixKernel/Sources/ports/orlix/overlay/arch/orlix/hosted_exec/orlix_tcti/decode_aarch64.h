@@ -35,6 +35,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
 	ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
 	ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+	ORLIX_TCTI_DECODE_GCS_STORE,
 	ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER,
 	ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE,
 	ORLIX_TCTI_DECODE_BITFIELD,
@@ -613,6 +614,9 @@ struct orlix_tcti_decoded_instruction {
 	bool simd_indexed;
 	bool sign_extend_load;
 	bool prefetch;
+	bool range_prefetch;
+	bool unprivileged;
+	bool memory_tag_store_pair;
 	u8 offset_extend;
 	bool offset_shift;
 	bool invert_second_operand;

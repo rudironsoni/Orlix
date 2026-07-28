@@ -15,6 +15,7 @@ typedef struct {
 	unsigned long orlix_tcti_static_pie_base;
 	atomic64_t orlix_tcti_mapping_sequence;
 	rwlock_t orlix_tcti_mapping_lock;
+	void *orlix_tcti_memory_metadata;
 } mm_context_t;
 #endif
 

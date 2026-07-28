@@ -134,6 +134,17 @@ int orlix_tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size);
 int orlix_tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 			  const void *buffer, size_t size);
+int orlix_tcti_set_gcs_memory(struct mm_struct *mm, unsigned long user_va,
+			 size_t size, bool enabled);
+int orlix_tcti_write_gcs_user_data(struct mm_struct *mm,
+			      unsigned long user_va, const void *buffer,
+			      size_t size);
+int orlix_tcti_store_tagged_pair(struct mm_struct *mm,
+			    unsigned long tagged_user_va,
+			    const void *buffer, size_t size);
+int orlix_tcti_load_allocation_tag(struct mm_struct *mm,
+			      unsigned long user_va, u8 *tag);
+void orlix_tcti_memory_metadata_destroy(struct mm_struct *mm);
 int orlix_tcti_load_exclusive_user_data(struct mm_struct *mm,
 				  unsigned long user_va, void *buffer, size_t size,
 				  unsigned long *pfn, u64 *generation,

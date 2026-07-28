@@ -24,6 +24,7 @@ enum orlix_tcti_pauth_bti_gcs_semantic_provenance {
 
 enum orlix_tcti_pauth_bti_gcs_implementation_status {
 	ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
+	ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTED,
 };
 
 enum orlix_tcti_pauth_bti_gcs_proof_status {

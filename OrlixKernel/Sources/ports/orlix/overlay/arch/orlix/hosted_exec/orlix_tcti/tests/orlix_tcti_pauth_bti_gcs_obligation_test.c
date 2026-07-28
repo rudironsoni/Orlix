@@ -23,7 +23,9 @@
 #define PAUTH_BTI_GCS_RECORD(ordinal, source_id, operation, feature, asl, mask, pattern, behavior) \
 	{ ordinal, source_id, operation, feature, asl, mask, pattern, behavior, \
 	  ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602, \
-	  ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED, \
+	  ((ordinal) == 2565U || (ordinal) == 2566U) ? \
+		ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTED : \
+		ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED, \
 	  ORLIX_TCTI_PAUTH_BTI_GCS_PROOF_REQUIRED_UNPROVEN },
 
 static const struct orlix_tcti_pauth_bti_gcs_obligation_record pauth_bti_gcs_rows[] = {
@@ -50,12 +52,17 @@ static void pauth_bti_gcs_inventory_is_complete_and_explicit(struct kunit *test)
 		KUNIT_EXPECT_EQ_MSG(test,
 			ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602,
 			row->semantic_provenance, "%s", row->source_id);
-		KUNIT_EXPECT_EQ_MSG(test,
-			ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
-			row->implementation_status, "%s", row->source_id);
-		KUNIT_EXPECT_EQ_MSG(test,
+		if (row->source_ordinal == 2565U || row->source_ordinal == 2566U) {
+			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTED,
+					row->implementation_status);
+		} else {
+			KUNIT_EXPECT_EQ(test,
+				ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED,
+				row->implementation_status);
+		}
+		KUNIT_EXPECT_EQ(test,
 			ORLIX_TCTI_PAUTH_BTI_GCS_PROOF_REQUIRED_UNPROVEN,
-			row->proof_status, "%s", row->source_id);
+			row->proof_status);
 		for (prior = 0; prior < index; prior++)
 			KUNIT_EXPECT_NE_MSG(test, row->source_ordinal,
 					    pauth_bti_gcs_rows[prior].source_ordinal,
@@ -72,6 +79,10 @@ static void pauth_bti_gcs_unimplemented_leaves_fail_closed(struct kunit *test)
 			&pauth_bti_gcs_rows[index];
 		struct orlix_tcti_decoded_instruction decoded =
 			orlix_tcti_decode_aarch64(row->pattern);
+
+		if (row->implementation_status ==
+		    ORLIX_TCTI_PAUTH_BTI_GCS_IMPLEMENTED)
+			continue;
 
 		KUNIT_EXPECT_EQ_MSG(test, row->pattern & row->mask,
 				    decoded.instruction & row->mask,

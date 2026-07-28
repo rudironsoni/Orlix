@@ -17,4 +17,5 @@ obj-y += tls_repair.o
 obj-y += gadget_program.o
 obj-y += block_cache.o
 obj-y += tlb.o
+obj-y += memory_metadata.o
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += tests/
