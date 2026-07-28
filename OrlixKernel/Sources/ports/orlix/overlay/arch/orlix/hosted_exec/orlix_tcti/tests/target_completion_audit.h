@@ -18,6 +18,7 @@ typedef uint64_t orlix_tcti_completion_u64;
 
 #include "target_proof_registry.h"
 #include "target_feature_domain.h"
+#include "target_feature_applicability_artifact.h"
 #include "target_feature_field_domain_binding_artifact.h"
 #include "target_runtime_capability_cohort_artifact.h"
 
@@ -339,6 +340,7 @@ struct orlix_tcti_target_completion_result {
 	size_t unresolved_feature_configuration_rows;
 	size_t unresolved_instruction_operand_rows;
 	size_t invalid_feature_applicability_rows;
+	size_t invalid_feature_applicability_artifact;
 	size_t invalid_feature_artifact;
 	/* ASL provenance must bind every leaf and remain unavailable until present. */
 	size_t asl_availability_rows;
@@ -388,6 +390,7 @@ struct orlix_tcti_target_completion_audit_inputs_for_test {
 	size_t registry_count;
 	/* Optional host-only checked artifact injection for atomicity tests. */
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact;
+	const struct orlix_tcti_target_feature_applicability_artifact *feature_applicability;
 	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
 	size_t linux_proof_count;
 };

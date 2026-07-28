@@ -593,24 +593,70 @@ static int values_equal(const struct orlix_tcti_feature_artifact *artifact,
 	    (right->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_ATOM ||
 	     right->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_DOT_ATOM))
 		return atom_equal(artifact, left, right, equal);
+	if ((left->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+	     left->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) &&
+	    (right->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
+	     right->kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)) {
+		if (!integer_valid(&left->integer) || !integer_valid(&right->integer) ||
+		    orlix_tcti_feature_domain_compare_numeric(left, right, equal))
+			return -1;
+		*equal = !*equal;
+		return 0;
+	}
 	if (left->kind != right->kind)
 		return -1;
 	switch (left->kind) {
 	case ORLIX_TCTI_FEATURE_DOMAIN_VALUE_BOOL:
 		*equal = left->boolean == right->boolean;
 		return 0;
-	case ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED:
-	case ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED:
-		if (!integer_valid(&left->integer) || !integer_valid(&right->integer) ||
-		    left->kind != right->kind)
-			return -1;
-		if (orlix_tcti_feature_domain_compare_numeric(left, right, equal))
-			return -1;
-		*equal = !*equal;
-		return 0;
 	default:
 		return -1;
 	}
+}
+
+static int relation_values_equal(
+	const struct orlix_tcti_feature_artifact *artifact,
+	const struct orlix_tcti_feature_artifact_node *left_node,
+	const struct orlix_tcti_feature_domain_value *left,
+	const struct orlix_tcti_feature_artifact_node *right_node,
+	const struct orlix_tcti_feature_domain_value *right, int *equal)
+{
+	struct orlix_tcti_feature_domain_value parsed;
+	const struct orlix_tcti_feature_domain_value *field;
+	const struct orlix_tcti_feature_domain_value *atom;
+	int order;
+
+	if (!left_node || !right_node)
+		return -1;
+	if (left_node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_FIELD &&
+	    right_node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_VALUE) {
+		field = left;
+		atom = right;
+	} else if (right_node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_FIELD &&
+		   left_node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_VALUE) {
+		field = right;
+		atom = left;
+	} else {
+		return values_equal(artifact, left, right, equal);
+	}
+	if (field->kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED ||
+	    atom->kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_ATOM ||
+	    orlix_tcti_feature_domain_parse_uint_literal(atom->text, &parsed) ||
+	    orlix_tcti_feature_domain_compare_numeric(field, &parsed, &order))
+		return -1;
+	*equal = order == 0;
+	return 0;
+}
+
+static enum orlix_tcti_feature_domain_value_kind relation_context_kind(
+	const struct orlix_tcti_feature_artifact_node *node)
+{
+	if (node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_UINT ||
+	    node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_FIELD)
+		return ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED;
+	if (node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_SINT)
+		return ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
+	return ORLIX_TCTI_FEATURE_DOMAIN_VALUE_INVALID;
 }
 
 int orlix_tcti_feature_domain_compare_numeric(
@@ -659,6 +705,8 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 	const struct orlix_tcti_feature_artifact_node *node;
 	struct orlix_tcti_feature_domain_value left;
 	struct orlix_tcti_feature_domain_value right;
+	orlix_tcti_feature_artifact_u32 child_index;
+	enum orlix_tcti_feature_domain_value_kind numeric_kind;
 	int relation;
 
 	if (index >= artifact->counts.node_count)
@@ -735,9 +783,25 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 		break;
 	case ORLIX_TCTI_FEATURE_ARTIFACT_UINT:
 	case ORLIX_TCTI_FEATURE_ARTIFACT_SINT:
-		if (node->child_count != 1 || !child_valid(artifact, node, 0) ||
-		    evaluate_node(artifact, artifact->children[node->first_child],
-			  environment, scratch, depth + 1U, &left, diagnostic))
+		if (node->child_count != 1 || !child_valid(artifact, node, 0))
+			goto reference_or_child_error;
+		child_index = artifact->children[node->first_child];
+		if (artifact->nodes[child_index].kind ==
+		    ORLIX_TCTI_FEATURE_ARTIFACT_DOT_ATOM) {
+			numeric_kind = node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_UINT ?
+				ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED :
+				ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED;
+			if (!environment->configuration ||
+			    environment->configuration(environment->context, child_index,
+				    numeric_kind, 128U, value))
+				goto missing_configuration;
+			if (!callback_value_valid(value) || value->kind != numeric_kind ||
+			    value->integer.width != 128U)
+				goto callback_value;
+			break;
+		}
+		if (evaluate_node(artifact, child_index,
+				  environment, scratch, depth + 1U, &left, diagnostic))
 			goto reference_or_child_error;
 		if ((left.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED ||
 		     left.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED) &&
@@ -804,9 +868,27 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 		    evaluate_node(artifact, node->right, environment, scratch,
 				  depth + 1U, &right, diagnostic))
 			goto reference_or_child_error;
+		if (artifact->nodes[node->left].kind ==
+			    ORLIX_TCTI_FEATURE_ARTIFACT_INTEGER) {
+			enum orlix_tcti_feature_domain_value_kind context_kind =
+				relation_context_kind(&artifact->nodes[node->right]);
+
+			if (context_kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_INVALID)
+				left.kind = context_kind;
+		}
+		if (artifact->nodes[node->right].kind ==
+			    ORLIX_TCTI_FEATURE_ARTIFACT_INTEGER) {
+			enum orlix_tcti_feature_domain_value_kind context_kind =
+				relation_context_kind(&artifact->nodes[node->left]);
+
+			if (context_kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_INVALID)
+				right.kind = context_kind;
+		}
 		if (node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_EQ ||
 		    node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_NE) {
-			if (values_equal(artifact, &left, &right, &relation))
+			if (relation_values_equal(artifact,
+				    &artifact->nodes[node->left], &left,
+				    &artifact->nodes[node->right], &right, &relation))
 				goto type_error;
 			if (node->kind == ORLIX_TCTI_FEATURE_ARTIFACT_NE)
 				relation = !relation;
@@ -824,6 +906,7 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 		value->boolean = (orlix_tcti_feature_artifact_u8)relation;
 		break;
 	case ORLIX_TCTI_FEATURE_ARTIFACT_IN: {
+		const struct orlix_tcti_feature_artifact_node *left_node;
 		orlix_tcti_feature_artifact_u32 child;
 		int matched = 0;
 
@@ -837,14 +920,17 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 		if (!scalar(&left) || right.kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SET ||
 		    right.node_index >= artifact->counts.node_count)
 			goto type_error;
+		left_node = &artifact->nodes[node->left];
 		node = &artifact->nodes[right.node_index];
 		for (child = 0; child < node->child_count; child++) {
-			if (!child_valid(artifact, node, child) ||
-			    evaluate_node(artifact,
-				 artifact->children[node->first_child + child], environment,
+			if (!child_valid(artifact, node, child))
+				goto reference_or_child_error;
+			child_index = artifact->children[node->first_child + child];
+			if (evaluate_node(artifact, child_index, environment,
 				 scratch, depth + 1U, &right, diagnostic))
 				goto reference_or_child_error;
-			if (values_equal(artifact, &left, &right, &relation))
+			if (relation_values_equal(artifact, left_node, &left,
+				    &artifact->nodes[child_index], &right, &relation))
 				goto type_error;
 			matched |= relation;
 		}
@@ -861,6 +947,10 @@ static int evaluate_node(const struct orlix_tcti_feature_artifact *artifact,
 missing_feature:
 	scratch->active[index] = 0;
 	return fail(diagnostic, ORLIX_TCTI_FEATURE_DOMAIN_MISSING_FEATURE, index);
+missing_configuration:
+	scratch->active[index] = 0;
+	return fail(diagnostic, ORLIX_TCTI_FEATURE_DOMAIN_MISSING_CONFIGURATION,
+		index);
 missing_field:
 	scratch->active[index] = 0;
 	return fail(diagnostic, ORLIX_TCTI_FEATURE_DOMAIN_MISSING_FIELD, index);

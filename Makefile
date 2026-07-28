@@ -57,6 +57,7 @@ ORLIX_TCTI_PROOF_CANDIDATE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/targ
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_ROUNDTRIP_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_instruction_artifact_roundtrip_test
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_instruction_artifact_generated_mutation_test
 ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_artifact_generated_test
+ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_applicability_artifact_test
 ORLIX_TCTI_FEATURE_DOMAIN_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_domain_test
 ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_feature_field_domain_binding_artifact_test
 ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_runtime_capability_cohort_artifact_test
@@ -362,6 +363,17 @@ orlix-tcti-isa-host-tests:
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact_test.c \
+		-o '$(ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_TEST)'
+	@'$(ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_TEST)'
+	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain_test.c \
 		-o '$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'
 	@'$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'
@@ -398,6 +410,7 @@ orlix-tcti-isa-audit: orlix-tcti-isa-host-tests
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \

@@ -46,6 +46,17 @@ enum {
 	N_BINARY_VALUE,
 	N_UINT_BINARY_VALUE,
 	N_SINT_BINARY_VALUE,
+	N_UINT_DOT_A_B,
+	N_FOUR_BIT_VALUE,
+	N_FIVE_BIT_VALUE,
+	N_SEVEN_BIT_VALUE,
+	N_FIELD_VALUE_SET,
+	N_FIELD_VALUE_EQ,
+	N_VALUE_FIELD_NE,
+	N_FIELD_IN_VALUES,
+	N_UINT_VALUE_EQ,
+	N_UINT_DOT_VALUE_EQ,
+	N_SIGNED_VALUE_EQ,
 	N_COUNT,
 };
 
@@ -57,6 +68,8 @@ static orlix_tcti_feature_artifact_u32 children[] = {
 	N_NEGATIVE,	/* N_UINT_NEGATIVE */
 	N_BINARY_VALUE,	/* N_UINT_BINARY_VALUE */
 	N_BINARY_VALUE,	/* N_SINT_BINARY_VALUE */
+	N_DOT_A_B,		/* N_UINT_DOT_A_B */
+	N_FOUR_BIT_VALUE, N_FIVE_BIT_VALUE, /* N_FIELD_VALUE_SET */
 };
 
 static struct orlix_tcti_feature_artifact_node nodes[N_COUNT] = {
@@ -161,6 +174,44 @@ static struct orlix_tcti_feature_artifact_node nodes[N_COUNT] = {
 		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
 		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
 		.first_child = 8, .child_count = 1 },
+	[N_UINT_DOT_A_B] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_UINT,
+		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.first_child = 9, .child_count = 1 },
+	[N_FOUR_BIT_VALUE] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_VALUE,
+		.text = "'0100'", .left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_FIVE_BIT_VALUE] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_VALUE,
+		.text = "'0101'", .left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_SEVEN_BIT_VALUE] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_VALUE,
+		.text = "'0111'", .left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_FIELD_VALUE_SET] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_SET,
+		.left = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.right = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE,
+		.first_child = 10, .child_count = 2 },
+	[N_FIELD_VALUE_EQ] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_EQ,
+		.left = N_FIELD, .right = N_FIVE_BIT_VALUE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_VALUE_FIELD_NE] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_NE,
+		.left = N_FIVE_BIT_VALUE, .right = N_FIELD,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_FIELD_IN_VALUES] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_IN,
+		.left = N_FIELD, .right = N_FIELD_VALUE_SET,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_UINT_VALUE_EQ] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_EQ,
+		.left = N_UINT_FOUR, .right = N_FOUR_BIT_VALUE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_UINT_DOT_VALUE_EQ] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_EQ,
+		.left = N_UINT_DOT_A_B, .right = N_SEVEN_BIT_VALUE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
+	[N_SIGNED_VALUE_EQ] = { .kind = ORLIX_TCTI_FEATURE_ARTIFACT_EQ,
+		.left = N_SINT_BINARY_VALUE, .right = N_BINARY_VALUE,
+		.first_child = ORLIX_TCTI_FEATURE_ARTIFACT_NODE_NONE },
 };
 
 static const struct orlix_tcti_feature_artifact_constraint constraints[] = {
@@ -202,8 +253,33 @@ static int field(void *context, const char *state, const char *register_name,
 	    strcmp(selector, "Value"))
 		return -1;
 	*value = (struct orlix_tcti_feature_domain_value) {
-		.kind = ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED,
+		.kind = ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED,
 		.integer = { .low = 5, .width = 4U },
+	};
+	return 0;
+}
+
+struct configuration_fixture {
+	orlix_tcti_feature_artifact_u32 node_index;
+	orlix_tcti_feature_artifact_u32 returned_width;
+	unsigned int match_count;
+};
+
+static int configuration(void *context,
+	orlix_tcti_feature_artifact_u32 node_index,
+	enum orlix_tcti_feature_domain_value_kind numeric_kind,
+	orlix_tcti_feature_artifact_u32 width,
+	struct orlix_tcti_feature_domain_value *value)
+{
+	const struct configuration_fixture *fixture = context;
+
+	if (!fixture || fixture->match_count != 1 ||
+	 node_index != fixture->node_index || width != 128U ||
+	 numeric_kind != ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED)
+		return -1;
+	*value = (struct orlix_tcti_feature_domain_value) {
+		.kind = numeric_kind,
+		.integer = { .low = 7, .width = fixture->returned_width },
 	};
 	return 0;
 }
@@ -359,6 +435,35 @@ static int evaluates_all_pinned_node_representations(void)
 	CHECK(value.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_BOOL && value.boolean);
 	CHECK(!orlix_tcti_feature_domain_evaluate_constraints(&fixture, &environment,
 						&scratch, &satisfied, &diagnostic));
+	CHECK(!orlix_tcti_feature_domain_evaluate(&fixture, N_FIELD_VALUE_EQ,
+		&environment, &scratch, &value, &diagnostic));
+	CHECK(value.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_BOOL && value.boolean);
+	CHECK(!orlix_tcti_feature_domain_evaluate(&fixture, N_VALUE_FIELD_NE,
+		&environment, &scratch, &value, &diagnostic));
+	CHECK(value.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_BOOL && !value.boolean);
+	CHECK(!orlix_tcti_feature_domain_evaluate(&fixture, N_FIELD_IN_VALUES,
+		&environment, &scratch, &value, &diagnostic));
+	CHECK(value.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_BOOL && value.boolean);
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_VALUE_EQ,
+		&environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error == ORLIX_TCTI_FEATURE_DOMAIN_TYPE);
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_SIGNED_VALUE_EQ,
+		&environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error == ORLIX_TCTI_FEATURE_DOMAIN_TYPE);
+	{
+		struct orlix_tcti_feature_domain_value signed_value = {
+			.kind = ORLIX_TCTI_FEATURE_DOMAIN_VALUE_SIGNED,
+			.integer = { .low = 1U, .width = 8U },
+		};
+		struct orlix_tcti_feature_domain_value unsigned_value = {
+			.kind = ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED,
+			.integer = { .low = 1U, .width = 8U },
+		};
+		int order;
+
+		CHECK(orlix_tcti_feature_domain_compare_numeric(
+			&signed_value, &unsigned_value, &order));
+	}
 	CHECK(satisfied == 1);
 	return 0;
 }
@@ -1445,9 +1550,63 @@ static int source_ordinals_900_through_1199_are_explicitly_evaluated(void)
 	return 0;
 }
 
+static int numeric_configuration_scalars_require_exact_certificate(void)
+{
+	struct configuration_fixture configuration_fixture = {
+		.node_index = N_DOT_A_B,
+		.returned_width = 128U,
+		.match_count = 1,
+	};
+	struct orlix_tcti_feature_domain_environment configuration_environment = {
+		.context = &configuration_fixture,
+		.feature = feature,
+		.configuration = configuration,
+		.field = field,
+	};
+	struct orlix_tcti_feature_domain_value value;
+	struct orlix_tcti_feature_domain_diagnostic diagnostic;
+
+	CHECK(!orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_A_B,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(value.kind == ORLIX_TCTI_FEATURE_DOMAIN_VALUE_UNSIGNED);
+	CHECK(value.integer.width == 128U && value.integer.low == 7U &&
+		!value.integer.high);
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_VALUE_EQ,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error == ORLIX_TCTI_FEATURE_DOMAIN_TYPE);
+
+	configuration_environment.configuration = NULL;
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_A_B,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error ==
+		ORLIX_TCTI_FEATURE_DOMAIN_MISSING_CONFIGURATION);
+
+	configuration_environment.configuration = configuration;
+	configuration_fixture.match_count = 2;
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_A_B,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error ==
+		ORLIX_TCTI_FEATURE_DOMAIN_MISSING_CONFIGURATION);
+
+	configuration_fixture.match_count = 1;
+	configuration_fixture.returned_width = 64U;
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_A_B,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error == ORLIX_TCTI_FEATURE_DOMAIN_CALLBACK_VALUE);
+
+	configuration_fixture.returned_width = 128U;
+	configuration_fixture.node_index = N_A;
+	CHECK(orlix_tcti_feature_domain_evaluate(&fixture, N_UINT_DOT_A_B,
+		&configuration_environment, &scratch, &value, &diagnostic));
+	CHECK(diagnostic.error ==
+		ORLIX_TCTI_FEATURE_DOMAIN_MISSING_CONFIGURATION);
+	return 0;
+}
+
 int main(void)
 {
-	if (tcnd_feature_terminals_bind_to_checked_parameters() ||
+	if (numeric_configuration_scalars_require_exact_certificate() ||
+	    tcnd_feature_terminals_bind_to_checked_parameters() ||
 	    evaluates_all_pinned_node_representations() ||
 	    fails_loud_on_missing_values_types_and_overflow() ||
 	    fails_loud_on_malformed_references_and_cycles() ||

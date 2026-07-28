@@ -179,6 +179,7 @@ static bool completion_projection_dependencies_valid(
 		!result->invalid_linux_proof_provenance_rows &&
 		!result->linux_proof_substitution_rows &&
 		!result->invalid_feature_artifact &&
+		!result->invalid_feature_applicability_artifact &&
 		!result->invalid_source_condition_rows;
 }
 
@@ -271,24 +272,80 @@ static void validate_source_feature_domain(
 	size_t source_count,
 	const struct orlix_tcti_feature_artifact *feature_artifact,
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact,
+	const struct orlix_tcti_target_feature_applicability_artifact *applicability_artifact,
 	struct orlix_tcti_target_completion_result *result,
 	struct orlix_tcti_target_completion_obligation *obligations)
 {
+	struct orlix_tcti_target_feature_applicability_validation_result diagnostic;
+	static unsigned char semantic_active[ORLIX_TCTI_FEATURE_ARTIFACT_NODE_COUNT];
+	static unsigned char semantic_common_seen[
+		ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_MAX_COMMON_VALUES];
+	static size_t semantic_parameter_order[
+		ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_PARAMETERS];
+	static size_t semantic_binding_order[
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_OCCURRENCE_COUNT];
+	static size_t semantic_field_common_index[
+		ORLIX_TCTI_FEATURE_FIELD_DOMAIN_BINDING_IDENTITY_GROUP_COUNT];
+	struct orlix_tcti_target_feature_applicability_semantic_scratch
+		semantic_scratch = {
+			.active_feature_nodes = semantic_active,
+			.active_feature_node_count = sizeof(semantic_active),
+			.common_values_seen = semantic_common_seen,
+			.common_values_seen_count = sizeof(semantic_common_seen),
+			.parameter_order = semantic_parameter_order,
+			.parameter_order_count = sizeof(semantic_parameter_order) /
+				sizeof(semantic_parameter_order[0]),
+			.binding_order = semantic_binding_order,
+			.binding_order_count = sizeof(semantic_binding_order) /
+				sizeof(semantic_binding_order[0]),
+			.field_common_index = semantic_field_common_index,
+			.field_common_index_count = sizeof(semantic_field_common_index) /
+				sizeof(semantic_field_common_index[0]),
+		};
 	size_t index;
+
+	if (!applicability_artifact ||
+	    orlix_tcti_target_feature_applicability_artifact_validate_semantics(
+		applicability_artifact, &semantic_scratch, &diagnostic) ||
+	    strcmp(applicability_artifact->provenance->instructions_sha256,
+		   source_provenance.source_sha256) ||
+	    strcmp(applicability_artifact->provenance->features_sha256,
+		   feature_artifact->source.sha256) ||
+	    applicability_artifact->row_count != source_count) {
+		result->invalid_feature_applicability_artifact++;
+		result->invalid_feature_applicability_rows += source_count;
+		result->unresolved_feature_applicability_rows += source_count;
+		record_error(result,
+			     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
+		if (obligations) {
+			for (index = 0; index < source_count; index++) {
+				obligations[index].feature_union_state =
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID;
+				obligations[index].first_unsupported_error =
+					ORLIX_TCTI_FEATURE_DOMAIN_TCND_INVALID_ARGUMENT;
+				obligations[index].known_feature_union_reason_mask =
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID |
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
+				obligations[index].blocker_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION |
+					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
+			}
+		}
+		return;
+	}
+
 	for (index = 0; index < source_count; index++) {
-		struct orlix_tcti_feature_domain_tcnd_diagnostic diagnostic;
-		struct orlix_tcti_target_instruction_operand_assignment assignment;
-		struct orlix_tcti_feature_domain_tcnd_environment environment;
-		struct orlix_tcti_feature_domain_tcnd_union_candidate candidate;
-		struct orlix_tcti_feature_domain_tcnd_union_result applicability;
+		struct orlix_tcti_feature_domain_tcnd_diagnostic condition_diagnostic;
 		const struct orlix_tcti_target_instruction_artifact_leaf *leaf =
 			&instruction_artifact->leaves[index];
+		const struct orlix_tcti_target_feature_applicability_row *row =
+			&applicability_artifact->rows[index];
 
 		if (!source_condition_matches_artifact(&source[index], leaf,
-						      instruction_artifact) ||
+					       instruction_artifact) ||
 		    orlix_tcti_feature_domain_validate_tcnd_features(
-				feature_artifact, source[index].condition_tcnd_hex,
-				&diagnostic)) {
+			feature_artifact, source[index].condition_tcnd_hex,
+			&condition_diagnostic)) {
 			result->invalid_source_condition_rows++;
 			record_error(result,
 				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_DOMAIN);
@@ -305,89 +362,43 @@ static void validate_source_feature_domain(
 			continue;
 		}
 		result->source_condition_domain_bound_rows++;
-		/*
-		 * The encoding pattern is a checked source witness, not a legal-domain
-		 * enumeration or runtime capability claim. It supplies only the
-		 * source-declared operand values. The missing feature callback keeps
-		 * the full target union incomplete.
-		 */
-		assignment = (struct orlix_tcti_target_instruction_operand_assignment) {
-			.artifact = instruction_artifact,
-			.leaf_index = index,
-			.instruction = leaf->encoding_pattern,
-		};
-		environment = (struct orlix_tcti_feature_domain_tcnd_environment) {
-			.context = &assignment,
-			.operand = orlix_tcti_target_instruction_operand_assignment,
-		};
-		candidate = (struct orlix_tcti_feature_domain_tcnd_union_candidate) {
-			.environment = &environment,
-		};
-		if (orlix_tcti_feature_domain_evaluate_tcnd_union(feature_artifact,
-			source[index].condition_tcnd_hex, &candidate, 1,
-			&applicability)) {
+		if (row->ordinal != index ||
+		    strcmp(row->name, source[index].name) ||
+		    strcmp(row->mnemonic, source[index].mnemonic) ||
+		    strcmp(row->operation_id, source[index].operation_id)) {
+			result->invalid_feature_applicability_rows++;
 			result->unresolved_feature_applicability_rows++;
-			result->unsupported_feature_applicability_rows++;
-			switch (applicability.first_unsupported.error) {
-			case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
-				result->unresolved_feature_configuration_rows++;
-				break;
-			case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
-				result->unresolved_instruction_operand_rows++;
-				break;
-			default:
-				result->invalid_feature_applicability_rows++;
-				break;
-			}
+			record_error(result,
+				     ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
 			if (obligations) {
+				obligations[index].feature_union_state =
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_INVALID;
 				obligations[index].first_unsupported_error =
-					applicability.first_unsupported.error;
-				switch (applicability.first_unsupported.error) {
-				case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_FEATURE:
-					obligations[index].feature_union_state =
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_CONFIGURATION;
-					obligations[index].known_feature_union_reason_mask |=
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_FEATURE;
-					break;
-				case ORLIX_TCTI_FEATURE_DOMAIN_TCND_MISSING_OPERAND:
-					obligations[index].feature_union_state =
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_MISSING_OPERAND;
-					obligations[index].known_feature_union_reason_mask |=
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_MISSING_OPERAND;
-					break;
-				default:
-					obligations[index].feature_union_state =
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_UNRESOLVED;
-					obligations[index].known_feature_union_reason_mask |=
-						ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID;
-					break;
-				}
+					ORLIX_TCTI_FEATURE_DOMAIN_TCND_INVALID_ARGUMENT;
+				obligations[index].known_feature_union_reason_mask |=
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INVALID |
+					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
 				obligations[index].blocker_mask |=
 					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION |
 					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
-				obligations[index].known_feature_union_reason_mask |=
-					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
 			}
-			record_error(result,
-				ORLIX_TCTI_TARGET_COMPLETION_ERROR_FEATURE_APPLICABILITY);
-		} else {
-			result->evaluated_feature_applicability_rows +=
-				applicability.evaluated_count;
-			result->satisfied_feature_applicability_rows +=
-				applicability.satisfied_count;
-			result->unsatisfied_feature_applicability_rows +=
-				applicability.unsatisfied_count;
-			if (obligations) {
-				obligations[index].first_unsupported_error =
-					ORLIX_TCTI_FEATURE_DOMAIN_TCND_OK;
-				obligations[index].feature_union_state =
-					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED;
-				/* No authoritative configuration union exists yet. */
-				obligations[index].blocker_mask |=
-					ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE;
-				obligations[index].known_feature_union_reason_mask |=
-					ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_INCOMPLETE;
-			}
+			continue;
+		}
+		result->evaluated_feature_applicability_rows++;
+		if (row->status == ORLIX_TCTI_TARGET_FEATURE_APPLICABLE)
+			result->satisfied_feature_applicability_rows++;
+		else
+			result->unsatisfied_feature_applicability_rows++;
+		if (obligations) {
+			obligations[index].first_unsupported_error =
+				ORLIX_TCTI_FEATURE_DOMAIN_TCND_OK;
+			obligations[index].feature_union_state =
+				ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_EVALUATED;
+			obligations[index].known_feature_union_reason_mask =
+				ORLIX_TCTI_TARGET_COMPLETION_FEATURE_UNION_REASON_NONE;
+			obligations[index].blocker_mask &=
+				~(ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION |
+				  ORLIX_TCTI_TARGET_COMPLETION_BLOCKER_FEATURE_UNION_INCOMPLETE);
 		}
 	}
 }
@@ -1602,6 +1613,9 @@ static int completion_audit_internal(
 		orlix_tcti_feature_artifact_canonical();
 	const struct orlix_tcti_target_instruction_artifact *instruction_artifact =
 		orlix_tcti_target_instruction_artifact_canonical();
+	const struct orlix_tcti_target_feature_applicability_artifact
+		*feature_applicability =
+			orlix_tcti_target_feature_applicability_artifact();
 	const struct orlix_tcti_target_linux_proof_disposition_row *linux_proof;
 	size_t linux_proof_count;
 	struct orlix_tcti_runtime_capability_cohort_validation_result runtime_diagnostic;
@@ -1633,6 +1647,8 @@ static int completion_audit_internal(
 		registry_count = inputs->registry_count;
 		if (inputs->instruction_artifact)
 			instruction_artifact = inputs->instruction_artifact;
+		if (inputs->feature_applicability)
+			feature_applicability = inputs->feature_applicability;
 		if (inputs->linux_proof || inputs->linux_proof_count) {
 			linux_proof = inputs->linux_proof;
 			linux_proof_count = inputs->linux_proof_count;
@@ -1683,7 +1699,8 @@ static int completion_audit_internal(
 						   result))
 		status = -1;
 	validate_source_feature_domain(source, source_count, feature_artifact,
-			       instruction_artifact, result, obligations);
+				       instruction_artifact, feature_applicability,
+				       result, obligations);
 	if (result->invalid_feature_artifact ||
 	    result->invalid_source_condition_rows ||
 	    result->unresolved_feature_applicability_rows)

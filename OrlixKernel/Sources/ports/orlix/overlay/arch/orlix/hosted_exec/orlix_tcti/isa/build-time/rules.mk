@@ -21,12 +21,14 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES := \
 	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_TEST_DEFINES := \
 	$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES) \
-	-DORLIX_TCTI_TARGET_REFRESH_NO_MAIN
+	-DORLIX_TCTI_TARGET_REFRESH_NO_MAIN \
+	-DORLIX_TCTI_TARGET_REFRESH_TEST_CACHE
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_refresh.c target_artifact_publisher.c target_manifest_generator.c \
 	target_inventory_import.c target_condition_serialization.c \
 	target_instruction_artifact_generator.c target_feature_model.c \
 	target_feature_artifact_generator.c target_feature_field_domain_binding.c \
+	target_feature_sat.c target_feature_applicability_generator.c \
 	target_feature_field_domain_binding_artifact_generator.c \
 	target_runtime_capability_cohort_artifact_generator.c \
 	target_register_model.c target_register_artifact_generator.c \
@@ -90,6 +92,21 @@ __tcti-isa-check:
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_field_domain_binding_artifact_generator_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_field_domain_binding_artifact_generator_test' \
 		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) -O2 $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		target_inventory_import.c target_feature_model.c target_register_model.c \
+		target_feature_field_domain_binding.c target_feature_sat.c \
+		target_feature_sat_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_sat_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_sat_test' \
+		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
+		'$(ORLIX_AARCHMRS_REGISTERS)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		target_feature_model.c target_condition_serialization.c target_feature_sat.c \
+		target_feature_applicability_generator.c \
+		target_feature_applicability_generator_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_applicability_generator_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_feature_applicability_generator_test'
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		target_inventory_import.c target_feature_model.c \
 		target_runtime_capability_cohort_artifact_generator_test.c \
@@ -117,7 +134,7 @@ __tcti-isa-check:
 		target_artifact_publisher_test.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_artifact_publisher_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_artifact_publisher_test'
-	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) -O2 $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
 		$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_TEST_DEFINES) \
 		target_refresh_test.c $(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES) \
@@ -127,7 +144,7 @@ __tcti-isa-check:
 		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)'
 
 __tcti-isa-refresh: __tcti-isa-check
-	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) -O2 $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
 		$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES) \
 		target_refresh.c $(filter-out target_refresh.c,$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES)) \

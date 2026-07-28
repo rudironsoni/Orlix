@@ -19,6 +19,9 @@ enum orlix_tcti_target_feature_applicability_error {
 	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_AUDIT_MISMATCH,
 	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_WITNESS_UNAVAILABLE,
 	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_WITNESS_INVALID,
+	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_CERTIFICATE_INVALID,
+	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_UNSAT_UNCERTIFIED,
+	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_CONDITION_INVALID,
 	ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_IO,
 };
 
@@ -31,7 +34,8 @@ enum orlix_tcti_target_feature_applicability_error {
 enum orlix_tcti_target_feature_applicability_error
 orlix_tcti_target_feature_applicability_emit(const struct orlix_tcti_feature_model *model,
 	const struct orlix_tcti_target_inventory *inventory,
-	const struct orlix_tcti_target_feature_sat_audit *audit, FILE *output);
+	const struct orlix_tcti_target_feature_sat_audit *audit,
+	FILE *output);
 
 const char *orlix_tcti_target_feature_applicability_error_name(
 	enum orlix_tcti_target_feature_applicability_error error);

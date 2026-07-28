@@ -177,3 +177,7 @@ This structural binding does not establish feature applicability,
 satisfiability, implementation, or proof. Linux proof: 6,364 rows; 3,314
 kselftest-owned, 3,050 typed N/A, zero executed. Invalid
 rows fail closed. Execution proof remains open.
+
+Feature-domain SAT: 4,350 applicable, zero impossible or unresolved. The
+checked certificate has 377 common and 364 leaf-scoped operand values;
+canonical replay passes and a source-bound valid-shape mutation fails.

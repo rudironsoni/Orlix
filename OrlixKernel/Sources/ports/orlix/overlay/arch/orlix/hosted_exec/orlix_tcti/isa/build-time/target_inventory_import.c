@@ -57,6 +57,7 @@ struct importer {
 	size_t token_count;
 	size_t expression_depth;
 	size_t tree_depth;
+	int encoding_stack[ORLIX_TCTI_TARGET_MAX_TREE_DEPTH];
 	struct orlix_tcti_target_inventory *inventory;
 	struct orlix_tcti_target_import_error *error;
 };
@@ -953,13 +954,25 @@ static void discard_operands_from(struct orlix_tcti_target_inventory *inventory,
 }
 
 static void discard_fixed_operands_from(struct orlix_tcti_target_inventory *inventory,
-					size_t first)
+					 size_t first)
 {
 	while (inventory->fixed_operand_count > first) {
 		struct orlix_tcti_target_fixed_operand *operand =
 			&inventory->fixed_operands[--inventory->fixed_operand_count];
 
 		inventory->fixed_operand_name_bytes -= strlen(operand->name) + 1;
+		free(operand->name);
+	}
+}
+
+static void discard_condition_operands_from(
+	struct orlix_tcti_target_inventory *inventory, size_t first)
+{
+	while (inventory->condition_operand_count > first) {
+		struct orlix_tcti_target_condition_operand *operand =
+			&inventory->condition_operands[--inventory->condition_operand_count];
+
+		inventory->condition_operand_name_bytes -= strlen(operand->name) + 1U;
 		free(operand->name);
 	}
 }
@@ -1094,6 +1107,59 @@ static int add_fixed_operand(struct importer *importer, int name_token,
 	return 0;
 }
 
+static int add_condition_operand(struct importer *importer, int name_token,
+				 uint32_t leaf_index, uint32_t condition,
+				 unsigned int start, unsigned int width,
+				 uint32_t field_mask, uint32_t fixed_value,
+				 uint32_t variable_mask)
+{
+	struct orlix_tcti_target_inventory *inventory = importer->inventory;
+	struct orlix_tcti_target_condition_operand *operand;
+	char *name = copy_token(importer, name_token);
+	size_t name_bytes;
+
+	if (!name || !name[0]) {
+		free(name);
+		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_INVALID_SOURCE,
+			  importer->tokens[name_token].start,
+			  "inherited A64 condition field lacks a name");
+		return -1;
+	}
+	name_bytes = strlen(name) + 1U;
+	if (name_bytes > ORLIX_TCTI_TARGET_MAX_OPERAND_NAME_BYTES ||
+	    inventory->condition_operand_name_bytes >
+		ORLIX_TCTI_TARGET_MAX_OPERAND_NAME_BYTES - name_bytes ||
+	    inventory->condition_operand_count >= ORLIX_TCTI_TARGET_MAX_OPERANDS) {
+		free(name);
+		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_INPUT_LIMIT,
+			  importer->tokens[name_token].start,
+			  "inherited A64 condition fields exceed limits");
+		return -1;
+	}
+	if (reserve((void **)&inventory->condition_operands,
+		    &inventory->condition_operand_capacity,
+		    inventory->condition_operand_count + 1U,
+		    sizeof(*inventory->condition_operands))) {
+		free(name);
+		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_NO_MEMORY, 0,
+			  "cannot allocate inherited A64 condition fields");
+		return -1;
+	}
+	operand = &inventory->condition_operands[inventory->condition_operand_count++];
+	*operand = (struct orlix_tcti_target_condition_operand) {
+		.name = name,
+		.leaf_index = leaf_index,
+		.condition = condition,
+		.field_mask = field_mask,
+		.fixed_value = fixed_value,
+		.variable_mask = variable_mask,
+		.start = (uint8_t)start,
+		.width = (uint8_t)width,
+	};
+	inventory->condition_operand_name_bytes += name_bytes;
+	return 0;
+}
+
 static int decode_encoding(struct importer *importer, int node_index,
 			   uint32_t leaf_index, uint32_t condition,
 			   uint32_t *mask, uint32_t *pattern)
@@ -1216,6 +1282,76 @@ fail:
 	return -1;
 }
 
+static int operand_name_exists(const struct orlix_tcti_target_inventory *inventory,
+	uint32_t leaf_index, const char *json, const struct json_token *name)
+{
+	size_t index, length = name->end - name->start;
+
+	for (index = 0; index < inventory->operand_count; index++)
+		if (inventory->operands[index].leaf_index == leaf_index &&
+			strlen(inventory->operands[index].name) == length &&
+			!memcmp(inventory->operands[index].name, json + name->start, length))
+			return 1;
+	for (index = 0; index < inventory->fixed_operand_count; index++)
+		if (inventory->fixed_operands[index].leaf_index == leaf_index &&
+		    strlen(inventory->fixed_operands[index].name) == length &&
+		    !memcmp(inventory->fixed_operands[index].name, json + name->start, length))
+			return 1;
+	for (index = 0; index < inventory->condition_operand_count; index++)
+		if (inventory->condition_operands[index].leaf_index == leaf_index &&
+		    strlen(inventory->condition_operands[index].name) == length &&
+		    !memcmp(inventory->condition_operands[index].name,
+			    json + name->start, length))
+			return 1;
+	return 0;
+}
+
+static int add_inherited_operands(struct importer *importer, uint32_t leaf_index,
+	uint32_t condition, uint32_t mask, uint32_t pattern)
+{
+	size_t depth = importer->tree_depth;
+
+	while (depth-- > 0U) {
+		int encoding = importer->encoding_stack[depth];
+		int values = object_find(importer, encoding, "values");
+		size_t item;
+
+		if (values < 0 || importer->tokens[values].kind != JSON_ARRAY)
+			continue;
+		for (item = 0; item < importer->tokens[values].size; item++) {
+			int field = array_element(importer, values, item);
+			int type = object_find(importer, field, "_type");
+			int name = object_find(importer, field, "name");
+			int range, start_token, width_token;
+			unsigned int start, width;
+			uint32_t field_mask, variable_mask;
+
+			if (type < 0 || name < 0 ||
+				!token_equals(importer->json, &importer->tokens[type],
+					"Instruction.Encodeset.Field") ||
+				importer->tokens[name].kind != JSON_STRING ||
+				operand_name_exists(importer->inventory, leaf_index,
+					importer->json, &importer->tokens[name]))
+				continue;
+			range = object_find(importer, field, "range");
+			start_token = object_find(importer, range, "start");
+			width_token = object_find(importer, range, "width");
+			if (unsigned_primitive(importer, start_token, &start) ||
+				unsigned_primitive(importer, width_token, &width) || !width ||
+				start >= 32U || width > 32U - start)
+				return -1;
+			field_mask = width == 32U ? UINT32_MAX :
+				((UINT32_C(1) << width) - 1U) << start;
+			variable_mask = field_mask & ~mask;
+			if (add_condition_operand(importer, name, leaf_index, condition,
+						  start, width, field_mask,
+						  pattern & field_mask, variable_mask))
+				return -1;
+		}
+	}
+	return 0;
+}
+
 static int source_mnemonic(const struct importer *importer, int node_index)
 {
 	int assembly = object_find(importer, node_index, "assembly");
@@ -1248,6 +1384,7 @@ static int add_leaf(struct importer *importer, int node_index,
 	int preferred = object_find(importer, node_index, "preferred");
 	size_t first_operand = inventory->operand_count;
 	size_t first_fixed_operand = inventory->fixed_operand_count;
+	size_t first_condition_operand = inventory->condition_operand_count;
 	size_t i;
 
 	leaf.name = copy_token(importer, name);
@@ -1299,6 +1436,9 @@ static int add_leaf(struct importer *importer, int node_index,
 			    (uint32_t)inventory->leaf_count, condition,
 			    &leaf.encoding_mask, &leaf.encoding_pattern))
 		goto fail;
+	if (add_inherited_operands(importer, (uint32_t)inventory->leaf_count,
+		condition, leaf.encoding_mask, leaf.encoding_pattern))
+		goto fail;
 	if (reserve((void **)&inventory->leaves, &inventory->leaf_capacity,
 		    inventory->leaf_count + 1, sizeof(*inventory->leaves))) {
 		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_NO_MEMORY, 0,
@@ -1310,6 +1450,7 @@ static int add_leaf(struct importer *importer, int node_index,
 fail:
 	discard_operands_from(inventory, first_operand);
 	discard_fixed_operands_from(inventory, first_fixed_operand);
+	discard_condition_operands_from(inventory, first_condition_operand);
 	free(leaf.name);
 	free(leaf.mnemonic);
 	free(leaf.operation_id);
@@ -1458,13 +1599,15 @@ static int import_node(struct importer *importer, int node_index,
 {
 	int status;
 
-	if (++importer->tree_depth > ORLIX_TCTI_TARGET_MAX_TREE_DEPTH) {
+	if (importer->tree_depth >= ORLIX_TCTI_TARGET_MAX_TREE_DEPTH) {
 		set_error(importer->error, ORLIX_TCTI_TARGET_IMPORT_DEPTH_LIMIT,
 			  node_index < 0 ? 0 : importer->tokens[node_index].start,
 			  "A64 instruction tree depth exceeded");
-		importer->tree_depth--;
 		return -1;
 	}
+	importer->encoding_stack[importer->tree_depth] =
+		object_find(importer, node_index, "encoding");
+	importer->tree_depth++;
 	status = import_node_inner(importer, node_index, parent_condition);
 	importer->tree_depth--;
 	return status;
@@ -1991,11 +2134,14 @@ void orlix_tcti_target_inventory_destroy(struct orlix_tcti_target_inventory *inv
 		free(inventory->operands[i].name);
 	for (i = 0; i < inventory->fixed_operand_count; i++)
 		free(inventory->fixed_operands[i].name);
+	for (i = 0; i < inventory->condition_operand_count; i++)
+		free(inventory->condition_operands[i].name);
 	free(inventory->leaves);
 	free(inventory->expressions);
 	free(inventory->set_items);
 	free(inventory->operands);
 	free(inventory->fixed_operands);
+	free(inventory->condition_operands);
 	for (i = 0; i < inventory->operation_count; i++) {
 		free(inventory->operations[i].id);
 		free(inventory->operations[i].alias_operation_id);

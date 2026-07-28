@@ -7,6 +7,9 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	../isa/target_ordinal_ledger.o \
 	target_ordinal_ledger_test.o \
 	target_feature_artifact.o \
+	target_feature_domain.o \
+	target_feature_field_domain_binding_artifact.o \
+	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
 	target_execution_slice_map.o \
 	target_execution_slice_map_test.o \
@@ -107,5 +110,9 @@ $(obj)/target_execution_slice_map.o: \
 	$(src)/../isa/target_execution_slice_map.def \
 	$(src)/../isa/generations/current/source_manifest.def
 $(obj)/target_feature_artifact.o: $(src)/../isa/generations/current/target_feature_artifact.def
+$(obj)/target_feature_field_domain_binding_artifact.o: \
+	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
+	$(src)/../isa/generations/current/target_feature_artifact.def
+$(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/current/target_feature_applicability.def
 
 ccflags-y += -I$(obj)

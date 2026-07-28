@@ -87,6 +87,22 @@ struct orlix_tcti_target_fixed_operand {
 	size_t source_length;
 };
 
+/*
+ * A named ancestor encoding field referenced by an inherited condition.
+ * This is SAT-only source context and is deliberately outside the canonical
+ * instruction operand and fixed-operand projection.
+ */
+struct orlix_tcti_target_condition_operand {
+	char *name;
+	uint32_t leaf_index;
+	uint32_t condition;
+	uint32_t field_mask;
+	uint32_t fixed_value;
+	uint32_t variable_mask;
+	uint8_t start;
+	uint8_t width;
+};
+
 /* An authoritative inline AARCHMRS operation object, not shared-ASL corpus data. */
 enum orlix_tcti_target_operation_body_state {
 	ORLIX_TCTI_TARGET_OPERATION_BODY_ABSENT,
@@ -170,6 +186,10 @@ struct orlix_tcti_target_inventory {
 	size_t fixed_operand_count;
 	size_t fixed_operand_capacity;
 	size_t fixed_operand_name_bytes;
+	struct orlix_tcti_target_condition_operand *condition_operands;
+	size_t condition_operand_count;
+	size_t condition_operand_capacity;
+	size_t condition_operand_name_bytes;
 	struct orlix_tcti_target_operation *operations;
 	size_t operation_count;
 	size_t operation_capacity;

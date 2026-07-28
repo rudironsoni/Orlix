@@ -27,6 +27,7 @@ int main(void)
 		"missing_feature_configuration=%zu "
 		"missing_instruction_operand=%zu "
 		"invalid_feature_applicability=%zu "
+		"invalid_feature_applicability_artifact=%zu "
 	       "invalid_feature_artifact=%zu "
 	       "asl_availability=%zu invalid_asl_availability=%zu "
 	       "unavailable_asl=%zu "
@@ -72,6 +73,7 @@ int main(void)
 		result.unresolved_feature_configuration_rows,
 		result.unresolved_instruction_operand_rows,
 		result.invalid_feature_applicability_rows,
+		result.invalid_feature_applicability_artifact,
 	       result.invalid_feature_artifact,
 	       result.asl_availability_rows,
 	       result.invalid_asl_availability_rows,

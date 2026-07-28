@@ -53,11 +53,27 @@ static int outputs_match(FILE *left, FILE *right)
 static int emits_all_pinned_ordinals_with_witnesses(void)
 {
 	static char name[] = "A";
+	static char pmu[] = "PMU", pmdevid[] = "PMDEVID", version[] = "VERSION";
+	static uint32_t children[] = { 1U, 2U, 3U, 4U };
+	static uint32_t constraints[] = { 7U };
 	struct orlix_tcti_feature_parameter parameter = { .name = name };
-	struct orlix_tcti_feature_node node = { .kind = ORLIX_TCTI_FEATURE_IDENTIFIER, .text = name };
+	struct orlix_tcti_feature_node nodes[] = {
+		{ .kind = ORLIX_TCTI_FEATURE_IDENTIFIER, .text = name },
+		{ .kind = ORLIX_TCTI_FEATURE_IDENTIFIER, .text = pmu },
+		{ .kind = ORLIX_TCTI_FEATURE_IDENTIFIER, .text = pmdevid },
+		{ .kind = ORLIX_TCTI_FEATURE_IDENTIFIER, .text = version },
+		{ .kind = ORLIX_TCTI_FEATURE_DOT_ATOM, .first_child = 0U,
+		  .child_count = 3U },
+		{ .kind = ORLIX_TCTI_FEATURE_UINT, .first_child = 3U,
+		  .child_count = 1U },
+		{ .kind = ORLIX_TCTI_FEATURE_INTEGER, .integer = 1 },
+		{ .kind = ORLIX_TCTI_FEATURE_GE, .left = 5U, .right = 6U },
+	};
 	struct orlix_tcti_target_expr expression = { .kind = ORLIX_TCTI_TARGET_EXPR_FEATURE, .text = name };
 	struct orlix_tcti_feature_model model = { .parameters = &parameter, .parameter_count = 1U,
-		.nodes = &node, .node_count = 1U };
+		.constraints = constraints, .constraint_count = 1U,
+		.nodes = nodes, .node_count = sizeof(nodes) / sizeof(nodes[0]),
+		.children = children, .child_count = sizeof(children) / sizeof(children[0]) };
 	struct orlix_tcti_target_inventory inventory = { 0 };
 	struct orlix_tcti_target_feature_sat_audit audit = { 0 };
 	struct orlix_tcti_target_feature_sat_error sat_error = { 0 };
@@ -78,17 +94,29 @@ static int emits_all_pinned_ordinals_with_witnesses(void)
 	}
 	EXPECT(!orlix_tcti_target_feature_sat_audit(&model, &inventory,
 		ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_BRANCH_LIMIT,
-		ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_ALLOCATION_LIMIT, &audit, &sat_error));
+		ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_ALLOCATION_LIMIT, NULL,
+		&audit, &sat_error));
 	first = tmpfile();
 	EXPECT(first != NULL);
 	EXPECT(orlix_tcti_target_feature_applicability_emit(&model, &inventory, &audit,
 		first) == ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_OK);
 	EXPECT(output_contains(first,
-		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_SOURCE(\"vFAPA1-A\", \"2026-06_rel\""));
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_SOURCE(\"vFAPA2-A\", \"2026-06_rel\", "
+		"\"a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe\", "
+		"\"633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187\", "
+		"\"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874\", "
+		"\"ceb8f8c561a5ecdce1a32bda12c7f33fc1b0433bbf035301f2590b6000ccbfe4\""));
 	EXPECT(output_contains(first,
-		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_ROW(0U, \"Leaf\", \"TEST\", \"op\", 0U, 1U, \"\\001\", 1U)"));
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_ROW(0U, \"Leaf\", \"TEST\", \"op\", 0U, "));
+	EXPECT(output_contains(first, "54434e4401"));
 	EXPECT(output_contains(first,
-		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_ROW(4349U, \"Leaf\", \"TEST\", \"op\", 0U, 1U, \"\\001\", 1U)"));
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_ROW(4349U, \"Leaf\", \"TEST\", \"op\", 0U, "));
+	EXPECT(output_contains(first,
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_CERTIFICATE_COUNTS(1U, 4350U, 0U, 16U)"));
+	EXPECT(output_contains(first,
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_CERTIFICATE_SYMBOL(0U, 0U, 0U, 4U, 4294967295U, \"\", 128U)"));
+	EXPECT(output_contains(first,
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_COMMON_VALUES(0U,"));
 	second = tmpfile();
 	EXPECT(second != NULL);
 	EXPECT(orlix_tcti_target_feature_applicability_emit(&model, &inventory, &audit,
@@ -126,6 +154,28 @@ static int fails_closed_for_incomplete_witness(void)
 		output) == ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_WITNESS_UNAVAILABLE);
 	EXPECT(!output_contains(output, "ORLIX_TCTI_A64_FEATURE_APPLICABILITY_SOURCE"));
 	fclose(output);
+
+	audit.witnesses = calloc(ORLIX_TCTI_A64_TARGET_LEAF_COUNT,
+				 sizeof(*audit.witnesses));
+	EXPECT(audit.witnesses != NULL);
+	audit.leaves[0] = ORLIX_TCTI_TARGET_FEATURE_SAT_IMPOSSIBLE;
+	output = tmpfile();
+	EXPECT(output != NULL);
+	EXPECT(orlix_tcti_target_feature_applicability_emit(&model, &inventory, &audit,
+		output) == ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_UNSAT_UNCERTIFIED);
+	EXPECT(!output_contains(output,
+		"ORLIX_TCTI_A64_FEATURE_APPLICABILITY_SOURCE"));
+	fclose(output);
+	audit.leaves[0] = ORLIX_TCTI_TARGET_FEATURE_SAT_APPLICABLE;
+
+	output = tmpfile();
+	EXPECT(output != NULL);
+	EXPECT(orlix_tcti_target_feature_applicability_emit(&model, &inventory, &audit,
+		output) == ORLIX_TCTI_TARGET_FEATURE_APPLICABILITY_WITNESS_INVALID);
+	EXPECT(!output_contains(output, "ORLIX_TCTI_A64_FEATURE_APPLICABILITY_SOURCE"));
+	fclose(output);
+
+	free(audit.witnesses);
 	free(audit.leaves);
 	free(inventory.leaves);
 	return 0;

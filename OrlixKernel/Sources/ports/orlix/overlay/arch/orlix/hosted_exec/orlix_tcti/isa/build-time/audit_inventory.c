@@ -154,10 +154,10 @@ int main(int argc, char **argv)
 		goto out;
 	}
 	if (orlix_tcti_target_feature_sat_audit(
-		    &feature_model, &target,
-		    ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_BRANCH_LIMIT,
-		    ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_ALLOCATION_LIMIT,
-		    &feature_audit, &feature_sat_error) ||
+		&feature_model, &target,
+		ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_BRANCH_LIMIT,
+		ORLIX_TCTI_TARGET_FEATURE_SAT_DEFAULT_ALLOCATION_LIMIT, NULL,
+		&feature_audit, &feature_sat_error) ||
 	    feature_audit.leaf_count != ORLIX_TCTI_A64_TARGET_LEAF_COUNT) {
 		fprintf(stderr,
 			"target-feature SAT audit failed: code=%d leaf=%zu offset=%zu\n",

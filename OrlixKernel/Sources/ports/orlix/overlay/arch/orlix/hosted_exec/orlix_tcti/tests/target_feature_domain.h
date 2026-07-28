@@ -49,7 +49,12 @@ struct orlix_tcti_feature_domain_value {
 struct orlix_tcti_feature_domain_environment {
 	void *context;
 	int (*feature)(void *context, const char *name,
-		       struct orlix_tcti_feature_domain_value *value);
+		struct orlix_tcti_feature_domain_value *value);
+	int (*configuration)(void *context,
+		orlix_tcti_feature_artifact_u32 node_index,
+		enum orlix_tcti_feature_domain_value_kind numeric_kind,
+		orlix_tcti_feature_artifact_u32 width,
+		struct orlix_tcti_feature_domain_value *value);
 	int (*field)(void *context, const char *state, const char *register_name,
 		     const char *selector, struct orlix_tcti_feature_domain_value *value);
 };
@@ -61,6 +66,7 @@ enum orlix_tcti_feature_domain_error {
 	ORLIX_TCTI_FEATURE_DOMAIN_CYCLE,
 	ORLIX_TCTI_FEATURE_DOMAIN_DEPTH,
 	ORLIX_TCTI_FEATURE_DOMAIN_MISSING_FEATURE,
+	ORLIX_TCTI_FEATURE_DOMAIN_MISSING_CONFIGURATION,
 	ORLIX_TCTI_FEATURE_DOMAIN_MISSING_FIELD,
 	ORLIX_TCTI_FEATURE_DOMAIN_CALLBACK_VALUE,
 	ORLIX_TCTI_FEATURE_DOMAIN_TYPE,

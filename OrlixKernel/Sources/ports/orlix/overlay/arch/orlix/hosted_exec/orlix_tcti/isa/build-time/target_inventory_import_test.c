@@ -193,6 +193,19 @@ static const struct orlix_tcti_target_fixed_operand *find_fixed_operand(
 	return NULL;
 }
 
+static const struct orlix_tcti_target_condition_operand *find_condition_operand(
+	const struct orlix_tcti_target_inventory *inventory, size_t leaf_index,
+	const char *name)
+{
+	size_t cursor;
+
+	for (cursor = 0; cursor < inventory->condition_operand_count; cursor++)
+		if (inventory->condition_operands[cursor].leaf_index == leaf_index &&
+		    !strcmp(inventory->condition_operands[cursor].name, name))
+			return &inventory->condition_operands[cursor];
+	return NULL;
+}
+
 static int source_span_contains(const char *json, size_t offset, size_t length,
 				const char *needle)
 {
@@ -696,6 +709,23 @@ static int import_pinned_source(const char *path)
 		goto out_json;
 	}
 	EXPECT_EQ(ORLIX_TCTI_A64_TARGET_LEAF_COUNT, inventory.leaf_count);
+	{
+		size_t leaf_index;
+		const struct orlix_tcti_target_leaf *leaf =
+			find_leaf(&inventory, "st1b_z_p_br_", &leaf_index);
+		const struct orlix_tcti_target_condition_operand *opc;
+
+		EXPECT_EQ(1, leaf != NULL);
+		EXPECT_EQ(1249U, leaf_index);
+		opc = find_condition_operand(&inventory, leaf_index, "opc");
+		EXPECT_EQ(1, opc != NULL);
+		EXPECT_EQ(leaf->condition, opc->condition);
+		EXPECT_EQ(22U, opc->start);
+		EXPECT_EQ(3U, opc->width);
+		EXPECT_EQ(UINT32_C(0x00400000), opc->variable_mask);
+	}
+	EXPECT_EQ(15980U, inventory.operand_count);
+	EXPECT_EQ(16675U, inventory.fixed_operand_count);
 	/*
 	 * AARCHMRS 2026-06 embeds only a typed placeholder for every concrete
 	 * operation.  The importer must retain the exact raw members instead of
