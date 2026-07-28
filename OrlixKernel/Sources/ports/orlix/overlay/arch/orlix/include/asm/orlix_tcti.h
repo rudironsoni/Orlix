@@ -58,6 +58,32 @@ struct orlix_tcti_sme_state {
 	bool valid;
 };
 
+struct orlix_tcti_cpa_control {
+	bool feat_cpa;
+	bool feat_cpa2;
+	bool sctlr2_el1_enabled;
+	bool sctlr2_el1_cpta0;
+	bool sctlr2_el1_cptm0;
+};
+
+struct orlix_tcti_pointer_add_observation {
+	u64 base;
+	u64 arithmetic_result;
+	u64 result;
+	bool valid;
+	bool previous_detection;
+	bool cpta_detected;
+	bool effective_cpta;
+	bool poisoned;
+};
+
+static inline struct orlix_tcti_cpa_control orlix_tcti_cpa_default_control(void)
+{
+	return (struct orlix_tcti_cpa_control) {
+		.feat_cpa = true,
+	};
+}
+
 int orlix_tcti_sve_state_reset(struct orlix_tcti_sve_state *state,
 			 unsigned long *user_simd, u16 vl_bytes);
 int orlix_tcti_sve_state_copy(struct orlix_tcti_sve_state *destination,

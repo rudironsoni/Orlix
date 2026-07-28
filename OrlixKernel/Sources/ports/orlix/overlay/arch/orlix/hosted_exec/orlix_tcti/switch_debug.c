@@ -828,6 +828,53 @@ static int orlix_tcti_execute_add_sub_with_carry(struct pt_regs *regs,
 	return 0;
 }
 
+static int orlix_tcti_execute_add_sub_pointer_checked(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	const struct orlix_tcti_cpa_control *control =
+		&current->thread.user_cpa_control;
+	struct orlix_tcti_pointer_add_observation *observation =
+		&current->thread.user_cpa_add_observation;
+	u64 base;
+	u64 offset;
+	u64 result;
+
+	memset(observation, 0, sizeof(*observation));
+	if (!control->feat_cpa)
+		return -EOPNOTSUPP;
+	base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
+	offset = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
+	offset <<= decoded->shift_amount;
+	result = decoded->subtract ? base - offset : base + offset;
+
+	observation->base = base;
+	observation->arithmetic_result = result;
+	observation->previous_detection =
+		!!(base & BIT_ULL(55)) != !!(base & BIT_ULL(54));
+	observation->cpta_detected =
+		((result ^ base) & GENMASK_ULL(63, 56)) != 0 ||
+		observation->previous_detection;
+	observation->effective_cpta = control->feat_cpa2 &&
+		control->sctlr2_el1_enabled && control->sctlr2_el1_cpta0;
+	observation->poisoned = observation->cpta_detected &&
+		observation->effective_cpta;
+	if (observation->poisoned) {
+		result &= GENMASK_ULL(53, 0);
+		result |= base & GENMASK_ULL(63, 55);
+		if (!(base & BIT_ULL(55)))
+			result |= BIT_ULL(54);
+	}
+	observation->result = result;
+	observation->valid = true;
+	if (decoded->rd == 31)
+		regs->sp = result;
+	else
+		regs->regs[decoded->rd] = result;
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int orlix_tcti_execute_logical_shifted_register(struct pt_regs *regs,
 						 const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -7634,6 +7681,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return orlix_tcti_execute_add_sub_extended_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_WITH_CARRY:
 		return orlix_tcti_execute_add_sub_with_carry(regs, decoded);
+	case ORLIX_TCTI_DECODE_ADD_SUB_POINTER_CHECKED:
+		return orlix_tcti_execute_add_sub_pointer_checked(regs, decoded);
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 		if (decoded->link)
 			regs->regs[30] = regs->pc + sizeof(u32);

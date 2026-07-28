@@ -53,6 +53,8 @@
 #define AARCH64_ADD_SUB_EXTENDED_REG_PATTERN 0x0b200000U
 #define AARCH64_ADD_SUB_WITH_CARRY_MASK 0x1fe0fc00U
 #define AARCH64_ADD_SUB_WITH_CARRY_PATTERN 0x1a000000U
+#define AARCH64_ADD_SUB_POINTER_CHECKED_MASK 0xbfe0e000U
+#define AARCH64_ADD_SUB_POINTER_CHECKED_PATTERN 0x9a002000U
 #define AARCH64_UNCONDITIONAL_BRANCH_IMM_MASK 0x7c000000U
 #define AARCH64_UNCONDITIONAL_BRANCH_IMM_PATTERN 0x14000000U
 #define AARCH64_BRANCH_REGISTER_MASK 0xfffffc1fU
@@ -1190,6 +1192,18 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.subtract = instruction & BIT(30);
 		decoded.set_flags = instruction & BIT(29);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_ADD_SUB_POINTER_CHECKED_MASK) ==
+	    AARCH64_ADD_SUB_POINTER_CHECKED_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_ADD_SUB_POINTER_CHECKED;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.shift_amount = (instruction >> 10) & 0x7U;
+		decoded.is_64bit = true;
+		decoded.subtract = instruction & BIT(30);
 		return decoded;
 	}
 

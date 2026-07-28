@@ -70,6 +70,8 @@ struct thread_struct {
 	unsigned long user_simd_valid;
 	struct orlix_tcti_sve_state user_sve;
 	struct orlix_tcti_sme_state user_sme;
+	struct orlix_tcti_cpa_control user_cpa_control;
+	struct orlix_tcti_pointer_add_observation user_cpa_add_observation;
 #endif
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;

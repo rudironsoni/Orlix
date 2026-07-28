@@ -167,6 +167,8 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 #define ERET_CONDITION TRUE_CONDITION
 #define LSE_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f4c5345"
+#define CPA_CONDITION \
+	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define LSE_SOURCE \
@@ -195,6 +197,11 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define ADD_FLAGS_OBLIGATIONS \
 	(ADD_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define ADD_SUB_POINTER_OBLIGATIONS \
+	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
 #define INTEGER_CONDITIONAL_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -775,8 +782,8 @@ static int scalar_source_bindings_are_complete_and_fail_closed(void)
 		entry_count++;
 		binding_count += candidate->binding_count;
 	}
-	EXPECT(entry_count == 25);
-	EXPECT(binding_count == 49);
+	EXPECT(entry_count == 27);
+	EXPECT(binding_count == 51);
 
 	/* A missing binding must leave its source-bound proof row unmatched. */
 	memcpy(copied, entries, count * sizeof(copied[0]));
@@ -797,6 +804,63 @@ static int scalar_source_bindings_are_complete_and_fail_closed(void)
 	duplicate[0].encoding_pattern ^= 0x1000000U;
 	EXPECT(orlix_tcti_target_proof_registry_validate(&entry, 1, &error) == -1);
 	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+	return 0;
+}
+
+static int add_sub_pointer_registry_binds_exact_source_rows(void)
+{
+	static const struct {
+		const char *id;
+		const char *leaf;
+		const char *operation;
+		uint32_t pattern;
+		uint32_t ordinal;
+	} expected[] = {
+		{ "kunit:add-sub-register-addpt", "ADDPT_64_addsub_pt", "ADDPT",
+		  0x9a002000U, 3474U },
+		{ "kunit:add-sub-register-subpt", "SUBPT_64_addsub_pt", "SUBPT",
+		  0xda002000U, 3475U },
+	};
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t expected_index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (expected_index = 0;
+	     expected_index < sizeof(expected) / sizeof(expected[0]);
+	     expected_index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry = NULL;
+		uint32_t requirements;
+		size_t index;
+
+		for (index = 0; index < count; index++)
+			if (!strcmp(entries[index].id, expected[expected_index].id)) {
+				entry = &entries[index];
+				break;
+			}
+		EXPECT(entry != NULL);
+		EXPECT(entry->obligations == ADD_SUB_POINTER_OBLIGATIONS);
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		EXPECT(entry->linux_interface ==
+		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		EXPECT(entry->binding_count == 1);
+		EXPECT(entry->kunit_case_count == 4);
+		EXPECT(!strcmp(entry->bindings[0].leaf_name,
+			       expected[expected_index].leaf));
+		EXPECT(!strcmp(entry->bindings[0].mnemonic,
+			       expected[expected_index].operation));
+		EXPECT(entry->bindings[0].encoding_mask == 0xffe0e000U);
+		EXPECT(entry->bindings[0].encoding_pattern ==
+		       expected[expected_index].pattern);
+		EXPECT(!strcmp(entry->bindings[0].condition_tcnd_hex, CPA_CONDITION));
+		EXPECT(entry->bindings[0].source_ordinal ==
+		       expected[expected_index].ordinal);
+		EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0xf));
+		EXPECT(orlix_tcti_target_proof_operation_requirements(
+			expected[expected_index].operation, 1, &requirements) == 0);
+		EXPECT(requirements == ADD_SUB_POINTER_OBLIGATIONS);
+	}
 	return 0;
 }
 
@@ -1827,6 +1891,8 @@ int main(void)
 		  lse_registry_cannot_clear_unproved_duties_statically },
 		{ "scalar_source_bindings_are_complete_and_fail_closed",
 		  scalar_source_bindings_are_complete_and_fail_closed },
+		{ "add_sub_pointer_registry_binds_exact_source_rows",
+		  add_sub_pointer_registry_binds_exact_source_rows },
 		{ "scalar_bitops_registry_binds_exact_source_rows",
 		  scalar_bitops_registry_binds_exact_source_rows },
 		{ "exclusive_registry_binds_exact_baseline_leaves",
