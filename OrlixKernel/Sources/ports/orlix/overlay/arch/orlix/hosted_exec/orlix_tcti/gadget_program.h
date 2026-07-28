@@ -52,6 +52,8 @@ int orlix_tcti_execute_gadget_program_authorized_observed(
 #ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
 void orlix_tcti_gadget_program_set_pre_authorized_test_hook(
 	void (*hook)(void *), void *data);
+bool orlix_tcti_gadget_program_uses_variable_shift_gadget(
+	const struct orlix_tcti_gadget_word *program, size_t word_count);
 #endif
 
 #endif /* ORLIX_TCTI_GADGET_PROGRAM_H */

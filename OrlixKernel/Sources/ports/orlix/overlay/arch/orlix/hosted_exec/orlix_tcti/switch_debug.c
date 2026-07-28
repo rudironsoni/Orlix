@@ -1007,6 +1007,52 @@ static u32 orlix_tcti_crc32_update(u32 accumulator, u64 value, u8 byte_count,
 	return accumulator;
 }
 
+int orlix_tcti_execute_variable_shift_semantics(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u8 data_size;
+	u8 access_size;
+	u64 left;
+	u64 right;
+	u8 amount;
+	u64 result;
+
+	if (!regs || !decoded ||
+	    decoded->decode_class != ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE)
+		return -EINVAL;
+
+	data_size = decoded->is_64bit ? 64 : 32;
+	access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
+	left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
+	right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
+	amount = right & (data_size - 1);
+
+	switch (decoded->dp2_op) {
+	case ORLIX_TCTI_DP2_LSLV:
+		result = left << amount;
+		break;
+	case ORLIX_TCTI_DP2_LSRV:
+		result = left >> amount;
+		break;
+	case ORLIX_TCTI_DP2_ASRV:
+		result = decoded->is_64bit ?
+			 (u64)((s64)left >> amount) :
+			 (u32)((s32)(u32)left >> amount);
+		break;
+	case ORLIX_TCTI_DP2_RORV:
+		result = decoded->is_64bit ? ror64(left, amount) :
+					     ror32(left, amount);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	orlix_tcti_write_gpr_or_zero(regs, decoded->rd, access_size, result);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int orlix_tcti_execute_data_processing_2source(struct pt_regs *regs,
 						 const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -1014,7 +1060,6 @@ static int orlix_tcti_execute_data_processing_2source(struct pt_regs *regs,
 	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
 	u64 left;
 	u64 right;
-	u8 amount;
 	u64 mask;
 	u64 result;
 
@@ -1033,10 +1078,12 @@ static int orlix_tcti_execute_data_processing_2source(struct pt_regs *regs,
 		regs->pc += sizeof(u32);
 		return 0;
 	}
+	if (decoded->dp2_op >= ORLIX_TCTI_DP2_LSLV &&
+	    decoded->dp2_op <= ORLIX_TCTI_DP2_RORV)
+		return orlix_tcti_execute_variable_shift_semantics(regs, decoded);
 
 	left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
 	right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
-	amount = right & (data_size - 1);
 	mask = orlix_tcti_ones_mask(data_size);
 
 	switch (decoded->dp2_op) {
@@ -1063,21 +1110,6 @@ static int orlix_tcti_execute_data_processing_2source(struct pt_regs *regs,
 			else
 				result = (u32)(dividend / divisor);
 		}
-		break;
-	case ORLIX_TCTI_DP2_LSLV:
-		result = left << amount;
-		break;
-	case ORLIX_TCTI_DP2_LSRV:
-		result = left >> amount;
-		break;
-	case ORLIX_TCTI_DP2_ASRV:
-		result = decoded->is_64bit ?
-			 (u64)((s64)left >> amount) :
-			 (u32)((s32)(u32)left >> amount);
-		break;
-	case ORLIX_TCTI_DP2_RORV:
-		result = decoded->is_64bit ? ror64(left, amount) :
-					     ror32(left, amount);
 		break;
 	case ORLIX_TCTI_DP2_SMAX:
 		result = decoded->is_64bit ?

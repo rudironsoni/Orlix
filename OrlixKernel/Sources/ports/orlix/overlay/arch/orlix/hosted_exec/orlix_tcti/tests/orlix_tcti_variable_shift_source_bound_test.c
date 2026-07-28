@@ -8,9 +8,13 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "../gadget_program.h"
+#include "target_execution_slice_map.h"
+#include "target_instruction_artifact.h"
 
 #define ORLIX_TCTI_VARIABLE_SHIFT_SOURCE_MASK 0xffe0fc00U
 #define ORLIX_TCTI_VARIABLE_SHIFT_SVC 0xd4000001U
@@ -18,6 +22,8 @@
 struct orlix_tcti_variable_shift_leaf {
 	u16 source_ordinal;
 	const char *source_name;
+	const char *source_mnemonic;
+	const char *operation_id;
 	u32 source_pattern;
 	enum orlix_tcti_data_processing_2source_op operation;
 	bool is_64bit;
@@ -25,15 +31,32 @@ struct orlix_tcti_variable_shift_leaf {
 
 /* Exact direct leaves from pinned Arm AARCHMRS 2026-06. */
 static const struct orlix_tcti_variable_shift_leaf orlix_tcti_variable_shift_leaves[] = {
-	{ 3358, "LSLV_32_dp_2src", 0x1ac02000U, ORLIX_TCTI_DP2_LSLV, false },
-	{ 3359, "LSRV_32_dp_2src", 0x1ac02400U, ORLIX_TCTI_DP2_LSRV, false },
-	{ 3360, "ASRV_32_dp_2src", 0x1ac02800U, ORLIX_TCTI_DP2_ASRV, false },
-	{ 3361, "RORV_32_dp_2src", 0x1ac02c00U, ORLIX_TCTI_DP2_RORV, false },
-	{ 3377, "LSLV_64_dp_2src", 0x9ac02000U, ORLIX_TCTI_DP2_LSLV, true },
-	{ 3378, "LSRV_64_dp_2src", 0x9ac02400U, ORLIX_TCTI_DP2_LSRV, true },
-	{ 3379, "ASRV_64_dp_2src", 0x9ac02800U, ORLIX_TCTI_DP2_ASRV, true },
-	{ 3380, "RORV_64_dp_2src", 0x9ac02c00U, ORLIX_TCTI_DP2_RORV, true },
+	{ 3358, "LSLV_32_dp_2src", "LSLV", "LSLV", 0x1ac02000U,
+	  ORLIX_TCTI_DP2_LSLV, false },
+	{ 3359, "LSRV_32_dp_2src", "LSRV", "LSRV", 0x1ac02400U,
+	  ORLIX_TCTI_DP2_LSRV, false },
+	{ 3360, "ASRV_32_dp_2src", "ASRV", "ASRV", 0x1ac02800U,
+	  ORLIX_TCTI_DP2_ASRV, false },
+	{ 3361, "RORV_32_dp_2src", "RORV", "RORV", 0x1ac02c00U,
+	  ORLIX_TCTI_DP2_RORV, false },
+	{ 3377, "LSLV_64_dp_2src", "LSLV", "LSLV", 0x9ac02000U,
+	  ORLIX_TCTI_DP2_LSLV, true },
+	{ 3378, "LSRV_64_dp_2src", "LSRV", "LSRV", 0x9ac02400U,
+	  ORLIX_TCTI_DP2_LSRV, true },
+	{ 3379, "ASRV_64_dp_2src", "ASRV", "ASRV", 0x9ac02800U,
+	  ORLIX_TCTI_DP2_ASRV, true },
+	{ 3380, "RORV_64_dp_2src", "RORV", "RORV", 0x9ac02c00U,
+	  ORLIX_TCTI_DP2_RORV, true },
 };
+
+static const char *orlix_tcti_variable_shift_artifact_string(
+	const struct orlix_tcti_target_instruction_artifact *artifact, u32 offset)
+{
+	if (offset >= artifact->string_pool_size)
+		return NULL;
+
+	return (const char *)artifact->string_pool + offset;
+}
 
 static u32 orlix_tcti_variable_shift_instruction(
 	const struct orlix_tcti_variable_shift_leaf *leaf, u8 rd, u8 rn, u8 rm)
@@ -188,25 +211,99 @@ static void orlix_tcti_variable_shift_execute(struct kunit *test,
 
 static void orlix_tcti_variable_shift_source_bindings(struct kunit *test)
 {
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
+	const struct orlix_tcti_execution_slice_map *slice_map =
+		orlix_tcti_execution_slice_map_canonical();
+	struct orlix_tcti_target_instruction_artifact_validation_result artifact_result;
+	struct orlix_tcti_execution_slice_map_validation_result slice_result;
 	static const u16 expected_ordinals[] = {
 		3358, 3359, 3360, 3361, 3377, 3378, 3379, 3380,
 	};
+	u32 family_index = U32_MAX;
 	size_t index;
 
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_instruction_artifact_validate(artifact,
+			&artifact_result));
+	KUNIT_ASSERT_NOT_NULL(test, slice_map);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_execution_slice_map_validate(slice_map, &slice_result));
+	for (index = 0; index < slice_map->counts.family_count; index++)
+		if (!strcmp(slice_map->families[index].stable_id,
+			    "base-residual-variable-shift")) {
+			family_index = index;
+			break;
+		}
+	KUNIT_ASSERT_NE(test, U32_MAX, family_index);
+	KUNIT_EXPECT_EQ(test, 183U, slice_map->families[family_index].issue_id);
+	KUNIT_EXPECT_EQ(test, 8U,
+			slice_map->families[family_index].declared_member_count);
 	KUNIT_ASSERT_EQ(test, 8U, ARRAY_SIZE(orlix_tcti_variable_shift_leaves));
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_variable_shift_leaves); index++) {
 		const struct orlix_tcti_variable_shift_leaf *leaf =
 			&orlix_tcti_variable_shift_leaves[index];
+		const struct orlix_tcti_target_instruction_artifact_leaf *source;
+		const struct orlix_tcti_execution_slice_member *slice_member;
 		u32 instruction = orlix_tcti_variable_shift_instruction(leaf, 7, 19, 11);
 
 		KUNIT_EXPECT_TRUE(test, leaf->source_name[0]);
 		KUNIT_EXPECT_EQ(test, expected_ordinals[index], leaf->source_ordinal);
+		KUNIT_ASSERT_LT(test, (size_t)leaf->source_ordinal,
+				artifact->leaf_count);
+		KUNIT_ASSERT_LT(test, (size_t)leaf->source_ordinal,
+				slice_map->counts.leaf_count);
+		source = &artifact->leaves[leaf->source_ordinal];
+		slice_member = &slice_map->members[leaf->source_ordinal];
+		KUNIT_EXPECT_STREQ(test, leaf->source_name,
+			orlix_tcti_variable_shift_artifact_string(artifact,
+				source->name_offset));
+		KUNIT_EXPECT_STREQ(test, leaf->source_mnemonic,
+			orlix_tcti_variable_shift_artifact_string(artifact,
+				source->mnemonic_offset));
+		KUNIT_EXPECT_STREQ(test, leaf->operation_id,
+			orlix_tcti_variable_shift_artifact_string(artifact,
+				source->operation_offset));
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_VARIABLE_SHIFT_SOURCE_MASK,
+				source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, leaf->source_pattern,
+				source->encoding_pattern);
+		KUNIT_EXPECT_EQ(test, leaf->source_ordinal, slice_member->ordinal);
+		KUNIT_EXPECT_STREQ(test, leaf->source_name,
+				slice_member->source_name);
+		KUNIT_EXPECT_EQ(test, family_index, slice_member->family_index);
 		KUNIT_EXPECT_EQ(test, leaf->source_pattern,
 				leaf->source_pattern & ORLIX_TCTI_VARIABLE_SHIFT_SOURCE_MASK);
 		KUNIT_EXPECT_PTR_EQ(test, leaf,
 			orlix_tcti_variable_shift_source_leaf(instruction));
 		orlix_tcti_variable_shift_expect_decode(test, leaf, instruction, 7, 19,
 						  11);
+	}
+}
+
+static void orlix_tcti_variable_shift_fixed_gadget_lowering(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_variable_shift_leaves); index++) {
+		const struct orlix_tcti_variable_shift_leaf *leaf =
+			&orlix_tcti_variable_shift_leaves[index];
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(
+				orlix_tcti_variable_shift_instruction(leaf, 7, 19, 11));
+		struct orlix_tcti_gadget_word
+			program[ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS] = {};
+		size_t word_count = 0;
+
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_lower_decoded_instruction(
+			&decoded, program, ARRAY_SIZE(program), &word_count));
+		KUNIT_EXPECT_EQ(test,
+			(size_t)ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS,
+			word_count);
+		KUNIT_EXPECT_TRUE_MSG(test,
+			orlix_tcti_gadget_program_uses_variable_shift_gadget(
+				program, word_count), "%s", leaf->source_name);
 	}
 }
 
@@ -285,12 +382,62 @@ static void orlix_tcti_variable_shift_destination_source_aliases(struct kunit *t
 					11, 0x8123456789abcdefULL, 63);
 }
 
+static void orlix_tcti_variable_shift_reserved_structured_exits(struct kunit *test)
+{
+	static const u8 reserved_opcodes[] = { 0x04, 0x07, 0x0c, 0x0f };
+	bool is_64bit;
+	size_t index;
+
+	for (is_64bit = false; ; is_64bit = true) {
+		for (index = 0; index < ARRAY_SIZE(reserved_opcodes); index++) {
+			u32 instruction = (is_64bit ? 0x9ac00000U : 0x1ac00000U) |
+				((u32)reserved_opcodes[index] << 10) |
+				(11U << 16) | (19U << 5) | 7U;
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
+			unsigned long mapped =
+				orlix_tcti_variable_shift_map_program(test, instruction);
+			struct pt_regs regs = {};
+			struct pt_regs before;
+			struct orlix_tcti_result result;
+			u8 reg;
+
+			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class, "%#x", instruction);
+			KUNIT_ASSERT_NE(test, 0UL, mapped);
+			for (reg = 0; reg < 31; reg++)
+				regs.regs[reg] = 0x517cc1b727220a95ULL ^
+					((u64)instruction << (reg & 7)) ^ reg;
+			regs.sp = 0x00000001fffffff0ULL;
+			regs.pc = mapped;
+			regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT |
+				PSR_D_BIT;
+			regs.syscallno = NO_SYSCALL;
+			before = regs;
+
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ_MSG(test,
+				ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason, "%#x", instruction);
+			KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+			KUNIT_EXPECT_EQ(test, instruction, result.instruction);
+			KUNIT_EXPECT_EQ(test, mapped, result.pc);
+			KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+		}
+		if (is_64bit)
+			break;
+	}
+}
+
 static struct kunit_case orlix_tcti_variable_shift_source_bound_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_variable_shift_source_bindings),
+	KUNIT_CASE(orlix_tcti_variable_shift_fixed_gadget_lowering),
 	KUNIT_CASE(orlix_tcti_variable_shift_all_legal_register_encodings),
 	KUNIT_CASE(orlix_tcti_variable_shift_production_path_semantics),
 	KUNIT_CASE(orlix_tcti_variable_shift_xzr_source_and_destination),
 	KUNIT_CASE(orlix_tcti_variable_shift_destination_source_aliases),
+	KUNIT_CASE(orlix_tcti_variable_shift_reserved_structured_exits),
 	{}
 };
 
