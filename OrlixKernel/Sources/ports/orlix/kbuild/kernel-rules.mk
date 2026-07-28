@@ -1047,7 +1047,13 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_ordinal_ledger_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_decode_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_uaccess_test.c \

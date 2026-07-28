@@ -3,12 +3,22 @@
 #include "target_proof_ingestion.h"
 #include "target_instruction_artifact.h"
 
+#ifdef __KERNEL__
+#include <linux/bits.h>
+#include <linux/const.h>
+#include <linux/ctype.h>
+#include <linux/limits.h>
+#include <linux/string.h>
+#define CHAR_BIT BITS_PER_BYTE
+#define UINT64_C(value) _ULL(value)
+#else
 #include <ctype.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#endif
 
 #define ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE ((size_t)-1)
 
@@ -647,7 +657,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"10e58fbe7aa8ac5e9bed7df97fcb6378d4ee505a04cde84fa5cf35f8a748bd39"
+	"ddb750e6f14e3fbbc1295754df8b7fd24371067f9e7e44e0ac734bf9b18f2f73"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -721,7 +731,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "bc640ad7b800c93842f3cc4a0e40d02af9ff508882850b66e177a9db1cb6ff3b",
+	  "e8c1dd47238f859f40b80cb1ff81a20c72c9d5c06c0614b656d73f1b9f323785",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
@@ -730,7 +740,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "01f0a5d61b132e0e7e7d1f439f503d7d09802b888de36c17b29de76aa6ecf0bc",
 	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
-	  "bfd3ba4e001c0080399f49323a502cb0f881ea81dcf8708f013a370098ab46a3",
+	  "4d6598bbc39dac5fabb2e43576a7dcde86386f00b4ea0f8d7f379b01119cbb99",
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
@@ -3777,6 +3787,7 @@ int orlix_tcti_target_proof_source_size_allowed(orlix_tcti_proof_u64 size)
 		size < (orlix_tcti_proof_u64)SIZE_MAX;
 }
 
+#ifndef __KERNEL__
 static char *read_source(const char *path, size_t *length)
 {
 	FILE *file;
@@ -3883,6 +3894,7 @@ static bool source_connects_case_to_suite(
 	registered_case = strstr(array, case_registration);
 	return registered_case && registered_case < array_end;
 }
+#endif
 
 static const struct kunit_source_provenance *
 find_kunit_source(const char *path)
@@ -3915,6 +3927,7 @@ find_kunit_case(const struct orlix_tcti_target_proof_registry_entry *entry,
 	return NULL;
 }
 
+#ifndef __KERNEL__
 static bool valid_kunit_dependency(
 	const struct kunit_source_provenance *source_metadata,
 	const char *dependency_sha256)
@@ -4007,6 +4020,23 @@ out:
 	free(source);
 	return valid;
 }
+#else
+int orlix_tcti_target_kunit_dependency_validate_for_test(
+	const char *source, const char *dependency, const char *dependency_sha256)
+{
+	(void)source;
+	(void)dependency;
+	(void)dependency_sha256;
+	return -1;
+}
+
+static bool valid_kunit_provenance(
+	const struct orlix_tcti_target_proof_registry_entry *entry)
+{
+	(void)entry;
+	return false;
+}
+#endif
 
 int orlix_tcti_target_kunit_provenance_identity(
 	const struct orlix_tcti_target_proof_registry_entry *entry,
@@ -4045,6 +4075,7 @@ int orlix_tcti_target_kunit_provenance_identity(
 	return 0;
 }
 
+#ifndef __KERNEL__
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance)
 {
@@ -4125,7 +4156,16 @@ int orlix_tcti_target_kselftest_provenance_validate(
 	cached_valid[index] = valid;
 	return valid ? 0 : -1;
 }
+#else
+int orlix_tcti_target_kselftest_provenance_validate(
+	const struct orlix_tcti_target_kselftest_provenance *provenance)
+{
+	(void)provenance;
+	return -1;
+}
+#endif
 
+#ifndef __KERNEL__
 int orlix_tcti_target_proof_source_evidence_validate(
 	const char *source_path, const char *source_sha256, const char *assertion)
 {
@@ -4144,6 +4184,16 @@ int orlix_tcti_target_proof_source_evidence_validate(
 	free(source);
 	return valid ? 0 : -1;
 }
+#else
+int orlix_tcti_target_proof_source_evidence_validate(
+	const char *source_path, const char *source_sha256, const char *assertion)
+{
+	(void)source_path;
+	(void)source_sha256;
+	(void)assertion;
+	return -1;
+}
+#endif
 
 int orlix_tcti_target_proof_registry_validate(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,

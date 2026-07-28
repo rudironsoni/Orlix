@@ -12,6 +12,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
 	target_execution_slice_map.o \
+	target_proof_registry.o \
+	target_proof_ingestion.o \
 	target_execution_slice_map_test.o \
 	orlix_tcti_atomic_memory_test.o orlix_tcti_lse_decode_test.o orlix_tcti_uaccess_test.o \
 	orlix_tcti_cssc_min_max_immediate_test.o \

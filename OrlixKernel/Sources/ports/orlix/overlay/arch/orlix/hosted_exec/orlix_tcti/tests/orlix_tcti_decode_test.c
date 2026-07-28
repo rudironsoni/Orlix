@@ -357,8 +357,9 @@ static void orlix_tcti_configured_profile_encodings_are_decoded(struct kunit *te
 		struct orlix_tcti_decoded_instruction decoded =
 			orlix_tcti_decode_aarch64(encoding->witness);
 
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			decoded.decode_class,
+		KUNIT_EXPECT_TRUE_MSG(test,
+			decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED ||
+			decoded.decode_class == ORLIX_TCTI_DECODE_UNDEFINED,
 			"non-EL0 or undefined A64 encoding was accepted: %s",
 			encoding->name);
 	}

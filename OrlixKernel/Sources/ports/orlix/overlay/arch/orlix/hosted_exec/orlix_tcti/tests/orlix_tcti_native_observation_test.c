@@ -215,7 +215,7 @@ static void native_encoding_domains_and_flags_require_typed_witnesses(
 			      mapped);
 	observation = native_create_and_execute(test, &spec, &regs);
 	orlix_tcti_native_observation_test_mutate_decode_class(
-		ORLIX_TCTI_DECODE_HINT);
+		ORLIX_TCTI_DECODE_UNDEFINED);
 	KUNIT_EXPECT_EQ(test, -EBADMSG,
 		orlix_tcti_native_observation_add_encoding_domain(observation));
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_POISONED,

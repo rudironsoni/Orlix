@@ -753,13 +753,12 @@ int orlix_tcti_native_observation_add_encoding_domain(
 			if (allocated)
 				continue;
 			observed_class = orlix_tcti_native_observed_decode(instruction);
-			if (observed_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
-			    observed_class != ORLIX_TCTI_DECODE_UNDEFINED)
+			if (observed_class != ORLIX_TCTI_DECODE_UNSUPPORTED)
 				return orlix_tcti_native_poison(observation, -EBADMSG);
 			domain.rejected_count++;
 			expected_domain.rejected_count++;
 			domain.digest = orlix_tcti_native_encoding_hash(
-				domain.digest, instruction, ORLIX_TCTI_DECODE_UNSUPPORTED);
+				domain.digest, instruction, observed_class);
 			expected_domain.digest = orlix_tcti_native_encoding_hash(
 				expected_domain.digest, instruction,
 				ORLIX_TCTI_DECODE_UNSUPPORTED);
