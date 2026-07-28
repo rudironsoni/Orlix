@@ -1797,6 +1797,7 @@ static int orlix_tcti_execute_simd_multiple_structure(
 	u8 lanes;
 	u8 index;
 	u8 lane;
+	u8 transfer;
 	int ret;
 
 	if (!mm || !decoded->simd_fp || !decoded->simd_structure_count ||
@@ -1810,60 +1811,46 @@ static int orlix_tcti_execute_simd_multiple_structure(
 	    decoded->result_size % decoded->access_size)
 		return -EOPNOTSUPP;
 
-	if (!decoded->simd_interleaved) {
-		for (index = 0; index < decoded->simd_structure_count; index++) {
-			u8 reg = (decoded->rd + index) & 0x1fU;
-			unsigned long element_address =
-				address + index * decoded->result_size;
+	lanes = decoded->result_size / decoded->access_size;
+	for (transfer = 0;
+	     transfer < lanes * decoded->simd_structure_count; transfer++) {
+		u8 reg;
+		u64 value;
+		unsigned long element_address = address +
+			transfer * decoded->access_size;
 
-			if (fault_address)
-				*fault_address = element_address;
-			if (decoded->load)
-				ret = orlix_tcti_load_simd_fp(mm, element_address, reg,
-							decoded->result_size);
-			else
-				ret = orlix_tcti_store_simd_fp(mm, element_address, reg,
-							 decoded->result_size);
-			if (ret)
-				return ret;
+		if (decoded->simd_interleaved) {
+			lane = transfer / decoded->simd_structure_count;
+			index = transfer % decoded->simd_structure_count;
+		} else {
+			index = transfer / lanes;
+			lane = transfer % lanes;
 		}
-	} else {
-		lanes = decoded->result_size / decoded->access_size;
-		if (decoded->load && !decoded->simd_q) {
-			for (index = 0; index < decoded->simd_structure_count;
-			     index++)
-				current->thread.user_simd[
-					((decoded->rd + index) & 0x1fU) * 2 + 1] = 0;
-		}
-
-		for (lane = 0; lane < lanes; lane++) {
-			for (index = 0; index < decoded->simd_structure_count;
-			     index++) {
-				u8 reg = (decoded->rd + index) & 0x1fU;
-				u64 value;
-				unsigned long element_address = address +
-					(lane * decoded->simd_structure_count + index) *
-					decoded->access_size;
-
-				if (fault_address)
-					*fault_address = element_address;
-				if (decoded->load) {
-					ret = orlix_tcti_load_integer(mm, element_address,
+		reg = (decoded->rd + index) & 0x1fU;
+		if (fault_address)
+			*fault_address = element_address;
+		if (decoded->load) {
+			ret = orlix_tcti_load_integer(mm, element_address,
 							decoded->access_size, &value);
-					if (!ret)
-						orlix_tcti_write_simd_lane(reg, lane,
-								     decoded->access_size,
-								     value);
-				} else {
-					value = orlix_tcti_read_simd_lane(reg, lane,
-								    decoded->access_size);
-					ret = orlix_tcti_store_integer(mm, element_address,
-							 decoded->access_size, value);
-				}
-				if (ret)
-					return ret;
+			if (!ret) {
+				/*
+				 * A Q=0 load clears the destination upper half,
+				 * but only once that register receives its first
+				 * successfully transferred element.
+				 */
+				if (!decoded->simd_q && !lane)
+					current->thread.user_simd[reg * 2 + 1] = 0;
+				orlix_tcti_write_simd_lane(reg, lane,
+							     decoded->access_size, value);
 			}
+		} else {
+			value = orlix_tcti_read_simd_lane(reg, lane,
+								    decoded->access_size);
+			ret = orlix_tcti_store_integer(mm, element_address,
+							 decoded->access_size, value);
 		}
+		if (ret)
+			return ret;
 	}
 
 	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST) {
