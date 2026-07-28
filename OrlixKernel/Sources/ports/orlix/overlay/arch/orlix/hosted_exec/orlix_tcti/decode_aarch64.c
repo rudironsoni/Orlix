@@ -3,6 +3,7 @@
 #include <linux/bits.h>
 #include <linux/bitops.h>
 #include <linux/errno.h>
+#include <linux/string.h>
 
 #include "decode_aarch64.h"
 #include "system_accessor.h"
@@ -828,6 +829,389 @@ bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
 	return (instruction & 0xffffff3fU) == 0xd503241fU;
 }
 
+/*
+ * The issue-cohort map is the checked partition of the pinned 4,350-leaf Arm
+ * source.  Keep the architectural masks and operation identity source-bound
+ * here, then lower the complete Base A64 atomic cohort by operation class.  A
+ * row match accepts every register/immediate encoding admitted by its mask; it
+ * is not an exact instruction-word allowlist.
+ */
+enum orlix_tcti_source_family {
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_COUNTS(...)
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_FAMILY(symbol, ...) \
+	ORLIX_TCTI_SOURCE_FAMILY_##symbol,
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_MEMBER(...)
+#include "isa/target_execution_slice_map.def"
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_COUNTS
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_FAMILY
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_MEMBER
+};
+
+static const u8 orlix_tcti_source_families[] = {
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_COUNTS(...)
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_FAMILY(...)
+#define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_MEMBER(i, name, condition, family) \
+	[i] = ORLIX_TCTI_SOURCE_FAMILY_##family,
+#include "isa/target_execution_slice_map.def"
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_COUNTS
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_FAMILY
+#undef ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_MEMBER
+};
+
+struct orlix_tcti_atomic_source_row {
+	u32 ordinal;
+	const char *name;
+	const char *mnemonic;
+	const char *operation;
+	u32 mask;
+	u32 pattern;
+};
+
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(i, name, mnemonic, operation, mask, \
+	pattern, ...) { i, name, mnemonic, operation, mask, pattern },
+static const struct orlix_tcti_atomic_source_row orlix_tcti_atomic_source_rows[] = {
+#include "isa/source_manifest.def"
+};
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
+
+static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
+{
+	return text && prefix && !strncmp(text, prefix, strlen(prefix));
+}
+
+static const struct orlix_tcti_atomic_source_row *
+orlix_tcti_base_atomic_source_row(u32 instruction)
+{
+	size_t index;
+
+	/* All six cohort mask classes are in the architectural load/store space. */
+	if ((instruction & 0x0a000000U) != 0x08000000U)
+		return NULL;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_ATOMICS)
+			continue;
+		if ((instruction & row->mask) == row->pattern)
+			return row;
+	}
+	return NULL;
+}
+
+static bool orlix_tcti_atomic_pair_operation(const char *operation)
+{
+	return !strcmp(operation, "CASP") || !strcmp(operation, "CASPT") ||
+		!strcmp(operation, "LDCLRP") || !strcmp(operation, "LDSETP") ||
+		!strcmp(operation, "SWPP") || strstr(operation, "CASP") ||
+		strstr(operation, "CLRP") || strstr(operation, "SETP") ||
+		strstr(operation, "SWPP");
+}
+
+static u8 orlix_tcti_atomic_named_size(const char *name, u32 instruction)
+{
+	if (strstr(name, "_Q_"))
+		return 2 * sizeof(u64);
+	if (strstr(name, "_8") || strstr(name, "_B_"))
+		return sizeof(u8);
+	if (strstr(name, "_16") || strstr(name, "_H_"))
+		return sizeof(u16);
+	if (strstr(name, "_32") || strstr(name, "_S_"))
+		return sizeof(u32);
+	if (strstr(name, "_64") || strstr(name, "_D_"))
+		return sizeof(u64);
+	return 1U << orlix_tcti_bits(instruction, 30, 2);
+}
+
+static void orlix_tcti_atomic_order(
+	const struct orlix_tcti_atomic_source_row *row,
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	const char *suffix = row->mnemonic;
+
+	if (orlix_tcti_text_has_prefix(row->mnemonic, row->operation))
+		suffix += strlen(row->operation);
+	decoded->acquire = strchr(suffix, 'A') != NULL;
+	decoded->release = strchr(suffix, 'L') != NULL;
+}
+
+static bool orlix_tcti_atomic_operation(
+	const char *operation, enum orlix_tcti_lse_atomic_op *op)
+{
+	const char *name = operation;
+
+	if (orlix_tcti_text_has_prefix(name, "RCWS"))
+		name += 4;
+	else if (orlix_tcti_text_has_prefix(name, "RCW"))
+		name += 3;
+	else if (orlix_tcti_text_has_prefix(name, "LDT"))
+		name += 3;
+	else if (orlix_tcti_text_has_prefix(name, "LD"))
+		name += 2;
+	else if (orlix_tcti_text_has_prefix(name, "ST"))
+		name += 2;
+
+	if (orlix_tcti_text_has_prefix(name, "CAS"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_CAS;
+	else if (orlix_tcti_text_has_prefix(name, "SWP"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_SWP;
+	else if (orlix_tcti_text_has_prefix(name, "ADD"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_ADD;
+	else if (orlix_tcti_text_has_prefix(name, "CLR"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_CLR;
+	else if (orlix_tcti_text_has_prefix(name, "EOR"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_EOR;
+	else if (orlix_tcti_text_has_prefix(name, "SET"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_SET;
+	else if (orlix_tcti_text_has_prefix(name, "SMAX"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_SMAX;
+	else if (orlix_tcti_text_has_prefix(name, "SMIN"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_SMIN;
+	else if (orlix_tcti_text_has_prefix(name, "UMAX"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_UMAX;
+	else if (orlix_tcti_text_has_prefix(name, "UMIN"))
+		*op = ORLIX_TCTI_LSE_ATOMIC_UMIN;
+	else
+		return false;
+	return true;
+}
+
+static bool orlix_tcti_fp_atomic_operation(
+	const char *operation, enum orlix_tcti_lse_atomic_op *op)
+{
+	bool bfloat = orlix_tcti_text_has_prefix(operation, "LDBF") ||
+		orlix_tcti_text_has_prefix(operation, "STBF");
+	const char *name;
+
+	if (bfloat)
+		name = operation + 4;
+	else if (orlix_tcti_text_has_prefix(operation, "LDF") ||
+		 orlix_tcti_text_has_prefix(operation, "STF"))
+		name = operation + 3;
+	else
+		return false;
+	if (!strcmp(name, "ADD"))
+		*op = bfloat ? ORLIX_TCTI_LSE_ATOMIC_BFADD :
+			ORLIX_TCTI_LSE_ATOMIC_FADD;
+	else if (!strcmp(name, "MAX"))
+		*op = bfloat ? ORLIX_TCTI_LSE_ATOMIC_BFMAX :
+			ORLIX_TCTI_LSE_ATOMIC_FMAX;
+	else if (!strcmp(name, "MAXNM"))
+		*op = bfloat ? ORLIX_TCTI_LSE_ATOMIC_BFMAXNM :
+			ORLIX_TCTI_LSE_ATOMIC_FMAXNM;
+	else if (!strcmp(name, "MIN"))
+		*op = bfloat ? ORLIX_TCTI_LSE_ATOMIC_BFMIN :
+			ORLIX_TCTI_LSE_ATOMIC_FMIN;
+	else if (!strcmp(name, "MINNM"))
+		*op = bfloat ? ORLIX_TCTI_LSE_ATOMIC_BFMINNM :
+			ORLIX_TCTI_LSE_ATOMIC_FMINNM;
+	else
+		return false;
+	return true;
+}
+
+static bool orlix_tcti_ordered_load_store_operation(const char *operation)
+{
+	return orlix_tcti_text_has_prefix(operation, "LDAR") ||
+		orlix_tcti_text_has_prefix(operation, "LDLAR") ||
+		orlix_tcti_text_has_prefix(operation, "LDAPR") ||
+		orlix_tcti_text_has_prefix(operation, "LDAPUR") ||
+		orlix_tcti_text_has_prefix(operation, "LDAP_") ||
+		orlix_tcti_text_has_prefix(operation, "LDAPP") ||
+		orlix_tcti_text_has_prefix(operation, "LDIAPP") ||
+		orlix_tcti_text_has_prefix(operation, "STLR") ||
+		orlix_tcti_text_has_prefix(operation, "STLLR") ||
+		orlix_tcti_text_has_prefix(operation, "STLUR") ||
+		orlix_tcti_text_has_prefix(operation, "STLP") ||
+		orlix_tcti_text_has_prefix(operation, "STILP");
+}
+
+static struct orlix_tcti_decoded_instruction
+orlix_tcti_decode_base_atomic_source(u32 instruction, bool *matched)
+{
+	const struct orlix_tcti_atomic_source_row *row =
+		orlix_tcti_base_atomic_source_row(instruction);
+	struct orlix_tcti_decoded_instruction decoded = {
+		.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+		.instruction = instruction,
+	};
+	const char *operation;
+
+	if (matched)
+		*matched = row != NULL;
+	if (!row)
+		return decoded;
+	operation = row->operation;
+	decoded.source_ordinal = row->ordinal;
+	decoded.rn = orlix_tcti_bits(instruction, 5, 5);
+	decoded.rt = orlix_tcti_bits(instruction, 0, 5);
+	decoded.rs = orlix_tcti_bits(instruction, 16, 5);
+	decoded.rt2 = orlix_tcti_bits(instruction, 10, 5);
+	decoded.access_size = orlix_tcti_atomic_named_size(row->name, instruction);
+	decoded.result_size = decoded.access_size;
+
+	if (!strcmp(operation, "LD64B") || !strcmp(operation, "ST64B") ||
+	    !strcmp(operation, "ST64BV") || !strcmp(operation, "ST64BV0")) {
+		if ((decoded.rt & 1U) || decoded.rt >= 24U)
+			return decoded;
+		decoded.decode_class = ORLIX_TCTI_DECODE_LS64;
+		decoded.load = operation[0] == 'L';
+		decoded.access_size = 64;
+		decoded.result_size = sizeof(u64);
+		decoded.ls64_status = operation[5] == 'V';
+		decoded.ls64_accdata = !strcmp(operation, "ST64BV0");
+		return decoded;
+	}
+
+	if (orlix_tcti_text_has_prefix(operation, "LDXR") ||
+	    orlix_tcti_text_has_prefix(operation, "LDAXR") ||
+	    orlix_tcti_text_has_prefix(operation, "LDXP") ||
+	    orlix_tcti_text_has_prefix(operation, "LDAXP") ||
+	    orlix_tcti_text_has_prefix(operation, "LDTXR") ||
+	    orlix_tcti_text_has_prefix(operation, "LDATXR") ||
+	    orlix_tcti_text_has_prefix(operation, "STXR") ||
+	    orlix_tcti_text_has_prefix(operation, "STLXR") ||
+	    orlix_tcti_text_has_prefix(operation, "STXP") ||
+	    orlix_tcti_text_has_prefix(operation, "STLXP") ||
+	    orlix_tcti_text_has_prefix(operation, "STTXR") ||
+	    orlix_tcti_text_has_prefix(operation, "STLTXR")) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE;
+		decoded.load = operation[0] == 'L';
+		decoded.exclusive = true;
+		decoded.pair = strstr(operation, "XP") != NULL;
+		decoded.acquire = strstr(row->mnemonic, "LDAX") == row->mnemonic ||
+			strstr(row->mnemonic, "LDATX") == row->mnemonic;
+		decoded.release = strstr(row->mnemonic, "STLX") == row->mnemonic ||
+			strstr(row->mnemonic, "STLTX") == row->mnemonic;
+		decoded.unprivileged = strchr(operation, 'T') != NULL;
+		return decoded;
+	}
+
+	if (orlix_tcti_ordered_load_store_operation(operation)) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE;
+		decoded.load = operation[0] == 'L';
+		decoded.acquire = decoded.load;
+		decoded.release = !decoded.load;
+		decoded.limited_ordering = strstr(operation, "LDLAR") ||
+			strstr(operation, "STLLR") ||
+			orlix_tcti_text_has_prefix(operation, "LDAP");
+		decoded.unprivileged = strstr(operation, "LDAPUR") ||
+			strstr(operation, "STLUR");
+		decoded.simd_fp = strstr(operation, "fpsimd") != NULL;
+		decoded.pair = !strcmp(operation, "LDAP_gen") ||
+			!strcmp(operation, "LDAPP_gen") ||
+			!strcmp(operation, "LDIAPP") || !strcmp(operation, "STLP_gen") ||
+			!strcmp(operation, "STILP");
+		if (strstr(operation, "SB")) {
+			decoded.access_size = sizeof(u8);
+			decoded.sign_extend_load = true;
+		} else if (strstr(operation, "SH")) {
+			decoded.access_size = sizeof(u16);
+			decoded.sign_extend_load = true;
+		} else if (strstr(operation, "SW")) {
+			decoded.access_size = sizeof(u32);
+			decoded.sign_extend_load = true;
+		} else if (operation[strlen(operation) - 1] == 'B') {
+			decoded.access_size = sizeof(u8);
+		} else if (operation[strlen(operation) - 1] == 'H') {
+			decoded.access_size = sizeof(u16);
+		}
+		if (decoded.sign_extend_load)
+			decoded.result_size = strstr(row->name, "_64_") ?
+				sizeof(u64) : sizeof(u32);
+		if (decoded.pair) {
+			decoded.rt2 = decoded.rs;
+			if (decoded.load && decoded.rt == decoded.rt2)
+				return (struct orlix_tcti_decoded_instruction) {
+					.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+					.instruction = instruction,
+				};
+		}
+		if (strstr(row->name, "_ldapstl_writeback")) {
+			decoded.memory_offset = decoded.load ?
+				decoded.access_size : -(s64)decoded.access_size;
+			decoded.memory_index_mode = decoded.load ?
+				ORLIX_TCTI_MEMORY_INDEX_POST :
+				ORLIX_TCTI_MEMORY_INDEX_PRE;
+			if (decoded.load && decoded.rn == decoded.rt &&
+			    decoded.rn != 31)
+				return (struct orlix_tcti_decoded_instruction) {
+					.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+					.instruction = instruction,
+				};
+		} else if ((!strcmp(operation, "LDIAPP") ||
+			    !strcmp(operation, "STILP")) &&
+			   !(instruction & BIT(12))) {
+			decoded.memory_offset = 2 * decoded.access_size;
+			decoded.memory_index_mode = ORLIX_TCTI_MEMORY_INDEX_POST;
+			if (decoded.load && decoded.rn != 31 &&
+			    (decoded.rn == decoded.rt || decoded.rn == decoded.rt2))
+				return (struct orlix_tcti_decoded_instruction) {
+					.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+					.instruction = instruction,
+				};
+		} else if (decoded.unprivileged) {
+			decoded.memory_offset = sign_extend64(
+				orlix_tcti_bits(instruction, 12, 9), 8);
+		}
+		return decoded;
+	}
+
+	if (orlix_tcti_fp_atomic_operation(operation, &decoded.lse_atomic_op)) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_LSE_ATOMIC;
+		decoded.atomic_fp = true;
+		decoded.atomic_store_only = operation[0] == 'S';
+		orlix_tcti_atomic_order(row, &decoded);
+		if (decoded.rt == 31)
+			decoded.acquire = false;
+		return decoded;
+	}
+
+	if (orlix_tcti_atomic_operation(operation, &decoded.lse_atomic_op)) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_LSE_ATOMIC;
+		decoded.atomic_rcw = orlix_tcti_text_has_prefix(operation, "RCW");
+		decoded.atomic_rcw_soft =
+			orlix_tcti_text_has_prefix(operation, "RCWS");
+		decoded.pair = orlix_tcti_atomic_pair_operation(operation);
+		decoded.lse128 = !strcmp(operation, "LDCLRP") ||
+			!strcmp(operation, "LDSETP") || !strcmp(operation, "SWPP");
+		decoded.unprivileged = strchr(operation, 'T') != NULL;
+		if (decoded.lse128) {
+			if (decoded.rt == 31 || decoded.rs == 31 ||
+			    decoded.rt == decoded.rs)
+				return (struct orlix_tcti_decoded_instruction) {
+					.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+					.instruction = instruction,
+				};
+			decoded.rt2 = decoded.rs;
+			decoded.access_size = sizeof(u64);
+			decoded.result_size = sizeof(u64);
+		} else if (decoded.pair && ((decoded.rt & 1U) ||
+					       (decoded.rs & 1U))) {
+			return (struct orlix_tcti_decoded_instruction) {
+				.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+				.instruction = instruction,
+			};
+		}
+		orlix_tcti_atomic_order(row, &decoded);
+		if (decoded.acquire &&
+		    (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS ?
+		     decoded.rs == 31 : decoded.rt == 31))
+			decoded.acquire = false;
+		return decoded;
+	}
+
+	return decoded;
+}
+
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 {
 	struct orlix_tcti_decoded_instruction decoded = {
@@ -835,7 +1219,14 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		.instruction = instruction,
 	};
 	struct orlix_tcti_sve_predicated_integer_binary sve_predicated_binary;
+	bool base_atomic_match;
 	int sve_ret;
+
+	decoded = orlix_tcti_decode_base_atomic_source(instruction,
+						       &base_atomic_match);
+	if (base_atomic_match)
+		return decoded;
+	decoded.instruction = instruction;
 
 	if ((instruction & AARCH64_SVC_MASK) == AARCH64_SVC_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_SVC;

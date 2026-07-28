@@ -73,6 +73,7 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
 	case ORLIX_TCTI_DECODE_LSE_ATOMIC:
+	case ORLIX_TCTI_DECODE_LS64:
 		return decoded->load ? ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
@@ -2220,7 +2221,7 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					    const struct orlix_tcti_decoded_instruction *decoded,
 					    unsigned long *fault_address)
 {
-	unsigned long address = orlix_tcti_memory_base(regs, decoded->rn);
+	unsigned long address = orlix_tcti_indexed_address(regs, decoded);
 	u8 loaded[2 * sizeof(u64)] = {};
 	u8 desired[2 * sizeof(u64)] = {};
 	u8 total_size = decoded->access_size * (decoded->pair ? 2 : 1);
@@ -2236,6 +2237,30 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		*fault_address = address;
 	if (!IS_ALIGNED(address, total_size))
 		return -EFAULT;
+	if (decoded->simd_fp) {
+		if (decoded->release) {
+			if (decoded->limited_ordering)
+				smp_wmb();
+			else
+				smp_mb();
+		}
+		ret = decoded->load ?
+			orlix_tcti_load_simd_fp(mm, address, decoded->rt,
+					       decoded->access_size) :
+			orlix_tcti_store_simd_fp(mm, address, decoded->rt,
+						decoded->access_size);
+		if (ret)
+			return ret;
+		if (decoded->acquire) {
+			if (decoded->limited_ordering)
+				smp_rmb();
+			else
+				smp_mb();
+		}
+		orlix_tcti_apply_memory_writeback(regs, decoded);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->load) {
 		if (!mm)
@@ -2273,14 +2298,23 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 			current->thread.user_exclusive_size = total_size;
 			current->thread.user_exclusive_valid = 1;
 		}
-		if (decoded->acquire)
-			smp_mb();
+		if (decoded->acquire) {
+			if (decoded->limited_ordering)
+				smp_rmb();
+			else
+				smp_mb();
+		}
+		orlix_tcti_apply_memory_writeback(regs, decoded);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
 
-	if (decoded->release)
-		smp_mb();
+	if (decoded->release) {
+		if (decoded->limited_ordering)
+			smp_wmb();
+		else
+			smp_mb();
+	}
 
 	if (decoded->exclusive &&
 	    (!current->thread.user_exclusive_valid ||
@@ -2318,10 +2352,58 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		orlix_tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32),
 				       exchanged ? 0 : 1);
 	} else {
-		ret = orlix_tcti_store_integer(mm, address, decoded->access_size,
-					 value);
+		ret = orlix_tcti_encode_integer(desired, decoded->access_size, value);
+		if (!ret && decoded->pair) {
+			value2 = orlix_tcti_read_gpr_or_zero(regs, decoded->rt2,
+						      decoded->access_size);
+			ret = orlix_tcti_encode_integer(desired + decoded->access_size,
+						decoded->access_size, value2);
+		}
+		if (!ret)
+			ret = orlix_tcti_write_user_data(mm, address, desired,
+						 decoded->pair ? total_size :
+						 decoded->access_size);
 		if (ret)
 			return ret;
+	}
+	orlix_tcti_apply_memory_writeback(regs, decoded);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int orlix_tcti_execute_ls64(struct mm_struct *mm, struct pt_regs *regs,
+				 const struct orlix_tcti_decoded_instruction *decoded,
+				 unsigned long *fault_address)
+{
+	unsigned long address;
+	u64 data[8];
+	u8 index;
+	int ret;
+
+	if (!mm || !regs || !decoded || (decoded->rt & 1U) || decoded->rt >= 24U)
+		return -EINVAL;
+	address = orlix_tcti_memory_base(regs, decoded->rn);
+	if (fault_address)
+		*fault_address = address;
+	if (!IS_ALIGNED(address, 64U))
+		return -EFAULT;
+	if (decoded->load) {
+		ret = orlix_tcti_read_user_data(mm, address, data, sizeof(data));
+		if (ret)
+			return ret;
+		for (index = 0; index < ARRAY_SIZE(data); index++)
+			regs->regs[decoded->rt + index] = data[index];
+	} else {
+		for (index = 0; index < ARRAY_SIZE(data); index++)
+			data[index] = regs->regs[decoded->rt + index];
+		if (decoded->ls64_accdata)
+			data[0] = (data[0] & GENMASK_ULL(63, 32)) |
+				  (current->thread.user_accdata_el1 & GENMASK_ULL(31, 0));
+		ret = orlix_tcti_write_user_data(mm, address, data, sizeof(data));
+		if (ret)
+			return ret;
+		if (decoded->ls64_status)
+			orlix_tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32), 0);
 	}
 	regs->pc += sizeof(u32);
 	return 0;
@@ -2384,6 +2466,148 @@ static int orlix_tcti_lse_memory_operation(enum orlix_tcti_lse_atomic_op lse_op,
 	}
 }
 
+static enum orlix_tcti_simd_vector_arithmetic_op
+orlix_tcti_fp_atomic_arithmetic(enum orlix_tcti_lse_atomic_op operation)
+{
+	switch (operation) {
+	case ORLIX_TCTI_LSE_ATOMIC_FADD:
+	case ORLIX_TCTI_LSE_ATOMIC_BFADD:
+		return ORLIX_TCTI_SIMD_ARITH_FADD;
+	case ORLIX_TCTI_LSE_ATOMIC_FMAX:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMAX:
+		return ORLIX_TCTI_SIMD_ARITH_FMAX;
+	case ORLIX_TCTI_LSE_ATOMIC_FMAXNM:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMAXNM:
+		return ORLIX_TCTI_SIMD_ARITH_FMAXNM;
+	case ORLIX_TCTI_LSE_ATOMIC_FMIN:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMIN:
+		return ORLIX_TCTI_SIMD_ARITH_FMIN;
+	case ORLIX_TCTI_LSE_ATOMIC_FMINNM:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMINNM:
+		return ORLIX_TCTI_SIMD_ARITH_FMINNM;
+	default:
+		return (enum orlix_tcti_simd_vector_arithmetic_op)-1;
+	}
+}
+
+static bool orlix_tcti_fp_atomic_is_bfloat(
+	enum orlix_tcti_lse_atomic_op operation)
+{
+	return operation >= ORLIX_TCTI_LSE_ATOMIC_BFADD &&
+		operation <= ORLIX_TCTI_LSE_ATOMIC_BFMINNM;
+}
+
+static u16 orlix_tcti_fp32_to_bfloat16(u32 value, unsigned long fpcr)
+{
+	u16 upper = value >> 16;
+	u16 lower = value;
+	u32 exponent = value & GENMASK(30, 23);
+	u32 fraction = value & GENMASK(22, 0);
+	u8 rounding = (fpcr >> 22) & 0x3U;
+	bool increment = false;
+
+	/* FEAT_LSFE fixes DN to one for the atomic operation. */
+	if (exponent == GENMASK(30, 23) && fraction)
+		return (value & BIT(31) ? BIT(15) : 0) | 0x7fc0U;
+	switch (rounding) {
+	case 0: /* nearest, ties to even */
+		increment = lower > 0x8000U ||
+			(lower == 0x8000U && (upper & 1U));
+		break;
+	case 1: /* plus infinity */
+		increment = !(value & BIT(31)) && lower;
+		break;
+	case 2: /* minus infinity */
+		increment = (value & BIT(31)) && lower;
+		break;
+	case 3: /* toward zero */
+		break;
+	}
+	return upper + increment;
+}
+
+struct orlix_tcti_fp_atomic_context {
+	enum orlix_tcti_lse_atomic_op operation;
+	unsigned long fpcr;
+};
+
+static int orlix_tcti_fp_atomic_transform(void *result_buffer,
+					 const void *old_buffer,
+					 const void *operand_buffer, size_t size,
+					 void *opaque)
+{
+	struct orlix_tcti_fp_atomic_context *context = opaque;
+	enum orlix_tcti_simd_vector_arithmetic_op operation =
+		orlix_tcti_fp_atomic_arithmetic(context->operation);
+	u64 left[2] = {};
+	u64 right[2] = {};
+	u64 result[2] = {};
+	unsigned long ignored_fpsr = 0;
+	unsigned long operation_fpcr =
+		(context->fpcr & AARCH64_FPCR_WRITABLE_MASK & ~GENMASK(12, 8)) |
+		BIT(25);
+	int ret;
+
+	if ((int)operation < 0)
+		return -EINVAL;
+	if (orlix_tcti_fp_atomic_is_bfloat(context->operation)) {
+		u32 old32;
+		u32 operand32;
+
+		if (size != sizeof(u16))
+			return -EINVAL;
+		old32 = (u32)*(const u16 *)old_buffer << 16;
+		operand32 = (u32)*(const u16 *)operand_buffer << 16;
+		left[0] = old32;
+		right[0] = operand32;
+		ret = orlix_tcti_native_simd_fp_three_same(operation, true,
+				sizeof(u32), sizeof(u32), result, left, right,
+				left, operation_fpcr, &ignored_fpsr);
+		if (!ret)
+			*(u16 *)result_buffer = orlix_tcti_fp32_to_bfloat16(
+				(u32)result[0], context->fpcr);
+		return ret;
+	}
+	memcpy(left, old_buffer, size);
+	memcpy(right, operand_buffer, size);
+	if (size == sizeof(u16))
+		ret = orlix_tcti_native_simd_fp16_three_same(operation, true, false,
+			result, left, right, left, operation_fpcr, &ignored_fpsr);
+	else
+		ret = orlix_tcti_native_simd_fp_three_same(operation, true, size,
+			size, result, left, right, left, operation_fpcr,
+			&ignored_fpsr);
+	if (!ret)
+		memcpy(result_buffer, result, size);
+	return ret;
+}
+
+static int orlix_tcti_execute_fp_atomic(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded,
+	unsigned long address, enum orlix_tcti_atomic_memory_order order)
+{
+	struct orlix_tcti_fp_atomic_context context = {
+		.operation = decoded->lse_atomic_op,
+		.fpcr = current->thread.user_fpcr,
+	};
+	u64 operand = current->thread.user_simd[decoded->rs * 2];
+	u64 old_value = 0;
+	int ret;
+
+	ret = orlix_tcti_atomic_transform_user_data(mm, address, order, &operand,
+		&old_value, decoded->access_size, orlix_tcti_fp_atomic_transform,
+		&context);
+	if (ret)
+		return ret;
+	if (!decoded->atomic_store_only)
+		orlix_tcti_write_simd_fp_register(decoded->rt,
+			decoded->access_size, old_value, 0);
+	orlix_tcti_clear_exclusive_monitor();
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static bool
 orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *decoded,
 			 unsigned long address)
@@ -2441,6 +2665,17 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 	ret = orlix_tcti_lse_memory_order(decoded, &order);
 	if (ret)
 		return ret;
+	/*
+	 * FEAT_THE RCW/RCWS execution depends on the EL1 RCWMASK_EL1 and
+	 * RCWSMASK_EL1 protection state.  Orlix does not yet expose that state to
+	 * TCTI, so fail before touching guest memory instead of approximating the
+	 * architected conditional write and NZCV result.
+	 */
+	if (decoded->atomic_rcw)
+		return -EOPNOTSUPP;
+	if (decoded->atomic_fp)
+		return orlix_tcti_execute_fp_atomic(mm, regs, decoded, address,
+						     order);
 	ret = orlix_tcti_lse_memory_operation(decoded->lse_atomic_op, &operation);
 	if (ret)
 		return ret;
@@ -7790,6 +8025,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 							 fault_address);
 	case ORLIX_TCTI_DECODE_LSE_ATOMIC:
 		return orlix_tcti_execute_lse_atomic(mm, regs, decoded, fault_address);
+	case ORLIX_TCTI_DECODE_LS64:
+		return orlix_tcti_execute_ls64(mm, regs, decoded, fault_address);
 	case ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
 		return orlix_tcti_execute_simd_modified_immediate(regs, decoded);
 	case ORLIX_TCTI_DECODE_FP_SCALAR_IMMEDIATE:

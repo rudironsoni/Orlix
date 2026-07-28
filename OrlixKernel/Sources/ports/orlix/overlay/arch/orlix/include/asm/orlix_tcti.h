@@ -96,6 +96,10 @@ enum orlix_tcti_atomic_memory_operation {
 	ORLIX_TCTI_ATOMIC_MEMORY_UMIN,
 };
 
+typedef int (*orlix_tcti_atomic_transform_fn)(void *result, const void *old_value,
+					      const void *operand, size_t size,
+					      void *context);
+
 struct orlix_tcti_result {
 	enum orlix_tcti_exit_reason reason;
 	long status;
@@ -148,6 +152,11 @@ int orlix_tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
 			  enum orlix_tcti_atomic_memory_order order,
 			  const void *expected, const void *operand,
 			  void *old_value, size_t size, bool *exchanged);
+int orlix_tcti_atomic_transform_user_data(
+	struct mm_struct *mm, unsigned long user_va,
+	enum orlix_tcti_atomic_memory_order order, const void *operand,
+	void *old_value, size_t size, orlix_tcti_atomic_transform_fn transform,
+	void *context);
 int orlix_tcti_compare_exchange_user_data(struct mm_struct *mm,
 				     unsigned long user_va,
 				     const void *expected,

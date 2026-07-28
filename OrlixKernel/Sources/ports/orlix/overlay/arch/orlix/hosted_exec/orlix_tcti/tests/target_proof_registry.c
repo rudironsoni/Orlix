@@ -465,6 +465,13 @@ proof_registry_projection[] = {
 #define LSE128_SUITE "orlix-tcti-lse128-resume"
 #define LSE128_SUITE_SYMBOL "orlix_tcti_lse128_resume_test_suite"
 #define LSE128_CASE_ARRAY "orlix_tcti_lse128_resume_test_cases"
+#define BASE_ATOMIC_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_atomic_source_bound_test.c"
+#define BASE_ATOMIC_SUITE "orlix-tcti-base-atomic-source-bound"
+#define BASE_ATOMIC_SUITE_SYMBOL \
+	"orlix_tcti_base_atomic_source_bound_suite"
+#define BASE_ATOMIC_CASE_ARRAY \
+	"orlix_tcti_base_atomic_source_bound_cases"
 #define LOGICAL_SHIFT_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_shifted_register_test.c"
 #define LOGICAL_SHIFT_SUITE "orlix-tcti-logical-shifted-register"
@@ -742,6 +749,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ LSE128_SOURCE,
 	  "5d80460fba9cebadbe3f54b3b9a7f8deeb2be0c8d341826a9af8f0fb09ebb0bd",
 	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
+	{ BASE_ATOMIC_SOURCE,
+	  "36e932c85fda2aabfa8f307024cbb9a420fc683924034da51ade43ae8bf83419",
+	  "orlix_tcti_base_atomic_source_bound_test.o", NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "44ebc99fb0297ee4353472b931f888986e80d5aecf84096dc3ab58cb58a95e64",
 	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
@@ -834,6 +844,56 @@ static const struct kunit_dependency_terminal_artifact
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_decodes_register_variants",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_rejects_reserved_registers",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_rejects_fixed_bit_neighbours",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_decodes_ordered_access_shapes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_executes_every_source_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_executes_every_fp_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_executes_ls64_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |

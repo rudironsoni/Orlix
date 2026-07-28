@@ -68,6 +68,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_atomic_128_rmw_test.o \
 	target_lse_operation_catalog.o \
 	orlix_tcti_lse_source_bound_test.o \
+	orlix_tcti_base_atomic_source_bound_test.o \
 	orlix_tcti_lse128_noncas_test.o \
 	orlix_tcti_lse128_resume_test.o \
 	orlix_tcti_lse_resume_production_test.o \
