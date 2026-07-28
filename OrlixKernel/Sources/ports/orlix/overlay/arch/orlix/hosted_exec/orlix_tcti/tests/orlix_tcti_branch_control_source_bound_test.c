@@ -11,19 +11,24 @@
  */
 #include <asm/processor.h>
 #include <asm/ptrace.h>
+#include <asm/elf.h>
 #include <asm/orlix_tcti.h>
 #include <kunit/test.h>
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
 #include "orlix_tcti_test_suites.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
+#include "orlix_tcti_native_observation.h"
+#include "target_proof_registry.h"
 #include "target_execution_slice_map.h"
 
 #define BCS_SVC_NOT_TAKEN 0xd4000021U
@@ -289,6 +294,256 @@ static bool bcs_is_exception_control(const struct bcs_leaf *leaf)
 {
 	return leaf->kind == BCS_SVC || leaf->kind == BCS_BRK ||
 	       leaf->kind == BCS_HLT;
+}
+
+static const char *bcs_issue_132_proof_id(const struct bcs_leaf *leaf)
+{
+	switch (leaf->kind) {
+	case BCS_SVC:
+		return "kunit:branch-control-svc";
+	case BCS_BRK:
+		return "kunit:branch-control-brk";
+	case BCS_HLT:
+		return "kunit:branch-control-hlt";
+	default:
+		return NULL;
+	}
+}
+
+static void bcs_capture_fp_simd(struct orlix_tcti_native_fp_simd_state *state)
+{
+	memset(state, 0, sizeof(*state));
+	memcpy(state->v, current->thread.user_simd, sizeof(state->v));
+	state->fpcr = current->thread.user_fpcr;
+	state->fpsr = current->thread.user_fpsr;
+	state->valid = true;
+}
+
+static void bcs_capture_sve(struct orlix_tcti_native_sve_state *state)
+{
+	const struct orlix_tcti_sve_state *sve = &current->thread.user_sve;
+
+	*state = (struct orlix_tcti_native_sve_state) {
+		.vl_bytes = sve->vl_bytes,
+		.z = &sve->z[0][0],
+		.p = &sve->p[0][0],
+		.ffr = sve->ffr,
+		.valid = sve->valid,
+	};
+}
+
+static void bcs_ingest_observation(
+	struct kunit *test, const char *proof_id, u32 ordinal,
+	struct orlix_tcti_target_native_result_record *record)
+{
+	const char *case_name =
+		"bcs_issue_132_exceptions_emit_typed_observations";
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	struct orlix_tcti_target_native_ingestion_selector selector = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary;
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *entry = NULL;
+	const struct orlix_tcti_target_proof_binding *binding = NULL;
+	enum orlix_tcti_target_proof_ingestion_error error;
+	char kernel_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	size_t entry_count;
+	size_t entry_index;
+	size_t binding_index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&entry_count);
+	KUNIT_ASSERT_NOT_NULL(test, entries);
+	for (entry_index = 0; entry_index < entry_count; entry_index++)
+		if (!strcmp(entries[entry_index].id, proof_id)) {
+			entry = &entries[entry_index];
+			break;
+		}
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	for (binding_index = 0; binding_index < entry->binding_count;
+	     binding_index++)
+		if (entry->bindings[binding_index].source_ordinal == ordinal) {
+			binding = &entry->bindings[binding_index];
+			break;
+		}
+	KUNIT_ASSERT_NOT_NULL(test, binding);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_kunit_provenance_identity(
+			entry, case_name, &provenance));
+	scnprintf(kernel_identity, sizeof(kernel_identity), "%s|%s|%s",
+		 init_utsname()->release, init_utsname()->version,
+		 init_utsname()->machine);
+	selector = (struct orlix_tcti_target_native_ingestion_selector) {
+		.proof_id = proof_id,
+		.classification_mask = entry->classification_mask,
+		.condition_tcnd_hex = binding->condition_tcnd_hex,
+		.kunit_source = provenance.source,
+		.kunit_source_sha256 = provenance.source_sha256,
+		.kunit_build_source = provenance.build_source,
+		.kunit_build_source_sha256 = provenance.build_source_sha256,
+		.kunit_suite = provenance.suite,
+		.kunit_case = provenance.case_name,
+		.executing_kernel_identity = kernel_identity,
+	};
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
+		ledger, record, &selector, &error));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, 1UL, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, 1UL, summary.native_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+}
+
+static void bcs_emit_observation(
+	struct kunit *test, const struct bcs_leaf *leaf,
+	enum orlix_tcti_native_obligation obligation)
+{
+	struct orlix_tcti_native_observation_spec spec = {};
+	struct orlix_tcti_native_observation *observation;
+	struct orlix_tcti_target_native_result_record *record = NULL;
+	struct orlix_tcti_native_fp_simd_state fp_simd;
+	struct orlix_tcti_native_sve_state sve;
+	struct orlix_tcti_native_memory_state memory;
+	struct orlix_tcti_native_fault_witness fault;
+	struct pt_regs regs;
+	u32 instruction = bcs_instruction(leaf, true);
+	u32 observed_instruction = 0;
+	unsigned long mapped = bcs_map_program(test, instruction);
+	const char *proof_id = bcs_issue_132_proof_id(leaf);
+
+	bcs_seed_regs(&regs, mapped, leaf, true);
+	spec.source_ordinal = leaf->ordinal;
+	spec.obligation = obligation;
+	spec.result.reason = leaf->kind == BCS_SVC ? ORLIX_TCTI_EXIT_SYSCALL :
+		(leaf->kind == BCS_BRK ? ORLIX_TCTI_EXIT_BREAKPOINT :
+		 ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION);
+	spec.result.status = leaf->kind == BCS_BRK ? 0x1234 : 0;
+	spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
+	spec.result.pc = mapped;
+	spec.result.instruction = instruction;
+	orlix_tcti_native_gpr_capture(&spec.gpr, &regs);
+	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
+		spec.expected.memory.address = mapped;
+		spec.expected.memory.size = sizeof(instruction);
+		spec.expected.memory.bytes = (const u8 *)&instruction;
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+		bcs_capture_fp_simd(&spec.expected.fp_simd);
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+		bcs_capture_sve(&spec.expected.sve);
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FAULT) {
+		spec.expected.fault = (struct orlix_tcti_native_fault_witness) {
+			.address = mapped,
+			.access = ORLIX_TCTI_ACCESS_FETCH,
+			.valid = true,
+			.occurred = true,
+			.precise = true,
+		};
+	}
+	observation = orlix_tcti_native_observation_create(&spec);
+	KUNIT_ASSERT_NOT_NULL(test, observation);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm));
+	if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(
+			current->mm, mapped, &observed_instruction,
+			sizeof(observed_instruction)));
+		memory = (struct orlix_tcti_native_memory_state) {
+			.address = mapped,
+			.size = sizeof(observed_instruction),
+			.bytes = (const u8 *)&observed_instruction,
+		};
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_memory(observation, &memory));
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+		bcs_capture_fp_simd(&fp_simd);
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_fp_simd(observation,
+				&fp_simd));
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+		bcs_capture_sve(&sve);
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_sve(observation, &sve));
+	} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FAULT) {
+		fault = spec.expected.fault;
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_fault(observation, &fault));
+	}
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_compare(observation));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_ASSERT_NOT_NULL(test, record);
+	KUNIT_ASSERT_NOT_NULL(test, proof_id);
+	bcs_ingest_observation(test, proof_id, leaf->ordinal, record);
+	orlix_tcti_target_native_result_record_destroy(record);
+	orlix_tcti_native_observation_destroy(observation);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void bcs_issue_132_exceptions_emit_typed_observations(
+	struct kunit *test)
+{
+	static const enum orlix_tcti_native_obligation obligations[] = {
+		ORLIX_TCTI_NATIVE_OBLIGATION_DECODE,
+		ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS,
+		ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS,
+		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
+		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
+		ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY,
+		ORLIX_TCTI_NATIVE_OBLIGATION_FAULT,
+		ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD,
+		ORLIX_TCTI_NATIVE_OBLIGATION_SVE,
+	};
+	struct orlix_tcti_sve_state *saved_sve;
+	unsigned long *saved_simd;
+	unsigned long saved_fpcr = current->thread.user_fpcr;
+	unsigned long saved_fpsr = current->thread.user_fpsr;
+	unsigned long saved_simd_valid = current->thread.user_simd_valid;
+	size_t leaf_index;
+	size_t obligation_index;
+
+	KUNIT_ASSERT_EQ(test, 0UL, (unsigned long)ELF_HWCAP);
+	KUNIT_ASSERT_EQ(test, 0UL, (unsigned long)ELF_HWCAP2);
+	saved_sve = kmemdup(&current->thread.user_sve,
+			    sizeof(current->thread.user_sve), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, saved_sve);
+	saved_simd = kmemdup(current->thread.user_simd,
+			     sizeof(current->thread.user_simd), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, saved_simd);
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(current->thread.user_simd);
+	     leaf_index++)
+		current->thread.user_simd[leaf_index] =
+			0x5a5a000000000000ULL ^ leaf_index;
+	current->thread.user_simd_valid = 1;
+	current->thread.user_fpcr = BIT(22) | BIT(24);
+	current->thread.user_fpsr = BIT(27) | BIT(4);
+	memset(&current->thread.user_sve, 0, sizeof(current->thread.user_sve));
+	current->thread.user_sve.vl_bytes = ORLIX_TCTI_SVE_MIN_VL_BYTES;
+	current->thread.user_sve.valid = true;
+	current->thread.user_sve.z[31][ORLIX_TCTI_SVE_MIN_VL_BYTES - 1] = 0xa5;
+	current->thread.user_sve.p[15][1] = 0x5a;
+	current->thread.user_sve.ffr[1] = 0x3c;
+	for (leaf_index = 0; leaf_index < 3; leaf_index++)
+		for (obligation_index = 0;
+		     obligation_index < ARRAY_SIZE(obligations); obligation_index++) {
+			if (bcs_leaves[leaf_index].kind == BCS_SVC &&
+			    obligations[obligation_index] ==
+				ORLIX_TCTI_NATIVE_OBLIGATION_FAULT)
+				continue;
+			bcs_emit_observation(test, &bcs_leaves[leaf_index],
+				obligations[obligation_index]);
+		}
+	memcpy(&current->thread.user_sve, saved_sve,
+	       sizeof(current->thread.user_sve));
+	memcpy(current->thread.user_simd, saved_simd,
+	       sizeof(current->thread.user_simd));
+	current->thread.user_simd_valid = saved_simd_valid;
+	current->thread.user_fpcr = saved_fpcr;
+	current->thread.user_fpsr = saved_fpsr;
+	kfree(saved_simd);
+	kfree(saved_sve);
 }
 
 static void bcs_expect_exception_control(struct kunit *test,
@@ -946,6 +1201,7 @@ static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_issue_132_exact_source_cohort),
 	KUNIT_CASE(bcs_source_decode),
 	KUNIT_CASE(bcs_production_resume),
+	KUNIT_CASE(bcs_issue_132_exceptions_emit_typed_observations),
 	KUNIT_CASE(bcs_x31_semantics_production),
 	KUNIT_CASE(bcs_register_branch_unaligned_target_production),
 	KUNIT_CASE(bcs_register_branch_out_of_range_target_production),
