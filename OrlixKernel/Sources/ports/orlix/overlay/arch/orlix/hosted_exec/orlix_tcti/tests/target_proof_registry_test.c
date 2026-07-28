@@ -1016,12 +1016,17 @@ static int scalar_bitops_registry_binds_exact_source_rows(void)
 			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c"));
 		EXPECT(!strcmp(entry->kunit_suite,
 			"orlix-tcti-scalar-bitops-source-bound"));
-		EXPECT(entry->kunit_case_count == 1);
+		EXPECT(entry->kunit_case_count == 2);
 		EXPECT(!strcmp(entry->kunit_cases[0].name,
 			"orlix_tcti_scalar_bitops_source_bindings"));
 		EXPECT(entry->kunit_cases[0].obligations ==
 			(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS));
+		EXPECT(!strcmp(entry->kunit_cases[1].name,
+			"orlix_tcti_scalar_bitops_production_path_semantics"));
+		EXPECT(entry->kunit_cases[1].obligations ==
+			(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC));
 		EXPECT(entry->unproved_obligations == entry->obligations);
 		EXPECT(entry->obligations &
 		       ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS);

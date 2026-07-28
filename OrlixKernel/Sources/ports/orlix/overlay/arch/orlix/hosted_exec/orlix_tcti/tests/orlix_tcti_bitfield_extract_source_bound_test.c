@@ -11,8 +11,13 @@
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 
 #include "target_instruction_artifact.h"
+#include "target_execution_slice_map.h"
+#include "target_proof_ingestion.h"
+#include "target_proof_registry.h"
+#include "orlix_tcti_native_observation.h"
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
 
@@ -72,65 +77,31 @@ static const struct source_row source_rows[] = {
 struct scalar_source_row {
 	u32 ordinal;
 	const char *leaf;
+	const char *operation;
 	u32 mask;
 	u32 pattern;
 	enum orlix_tcti_decode_class class;
-	union {
-		enum orlix_tcti_data_processing_1source_op dp1;
-		enum orlix_tcti_data_processing_2source_op dp2;
-	} op;
+	enum orlix_tcti_data_processing_1source_op op;
 };
 
 static const struct scalar_source_row dp1_source_rows[] = {
-	{ 3389U, "RBIT_32_dp_1src", 0xfffffc00U, 0x5ac00000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_RBIT } },
-	{ 3390U, "REV16_32_dp_1src", 0xfffffc00U, 0x5ac00400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_REV16 } },
-	{ 3391U, "REV_32_dp_1src", 0xfffffc00U, 0x5ac00800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_REV } },
-	{ 3392U, "CLZ_32_dp_1src", 0xfffffc00U, 0x5ac01000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_CLZ } },
-	{ 3393U, "CLS_32_dp_1src", 0xfffffc00U, 0x5ac01400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_CLS } },
-	{ 3397U, "RBIT_64_dp_1src", 0xfffffc00U, 0xdac00000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_RBIT } },
-	{ 3398U, "REV16_64_dp_1src", 0xfffffc00U, 0xdac00400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_REV16 } },
-	{ 3399U, "REV32_64_dp_1src", 0xfffffc00U, 0xdac00800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_REV32 } },
-	{ 3400U, "REV_64_dp_1src", 0xfffffc00U, 0xdac00c00U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_REV } },
-	{ 3401U, "CLZ_64_dp_1src", 0xfffffc00U, 0xdac01000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_CLZ } },
-	{ 3402U, "CLS_64_dp_1src", 0xfffffc00U, 0xdac01400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, { .dp1 = ORLIX_TCTI_DP1_CLS } },
-};
-
-static const struct scalar_source_row dp2_source_rows[] = {
-	{ 3356U, "UDIV_32_dp_2src", 0xffe0fc00U, 0x1ac00800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_UDIV } },
-	{ 3357U, "SDIV_32_dp_2src", 0xffe0fc00U, 0x1ac00c00U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_SDIV } },
-	{ 3358U, "LSLV_32_dp_2src", 0xffe0fc00U, 0x1ac02000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_LSLV } },
-	{ 3359U, "LSRV_32_dp_2src", 0xffe0fc00U, 0x1ac02400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_LSRV } },
-	{ 3360U, "ASRV_32_dp_2src", 0xffe0fc00U, 0x1ac02800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_ASRV } },
-	{ 3361U, "RORV_32_dp_2src", 0xffe0fc00U, 0x1ac02c00U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_RORV } },
-	{ 3373U, "UDIV_64_dp_2src", 0xffe0fc00U, 0x9ac00800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_UDIV } },
-	{ 3374U, "SDIV_64_dp_2src", 0xffe0fc00U, 0x9ac00c00U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_SDIV } },
-	{ 3377U, "LSLV_64_dp_2src", 0xffe0fc00U, 0x9ac02000U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_LSLV } },
-	{ 3378U, "LSRV_64_dp_2src", 0xffe0fc00U, 0x9ac02400U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_LSRV } },
-	{ 3379U, "ASRV_64_dp_2src", 0xffe0fc00U, 0x9ac02800U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_ASRV } },
-	{ 3380U, "RORV_64_dp_2src", 0xffe0fc00U, 0x9ac02c00U,
-	  ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE, { .dp2 = ORLIX_TCTI_DP2_RORV } },
+	{ 3389U, "RBIT_32_dp_1src", "RBIT_int", 0xfffffc00U, 0x5ac00000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_RBIT },
+	{ 3390U, "REV16_32_dp_1src", "REV16_int", 0xfffffc00U, 0x5ac00400U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_REV16 },
+	{ 3391U, "REV_32_dp_1src", "REV", 0xfffffc00U, 0x5ac00800U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_REV },
+	{ 3392U, "CLZ_32_dp_1src", "CLZ_int", 0xfffffc00U, 0x5ac01000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CLZ },
+	{ 3393U, "CLS_32_dp_1src", "CLS_int", 0xfffffc00U, 0x5ac01400U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CLS },
+	{ 3394U, "CTZ_32_dp_1src", "CTZ", 0xfffffc00U, 0x5ac01800U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CTZ },
+	{ 3395U, "CNT_32_dp_1src", "CNT", 0xfffffc00U, 0x5ac01c00U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CNT },
+	{ 3396U, "ABS_32_dp_1src", "ABS", 0xfffffc00U, 0x5ac02000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_ABS },
+	{ 3397U, "RBIT_64_dp_1src", "RBIT_int", 0xfffffc00U, 0xdac00000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_RBIT },
+	{ 3398U, "REV16_64_dp_1src", "REV16_int", 0xfffffc00U, 0xdac00400U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_REV16 },
+	{ 3399U, "REV32_64_dp_1src", "REV32_int", 0xfffffc00U, 0xdac00800U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_REV32 },
+	{ 3400U, "REV_64_dp_1src", "REV", 0xfffffc00U, 0xdac00c00U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_REV },
+	{ 3401U, "CLZ_64_dp_1src", "CLZ_int", 0xfffffc00U, 0xdac01000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CLZ },
+	{ 3402U, "CLS_64_dp_1src", "CLS_int", 0xfffffc00U, 0xdac01400U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CLS },
+	{ 3403U, "CTZ_64_dp_1src", "CTZ", 0xfffffc00U, 0xdac01800U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CTZ },
+	{ 3404U, "CNT_64_dp_1src", "CNT", 0xfffffc00U, 0xdac01c00U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_CNT },
+	{ 3405U, "ABS_64_dp_1src", "ABS", 0xfffffc00U, 0xdac02000U, ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE, ORLIX_TCTI_DP1_ABS },
 };
 
 struct alias_case {
@@ -335,12 +306,37 @@ static void source_fingerprints(struct kunit *test)
 
 static void scalar_source_fingerprints(struct kunit *test)
 {
+	const struct orlix_tcti_target_instruction_artifact *artifact =
+		orlix_tcti_target_instruction_artifact_canonical();
 	size_t i;
 
+	KUNIT_ASSERT_NOT_NULL(test, artifact);
+	KUNIT_ASSERT_EQ(test, 25U,
+		ARRAY_SIZE(source_rows) + ARRAY_SIZE(dp1_source_rows));
 	for (i = 0; i < ARRAY_SIZE(dp1_source_rows); i++) {
 		const struct scalar_source_row *row = &dp1_source_rows[i];
+		const struct orlix_tcti_target_instruction_artifact_leaf *leaf;
+		const char *leaf_name;
+		const char *operation;
 		struct orlix_tcti_decoded_instruction decoded =
 			orlix_tcti_decode_aarch64(row->pattern);
+		size_t prior;
+
+		KUNIT_ASSERT_LT(test, row->ordinal, artifact->leaf_count);
+		leaf = &artifact->leaves[row->ordinal];
+		leaf_name = bitfield_extract_artifact_string(artifact,
+			leaf->name_offset);
+		operation = bitfield_extract_artifact_string(artifact,
+			leaf->operation_offset);
+		KUNIT_ASSERT_NOT_NULL(test, leaf_name);
+		KUNIT_ASSERT_NOT_NULL(test, operation);
+		KUNIT_EXPECT_STREQ(test, row->leaf, leaf_name);
+		KUNIT_EXPECT_STREQ(test, row->operation, operation);
+		KUNIT_EXPECT_EQ(test, row->mask, leaf->encoding_mask);
+		KUNIT_EXPECT_EQ(test, row->pattern, leaf->encoding_pattern);
+		for (prior = 0; prior < i; prior++)
+			KUNIT_EXPECT_NE(test, row->ordinal,
+				dp1_source_rows[prior].ordinal);
 
 		KUNIT_EXPECT_EQ_MSG(test, row->pattern, row->pattern & row->mask,
 				    "%s source ordinal %u", row->leaf,
@@ -348,26 +344,70 @@ static void scalar_source_fingerprints(struct kunit *test)
 		KUNIT_ASSERT_EQ_MSG(test, row->class, decoded.decode_class,
 				    "%s source ordinal %u", row->leaf,
 				    row->ordinal);
-		KUNIT_EXPECT_EQ_MSG(test, row->op.dp1, decoded.dp1_op,
+		KUNIT_EXPECT_EQ_MSG(test, row->op, decoded.dp1_op,
 				    "%s source ordinal %u", row->leaf,
 				    row->ordinal);
 	}
+}
 
-	for (i = 0; i < ARRAY_SIZE(dp2_source_rows); i++) {
-		const struct scalar_source_row *row = &dp2_source_rows[i];
-		struct orlix_tcti_decoded_instruction decoded =
-			orlix_tcti_decode_aarch64(row->pattern);
+static const char *bitfield_unary_source_name(u32 ordinal)
+{
+	size_t index;
 
-		KUNIT_EXPECT_EQ_MSG(test, row->pattern, row->pattern & row->mask,
-				    "%s source ordinal %u", row->leaf,
-				    row->ordinal);
-		KUNIT_ASSERT_EQ_MSG(test, row->class, decoded.decode_class,
-				    "%s source ordinal %u", row->leaf,
-				    row->ordinal);
-		KUNIT_EXPECT_EQ_MSG(test, row->op.dp2, decoded.dp2_op,
-				    "%s source ordinal %u", row->leaf,
-				    row->ordinal);
+	for (index = 0; index < ARRAY_SIZE(source_rows); index++)
+		if (source_rows[index].ordinal == ordinal)
+			return source_rows[index].source_id;
+	for (index = 0; index < ARRAY_SIZE(dp1_source_rows); index++)
+		if (dp1_source_rows[index].ordinal == ordinal)
+			return dp1_source_rows[index].leaf;
+	return NULL;
+}
+
+static void bitfield_unary_exact_cohort(struct kunit *test)
+{
+	const struct orlix_tcti_execution_slice_map *map =
+		orlix_tcti_execution_slice_map_canonical();
+	struct orlix_tcti_execution_slice_map_validation_result validation;
+	size_t family_index;
+	size_t member_index;
+	size_t matched = 0;
+	size_t selected_family = SIZE_MAX;
+
+	KUNIT_ASSERT_NOT_NULL(test, map);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_execution_slice_map_validate(map, &validation));
+	KUNIT_ASSERT_EQ(test, 25U,
+		ARRAY_SIZE(source_rows) + ARRAY_SIZE(dp1_source_rows));
+	for (family_index = 0; family_index < map->counts.family_count;
+	     family_index++) {
+		const struct orlix_tcti_execution_slice_family *family =
+			&map->families[family_index];
+
+		if (family->issue_id != 129U)
+			continue;
+		KUNIT_EXPECT_EQ(test, SIZE_MAX, selected_family);
+		selected_family = family_index;
+		KUNIT_EXPECT_STREQ(test, "base-a64-bitfield-unary",
+			family->stable_id);
+		KUNIT_EXPECT_EQ(test, 25U, family->declared_member_count);
 	}
+	KUNIT_ASSERT_NE(test, SIZE_MAX, selected_family);
+	for (member_index = 0; member_index < map->counts.leaf_count;
+	     member_index++) {
+		const struct orlix_tcti_execution_slice_member *member =
+			&map->members[member_index];
+		const char *source_name;
+
+		if (member->family_index != selected_family)
+			continue;
+		source_name = bitfield_unary_source_name(member->ordinal);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, source_name, "ordinal=%u",
+			member->ordinal);
+		KUNIT_EXPECT_STREQ_MSG(test, source_name, member->source_name,
+			"ordinal=%u", member->ordinal);
+		matched++;
+	}
+	KUNIT_EXPECT_EQ(test, 25U, matched);
 }
 
 static u64 scalar_reverse_bits(u64 value, u8 width)
@@ -436,42 +476,12 @@ static u64 scalar_dp1_expected(enum orlix_tcti_data_processing_1source_op op,
 		return scalar_count_leading_zeros(value, width);
 	case ORLIX_TCTI_DP1_CLS:
 		return scalar_count_leading_sign_bits(value, width);
-	default:
-		return 0;
-	}
-}
-
-static u64 scalar_dp2_expected(enum orlix_tcti_data_processing_2source_op op,
-			       bool is_64bit, u64 left, u64 right)
-{
-	u8 width = is_64bit ? 64 : 32;
-	u64 mask = width_mask(is_64bit);
-	u8 amount;
-
-	left &= mask;
-	right &= mask;
-	amount = right & (width - 1);
-	switch (op) {
-	case ORLIX_TCTI_DP2_UDIV:
-		return right ? left / right : 0;
-	case ORLIX_TCTI_DP2_SDIV:
-		if (!right)
-			return 0;
-		if (is_64bit)
-			return (s64)left == S64_MIN && (s64)right == -1 ?
-				left : (u64)((s64)left / (s64)right);
-		return (s32)(u32)left == S32_MIN && (s32)(u32)right == -1 ?
-			(u32)left : (u32)((s32)(u32)left / (s32)(u32)right);
-	case ORLIX_TCTI_DP2_LSLV:
-		return left << amount;
-	case ORLIX_TCTI_DP2_LSRV:
-		return left >> amount;
-	case ORLIX_TCTI_DP2_ASRV:
-		return is_64bit ? (u64)((s64)left >> amount) :
-			(u32)((s32)(u32)left >> amount);
-	case ORLIX_TCTI_DP2_RORV:
-		return amount ? (left >> amount) |
-			(left << (width - amount)) : left;
+	case ORLIX_TCTI_DP1_CTZ:
+		return value ? __ffs64(value) : width;
+	case ORLIX_TCTI_DP1_CNT:
+		return width == 64 ? hweight64(value) : hweight32(value);
+	case ORLIX_TCTI_DP1_ABS:
+		return value & BIT_ULL(width - 1) ? (-value) & ones(width) : value;
 	default:
 		return 0;
 	}
@@ -481,7 +491,6 @@ static void scalar_source_execution(struct kunit *test)
 {
 	const u8 rd = 7;
 	const u8 rn = 19;
-	const u8 rm = 11;
 	size_t i;
 
 	for (i = 0; i < ARRAY_SIZE(dp1_source_rows); i++) {
@@ -496,30 +505,8 @@ static void scalar_source_execution(struct kunit *test)
 		seed_regs(&regs, instruction);
 		regs.regs[rn] = 0x8123456789abcdefULL;
 		before = regs;
-		expected = scalar_dp1_expected(decoded.dp1_op,
+		expected = scalar_dp1_expected(row->op,
 			before.regs[rn] & width_mask(decoded.is_64bit), width);
-		KUNIT_ASSERT_EQ_MSG(test, 0,
-			orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL),
-			"%s source ordinal %u", row->leaf, row->ordinal);
-		expect_state(test, &before, &regs, rd,
-			     expected & width_mask(decoded.is_64bit));
-	}
-
-	for (i = 0; i < ARRAY_SIZE(dp2_source_rows); i++) {
-		const struct scalar_source_row *row = &dp2_source_rows[i];
-		u32 instruction = row->pattern | ((u32)rm << 16) |
-			((u32)rn << 5) | rd;
-		struct orlix_tcti_decoded_instruction decoded =
-			orlix_tcti_decode_aarch64(instruction);
-		struct pt_regs regs, before;
-		u64 expected;
-
-		seed_regs(&regs, instruction);
-		regs.regs[rn] = 0x8123456789abcdefULL;
-		regs.regs[rm] = 35;
-		before = regs;
-		expected = scalar_dp2_expected(decoded.dp2_op, decoded.is_64bit,
-			before.regs[rn], before.regs[rm]);
 		KUNIT_ASSERT_EQ_MSG(test, 0,
 			orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL),
 			"%s source ordinal %u", row->leaf, row->ordinal);
@@ -582,6 +569,61 @@ static void exhaustive_extract_decode(struct kunit *test)
 					legal += valid;
 				}
 	KUNIT_EXPECT_EQ(test, 96U, legal);
+}
+
+static void exhaustive_bitfield_semantics(struct kunit *test)
+{
+	u8 sf, opc, immr, imms;
+
+	for (sf = 0; sf < 2; sf++)
+		for (opc = 0; opc < 3; opc++)
+			for (immr = 0; immr < (sf ? 64 : 32); immr++)
+				for (imms = 0; imms < (sf ? 64 : 32); imms++) {
+					u32 instruction = encode_bitfield(sf, opc, sf,
+						immr, imms, 4, 7);
+					struct orlix_tcti_decoded_instruction decoded =
+						orlix_tcti_decode_aarch64(instruction);
+					struct pt_regs regs, before;
+					u64 expected;
+
+					seed_regs(&regs, instruction);
+					before = regs;
+					expected = bitfield_expected(&decoded,
+						before.regs[4], before.regs[7]);
+					KUNIT_ASSERT_EQ(test, 0,
+						orlix_tcti_switch_debug_execute_decoded(
+							NULL, &regs, &decoded, NULL));
+					expect_state(test, &before, &regs, 7, expected);
+				}
+}
+
+static void exhaustive_extract_semantics(struct kunit *test)
+{
+	u8 sf, shift;
+
+	for (sf = 0; sf < 2; sf++) {
+		u8 width = sf ? 64 : 32;
+
+		for (shift = 0; shift < width; shift++) {
+			u32 instruction = encode_extract(sf, sf, false, 5,
+				shift, 4, 7);
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
+			struct pt_regs regs, before;
+			u64 high, low, expected;
+
+			seed_regs(&regs, instruction);
+			before = regs;
+			high = before.regs[4] & width_mask(sf);
+			low = before.regs[5] & width_mask(sf);
+			expected = shift ? ((low >> shift) |
+				(high << (width - shift))) & width_mask(sf) : low;
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_switch_debug_execute_decoded(
+					NULL, &regs, &decoded, NULL));
+			expect_state(test, &before, &regs, 7, expected);
+		}
+	}
 }
 
 static void bitfield_alias_state(struct kunit *test)
@@ -908,12 +950,287 @@ static void bitfield_extract_production_path_reserved_rejection(struct kunit *te
 		encode_extract(false, false, false, 5, 32, 4, 7));
 }
 
+static void bitfield_unary_production_path_leaves(struct kunit *test)
+{
+	static const struct {
+		u8 rn;
+		u8 rd;
+		u64 value;
+	} cases[] = {
+		{ 4, 7, 0x8123456789abcdefULL },
+		{ 7, 7, 0x8000000000000000ULL },
+		{ 31, 8, 0xffffffffffffffffULL },
+		{ 6, 31, 0x0000000000000001ULL },
+	};
+	size_t row, variant;
+
+	for (row = 0; row < ARRAY_SIZE(dp1_source_rows); row++) {
+		const struct scalar_source_row *source = &dp1_source_rows[row];
+
+		for (variant = 0; variant < ARRAY_SIZE(cases); variant++) {
+			u32 instruction = source->pattern |
+				((u32)cases[variant].rn << 5) | cases[variant].rd;
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
+			struct pt_regs regs, before;
+			struct orlix_tcti_result result;
+			unsigned long mapped = bitfield_extract_map_rx(test, instruction);
+			u8 width = decoded.is_64bit ? 64 : 32;
+			u64 input;
+			u64 expected;
+
+			KUNIT_ASSERT_EQ_MSG(test, source->class,
+				decoded.decode_class, "%s ordinal %u",
+				source->leaf, source->ordinal);
+			KUNIT_ASSERT_EQ(test, source->op, decoded.dp1_op);
+			bitfield_extract_seed_resume_regs(&regs, mapped, instruction);
+			if (cases[variant].rn != 31)
+				regs.regs[cases[variant].rn] = cases[variant].value;
+			before = regs;
+			input = cases[variant].rn == 31 ? 0 :
+				before.regs[cases[variant].rn];
+			expected = scalar_dp1_expected(source->op,
+				input & width_mask(decoded.is_64bit), width) &
+				width_mask(decoded.is_64bit);
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL,
+				result.reason, "%s ordinal %u", source->leaf,
+				source->ordinal);
+			KUNIT_EXPECT_EQ(test, 0L, result.status);
+			KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
+			KUNIT_EXPECT_EQ(test, BITFIELD_EXTRACT_SVC,
+				result.instruction);
+			bitfield_extract_expect_resume_frame(test, &before, &regs,
+				cases[variant].rd, expected, mapped);
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+		}
+	}
+}
+
+static void bitfield_unary_reserved_rejection(struct kunit *test)
+{
+	/* REV32 is reserved in the 32-bit one-source encoding. */
+	bitfield_extract_expect_resume_rejection(test,
+		0x5ac00c00U | (4U << 5) | 7U);
+}
+
+static const struct orlix_tcti_target_proof_registry_entry *
+bitfield_unary_registry_entry(struct kunit *test, u32 ordinal,
+	const struct orlix_tcti_target_proof_binding **selected_binding)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *selected = NULL;
+	size_t count;
+	size_t entry_index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	if (!entries) {
+		KUNIT_FAIL(test, "proof registry is unavailable");
+		return NULL;
+	}
+	for (entry_index = 0; entry_index < count; entry_index++) {
+		size_t binding_index;
+
+		for (binding_index = 0;
+		     binding_index < entries[entry_index].binding_count;
+		     binding_index++) {
+			const struct orlix_tcti_target_proof_binding *binding =
+				&entries[entry_index].bindings[binding_index];
+
+			if (binding->source_ordinal != ordinal)
+				continue;
+			KUNIT_EXPECT_PTR_EQ(test, NULL, selected);
+			selected = &entries[entry_index];
+			*selected_binding = binding;
+		}
+	}
+	return selected;
+}
+
+static const char *bitfield_unary_native_case(
+	const struct orlix_tcti_target_proof_registry_entry *entry)
+{
+	if (!strcmp(entry->kunit_suite,
+		    "orlix-tcti-bitfield-extract-source-bound"))
+		return "bitfield_extract_production_path_leaves";
+	if (!strcmp(entry->kunit_suite,
+		    "orlix-tcti-scalar-bitops-source-bound"))
+		return "orlix_tcti_scalar_bitops_production_path_semantics";
+	return "orlix_tcti_cssc_data_processing_execute_boundaries";
+}
+
+static void bitfield_unary_typed_one(struct kunit *test,
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger, u32 ordinal,
+	u32 instruction, u64 expected)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entry;
+	const struct orlix_tcti_target_proof_binding *binding = NULL;
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	struct orlix_tcti_target_native_ingestion_selector selector;
+	struct orlix_tcti_target_native_result_record *record = NULL;
+	struct orlix_tcti_native_observation_spec spec = {};
+	struct orlix_tcti_native_observation *observation;
+	enum orlix_tcti_target_proof_ingestion_error error;
+	struct pt_regs regs, expected_regs;
+	char build_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	unsigned long mapped = bitfield_extract_map_rx(test, instruction);
+	u8 rd = instruction & 31;
+	const char *case_name;
+
+	bitfield_extract_seed_resume_regs(&regs, mapped, instruction);
+	expected_regs = regs;
+	if (rd != 31)
+		expected_regs.regs[rd] = expected;
+	expected_regs.pc = mapped + sizeof(u32);
+	spec.source_ordinal = ordinal;
+	spec.obligation = ORLIX_TCTI_NATIVE_OBLIGATION_GPR;
+	spec.result.reason = ORLIX_TCTI_EXIT_SYSCALL;
+	spec.result.status = 0;
+	spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
+	spec.result.pc = mapped + sizeof(u32);
+	spec.result.instruction = BITFIELD_EXTRACT_SVC;
+	orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
+	observation = orlix_tcti_native_observation_create(&spec);
+	KUNIT_ASSERT_NOT_NULL(test, observation);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_compare(observation));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_ASSERT_NOT_NULL(test, record);
+
+	entry = bitfield_unary_registry_entry(test, ordinal, &binding);
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	KUNIT_ASSERT_NOT_NULL(test, binding);
+	case_name = bitfield_unary_native_case(entry);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_target_kunit_provenance_identity(
+		entry, case_name, &provenance));
+	scnprintf(build_identity, sizeof(build_identity), "%s|%s|%s",
+		init_utsname()->release, init_utsname()->version,
+		init_utsname()->machine);
+	selector = (struct orlix_tcti_target_native_ingestion_selector) {
+		.proof_id = entry->id,
+		.classification_mask = entry->classification_mask,
+		.condition_tcnd_hex = binding->condition_tcnd_hex,
+		.kunit_source = provenance.source,
+		.kunit_source_sha256 = provenance.source_sha256,
+		.kunit_build_source = provenance.build_source,
+		.kunit_build_source_sha256 = provenance.build_source_sha256,
+		.kunit_suite = provenance.suite,
+		.kunit_case = provenance.case_name,
+		.executing_kernel_identity = build_identity,
+	};
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
+		ledger, record, &selector, &error));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+	orlix_tcti_target_native_result_record_destroy(record);
+	orlix_tcti_native_observation_destroy(observation);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
+static void bitfield_unary_typed_proof_ingestion(struct kunit *test)
+{
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary;
+	size_t row;
+
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(25);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	for (row = 0; row < ARRAY_SIZE(source_rows); row++) {
+		const struct source_row *source = &source_rows[row];
+		bool sf = source->ordinal == 2170U || source->ordinal >= 2208U;
+		u32 instruction;
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs seeded;
+		u64 expected;
+
+		instruction = source->class == ORLIX_TCTI_DECODE_EXTRACT ?
+			encode_extract(sf, sf, false, 5, sf ? 37 : 19, 4, 7) :
+			encode_bitfield(sf, source->op, sf, sf ? 56 : 24,
+				sf ? 7 : 23, 4, 7);
+		decoded = orlix_tcti_decode_aarch64(instruction);
+		bitfield_extract_seed_resume_regs(&seeded, 0, instruction);
+		if (source->class == ORLIX_TCTI_DECODE_EXTRACT) {
+			u8 width = sf ? 64 : 32;
+			u64 high = seeded.regs[4] & width_mask(sf);
+			u64 low = seeded.regs[5] & width_mask(sf);
+
+			expected = ((low >> decoded.shift_amount) |
+				(high << (width - decoded.shift_amount))) &
+				width_mask(sf);
+		} else {
+			expected = bitfield_expected(&decoded, seeded.regs[4],
+				seeded.regs[7]);
+		}
+		bitfield_unary_typed_one(test, ledger, source->ordinal,
+			instruction, expected);
+	}
+	for (row = 0; row < ARRAY_SIZE(dp1_source_rows); row++) {
+		const struct scalar_source_row *source = &dp1_source_rows[row];
+		u32 instruction = source->pattern | (4U << 5) | 7U;
+		struct pt_regs seeded;
+		bool sf = instruction & BIT(31);
+		u8 width = sf ? 64 : 32;
+		u64 expected;
+
+		bitfield_extract_seed_resume_regs(&seeded, 0, instruction);
+		expected = scalar_dp1_expected(source->op,
+			seeded.regs[4] & width_mask(sf), width) & width_mask(sf);
+		bitfield_unary_typed_one(test, ledger, source->ordinal,
+			instruction, expected);
+	}
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, 25U, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, 25U, summary.native_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.rejected);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+}
+
+static void bitfield_unary_linux_disposition(struct kunit *test)
+{
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows;
+	size_t count;
+	size_t index;
+	size_t matched = 0;
+
+	rows = orlix_tcti_target_linux_proof_dispositions(&count);
+	KUNIT_ASSERT_NOT_NULL(test, rows);
+	for (index = 0; index < count; index++) {
+		u32 ordinal = rows[index].source.source_index;
+		bool selected = (ordinal >= 2169U && ordinal <= 2170U) ||
+			(ordinal >= 2205U && ordinal <= 2210U) ||
+			(ordinal >= 3389U && ordinal <= 3405U);
+
+		if (rows[index].subject_kind !=
+		    ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF || !selected)
+			continue;
+		matched++;
+		KUNIT_EXPECT_EQ(test,
+			ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE,
+			rows[index].disposition);
+		KUNIT_EXPECT_EQ(test,
+			ORLIX_TCTI_TARGET_LINUX_NA_ARCHITECTURAL_SEMANTICS_ONLY,
+			rows[index].not_applicable_reason);
+		KUNIT_EXPECT_EQ(test, 0U, rows[index].linux_owner_mask);
+		KUNIT_EXPECT_EQ(test, 0U, rows[index].kselftest_count);
+		KUNIT_EXPECT_EQ(test,
+			ORLIX_TCTI_TARGET_LINUX_EXECUTION_NOT_OBSERVED,
+			rows[index].execution_state);
+	}
+	KUNIT_EXPECT_EQ(test, 25U, matched);
+}
+
 static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(source_fingerprints),
 	KUNIT_CASE(scalar_source_fingerprints),
+	KUNIT_CASE(bitfield_unary_exact_cohort),
 	KUNIT_CASE(scalar_source_execution),
 	KUNIT_CASE(exhaustive_bitfield_decode),
 	KUNIT_CASE(exhaustive_extract_decode),
+	KUNIT_CASE(exhaustive_bitfield_semantics),
+	KUNIT_CASE(exhaustive_extract_semantics),
 	KUNIT_CASE(bitfield_alias_state),
 	KUNIT_CASE(extract_ror_alias_state),
 	KUNIT_CASE(extract_overlap_xzr_state),
@@ -921,6 +1238,10 @@ static struct kunit_case source_bound_cases[] = {
 	KUNIT_CASE(bitfield_extract_production_path_aliases),
 	KUNIT_CASE(bitfield_extract_production_path_extract_overlaps),
 	KUNIT_CASE(bitfield_extract_production_path_reserved_rejection),
+	KUNIT_CASE(bitfield_unary_production_path_leaves),
+	KUNIT_CASE(bitfield_unary_reserved_rejection),
+	KUNIT_CASE(bitfield_unary_typed_proof_ingestion),
+	KUNIT_CASE(bitfield_unary_linux_disposition),
 	{}
 };
 

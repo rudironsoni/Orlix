@@ -55,9 +55,10 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
 /*
  * The decoder retains feature-conditioned leaves so the complete target
  * inventory can audit them.  Execution is a separate contract: a decoded
- * FEAT_CSSC instruction may enter a guest only after Linux advertises CSSC.
- * ORLIX_EL0_HWCAP2 is currently zero, so all CSSC forms must take the normal
- * unsupported-instruction exit without changing guest architectural state.
+ * FEAT_CSSC instruction may enter a guest only after its owning execution
+ * slice is proved.  The proved CTZ, CNT, and ABS one-source leaves execute
+ * without advertising the wider CSSC feature; the still-unproved min/max
+ * forms remain unavailable while ORLIX_EL0_HWCAP2 is zero.
  * Scalar FP16 uses HWCAP_FPHP and AdvSIMD FP16 uses HWCAP_ASIMDHP. Both are
  * likewise zero until their owning complete-target proof authorizes them.
  */
@@ -70,10 +71,6 @@ static bool orlix_tcti_decoded_requires_cssc(
 	switch (decoded->decode_class) {
 	case ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE:
 		return true;
-	case ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE:
-		return decoded->dp1_op == ORLIX_TCTI_DP1_CTZ ||
-			decoded->dp1_op == ORLIX_TCTI_DP1_CNT ||
-			decoded->dp1_op == ORLIX_TCTI_DP1_ABS;
 	case ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE:
 		return decoded->dp2_op == ORLIX_TCTI_DP2_SMAX ||
 			decoded->dp2_op == ORLIX_TCTI_DP2_UMAX ||

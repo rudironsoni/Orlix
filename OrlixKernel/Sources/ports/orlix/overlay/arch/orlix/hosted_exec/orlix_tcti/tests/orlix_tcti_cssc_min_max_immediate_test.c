@@ -687,7 +687,7 @@ static unsigned long orlix_tcti_cssc_data_processing_map_program(
 	return mapped;
 }
 
-static void orlix_tcti_cssc_data_processing_resume_user_rejects_unavailable_feature(
+static void orlix_tcti_cssc_two_source_resume_user_rejects_unavailable_feature(
 	struct kunit *test)
 {
 	size_t index;
@@ -698,6 +698,9 @@ static void orlix_tcti_cssc_data_processing_resume_user_rejects_unavailable_feat
 	     index++) {
 		const struct orlix_tcti_cssc_data_processing_leaf *leaf =
 			&orlix_tcti_cssc_data_processing_leaves[index];
+
+		if (!leaf->two_source)
+			continue;
 		u64 left = leaf->is_64bit ? (u64)S64_MIN : 0x80000000ULL;
 		u64 right = leaf->is_64bit ? 1 : U32_MAX;
 		unsigned long mapped = orlix_tcti_cssc_data_processing_map_program(
@@ -810,6 +813,7 @@ static struct kunit_case orlix_tcti_cssc_min_max_immediate_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_zero_registers),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_minmax_overlap),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_resume_user_rejects_unavailable_feature),
+	KUNIT_CASE(orlix_tcti_cssc_two_source_resume_user_rejects_unavailable_feature),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_rejects_reserved_opcodes),
 	{}
 };
