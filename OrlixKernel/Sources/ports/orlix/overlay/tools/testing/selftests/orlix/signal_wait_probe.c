@@ -128,12 +128,63 @@ static bool waitpid_observes_hlt_as_sigill(void)
 	return WIFSIGNALED(status) && WTERMSIG(status) == SIGILL;
 }
 
+enum undefined_instruction {
+	UNDEFINED_UDF,
+	UNDEFINED_HVC,
+	UNDEFINED_SMC,
+	UNDEFINED_DCPS1,
+	UNDEFINED_DCPS2,
+	UNDEFINED_DCPS3,
+};
+
+static void execute_undefined_instruction(enum undefined_instruction instruction)
+{
+	switch (instruction) {
+	case UNDEFINED_UDF:
+		__asm__ volatile(".inst 0x00001234");
+		break;
+	case UNDEFINED_HVC:
+		__asm__ volatile(".inst 0xd4024682");
+		break;
+	case UNDEFINED_SMC:
+		__asm__ volatile(".inst 0xd4024683");
+		break;
+	case UNDEFINED_DCPS1:
+		__asm__ volatile(".inst 0xd4a24681");
+		break;
+	case UNDEFINED_DCPS2:
+		__asm__ volatile(".inst 0xd4a24682");
+		break;
+	case UNDEFINED_DCPS3:
+		__asm__ volatile(".inst 0xd4a24683");
+		break;
+	}
+}
+
+static bool waitpid_observes_undefined_as_sigill(
+	enum undefined_instruction instruction)
+{
+	pid_t child;
+	int status = 0;
+
+	child = fork();
+	if (child == 0) {
+		execute_undefined_instruction(instruction);
+		_exit(127);
+	}
+	if (child < 0)
+		return false;
+	if (waitpid(child, &status, 0) != child)
+		return false;
+	return WIFSIGNALED(status) && WTERMSIG(status) == SIGILL;
+}
+
 int main(void)
 {
 	static const char message[] = "ORLIX-SIGNAL-WAIT-PROBE\n";
 
 	(void)write(STDOUT_FILENO, message, sizeof(message) - 1);
-	orlix_test_plan(6);
+	orlix_test_plan(12);
 
 	orlix_test_result(signal_handler_runs(),
 			  "signal handler runs for delivered signal");
@@ -147,6 +198,18 @@ int main(void)
 			  "AArch64 BRK is delivered as SIGTRAP");
 	orlix_test_result(waitpid_observes_hlt_as_sigill(),
 			  "AArch64 HLT is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_UDF),
+			  "AArch64 UDF is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_HVC),
+			  "AArch64 HVC at EL0 is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_SMC),
+			  "AArch64 SMC at EL0 is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS1),
+			  "AArch64 DCPS1 outside Debug state is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS2),
+			  "AArch64 DCPS2 outside Debug state is delivered as SIGILL");
+	orlix_test_result(waitpid_observes_undefined_as_sigill(UNDEFINED_DCPS3),
+			  "AArch64 DCPS3 outside Debug state is delivered as SIGILL");
 
 	orlix_test_exit();
 }

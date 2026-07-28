@@ -556,6 +556,7 @@ orlix_tcti_decoded_ends_block(const struct orlix_tcti_decoded_instruction *decod
 	case ORLIX_TCTI_DECODE_SVC:
 	case ORLIX_TCTI_DECODE_BRK:
 	case ORLIX_TCTI_DECODE_HLT:
+	case ORLIX_TCTI_DECODE_UNDEFINED:
 	case ORLIX_TCTI_DECODE_BARRIER:
 	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE:
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
@@ -658,7 +659,8 @@ static int orlix_tcti_build_straight_line_block(struct mm_struct *mm,
 		decoded = orlix_tcti_decode_aarch64(instruction);
 		if (decoded.decode_class == ORLIX_TCTI_DECODE_SVC ||
 		    decoded.decode_class == ORLIX_TCTI_DECODE_BRK ||
-		    decoded.decode_class == ORLIX_TCTI_DECODE_HLT) {
+		    decoded.decode_class == ORLIX_TCTI_DECODE_HLT ||
+		    decoded.decode_class == ORLIX_TCTI_DECODE_UNDEFINED) {
 			if (!count && first_exit_class)
 				*first_exit_class = decoded.decode_class;
 			return count ? 0 : -EINTR;
@@ -901,8 +903,8 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				result.reason = ORLIX_TCTI_EXIT_BREAKPOINT;
 				result.status = (instruction >> 5) & 0xffffU;
 			} else {
-				result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
-				result.status = -EOPNOTSUPP;
+				result.reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
+				result.status = 0;
 			}
 			result.pc = regs->pc;
 			result.instruction = instruction;
@@ -1304,6 +1306,11 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 		case ORLIX_TCTI_EXIT_ALIGNMENT_FAULT:
 			force_sig_fault(SIGBUS, BUS_ADRALN,
 					(void __user *)result.fault_address);
+			orlix_exit_to_user_mode_work(regs);
+			break;
+		case ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION:
+			force_sig_fault(SIGILL, ILL_ILLOPC,
+					(void __user *)result.pc);
 			orlix_exit_to_user_mode_work(regs);
 			break;
 		case ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION:
