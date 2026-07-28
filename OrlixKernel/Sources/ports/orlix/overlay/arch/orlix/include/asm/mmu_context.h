@@ -18,6 +18,8 @@ static inline int init_new_context(struct task_struct *tsk,
 	if (mm) {
 		atomic64_set(&mm->context.orlix_tcti_mapping_sequence, 0);
 		rwlock_init(&mm->context.orlix_tcti_mapping_lock);
+		if (orlix_tcti_mte_init_mm(mm))
+			return -ENOMEM;
 		orlix_tcti_invalidate_mm(mm);
 	}
 #endif
@@ -28,6 +30,7 @@ static inline int init_new_context(struct task_struct *tsk,
 static inline void destroy_context(struct mm_struct *mm)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT) && defined(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
+	orlix_tcti_mte_destroy_mm(mm);
 	orlix_tcti_invalidate_mm(mm);
 #else
 	(void)mm;

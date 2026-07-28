@@ -155,6 +155,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/mm/iomem.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/init.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/mmap.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/mte.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/copypage.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_user_page.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_invalidate.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/uaccess.c \

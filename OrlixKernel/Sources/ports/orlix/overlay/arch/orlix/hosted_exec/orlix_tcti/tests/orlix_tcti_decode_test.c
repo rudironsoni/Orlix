@@ -73,7 +73,7 @@ static void orlix_tcti_runtime_profile_uses_full_target_without_promotion(
 	KUNIT_EXPECT_EQ(test, 0,
 			orlix_tcti_runtime_projection_audit(&projection));
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.target_leaf_count);
-	KUNIT_EXPECT_EQ(test, (size_t)1101, projection.classified_leaf_count);
+	KUNIT_EXPECT_EQ(test, (size_t)1121, projection.classified_leaf_count);
 	KUNIT_EXPECT_EQ(test, (size_t)4350, projection.unproved_leaf_count);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap);
 	KUNIT_EXPECT_EQ(test, 0UL, projection.proved_hwcap2);
