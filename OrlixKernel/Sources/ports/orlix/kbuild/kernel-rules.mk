@@ -1055,6 +1055,7 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/boot/boot_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/runtime_projection.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_ordinal_ledger.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_ordinal_ledger_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
