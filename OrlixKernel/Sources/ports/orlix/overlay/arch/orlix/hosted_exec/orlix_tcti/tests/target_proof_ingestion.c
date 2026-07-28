@@ -24,7 +24,6 @@ static void reject(enum orlix_tcti_target_proof_ingestion_error value,
 		*error = value;
 }
 
-
 struct orlix_tcti_target_proof_ingestion_ledger *
 orlix_tcti_target_proof_ingestion_ledger_create(size_t capacity)
 {

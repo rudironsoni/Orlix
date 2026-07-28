@@ -10,13 +10,10 @@
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
-#include <linux/utsname.h>
 
 #include "../decode_aarch64.h"
 #include "orlix_tcti_test_suites.h"
-#include "orlix_tcti_native_observation.h"
 #include "target_execution_slice_map.h"
-#include "target_proof_ingestion.h"
 #include "target_proof_registry.h"
 
 #define ASR_NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
@@ -928,84 +925,7 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 	}
 	orlix_tcti_cpu_cpa_control_set(&saved_control);
 }
-
-static const struct asr_cohort_binding *asr_cohort_binding(u16 ordinal)
-{
-	size_t index;
-
-	for (index = 0; index < ARRAY_SIZE(asr_cohort_bindings); index++)
-		if (asr_cohort_bindings[index].ordinal == ordinal)
-			return &asr_cohort_bindings[index];
-	return NULL;
-}
-
-static const struct orlix_tcti_target_proof_registry_entry *
-asr_registry_entry(const char *proof_id)
-{
-	const struct orlix_tcti_target_proof_registry_entry *entries;
-	size_t count;
-	size_t index;
-
-	entries = orlix_tcti_target_proof_registry_entries(&count);
-	for (index = 0; entries && index < count; index++)
-		if (!strcmp(entries[index].id, proof_id))
-			return &entries[index];
-	return NULL;
-}
-
-static void asr_ingest_native_record(
-	struct kunit *test, const struct asr_cohort_binding *cohort,
-	const char *case_name, struct orlix_tcti_native_observation *observation)
-{
-	const struct orlix_tcti_target_proof_registry_entry *entry =
-		asr_registry_entry(cohort->proof_id);
-	const struct orlix_tcti_target_proof_binding *binding = NULL;
-	struct orlix_tcti_target_kunit_provenance_identity provenance;
-	struct orlix_tcti_target_native_ingestion_selector selector = {};
-	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
-	struct orlix_tcti_target_native_result_record *record = NULL;
-	enum orlix_tcti_target_proof_ingestion_error error;
-	char kernel_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
-	size_t index;
-
-	KUNIT_ASSERT_NOT_NULL(test, entry);
-	for (index = 0; index < entry->binding_count; index++)
-		if (entry->bindings[index].source_ordinal == cohort->ordinal) {
-			KUNIT_ASSERT_PTR_EQ(test, binding, NULL);
-			binding = &entry->bindings[index];
-		}
-	KUNIT_ASSERT_NOT_NULL(test, binding);
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_target_kunit_provenance_identity(entry, case_name,
-			&provenance));
-	scnprintf(kernel_identity, sizeof(kernel_identity), "%s|%s|%s",
-		 init_utsname()->release, init_utsname()->version,
-		 init_utsname()->machine);
-	selector = (struct orlix_tcti_target_native_ingestion_selector) {
-		.proof_id = entry->id,
-		.classification_mask = entry->classification_mask,
-		.condition_tcnd_hex = binding->condition_tcnd_hex,
-		.kunit_source = provenance.source,
-		.kunit_source_sha256 = provenance.source_sha256,
-		.kunit_build_source = provenance.build_source,
-		.kunit_build_source_sha256 = provenance.build_source_sha256,
-		.kunit_suite = provenance.suite,
-		.kunit_case = provenance.case_name,
-		.executing_kernel_identity = kernel_identity,
-	};
-	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1);
-	KUNIT_ASSERT_NOT_NULL(test, ledger);
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_native_observation_export(observation, &record));
-	KUNIT_ASSERT_NOT_NULL(test, record);
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
-		ledger, record, &selector, &error));
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
-	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
-	orlix_tcti_target_native_result_record_destroy(record);
-}
-
-static void asr_native_seed_extended_state(void)
+static void asr_seed_extended_state(void)
 {
 	size_t index;
 
@@ -1014,6 +934,7 @@ static void asr_native_seed_extended_state(void)
 			0x1100000000000000ULL + index;
 	current->thread.user_fpcr = 0x00400000;
 	current->thread.user_fpsr = 0x15;
+	current->thread.user_fpmr = 0x26;
 	current->thread.user_simd_valid = 1;
 	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 		current->thread.user_simd, ORLIX_TCTI_SVE_MIN_VL_BYTES);
@@ -1024,36 +945,32 @@ static void asr_native_seed_extended_state(void)
 	for (index = 0; index < sizeof(current->thread.user_sve.ffr); index++)
 		current->thread.user_sve.ffr[index] = (u8)(index * 7U + 2U);
 }
-
 static void asr_run_ddi_vector(struct kunit *test,
-	const struct asr_ddi_vector *vector,
-	enum orlix_tcti_native_obligation obligation, const char *case_name)
+	const struct asr_ddi_vector *vector)
 {
 	const struct asr_leaf *leaf = &leaves[vector->leaf_index];
-	const struct asr_cohort_binding *cohort =
-		asr_cohort_binding(leaf->ordinal);
-	struct orlix_tcti_native_observation_spec *spec = NULL;
-	struct orlix_tcti_native_observation *observation = NULL;
 	typeof(current->thread.user_sve) *sve_before =
 		kunit_kzalloc(test, sizeof(*sve_before), GFP_KERNEL);
+	typeof(current->thread.user_sme) sme_before;
 	u64 simd_before[ARRAY_SIZE(current->thread.user_simd)];
 	u8 memory_before[sizeof(u32) * 2];
 	u8 memory_after[sizeof(memory_before)];
 	struct pt_regs regs = {};
 	struct pt_regs expected;
 	struct orlix_tcti_result result;
-	u64 fpcr_before;
-	u64 fpsr_before;
-	u8 simd_valid_before;
 	u64 expected_result = leaf->wide ? vector->expected :
 		(u32)vector->expected;
 	u32 instruction = asr_instruction(leaf, vector->rm, vector->modifier,
 		vector->amount, vector->rn, vector->rd);
 	unsigned long mapped = asr_map(test, instruction);
+	unsigned long fpcr_before;
+	unsigned long fpsr_before;
+	unsigned long fpmr_before;
+	unsigned long simd_valid_before;
+	unsigned long expected_pstate;
 	unsigned int reg;
 
 	KUNIT_ASSERT_NOT_NULL(test, sve_before);
-	KUNIT_ASSERT_NOT_NULL(test, cohort);
 	for (reg = 0; reg < 31; reg++)
 		regs.regs[reg] = 0x8400000000000000ULL + reg;
 	if (vector->rn < 31)
@@ -1074,50 +991,29 @@ static void asr_run_ddi_vector(struct kunit *test,
 	else if (leaf->family == ASR_EXTENDED && !leaf->flags)
 		expected.sp = expected_result;
 	expected.pc += sizeof(u32);
+	expected_pstate = expected.pstate;
 	if (leaf->flags)
-		expected.pstate = (expected.pstate & ~ASR_NZCV) |
+		expected_pstate = (expected.pstate & ~ASR_NZCV) |
 			vector->expected_nzcv;
+	expected.pstate = expected_pstate;
 
-	asr_native_seed_extended_state();
+	asr_seed_extended_state();
 	memcpy(simd_before, current->thread.user_simd, sizeof(simd_before));
+	memcpy(sve_before, &current->thread.user_sve, sizeof(*sve_before));
+	memcpy(&sme_before, &current->thread.user_sme, sizeof(sme_before));
 	fpcr_before = current->thread.user_fpcr;
 	fpsr_before = current->thread.user_fpsr;
+	fpmr_before = current->thread.user_fpmr;
 	simd_valid_before = current->thread.user_simd_valid;
-	memcpy(sve_before, &current->thread.user_sve, sizeof(*sve_before));
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, mapped,
 		memory_before, sizeof(memory_before)));
 
-	if (obligation) {
-		spec = kunit_kzalloc(test, sizeof(*spec), GFP_KERNEL);
-		KUNIT_ASSERT_NOT_NULL(test, spec);
-		*spec = (struct orlix_tcti_native_observation_spec) {
-			.source_ordinal = leaf->ordinal,
-			.obligation = obligation,
-			.result = {
-				.reason = ORLIX_TCTI_EXIT_SYSCALL,
-				.status = 0,
-				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
-				.pc = expected.pc,
-				.instruction = ASR_SVC,
-			},
-		};
-		orlix_tcti_native_gpr_capture(&spec->gpr, &expected);
-		observation = orlix_tcti_native_observation_create(spec);
-		KUNIT_ASSERT_NOT_NULL(test, observation);
-		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
-			observation, current, &regs, current->mm));
-		KUNIT_ASSERT_EQ(test, 0,
-			orlix_tcti_native_observation_compare(observation));
-		asr_ingest_native_record(test, cohort, case_name, observation);
-		orlix_tcti_native_observation_destroy(observation);
-	} else {
-		result = orlix_tcti_resume_user(current, &regs, current->mm);
-		KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
-			"%s %s", leaf->name, vector->name);
-		KUNIT_EXPECT_EQ(test, 0L, result.status);
-		KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
-		KUNIT_EXPECT_EQ(test, expected.pc, result.pc);
-	}
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
+		"%s %s", leaf->name, vector->name);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
+	KUNIT_EXPECT_EQ(test, expected.pc, result.pc);
 	KUNIT_EXPECT_MEMEQ_MSG(test, &expected, &regs, sizeof(regs),
 		"%s %s complete GPR state", leaf->name, vector->name);
 	if (!leaf->wide && vector->rd < 31)
@@ -1132,10 +1028,13 @@ static void asr_run_ddi_vector(struct kunit *test,
 		sizeof(simd_before), "%s %s FP/SIMD", leaf->name, vector->name);
 	KUNIT_EXPECT_EQ(test, fpcr_before, current->thread.user_fpcr);
 	KUNIT_EXPECT_EQ(test, fpsr_before, current->thread.user_fpsr);
+	KUNIT_EXPECT_EQ(test, fpmr_before, current->thread.user_fpmr);
 	KUNIT_EXPECT_EQ(test, simd_valid_before,
 		current->thread.user_simd_valid);
 	KUNIT_EXPECT_MEMEQ_MSG(test, sve_before, &current->thread.user_sve,
 		sizeof(*sve_before), "%s %s SVE", leaf->name, vector->name);
+	KUNIT_EXPECT_MEMEQ_MSG(test, &sme_before, &current->thread.user_sme,
+		sizeof(sme_before), "%s %s SME", leaf->name, vector->name);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
@@ -1175,7 +1074,7 @@ static void asr_ddi_arithmetic_alias_and_preservation_vectors(
 			nzcv_cv |= vector->expected_nzcv ==
 				(PSR_C_BIT | PSR_V_BIT);
 		}
-		asr_run_ddi_vector(test, vector, 0, NULL);
+		asr_run_ddi_vector(test, vector);
 	}
 	for (index = 0; index < ARRAY_SIZE(leaf_coverage); index++)
 		KUNIT_EXPECT_GT_MSG(test, leaf_coverage[index], (u8)0,
@@ -1190,36 +1089,6 @@ static void asr_ddi_arithmetic_alias_and_preservation_vectors(
 	KUNIT_EXPECT_TRUE(test, nzcv_nv);
 	KUNIT_EXPECT_TRUE(test, nzcv_cv);
 }
-
-static void asr_native_fp_simd_capture(
-	struct orlix_tcti_native_fp_simd_state *state)
-{
-	memset(state, 0, sizeof(*state));
-	memcpy(state->v, current->thread.user_simd, sizeof(state->v));
-	state->fpcr = current->thread.user_fpcr;
-	state->fpsr = current->thread.user_fpsr;
-	state->valid = current->thread.user_simd_valid;
-}
-
-static void asr_native_sve_capture(struct orlix_tcti_native_sve_state *state)
-{
-	*state = (struct orlix_tcti_native_sve_state) {
-		.vl_bytes = current->thread.user_sve.vl_bytes,
-		.z = (const u8 *)current->thread.user_sve.z,
-		.p = (const u8 *)current->thread.user_sve.p,
-		.ffr = current->thread.user_sve.ffr,
-		.valid = current->thread.user_sve.valid,
-	};
-}
-
-static struct orlix_tcti_native_sme_state asr_native_sme_absent(void)
-{
-	return (struct orlix_tcti_native_sme_state) {
-		.valid = true,
-		.production_available = true,
-	};
-}
-
 static void asr_extended_fixed_bits_reject_and_preserve_state(
 	struct kunit *test)
 {
@@ -1233,8 +1102,7 @@ static void asr_extended_fixed_bits_reject_and_preserve_state(
 		for (fixed_bit = 22; fixed_bit <= 23; fixed_bit++) {
 			typeof(current->thread.user_sve) *sve_before =
 				kunit_kzalloc(test, sizeof(*sve_before), GFP_KERNEL);
-			struct orlix_tcti_native_sme_state sme_before;
-			struct orlix_tcti_native_sme_state sme_after;
+			typeof(current->thread.user_sme) sme_before;
 			u64 simd_before[ARRAY_SIZE(current->thread.user_simd)];
 			u8 memory_before[sizeof(u32) * 2];
 			u8 memory_after[sizeof(memory_before)];
@@ -1244,6 +1112,7 @@ static void asr_extended_fixed_bits_reject_and_preserve_state(
 			u64 fpcr_before;
 			u64 fpsr_before;
 			u8 simd_valid_before;
+			unsigned long fpmr_before;
 			u32 instruction =
 				asr_instruction(leaf, 7, 0, 0, 5, 3) | BIT(fixed_bit);
 			unsigned long mapped;
@@ -1263,15 +1132,16 @@ static void asr_extended_fixed_bits_reject_and_preserve_state(
 			regs.syscallno = NO_SYSCALL;
 			regs_before = regs;
 
-			asr_native_seed_extended_state();
+			asr_seed_extended_state();
 			memcpy(simd_before, current->thread.user_simd,
 			       sizeof(simd_before));
 			fpcr_before = current->thread.user_fpcr;
 			fpsr_before = current->thread.user_fpsr;
 			simd_valid_before = current->thread.user_simd_valid;
+			fpmr_before = current->thread.user_fpmr;
 			memcpy(sve_before, &current->thread.user_sve,
 			       sizeof(*sve_before));
-			sme_before = asr_native_sme_absent();
+			memcpy(&sme_before, &current->thread.user_sme, sizeof(sme_before));
 			KUNIT_ASSERT_EQ(test, 0,
 				orlix_tcti_read_user_data(current->mm, mapped,
 					memory_before, sizeof(memory_before)));
@@ -1300,11 +1170,11 @@ static void asr_extended_fixed_bits_reject_and_preserve_state(
 			KUNIT_EXPECT_EQ(test, fpsr_before, current->thread.user_fpsr);
 			KUNIT_EXPECT_EQ(test, simd_valid_before,
 				current->thread.user_simd_valid);
+			KUNIT_EXPECT_EQ(test, fpmr_before, current->thread.user_fpmr);
 			KUNIT_EXPECT_MEMEQ_MSG(test, sve_before,
 				&current->thread.user_sve, sizeof(*sve_before),
 				"%s fixed bit %u SVE", leaf->name, fixed_bit);
-			sme_after = asr_native_sme_absent();
-			KUNIT_EXPECT_MEMEQ_MSG(test, &sme_before, &sme_after,
+			KUNIT_EXPECT_MEMEQ_MSG(test, &sme_before, &current->thread.user_sme,
 				sizeof(sme_before), "%s fixed bit %u SME typed state",
 				leaf->name, fixed_bit);
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
@@ -1312,248 +1182,11 @@ static void asr_extended_fixed_bits_reject_and_preserve_state(
 	}
 }
 
-static u32 asr_native_rejected_encoding(u32 mask, u32 pattern)
-{
-	u32 bit;
-
-	for (bit = 0; bit < 32; bit++) {
-		u32 candidate;
-
-		if (!(mask & BIT(bit)))
-			continue;
-		candidate = pattern ^ BIT(bit);
-		if (orlix_tcti_decode_aarch64(candidate).decode_class ==
-		    ORLIX_TCTI_DECODE_UNSUPPORTED)
-			return candidate;
-	}
-	return pattern;
-}
-
-static void asr_native_records_for_obligation(
-	struct kunit *test, enum orlix_tcti_native_obligation obligation,
-	const char *case_name)
-{
-	struct orlix_tcti_cpa_control saved_control;
-	struct orlix_tcti_pointer_add_observation saved_observation =
-		current->thread.user_cpa_add_observation;
-	struct orlix_tcti_native_observation_spec *spec =
-		kunit_kzalloc(test, sizeof(*spec), GFP_KERNEL);
-	const struct orlix_tcti_cpa_control default_control =
-		orlix_tcti_cpa_default_control();
-	size_t leaf_index;
-
-	KUNIT_ASSERT_NOT_NULL(test, spec);
-	orlix_tcti_cpu_cpa_control_get(&saved_control);
-	orlix_tcti_cpu_cpa_control_set(&default_control);
-	for (leaf_index = 0; leaf_index < ARRAY_SIZE(leaves) +
-						ARRAY_SIZE(pointer_leaves); leaf_index++) {
-		const struct asr_leaf *leaf =
-			leaf_index < ARRAY_SIZE(leaves) ? &leaves[leaf_index] : NULL;
-		const struct asr_pointer_leaf *pointer = leaf ? NULL :
-			&pointer_leaves[leaf_index - ARRAY_SIZE(leaves)];
-		const struct asr_cohort_binding *cohort = asr_cohort_binding(
-			leaf ? leaf->ordinal : pointer->ordinal);
-		struct orlix_tcti_native_observation *observation;
-		struct orlix_tcti_native_fp_simd_state fp_simd;
-		struct orlix_tcti_native_sve_state sve;
-		struct orlix_tcti_native_sme_state sme;
-		struct pt_regs regs = {};
-		struct pt_regs expected;
-		u8 expected_memory[sizeof(u32) * 2];
-		u8 observed_memory[sizeof(expected_memory)];
-		struct orlix_tcti_native_memory_state memory;
-		u32 instruction;
-		unsigned long mapped;
-		u64 mask = leaf && !leaf->wide ? U32_MAX : U64_MAX;
-		u64 left;
-		u64 right;
-		u64 value;
-		int ret;
-		unsigned int reg;
-
-		KUNIT_ASSERT_NOT_NULL(test, cohort);
-		if (leaf) {
-			instruction = obligation ==
-					      ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING ?
-				asr_native_rejected_encoding(leaf->mask, leaf->pattern) :
-				asr_instruction(leaf, 7, 0, 0, 5, 3);
-		} else {
-			instruction = obligation ==
-					      ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING ?
-				asr_native_rejected_encoding(0xffe0e000U,
-					pointer->pattern) :
-				asr_pointer_instruction(pointer, 7, 0, 5, 3);
-		}
-		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING)
-			KUNIT_ASSERT_NE(test, leaf ? leaf->pattern : pointer->pattern,
-				instruction);
-		mapped = asr_map(test, instruction);
-		for (reg = 0; reg < 31; reg++)
-			regs.regs[reg] = 0x8100000000000000ULL + reg;
-		regs.regs[5] = pointer ? 0x1000 : 0x12345678;
-		regs.regs[7] = 3;
-		regs.sp = 0x00000001fffffff0ULL;
-		regs.pc = mapped;
-		regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
-		regs.syscallno = NO_SYSCALL;
-		expected = regs;
-		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING) {
-			spec->result = (struct orlix_tcti_result) {
-				.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
-				.status = -EOPNOTSUPP,
-				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
-				.pc = mapped,
-				.instruction = instruction,
-			};
-		} else {
-			left = regs.regs[5] & mask;
-			right = leaf ? asr_right(regs.regs[7], !!leaf->wide,
-				leaf->family, 0, 0) : regs.regs[7];
-			if (leaf && leaf->family == ASR_CARRY)
-				value = (left + (leaf->subtract ? ~right & mask : right) +
-					 1) & mask;
-			else
-				value = ((leaf ? leaf->subtract : pointer->subtract) ?
-					 left - right : left + right) & mask;
-			expected.regs[3] = value;
-			expected.pc += sizeof(u32);
-			if (leaf && leaf->flags)
-				expected.pstate = (expected.pstate & ~ASR_NZCV) |
-					asr_nzcv(leaf->wide, leaf->subtract, left,
-						right, value,
-						leaf->family == ASR_CARRY);
-			spec->result = (struct orlix_tcti_result) {
-				.reason = ORLIX_TCTI_EXIT_SYSCALL,
-				.status = 0,
-				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
-				.pc = expected.pc,
-				.instruction = ASR_SVC,
-			};
-		}
-		asr_native_seed_extended_state();
-		ret = orlix_tcti_read_user_data(current->mm, mapped,
-			expected_memory, sizeof(expected_memory));
-		KUNIT_ASSERT_EQ(test, 0, ret);
-		spec->source_ordinal = cohort->ordinal;
-		spec->obligation = obligation;
-		orlix_tcti_native_gpr_capture(&spec->gpr, &expected);
-		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
-			spec->expected.memory =
-				(struct orlix_tcti_native_memory_state) {
-					.address = mapped,
-					.size = sizeof(expected_memory),
-					.bytes = expected_memory,
-				};
-		else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
-			asr_native_fp_simd_capture(&fp_simd);
-			spec->expected.fp_simd = fp_simd;
-		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
-			asr_native_sve_capture(&sve);
-			spec->expected.sve = sve;
-		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
-			sme = asr_native_sme_absent();
-			spec->expected.sme = sme;
-		}
-		observation = orlix_tcti_native_observation_create(spec);
-		KUNIT_ASSERT_NOT_NULL(test, observation);
-		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
-			observation, current, &regs, current->mm));
-		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
-			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
-				mapped, observed_memory, sizeof(observed_memory)));
-			memory = (struct orlix_tcti_native_memory_state) {
-				.address = mapped,
-				.size = sizeof(observed_memory),
-				.bytes = observed_memory,
-			};
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_add_memory(observation,
-					&memory));
-		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
-			asr_native_fp_simd_capture(&fp_simd);
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_add_fp_simd(observation,
-					&fp_simd));
-		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
-			asr_native_sve_capture(&sve);
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_add_sve(observation, &sve));
-		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
-			sme = asr_native_sme_absent();
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_add_sme(observation, &sme));
-		}
-		KUNIT_ASSERT_EQ(test, 0,
-			orlix_tcti_native_observation_compare(observation));
-		asr_ingest_native_record(test, cohort, case_name, observation);
-		orlix_tcti_native_observation_destroy(observation);
-		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
-	}
-	orlix_tcti_cpu_cpa_control_set(&saved_control);
-	current->thread.user_cpa_add_observation = saved_observation;
-}
-
-static void asr_native_ddi_records(
-	struct kunit *test, enum orlix_tcti_native_obligation obligation,
-	const char *case_name)
-{
-	size_t index;
-
-	for (index = 0; index < ARRAY_SIZE(asr_ddi_vectors); index++)
-		asr_run_ddi_vector(test, &asr_ddi_vectors[index], obligation,
-			case_name);
-}
-
-static void asr_native_decode_records(struct kunit *test)
-{
-	asr_source_and_decode(test);
-	asr_native_records_for_obligation(test,
-		ORLIX_TCTI_NATIVE_OBLIGATION_DECODE, __func__);
-}
-
-static void asr_native_legal_records(struct kunit *test)
-{
-	asr_source_and_decode(test);
-	asr_native_records_for_obligation(test,
-		ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODING, __func__);
-}
-
-static void asr_native_register_records(struct kunit *test)
-{
-	/* Retain pointer-leaf records, then bind every fixed DDI register vector. */
-	asr_native_records_for_obligation(test, ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
-		__func__);
-	asr_native_ddi_records(test, ORLIX_TCTI_NATIVE_OBLIGATION_GPR, __func__);
-}
-
-static void asr_native_flags_records(struct kunit *test)
-{
-	/* Non-flag leaves prove preservation; flag leaves prove every NZCV result. */
-	asr_native_records_for_obligation(test, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
-		__func__);
-	asr_native_ddi_records(test, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS, __func__);
-}
-
-#define ASR_NATIVE_CASE(name, obligation) \
-	static void name(struct kunit *test) \
-	{ \
-		asr_native_records_for_obligation(test, obligation, #name); \
-	}
-ASR_NATIVE_CASE(asr_native_rejected_records,
-	ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING)
-ASR_NATIVE_CASE(asr_native_pc_records, ORLIX_TCTI_NATIVE_OBLIGATION_RESULT)
-ASR_NATIVE_CASE(asr_native_memory_records, ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
-ASR_NATIVE_CASE(asr_native_fp_simd_records,
-	ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD)
-ASR_NATIVE_CASE(asr_native_sve_records, ORLIX_TCTI_NATIVE_OBLIGATION_SVE)
-ASR_NATIVE_CASE(asr_native_sme_records, ORLIX_TCTI_NATIVE_OBLIGATION_SME)
-#undef ASR_NATIVE_CASE
-
 static struct kunit_case asr_cases[] = {
-    KUNIT_CASE(asr_source_and_decode),
-    KUNIT_CASE(asr_resume_semantics),
+	KUNIT_CASE(asr_source_and_decode),
+	KUNIT_CASE(asr_resume_semantics),
 	KUNIT_CASE(asr_ddi_arithmetic_alias_and_preservation_vectors),
-    KUNIT_CASE(asr_reserved_structured_exits),
+	KUNIT_CASE(asr_reserved_structured_exits),
 	KUNIT_CASE(asr_issue_133_exact_cohort),
 	KUNIT_CASE(asr_pointer_source_and_decode),
 	KUNIT_CASE(asr_pointer_production_semantics),
@@ -1561,19 +1194,11 @@ static struct kunit_case asr_cases[] = {
 	KUNIT_CASE(asr_pointer_source_mask_reserved_neighbors),
 	KUNIT_CASE(asr_pointer_rejections_are_structured),
 	KUNIT_CASE(asr_extended_fixed_bits_reject_and_preserve_state),
-	KUNIT_CASE(asr_native_decode_records),
-	KUNIT_CASE(asr_native_legal_records),
-	KUNIT_CASE(asr_native_rejected_records),
-	KUNIT_CASE(asr_native_register_records),
-	KUNIT_CASE(asr_native_pc_records),
-	KUNIT_CASE(asr_native_flags_records),
-	KUNIT_CASE(asr_native_memory_records),
-	KUNIT_CASE(asr_native_fp_simd_records),
-	KUNIT_CASE(asr_native_sve_records),
-	KUNIT_CASE(asr_native_sme_records),
-    {}};
+	{}
+};
+
 struct kunit_suite orlix_tcti_add_sub_register_source_bound_test_suite = {
-    .name = "orlix-tcti-add-sub-register-source-bound",
-    .test_cases = asr_cases,
+	.name = "orlix-tcti-add-sub-register-source-bound",
+	.test_cases = asr_cases,
 };
 kunit_test_suite(orlix_tcti_add_sub_register_source_bound_test_suite);

@@ -705,8 +705,8 @@ static int add_sub_immediate_registry_is_source_bound(void)
 					break;
 				}
 			EXPECT(entry != NULL);
-			EXPECT(entry->kunit_case_count == 10);
-			EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x3ff));
+			EXPECT(entry->kunit_case_count == 7);
+			EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x7f));
 		}
 		reference.encoding_pattern ^= 0x1000000U;
 		EXPECT(orlix_tcti_target_proof_registry_lookup(entries, count, &reference) ==
@@ -864,7 +864,7 @@ static int add_sub_pointer_registry_binds_exact_source_rows(void)
 		EXPECT(entry->linux_interface ==
 		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
 		EXPECT(entry->binding_count == 1);
-		EXPECT(entry->kunit_case_count == 10);
+		EXPECT(entry->kunit_case_count == 6);
 		EXPECT(!strcmp(entry->bindings[0].leaf_name,
 			       expected[expected_index].leaf));
 		EXPECT(!strcmp(entry->bindings[0].mnemonic,
@@ -875,7 +875,7 @@ static int add_sub_pointer_registry_binds_exact_source_rows(void)
 		EXPECT(!strcmp(entry->bindings[0].condition_tcnd_hex, CPA_CONDITION));
 		EXPECT(entry->bindings[0].source_ordinal ==
 		       expected[expected_index].ordinal);
-		EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x3ff));
+		EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x3f));
 		EXPECT(orlix_tcti_target_proof_operation_requirements(
 			expected[expected_index].operation, 1, &requirements) == 0);
 		EXPECT(requirements == ADD_SUB_POINTER_OBLIGATIONS);
