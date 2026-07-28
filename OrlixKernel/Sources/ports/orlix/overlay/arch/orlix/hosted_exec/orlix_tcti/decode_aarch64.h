@@ -213,6 +213,7 @@ enum orlix_tcti_data_processing_2source_op {
 	ORLIX_TCTI_DP2_UMAX,
 	ORLIX_TCTI_DP2_SMIN,
 	ORLIX_TCTI_DP2_UMIN,
+	ORLIX_TCTI_DP2_SUBP,
 };
 
 enum orlix_tcti_lse_atomic_op {

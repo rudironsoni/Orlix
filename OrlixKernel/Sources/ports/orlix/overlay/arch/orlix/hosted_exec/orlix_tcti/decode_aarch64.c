@@ -91,6 +91,8 @@
 #define AARCH64_DP1_CLS_OPCODE 0x05U
 #define AARCH64_DATA_PROCESSING_2SOURCE_MASK 0x7fe00000U
 #define AARCH64_DATA_PROCESSING_2SOURCE_PATTERN 0x1ac00000U
+#define AARCH64_POINTER_SUBTRACT_MASK 0xdfe0fc00U
+#define AARCH64_POINTER_SUBTRACT_PATTERN 0x9ac00000U
 #define AARCH64_MULTIPLY_ADD_SUB_MASK 0x7f000000U
 #define AARCH64_MULTIPLY_ADD_SUB_PATTERN 0x1b000000U
 #define AARCH64_MOVE_WIDE_IMM_MASK 0x1f800000U
@@ -1789,6 +1791,18 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.is_64bit = instruction & BIT(31);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_POINTER_SUBTRACT_MASK) ==
+	    AARCH64_POINTER_SUBTRACT_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE;
+		decoded.dp2_op = ORLIX_TCTI_DP2_SUBP;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.is_64bit = true;
+		decoded.set_flags = instruction & BIT(29);
 		return decoded;
 	}
 

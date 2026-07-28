@@ -1018,6 +1018,20 @@ static int orlix_tcti_execute_data_processing_2source(struct pt_regs *regs,
 	u64 mask;
 	u64 result;
 
+	if (decoded->dp2_op == ORLIX_TCTI_DP2_SUBP) {
+		left = sign_extend64(orlix_tcti_read_gpr_or_sp(
+			regs, decoded->rn, sizeof(u64)), 55);
+		right = sign_extend64(orlix_tcti_read_gpr_or_sp(
+			regs, decoded->rm, sizeof(u64)), 55);
+		result = left - right;
+		orlix_tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u64), result);
+		if (decoded->set_flags)
+			orlix_tcti_update_add_sub_flags(regs, left, right, result,
+						       sizeof(u64), true);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
 	if (decoded->dp2_op == ORLIX_TCTI_DP2_CRC32 ||
 	    decoded->dp2_op == ORLIX_TCTI_DP2_CRC32C) {
 		u32 accumulator = orlix_tcti_read_gpr_or_zero(
