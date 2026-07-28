@@ -194,14 +194,16 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ADD_FLAGS_OBLIGATIONS \
 	(ADD_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ADD_SUB_POINTER_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define INTEGER_CONDITIONAL_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -237,7 +239,9 @@ static const struct orlix_tcti_target_proof_case add_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
 	{ "orlix_tcti_add_sub_immediate_production_path_arithmetic",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ "orlix_tcti_add_sub_immediate_special_register_aliases",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
@@ -689,6 +693,20 @@ static int add_sub_immediate_registry_is_source_bound(void)
 		EXPECT(requirements == bindings[index].obligations);
 		EXPECT(orlix_tcti_target_proof_registry_lookup(entries, count, &reference) ==
 		       ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK);
+		{
+			const struct orlix_tcti_target_proof_registry_entry *entry = NULL;
+			size_t entry_index;
+
+			for (entry_index = 0; entry_index < count; entry_index++)
+				if (!strcmp(entries[entry_index].id,
+					    bindings[index].proof_id)) {
+					entry = &entries[entry_index];
+					break;
+				}
+			EXPECT(entry != NULL);
+			EXPECT(entry->kunit_case_count == 9);
+			EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x1ff));
+		}
 		reference.encoding_pattern ^= 0x1000000U;
 		EXPECT(orlix_tcti_target_proof_registry_lookup(entries, count, &reference) ==
 		       ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
@@ -845,7 +863,7 @@ static int add_sub_pointer_registry_binds_exact_source_rows(void)
 		EXPECT(entry->linux_interface ==
 		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
 		EXPECT(entry->binding_count == 1);
-		EXPECT(entry->kunit_case_count == 4);
+		EXPECT(entry->kunit_case_count == 10);
 		EXPECT(!strcmp(entry->bindings[0].leaf_name,
 			       expected[expected_index].leaf));
 		EXPECT(!strcmp(entry->bindings[0].mnemonic,
@@ -856,7 +874,7 @@ static int add_sub_pointer_registry_binds_exact_source_rows(void)
 		EXPECT(!strcmp(entry->bindings[0].condition_tcnd_hex, CPA_CONDITION));
 		EXPECT(entry->bindings[0].source_ordinal ==
 		       expected[expected_index].ordinal);
-		EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0xf));
+		EXPECT(entry->bindings[0].kunit_case_mask == UINT64_C(0x3ff));
 		EXPECT(orlix_tcti_target_proof_operation_requirements(
 			expected[expected_index].operation, 1, &requirements) == 0);
 		EXPECT(requirements == ADD_SUB_POINTER_OBLIGATIONS);

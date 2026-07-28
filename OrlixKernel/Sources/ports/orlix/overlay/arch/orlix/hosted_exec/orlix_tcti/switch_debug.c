@@ -4,6 +4,7 @@
 #include <linux/limits.h>
 #include <linux/log2.h>
 #include <linux/preempt.h>
+#include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
@@ -20,6 +21,34 @@
 #include "system_accessor.h"
 #include "sve_state.h"
 #include "switch_debug.h"
+
+struct orlix_tcti_cpu_system_state {
+	struct orlix_tcti_cpa_control cpa_control;
+};
+
+static DEFINE_SPINLOCK(orlix_tcti_cpu_system_state_lock);
+static struct orlix_tcti_cpu_system_state orlix_tcti_cpu_system_state = {
+	.cpa_control.feat_cpa = true,
+};
+
+void orlix_tcti_cpu_cpa_control_get(struct orlix_tcti_cpa_control *control)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&orlix_tcti_cpu_system_state_lock, flags);
+	*control = orlix_tcti_cpu_system_state.cpa_control;
+	spin_unlock_irqrestore(&orlix_tcti_cpu_system_state_lock, flags);
+}
+
+void orlix_tcti_cpu_cpa_control_set(
+	const struct orlix_tcti_cpa_control *control)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&orlix_tcti_cpu_system_state_lock, flags);
+	orlix_tcti_cpu_system_state.cpa_control = *control;
+	spin_unlock_irqrestore(&orlix_tcti_cpu_system_state_lock, flags);
+}
 
 #define AARCH64_ADRP_PAGE_MASK (~0xfffULL)
 #define AARCH64_FPSR_IOC BIT(0)
@@ -832,8 +861,7 @@ static int orlix_tcti_execute_add_sub_pointer_checked(
 	struct pt_regs *regs,
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
-	const struct orlix_tcti_cpa_control *control =
-		&current->thread.user_cpa_control;
+	struct orlix_tcti_cpa_control control;
 	struct orlix_tcti_pointer_add_observation *observation =
 		&current->thread.user_cpa_add_observation;
 	u64 base;
@@ -841,7 +869,8 @@ static int orlix_tcti_execute_add_sub_pointer_checked(
 	u64 result;
 
 	memset(observation, 0, sizeof(*observation));
-	if (!control->feat_cpa)
+	orlix_tcti_cpu_cpa_control_get(&control);
+	if (!control.feat_cpa)
 		return -EOPNOTSUPP;
 	base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
 	offset = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
@@ -855,8 +884,8 @@ static int orlix_tcti_execute_add_sub_pointer_checked(
 	observation->cpta_detected =
 		((result ^ base) & GENMASK_ULL(63, 56)) != 0 ||
 		observation->previous_detection;
-	observation->effective_cpta = control->feat_cpa2 &&
-		control->sctlr2_el1_enabled && control->sctlr2_el1_cpta0;
+	observation->effective_cpta = control.feat_cpa2 &&
+		control.sctlr2_el1_enabled && control.sctlr2_el1_cpta0;
 	observation->poisoned = observation->cpta_detected &&
 		observation->effective_cpta;
 	if (observation->poisoned) {

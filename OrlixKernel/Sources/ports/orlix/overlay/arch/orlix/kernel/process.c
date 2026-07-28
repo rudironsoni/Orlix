@@ -102,7 +102,6 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	orlix_tcti_sme_state_release(&current->thread.user_sme);
-	current->thread.user_cpa_control = orlix_tcti_cpa_default_control();
 	memset(&current->thread.user_cpa_add_observation, 0,
 	       sizeof(current->thread.user_cpa_add_observation));
 	current->thread.user_exclusive_address = 0;
@@ -132,7 +131,6 @@ void flush_thread(void)
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	orlix_tcti_sme_state_release(&current->thread.user_sme);
-	current->thread.user_cpa_control = orlix_tcti_cpa_default_control();
 	memset(&current->thread.user_cpa_add_observation, 0,
 	       sizeof(current->thread.user_cpa_add_observation));
 	current->thread.user_exclusive_address = 0;
@@ -166,7 +164,6 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	/* task_struct duplication may have copied parent-owned SME pointers. */
 	memset(&p->thread.user_sme, 0, sizeof(p->thread.user_sme));
-	p->thread.user_cpa_control = current->thread.user_cpa_control;
 	memset(&p->thread.user_cpa_add_observation, 0,
 	       sizeof(p->thread.user_cpa_add_observation));
 	p->thread.user_exclusive_address = 0;

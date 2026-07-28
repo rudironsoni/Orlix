@@ -10,10 +10,14 @@
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 
 #include "../decode_aarch64.h"
 #include "orlix_tcti_test_suites.h"
+#include "orlix_tcti_native_observation.h"
 #include "target_execution_slice_map.h"
+#include "target_proof_ingestion.h"
+#include "target_proof_registry.h"
 
 #define ASR_NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
 #define ASR_SVC 0xd4000001U
@@ -74,6 +78,74 @@ static const struct asr_pointer_leaf pointer_leaves[] = {
 	{ 3474, "ADDPT_64_addsub_pt", "ADDPT", 0x9a002000U, false },
 	{ 3475, "SUBPT_64_addsub_pt", "SUBPT", 0xda002000U, true },
 };
+
+struct asr_cohort_binding {
+	u16 ordinal;
+	const char *name;
+	const char *proof_id;
+};
+
+static const struct asr_cohort_binding asr_cohort_bindings[] = {
+	{ 2173, "ADD_32_addsub_imm", "kunit:add-sub-immediate-add" },
+	{ 2174, "ADDS_32S_addsub_imm", "kunit:add-sub-immediate-adds" },
+	{ 2175, "SUB_32_addsub_imm", "kunit:add-sub-immediate-sub" },
+	{ 2176, "SUBS_32S_addsub_imm", "kunit:add-sub-immediate-subs" },
+	{ 2177, "ADD_64_addsub_imm", "kunit:add-sub-immediate-add" },
+	{ 2178, "ADDS_64S_addsub_imm", "kunit:add-sub-immediate-adds" },
+	{ 2179, "SUB_64_addsub_imm", "kunit:add-sub-immediate-sub" },
+	{ 2180, "SUBS_64S_addsub_imm", "kunit:add-sub-immediate-subs" },
+	{ 3450, "ADD_32_addsub_shift", "kunit:add-sub-register-add-shift" },
+	{ 3451, "ADDS_32_addsub_shift", "kunit:add-sub-register-adds-shift" },
+	{ 3452, "SUB_32_addsub_shift", "kunit:add-sub-register-sub-shift" },
+	{ 3453, "SUBS_32_addsub_shift", "kunit:add-sub-register-subs-shift" },
+	{ 3454, "ADD_64_addsub_shift", "kunit:add-sub-register-add-shift" },
+	{ 3455, "ADDS_64_addsub_shift", "kunit:add-sub-register-adds-shift" },
+	{ 3456, "SUB_64_addsub_shift", "kunit:add-sub-register-sub-shift" },
+	{ 3457, "SUBS_64_addsub_shift", "kunit:add-sub-register-subs-shift" },
+	{ 3458, "ADD_32_addsub_ext", "kunit:add-sub-register-add-ext" },
+	{ 3459, "ADDS_32S_addsub_ext", "kunit:add-sub-register-adds-ext" },
+	{ 3460, "SUB_32_addsub_ext", "kunit:add-sub-register-sub-ext" },
+	{ 3461, "SUBS_32S_addsub_ext", "kunit:add-sub-register-subs-ext" },
+	{ 3462, "ADD_64_addsub_ext", "kunit:add-sub-register-add-ext" },
+	{ 3463, "ADDS_64S_addsub_ext", "kunit:add-sub-register-adds-ext" },
+	{ 3464, "SUB_64_addsub_ext", "kunit:add-sub-register-sub-ext" },
+	{ 3465, "SUBS_64S_addsub_ext", "kunit:add-sub-register-subs-ext" },
+	{ 3466, "ADC_32_addsub_carry", "kunit:add-sub-register-adc" },
+	{ 3467, "ADCS_32_addsub_carry", "kunit:add-sub-register-adcs" },
+	{ 3468, "SBC_32_addsub_carry", "kunit:add-sub-register-sbc" },
+	{ 3469, "SBCS_32_addsub_carry", "kunit:add-sub-register-sbcs" },
+	{ 3470, "ADC_64_addsub_carry", "kunit:add-sub-register-adc" },
+	{ 3471, "ADCS_64_addsub_carry", "kunit:add-sub-register-adcs" },
+	{ 3472, "SBC_64_addsub_carry", "kunit:add-sub-register-sbc" },
+	{ 3473, "SBCS_64_addsub_carry", "kunit:add-sub-register-sbcs" },
+	{ 3474, "ADDPT_64_addsub_pt", "kunit:add-sub-register-addpt" },
+	{ 3475, "SUBPT_64_addsub_pt", "kunit:add-sub-register-subpt" },
+};
+
+struct asr_source_bound_projection {
+	u16 ordinal;
+	const char *proof_id;
+};
+
+#define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
+	{ ordinal, proof_id },
+static const struct asr_source_bound_projection asr_source_bound_projections[] = {
+#include "../isa/source_bound_proof.def"
+};
+#undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
+
+struct asr_classification_projection {
+	const char *evidence;
+	const char *proof_id;
+};
+
+#define ORLIX_TCTI_A64_TARGET_CLASSIFICATION(name, classification, relation, \
+					      evidence, proof_id, note) \
+	{ proof_id, note },
+static const struct asr_classification_projection asr_classifications[] = {
+#include "../isa/target_classification.def"
+};
+#undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 
 static u32 asr_pointer_instruction(const struct asr_pointer_leaf *leaf, u8 rm,
 				   u8 shift, u8 rn, u8 rd)
@@ -324,49 +396,111 @@ static void asr_reserved_structured_exits(struct kunit *test)
 
 static void asr_issue_133_exact_cohort(struct kunit *test)
 {
-	static const u16 expected_ordinals[] = {
-		2173, 2174, 2175, 2176, 2177, 2178, 2179, 2180,
-		3450, 3451, 3452, 3453, 3454, 3455, 3456, 3457,
-		3458, 3459, 3460, 3461, 3462, 3463, 3464, 3465,
-		3466, 3467, 3468, 3469, 3470, 3471, 3472, 3473,
-		3474, 3475,
-	};
 	const struct orlix_tcti_execution_slice_map *map =
 		orlix_tcti_execution_slice_map_canonical();
-	bool found[ARRAY_SIZE(expected_ordinals)] = {};
-	size_t member_index;
-	size_t issue_count = 0;
+	const struct orlix_tcti_target_proof_registry_entry *registry;
+	size_t registry_count;
+	size_t cohort_index;
+	size_t map_count = 0;
+	size_t source_count = 0;
+	size_t classification_count = 0;
+	size_t binding_count = 0;
 
 	KUNIT_ASSERT_NOT_NULL(test, map);
-	KUNIT_EXPECT_EQ(test, 34, (int)ARRAY_SIZE(expected_ordinals));
-	for (member_index = 0; member_index < map->counts.leaf_count;
-	     member_index++) {
-		const struct orlix_tcti_execution_slice_member *member =
-			&map->members[member_index];
-		const struct orlix_tcti_execution_slice_family *family =
-			&map->families[member->family_index];
-		size_t expected_index;
+	registry = orlix_tcti_target_proof_registry_entries(&registry_count);
+	KUNIT_ASSERT_NOT_NULL(test, registry);
+	KUNIT_ASSERT_EQ(test, 34U, ARRAY_SIZE(asr_cohort_bindings));
+	KUNIT_ASSERT_EQ(test, 4350U, ARRAY_SIZE(asr_classifications));
+	for (cohort_index = 0; cohort_index < ARRAY_SIZE(asr_cohort_bindings);
+	     cohort_index++) {
+		const struct asr_cohort_binding *expected =
+			&asr_cohort_bindings[cohort_index];
+		size_t index;
+		size_t map_matches = 0;
+		size_t source_matches = 0;
+		size_t registry_matches = 0;
 
-		if (family->issue_id != 133U)
-			continue;
-		issue_count++;
-		KUNIT_EXPECT_STREQ(test, "base-a64-add-subtract",
-				   family->stable_id);
-		for (expected_index = 0;
-		     expected_index < ARRAY_SIZE(expected_ordinals);
-		     expected_index++) {
-			if (expected_ordinals[expected_index] != member->ordinal)
-				continue;
-			KUNIT_EXPECT_FALSE(test, found[expected_index]);
-			found[expected_index] = true;
-			break;
+		for (index = 0; index < map->counts.leaf_count; index++) {
+			const struct orlix_tcti_execution_slice_member *member =
+				&map->members[index];
+			const struct orlix_tcti_execution_slice_family *family =
+				&map->families[member->family_index];
+
+			if (family->issue_id == 133U &&
+			    member->ordinal == expected->ordinal &&
+			    !strcmp(member->source_name, expected->name)) {
+				KUNIT_EXPECT_STREQ(test, "base-a64-add-subtract",
+					family->stable_id);
+				map_matches++;
+			}
 		}
-		KUNIT_EXPECT_LT(test, expected_index,
-				(size_t)ARRAY_SIZE(expected_ordinals));
+		for (index = 0; index < ARRAY_SIZE(asr_source_bound_projections);
+		     index++)
+			if (asr_source_bound_projections[index].ordinal ==
+				    expected->ordinal &&
+			    !strcmp(asr_source_bound_projections[index].proof_id,
+				    expected->proof_id))
+				source_matches++;
+		KUNIT_ASSERT_LT(test, (u32)expected->ordinal,
+			ARRAY_SIZE(asr_classifications));
+		KUNIT_EXPECT_STREQ(test, expected->proof_id,
+			asr_classifications[expected->ordinal].proof_id);
+		KUNIT_EXPECT_TRUE(test,
+			!strcmp(asr_classifications[expected->ordinal].evidence,
+				"source-bound-kunit-add-sub-immediate") ||
+			!strcmp(asr_classifications[expected->ordinal].evidence,
+				"source-bound-kunit-add-sub-register"));
+		for (index = 0; index < registry_count; index++) {
+			size_t binding;
+
+			if (strcmp(registry[index].id, expected->proof_id))
+				continue;
+			for (binding = 0; binding < registry[index].binding_count;
+			     binding++)
+				if (registry[index].bindings[binding].source_ordinal ==
+					    expected->ordinal &&
+				    !strcmp(registry[index].bindings[binding].leaf_name,
+					    expected->name))
+					registry_matches++;
+		}
+		KUNIT_EXPECT_EQ_MSG(test, 1U, map_matches, "map ordinal %u",
+			expected->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 1U, source_matches, "source ordinal %u",
+			expected->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 1U, registry_matches,
+			"registry ordinal %u", expected->ordinal);
 	}
-	KUNIT_EXPECT_EQ(test, (size_t)34, issue_count);
-	for (member_index = 0; member_index < ARRAY_SIZE(found); member_index++)
-		KUNIT_EXPECT_TRUE(test, found[member_index]);
+	for (cohort_index = 0; cohort_index < map->counts.leaf_count;
+	     cohort_index++)
+		if (map->families[map->members[cohort_index].family_index].issue_id ==
+		    133U)
+			map_count++;
+	for (cohort_index = 0;
+	     cohort_index < ARRAY_SIZE(asr_source_bound_projections);
+	     cohort_index++)
+		if (!strncmp(asr_source_bound_projections[cohort_index].proof_id,
+			    "kunit:add-sub-", strlen("kunit:add-sub-")))
+			source_count++;
+	for (cohort_index = 0; cohort_index < ARRAY_SIZE(asr_classifications);
+	     cohort_index++)
+		if (!strncmp(asr_classifications[cohort_index].evidence,
+			    "source-bound-kunit-add-sub-",
+			    strlen("source-bound-kunit-add-sub-")))
+			classification_count++;
+	for (cohort_index = 0; cohort_index < registry_count; cohort_index++) {
+		size_t binding;
+
+		if (strncmp(registry[cohort_index].id, "kunit:add-sub-",
+			    strlen("kunit:add-sub-")))
+			continue;
+		for (binding = 0; binding < registry[cohort_index].binding_count;
+		     binding++)
+			binding_count++;
+	}
+	KUNIT_EXPECT_EQ(test, 34U, map_count);
+	KUNIT_EXPECT_EQ(test, 34U, source_count);
+	KUNIT_EXPECT_EQ(test, 34U, classification_count);
+	KUNIT_EXPECT_EQ(test, 34U, binding_count);
 }
 
 static void asr_pointer_source_and_decode(struct kunit *test)
@@ -409,15 +543,6 @@ static void asr_pointer_source_and_decode(struct kunit *test)
 	}
 }
 
-static u64 asr_pointer_poison(u64 result, u64 base)
-{
-	result &= GENMASK_ULL(53, 0);
-	result |= base & GENMASK_ULL(63, 55);
-	if (!(base & BIT_ULL(55)))
-		result |= BIT_ULL(54);
-	return result;
-}
-
 static void asr_pointer_production_semantics(struct kunit *test)
 {
 	static const struct {
@@ -433,28 +558,37 @@ static void asr_pointer_production_semantics(struct kunit *test)
 		bool cpta_detected;
 		bool effective_cpta;
 		bool poisoned;
+		u64 expected;
 	} cases[] = {
 		{ 0, 3, 5, 7, 2, 0x1000, 3, { .feat_cpa = true },
-		  false, false, false, false },
+		  false, false, false, false, 0x100c },
 		{ 1, 31, 31, 7, 7, 0x9000, 0x11,
-		  { .feat_cpa = true }, false, false, false, false },
+		  { .feat_cpa = true }, false, false, false, false, 0x8780 },
 		{ 0, 4, 5, 31, 7, 0x12345678, U64_MAX,
-		  { .feat_cpa = true }, false, false, false, false },
+		  { .feat_cpa = true }, false, false, false, false, 0x12345678 },
 		{ 0, 8, 5, 7, 0, 0x0100000000000000ULL,
 		  0x0100000000000000ULL,
-		  { true, true, true, true, false }, false, true, true, true },
+		  { true, true, true, true, false }, false, true, true, true,
+		  0x0140000000000000ULL },
 		{ 0, 9, 5, 7, 0, BIT_ULL(55), 1,
-		  { true, true, true, true, false }, true, true, true, true },
+		  { true, true, true, true, false }, true, true, true, true,
+		  0x0080000000000001ULL },
 		{ 1, 10, 5, 7, 0, 0x0100000000000000ULL,
 		  0x0200000000000000ULL,
-		  { true, false, true, true, false }, false, true, false, false },
+		  { true, false, true, true, false }, false, true, false, false,
+		  0xff00000000000000ULL },
+		/* DDI alias vectors: destination overlaps the base and offset. */
+		{ 0, 5, 5, 7, 1, 0x100, 3, { .feat_cpa = true },
+		  false, false, false, false, 0x106 },
+		{ 1, 7, 5, 7, 1, 0x100, 3, { .feat_cpa = true },
+		  false, false, false, false, 0xfa },
 	};
-	struct orlix_tcti_cpa_control saved_control =
-		current->thread.user_cpa_control;
+	struct orlix_tcti_cpa_control saved_control;
 	struct orlix_tcti_pointer_add_observation saved_observation =
 		current->thread.user_cpa_add_observation;
 	size_t index;
 
+	orlix_tcti_cpu_cpa_control_get(&saved_control);
 	for (index = 0; index < ARRAY_SIZE(cases); index++) {
 		const struct asr_pointer_leaf *leaf = &pointer_leaves[cases[index].leaf];
 		struct orlix_tcti_pointer_add_observation *observation;
@@ -468,10 +602,9 @@ static void asr_pointer_production_semantics(struct kunit *test)
 			cases[index].offset << cases[index].shift;
 		u64 arithmetic = leaf->subtract ? cases[index].base - shifted_offset :
 			cases[index].base + shifted_offset;
-		u64 expected = cases[index].poisoned ?
-			asr_pointer_poison(arithmetic, cases[index].base) : arithmetic;
+		u64 expected = cases[index].expected;
 
-		current->thread.user_cpa_control = cases[index].control;
+		orlix_tcti_cpu_cpa_control_set(&cases[index].control);
 		memset(&current->thread.user_cpa_add_observation, 0xa5,
 		       sizeof(current->thread.user_cpa_add_observation));
 		if (cases[index].rn != 31)
@@ -490,8 +623,12 @@ static void asr_pointer_production_semantics(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
 		if (cases[index].rd == 31)
 			KUNIT_EXPECT_EQ(test, expected, regs.sp);
-		else
+		else {
+			before.regs[cases[index].rd] = expected;
 			KUNIT_EXPECT_EQ(test, expected, regs.regs[cases[index].rd]);
+		}
+		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs,
+				   sizeof(regs.regs));
 		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), regs.pc);
 		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
 		KUNIT_EXPECT_TRUE(test, observation->valid);
@@ -508,8 +645,102 @@ static void asr_pointer_production_semantics(struct kunit *test)
 				observation->poisoned);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
-	current->thread.user_cpa_control = saved_control;
+	orlix_tcti_cpu_cpa_control_set(&saved_control);
 	current->thread.user_cpa_add_observation = saved_observation;
+}
+
+static void asr_pointer_all_cpa_controls(struct kunit *test)
+{
+	struct orlix_tcti_cpa_control saved_control;
+	struct orlix_tcti_pointer_add_observation saved_observation =
+		current->thread.user_cpa_add_observation;
+	u32 combination;
+	size_t leaf_index;
+
+	orlix_tcti_cpu_cpa_control_get(&saved_control);
+	for (combination = 0; combination < 32; combination++) {
+		const struct orlix_tcti_cpa_control control = {
+			.feat_cpa = combination & BIT(0),
+			.feat_cpa2 = combination & BIT(1),
+			.sctlr2_el1_enabled = combination & BIT(2),
+			.sctlr2_el1_cpta0 = combination & BIT(3),
+			.sctlr2_el1_cptm0 = combination & BIT(4),
+		};
+
+		for (leaf_index = 0; leaf_index < ARRAY_SIZE(pointer_leaves);
+		     leaf_index++) {
+			struct pt_regs regs = {};
+			struct pt_regs before;
+			struct orlix_tcti_result result;
+			u32 instruction = asr_pointer_instruction(
+				&pointer_leaves[leaf_index], 7, 0, 5, 3);
+			unsigned long mapped = asr_map(test, instruction);
+			bool effective = control.feat_cpa2 &&
+				control.sctlr2_el1_enabled && control.sctlr2_el1_cpta0;
+			u64 raw = leaf_index ? 0xff00000000000000ULL :
+				0x0200000000000000ULL;
+			u64 expected = effective ? 0x0140000000000000ULL : raw;
+
+			orlix_tcti_cpu_cpa_control_set(&control);
+			memset(&current->thread.user_cpa_add_observation, 0,
+			       sizeof(current->thread.user_cpa_add_observation));
+			regs.regs[3] = 0xa5a5a5a5a5a5a5a5ULL;
+			regs.regs[5] = 0x0100000000000000ULL;
+			regs.regs[7] = leaf_index ? 0x0200000000000000ULL :
+				0x0100000000000000ULL;
+			regs.pc = mapped;
+			regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
+			regs.syscallno = NO_SYSCALL;
+			before = regs;
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			if (!control.feat_cpa) {
+				KUNIT_EXPECT_EQ(test,
+					ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+					result.reason);
+				KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+				KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+				KUNIT_EXPECT_FALSE(test,
+					current->thread.user_cpa_add_observation.valid);
+			} else {
+				KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL,
+					result.reason);
+				KUNIT_EXPECT_EQ(test, expected, regs.regs[3]);
+				KUNIT_EXPECT_EQ(test, effective,
+					current->thread.user_cpa_add_observation.poisoned);
+			}
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+		}
+	}
+	orlix_tcti_cpu_cpa_control_set(&saved_control);
+	current->thread.user_cpa_add_observation = saved_observation;
+}
+
+static void asr_pointer_source_mask_reserved_neighbors(struct kunit *test)
+{
+	const u32 source_mask = 0xffe0e000U;
+	size_t leaf_index;
+
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(pointer_leaves);
+	     leaf_index++) {
+		u32 bit;
+		u32 rejected = 0;
+
+		for (bit = 0; bit < 32; bit++) {
+			u32 instruction;
+
+			if (!(source_mask & BIT(bit)))
+				continue;
+			instruction = pointer_leaves[leaf_index].pattern ^ BIT(bit);
+			if (orlix_tcti_decode_aarch64(instruction).decode_class !=
+			    ORLIX_TCTI_DECODE_UNSUPPORTED)
+				continue;
+			rejected++;
+		}
+		KUNIT_EXPECT_GT(test, rejected, 0U);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+			orlix_tcti_decode_aarch64(
+				pointer_leaves[leaf_index].pattern ^ BIT(31)).decode_class);
+	}
 }
 
 static void asr_pointer_rejections_are_structured(struct kunit *test)
@@ -518,8 +749,7 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		0x1a002000U,
 		0xba002000U,
 	};
-	struct orlix_tcti_cpa_control saved_control =
-		current->thread.user_cpa_control;
+	struct orlix_tcti_cpa_control saved_control;
 	size_t index;
 
 	for (index = 0; index < ARRAY_SIZE(instructions); index++) {
@@ -546,7 +776,12 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 
-	current->thread.user_cpa_control = (struct orlix_tcti_cpa_control) {};
+	orlix_tcti_cpu_cpa_control_get(&saved_control);
+	{
+		const struct orlix_tcti_cpa_control disabled = {};
+
+		orlix_tcti_cpu_cpa_control_set(&disabled);
+	}
 	{
 		struct pt_regs regs = {};
 		struct pt_regs before;
@@ -571,8 +806,334 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 			current->thread.user_cpa_add_observation.valid);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
-	current->thread.user_cpa_control = saved_control;
+	orlix_tcti_cpu_cpa_control_set(&saved_control);
 }
+
+static const struct asr_cohort_binding *asr_cohort_binding(u16 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(asr_cohort_bindings); index++)
+		if (asr_cohort_bindings[index].ordinal == ordinal)
+			return &asr_cohort_bindings[index];
+	return NULL;
+}
+
+static const struct orlix_tcti_target_proof_registry_entry *
+asr_registry_entry(const char *proof_id)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++)
+		if (!strcmp(entries[index].id, proof_id))
+			return &entries[index];
+	return NULL;
+}
+
+static void asr_ingest_native_record(
+	struct kunit *test, const struct asr_cohort_binding *cohort,
+	const char *case_name, struct orlix_tcti_native_observation *observation)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entry =
+		asr_registry_entry(cohort->proof_id);
+	const struct orlix_tcti_target_proof_binding *binding = NULL;
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	struct orlix_tcti_target_native_ingestion_selector selector = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_native_result_record *record = NULL;
+	enum orlix_tcti_target_proof_ingestion_error error;
+	char kernel_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	for (index = 0; index < entry->binding_count; index++)
+		if (entry->bindings[index].source_ordinal == cohort->ordinal) {
+			KUNIT_ASSERT_PTR_EQ(test, binding, NULL);
+			binding = &entry->bindings[index];
+		}
+	KUNIT_ASSERT_NOT_NULL(test, binding);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_kunit_provenance_identity(entry, case_name,
+			&provenance));
+	scnprintf(kernel_identity, sizeof(kernel_identity), "%s|%s|%s",
+		 init_utsname()->release, init_utsname()->version,
+		 init_utsname()->machine);
+	selector = (struct orlix_tcti_target_native_ingestion_selector) {
+		.proof_id = entry->id,
+		.classification_mask = entry->classification_mask,
+		.condition_tcnd_hex = binding->condition_tcnd_hex,
+		.kunit_source = provenance.source,
+		.kunit_source_sha256 = provenance.source_sha256,
+		.kunit_build_source = provenance.build_source,
+		.kunit_build_source_sha256 = provenance.build_source_sha256,
+		.kunit_suite = provenance.suite,
+		.kunit_case = provenance.case_name,
+		.executing_kernel_identity = kernel_identity,
+	};
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_ASSERT_NOT_NULL(test, record);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
+		ledger, record, &selector, &error));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	orlix_tcti_target_native_result_record_destroy(record);
+}
+
+static void asr_native_seed_extended_state(void)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
+		current->thread.user_simd[index] =
+			0x1100000000000000ULL + index;
+	current->thread.user_fpcr = 0x00400000;
+	current->thread.user_fpsr = 0x15;
+	current->thread.user_simd_valid = 1;
+	orlix_tcti_sve_state_reset(&current->thread.user_sve,
+		current->thread.user_simd, ORLIX_TCTI_SVE_MIN_VL_BYTES);
+	for (index = 0; index < sizeof(current->thread.user_sve.z); index++)
+		((u8 *)current->thread.user_sve.z)[index] = (u8)(index * 17U + 3U);
+	for (index = 0; index < sizeof(current->thread.user_sve.p); index++)
+		((u8 *)current->thread.user_sve.p)[index] = (u8)(index * 5U + 1U);
+	for (index = 0; index < sizeof(current->thread.user_sve.ffr); index++)
+		current->thread.user_sve.ffr[index] = (u8)(index * 7U + 2U);
+}
+
+static void asr_native_fp_simd_capture(
+	struct orlix_tcti_native_fp_simd_state *state)
+{
+	memset(state, 0, sizeof(*state));
+	memcpy(state->v, current->thread.user_simd, sizeof(state->v));
+	state->fpcr = current->thread.user_fpcr;
+	state->fpsr = current->thread.user_fpsr;
+	state->valid = current->thread.user_simd_valid;
+}
+
+static void asr_native_sve_capture(struct orlix_tcti_native_sve_state *state)
+{
+	*state = (struct orlix_tcti_native_sve_state) {
+		.vl_bytes = current->thread.user_sve.vl_bytes,
+		.z = (const u8 *)current->thread.user_sve.z,
+		.p = (const u8 *)current->thread.user_sve.p,
+		.ffr = current->thread.user_sve.ffr,
+		.valid = current->thread.user_sve.valid,
+	};
+}
+
+static struct orlix_tcti_native_sme_state asr_native_sme_absent(void)
+{
+	return (struct orlix_tcti_native_sme_state) {
+		.valid = true,
+		.production_available = true,
+	};
+}
+
+static u32 asr_native_rejected_encoding(u32 mask, u32 pattern)
+{
+	u32 bit;
+
+	for (bit = 0; bit < 32; bit++) {
+		u32 candidate;
+
+		if (!(mask & BIT(bit)))
+			continue;
+		candidate = pattern ^ BIT(bit);
+		if (orlix_tcti_decode_aarch64(candidate).decode_class ==
+		    ORLIX_TCTI_DECODE_UNSUPPORTED)
+			return candidate;
+	}
+	return pattern;
+}
+
+static void asr_native_records_for_obligation(
+	struct kunit *test, enum orlix_tcti_native_obligation obligation,
+	const char *case_name)
+{
+	struct orlix_tcti_cpa_control saved_control;
+	struct orlix_tcti_pointer_add_observation saved_observation =
+		current->thread.user_cpa_add_observation;
+	struct orlix_tcti_native_observation_spec *spec =
+		kunit_kzalloc(test, sizeof(*spec), GFP_KERNEL);
+	const struct orlix_tcti_cpa_control default_control =
+		orlix_tcti_cpa_default_control();
+	size_t leaf_index;
+
+	KUNIT_ASSERT_NOT_NULL(test, spec);
+	orlix_tcti_cpu_cpa_control_get(&saved_control);
+	orlix_tcti_cpu_cpa_control_set(&default_control);
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(leaves) +
+						ARRAY_SIZE(pointer_leaves); leaf_index++) {
+		const struct asr_leaf *leaf =
+			leaf_index < ARRAY_SIZE(leaves) ? &leaves[leaf_index] : NULL;
+		const struct asr_pointer_leaf *pointer = leaf ? NULL :
+			&pointer_leaves[leaf_index - ARRAY_SIZE(leaves)];
+		const struct asr_cohort_binding *cohort = asr_cohort_binding(
+			leaf ? leaf->ordinal : pointer->ordinal);
+		struct orlix_tcti_native_observation *observation;
+		struct orlix_tcti_native_fp_simd_state fp_simd;
+		struct orlix_tcti_native_sve_state sve;
+		struct orlix_tcti_native_sme_state sme;
+		struct pt_regs regs = {};
+		struct pt_regs expected;
+		u8 expected_memory[sizeof(u32) * 2];
+		u8 observed_memory[sizeof(expected_memory)];
+		struct orlix_tcti_native_memory_state memory;
+		u32 instruction;
+		unsigned long mapped;
+		u64 mask = leaf && !leaf->wide ? U32_MAX : U64_MAX;
+		u64 left;
+		u64 right;
+		u64 value;
+		int ret;
+		unsigned int reg;
+
+		KUNIT_ASSERT_NOT_NULL(test, cohort);
+		if (leaf) {
+			instruction = obligation ==
+					      ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING ?
+				asr_native_rejected_encoding(leaf->mask, leaf->pattern) :
+				asr_instruction(leaf, 7, 0, 0, 5, 3);
+		} else {
+			instruction = obligation ==
+					      ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING ?
+				asr_native_rejected_encoding(0xffe0e000U,
+					pointer->pattern) :
+				asr_pointer_instruction(pointer, 7, 0, 5, 3);
+		}
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING)
+			KUNIT_ASSERT_NE(test, leaf ? leaf->pattern : pointer->pattern,
+				instruction);
+		mapped = asr_map(test, instruction);
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x8100000000000000ULL + reg;
+		regs.regs[5] = pointer ? 0x1000 : 0x12345678;
+		regs.regs[7] = 3;
+		regs.sp = 0x00000001fffffff0ULL;
+		regs.pc = mapped;
+		regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
+		regs.syscallno = NO_SYSCALL;
+		expected = regs;
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING) {
+			spec->result = (struct orlix_tcti_result) {
+				.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				.status = -EOPNOTSUPP,
+				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+				.pc = mapped,
+				.instruction = instruction,
+			};
+		} else {
+			left = regs.regs[5] & mask;
+			right = leaf ? asr_right(regs.regs[7], !!leaf->wide,
+				leaf->family, 0, 0) : regs.regs[7];
+			if (leaf && leaf->family == ASR_CARRY)
+				value = (left + (leaf->subtract ? ~right & mask : right) +
+					 1) & mask;
+			else
+				value = ((leaf ? leaf->subtract : pointer->subtract) ?
+					 left - right : left + right) & mask;
+			expected.regs[3] = value;
+			expected.pc += sizeof(u32);
+			if (leaf && leaf->flags)
+				expected.pstate = (expected.pstate & ~ASR_NZCV) |
+					asr_nzcv(leaf->wide, leaf->subtract, left,
+						right, value,
+						leaf->family == ASR_CARRY);
+			spec->result = (struct orlix_tcti_result) {
+				.reason = ORLIX_TCTI_EXIT_SYSCALL,
+				.status = 0,
+				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+				.pc = expected.pc,
+				.instruction = ASR_SVC,
+			};
+		}
+		asr_native_seed_extended_state();
+		ret = orlix_tcti_read_user_data(current->mm, mapped,
+			expected_memory, sizeof(expected_memory));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		spec->source_ordinal = cohort->ordinal;
+		spec->obligation = obligation;
+		orlix_tcti_native_gpr_capture(&spec->gpr, &expected);
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
+			spec->expected.memory =
+				(struct orlix_tcti_native_memory_state) {
+					.address = mapped,
+					.size = sizeof(expected_memory),
+					.bytes = expected_memory,
+				};
+		else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+			asr_native_fp_simd_capture(&fp_simd);
+			spec->expected.fp_simd = fp_simd;
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+			asr_native_sve_capture(&sve);
+			spec->expected.sve = sve;
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
+			sme = asr_native_sme_absent();
+			spec->expected.sme = sme;
+		}
+		observation = orlix_tcti_native_observation_create(spec);
+		KUNIT_ASSERT_NOT_NULL(test, observation);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
+			observation, current, &regs, current->mm));
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+				mapped, observed_memory, sizeof(observed_memory)));
+			memory = (struct orlix_tcti_native_memory_state) {
+				.address = mapped,
+				.size = sizeof(observed_memory),
+				.bytes = observed_memory,
+			};
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_memory(observation,
+					&memory));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+			asr_native_fp_simd_capture(&fp_simd);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_fp_simd(observation,
+					&fp_simd));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+			asr_native_sve_capture(&sve);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_sve(observation, &sve));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
+			sme = asr_native_sme_absent();
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_sme(observation, &sme));
+		}
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+		asr_ingest_native_record(test, cohort, case_name, observation);
+		orlix_tcti_native_observation_destroy(observation);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+	orlix_tcti_cpu_cpa_control_set(&saved_control);
+	current->thread.user_cpa_add_observation = saved_observation;
+}
+
+#define ASR_NATIVE_CASE(name, obligation) \
+	static void name(struct kunit *test) \
+	{ \
+		asr_native_records_for_obligation(test, obligation, #name); \
+	}
+ASR_NATIVE_CASE(asr_native_decode_records, ORLIX_TCTI_NATIVE_OBLIGATION_DECODE)
+ASR_NATIVE_CASE(asr_native_legal_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODING)
+ASR_NATIVE_CASE(asr_native_rejected_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODING)
+ASR_NATIVE_CASE(asr_native_register_records, ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
+ASR_NATIVE_CASE(asr_native_pc_records, ORLIX_TCTI_NATIVE_OBLIGATION_RESULT)
+ASR_NATIVE_CASE(asr_native_flags_records, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS)
+ASR_NATIVE_CASE(asr_native_memory_records, ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
+ASR_NATIVE_CASE(asr_native_fp_simd_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD)
+ASR_NATIVE_CASE(asr_native_sve_records, ORLIX_TCTI_NATIVE_OBLIGATION_SVE)
+ASR_NATIVE_CASE(asr_native_sme_records, ORLIX_TCTI_NATIVE_OBLIGATION_SME)
+#undef ASR_NATIVE_CASE
 
 static struct kunit_case asr_cases[] = {
     KUNIT_CASE(asr_source_and_decode),
@@ -581,7 +1142,19 @@ static struct kunit_case asr_cases[] = {
 	KUNIT_CASE(asr_issue_133_exact_cohort),
 	KUNIT_CASE(asr_pointer_source_and_decode),
 	KUNIT_CASE(asr_pointer_production_semantics),
+	KUNIT_CASE(asr_pointer_all_cpa_controls),
+	KUNIT_CASE(asr_pointer_source_mask_reserved_neighbors),
 	KUNIT_CASE(asr_pointer_rejections_are_structured),
+	KUNIT_CASE(asr_native_decode_records),
+	KUNIT_CASE(asr_native_legal_records),
+	KUNIT_CASE(asr_native_rejected_records),
+	KUNIT_CASE(asr_native_register_records),
+	KUNIT_CASE(asr_native_pc_records),
+	KUNIT_CASE(asr_native_flags_records),
+	KUNIT_CASE(asr_native_memory_records),
+	KUNIT_CASE(asr_native_fp_simd_records),
+	KUNIT_CASE(asr_native_sve_records),
+	KUNIT_CASE(asr_native_sme_records),
     {}};
 struct kunit_suite orlix_tcti_add_sub_register_source_bound_test_suite = {
     .name = "orlix-tcti-add-sub-register-source-bound",

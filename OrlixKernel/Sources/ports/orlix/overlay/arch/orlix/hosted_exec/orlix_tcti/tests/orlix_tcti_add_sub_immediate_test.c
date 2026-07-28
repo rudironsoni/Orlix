@@ -6,7 +6,9 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
@@ -14,6 +16,9 @@
 #include "../block_cache.h"
 #include "../decode_aarch64.h"
 #include "orlix_tcti_test_suites.h"
+#include "orlix_tcti_native_observation.h"
+#include "target_proof_ingestion.h"
+#include "target_proof_registry.h"
 
 #define ADD_SUB_IMMEDIATE_SOURCE_MASK 0xff800000U
 #define ADD_SUB_IMMEDIATE_VARIABLE_MASK (~ADD_SUB_IMMEDIATE_SOURCE_MASK)
@@ -461,6 +466,277 @@ static void orlix_tcti_add_sub_immediate_source_mask_boundaries(
 			orlix_tcti_decode_aarch64(mte_tagged_patterns[index]).decode_class);
 }
 
+static const char *orlix_tcti_add_sub_immediate_proof_id(
+	const struct orlix_tcti_add_sub_immediate_leaf *leaf)
+{
+	if (!leaf->subtract)
+		return leaf->set_flags ? "kunit:add-sub-immediate-adds" :
+			"kunit:add-sub-immediate-add";
+	return leaf->set_flags ? "kunit:add-sub-immediate-subs" :
+		"kunit:add-sub-immediate-sub";
+}
+
+static const struct orlix_tcti_target_proof_registry_entry *
+orlix_tcti_add_sub_immediate_registry_entry(const char *proof_id)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++)
+		if (!strcmp(entries[index].id, proof_id))
+			return &entries[index];
+	return NULL;
+}
+
+static void orlix_tcti_add_sub_immediate_ingest(
+	struct kunit *test,
+	const struct orlix_tcti_add_sub_immediate_leaf *leaf,
+	const char *case_name, struct orlix_tcti_native_observation *observation)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entry =
+		orlix_tcti_add_sub_immediate_registry_entry(
+			orlix_tcti_add_sub_immediate_proof_id(leaf));
+	const struct orlix_tcti_target_proof_binding *binding = NULL;
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	struct orlix_tcti_target_native_ingestion_selector selector = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_native_result_record *record = NULL;
+	enum orlix_tcti_target_proof_ingestion_error error;
+	char kernel_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	for (index = 0; index < entry->binding_count; index++)
+		if (entry->bindings[index].source_ordinal == leaf->source_ordinal) {
+			KUNIT_ASSERT_PTR_EQ(test, binding, NULL);
+			binding = &entry->bindings[index];
+		}
+	KUNIT_ASSERT_NOT_NULL(test, binding);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_kunit_provenance_identity(entry, case_name,
+			&provenance));
+	scnprintf(kernel_identity, sizeof(kernel_identity), "%s|%s|%s",
+		 init_utsname()->release, init_utsname()->version,
+		 init_utsname()->machine);
+	selector = (struct orlix_tcti_target_native_ingestion_selector) {
+		.proof_id = entry->id,
+		.classification_mask = entry->classification_mask,
+		.condition_tcnd_hex = binding->condition_tcnd_hex,
+		.kunit_source = provenance.source,
+		.kunit_source_sha256 = provenance.source_sha256,
+		.kunit_build_source = provenance.build_source,
+		.kunit_build_source_sha256 = provenance.build_source_sha256,
+		.kunit_suite = provenance.suite,
+		.kunit_case = provenance.case_name,
+		.executing_kernel_identity = kernel_identity,
+	};
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_observation_export(observation, &record));
+	KUNIT_ASSERT_NOT_NULL(test, record);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(
+		ledger, record, &selector, &error));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK, error);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	orlix_tcti_target_native_result_record_destroy(record);
+}
+
+static void orlix_tcti_add_sub_immediate_seed_extended_state(void)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
+		current->thread.user_simd[index] =
+			0x2200000000000000ULL + index;
+	current->thread.user_fpcr = 0x00400000;
+	current->thread.user_fpsr = 0x1a;
+	current->thread.user_simd_valid = 1;
+	orlix_tcti_sve_state_reset(&current->thread.user_sve,
+		current->thread.user_simd, ORLIX_TCTI_SVE_MIN_VL_BYTES);
+	for (index = 0; index < sizeof(current->thread.user_sve.z); index++)
+		((u8 *)current->thread.user_sve.z)[index] = (u8)(index * 11U + 5U);
+	for (index = 0; index < sizeof(current->thread.user_sve.p); index++)
+		((u8 *)current->thread.user_sve.p)[index] = (u8)(index * 3U + 7U);
+	for (index = 0; index < sizeof(current->thread.user_sve.ffr); index++)
+		current->thread.user_sve.ffr[index] = (u8)(index * 13U + 1U);
+}
+
+static void orlix_tcti_add_sub_immediate_fp_capture(
+	struct orlix_tcti_native_fp_simd_state *state)
+{
+	memset(state, 0, sizeof(*state));
+	memcpy(state->v, current->thread.user_simd, sizeof(state->v));
+	state->fpcr = current->thread.user_fpcr;
+	state->fpsr = current->thread.user_fpsr;
+	state->valid = current->thread.user_simd_valid;
+}
+
+static void orlix_tcti_add_sub_immediate_sve_capture(
+	struct orlix_tcti_native_sve_state *state)
+{
+	*state = (struct orlix_tcti_native_sve_state) {
+		.vl_bytes = current->thread.user_sve.vl_bytes,
+		.z = (const u8 *)current->thread.user_sve.z,
+		.p = (const u8 *)current->thread.user_sve.p,
+		.ffr = current->thread.user_sve.ffr,
+		.valid = current->thread.user_sve.valid,
+	};
+}
+
+static struct orlix_tcti_native_sme_state
+orlix_tcti_add_sub_immediate_sme_absent(void)
+{
+	return (struct orlix_tcti_native_sme_state) {
+		.valid = true,
+		.production_available = true,
+	};
+}
+
+static void orlix_tcti_add_sub_immediate_native_records(
+	struct kunit *test, enum orlix_tcti_native_obligation obligation,
+	const char *case_name)
+{
+	struct orlix_tcti_native_observation_spec *spec =
+		kunit_kzalloc(test, sizeof(*spec), GFP_KERNEL);
+	size_t leaf_index;
+
+	KUNIT_ASSERT_NOT_NULL(test, spec);
+	for (leaf_index = 0;
+	     leaf_index < ARRAY_SIZE(orlix_tcti_add_sub_immediate_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_add_sub_immediate_leaf *leaf =
+			&orlix_tcti_add_sub_immediate_leaves[leaf_index];
+		struct orlix_tcti_native_observation *observation;
+		struct orlix_tcti_native_fp_simd_state fp_simd;
+		struct orlix_tcti_native_sve_state sve;
+		struct orlix_tcti_native_sme_state sme;
+		struct orlix_tcti_native_memory_state memory;
+		struct pt_regs regs = {};
+		struct pt_regs expected;
+		u8 before_memory[sizeof(u32) * 2];
+		u8 after_memory[sizeof(before_memory)];
+		u32 instruction = orlix_tcti_add_sub_immediate_instruction(
+			leaf, false, 1, 4, 7);
+		unsigned long mapped =
+			orlix_tcti_add_sub_immediate_map_program(test, instruction);
+		u64 mask = leaf->is_64bit ? U64_MAX : U32_MAX;
+		u64 left = 0x7fffffff;
+		u64 value;
+		unsigned int reg;
+
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x8200000000000000ULL + reg;
+		regs.regs[4] = left;
+		regs.sp = 0x00000002fffffff0ULL;
+		regs.pc = mapped;
+		regs.pstate = PSR_MODE_EL0t | ADD_SUB_IMMEDIATE_NZCV;
+		regs.syscallno = NO_SYSCALL;
+		expected = regs;
+		value = (leaf->subtract ? left - 1 : left + 1) & mask;
+		expected.regs[7] = value;
+		expected.pc += sizeof(u32);
+		expected.pstate = orlix_tcti_add_sub_immediate_expected_pstate(
+			leaf, left, 1, value, expected.pstate);
+		*spec = (struct orlix_tcti_native_observation_spec) {
+			.source_ordinal = leaf->source_ordinal,
+			.obligation = obligation,
+			.result = {
+				.reason = ORLIX_TCTI_EXIT_SYSCALL,
+				.status = 0,
+				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+				.pc = expected.pc,
+				.instruction = ADD_SUB_IMMEDIATE_SVC,
+			},
+		};
+		orlix_tcti_native_gpr_capture(&spec->gpr, &expected);
+		orlix_tcti_add_sub_immediate_seed_extended_state();
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, before_memory, sizeof(before_memory)));
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
+			spec->expected.memory =
+				(struct orlix_tcti_native_memory_state) {
+					.address = mapped,
+					.size = sizeof(before_memory),
+					.bytes = before_memory,
+				};
+		else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+			orlix_tcti_add_sub_immediate_fp_capture(&fp_simd);
+			spec->expected.fp_simd = fp_simd;
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+			orlix_tcti_add_sub_immediate_sve_capture(&sve);
+			spec->expected.sve = sve;
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
+			sme = orlix_tcti_add_sub_immediate_sme_absent();
+			spec->expected.sme = sme;
+		}
+		observation = orlix_tcti_native_observation_create(spec);
+		KUNIT_ASSERT_NOT_NULL(test, observation);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_observation_execute(
+			observation, current, &regs, current->mm));
+		if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY) {
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+				mapped, after_memory, sizeof(after_memory)));
+			memory = (struct orlix_tcti_native_memory_state) {
+				.address = mapped,
+				.size = sizeof(after_memory),
+				.bytes = after_memory,
+			};
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_memory(observation,
+					&memory));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+			orlix_tcti_add_sub_immediate_fp_capture(&fp_simd);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_fp_simd(observation,
+					&fp_simd));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE) {
+			orlix_tcti_add_sub_immediate_sve_capture(&sve);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_sve(observation, &sve));
+		} else if (obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME) {
+			sme = orlix_tcti_add_sub_immediate_sme_absent();
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_add_sme(observation, &sme));
+		}
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+		orlix_tcti_add_sub_immediate_ingest(test, leaf, case_name,
+			observation);
+		orlix_tcti_native_observation_destroy(observation);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+}
+
+#define ADD_SUB_IMMEDIATE_NATIVE_CASE(name, obligation) \
+	static void name(struct kunit *test) \
+	{ \
+		orlix_tcti_add_sub_immediate_native_records(test, obligation, #name); \
+	}
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_decode_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_DECODE)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_legal_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODING)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(
+	orlix_tcti_add_sub_immediate_native_register_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_pc_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_RESULT)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_flags_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_memory_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(
+	orlix_tcti_add_sub_immediate_native_fp_simd_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_sve_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_SVE)
+ADD_SUB_IMMEDIATE_NATIVE_CASE(orlix_tcti_add_sub_immediate_native_sme_records,
+	ORLIX_TCTI_NATIVE_OBLIGATION_SME)
+#undef ADD_SUB_IMMEDIATE_NATIVE_CASE
+
 static struct kunit_case orlix_tcti_add_sub_immediate_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_source_bindings),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_all_legal_encodings),
@@ -468,6 +744,15 @@ static struct kunit_case orlix_tcti_add_sub_immediate_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_special_register_aliases),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_cmn_cmp_nzcv_boundaries),
 	KUNIT_CASE(orlix_tcti_add_sub_immediate_source_mask_boundaries),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_decode_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_legal_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_register_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_pc_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_flags_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_memory_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_fp_simd_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_sve_records),
+	KUNIT_CASE(orlix_tcti_add_sub_immediate_native_sme_records),
 	{}
 };
 
