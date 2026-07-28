@@ -743,7 +743,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ ADVSIMD_STRUCTURE_SOURCE,
-	  "1234dafb6bee8f416ede141a3665f490df71db781d73e334e0af2e3600d4b4a0",
+	  "0d140dcb889e45bb6ef1bb76d62edef0d662ce512a9b605f59212ce757b7da08",
 	  "orlix_tcti_advsimd_structure_load_store_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
@@ -1277,6 +1277,13 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_ordering_litmus_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
 	  "orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state",
@@ -3266,6 +3273,10 @@ static const struct orlix_tcti_target_proof_case advsimd_structure_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_structure_ordering_litmus_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ "orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
@@ -3297,7 +3308,7 @@ static orlix_tcti_proof_u64 advsimd_structure_case_mask(
 {
 	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
 		ORLIX_TCTI_PROOF_U64_C(1) << 1 |
-		ORLIX_TCTI_PROOF_U64_C(1) << 14;
+		ORLIX_TCTI_PROOF_U64_C(1) << 15;
 
 	if (strstr(source->operation_id, "_advsimd_mult"))
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
@@ -3333,7 +3344,8 @@ static orlix_tcti_proof_u64 advsimd_structure_case_mask(
 		break;
 	case 2403U:
 	case 2422U:
-		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13;
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13 |
+			ORLIX_TCTI_PROOF_U64_C(1) << 14;
 		break;
 	case 2450U:
 	case 2465U:

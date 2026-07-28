@@ -8,11 +8,15 @@
  */
 #include <kunit/test.h>
 #include <linux/bitfield.h>
+#include <linux/completion.h>
 #include <linux/err.h>
+#include <linux/jiffies.h>
+#include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/hosted_exec.h>
@@ -412,6 +416,23 @@ static size_t orlix_tcti_advsimd_structure_unallocated_neighbour_classes(
 	return class_count;
 }
 
+static u32 orlix_tcti_advsimd_structure_scatter_free_fields(u32 value,
+							     u32 free_mask)
+{
+	u32 instruction = 0;
+	u8 bit;
+	u8 source_bit = 0;
+
+	for (bit = 0; bit < 32; bit++) {
+		if (!(free_mask & BIT(bit)))
+			continue;
+		if (value & BIT(source_bit))
+			instruction |= BIT(bit);
+		source_bit++;
+	}
+	return instruction;
+}
+
 /*
  * Every execution claim below enters through the same EL0 resume path as an
  * ordinary hosted guest.  The terminating SVC makes the structured result
@@ -432,6 +453,39 @@ static unsigned long orlix_tcti_advsimd_structure_map_instruction(struct kunit *
 	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
 	KUNIT_ASSERT_EQ(test, 0, ret);
 	return mapped;
+}
+
+static unsigned long orlix_tcti_advsimd_structure_map_program(struct kunit *test,
+							 const u32 *program,
+							 size_t instruction_count)
+{
+	unsigned long mapped;
+	int ret;
+
+	KUNIT_ASSERT_LE(test, instruction_count * sizeof(*program), PAGE_SIZE);
+	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	ret = orlix_tcti_write_user_data(current->mm, mapped, program,
+		instruction_count * sizeof(*program));
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	return mapped;
+}
+
+static struct orlix_tcti_result orlix_tcti_advsimd_structure_resume_program(
+	struct kunit *test, unsigned long mapped, struct pt_regs *regs)
+{
+	struct orlix_tcti_result result;
+
+	regs->pc = mapped;
+	regs->pstate |= PSR_MODE_EL0t;
+	regs->syscallno = NO_SYSCALL;
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
+	return result;
 }
 
 static struct orlix_tcti_result orlix_tcti_advsimd_structure_resume(
@@ -630,6 +684,7 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 {
 	u64 *before_simd;
 	u64 *expected_simd;
+	u32 *executed;
 	u8 *memory;
 	u8 *observed;
 	size_t index;
@@ -643,21 +698,28 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 		ORLIX_TCTI_ADVSIMD_STRUCTURE_TEST_MEMORY_SIZE, GFP_KERNEL);
 	observed = kunit_kmalloc(test,
 		ORLIX_TCTI_ADVSIMD_STRUCTURE_TEST_MEMORY_SIZE, GFP_KERNEL);
+	executed = kunit_kcalloc(test, 1024, sizeof(*executed), GFP_KERNEL);
 	KUNIT_ASSERT_NOT_NULL(test, before_simd);
 	KUNIT_ASSERT_NOT_NULL(test, expected_simd);
 	KUNIT_ASSERT_NOT_NULL(test, memory);
 	KUNIT_ASSERT_NOT_NULL(test, observed);
+	KUNIT_ASSERT_NOT_NULL(test, executed);
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
 	     index++) {
 		const struct orlix_tcti_advsimd_structure_contract *contract =
 			&orlix_tcti_advsimd_structure_contracts[index];
-		u32 executed[16];
-		u8 executed_count = 0;
+		u16 executed_count = 0;
 		unsigned int lane_variant;
+		unsigned int register_variant;
 
 		if (contract->lane_shape != shape)
 			continue;
 		for (lane_variant = 0; lane_variant < 16; lane_variant++) {
+			bool free_rm = !(contract->mask & GENMASK(20, 16));
+
+			for (register_variant = 0;
+			     register_variant < 32U + (free_rm ? 31U : 0U);
+			     register_variant++) {
 			struct pt_regs regs = {};
 			struct pt_regs expected_regs;
 			u32 free_lane_fields = (BIT(30) | GENMASK(12, 10)) &
@@ -665,8 +727,16 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 			u32 lane_encoding =
 				((lane_variant & 8U) ? BIT(30) : 0U) |
 				FIELD_PREP(GENMASK(12, 10), lane_variant & 7U);
+			u8 rd = register_variant < 32U ? register_variant :
+				(register_variant - 32U + 29U) & 31U;
+			u8 rn = register_variant < 32U ? (register_variant + 1U) & 31U :
+				register_variant - 32U;
+			u8 rm = register_variant < 32U ? (register_variant + 2U) & 31U :
+				register_variant - 32U;
 			u32 instruction = (contract->pattern & ~free_lane_fields) |
-				(lane_encoding & free_lane_fields) | (8U << 5) | 30U;
+				(lane_encoding & free_lane_fields) |
+				FIELD_PREP(GENMASK(9, 5), rn) |
+				FIELD_PREP(GENMASK(4, 0), rd);
 			unsigned long address;
 			unsigned long mapped;
 			u8 access_size;
@@ -674,11 +744,13 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 				contract->q0_semantic_width;
 			u8 transfer_size;
 			u8 total;
-			u8 prior;
+			u16 prior;
 			u8 writeback_register;
 			u64 writeback;
 			int ret;
 
+			if (free_rm)
+				instruction |= FIELD_PREP(GENMASK(20, 16), rm);
 			for (prior = 0; prior < executed_count; prior++)
 				if (executed[prior] == instruction)
 					break;
@@ -702,14 +774,13 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 				MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 			KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
 			orlix_tcti_advsimd_structure_initialize_state(&regs, instruction);
-			regs.regs[8] = address + 8;
+			if (rn == 31)
+				regs.sp = address + 8;
+			else
+				regs.regs[rn] = address + 8;
 			if (contract->index_mode == ORLIX_TCTI_MEMORY_INDEX_POST &&
-			    writeback_register != 31) {
-				KUNIT_ASSERT_NE_MSG(test, 8U, writeback_register,
-					"ordinal=%u leaf=%s", contract->ordinal,
-					contract->leaf_id);
+			    writeback_register != 31 && writeback_register != rn)
 				regs.regs[writeback_register] = writeback;
-			}
 			memcpy(before_simd, current->thread.user_simd,
 				sizeof(current->thread.user_simd));
 			memcpy(expected_simd, before_simd,
@@ -723,9 +794,15 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 			orlix_tcti_advsimd_structure_expected_transfer(contract, instruction,
 				before_simd, expected_simd, memory + 8);
 			expected_regs = regs;
-			if (contract->index_mode == ORLIX_TCTI_MEMORY_INDEX_POST)
-				expected_regs.regs[8] += writeback_register == 31 ?
-					total : writeback;
+			if (contract->index_mode == ORLIX_TCTI_MEMORY_INDEX_POST) {
+				u64 increment = writeback_register == 31 ? total :
+					(writeback_register == rn ? address + 8 : writeback);
+
+				if (rn == 31)
+					expected_regs.sp += increment;
+				else
+					expected_regs.regs[rn] += increment;
+			}
 			orlix_tcti_advsimd_structure_resume(test, instruction, &regs, &mapped);
 			expected_regs.pc = mapped + 2 * sizeof(u32);
 			KUNIT_EXPECT_MEMEQ_MSG(test, &expected_regs, &regs, sizeof(regs),
@@ -759,6 +836,7 @@ static void orlix_tcti_advsimd_structure_execute_contract_shape(
 			}
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+			}
 		}
 	}
 }
@@ -892,7 +970,6 @@ static void orlix_tcti_advsimd_structure_authoritative_encoding_space(
 {
 	const struct orlix_tcti_target_instruction_artifact *artifact =
 		orlix_tcti_target_instruction_artifact_canonical();
-	static const u8 boundaries[] = { 0U, 1U, 30U, 31U };
 	const u32 lane_fields = BIT(30) | GENMASK(12, 10);
 	u32 allocated_neighbours = 0;
 	u32 fixed_neighbours = 0;
@@ -906,9 +983,9 @@ static void orlix_tcti_advsimd_structure_authoritative_encoding_space(
 			&orlix_tcti_advsimd_structure_contracts[index];
 		u32 free_lane_fields = lane_fields & ~contract->mask;
 		bool free_rm = !(contract->mask & GENMASK(20, 16));
-		u8 rd_index;
-		u8 rn_index;
-		u8 rm_index;
+		u8 rd;
+		u8 rn;
+		u8 rm;
 		u8 lane_variant;
 		u8 bit;
 
@@ -921,20 +998,18 @@ static void orlix_tcti_advsimd_structure_authoritative_encoding_space(
 
 		/*
 		 * Exercise every lane/size bit left free by the authoritative mask,
-		 * plus SP, register boundaries, list wrap, base/list overlap, and
-		 * register/immediate writeback boundaries.
+		 * plus the complete Rd/Rn/Rm product.  This includes SP, every
+		 * modulo-32 list endpoint, every base/list overlap, and both
+		 * register and immediate writeback.
 		 */
 		for (lane_variant = 0; lane_variant < 16; lane_variant++) {
 			u32 lane_encoding =
 				((lane_variant & 8U) ? BIT(30) : 0U) |
 				FIELD_PREP(GENMASK(12, 10), lane_variant & 7U);
 
-			for (rd_index = 0; rd_index < ARRAY_SIZE(boundaries); rd_index++)
-				for (rn_index = 0; rn_index < ARRAY_SIZE(boundaries);
-				     rn_index++)
-					for (rm_index = 0;
-					     rm_index < (free_rm ? ARRAY_SIZE(boundaries) : 1U);
-					     rm_index++) {
+			for (rd = 0; rd < 32; rd++)
+				for (rn = 0; rn < 32; rn++)
+					for (rm = 0; rm < (free_rm ? 32U : 1U); rm++) {
 						struct orlix_tcti_decoded_instruction decoded;
 						u32 instruction = contract->pattern;
 						u8 expected_access_size;
@@ -943,13 +1018,12 @@ static void orlix_tcti_advsimd_structure_authoritative_encoding_space(
 						instruction = (instruction & ~free_lane_fields) |
 							(lane_encoding & free_lane_fields);
 						instruction = (instruction & ~GENMASK(4, 0)) |
-							FIELD_PREP(GENMASK(4, 0), boundaries[rd_index]);
+							FIELD_PREP(GENMASK(4, 0), rd);
 						instruction = (instruction & ~GENMASK(9, 5)) |
-							FIELD_PREP(GENMASK(9, 5), boundaries[rn_index]);
+							FIELD_PREP(GENMASK(9, 5), rn);
 						if (free_rm)
 							instruction = (instruction & ~GENMASK(20, 16)) |
-								FIELD_PREP(GENMASK(20, 16),
-									boundaries[rm_index]);
+								FIELD_PREP(GENMASK(20, 16), rm);
 						KUNIT_ASSERT_EQ_MSG(test, contract->pattern,
 							instruction & contract->mask,
 							"ordinal=%u leaf=%s instruction=%#x",
@@ -1620,19 +1694,171 @@ static void orlix_tcti_advsimd_structure_ordered_lane_variants_resume(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 }
 
+struct orlix_tcti_advsimd_structure_litmus_context {
+	struct mm_struct *mm;
+	unsigned long data;
+	unsigned long marker;
+	struct completion start;
+	struct completion done;
+	u64 observed_data;
+	u64 observed_marker;
+	int ret;
+};
+
+static int orlix_tcti_advsimd_structure_release_observer(void *opaque)
+{
+	struct orlix_tcti_advsimd_structure_litmus_context *context = opaque;
+	unsigned int iteration;
+
+	wait_for_completion(&context->start);
+	for (iteration = 0; iteration < 1000000U && !kthread_should_stop();
+	     iteration++) {
+		context->ret = orlix_tcti_read_user_data(context->mm,
+			context->marker, &context->observed_marker,
+			sizeof(context->observed_marker));
+		if (context->ret || !context->observed_marker) {
+			cpu_relax();
+			continue;
+		}
+		smp_rmb();
+		context->ret = orlix_tcti_read_user_data(context->mm,
+			context->data, &context->observed_data,
+			sizeof(context->observed_data));
+		break;
+	}
+	complete(&context->done);
+	return 0;
+}
+
+static int orlix_tcti_advsimd_structure_acquire_producer(void *opaque)
+{
+	struct orlix_tcti_advsimd_structure_litmus_context *context = opaque;
+	const u64 one = 1;
+
+	wait_for_completion(&context->start);
+	context->ret = orlix_tcti_write_user_data(context->mm, context->data,
+		&one, sizeof(one));
+	if (!context->ret) {
+		smp_wmb();
+		context->ret = orlix_tcti_write_user_data(context->mm,
+			context->marker, &one, sizeof(one));
+	}
+	complete(&context->done);
+	return 0;
+}
+
+static void orlix_tcti_advsimd_structure_ordering_litmus_resume(
+	struct kunit *test)
+{
+	static const u32 release_program[] = {
+		0xf9000120U, /* STR X0, [X9] */
+		0x0d018500U, /* STL1 {V0.D}[0], [X8] */
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC,
+	};
+	static const u32 acquire_program[] = {
+		0x0d418500U, /* LDAP1 {V0.D}[0], [X8] */
+		0xf9400120U, /* LDR X0, [X9] */
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC,
+	};
+	struct orlix_tcti_advsimd_structure_litmus_context context = {};
+	struct task_struct *task;
+	struct pt_regs regs = {};
+	struct orlix_tcti_result result;
+	unsigned long address;
+	unsigned long mapped;
+	u64 zeroes[2] = {};
+	u64 marker;
+	unsigned int iteration;
+	unsigned int acquired = 0;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+	context.mm = current->mm;
+	context.data = address;
+	context.marker = address + sizeof(u64);
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, address,
+		zeroes, sizeof(zeroes)));
+	init_completion(&context.start);
+	init_completion(&context.done);
+	task = kthread_run(orlix_tcti_advsimd_structure_release_observer,
+		&context, "orlix-tcti-stl1-observer");
+	KUNIT_ASSERT_FALSE(test, IS_ERR(task));
+	mapped = orlix_tcti_advsimd_structure_map_program(test, release_program,
+		ARRAY_SIZE(release_program));
+	regs.regs[0] = 1;
+	regs.regs[8] = context.marker;
+	regs.regs[9] = context.data;
+	current->thread.user_simd[0] = 1;
+	complete(&context.start);
+	result = orlix_tcti_advsimd_structure_resume_program(test, mapped, &regs);
+	KUNIT_EXPECT_EQ(test, mapped + sizeof(release_program), result.pc);
+	KUNIT_ASSERT_NE(test, 0UL, wait_for_completion_timeout(&context.done,
+		msecs_to_jiffies(5000)));
+	kthread_stop(task);
+	KUNIT_EXPECT_EQ(test, 0, context.ret);
+	KUNIT_EXPECT_EQ(test, 1ULL, context.observed_marker);
+	KUNIT_EXPECT_EQ_MSG(test, 1ULL, context.observed_data,
+		"forbidden STL1 outcome: marker=1 data=0");
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+
+	mapped = orlix_tcti_advsimd_structure_map_program(test, acquire_program,
+		ARRAY_SIZE(acquire_program));
+	for (iteration = 0; iteration < 64U; iteration++) {
+		memset(&context, 0, sizeof(context));
+		context.mm = current->mm;
+		context.data = address;
+		context.marker = address + sizeof(u64);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			address, zeroes, sizeof(zeroes)));
+		init_completion(&context.start);
+		init_completion(&context.done);
+		task = kthread_run(orlix_tcti_advsimd_structure_acquire_producer,
+			&context, "orlix-tcti-ldap1-producer");
+		KUNIT_ASSERT_FALSE(test, IS_ERR(task));
+		memset(&regs, 0, sizeof(regs));
+		regs.regs[8] = context.marker;
+		regs.regs[9] = context.data;
+		current->thread.user_simd[0] = 0;
+		complete(&context.start);
+		result = orlix_tcti_advsimd_structure_resume_program(test, mapped,
+			&regs);
+		KUNIT_ASSERT_NE(test, 0UL, wait_for_completion_timeout(&context.done,
+			msecs_to_jiffies(5000)));
+		kthread_stop(task);
+		KUNIT_ASSERT_EQ(test, 0, context.ret);
+		marker = current->thread.user_simd[0];
+		if (marker == 1) {
+			acquired++;
+			KUNIT_EXPECT_EQ_MSG(test, 1ULL, regs.regs[0],
+				"forbidden LDAP1 outcome: marker=1 data=0 iteration=%u",
+				iteration);
+		}
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(acquire_program), result.pc);
+	}
+	KUNIT_EXPECT_GT(test, acquired, 0U);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
 static void
 orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state(
 	struct kunit *test)
 {
 	const struct orlix_tcti_target_instruction_artifact *artifact =
 		orlix_tcti_target_instruction_artifact_canonical();
-	static const u8 boundaries[] = { 0U, 1U, 30U, 31U };
 	struct orlix_tcti_advsimd_structure_encoding_class *classes;
 	u32 *program;
+	u16 *program_classes;
 	u8 before_memory[64];
 	u8 observed_memory[sizeof(before_memory)];
 	size_t class_count;
 	size_t class_index;
+	size_t combination_index;
+	size_t program_index = 0;
+	size_t program_count = 0;
 	size_t mapping_size;
 	unsigned long data;
 	unsigned long mapped;
@@ -1649,44 +1875,52 @@ orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_stat
 	KUNIT_ASSERT_GT(test, class_count, 0UL);
 	KUNIT_ASSERT_LE(test, class_count,
 		(size_t)ORLIX_TCTI_ADVSIMD_STRUCTURE_MAX_NEIGHBOUR_CLASSES);
-	program = kunit_kcalloc(test, class_count * 2, sizeof(*program), GFP_KERNEL);
+	for (class_index = 0; class_index < class_count; class_index++)
+		program_count += 1UL << hweight32(~classes[class_index].mask);
+	KUNIT_ASSERT_GT(test, program_count, class_count);
+	program = kvcalloc(program_count * 2, sizeof(*program), GFP_KERNEL);
 	KUNIT_ASSERT_NOT_NULL(test, program);
+	program_classes = kvcalloc(program_count, sizeof(*program_classes),
+		GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, program_classes);
 	for (class_index = 0; class_index < class_count; class_index++) {
-		u32 variable_fields =
-			FIELD_PREP(GENMASK(4, 0), boundaries[class_index % 4]) |
-			FIELD_PREP(GENMASK(9, 5), boundaries[(class_index / 4) % 4]) |
-			FIELD_PREP(GENMASK(20, 16), boundaries[(class_index / 16) % 4]) |
-			((class_index & 8U) ? BIT(30) : 0U) |
-			FIELD_PREP(GENMASK(12, 10), class_index & 7U);
+		size_t combination_count =
+			1UL << hweight32(~classes[class_index].mask);
 
-		program[class_index * 2] = classes[class_index].pattern |
-			(variable_fields & ~classes[class_index].mask);
-		program[class_index * 2 + 1] = ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC;
+		for (combination_index = 0; combination_index < combination_count;
+		     combination_index++, program_index++) {
+		program[program_index * 2] = classes[class_index].pattern |
+			orlix_tcti_advsimd_structure_scatter_free_fields(
+				combination_index, ~classes[class_index].mask);
+		program[program_index * 2 + 1] = ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC;
+		program_classes[program_index] = class_index;
 		KUNIT_EXPECT_EQ_MSG(test, classes[class_index].pattern,
-			program[class_index * 2] & classes[class_index].mask,
+			program[program_index * 2] & classes[class_index].mask,
 			"ordinal=%u complement-bit=%u", classes[class_index].source_ordinal,
 			classes[class_index].complemented_bit);
 		KUNIT_EXPECT_FALSE_MSG(test,
 			orlix_tcti_advsimd_structure_complete_inventory_matches(artifact,
-				program[class_index * 2]),
+				program[program_index * 2]),
 			"ordinal=%u complement-bit=%u instruction=%#x",
 			classes[class_index].source_ordinal,
 			classes[class_index].complemented_bit,
-			program[class_index * 2]);
+			program[program_index * 2]);
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			orlix_tcti_decode_aarch64(program[class_index * 2]).decode_class,
+			orlix_tcti_decode_aarch64(program[program_index * 2]).decode_class,
 			"ordinal=%u complement-bit=%u instruction=%#x",
 			classes[class_index].source_ordinal,
 			classes[class_index].complemented_bit,
-			program[class_index * 2]);
+			program[program_index * 2]);
+		}
 	}
+	KUNIT_ASSERT_EQ(test, program_count, program_index);
 
-	mapping_size = PAGE_ALIGN(class_count * 2 * sizeof(*program));
+	mapping_size = PAGE_ALIGN(program_count * 2 * sizeof(*program));
 	mapped = ksys_mmap_pgoff(0, mapping_size, PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, mapped,
-		program, class_count * 2 * sizeof(*program)));
+		program, program_count * 2 * sizeof(*program)));
 	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(mapped, mapping_size,
 		PROT_READ | PROT_EXEC));
 	data = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
@@ -1696,7 +1930,7 @@ orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_stat
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data,
 		before_memory, sizeof(before_memory)));
 
-	for (class_index = 0; class_index < class_count; class_index++) {
+	for (program_index = 0; program_index < program_count; program_index++) {
 		struct pt_regs regs = {};
 		struct pt_regs before_regs;
 		struct orlix_tcti_result result;
@@ -1705,8 +1939,10 @@ orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_stat
 		unsigned long before_fpcr;
 		unsigned long before_fpsr;
 		unsigned long instruction_pc = mapped +
-			class_index * 2 * sizeof(*program);
-		u32 instruction = program[class_index * 2];
+			program_index * 2 * sizeof(*program);
+		u32 instruction = program[program_index * 2];
+
+		class_index = program_classes[program_index];
 
 		orlix_tcti_advsimd_structure_initialize_state(&regs, instruction);
 		regs.regs[0] = data;
@@ -1747,6 +1983,8 @@ orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_stat
 	}
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, mapping_size));
+	kvfree(program_classes);
+	kvfree(program);
 }
 
 static struct kunit_case orlix_tcti_advsimd_structure_cases[] = {
@@ -1764,6 +2002,7 @@ static struct kunit_case orlix_tcti_advsimd_structure_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_structure_unaligned_access_is_legal),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_register_writeback_boundaries_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_ordered_lane_variants_resume),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_ordering_litmus_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_unallocated_neighbour_classes_reject_unchanged_state),
 	{}
 };

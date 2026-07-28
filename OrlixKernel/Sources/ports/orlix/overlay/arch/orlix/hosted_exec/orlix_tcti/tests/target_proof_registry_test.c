@@ -1459,7 +1459,7 @@ static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
 {
 	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
 		ORLIX_TCTI_PROOF_U64_C(1) << 1 |
-		ORLIX_TCTI_PROOF_U64_C(1) << 14;
+		ORLIX_TCTI_PROOF_U64_C(1) << 15;
 
 	if (strstr(operation_id, "_advsimd_mult"))
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
@@ -1479,7 +1479,8 @@ static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
 	case 2364U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 10; break;
 	case 2366U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 11; break;
 	case 2403U:
-	case 2422U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13; break;
+	case 2422U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 14; break;
 	case 2450U:
 	case 2465U:
 	case 2486U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12; break;
@@ -1503,8 +1504,12 @@ static int advsimd_structure_registry_accounts_for_exact_issue_126_cohort(void)
 	entries = orlix_tcti_target_proof_registry_entries(&entry_count);
 	rows = orlix_tcti_target_linux_proof_dispositions(&row_count);
 	EXPECT(entries && rows);
-	EXPECT(!orlix_tcti_target_proof_registry_source_bound_projection_validate(
-		entries, entry_count, &error));
+	if (orlix_tcti_target_proof_registry_source_bound_projection_validate(
+		    entries, entry_count, &error)) {
+		fprintf(stderr, "issue 126 source-bound projection error=%u\n",
+			(unsigned int)error);
+		return -1;
+	}
 	for (ordinal = 2353U; ordinal <= 2504U; ordinal++) {
 		size_t binding_matches = 0;
 		size_t disposition_matches = 0;

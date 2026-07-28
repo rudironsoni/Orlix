@@ -3,9 +3,21 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-07-23
+updated: 2026-07-28
 ---
 # Orlix Knowledge Log
+
+## [2026-07-28] correct | Close AdvSIMD structure proof gaps without overcredit
+
+Corrected issue #126's proof matrix for the selected AARCHMRS generation. The
+canonical cohort is 152 direct source leaves at ordinals 2353 through 2504,
+with no semantic-variant rows; an asserted 182-leaf count is not present in the
+source artifacts. KUnit now exhausts the complete decoder field product,
+production register domains and legal original-base overlaps, every free-field
+assignment for canonical unallocated fixed-bit neighbour classes, and
+competing-observer STL1/LDAP1 programs through `orlix_tcti_resume_user`.
+`ORDERING` and all other runtime obligations remain unproved until corrected
+#120 native contracts and app-hosted observations are genuinely ingested.
 
 ## [2026-07-23] align | Separate full ISA proof from runtime promotion
 
