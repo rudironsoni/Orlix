@@ -71,6 +71,8 @@ static orlix_tcti_proof_u64 native_identity(
 			   sizeof(record->source_ordinal));
 	value = hash_bytes(value, &record->entry_instruction,
 			   sizeof(record->entry_instruction));
+	value = hash_bytes(value, &record->obligation,
+			   sizeof(record->obligation));
 	value = hash_bytes(value, &record->kind, sizeof(record->kind));
 	value = hash_bytes(value, record->artifact_source_sha256,
 			   strlen(record->artifact_source_sha256));
@@ -96,6 +98,7 @@ orlix_tcti_target_native_result_record_create_for_test(
 	record->encoding_mask = input->encoding_mask;
 	record->encoding_pattern = input->encoding_pattern;
 	record->entry_instruction = input->entry_instruction;
+	record->obligation = input->obligation;
 	record->kind = input->kind;
 	record->production_resume = input->production_resume;
 	record->source_bound = input->source_bound;
@@ -355,6 +358,36 @@ static bool native_record_consume(
 #endif
 }
 
+static bool native_record_obligation_valid(
+	const struct orlix_tcti_target_native_result_record *record)
+{
+	orlix_tcti_proof_u32 obligation;
+
+	if (!record)
+		return false;
+	obligation = record->obligation;
+	if (!obligation || (obligation & (obligation - 1U)))
+		return false;
+	switch (record->kind) {
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT:
+		return obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR:
+		return obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS;
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_FP_SIMD:
+		return obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS ||
+		       obligation == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS;
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_INVALID:
+	case ORLIX_TCTI_TARGET_NATIVE_RESULT_NON_PRODUCTION:
+	default:
+		return false;
+	}
+}
+
 int orlix_tcti_target_proof_ingest_native(
 	struct orlix_tcti_target_proof_ingestion_ledger *ledger,
 	struct orlix_tcti_target_native_result_record *record,
@@ -365,7 +398,6 @@ int orlix_tcti_target_proof_ingest_native(
 	const struct orlix_tcti_target_proof_registry_entry *entries;
 	const struct orlix_tcti_target_proof_registry_entry *entry;
 	const struct orlix_tcti_target_proof_binding *binding;
-	orlix_tcti_proof_u32 obligation;
 	size_t entry_count;
 	int selected_case;
 	const struct orlix_tcti_target_instruction_artifact *artifact;
@@ -397,12 +429,14 @@ int orlix_tcti_target_proof_ingest_native(
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_PATH_MISMATCH, error);
 		return -1;
 	}
-	if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT)
-		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
-	else if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR)
-		obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
-	else {
+	if (record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_INVALID ||
+	    record->kind == ORLIX_TCTI_TARGET_NATIVE_RESULT_NON_PRODUCTION) {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_NON_PRODUCTION, error);
+		return -1;
+	}
+	if (!native_record_obligation_valid(record)) {
+		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_OBLIGATION_MISMATCH,
+		       error);
 		return -1;
 	}
 	entry = find_entry(entries, entry_count, selector->proof_id);
@@ -453,9 +487,10 @@ int orlix_tcti_target_proof_ingest_native(
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_CASE_MISMATCH, error);
 		return -1;
 	}
-	if (!(entry->obligations & obligation) ||
-	    !(entry->unproved_obligations & obligation) ||
-	    !(entry->kunit_cases[selected_case].obligations & obligation)) {
+	if (!(entry->obligations & record->obligation) ||
+	    !(entry->unproved_obligations & record->obligation) ||
+	    !(entry->kunit_cases[selected_case].obligations &
+	      record->obligation)) {
 		reject(ledger, ORLIX_TCTI_TARGET_PROOF_INGEST_OBLIGATION_MISMATCH, error);
 		return -1;
 	}

@@ -72,6 +72,8 @@ static int fixture_init(struct native_fixture *fixture)
 	fixture->input.encoding_mask = fixture->binding.encoding_mask;
 	fixture->input.encoding_pattern = fixture->binding.encoding_pattern;
 	fixture->input.entry_instruction = fixture->binding.encoding_pattern;
+	fixture->input.obligation =
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
 	fixture->input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
 	fixture->input.artifact_architecture = artifact->architecture;
 	fixture->input.artifact_build = artifact->build;
@@ -169,6 +171,18 @@ static int native_mutation_matrix(void)
 	selector.kunit_case = "wrong-case";
 	EXPECT(!ingest_once(&fixture, &fixture.input, &selector,
 		ORLIX_TCTI_TARGET_PROOF_INGEST_CASE_MISMATCH));
+	input = fixture.input;
+	input.kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FP_SIMD;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_OK));
+	input.obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_OBLIGATION_MISMATCH));
+	input = fixture.input;
+	input.obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			   ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
+	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,
+		ORLIX_TCTI_TARGET_PROOF_INGEST_OBLIGATION_MISMATCH));
 	input = fixture.input;
 	input.production_resume = false;
 	EXPECT(!ingest_once(&fixture, &input, &fixture.selector,

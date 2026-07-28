@@ -203,5 +203,9 @@ int orlix_tcti_native_observation_compare(
 int orlix_tcti_native_observation_export(
 		struct orlix_tcti_native_observation *observation,
 		struct orlix_tcti_target_native_result_record **record);
+int orlix_tcti_native_observation_export_obligation(
+		struct orlix_tcti_native_observation *observation,
+		orlix_tcti_proof_u32 obligation,
+		struct orlix_tcti_target_native_result_record **record);
 
 #endif /* ORLIX_TCTI_NATIVE_OBSERVATION_H */

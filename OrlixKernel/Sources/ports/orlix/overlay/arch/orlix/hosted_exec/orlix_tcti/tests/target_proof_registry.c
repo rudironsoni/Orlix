@@ -697,7 +697,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "93e647a701efdf32967ddc75229e6c56e081d1dd0d534f4a9de41803d93ea558",
 	  "orlix_tcti_advsimd_mul_source_bound_test.o" },
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
-	  "04b12956e0aac089c38b7271a6f4509e4df6754a0e2ac1aa29af9b87a8c64d57",
+"3fec88a63ff1215166f0e17977802a0167724945a64e5ed438cd73f6bb5a429e",
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
@@ -1141,6 +1141,11 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ ADVSIMD_MINMAX_REDUCTION_SOURCE, ADVSIMD_MINMAX_REDUCTION_SUITE,
+	  ADVSIMD_MINMAX_REDUCTION_SUITE_SYMBOL,
+	  ADVSIMD_MINMAX_REDUCTION_CASE_ARRAY,
+	  "orlix_tcti_minmaxv_native_records_ingest",
+	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS },
 
 };
 
@@ -1604,13 +1609,15 @@ advsimd_minmax_reduction_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_minmaxv_native_records_ingest",
+	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS },
 };
 
 #define ADVSIMD_MINMAX_REDUCTION_BINDING(name, ordinal, leaf, mnemonic, pattern) \
 	static const struct orlix_tcti_target_proof_binding name##_bindings[] = { \
 		{ leaf, mnemonic, 0xbf3ffc00U, pattern, \
 		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
-		  ORLIX_TCTI_PROOF_U64_C(0xf), ordinal }, \
+		  ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }, \
 	}
 ADVSIMD_MINMAX_REDUCTION_BINDING(advsimd_minmax_reduction_smaxv, 3855U,
 	"SMAXV_asimdall_only", "SMAXV", 0x0e30a800U);

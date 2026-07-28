@@ -21,6 +21,7 @@ struct orlix_tcti_target_native_result_record {
 	orlix_tcti_proof_u32 encoding_mask;
 	orlix_tcti_proof_u32 encoding_pattern;
 	orlix_tcti_proof_u32 entry_instruction;
+	orlix_tcti_proof_u32 obligation;
 	enum orlix_tcti_target_native_result_kind kind;
 	bool production_resume;
 	bool source_bound;
@@ -76,6 +77,7 @@ struct orlix_tcti_target_native_result_test_input {
 	orlix_tcti_proof_u32 encoding_mask;
 	orlix_tcti_proof_u32 encoding_pattern;
 	orlix_tcti_proof_u32 entry_instruction;
+	orlix_tcti_proof_u32 obligation;
 	enum orlix_tcti_target_native_result_kind kind;
 	const char *artifact_architecture;
 	const char *artifact_build;

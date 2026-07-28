@@ -8,7 +8,9 @@
 #include <linux/sched/mm.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
+#include <linux/utsname.h>
 
+#include <asm/isa.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
@@ -16,6 +18,7 @@
 #include "../decode_aarch64.h"
 #include "orlix_tcti_native_observation.h"
 #include "target_instruction_artifact.h"
+#include "target_proof_ingestion.h"
 
 #define ORLIX_TCTI_MINMAXV_SVC 0xd4000001U
 #define ORLIX_TCTI_MINMAXV_VARIABLE_MASK 0x40c003ffU
@@ -29,25 +32,42 @@ struct orlix_tcti_minmaxv_leaf {
 	const char *source_name;
 	const char *source_mnemonic;
 	const char *source_operation;
+	const char *proof_id;
 	u32 source_mask;
 	u32 source_pattern;
 	enum orlix_tcti_simd_reduction_op operation;
 };
 
 static const struct orlix_tcti_minmaxv_leaf orlix_tcti_minmaxv_leaves[] = {
-	{ 3855U, "SMAXV_asimdall_only", "SMAXV", "SMAXV_advsimd", 0xbf3ffc00U,
+	{ 3855U, "SMAXV_asimdall_only", "SMAXV", "SMAXV_advsimd",
+	  "kunit:advsimd-minmax-reduction-smaxv-source-leaf", 0xbf3ffc00U,
 	  0x0e30a800U, ORLIX_TCTI_SIMD_REDUCTION_SMAXV },
-	{ 3856U, "SMINV_asimdall_only", "SMINV", "SMINV_advsimd", 0xbf3ffc00U,
+	{ 3856U, "SMINV_asimdall_only", "SMINV", "SMINV_advsimd",
+	  "kunit:advsimd-minmax-reduction-sminv-source-leaf", 0xbf3ffc00U,
 	  0x0e31a800U, ORLIX_TCTI_SIMD_REDUCTION_SMINV },
-	{ 3863U, "UMAXV_asimdall_only", "UMAXV", "UMAXV_advsimd", 0xbf3ffc00U,
+	{ 3863U, "UMAXV_asimdall_only", "UMAXV", "UMAXV_advsimd",
+	  "kunit:advsimd-minmax-reduction-umaxv-source-leaf", 0xbf3ffc00U,
 	  0x2e30a800U, ORLIX_TCTI_SIMD_REDUCTION_UMAXV },
-	{ 3864U, "UMINV_asimdall_only", "UMINV", "UMINV_advsimd", 0xbf3ffc00U,
+	{ 3864U, "UMINV_asimdall_only", "UMINV", "UMINV_advsimd",
+	  "kunit:advsimd-minmax-reduction-uminv-source-leaf", 0xbf3ffc00U,
 	  0x2e31a800U, ORLIX_TCTI_SIMD_REDUCTION_UMINV },
 };
 
 static_assert(ARRAY_SIZE(orlix_tcti_minmaxv_leaves) ==
 	      ORLIX_TCTI_MINMAXV_LEAF_COUNT);
 static_assert(ORLIX_TCTI_ISSUE_125_REMAINING_LEAF_COUNT == 236U);
+static_assert(ORLIX_EL0_HWCAP == 0);
+static_assert(ORLIX_EL0_HWCAP2 == 0);
+
+enum orlix_tcti_minmaxv_vector_kind {
+	ORLIX_TCTI_MINMAXV_ALL_ZERO,
+	ORLIX_TCTI_MINMAXV_ALL_ONE,
+	ORLIX_TCTI_MINMAXV_SIGNED_EXTREMA,
+	ORLIX_TCTI_MINMAXV_UNSIGNED_EXTREMA,
+	ORLIX_TCTI_MINMAXV_MIXED_BOUNDARY,
+	ORLIX_TCTI_MINMAXV_TIES,
+	ORLIX_TCTI_MINMAXV_VECTOR_KIND_COUNT,
+};
 
 struct orlix_tcti_minmaxv_context {
 	struct mm_struct *mm;
@@ -313,16 +333,71 @@ static void orlix_tcti_minmaxv_complete_encoding_domain(struct kunit *test)
 	}
 }
 
-static void orlix_tcti_minmaxv_seed_simd(u8 rn)
+static u32 orlix_tcti_minmaxv_vector_lane(
+	enum orlix_tcti_minmaxv_vector_kind kind, u8 lane_bits, u8 lane)
+{
+	u32 mask = GENMASK(lane_bits - 1U, 0);
+	u32 sign = BIT(lane_bits - 1U);
+
+	switch (kind) {
+	case ORLIX_TCTI_MINMAXV_ALL_ZERO:
+		return 0;
+	case ORLIX_TCTI_MINMAXV_ALL_ONE:
+		return mask;
+	case ORLIX_TCTI_MINMAXV_SIGNED_EXTREMA:
+		return lane & 1U ? sign - 1U : sign;
+	case ORLIX_TCTI_MINMAXV_UNSIGNED_EXTREMA:
+		return lane & 1U ? mask : 0;
+	case ORLIX_TCTI_MINMAXV_MIXED_BOUNDARY:
+		switch (lane & 7U) {
+		case 0:
+			return 0;
+		case 1:
+			return 1;
+		case 2:
+			return sign - 1U;
+		case 3:
+			return sign;
+		case 4:
+			return mask;
+		case 5:
+			return mask - 1U;
+		case 6:
+			return sign + 1U;
+		default:
+			return 2;
+		}
+	case ORLIX_TCTI_MINMAXV_TIES:
+		return (mask >> 2) | 1U;
+	case ORLIX_TCTI_MINMAXV_VECTOR_KIND_COUNT:
+	default:
+		return 0;
+	}
+}
+
+static void orlix_tcti_minmaxv_seed_simd(
+	u8 rn, u8 size, enum orlix_tcti_minmaxv_vector_kind kind)
 {
 	unsigned int index;
+	u8 lane_bits = (1U << size) * 8U;
+	u8 lane_count = (2U * sizeof(u64)) / (1U << size);
+	u64 source[2] = {};
+	u8 lane;
 
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
 			0x6a09e667f3bcc909ULL ^
 			((u64)(index + 1U) * 0x0102040810204081ULL);
-	current->thread.user_simd[rn * 2U] = 0xc040028201fe7e81ULL;
-	current->thread.user_simd[rn * 2U + 1U] = 0xaa55e02000ff7f80ULL;
+	for (lane = 0; lane < lane_count; lane++) {
+		u8 byte_offset = lane * (1U << size);
+		u8 word = byte_offset / sizeof(u64);
+		u8 shift = (byte_offset % sizeof(u64)) * 8U;
+
+		source[word] |= (u64)orlix_tcti_minmaxv_vector_lane(
+			kind, lane_bits, lane) << shift;
+	}
+	current->thread.user_simd[rn * 2U] = source[0];
+	current->thread.user_simd[rn * 2U + 1U] = source[1];
 }
 
 static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
@@ -341,6 +416,7 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 	size_t leaf_index;
 	size_t arrangement_index;
 	size_t register_index;
+	size_t vector_index;
 
 	for (leaf_index = 0; leaf_index < ARRAY_SIZE(orlix_tcti_minmaxv_leaves);
 	     leaf_index++) {
@@ -356,6 +432,9 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 			for (register_index = 0;
 			     register_index < ARRAY_SIZE(registers);
 			     register_index++) {
+				for (vector_index = 0;
+				     vector_index < ORLIX_TCTI_MINMAXV_VECTOR_KIND_COUNT;
+				     vector_index++) {
 				u8 rd = registers[register_index].rd;
 				u8 rn = registers[register_index].rn;
 				u8 q = arrangement->q;
@@ -386,7 +465,7 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 						   before_program,
 						   sizeof(program));
 
-				orlix_tcti_minmaxv_seed_simd(rn);
+				orlix_tcti_minmaxv_seed_simd(rn, size, vector_index);
 				source[0] = current->thread.user_simd[rn * 2U];
 				source[1] =
 					current->thread.user_simd[rn * 2U + 1U];
@@ -440,6 +519,7 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 				KUNIT_ASSERT_EQ(test, 0, ret);
 				KUNIT_EXPECT_MEMEQ(test, program, after_program,
 						   sizeof(program));
+				}
 			}
 		}
 	}
@@ -486,7 +566,8 @@ static void orlix_tcti_minmaxv_reserved_arrangements_resume(struct kunit *test)
 			KUNIT_EXPECT_MEMEQ(test, program, before_program,
 					   sizeof(program));
 
-			orlix_tcti_minmaxv_seed_simd(9U);
+			orlix_tcti_minmaxv_seed_simd(
+				9U, 0U, ORLIX_TCTI_MINMAXV_MIXED_BOUNDARY);
 			memcpy(before_simd, current->thread.user_simd,
 			       sizeof(before_simd));
 			current->thread.user_simd_valid = 1;
@@ -532,11 +613,230 @@ static void orlix_tcti_minmaxv_reserved_arrangements_resume(struct kunit *test)
 	}
 }
 
+static const struct orlix_tcti_target_proof_registry_entry *
+orlix_tcti_minmaxv_proof_entry(const struct orlix_tcti_minmaxv_leaf *leaf)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *found = NULL;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++) {
+		if (strcmp(entries[index].id, leaf->proof_id))
+			continue;
+		if (found)
+			return NULL;
+		found = &entries[index];
+	}
+	return found;
+}
+
+static const struct orlix_tcti_target_proof_binding *
+orlix_tcti_minmaxv_proof_binding(
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	const struct orlix_tcti_minmaxv_leaf *leaf)
+{
+	const struct orlix_tcti_target_proof_binding *found = NULL;
+	size_t index;
+
+	for (index = 0; entry && index < entry->binding_count; index++) {
+		if (entry->bindings[index].source_ordinal != leaf->source_ordinal)
+			continue;
+		if (found)
+			return NULL;
+		found = &entry->bindings[index];
+	}
+	return found;
+}
+
+static int orlix_tcti_minmaxv_make_observation(
+	struct kunit *test, const struct orlix_tcti_minmaxv_leaf *leaf,
+	enum orlix_tcti_native_obligation native_obligation, bool rejected,
+	struct orlix_tcti_native_observation **observation_out)
+{
+	struct orlix_tcti_minmaxv_context *context = test->priv;
+	struct orlix_tcti_native_observation_spec spec = {};
+	struct orlix_tcti_native_observation *observation;
+	struct orlix_tcti_native_fp_simd_state observed_fp_simd;
+	struct pt_regs expected_regs;
+	struct pt_regs regs;
+	u8 q = rejected ? 0U : 1U;
+	u8 size = 2U;
+	u8 rd = 9U;
+	u8 rn = 9U;
+	u32 instruction = orlix_tcti_minmaxv_instruction(leaf, q, size, rd, rn);
+	u64 source[2];
+	u32 expected;
+	int ret;
+
+	if (!observation_out)
+		return -EINVAL;
+	*observation_out = NULL;
+	ret = orlix_tcti_minmaxv_load_instruction(test, instruction);
+	if (ret)
+		return ret;
+	orlix_tcti_minmaxv_seed_simd(
+		rn, rejected ? 0U : size, ORLIX_TCTI_MINMAXV_MIXED_BOUNDARY);
+	current->thread.user_simd_valid = rejected ? 1U : 0U;
+	current->thread.user_fpcr = BIT(22) | BIT(24);
+	current->thread.user_fpsr = BIT(27) | BIT(4);
+	orlix_tcti_minmaxv_seed_regs(&regs, context->instructions, instruction);
+	expected_regs = regs;
+	if (!rejected)
+		expected_regs.pc += sizeof(u32);
+
+	spec.source_ordinal = leaf->source_ordinal;
+	spec.obligation = native_obligation;
+	spec.result.reason = rejected ?
+		ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION : ORLIX_TCTI_EXIT_SYSCALL;
+	spec.result.status = rejected ? -EOPNOTSUPP : 0;
+	spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
+	spec.result.pc = rejected ? context->instructions :
+		context->instructions + sizeof(u32);
+	spec.result.instruction = rejected ? instruction : ORLIX_TCTI_MINMAXV_SVC;
+	orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
+	if (native_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+		source[0] = current->thread.user_simd[rn * 2U];
+		source[1] = current->thread.user_simd[rn * 2U + 1U];
+		expected = minmaxv_oracle(leaf->operation, q, size, source);
+		orlix_tcti_minmaxv_capture_fp_simd(&spec.expected.fp_simd);
+		memset(spec.expected.fp_simd.v[rd], 0,
+		       sizeof(spec.expected.fp_simd.v[rd]));
+		memcpy(spec.expected.fp_simd.v[rd], &expected, sizeof(expected));
+		spec.expected.fp_simd.valid = true;
+	}
+
+	observation = orlix_tcti_native_observation_create(&spec);
+	if (!observation)
+		return -ENOMEM;
+	ret = orlix_tcti_native_observation_execute(
+		observation, current, &regs, current->mm);
+	if (!ret && native_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD) {
+		orlix_tcti_minmaxv_capture_fp_simd(&observed_fp_simd);
+		ret = orlix_tcti_native_observation_add_fp_simd(
+			observation, &observed_fp_simd);
+	}
+	if (!ret)
+		ret = orlix_tcti_native_observation_compare(observation);
+	if (ret) {
+		orlix_tcti_native_observation_destroy(observation);
+		return ret;
+	}
+	*observation_out = observation;
+	return 0;
+}
+
+static void orlix_tcti_minmaxv_native_records_ingest(struct kunit *test)
+{
+	static const char case_name[] =
+		"orlix_tcti_minmaxv_native_records_ingest";
+	static const struct {
+		orlix_tcti_proof_u32 obligation;
+		enum orlix_tcti_native_obligation native_obligation;
+		bool rejected;
+	} obligations[] = {
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_RESULT, false },
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_RESULT, false },
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_RESULT, true },
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD, false },
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_RESULT, false },
+		{ ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS,
+		  ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD, false },
+	};
+	struct orlix_tcti_target_native_result_record *records[
+		ARRAY_SIZE(orlix_tcti_minmaxv_leaves) * ARRAY_SIZE(obligations)] = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary;
+	char build_identity[ORLIX_TCTI_TARGET_PROOF_BUILD_ID_MAX];
+	size_t record_count = 0;
+	size_t leaf_index;
+	size_t obligation_index;
+
+	scnprintf(build_identity, sizeof(build_identity), "%s|%s|%s",
+		  init_utsname()->release, init_utsname()->version,
+		  init_utsname()->machine);
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(
+		ARRAY_SIZE(records));
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+
+	for (leaf_index = 0; leaf_index < ARRAY_SIZE(orlix_tcti_minmaxv_leaves);
+	     leaf_index++) {
+		const struct orlix_tcti_minmaxv_leaf *leaf =
+			&orlix_tcti_minmaxv_leaves[leaf_index];
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			orlix_tcti_minmaxv_proof_entry(leaf);
+		const struct orlix_tcti_target_proof_binding *binding =
+			orlix_tcti_minmaxv_proof_binding(entry, leaf);
+		struct orlix_tcti_target_kunit_provenance_identity provenance;
+		struct orlix_tcti_target_native_ingestion_selector selector = {};
+
+		KUNIT_ASSERT_NOT_NULL(test, entry);
+		KUNIT_ASSERT_NOT_NULL(test, binding);
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_target_kunit_provenance_identity(
+				entry, case_name, &provenance));
+		selector.proof_id = entry->id;
+		selector.classification_mask = entry->classification_mask;
+		selector.condition_tcnd_hex = binding->condition_tcnd_hex;
+		selector.kunit_source = provenance.source;
+		selector.kunit_source_sha256 = provenance.source_sha256;
+		selector.kunit_build_source = provenance.build_source;
+		selector.kunit_build_source_sha256 = provenance.build_source_sha256;
+		selector.kunit_suite = provenance.suite;
+		selector.kunit_case = provenance.case_name;
+		selector.executing_kernel_identity = build_identity;
+
+		for (obligation_index = 0;
+		     obligation_index < ARRAY_SIZE(obligations);
+		     obligation_index++) {
+			struct orlix_tcti_native_observation *observation;
+			enum orlix_tcti_target_proof_ingestion_error error;
+			int ret;
+
+			ret = orlix_tcti_minmaxv_make_observation(
+				test, leaf,
+				obligations[obligation_index].native_obligation,
+				obligations[obligation_index].rejected,
+				&observation);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			ret = orlix_tcti_native_observation_export_obligation(
+				observation, obligations[obligation_index].obligation,
+				&records[record_count]);
+			orlix_tcti_native_observation_destroy(observation);
+			KUNIT_ASSERT_EQ(test, 0, ret);
+			KUNIT_ASSERT_NOT_NULL(test, records[record_count]);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_target_proof_ingest_native(
+					ledger, records[record_count], &selector, &error));
+			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_TARGET_PROOF_INGEST_OK,
+					error);
+			record_count++;
+		}
+	}
+
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(records), summary.native_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.kselftest_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.rejected);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	for (record_count = 0; record_count < ARRAY_SIZE(records); record_count++)
+		orlix_tcti_target_native_result_record_destroy(records[record_count]);
+}
+
 static struct kunit_case orlix_tcti_minmaxv_cases[] = {
 	KUNIT_CASE(orlix_tcti_minmaxv_source_bindings),
 	KUNIT_CASE(orlix_tcti_minmaxv_complete_encoding_domain),
 	KUNIT_CASE(orlix_tcti_minmaxv_legal_arrangements_resume),
 	KUNIT_CASE(orlix_tcti_minmaxv_reserved_arrangements_resume),
+	KUNIT_CASE(orlix_tcti_minmaxv_native_records_ingest),
 	{}
 };
 
