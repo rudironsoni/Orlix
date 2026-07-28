@@ -267,6 +267,47 @@ static const struct orlix_tcti_advsimd_structure_contract
 #undef ORLIX_TCTI_ADVSIMD_STRUCTURE_CONTRACT_ROW
 };
 
+enum orlix_tcti_advsimd_structure_addressing_applicability {
+	ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_APPLICABLE,
+	ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_NOT_APPLICABLE_NO_ENCODING,
+};
+
+static enum orlix_tcti_advsimd_structure_addressing_applicability
+orlix_tcti_advsimd_structure_addressing_applicability(
+	const struct orlix_tcti_advsimd_structure_contract *contract,
+	enum orlix_tcti_memory_index_mode mode)
+{
+	if (mode == ORLIX_TCTI_MEMORY_INDEX_PRE)
+		return ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_NOT_APPLICABLE_NO_ENCODING;
+	return mode == contract->index_mode ?
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_APPLICABLE :
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_NOT_APPLICABLE_NO_ENCODING;
+}
+
+static bool orlix_tcti_advsimd_structure_is_family_decode(
+	enum orlix_tcti_decode_class decode_class)
+{
+	return decode_class == ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE ||
+	       decode_class == ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE ||
+	       decode_class == ORLIX_TCTI_DECODE_SIMD_LOAD_REPLICATE;
+}
+
+static bool orlix_tcti_advsimd_structure_matches_authoritative_leaf(
+	u32 instruction)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
+	     index++) {
+		const struct orlix_tcti_advsimd_structure_contract *contract =
+			&orlix_tcti_advsimd_structure_contracts[index];
+
+		if ((instruction & contract->mask) == contract->pattern)
+			return true;
+	}
+	return false;
+}
+
 /*
  * Every execution claim below enters through the same EL0 resume path as an
  * ordinary hosted guest.  The terminating SVC makes the structured result
@@ -463,8 +504,8 @@ static void orlix_tcti_advsimd_structure_expected_transfer(
 			expected_simd[((register_index + structure) & 31) * 2 + 1] = 0;
 }
 
-static void orlix_tcti_advsimd_structure_every_contract_row_executes(
-	struct kunit *test)
+static void orlix_tcti_advsimd_structure_execute_contract_shape(
+	struct kunit *test, enum orlix_tcti_advsimd_structure_lane_shape shape)
 {
 	size_t index;
 
@@ -475,6 +516,8 @@ static void orlix_tcti_advsimd_structure_every_contract_row_executes(
 			&orlix_tcti_advsimd_structure_contracts[index];
 		unsigned int q;
 
+		if (contract->lane_shape != shape)
+			continue;
 		for (q = 0; q < 2; q++) {
 			struct pt_regs regs = {};
 			struct pt_regs expected_regs;
@@ -556,6 +599,27 @@ static void orlix_tcti_advsimd_structure_every_contract_row_executes(
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 		}
 	}
+}
+
+static void orlix_tcti_advsimd_structure_multiple_production_semantics(
+	struct kunit *test)
+{
+	orlix_tcti_advsimd_structure_execute_contract_shape(test,
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE_NONE);
+}
+
+static void orlix_tcti_advsimd_structure_lane_production_semantics(
+	struct kunit *test)
+{
+	orlix_tcti_advsimd_structure_execute_contract_shape(test,
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE);
+}
+
+static void orlix_tcti_advsimd_structure_replicate_production_semantics(
+	struct kunit *test)
+{
+	orlix_tcti_advsimd_structure_execute_contract_shape(test,
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_REPLICATE);
 }
 
 static void orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder(
@@ -659,6 +723,104 @@ static void orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder(
 	}
 
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ADVSIMD_STRUCTURE_SOURCE_COUNT, observed);
+}
+
+static void orlix_tcti_advsimd_structure_authoritative_encoding_space(
+	struct kunit *test)
+{
+	static const u8 boundaries[] = { 0U, 1U, 30U, 31U };
+	const u32 lane_fields = BIT(30) | GENMASK(12, 10);
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
+	     index++) {
+		const struct orlix_tcti_advsimd_structure_contract *contract =
+			&orlix_tcti_advsimd_structure_contracts[index];
+		u32 free_lane_fields = lane_fields & ~contract->mask;
+		bool free_rm = !(contract->mask & GENMASK(20, 16));
+		u8 rd_index;
+		u8 rn_index;
+		u8 rm_index;
+		u8 lane_variant;
+		u8 bit;
+
+		KUNIT_EXPECT_EQ_MSG(test,
+			ORLIX_TCTI_ADVSIMD_STRUCTURE_ADDRESSING_NOT_APPLICABLE_NO_ENCODING,
+			orlix_tcti_advsimd_structure_addressing_applicability(contract,
+				ORLIX_TCTI_MEMORY_INDEX_PRE),
+			"ordinal=%u leaf=%s pre-index", contract->ordinal,
+			contract->leaf_id);
+
+		/*
+		 * Exercise every lane/size bit left free by the authoritative mask,
+		 * plus SP, register boundaries, list wrap, base/list overlap, and
+		 * register/immediate writeback boundaries.
+		 */
+		for (lane_variant = 0; lane_variant < 16; lane_variant++) {
+			u32 lane_encoding =
+				((lane_variant & 8U) ? BIT(30) : 0U) |
+				FIELD_PREP(GENMASK(12, 10), lane_variant & 7U);
+
+			for (rd_index = 0; rd_index < ARRAY_SIZE(boundaries); rd_index++)
+				for (rn_index = 0; rn_index < ARRAY_SIZE(boundaries);
+				     rn_index++)
+					for (rm_index = 0;
+					     rm_index < (free_rm ? ARRAY_SIZE(boundaries) : 1U);
+					     rm_index++) {
+						struct orlix_tcti_decoded_instruction decoded;
+						u32 instruction = contract->pattern;
+
+						instruction = (instruction & ~free_lane_fields) |
+							(lane_encoding & free_lane_fields);
+						instruction = (instruction & ~GENMASK(4, 0)) |
+							FIELD_PREP(GENMASK(4, 0), boundaries[rd_index]);
+						instruction = (instruction & ~GENMASK(9, 5)) |
+							FIELD_PREP(GENMASK(9, 5), boundaries[rn_index]);
+						if (free_rm)
+							instruction = (instruction & ~GENMASK(20, 16)) |
+								FIELD_PREP(GENMASK(20, 16),
+									boundaries[rm_index]);
+						KUNIT_ASSERT_EQ_MSG(test, contract->pattern,
+							instruction & contract->mask,
+							"ordinal=%u leaf=%s instruction=%#x",
+							contract->ordinal, contract->leaf_id, instruction);
+						decoded = orlix_tcti_decode_aarch64(instruction);
+						KUNIT_EXPECT_EQ_MSG(test, contract->decode_class,
+							decoded.decode_class,
+							"ordinal=%u leaf=%s instruction=%#x",
+							contract->ordinal, contract->leaf_id, instruction);
+						KUNIT_EXPECT_EQ_MSG(test, contract->load, decoded.load,
+							"ordinal=%u leaf=%s instruction=%#x",
+							contract->ordinal, contract->leaf_id, instruction);
+						KUNIT_EXPECT_EQ_MSG(test, contract->structure_count,
+							decoded.simd_structure_count,
+							"ordinal=%u leaf=%s instruction=%#x",
+							contract->ordinal, contract->leaf_id, instruction);
+						KUNIT_EXPECT_EQ_MSG(test, contract->index_mode,
+							decoded.memory_index_mode,
+							"ordinal=%u leaf=%s instruction=%#x",
+							contract->ordinal, contract->leaf_id, instruction);
+					}
+		}
+
+		/* A fixed-bit complement not owned by any leaf must not overdecode. */
+		for (bit = 0; bit < 32; bit++) {
+			u32 complement;
+			struct orlix_tcti_decoded_instruction decoded;
+
+			if (!(contract->mask & BIT(bit)))
+				continue;
+			complement = contract->pattern ^ BIT(bit);
+			if (orlix_tcti_advsimd_structure_matches_authoritative_leaf(complement))
+				continue;
+			decoded = orlix_tcti_decode_aarch64(complement);
+			KUNIT_EXPECT_FALSE_MSG(test,
+				orlix_tcti_advsimd_structure_is_family_decode(
+					decoded.decode_class),
+				"ordinal=%u leaf=%s complement-bit=%u instruction=%#x",
+				contract->ordinal, contract->leaf_id, bit, complement);
+		}
+	}
 }
 
 
@@ -928,6 +1090,79 @@ static void orlix_tcti_advsimd_structure_late_fault_commits_prior_accesses_only(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, 2 * PAGE_SIZE));
 }
 
+static void orlix_tcti_advsimd_structure_noninterleaved_fault_is_element_precise(
+	struct kunit *test)
+{
+	const u8 source[] = { 0x31, 0x42, 0x53 };
+	struct pt_regs load_regs = {};
+	struct pt_regs store_regs = {};
+	struct orlix_tcti_result result;
+	unsigned long address;
+	unsigned long mapped;
+	u64 before_low;
+	u64 before_high;
+	u64 expected_low;
+	u8 observed[sizeof(source)] = {};
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	address = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(source), source, sizeof(source)));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_NONE));
+
+	/* LD1 {v0.8b}, [x8] commits three bytes, then faults on byte four. */
+	orlix_tcti_advsimd_structure_initialize_state(&load_regs, 0x0c407100U);
+	load_regs.regs[8] = address + PAGE_SIZE - sizeof(source);
+	before_low = current->thread.user_simd[0];
+	before_high = current->thread.user_simd[1];
+	expected_low = (before_low & ~GENMASK_ULL(23, 0)) |
+		(u64)source[0] | ((u64)source[1] << 8) | ((u64)source[2] << 16);
+	mapped = orlix_tcti_advsimd_structure_map_instruction(test, 0x0c407100U);
+	load_regs.pc = mapped;
+	result = orlix_tcti_resume_user(current, &load_regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_READ, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, load_regs.pc);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE - sizeof(source),
+		load_regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, expected_low, current->thread.user_simd[0]);
+	KUNIT_EXPECT_NE(test, 0ULL, before_high);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[1]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+
+	/* ST1 exposes the same element granularity and exact failing address. */
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_READ | PROT_WRITE));
+	memset(observed, 0, sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(observed), observed, sizeof(observed)));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_NONE));
+	orlix_tcti_advsimd_structure_initialize_state(&store_regs, 0x0c007100U);
+	current->thread.user_simd[0] = 0x8877665544332211ULL;
+	store_regs.regs[8] = address + PAGE_SIZE - sizeof(observed);
+	mapped = orlix_tcti_advsimd_structure_map_instruction(test, 0x0c007100U);
+	store_regs.pc = mapped;
+	result = orlix_tcti_resume_user(current, &store_regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_WRITE, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, store_regs.pc);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE - sizeof(observed),
+		store_regs.regs[8]);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(observed), observed, sizeof(observed)));
+	KUNIT_EXPECT_EQ(test, 0x11, observed[0]);
+	KUNIT_EXPECT_EQ(test, 0x22, observed[1]);
+	KUNIT_EXPECT_EQ(test, 0x33, observed[2]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, 2 * PAGE_SIZE));
+}
+
 static void orlix_tcti_advsimd_structure_unaligned_access_is_legal(
 	struct kunit *test)
 {
@@ -957,6 +1192,10 @@ static void orlix_tcti_advsimd_structure_unaligned_access_is_legal(
 static void orlix_tcti_advsimd_structure_ordered_lane_variants_resume(
 	struct kunit *test)
 {
+	/*
+	 * This proves decode and production transfer only.  It is not a
+	 * competing-observer litmus, so the registry keeps ORDERING unproved.
+	 */
 	struct orlix_tcti_decoded_instruction stl1 =
 		orlix_tcti_decode_aarch64(0x0d018400U);
 	struct orlix_tcti_decoded_instruction ldap1 =
@@ -1043,12 +1282,16 @@ static void orlix_tcti_advsimd_structure_reserved_encodings_reject(
 
 static struct kunit_case orlix_tcti_advsimd_structure_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder),
-	KUNIT_CASE(orlix_tcti_advsimd_structure_every_contract_row_executes),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_authoritative_encoding_space),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_multiple_production_semantics),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_lane_production_semantics),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_replicate_production_semantics),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_single_lane_writeback_and_pc),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_replicate_and_pc),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_fault_preserves_pc_and_writeback),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_write_fault_preserves_full_state),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_late_fault_commits_prior_accesses_only),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_noninterleaved_fault_is_element_precise),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_unaligned_access_is_legal),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_ordered_lane_variants_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_reserved_encodings_reject),
