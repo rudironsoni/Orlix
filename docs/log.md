@@ -876,3 +876,12 @@ Removed the machine-specific external-storage recovery procedure from the
 repository agent rules. Orlix verification now relies on repository-owned Make
 targets and reports unavailable app-hosted evidence directly instead of
 requiring a machine-local recovery helper.
+
+## [2026-07-28] implement | Correct Base A64 add/subtract fixed-bit decoding
+
+The issue 133 extended-register decoder now treats encoding bits 23:22 as fixed
+zeroes. Production-path KUnit covers both one-bit reserved neighbours across
+all eight extended leaves and requires a structured unsupported exit with GPR,
+NZCV, SP, PC, memory, FP/SIMD, SVE, and typed SME-state preservation. The
+cohort keeps those state observations distinct and records the exact shared
+proof-registry adaptation points for the pending issue 120 obligation split.

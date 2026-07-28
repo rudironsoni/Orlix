@@ -91,6 +91,27 @@ Completion requires:
 - Linux kselftest proof for representative live execution and Linux-visible integration without moving ISA assertions into XCTest or a host-side Swift gate;
 - an independent coverage audit against the AArch64 architecture and the reference implementation inventory.
 
+## Issue 133 base A64 add and subtract cohort
+
+The issue 133 cohort owns exactly 34 pinned leaves: eight immediate, eight
+shifted-register, eight extended-register, eight carry, and two
+pointer-authenticated add/subtract leaves. Extended-register encodings require
+bits 23:22 to be `00`; each fixed-bit neighbour must reach the structured
+unsupported-instruction exit without changing GPR, NZCV, SP, PC, memory,
+FP/SIMD, SVE, or the explicit SME availability state.
+
+The cohort keeps GPR, FP/SIMD, SVE, and SME observations as distinct native
+result kinds. The corrected issue 120 shared obligation contract must adapt the
+following owning surfaces without collapsing those results into one register
+credit: the obligation enum and ledger width in `target_proof_registry.h` and
+`target_proof_ingestion.h`; `native_record_obligation()` in
+`target_proof_ingestion.c`; the global case-provenance rows and
+`ADD_SUB_REGISTER_NATIVE_CASES` in `target_proof_registry.c`; and the exact-mask
+expectations in `target_proof_ingestion_test.c` and
+`target_proof_registry_test.c`. The issue 133 native cases already select GPR,
+FP/SIMD, SVE, and SME independently and must map one-to-one to those corrected
+obligations when issue 120 lands.
+
 ## Remaining sequence
 
 1. Complete the maintainer-refresh pipeline and the canonical fixed-width C
