@@ -52,6 +52,41 @@ class HookScopeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_project_hooks_drain_stdin_before_disengaging(self):
+        source = json.loads((ROOT / ".rulesync" / "hooks.json").read_text())["hooks"]
+        payload = b'{"padding":"' + (b"x" * 1024 * 1024) + b'"}'
+        with tempfile.TemporaryDirectory() as foreign_root:
+            for event, hooks in source.items():
+                for hook in hooks:
+                    with self.subTest(event=event):
+                        process = subprocess.Popen(
+                            hook["command"],
+                            shell=True,
+                            cwd=foreign_root,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        assert process.stdin is not None
+                        try:
+                            for offset in range(0, len(payload), 16384):
+                                process.stdin.write(payload[offset : offset + 16384])
+                                process.stdin.flush()
+                        except BrokenPipeError:
+                            self.fail(f"{event} hook closed stdin before consuming its payload")
+                        finally:
+                            try:
+                                process.stdin.close()
+                            except BrokenPipeError:
+                                self.fail(f"{event} hook closed stdin before consuming its payload")
+                        returncode = process.wait(timeout=5)
+                        stderr = process.stderr.read().decode() if process.stderr else ""
+                        if process.stdout:
+                            process.stdout.close()
+                        if process.stderr:
+                            process.stderr.close()
+                        self.assertEqual(returncode, 0, stderr)
+
     def test_generated_codex_hooks_match_rulesync_source(self):
         source = json.loads((ROOT / ".rulesync" / "hooks.json").read_text())["hooks"]
         generated = json.loads((ROOT / ".codex" / "hooks.json").read_text())["hooks"]

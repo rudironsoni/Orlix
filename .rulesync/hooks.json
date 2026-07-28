@@ -4,7 +4,7 @@
     "preToolUse": [
       {
         "type": "command",
-        "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/pre_tool_use_guard.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+        "command": "payload=\"$(mktemp \"${TMPDIR:-/tmp}/orlix-hook.XXXXXX\")\" || { cat >/dev/null; exit 0; }; trap 'rm -f \"$payload\"' EXIT HUP INT TERM; cat >\"$payload\"; root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/pre_tool_use_guard.py\"; [ -f \"$hook\" ] || exit 0; /usr/bin/python3 \"$hook\" <\"$payload\"",
         "timeout": 30,
         "matcher": "Bash|apply_patch|Edit|Write"
       }
@@ -12,7 +12,7 @@
     "permissionRequest": [
       {
         "type": "command",
-        "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/permission_request_guard.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+        "command": "payload=\"$(mktemp \"${TMPDIR:-/tmp}/orlix-hook.XXXXXX\")\" || { cat >/dev/null; exit 0; }; trap 'rm -f \"$payload\"' EXIT HUP INT TERM; cat >\"$payload\"; root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/permission_request_guard.py\"; [ -f \"$hook\" ] || exit 0; /usr/bin/python3 \"$hook\" <\"$payload\"",
         "timeout": 30,
         "matcher": "Bash|apply_patch|Edit|Write"
       }
@@ -20,7 +20,7 @@
     "postToolUse": [
       {
         "type": "command",
-        "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/post_tool_use_review.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+        "command": "payload=\"$(mktemp \"${TMPDIR:-/tmp}/orlix-hook.XXXXXX\")\" || { cat >/dev/null; exit 0; }; trap 'rm -f \"$payload\"' EXIT HUP INT TERM; cat >\"$payload\"; root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/post_tool_use_review.py\"; [ -f \"$hook\" ] || exit 0; /usr/bin/python3 \"$hook\" <\"$payload\"",
         "timeout": 30,
         "matcher": "Bash|apply_patch|Edit|Write"
       }
@@ -28,7 +28,7 @@
     "stop": [
       {
         "type": "command",
-        "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/stop_claim_check.py\"; [ -f \"$hook\" ] || exit 0; exec /usr/bin/python3 \"$hook\"",
+        "command": "payload=\"$(mktemp \"${TMPDIR:-/tmp}/orlix-hook.XXXXXX\")\" || { cat >/dev/null; exit 0; }; trap 'rm -f \"$payload\"' EXIT HUP INT TERM; cat >\"$payload\"; root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; hook=\"$root/.codex/hooks/stop_claim_check.py\"; [ -f \"$hook\" ] || exit 0; /usr/bin/python3 \"$hook\" <\"$payload\"",
         "timeout": 30
       }
     ]
