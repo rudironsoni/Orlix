@@ -13,6 +13,7 @@ obj-y += sve_state.o
 obj-y += sve_decode.o
 obj-y += decode_aarch64.o
 obj-y += crc32.o
+obj-y += memory_tagging.o
 obj-y += tls_repair.o
 obj-y += gadget_program.o
 obj-y += block_cache.o
