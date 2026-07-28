@@ -1454,6 +1454,37 @@ static int operational_note_mapping_is_exact_and_fail_closed(void)
 	return 0;
 }
 
+static orlix_tcti_proof_u64 advsimd_structure_expected_case_mask(
+	const char *operation_id, unsigned int ordinal)
+{
+	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 1;
+
+	if (strstr(operation_id, "_advsimd_mult"))
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
+	else if (strstr(operation_id, "_advsimd_sngl"))
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 3;
+	else
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 4;
+	switch (ordinal) {
+	case 2496U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 5 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 9; break;
+	case 2432U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 6; break;
+	case 2365U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 7; break;
+	case 2358U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 8; break;
+	case 2458U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 9; break;
+	case 2357U:
+	case 2364U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 10; break;
+	case 2366U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 11; break;
+	case 2403U:
+	case 2422U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12; break;
+	case 2353U:
+	case 2399U: mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13; break;
+	default: break;
+	}
+	return mask;
+}
+
 static int advsimd_structure_registry_accounts_for_exact_issue_126_cohort(void)
 {
 	const struct orlix_tcti_target_proof_registry_entry *entries;
@@ -1482,11 +1513,21 @@ static int advsimd_structure_registry_accounts_for_exact_issue_126_cohort(void)
 				    "kunit:advsimd-structure-",
 				    strlen("kunit:advsimd-structure-")))
 				continue;
+			EXPECT(entries[index].unproved_obligations ==
+			       entries[index].obligations);
+			if (!strcmp(entries[index].operation_id, "STL1_advsimd_sngl") ||
+			    !strcmp(entries[index].operation_id, "LDAP1_advsimd_sngl"))
+				EXPECT(entries[index].unproved_obligations &
+				       ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING);
 			for (binding = 0; binding < entries[index].binding_count;
 			     binding++)
 				if (entries[index].bindings[binding].source_ordinal ==
-				    ordinal)
+				    ordinal) {
+					EXPECT(entries[index].bindings[binding].kunit_case_mask ==
+					       advsimd_structure_expected_case_mask(
+						       entries[index].operation_id, ordinal));
 					binding_matches++;
+				}
 		}
 		for (index = 0; index < row_count; index++) {
 			if (rows[index].subject_kind !=

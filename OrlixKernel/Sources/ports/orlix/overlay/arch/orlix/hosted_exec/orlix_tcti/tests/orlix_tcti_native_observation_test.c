@@ -656,10 +656,9 @@ static void native_export_is_opaque_single_use_and_production_only(
 		observation, &spec.expected.memory));
 	KUNIT_ASSERT_EQ(test, 0,
 			orlix_tcti_native_observation_compare(observation));
-	KUNIT_EXPECT_EQ(test, 0,
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP,
 			orlix_tcti_native_observation_export(observation, &record));
-	KUNIT_EXPECT_NOT_NULL(test, record);
-	orlix_tcti_target_native_result_record_destroy(record);
+	KUNIT_EXPECT_PTR_EQ(test, NULL, record);
 	orlix_tcti_native_observation_destroy(observation);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }

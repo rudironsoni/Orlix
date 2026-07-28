@@ -743,7 +743,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ ADVSIMD_STRUCTURE_SOURCE,
-	  "8f3c1e283a9108359cec2fdfaaa6af22540757d33b7693f09a8f33de152bb6d9",
+	  "056ffc47eac0e97a9c9dd9819d241e67ec1b16825d9d4ff5084fba2c14dc4f8e",
 	  "orlix_tcti_advsimd_structure_load_store_source_bound_test.o",
 	  NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
@@ -1191,11 +1191,28 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
 	  "orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
-	  "orlix_tcti_advsimd_structure_every_contract_row_executes",
+	  "orlix_tcti_advsimd_structure_authoritative_encoding_space",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_multiple_production_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_lane_production_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_replicate_production_semantics",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
@@ -1234,18 +1251,26 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
-	  "orlix_tcti_advsimd_structure_unaligned_access_is_legal",
+	  "orlix_tcti_advsimd_structure_noninterleaved_fault_is_element_precise",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_structure_unaligned_access_is_legal",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
+	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
 	  "orlix_tcti_advsimd_structure_ordered_lane_variants_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ ADVSIMD_STRUCTURE_SOURCE, ADVSIMD_STRUCTURE_SUITE,
 	  ADVSIMD_STRUCTURE_SUITE_SYMBOL, ADVSIMD_STRUCTURE_CASE_ARRAY,
 	  "orlix_tcti_advsimd_structure_reserved_encodings_reject",
@@ -3174,9 +3199,20 @@ advsimd_structure_registry_operations[] = {
 
 static const struct orlix_tcti_target_proof_case advsimd_structure_cases[] = {
 	{ "orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+	{ "orlix_tcti_advsimd_structure_authoritative_encoding_space",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "orlix_tcti_advsimd_structure_every_contract_row_executes",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_advsimd_structure_multiple_production_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_structure_lane_production_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_structure_replicate_production_semantics",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
@@ -3203,25 +3239,27 @@ static const struct orlix_tcti_target_proof_case advsimd_structure_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
-	{ "orlix_tcti_advsimd_structure_unaligned_access_is_legal",
+	{ "orlix_tcti_advsimd_structure_noninterleaved_fault_is_element_precise",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_advsimd_structure_unaligned_access_is_legal",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_structure_ordered_lane_variants_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ "orlix_tcti_advsimd_structure_reserved_encodings_reject",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-};
-
-static const struct orlix_tcti_target_proof_case
-advsimd_structure_ordering_cases[] = {
-	{ "orlix_tcti_advsimd_structure_ordered_lane_variants_resume",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 };
 
 static struct orlix_tcti_target_proof_binding
@@ -3242,10 +3280,55 @@ advsimd_structure_registry_operation_for(const char *operation_id)
 	return NULL;
 }
 
-static bool advsimd_structure_ordered_operation(const char *operation_id)
+static orlix_tcti_proof_u64 advsimd_structure_case_mask(
+	const struct source_manifest_binding *source)
 {
-	return !strcmp(operation_id, "STL1_advsimd_sngl") ||
-	       !strcmp(operation_id, "LDAP1_advsimd_sngl");
+	orlix_tcti_proof_u64 mask = ORLIX_TCTI_PROOF_U64_C(1) << 0 |
+		ORLIX_TCTI_PROOF_U64_C(1) << 1;
+
+	if (strstr(source->operation_id, "_advsimd_mult"))
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 2;
+	else if (strstr(source->operation_id, "_advsimd_sngl"))
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 3;
+	else
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 4;
+
+	switch (source->ordinal) {
+	case 2496U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 5 |
+			ORLIX_TCTI_PROOF_U64_C(1) << 9;
+		break;
+	case 2432U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 6;
+		break;
+	case 2365U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 7;
+		break;
+	case 2358U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 8;
+		break;
+	case 2458U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 9;
+		break;
+	case 2357U:
+	case 2364U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 10;
+		break;
+	case 2366U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 11;
+		break;
+	case 2403U:
+	case 2422U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12;
+		break;
+	case 2353U:
+	case 2399U:
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13;
+		break;
+	default:
+		break;
+	}
+	return mask;
 }
 
 static bool build_advsimd_structure_registry(void)
@@ -3305,12 +3388,7 @@ static bool build_advsimd_structure_registry(void)
 			.encoding_mask = source->encoding_mask,
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
-			.kunit_case_mask =
-				advsimd_structure_ordered_operation(
-					operation->operation_id) ?
-				ORLIX_TCTI_PROOF_U64_C(1) :
-				(ORLIX_TCTI_PROOF_U64_C(1) <<
-				 ARRAY_COUNT(advsimd_structure_cases)) - 1,
+			.kunit_case_mask = advsimd_structure_case_mask(source),
 			.source_ordinal = source->ordinal,
 		};
 	}
@@ -3335,16 +3413,8 @@ static bool build_advsimd_structure_registry(void)
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 				.kunit_source = ADVSIMD_STRUCTURE_SOURCE,
 				.kunit_suite = ADVSIMD_STRUCTURE_SUITE,
-				.kunit_cases =
-					advsimd_structure_ordered_operation(
-						operation->operation_id) ?
-					advsimd_structure_ordering_cases :
-					advsimd_structure_cases,
-				.kunit_case_count =
-					advsimd_structure_ordered_operation(
-						operation->operation_id) ?
-					ARRAY_COUNT(advsimd_structure_ordering_cases) :
-					ARRAY_COUNT(advsimd_structure_cases),
+				.kunit_cases = advsimd_structure_cases,
+				.kunit_case_count = ARRAY_COUNT(advsimd_structure_cases),
 				.bindings = &advsimd_structure_registry_bindings[
 					operation->binding_offset],
 				.binding_count = operation->binding_count,

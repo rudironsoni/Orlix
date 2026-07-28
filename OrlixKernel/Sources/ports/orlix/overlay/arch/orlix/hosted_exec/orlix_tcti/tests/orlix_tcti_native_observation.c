@@ -960,9 +960,9 @@ int orlix_tcti_native_observation_export(
 	    observation->execution_path !=
 		    ORLIX_TCTI_NATIVE_INTERNAL_PATH_RESUME_USER)
 		return -EPERM;
-	if (observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SVE ||
-	    observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME ||
-	    observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_ATOMICITY)
+	if (observation->expected_obligation !=
+		    ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
+	    observation->expected_obligation != ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
 		return -EOPNOTSUPP;
 	artifact = orlix_tcti_target_instruction_artifact_canonical();
 	if (!artifact || observation->expected_source_ordinal >= artifact->leaf_count)
@@ -982,29 +982,10 @@ int orlix_tcti_native_observation_export(
 	exported->encoding_mask = mask;
 	exported->encoding_pattern = pattern;
 	exported->entry_instruction = observation->observed_result.entry_instruction;
-	switch (observation->expected_obligation) {
-	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT;
-		break;
-	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
-		break;
-	case ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_MEMORY;
-		break;
-	case ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FP_SIMD;
-		break;
-	case ORLIX_TCTI_NATIVE_OBLIGATION_FAULT:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FAULT;
-		break;
-	case ORLIX_TCTI_NATIVE_OBLIGATION_ORDERING:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_ORDERING;
-		break;
-	default:
-		kfree(exported);
-		return -EOPNOTSUPP;
-	}
+	exported->kind = observation->expected_obligation ==
+			     ORLIX_TCTI_NATIVE_OBLIGATION_RESULT ?
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_RESULT :
+		ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
 	exported->production_resume = true;
 	exported->source_bound = true;
 	exported->match = true;
