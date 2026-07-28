@@ -692,7 +692,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "2870f5ec26ff59f7f9d1c95997a1badbb95c0099aace28ebf487853c418ac7c2",
 	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL },
 	{ MOVE_WIDE_SOURCE,
-	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
+	  "f5d70a9b3c23b0faa02f6bc44c3520e937decd04cd703eeafcaa5fdcef2008af",
 	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_BITOPS_SOURCE,
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
@@ -967,6 +967,11 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  MOVE_WIDE_CASE_ARRAY, "orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ MOVE_WIDE_SOURCE, MOVE_WIDE_SUITE, MOVE_WIDE_SUITE_SYMBOL,
+	  MOVE_WIDE_CASE_ARRAY, "orlix_tcti_move_wide_reserved_production_exits",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
 	  SCALAR_BITOPS_SUITE_SYMBOL, SCALAR_BITOPS_CASE_ARRAY,
 	  "orlix_tcti_scalar_bitops_source_bindings",
@@ -2595,6 +2600,10 @@ static const struct orlix_tcti_target_proof_case move_wide_cases[] = {
 	{ "orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_move_wide_reserved_production_exits",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 static const struct orlix_tcti_target_proof_case scalar_bitops_cases[] = {

@@ -6,6 +6,7 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
@@ -13,13 +14,37 @@
 
 #include "../decode_aarch64.h"
 
-#define MOVE_WIDE_SOURCE_MASK 0xff800000U
 #define MOVE_WIDE_SVC 0xd4000001U
+
+struct orlix_tcti_move_wide_manifest_leaf {
+	u32 source_ordinal;
+	const char *source_name;
+	const char *mnemonic;
+	const char *operation_id;
+	u32 source_mask;
+	u32 source_pattern;
+	const char *condition;
+	u32 source_offset;
+	u32 source_length;
+};
+
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
+#define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, name, mnemonic, operation, \
+					   mask, pattern, condition, offset, length) \
+	{ ordinal, name, mnemonic, operation, mask, pattern, condition, offset, length },
+static const struct orlix_tcti_move_wide_manifest_leaf
+orlix_tcti_move_wide_manifest[] = {
+#include "../isa/source_manifest.def"
+};
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
+#undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
 
 struct orlix_tcti_move_wide_leaf {
 	u16 source_ordinal;
 	const char *source_name;
+	const char *mnemonic;
 	const char *operation_id;
+	u32 source_mask;
 	u32 source_pattern;
 	enum orlix_tcti_move_wide_op operation;
 	bool is_64bit;
@@ -30,17 +55,17 @@ struct orlix_tcti_move_wide_leaf {
  * MOV is an assembler alias of MOVZ or ORR, and is not another direct leaf.
  */
 static const struct orlix_tcti_move_wide_leaf orlix_tcti_move_wide_leaves[] = {
-	{ 2199, "MOVN_32_movewide", "MOVN", 0x12800000U,
+	{ 2199, "MOVN_32_movewide", "MOVN", "MOVN", 0xffc00000U, 0x12800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVN, false },
-	{ 2200, "MOVZ_32_movewide", "MOVZ", 0x52800000U,
+	{ 2200, "MOVZ_32_movewide", "MOVZ", "MOVZ", 0xffc00000U, 0x52800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVZ, false },
-	{ 2201, "MOVK_32_movewide", "MOVK", 0x72800000U,
+	{ 2201, "MOVK_32_movewide", "MOVK", "MOVK", 0xffc00000U, 0x72800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVK, false },
-	{ 2202, "MOVN_64_movewide", "MOVN", 0x92800000U,
+	{ 2202, "MOVN_64_movewide", "MOVN", "MOVN", 0xff800000U, 0x92800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVN, true },
-	{ 2203, "MOVZ_64_movewide", "MOVZ", 0xd2800000U,
+	{ 2203, "MOVZ_64_movewide", "MOVZ", "MOVZ", 0xff800000U, 0xd2800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVZ, true },
-	{ 2204, "MOVK_64_movewide", "MOVK", 0xf2800000U,
+	{ 2204, "MOVK_64_movewide", "MOVK", "MOVK", 0xff800000U, 0xf2800000U,
 	  ORLIX_TCTI_MOVE_WIDE_MOVK, true },
 };
 
@@ -60,7 +85,7 @@ orlix_tcti_move_wide_source_leaf(u32 instruction)
 		const struct orlix_tcti_move_wide_leaf *leaf =
 			&orlix_tcti_move_wide_leaves[index];
 
-		if ((instruction & MOVE_WIDE_SOURCE_MASK) == leaf->source_pattern)
+		if ((instruction & leaf->source_mask) == leaf->source_pattern)
 			return leaf;
 	}
 	return NULL;
@@ -192,15 +217,27 @@ static void orlix_tcti_move_wide_source_bindings(struct kunit *test)
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_move_wide_leaves); index++) {
 		const struct orlix_tcti_move_wide_leaf *leaf =
 			&orlix_tcti_move_wide_leaves[index];
+		const struct orlix_tcti_move_wide_manifest_leaf *manifest =
+			&orlix_tcti_move_wide_manifest[leaf->source_ordinal];
 		u8 hw = leaf->is_64bit ? 3 : 1;
 		u32 instruction = orlix_tcti_move_wide_instruction(leaf, hw, 0xa55a, 29);
 		size_t previous;
 
 		KUNIT_EXPECT_EQ(test, 2199U + index, leaf->source_ordinal);
 		KUNIT_EXPECT_TRUE(test, leaf->source_name[0]);
+		KUNIT_EXPECT_TRUE(test, leaf->mnemonic[0]);
 		KUNIT_EXPECT_TRUE(test, leaf->operation_id[0]);
 		KUNIT_EXPECT_EQ(test, leaf->source_pattern,
-				leaf->source_pattern & MOVE_WIDE_SOURCE_MASK);
+				leaf->source_pattern & leaf->source_mask);
+		KUNIT_EXPECT_EQ(test, leaf->source_ordinal, manifest->source_ordinal);
+		KUNIT_EXPECT_STREQ(test, leaf->source_name, manifest->source_name);
+		KUNIT_EXPECT_STREQ(test, leaf->mnemonic, manifest->mnemonic);
+		KUNIT_EXPECT_STREQ(test, leaf->operation_id, manifest->operation_id);
+		KUNIT_EXPECT_EQ(test, leaf->source_mask, manifest->source_mask);
+		KUNIT_EXPECT_EQ(test, leaf->source_pattern, manifest->source_pattern);
+		KUNIT_EXPECT_TRUE(test, manifest->condition[0]);
+		KUNIT_EXPECT_NE(test, 0U, manifest->source_offset);
+		KUNIT_EXPECT_NE(test, 0U, manifest->source_length);
 		KUNIT_EXPECT_PTR_EQ(test, leaf,
 				    orlix_tcti_move_wide_source_leaf(instruction));
 		orlix_tcti_move_wide_expect_decode(test, leaf, instruction, hw, 0xa55a,
@@ -320,7 +357,7 @@ static void orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved(struct kunit 
 			const struct orlix_tcti_move_wide_leaf *neighbour;
 			struct orlix_tcti_decoded_instruction decoded;
 
-			if (!(MOVE_WIDE_SOURCE_MASK & BIT(bit)))
+			if (!(leaf->source_mask & BIT(bit)))
 				continue;
 			instruction = orlix_tcti_move_wide_instruction(leaf, 0, 1, 3) ^
 				BIT(bit);
@@ -364,12 +401,64 @@ static void orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved(struct kunit 
 	}
 }
 
+static void orlix_tcti_move_wide_reserved_production_exits(struct kunit *test)
+{
+	u32 instructions[14];
+	size_t count = 0;
+	size_t index;
+	u8 hw;
+
+	/* opc == 1 is reserved for both widths and all halfword selections. */
+	for (index = 0; index < 2; index++) {
+		u32 base = index ? 0x92800000U : 0x12800000U;
+
+		for (hw = 0; hw < 4; hw++)
+			instructions[count++] = base | BIT(29) | ((u32)hw << 21);
+	}
+
+	/* 32-bit forms reserve halfword selections 2 and 3. */
+	for (index = 0; index < 3; index++)
+		for (hw = 2; hw < 4; hw++)
+			instructions[count++] = orlix_tcti_move_wide_instruction(
+				&orlix_tcti_move_wide_leaves[index], hw, 0xa55a, 7);
+
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(instructions), count);
+	for (index = 0; index < count; index++) {
+		unsigned long mapped =
+			orlix_tcti_move_wide_map_program(test, instructions[index]);
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+		unsigned int reg;
+
+		KUNIT_ASSERT_NE(test, 0UL, mapped);
+		for (reg = 0; reg < 31; reg++)
+			regs.regs[reg] = 0x6a09e667f3bcc909ULL ^
+				((u64)instructions[index] << (reg & 15)) ^ reg;
+		regs.sp = 0x00000001fffffff0ULL;
+		regs.pc = mapped;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT | PSR_V_BIT;
+		regs.syscallno = NO_SYSCALL;
+		before = regs;
+
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+		KUNIT_EXPECT_EQ(test, mapped, result.pc);
+		KUNIT_EXPECT_EQ(test, instructions[index], result.instruction);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+}
+
 static struct kunit_case orlix_tcti_move_wide_source_bound_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_move_wide_source_bindings),
 	KUNIT_CASE(orlix_tcti_move_wide_complete_legal_decode_matrix),
 	KUNIT_CASE(orlix_tcti_move_wide_all_immediates_decode),
 	KUNIT_CASE(orlix_tcti_move_wide_production_path_semantics),
 	KUNIT_CASE(orlix_tcti_move_wide_fixed_bit_neighbours_and_reserved),
+	KUNIT_CASE(orlix_tcti_move_wide_reserved_production_exits),
 	{}
 };
 
