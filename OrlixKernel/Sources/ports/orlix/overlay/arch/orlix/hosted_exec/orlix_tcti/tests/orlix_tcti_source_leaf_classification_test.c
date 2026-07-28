@@ -13,6 +13,7 @@
 #include <target_inventory.h>
 
 #include "../decode_aarch64.h"
+#include "orlix_tcti_native_observation.h"
 #include "orlix_tcti_test_suites.h"
 #include "orlix_tcti_native_observation.h"
 #include "target_native_proof_contract_private.h"
@@ -417,6 +418,81 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 	}
 }
 
+static void orlix_tcti_issue_130_non_el0_typed_native_production_records(
+	struct kunit *test)
+{
+	static const u32 ordinals[] = { 2299U, 2300U, 2301U, 2302U, 2303U };
+	static const enum orlix_tcti_native_obligation obligations[] = {
+		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
+		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
+	};
+	size_t ordinal_index;
+
+	for (ordinal_index = 0; ordinal_index < ARRAY_SIZE(ordinals);
+	     ordinal_index++) {
+		struct orlix_tcti_source_leaf_rejection entry;
+		const struct orlix_tcti_source_leaf_rejection *leaf = NULL;
+		size_t rejection_index;
+		size_t obligation_index;
+
+		for (rejection_index = 0;
+		     rejection_index < orlix_tcti_source_leaf_rejection_count();
+		     rejection_index++) {
+			const struct orlix_tcti_source_leaf_rejection *candidate =
+				orlix_tcti_source_leaf_rejection_at(rejection_index,
+								      &entry);
+
+			if (candidate && candidate->ordinal == ordinals[ordinal_index]) {
+				leaf = candidate;
+				break;
+			}
+		}
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+
+		for (obligation_index = 0;
+		     obligation_index < ARRAY_SIZE(obligations);
+		     obligation_index++) {
+			struct orlix_tcti_native_observation_spec spec = {
+				.source_ordinal = leaf->ordinal,
+				.obligation = obligations[obligation_index],
+			};
+			struct orlix_tcti_native_observation *observation;
+			struct orlix_tcti_target_native_result_record *record = NULL;
+			struct pt_regs regs = { };
+			struct pt_regs expected_regs;
+			unsigned long mapped = source_leaf_map(test, leaf->pattern);
+
+			regs.pc = mapped;
+			regs.sp = STACK_TOP - 16;
+			regs.pstate = PSR_MODE_EL0t;
+			regs.syscallno = NO_SYSCALL;
+			regs.regs[0] = 0x123456789abcdef0ULL;
+			expected_regs = regs;
+			spec.result = (struct orlix_tcti_result) {
+				.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				.status = -EOPNOTSUPP,
+				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
+				.pc = mapped,
+				.instruction = leaf->pattern,
+			};
+			orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
+			observation = orlix_tcti_native_observation_create(&spec);
+			KUNIT_ASSERT_NOT_NULL(test, observation);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_execute(
+					observation, current, &regs, current->mm));
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_compare(observation));
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_native_observation_export(observation, &record));
+			KUNIT_EXPECT_NOT_NULL(test, record);
+			orlix_tcti_target_native_result_record_destroy(record);
+			orlix_tcti_native_observation_destroy(observation);
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+		}
+	}
+}
+
 static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_leaf_catalog_tracks_authoritative_fanout),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_binds_source_metadata),
@@ -428,6 +504,7 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_source_leaf_tenter_remains_unclassified),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_match_pinned_tuples),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_are_structured_el0_exits),
+	KUNIT_CASE(orlix_tcti_issue_130_non_el0_typed_native_production_records),
 	{}
 };
 

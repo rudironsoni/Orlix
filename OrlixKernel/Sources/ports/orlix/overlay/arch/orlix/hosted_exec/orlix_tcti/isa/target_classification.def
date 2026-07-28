@@ -2307,7 +2307,7 @@ ORLIX_TCTI_A64_TARGET_CLASSIFICATION(RETAB_64E_branch_reg, UNCLASSIFIED, ORLIX_T
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(ERET_64E_branch_reg, NON_EL0, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "pinned-source:privileged-el0-rejection", "kunit:source-leaf-eret-non-el0")
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(ERETAA_64E_branch_reg, NON_EL0, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "pinned-source:privileged-el0-rejection", "kunit:source-leaf-ereta-non-el0")
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(ERETAB_64E_branch_reg, NON_EL0, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "pinned-source:privileged-el0-rejection", "kunit:source-leaf-ereta-non-el0")
-ORLIX_TCTI_A64_TARGET_CLASSIFICATION(TEXIT_te_branch_reg, UNCLASSIFIED, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "", "")
+ORLIX_TCTI_A64_TARGET_CLASSIFICATION(TEXIT_te_branch_reg, NON_EL0, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "pinned-source:privileged-el0-rejection", "kunit:source-leaf-texit-non-el0")
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(DRPS_64E_branch_reg, NON_EL0, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "pinned-source:privileged-el0-rejection", "kunit:source-leaf-drps-non-el0")
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(BRAA_64P_branch_reg, UNCLASSIFIED, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "", "")
 ORLIX_TCTI_A64_TARGET_CLASSIFICATION(BRAB_64P_branch_reg, UNCLASSIFIED, ORLIX_TCTI_A64_TARGET_RELATION_NONE, "", "", "")

@@ -890,22 +890,32 @@ static int branch_control_registry_binds_exact_source_rows(void)
 	for (index = 0; index < count; index++) {
 		const struct orlix_tcti_target_proof_registry_entry *entry =
 			&entries[index];
+		uint32_t expected_obligations;
 		size_t binding;
 
 		if (strncmp(entry->id, "kunit:branch-control-", 21))
 			continue;
 		EXPECT(entry->classification_mask ==
 		       ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
-		EXPECT(entry->obligations ==
-		       (ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		expected_obligations =
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
-			(!strcmp(entry->id, "kunit:branch-control-svc") ||
-			 !strcmp(entry->id, "kunit:branch-control-brk") ||
-			 !strcmp(entry->id, "kunit:branch-control-hlt") ?
-			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE : 0U)));
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC;
+		if (!strcmp(entry->operation_id, "BR") ||
+		    !strcmp(entry->operation_id, "BLR") ||
+		    !strcmp(entry->operation_id, "RET") ||
+		    !strcmp(entry->operation_id, "B_uncond") ||
+		    !strcmp(entry->operation_id, "BL"))
+			expected_obligations |=
+				ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS;
+		if (!strcmp(entry->id, "kunit:branch-control-svc") ||
+		    !strcmp(entry->id, "kunit:branch-control-brk") ||
+		    !strcmp(entry->id, "kunit:branch-control-hlt"))
+			expected_obligations |=
+				ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
+		EXPECT(entry->obligations == expected_obligations);
 		EXPECT(entry->unproved_obligations == entry->obligations);
 		EXPECT(entry->linux_interface ==
 		       (!strcmp(entry->id, "kunit:branch-control-svc") ||
