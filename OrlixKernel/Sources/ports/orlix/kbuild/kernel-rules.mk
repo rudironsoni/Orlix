@@ -1501,10 +1501,11 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 	linux_page_size="$(ORLIX_KERNEL_LINUX_PAGE_SIZE)"; \
 	exception_dir="$$patch_dir/exceptions"; \
 	port_filelist="$(ORLIX_KERNEL_BUILD_ROOT)/linux-$(LINUX_VERSION)-port-source-files.$$$$.txt"; \
+	port_archive="$(ORLIX_KERNEL_BUILD_ROOT)/linux-$(LINUX_VERSION)-port-archive.$$$$.tar"; \
 	port_stamp="$$port_dir/.orlix-port-profile"; \
 	port_tmp_dir="$$port_dir.tmp.$$$$"; \
 	forbidden_re='^(fs|kernel|mm|ipc|net|include/linux|include/uapi)(/|$$)'; \
-	trap 'rm -rf "$$port_tmp_dir"; rm -f "$$port_filelist"' EXIT; \
+	trap 'rm -rf "$$port_tmp_dir"; rm -f "$$port_filelist" "$$port_archive"' EXIT; \
 	if [ "$$port_dir" != "$$expected_port_dir" ]; then \
 		echo "Orlix kernel port tree must be $$expected_port_dir: $$port_dir" >&2; \
 		exit 1; \
@@ -1552,7 +1553,9 @@ __prepare-port: __validate-profile __bootstrap-linux-upstream
 		printf 'checking out Orlix Linux port input: %s\n' "$$archive_path"; \
 		git -C "$$upstream_dir" ls-tree -r --name-only "$(LINUX_TAG)" -- "$$archive_path" > "$$port_filelist"; \
 		[ -s "$$port_filelist" ] || { echo "missing Orlix Linux port input: $$archive_path" >&2; exit 1; }; \
-		git -C "$$upstream_dir" archive "$(LINUX_TAG)" "$$archive_path" | tar -xf - -C "$$port_tmp_dir"; \
+		git -C "$$upstream_dir" archive --output="$$port_archive" "$(LINUX_TAG)" "$$archive_path"; \
+		tar -xf "$$port_archive" -C "$$port_tmp_dir"; \
+		rm -f "$$port_archive"; \
 	done; \
 	cp -R "$$overlay_dir/." "$$port_tmp_dir"; \
 	uapi_arch="$(LINUX_UAPI_ARCH)"; \
