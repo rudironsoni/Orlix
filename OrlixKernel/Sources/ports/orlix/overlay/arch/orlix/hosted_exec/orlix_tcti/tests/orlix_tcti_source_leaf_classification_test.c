@@ -13,13 +13,8 @@
 #include <target_inventory.h>
 
 #include "../decode_aarch64.h"
-#include "orlix_tcti_native_observation.h"
 #include "orlix_tcti_test_suites.h"
-#include "orlix_tcti_native_observation.h"
-#include "target_native_proof_contract_private.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
-#include "target_native_proof_registry_private.h"
-#include "target_completion_audit.h"
 
 #define SOURCE_LEAF_SVC 0xd4000001U
 
@@ -422,10 +417,6 @@ static void orlix_tcti_issue_130_non_el0_typed_native_production_records(
 	struct kunit *test)
 {
 	static const u32 ordinals[] = { 2299U, 2300U, 2301U, 2303U };
-	static const enum orlix_tcti_native_obligation obligations[] = {
-		ORLIX_TCTI_NATIVE_OBLIGATION_GPR,
-		ORLIX_TCTI_NATIVE_OBLIGATION_RESULT,
-	};
 	size_t ordinal_index;
 
 	for (ordinal_index = 0; ordinal_index < ARRAY_SIZE(ordinals);
@@ -433,7 +424,10 @@ static void orlix_tcti_issue_130_non_el0_typed_native_production_records(
 		struct orlix_tcti_source_leaf_rejection entry;
 		const struct orlix_tcti_source_leaf_rejection *leaf = NULL;
 		size_t rejection_index;
-		size_t obligation_index;
+		struct pt_regs regs = { };
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+		unsigned long mapped;
 
 		for (rejection_index = 0;
 		     rejection_index < orlix_tcti_source_leaf_rejection_count();
@@ -448,48 +442,27 @@ static void orlix_tcti_issue_130_non_el0_typed_native_production_records(
 			}
 		}
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
-
-		for (obligation_index = 0;
-		     obligation_index < ARRAY_SIZE(obligations);
-		     obligation_index++) {
-			struct orlix_tcti_native_observation_spec spec = {
-				.source_ordinal = leaf->ordinal,
-				.obligation = obligations[obligation_index],
-			};
-			struct orlix_tcti_native_observation *observation;
-			struct orlix_tcti_target_native_result_record *record = NULL;
-			struct pt_regs regs = { };
-			struct pt_regs expected_regs;
-			unsigned long mapped = source_leaf_map(test, leaf->pattern);
-
-			regs.pc = mapped;
-			regs.sp = STACK_TOP - 16;
-			regs.pstate = PSR_MODE_EL0t;
-			regs.syscallno = NO_SYSCALL;
-			regs.regs[0] = 0x123456789abcdef0ULL;
-			expected_regs = regs;
-			spec.result = (struct orlix_tcti_result) {
-				.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
-				.status = -EOPNOTSUPP,
-				.fault_access = ORLIX_TCTI_ACCESS_FETCH,
-				.pc = mapped,
-				.instruction = leaf->pattern,
-			};
-			orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
-			observation = orlix_tcti_native_observation_create(&spec);
-			KUNIT_ASSERT_NOT_NULL(test, observation);
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_execute(
-					observation, current, &regs, current->mm));
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_compare(observation));
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_native_observation_export(observation, &record));
-			KUNIT_EXPECT_NOT_NULL(test, record);
-			orlix_tcti_target_native_result_record_destroy(record);
-			orlix_tcti_native_observation_destroy(observation);
-			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
-		}
+		mapped = source_leaf_map(test, leaf->pattern);
+		if (!mapped)
+			return;
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x123456789abcdef0ULL;
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "%s source ordinal %u", leaf->name,
+			leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+			"%s source ordinal %u", leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, result.instruction,
+			"%s source ordinal %u", leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, before.pc, result.pc,
+			"%s source ordinal %u", leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 }
 

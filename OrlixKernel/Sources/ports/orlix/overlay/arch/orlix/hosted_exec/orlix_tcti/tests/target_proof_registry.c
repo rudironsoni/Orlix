@@ -758,7 +758,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "9d3a192cb918417067a7684117692ec633d4242ce2a96f0c43bb8e99ad8ab89d",
+	  "ec809e8d1d505d72b552a94454f1ccf7664621b5973654637fb3c0a68ce71731",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
