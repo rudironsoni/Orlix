@@ -393,37 +393,56 @@ struct system_accessor_binding {
 	orlix_tcti_proof_u32 accessor_index;
 	orlix_tcti_proof_u32 encoding_index;
 	const char *name;
+	const char *variant_name;
 	const char *generic_leaf;
 	orlix_tcti_proof_u32 direction;
 	orlix_tcti_proof_u32 disposition;
 	orlix_tcti_proof_u32 selector_count;
 	orlix_tcti_proof_u32 condition_expression;
+	orlix_tcti_proof_u32 access_expression;
+	orlix_tcti_proof_u32 concrete_selector;
+	enum orlix_tcti_target_system_accessor_applicability applicability;
+	enum orlix_tcti_target_system_accessor_semantics semantics;
+	enum orlix_tcti_target_system_accessor_implementation implementation;
+	enum orlix_tcti_target_system_accessor_proof_state proof_state;
 	orlix_tcti_proof_u64 selector_identity;
 	orlix_tcti_proof_u64 condition_identity;
+	orlix_tcti_proof_u64 access_identity;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
 	orlix_tcti_proof_u64 accessor_source_offset;
 	orlix_tcti_proof_u64 accessor_source_length;
 	orlix_tcti_proof_u64 encoding_source_offset;
 	orlix_tcti_proof_u64 encoding_source_length;
 	orlix_tcti_proof_u64 condition_source_offset;
 	orlix_tcti_proof_u64 condition_source_length;
+	orlix_tcti_proof_u64 access_source_offset;
+	orlix_tcti_proof_u64 access_source_length;
 };
 
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
-#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, generic, direction, \
-				 disposition, selectors, condition, selector_identity, \
-				 condition_identity, accessor_offset, accessor_length, \
-				 encoding_offset, encoding_length, condition_offset, \
-				 condition_length) \
-	{ accessor, encoding, name, generic, direction, disposition, selectors, \
-	  condition, selector_identity, condition_identity, accessor_offset, \
-	  accessor_length, encoding_offset, encoding_length, condition_offset, \
-	  condition_length },
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
+		direction, disposition, selectors, condition, access, concrete, \
+		applicability, semantics, implementation, proof, selector_identity, \
+		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		accessor_offset, accessor_length, encoding_offset, encoding_length, \
+		condition_offset, condition_length, access_offset, access_length) \
+	{ accessor, encoding, name, variant, generic, direction, disposition, selectors, \
+	  condition, access, concrete, applicability, semantics, implementation, proof, \
+	  selector_identity, condition_identity, access_identity, decoder, executor, \
+	  suite, test_case, accessor_offset, accessor_length, encoding_offset, \
+	  encoding_length, condition_offset, condition_length, access_offset, \
+	  access_length },
 static const struct system_accessor_binding system_accessor_bindings[] = {
 #include "../isa/target_system_accessor_reconciliation.def"
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -4616,17 +4635,33 @@ linux_variant_row(size_t ordinal, const struct system_accessor_binding *variant)
 			.secondary_index = variant->accessor_index,
 			.tertiary_index = variant->encoding_index,
 			.name = variant->name,
+			.variant_name = variant->variant_name,
 			.operation_id = variant->generic_leaf,
 			.encoding_mask = variant->direction,
 			.encoding_pattern = variant->disposition,
+			.selector_count = variant->selector_count,
+			.condition_expression = variant->condition_expression,
+			.access_expression = variant->access_expression,
+			.concrete_selector = variant->concrete_selector,
+			.applicability = variant->applicability,
+			.semantics = variant->semantics,
+			.implementation = variant->implementation,
+			.proof_state = variant->proof_state,
 			.identity = variant->selector_identity,
 			.condition_identity = variant->condition_identity,
+			.access_identity = variant->access_identity,
+			.decoder_owner = variant->decoder_owner,
+			.execution_owner = variant->execution_owner,
+			.kunit_suite = variant->kunit_suite,
+			.kunit_case = variant->kunit_case,
 			.source_offset = variant->accessor_source_offset,
 			.source_length = variant->accessor_source_length,
 			.secondary_offset = variant->encoding_source_offset,
 			.secondary_length = variant->encoding_source_length,
 			.condition_offset = variant->condition_source_offset,
 			.condition_length = variant->condition_source_length,
+			.access_offset = variant->access_source_offset,
+			.access_length = variant->access_source_length,
 		},
 		.disposition = policy.disposition,
 		.not_applicable_reason = policy.reason,
@@ -4652,17 +4687,43 @@ static bool linux_source_identity_equal(
 		!strcmp(left->operation_id, right->operation_id) &&
 		left->encoding_mask == right->encoding_mask &&
 		left->encoding_pattern == right->encoding_pattern &&
+		left->selector_count == right->selector_count &&
+		left->condition_expression == right->condition_expression &&
+		left->access_expression == right->access_expression &&
+		left->concrete_selector == right->concrete_selector &&
+		left->applicability == right->applicability &&
+		left->semantics == right->semantics &&
+		left->implementation == right->implementation &&
+		left->proof_state == right->proof_state &&
 		((!left->condition_tcnd_hex && !right->condition_tcnd_hex) ||
 		 (left->condition_tcnd_hex && right->condition_tcnd_hex &&
 		  !strcmp(left->condition_tcnd_hex, right->condition_tcnd_hex))) &&
 		left->identity == right->identity &&
 		left->condition_identity == right->condition_identity &&
+		left->access_identity == right->access_identity &&
+		((!left->variant_name && !right->variant_name) ||
+		 (left->variant_name && right->variant_name &&
+		  !strcmp(left->variant_name, right->variant_name))) &&
+		((!left->decoder_owner && !right->decoder_owner) ||
+		 (left->decoder_owner && right->decoder_owner &&
+		  !strcmp(left->decoder_owner, right->decoder_owner))) &&
+		((!left->execution_owner && !right->execution_owner) ||
+		 (left->execution_owner && right->execution_owner &&
+		  !strcmp(left->execution_owner, right->execution_owner))) &&
+		((!left->kunit_suite && !right->kunit_suite) ||
+		 (left->kunit_suite && right->kunit_suite &&
+		  !strcmp(left->kunit_suite, right->kunit_suite))) &&
+		((!left->kunit_case && !right->kunit_case) ||
+		 (left->kunit_case && right->kunit_case &&
+		  !strcmp(left->kunit_case, right->kunit_case))) &&
 		left->source_offset == right->source_offset &&
 		left->source_length == right->source_length &&
 		left->secondary_offset == right->secondary_offset &&
 		left->secondary_length == right->secondary_length &&
 		left->condition_offset == right->condition_offset &&
-		left->condition_length == right->condition_length;
+		left->condition_length == right->condition_length &&
+		left->access_offset == right->access_offset &&
+		left->access_length == right->access_length;
 }
 
 int orlix_tcti_target_linux_source_policy_validate_for_test(

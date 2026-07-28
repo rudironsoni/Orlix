@@ -1190,6 +1190,19 @@ static int linux_proof_matrix_is_lossless_and_fail_closed(void)
 							     &result) == -1);
 	EXPECT(result.stale_rows == 1U);
 
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	mutated[ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS].source.execution_owner =
+		"stale-owner";
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.stale_rows == 1U);
+
+	memcpy(mutated, canonical, count * sizeof(*mutated));
+	mutated[ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_ROWS].source.proof_state = 0U;
+	EXPECT(orlix_tcti_target_linux_proof_matrix_validate(mutated, count,
+							     &result) == -1);
+	EXPECT(result.stale_rows == 1U);
+
 	for (index = 0; index < count; index++) {
 		if (!applicable && canonical[index].disposition ==
 		    ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED)

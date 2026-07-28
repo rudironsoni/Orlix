@@ -42,6 +42,8 @@ int main(void)
 	       "system_accessors=%zu mapped_system_accessors=%zu "
 	       "nonmapped_system_accessors=%zu "
 	       "invalid_system_accessors=%zu "
+	       "implemented_system_accessors=%zu rejected_system_accessors=%zu "
+	       "unobserved_system_accessor_proofs=%zu "
 	       "feature_field_domains=%zu mapped_feature_field_domains=%zu "
 	       "unresolved_feature_field_domains=%zu "
 	       "ambiguous_feature_field_domains=%zu "
@@ -101,6 +103,9 @@ int main(void)
 	       result.mapped_system_accessor_rows,
 	       result.nonmapped_system_accessor_rows,
 	       result.invalid_system_accessor_rows,
+	       result.implemented_system_accessor_rows,
+	       result.rejected_system_accessor_rows,
+	       result.unobserved_system_accessor_proof_rows,
 	       result.feature_field_domain_rows,
 	       result.mapped_feature_field_domain_rows,
 	       result.unresolved_feature_field_domain_rows,

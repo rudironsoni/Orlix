@@ -19,8 +19,8 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 		{ .type = "Accessors.SystemAccessor", .name = "A64.MRS",
 		  .first_system_encoding = 0U, .system_encoding_count = 1U,
 		  .condition_expression = 7U, .source_offset = 10U,
-		  .source_length = 11U, .condition_offset = 9U,
-		  .condition_length = 9U },
+		  .source_length = 8U, .condition_offset = 9U,
+		  .condition_length = 9U, .access_expression = UINT32_MAX },
 		{ .type = "Accessors.SystemAccessor", .name = "A64.Unknown",
 		  .first_system_encoding = 1U, .system_encoding_count = 1U },
 		{ .type = "Accessors.SystemAccessor", .name = "A64.MSRregister",
@@ -29,13 +29,16 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 		  .first_system_encoding = UINT32_MAX, .system_encoding_count = 0U },
 	};
 	static const struct orlix_tcti_register_system_encoding encodings[] = {
-		{ .accessor_index = 0U, .source_offset = 20U, .source_length = 21U },
+		{ .accessor_index = 0U, .asmvalue = "TPIDR_EL0",
+		  .source_offset = 0U, .source_length = 8U },
 		{ .accessor_index = 1U },
 		{ .accessor_index = 2U },
 		{ .accessor_index = 2U },
 	};
 	static const struct orlix_tcti_register_system_selector selectors[] = {
-		{ .encoding_index = 0U, .source_offset = 0U, .source_length = 8U },
+		{ .encoding_index = 0U, .name = "op0", .value = "'11'",
+		  .value_kind = ORLIX_TCTI_REGISTER_SELECTOR_VALUE_LITERAL,
+		  .source_offset = 0U, .source_length = 8U },
 		{ .encoding_index = 1U },
 		{ .encoding_index = 2U }, { .encoding_index = 3U },
 	};
@@ -53,7 +56,7 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 	};
 	struct orlix_tcti_system_accessor_reconciliation_result result = { 0 };
 	FILE *artifact;
-	char artifact_text[1024] = { 0 };
+	char artifact_text[4096] = { 0 };
 
 	CHECK(orlix_tcti_system_accessor_reconcile(&model, &result) ==
 	      ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK);
@@ -76,7 +79,11 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 	      ORLIX_TCTI_SYSTEM_ACCESSOR_LEAF_MRS_RS_SYSTEMMOVE);
 	CHECK(result.entries[0].direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ);
 	CHECK(result.entries[0].accessor_source_offset == 10U);
-	CHECK(result.entries[0].encoding_source_offset == 20U);
+	CHECK(result.entries[0].encoding_source_offset == 0U);
+	CHECK(result.entries[0].semantics ==
+	      ORLIX_TCTI_SYSTEM_ACCESSOR_GENERIC_LEAF_SEMANTICS);
+	CHECK(result.entries[0].implementation ==
+	      ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED);
 	CHECK(result.entries[1].disposition == ORLIX_TCTI_SYSTEM_ACCESSOR_UNSUPPORTED);
 	CHECK(result.entries[2].disposition == ORLIX_TCTI_SYSTEM_ACCESSOR_AMBIGUOUS);
 	CHECK(result.entries[3].disposition == ORLIX_TCTI_SYSTEM_ACCESSOR_INVALID);
@@ -95,7 +102,7 @@ static int synthetic_mapping_and_fail_closed_dispositions(void)
 	      "0U, 1U)") != NULL);
 	CHECK(strstr(artifact_text,
 	      "ORLIX_TCTI_A64_SYSTEM_ACCESSOR(0U, 0U, \"A64.MRS\", "
-	      "\"MRS_RS_systemmove\", 1U, 0U, 1U, 7U, UINT64_C(") != NULL);
+	      "\"TPIDR_EL0\", \"MRS_RS_systemmove\", 1U, 0U, 1U, 7U, ") != NULL);
 	fclose(artifact);
 	return 0;
 }
@@ -170,6 +177,14 @@ static int pinned_aarch64_census(const char *path)
 	CHECK(result.census.ambiguous == 0U);
 	CHECK(result.census.contradictory == 0U);
 	CHECK(result.census.invalid == 0U);
+	CHECK(result.census.source_access_semantics == 2001U);
+	CHECK(result.census.generic_leaf_semantics == 13U);
+	CHECK(result.census.implemented == 13U);
+	CHECK(result.census.architectural_rejection == 2U);
+	CHECK(result.census.unimplemented_rejection == 1999U);
+	CHECK(result.census.concrete_selectors == 1836U);
+	CHECK(result.census.symbolic_selectors == 178U);
+	CHECK(result.census.proof_not_observed == 2014U);
 	CHECK(orlix_tcti_system_accessor_reconciliation_validate(&result) ==
 	      ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK);
 	{
@@ -177,6 +192,8 @@ static int pinned_aarch64_census(const char *path)
 		size_t mrrs = 0;
 		size_t msrr = 0;
 		size_t sysp = 0;
+		size_t rndr = 0;
+		size_t rndrrs = 0;
 
 		for (index = 0; index < result.entry_count; index++) {
 			const struct orlix_tcti_system_accessor_reconciliation_entry *entry =
@@ -201,10 +218,23 @@ static int pinned_aarch64_census(const char *path)
 				      ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_EXECUTE);
 				sysp++;
 			}
+			if (!strcmp(entry->variant_name, "RNDR")) {
+				CHECK(entry->generic_leaf ==
+				      ORLIX_TCTI_SYSTEM_ACCESSOR_LEAF_MRS_RS_SYSTEMMOVE);
+				CHECK(entry->concrete_selector == 0x5920U);
+				rndr++;
+			} else if (!strcmp(entry->variant_name, "RNDRRS")) {
+				CHECK(entry->generic_leaf ==
+				      ORLIX_TCTI_SYSTEM_ACCESSOR_LEAF_MRS_RS_SYSTEMMOVE);
+				CHECK(entry->concrete_selector == 0x5921U);
+				rndrrs++;
+			}
 		}
 		CHECK(mrrs == 13U);
 		CHECK(msrr == 13U);
 		CHECK(sysp == 1U);
+		CHECK(rndr == 1U);
+		CHECK(rndrrs == 1U);
 	}
 	orlix_tcti_system_accessor_reconciliation_destroy(&result);
 	orlix_tcti_register_model_destroy(&model);

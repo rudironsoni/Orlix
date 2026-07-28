@@ -94,6 +94,15 @@ static int fixture_init(struct fixture *fixture)
 			.registers_sha256 = ORLIX_TCTI_A64_KBUILD_REGISTERS_SHA256,
 			.accessor_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
 			.mapped_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.semantic_count = ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.source_access_semantics_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.unimplemented_rejection_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.concrete_selector_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
+			.proof_not_observed_count =
+				ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT,
 		};
 	for (index = 0; index < ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT; index++) {
 		CHECK(snprintf(fixture->accessor_names[index],
@@ -104,6 +113,7 @@ static int fixture_init(struct fixture *fixture)
 				.accessor_index = (uint32_t)index,
 				.encoding_index = (uint32_t)index,
 				.name = fixture->accessor_names[index],
+				.variant_name = fixture->accessor_names[index],
 				.generic_leaf = fixture->source[index].name,
 				.direction =
 					ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_READ,
@@ -111,14 +121,28 @@ static int fixture_init(struct fixture *fixture)
 					ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_MAPPED,
 				.selector_count = 5U,
 				.condition_expression = (uint32_t)index,
+				.access_expression = (uint32_t)index,
+				.concrete_selector = (uint32_t)index,
+				.applicability = 1U,
+				.semantics = 1U,
+				.implementation = 3U,
+				.proof_state = 1U,
 				.selector_identity = UINT64_C(0x1000000000000000) + index,
 				.condition_identity = UINT64_C(0x2000000000000000) + index,
+				.access_identity = UINT64_C(0x3000000000000000) + index,
+				.decoder_owner = "orlix_tcti_decode_aarch64",
+				.execution_owner = "orlix_tcti_resume_user",
+				.kunit_suite = "orlix-tcti-source-leaf-classification",
+				.kunit_case =
+					"orlix_tcti_system_accessor_partition_binds_source_metadata",
 				.accessor_source_offset = (uint32_t)(index + 1U),
 				.accessor_source_length = 1U,
 				.encoding_source_offset = (uint32_t)(index + 2U),
 				.encoding_source_length = 1U,
 				.condition_source_offset = (uint32_t)(index + 3U),
 				.condition_source_length = 1U,
+				.access_source_offset = (uint32_t)(index + 4U),
+				.access_source_length = 1U,
 			};
 	}
 	fixture->accessor_metadata.reconciliation_identity =

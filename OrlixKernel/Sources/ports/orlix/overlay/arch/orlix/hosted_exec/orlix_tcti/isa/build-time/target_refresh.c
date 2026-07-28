@@ -877,7 +877,7 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	const struct artifact_bytes *system_accessors)
 {
 	size_t feature_counts[6], cohort_counts[4];
-	size_t register_counts[24], accessor_counts[8];
+	size_t register_counts[24], accessor_counts[8], accessor_semantic_counts[9];
 	size_t index;
 	size_t accessor_outcomes = 0;
 
@@ -970,6 +970,18 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	    parse_counts(system_accessors,
 			 "ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(",
 			 accessor_counts, ARRAY_SIZE(accessor_counts)) ||
+	    parse_counts(system_accessors,
+			 "ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(",
+			 accessor_semantic_counts,
+			 ARRAY_SIZE(accessor_semantic_counts)) ||
+	    accessor_semantic_counts[0] != accessor_counts[0] ||
+	    accessor_semantic_counts[1] + accessor_semantic_counts[2] !=
+		    accessor_counts[0] ||
+	    accessor_semantic_counts[3] + accessor_semantic_counts[4] +
+		    accessor_semantic_counts[5] != accessor_counts[0] ||
+	    accessor_semantic_counts[6] + accessor_semantic_counts[7] !=
+		    accessor_counts[0] ||
+	    accessor_semantic_counts[8] != accessor_counts[0] ||
 	    count_token(system_accessors,
 			"ORLIX_TCTI_A64_SYSTEM_ACCESSOR(") != accessor_counts[0] ||
 	    count_token(system_accessors,

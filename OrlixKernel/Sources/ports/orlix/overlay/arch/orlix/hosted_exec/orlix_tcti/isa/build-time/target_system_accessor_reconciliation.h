@@ -42,6 +42,25 @@ enum orlix_tcti_system_accessor_disposition {
 	ORLIX_TCTI_SYSTEM_ACCESSOR_INVALID,
 };
 
+enum orlix_tcti_system_accessor_applicability {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_EL0_BEHAVIOR_REQUIRED = 1,
+};
+
+enum orlix_tcti_system_accessor_semantics {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_SOURCE_ACCESS_SEMANTICS = 1,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_GENERIC_LEAF_SEMANTICS,
+};
+
+enum orlix_tcti_system_accessor_implementation {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED = 1,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_ARCHITECTURAL_REJECTION,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_UNIMPLEMENTED_REJECTION,
+};
+
+enum orlix_tcti_system_accessor_proof_state {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PROOF_NOT_OBSERVED = 1,
+};
+
 enum orlix_tcti_system_accessor_reconciliation_error {
 	ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK,
 	ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID_ARGUMENT,
@@ -58,20 +77,34 @@ struct orlix_tcti_system_accessor_reconciliation_entry {
 	uint32_t accessor_index;
 	uint32_t encoding_index;
 	uint32_t condition_expression;
+	uint32_t access_expression;
 	uint32_t selector_count;
+	uint32_t concrete_selector;
 	enum orlix_tcti_system_accessor_generic_leaf generic_leaf;
 	enum orlix_tcti_system_accessor_direction direction;
 	enum orlix_tcti_system_accessor_disposition disposition;
+	enum orlix_tcti_system_accessor_applicability applicability;
+	enum orlix_tcti_system_accessor_semantics semantics;
+	enum orlix_tcti_system_accessor_implementation implementation;
+	enum orlix_tcti_system_accessor_proof_state proof_state;
 	/* Exact source identities, not merely a count or parser-local index. */
 	uint64_t selector_identity;
 	uint64_t condition_identity;
+	uint64_t access_identity;
 	const char *accessor_name;
+	const char *variant_name;
+	const char *decoder_owner;
+	const char *execution_owner;
+	const char *kunit_suite;
+	const char *kunit_case;
 	size_t accessor_source_offset;
 	size_t accessor_source_length;
 	size_t encoding_source_offset;
 	size_t encoding_source_length;
 	size_t condition_source_offset;
 	size_t condition_source_length;
+	size_t access_source_offset;
+	size_t access_source_length;
 };
 
 struct orlix_tcti_system_accessor_reconciliation_census {
@@ -83,6 +116,14 @@ struct orlix_tcti_system_accessor_reconciliation_census {
 	size_t ambiguous;
 	size_t contradictory;
 	size_t invalid;
+	size_t source_access_semantics;
+	size_t generic_leaf_semantics;
+	size_t implemented;
+	size_t architectural_rejection;
+	size_t unimplemented_rejection;
+	size_t concrete_selectors;
+	size_t symbolic_selectors;
+	size_t proof_not_observed;
 };
 
 struct orlix_tcti_system_accessor_reconciliation_result {

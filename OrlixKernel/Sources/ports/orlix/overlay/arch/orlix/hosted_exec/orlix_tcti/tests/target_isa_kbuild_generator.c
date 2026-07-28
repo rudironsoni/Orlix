@@ -117,13 +117,25 @@ uint64_t orlix_tcti_a64_kbuild_system_accessor_identity(
 		identity = accessor_identity_u64(identity, row->accessor_index);
 		identity = accessor_identity_u64(identity, row->encoding_index);
 		identity = accessor_identity_text(identity, row->name);
+		identity = accessor_identity_text(identity, row->variant_name);
 		identity = accessor_identity_text(identity, row->generic_leaf);
 		identity = accessor_identity_u64(identity, row->direction);
 		identity = accessor_identity_u64(identity, row->disposition);
 		identity = accessor_identity_u64(identity, row->selector_count);
 		identity = accessor_identity_u64(identity, row->condition_expression);
+		identity = accessor_identity_u64(identity, row->access_expression);
+		identity = accessor_identity_u64(identity, row->concrete_selector);
 		identity = accessor_identity_u64(identity, row->selector_identity);
 		identity = accessor_identity_u64(identity, row->condition_identity);
+		identity = accessor_identity_u64(identity, row->access_identity);
+		identity = accessor_identity_u64(identity, row->applicability);
+		identity = accessor_identity_u64(identity, row->semantics);
+		identity = accessor_identity_u64(identity, row->implementation);
+		identity = accessor_identity_u64(identity, row->proof_state);
+		identity = accessor_identity_text(identity, row->decoder_owner);
+		identity = accessor_identity_text(identity, row->execution_owner);
+		identity = accessor_identity_text(identity, row->kunit_suite);
+		identity = accessor_identity_text(identity, row->kunit_case);
 		identity = accessor_identity_u64(identity,
 			row->accessor_source_offset);
 		identity = accessor_identity_u64(identity,
@@ -136,6 +148,8 @@ uint64_t orlix_tcti_a64_kbuild_system_accessor_identity(
 			row->condition_source_offset);
 		identity = accessor_identity_u64(identity,
 			row->condition_source_length);
+		identity = accessor_identity_u64(identity, row->access_source_offset);
+		identity = accessor_identity_u64(identity, row->access_source_length);
 	}
 	return identity;
 }
@@ -293,6 +307,15 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 	if (accessor_metadata->accessor_count !=
 			ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
 	    accessor_count != ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_COUNT ||
+	    accessor_metadata->semantic_count != accessor_count ||
+	    accessor_metadata->source_access_semantics_count +
+		    accessor_metadata->generic_leaf_semantics_count != accessor_count ||
+	    accessor_metadata->implemented_count +
+		    accessor_metadata->architectural_rejection_count +
+		    accessor_metadata->unimplemented_rejection_count != accessor_count ||
+	    accessor_metadata->concrete_selector_count +
+		    accessor_metadata->symbolic_selector_count != accessor_count ||
+	    accessor_metadata->proof_not_observed_count != accessor_count ||
 	    accessor_metadata->mapped_count +
 		    accessor_metadata->reserved_count +
 		    accessor_metadata->privileged_count +
@@ -316,6 +339,7 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 		int generic_leaf_found = 0;
 
 		if (!row->name || strncmp(row->name, "A64.", 4U) ||
+		    !row->variant_name || !row->variant_name[0] ||
 		    !row->generic_leaf || !row->generic_leaf[0] ||
 		    row->direction <
 			    ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_DIRECTION_READ ||
@@ -324,6 +348,11 @@ static enum orlix_tcti_a64_kbuild_generator_error validate_inputs(
 		    row->disposition != ORLIX_TCTI_A64_KBUILD_SYSTEM_ACCESSOR_MAPPED ||
 		    row->encoding_index == UINT32_MAX || !row->selector_count ||
 		    !row->selector_identity || !row->condition_identity ||
+		    !row->access_identity || row->applicability != 1U ||
+		    (row->semantics != 1U && row->semantics != 2U) ||
+		    (row->implementation < 1U || row->implementation > 3U) ||
+		    row->proof_state != 1U || !row->decoder_owner ||
+		    !row->execution_owner || !row->kunit_suite || !row->kunit_case ||
 		    row->condition_expression == UINT32_MAX ||
 		    !row->accessor_source_length || !row->encoding_source_length ||
 		    !row->condition_source_length)
@@ -810,11 +839,18 @@ builtin_classification[] = {
 		total, mapped, reserved, privileged, unsupported, ambiguous, \
 		contradictory, invalid \
 	};
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(total, source, generic, \
+		implemented, architectural, unimplemented, concrete, symbolic, proof) \
+	static const uint32_t builtin_accessor_semantic_counts[] = { \
+		total, source, generic, implemented, architectural, unimplemented, \
+		concrete, symbolic, proof \
+	};
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(identity_value) \
 	static const uint64_t builtin_accessor_identity = identity_value;
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(...)
 #include "../isa/target_system_accessor_reconciliation.def"
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
@@ -828,26 +864,36 @@ builtin_accessor_metadata = {
 	builtin_accessor_counts[2], builtin_accessor_counts[3],
 	builtin_accessor_counts[4], builtin_accessor_counts[5],
 	builtin_accessor_counts[6], builtin_accessor_counts[7],
+	builtin_accessor_semantic_counts[0], builtin_accessor_semantic_counts[1],
+	builtin_accessor_semantic_counts[2], builtin_accessor_semantic_counts[3],
+	builtin_accessor_semantic_counts[4], builtin_accessor_semantic_counts[5],
+	builtin_accessor_semantic_counts[6], builtin_accessor_semantic_counts[7],
+	builtin_accessor_semantic_counts[8],
 	builtin_accessor_identity,
 };
 
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
-#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, generic, \
-				 direction_value, disposition_value, selectors, \
-				 condition, selector_identity_value, \
-				 condition_identity_value, accessor_offset, accessor_length, \
-				 encoding_offset, encoding_length, condition_offset, \
-				 condition_length) \
-	{ accessor, encoding, name_value, generic, direction_value, \
-	  disposition_value, selectors, condition, selector_identity_value, \
-	  condition_identity_value, accessor_offset, accessor_length, \
-	  encoding_offset, encoding_length, condition_offset, condition_length },
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, variant, \
+		generic, direction_value, disposition_value, selectors, condition, access, \
+		concrete, applicability, semantics, implementation, proof, \
+		selector_identity_value, condition_identity_value, access_identity, \
+		decoder, executor, suite, test_case, accessor_offset, accessor_length, \
+		encoding_offset, encoding_length, condition_offset, condition_length, \
+		access_offset, access_length) \
+	{ accessor, encoding, name_value, variant, generic, direction_value, \
+	  disposition_value, selectors, condition, access, concrete, applicability, \
+	  semantics, implementation, proof, selector_identity_value, \
+	  condition_identity_value, access_identity, decoder, executor, suite, \
+	  test_case, accessor_offset, accessor_length, encoding_offset, encoding_length, \
+	  condition_offset, condition_length, access_offset, access_length },
 static const struct orlix_tcti_a64_kbuild_system_accessor_row builtin_accessors[] = {
 #include "../isa/target_system_accessor_reconciliation.def"
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE

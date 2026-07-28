@@ -61,6 +61,64 @@ static int validate_canonical_contract(
 	return 0;
 }
 
+static int validate_system_accessor_mutations(
+	const struct orlix_tcti_target_completion_source_row *source,
+	size_t source_count)
+{
+	const struct orlix_tcti_target_completion_system_accessor_provenance *provenance =
+		orlix_tcti_target_completion_system_accessor_provenance();
+	const struct orlix_tcti_target_completion_system_accessor_row *rows;
+	struct orlix_tcti_target_completion_system_accessor_row *mutated;
+	struct orlix_tcti_target_completion_result result;
+	size_t row_count, rndr;
+
+	rows = orlix_tcti_target_completion_system_accessors(&row_count);
+	EXPECT(provenance && rows && row_count == 2014U);
+	memset(&result, 0, sizeof(result));
+	EXPECT(!orlix_tcti_target_completion_validate_system_accessors(source,
+		source_count, provenance, rows, row_count, &result));
+	EXPECT(result.implemented_system_accessor_rows == 13U);
+	EXPECT(result.rejected_system_accessor_rows == 2001U);
+	EXPECT(result.unobserved_system_accessor_proof_rows == 2014U);
+	mutated = malloc(row_count * sizeof(*mutated));
+	EXPECT(mutated);
+
+#define EXPECT_MUTATION_FAIL(statement) do { \
+	memcpy(mutated, rows, row_count * sizeof(*mutated)); \
+	statement; \
+	memset(&result, 0, sizeof(result)); \
+	EXPECT(orlix_tcti_target_completion_validate_system_accessors(source, \
+		source_count, provenance, mutated, row_count, &result) == -1); \
+	EXPECT(result.error_mask & ORLIX_TCTI_TARGET_COMPLETION_ERROR_SYSTEM_ACCESSOR); \
+} while (0)
+
+	EXPECT_MUTATION_FAIL(mutated[0].variant_name = "stale-variant");
+	EXPECT_MUTATION_FAIL(mutated[0].concrete_selector ^= 1U);
+	EXPECT_MUTATION_FAIL(mutated[0].direction =
+		ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_EXECUTE);
+	EXPECT_MUTATION_FAIL(mutated[0].condition_identity ^= 1U);
+	EXPECT_MUTATION_FAIL(mutated[0].decoder_owner = "stale-owner");
+	EXPECT_MUTATION_FAIL(mutated[0].proof_state = 0);
+	EXPECT_MUTATION_FAIL(mutated[0].accessor_source_length = 0U);
+	EXPECT_MUTATION_FAIL(mutated[1] = mutated[0]);
+	for (rndr = 0; rndr < row_count; rndr++)
+		if (!strcmp(rows[rndr].variant_name, "RNDR"))
+			break;
+	EXPECT(rndr < row_count);
+	EXPECT_MUTATION_FAIL(mutated[rndr].generic_leaf = "RNDR");
+
+	memset(&result, 0, sizeof(result));
+	EXPECT(orlix_tcti_target_completion_validate_system_accessors(source,
+		source_count, provenance, rows, row_count - 1U, &result) == -1);
+	memset(&result, 0, sizeof(result));
+	EXPECT(orlix_tcti_target_completion_validate_system_accessors(source,
+		source_count - 1U, provenance, rows, row_count, &result) == -1);
+
+#undef EXPECT_MUTATION_FAIL
+	free(mutated);
+	return 0;
+}
+
 int main(void)
 {
 	const struct orlix_tcti_target_completion_source_row *source;
@@ -82,6 +140,7 @@ int main(void)
 	EXPECT(source_count == 4350U && row_count == 4350U);
 	EXPECT(validate_canonical_contract(source, source_count, provenance, rows,
 					   row_count) == 0);
+	EXPECT(validate_system_accessor_mutations(source, source_count) == 0);
 
 	stale_provenance = *provenance;
 	stale_provenance.identity = "stale-external-provenance";
