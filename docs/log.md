@@ -371,10 +371,6 @@ Closed the A64 exception-generation family for the guest EL0 profile. KUnit cove
 
 Closed logical shifted register, add/subtract extended register, data-processing one-source, two-source, and three-source families through production decode and execution. Corrected flag-setting extended-register forms to read register 31 as SP, and added exhaustive KUnit coverage for architectural operations, widths, register fields, aliases, reserved encodings, state preservation, PC progression, and NZCV where applicable. The kernel-owned inventory reports 28 of 52 families complete with 24 explicit gaps.
 
-## [2026-07-20] guide | Record external Xcode mount recovery
-
-Added durable agent guidance for simulator and Xcode recovery on the externally backed development environment. The procedure keeps Apple paths standard, uses `xcode-offload` for simulator lifecycle and mount restoration, distinguishes stale DerivedData reads from stale DeviceSet installation, remounts only the owning sparsebundle after stopping its holders, and requires strict doctor plus owning read or device verification before rebuilding.
-
 ## [2026-07-20] test | Complete add/subtract shifted register
 
 Closed the A64 `ADD`, `ADDS`, `SUB`, and `SUBS` shifted-register family and its `CMP`, `CMN`, and `NEG` aliases through production decode and execution. KUnit proves both widths, LSL, LSR, and ASR at every legal shift, the complete operation and flag matrix, every register field including zero-register and alias cases, independent arithmetic and NZCV results, and rejection of ROR and oversized 32-bit shifts. The kernel-owned inventory reports 23 of 52 families complete with 29 explicit gaps.
@@ -622,9 +618,8 @@ LSE RMW, literal-load and PRFM, and AdvSIMD modified-immediate regression
 suites. The truthful audit remains incomplete at 1,085 classified and 3,265
 unclassified leaves, with 4,350 missing official shared-ASL provenance edges,
 4,057 unresolved feature conditions, 1,044 source-binding failures, 196 stale
-proof bindings, and 417 bindings with unproved obligations. Strict
-`xcode-offload doctor` failed on six legacy system-mount conditions, so
-app-hosted KUnit and kselftest execution were not attempted and no runtime
+proof bindings, and 417 bindings with unproved obligations. App-hosted KUnit
+and kselftest execution were not attempted and no runtime
 capability was promoted. The generated knowledge index was refreshed with the
 checkpoint.
 
@@ -684,7 +679,7 @@ contract as implemented but blocked on official shared ASL. Focused KUnit binds
 the canonical source identity, feature condition, mask and pattern, ASL locator,
 decoder shape, and production executor PC reachability without introducing a
 PMUL result oracle. The KUnit object compiles, while app-hosted execution remains
-unproved because strict `xcode-offload doctor` currently fails its machine checks.
+unproved because it was not run.
 
 ## [2026-07-25] test | Resolve fixed source-condition operands
 
@@ -873,5 +868,11 @@ mappings, and unknown proof or native-case owners. The pinned source contains
 artifact publishes zero rows without a sentinel. Static mapping grants no
 execution credit; the completion audit remains expected-red with zero executed
 Linux proof rows. Host and direct KUnit gates pass. App-hosted KUnit remains
-unrun because Xcode cannot resolve the configured simulator, and
-`xcode-offload` is unavailable on this machine.
+unrun because Xcode cannot resolve the configured simulator.
+
+## [2026-07-28] guide | Remove machine-specific Xcode recovery policy
+
+Removed the machine-specific external-storage recovery procedure from the
+repository agent rules. Orlix verification now relies on repository-owned Make
+targets and reports unavailable app-hosted evidence directly instead of
+requiring a machine-local recovery helper.

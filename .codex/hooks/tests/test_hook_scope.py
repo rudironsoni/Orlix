@@ -29,7 +29,6 @@ FORBIDDEN_SUBSYSTEM_TERMS = (
     "unauthorized_release_command",
     "external-ssd",
     "external_ssd",
-    "xcode-offload",
     "/volumes/1tb",
     "generated_tree",
     "generated upstream/build",
