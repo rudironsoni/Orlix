@@ -1220,6 +1220,98 @@ static struct orlix_tcti_native_sme_state asr_native_sme_absent(void)
 	};
 }
 
+static void asr_extended_fixed_bits_reject_and_preserve_state(
+	struct kunit *test)
+{
+	size_t leaf_index;
+
+	for (leaf_index = 8; leaf_index < 16; leaf_index++) {
+		const struct asr_leaf *leaf = &leaves[leaf_index];
+		u32 fixed_bit;
+
+		KUNIT_ASSERT_EQ(test, ASR_EXTENDED, leaf->family);
+		for (fixed_bit = 22; fixed_bit <= 23; fixed_bit++) {
+			typeof(current->thread.user_sve) *sve_before =
+				kunit_kzalloc(test, sizeof(*sve_before), GFP_KERNEL);
+			struct orlix_tcti_native_sme_state sme_before;
+			struct orlix_tcti_native_sme_state sme_after;
+			u64 simd_before[ARRAY_SIZE(current->thread.user_simd)];
+			u8 memory_before[sizeof(u32) * 2];
+			u8 memory_after[sizeof(memory_before)];
+			struct pt_regs regs = {};
+			struct pt_regs regs_before;
+			struct orlix_tcti_result result;
+			u64 fpcr_before;
+			u64 fpsr_before;
+			u8 simd_valid_before;
+			u32 instruction =
+				asr_instruction(leaf, 7, 0, 0, 5, 3) | BIT(fixed_bit);
+			unsigned long mapped;
+			unsigned int reg;
+
+			KUNIT_ASSERT_NOT_NULL(test, sve_before);
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				orlix_tcti_decode_aarch64(instruction).decode_class,
+				"%s fixed bit %u instruction %#x", leaf->name,
+				fixed_bit, instruction);
+			mapped = asr_map(test, instruction);
+			for (reg = 0; reg < 31; reg++)
+				regs.regs[reg] = 0x8500000000000000ULL + reg;
+			regs.sp = 0x00000001ffffffe0ULL;
+			regs.pc = mapped;
+			regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
+			regs.syscallno = NO_SYSCALL;
+			regs_before = regs;
+
+			asr_native_seed_extended_state();
+			memcpy(simd_before, current->thread.user_simd,
+			       sizeof(simd_before));
+			fpcr_before = current->thread.user_fpcr;
+			fpsr_before = current->thread.user_fpsr;
+			simd_valid_before = current->thread.user_simd_valid;
+			memcpy(sve_before, &current->thread.user_sve,
+			       sizeof(*sve_before));
+			sme_before = asr_native_sme_absent();
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_read_user_data(current->mm, mapped,
+					memory_before, sizeof(memory_before)));
+
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ_MSG(test,
+				ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason,
+				"%s fixed bit %u structured reason", leaf->name,
+				fixed_bit);
+			KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+			KUNIT_EXPECT_EQ(test, instruction, result.instruction);
+			KUNIT_EXPECT_EQ(test, mapped, result.pc);
+			KUNIT_EXPECT_MEMEQ_MSG(test, &regs_before, &regs, sizeof(regs),
+				"%s fixed bit %u complete GPR, flags, and PC state",
+				leaf->name, fixed_bit);
+			KUNIT_ASSERT_EQ(test, 0,
+				orlix_tcti_read_user_data(current->mm, mapped,
+					memory_after, sizeof(memory_after)));
+			KUNIT_EXPECT_MEMEQ_MSG(test, memory_before, memory_after,
+				sizeof(memory_before), "%s fixed bit %u memory",
+				leaf->name, fixed_bit);
+			KUNIT_EXPECT_MEMEQ_MSG(test, simd_before,
+				current->thread.user_simd, sizeof(simd_before),
+				"%s fixed bit %u FP/SIMD", leaf->name, fixed_bit);
+			KUNIT_EXPECT_EQ(test, fpcr_before, current->thread.user_fpcr);
+			KUNIT_EXPECT_EQ(test, fpsr_before, current->thread.user_fpsr);
+			KUNIT_EXPECT_EQ(test, simd_valid_before,
+				current->thread.user_simd_valid);
+			KUNIT_EXPECT_MEMEQ_MSG(test, sve_before,
+				&current->thread.user_sve, sizeof(*sve_before),
+				"%s fixed bit %u SVE", leaf->name, fixed_bit);
+			sme_after = asr_native_sme_absent();
+			KUNIT_EXPECT_MEMEQ_MSG(test, &sme_before, &sme_after,
+				sizeof(sme_before), "%s fixed bit %u SME typed state",
+				leaf->name, fixed_bit);
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+		}
+	}
+}
+
 static u32 asr_native_rejected_encoding(u32 mask, u32 pattern)
 {
 	u32 bit;
@@ -1468,6 +1560,7 @@ static struct kunit_case asr_cases[] = {
 	KUNIT_CASE(asr_pointer_all_cpa_controls),
 	KUNIT_CASE(asr_pointer_source_mask_reserved_neighbors),
 	KUNIT_CASE(asr_pointer_rejections_are_structured),
+	KUNIT_CASE(asr_extended_fixed_bits_reject_and_preserve_state),
 	KUNIT_CASE(asr_native_decode_records),
 	KUNIT_CASE(asr_native_legal_records),
 	KUNIT_CASE(asr_native_rejected_records),
