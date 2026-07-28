@@ -16,6 +16,7 @@
 #include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/hosted_exec.h>
+#include <linux/unaligned.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
@@ -99,12 +100,6 @@ struct orlix_tcti_advsimd_structure_contract {
 	bool interleaved;
 };
 
-/*
- * STL1 (ordinal 2403) and LDAP1 (ordinal 2422) are exercised here only for
- * their ordinary structure-transfer state changes.  Their release/acquire
- * ordering guarantees require a separate concurrency proof and are not
- * established by this suite.
- */
 #define ORLIX_TCTI_ADVSIMD_STRUCTURE_CONTRACT_ROWS(X) \
 	X(2353U, "ST4_asisdlse_R4", "ST4", "ST4_advsimd_mult", 0xbffff000U, 0x0c000000U, ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE, false, 4U, 1U, 8U, 16U, ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET, ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE_NONE, true) \
 	X(2354U, "ST1_asisdlse_R4_4v", "ST1", "ST1_advsimd_mult", 0xbffff000U, 0x0c002000U, ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE, false, 4U, 1U, 8U, 16U, ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET, ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE_NONE, false) \
@@ -655,7 +650,11 @@ static void orlix_tcti_advsimd_structure_every_source_leaf_reaches_decoder(
 		if (expected->lane_shape == ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE)
 			KUNIT_EXPECT_FALSE_MSG(test, q0.simd_replicate,
 				"ordinal=%u leaf=%s lane form", expected->ordinal,
-				expected->leaf_id);
+					expected->leaf_id);
+		KUNIT_EXPECT_EQ_MSG(test, expected->ordinal == 2422U, q0.acquire,
+			"ordinal=%u leaf=%s", expected->ordinal, expected->leaf_id);
+		KUNIT_EXPECT_EQ_MSG(test, expected->ordinal == 2403U, q0.release,
+			"ordinal=%u leaf=%s", expected->ordinal, expected->leaf_id);
 		observed++;
 	}
 
@@ -671,7 +670,6 @@ static void orlix_tcti_advsimd_structure_single_lane_writeback_and_pc(
 	struct orlix_tcti_decoded_instruction decoded;
 	unsigned long address;
 	unsigned long mapped;
-	int ret;
 
 	KUNIT_ASSERT_NOT_NULL(test, current->mm);
 	address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
@@ -715,7 +713,6 @@ static void orlix_tcti_advsimd_structure_replicate_and_pc(struct kunit *test)
 	struct orlix_tcti_decoded_instruction decoded;
 	unsigned long address;
 	unsigned long mapped;
-	int ret;
 
 	KUNIT_ASSERT_NOT_NULL(test, current->mm);
 	address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
@@ -759,7 +756,6 @@ static void orlix_tcti_advsimd_structure_fault_preserves_pc_and_writeback(
 	unsigned long before_valid;
 	unsigned long before_fpcr;
 	unsigned long before_fpsr;
-	int ret;
 
 	KUNIT_ASSERT_NOT_NULL(test, current->mm);
 	address = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
@@ -859,6 +855,158 @@ static void orlix_tcti_advsimd_structure_write_fault_preserves_full_state(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, 2 * PAGE_SIZE));
 }
 
+static void orlix_tcti_advsimd_structure_late_fault_commits_prior_accesses_only(
+	struct kunit *test)
+{
+	const u8 source[] = { 0x11, 0x22 };
+	struct pt_regs load_regs = {};
+	struct pt_regs store_regs = {};
+	struct orlix_tcti_result result;
+	unsigned long address;
+	unsigned long mapped;
+	u64 load_before[ARRAY_SIZE(current->thread.user_simd)];
+	u8 observed[2] = {};
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	address = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(source), source, sizeof(source)));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_NONE));
+
+	/* LD4 {v0.b-v3.b}[0], [x8], #4 faults on the third byte. */
+	orlix_tcti_advsimd_structure_initialize_state(&load_regs, 0x0dff2100U);
+	load_regs.regs[8] = address + PAGE_SIZE - sizeof(source);
+	memcpy(load_before, current->thread.user_simd, sizeof(load_before));
+	mapped = orlix_tcti_advsimd_structure_map_instruction(test, 0x0dff2100U);
+	load_regs.pc = mapped;
+	result = orlix_tcti_resume_user(current, &load_regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_READ, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, load_regs.pc);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE - sizeof(source),
+		load_regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, (load_before[0] & ~0xffULL) | source[0],
+		current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, (load_before[2] & ~0xffULL) | source[1],
+		current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, load_before[4], current->thread.user_simd[4]);
+	KUNIT_EXPECT_EQ(test, load_before[6], current->thread.user_simd[6]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+
+	/* ST4 commits the first two bytes, then reports the third-byte fault. */
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_READ | PROT_WRITE));
+	memset(observed, 0, sizeof(observed));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(observed), observed, sizeof(observed)));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_NONE));
+	orlix_tcti_advsimd_structure_initialize_state(&store_regs, 0x0dbf2100U);
+	current->thread.user_simd[0] = 0xa1;
+	current->thread.user_simd[2] = 0xb2;
+	store_regs.regs[8] = address + PAGE_SIZE - sizeof(observed);
+	mapped = orlix_tcti_advsimd_structure_map_instruction(test, 0x0dbf2100U);
+	store_regs.pc = mapped;
+	result = orlix_tcti_resume_user(current, &store_regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_WRITE, result.fault_access);
+	KUNIT_EXPECT_EQ(test, mapped, store_regs.pc);
+	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE - sizeof(observed),
+		store_regs.regs[8]);
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address + PAGE_SIZE, PAGE_SIZE,
+		PROT_READ | PROT_WRITE));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+		address + PAGE_SIZE - sizeof(observed), observed, sizeof(observed)));
+	KUNIT_EXPECT_EQ(test, 0xa1, observed[0]);
+	KUNIT_EXPECT_EQ(test, 0xb2, observed[1]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, 2 * PAGE_SIZE));
+}
+
+static void orlix_tcti_advsimd_structure_unaligned_access_is_legal(
+	struct kunit *test)
+{
+	const u8 source[] = { 1, 2, 3, 4, 5, 6, 7, 8,
+		9, 10, 11, 12, 13, 14, 15, 16 };
+	struct pt_regs regs = {};
+	unsigned long address;
+	unsigned long mapped;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+		address + 1, source, sizeof(source)));
+	/* LD1 {v0.8b, v1.8b}, [x8] must not impose an atomic alignment rule. */
+	regs.regs[8] = address + 1;
+	orlix_tcti_advsimd_structure_resume(test, 0x0c40a100U, &regs, &mapped);
+	KUNIT_EXPECT_EQ(test, get_unaligned_le64(source),
+		current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, get_unaligned_le64(source + sizeof(u64)),
+		current->thread.user_simd[2]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
+static void orlix_tcti_advsimd_structure_ordered_lane_variants_resume(
+	struct kunit *test)
+{
+	struct orlix_tcti_decoded_instruction stl1 =
+		orlix_tcti_decode_aarch64(0x0d018400U);
+	struct orlix_tcti_decoded_instruction ldap1 =
+		orlix_tcti_decode_aarch64(0x0d418400U);
+	struct pt_regs store_regs = {};
+	struct pt_regs load_regs = {};
+	const u64 stored = 0x8877665544332211ULL;
+	const u64 loaded = 0x1020304050607080ULL;
+	unsigned long address;
+	unsigned long mapped;
+	u64 observed = 0;
+
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
+		stl1.decode_class);
+	KUNIT_EXPECT_TRUE(test, stl1.release);
+	KUNIT_EXPECT_FALSE(test, stl1.acquire);
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
+		ldap1.decode_class);
+	KUNIT_EXPECT_TRUE(test, ldap1.acquire);
+	KUNIT_EXPECT_FALSE(test, ldap1.release);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+		orlix_tcti_decode_aarch64(0x0d028400U).decode_class);
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+
+	current->thread.user_simd[0] = stored;
+	store_regs.regs[8] = address;
+	orlix_tcti_advsimd_structure_resume(test, 0x0d018500U, &store_regs,
+		&mapped);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, address,
+		&observed, sizeof(observed)));
+	KUNIT_EXPECT_EQ(test, stored, observed);
+	KUNIT_EXPECT_EQ(test, address, store_regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, address,
+		&loaded, sizeof(loaded)));
+	current->thread.user_simd[0] = 0;
+	load_regs.regs[8] = address;
+	orlix_tcti_advsimd_structure_resume(test, 0x0d418500U, &load_regs,
+		&mapped);
+	KUNIT_EXPECT_EQ(test, loaded, current->thread.user_simd[0]);
+	KUNIT_EXPECT_EQ(test, address, load_regs.regs[8]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
 static void orlix_tcti_advsimd_structure_reserved_encodings_reject(
 	struct kunit *test)
 {
@@ -900,6 +1048,9 @@ static struct kunit_case orlix_tcti_advsimd_structure_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_structure_replicate_and_pc),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_fault_preserves_pc_and_writeback),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_write_fault_preserves_full_state),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_late_fault_commits_prior_accesses_only),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_unaligned_access_is_legal),
+	KUNIT_CASE(orlix_tcti_advsimd_structure_ordered_lane_variants_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_reserved_encodings_reject),
 	{}
 };

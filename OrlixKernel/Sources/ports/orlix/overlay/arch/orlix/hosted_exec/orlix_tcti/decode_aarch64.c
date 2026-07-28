@@ -1440,9 +1440,16 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		u8 rm = (instruction >> 16) & 0x1fU;
 		u8 base_opcode = opcode;
 		bool post_index = instruction & BIT(23);
+		bool ordered_lane = !post_index && rm == 1 && opcode == 4 &&
+				    size == 1 && !(instruction & BIT(12)) &&
+				    !(instruction & BIT(21));
 		bool replicate;
 
-		if (!post_index && rm)
+		/*
+		 * FEAT_LRCPC3 reuses the otherwise-reserved Rm=1 no-offset
+		 * encoding for STL1/LDAP1.  No other no-offset Rm value is legal.
+		 */
+		if (!post_index && rm && !ordered_lane)
 			return decoded;
 
 		decoded.rd = instruction & 0x1fU;
@@ -1451,6 +1458,8 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.load = instruction & BIT(22);
 		decoded.simd_fp = true;
 		decoded.simd_q = instruction & BIT(30);
+		decoded.acquire = ordered_lane && decoded.load;
+		decoded.release = ordered_lane && !decoded.load;
 		decoded.memory_index_mode = post_index ?
 			ORLIX_TCTI_MEMORY_INDEX_POST : ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 		replicate = decoded.load && !(instruction & BIT(12)) &&

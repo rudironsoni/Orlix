@@ -1454,6 +1454,68 @@ static int operational_note_mapping_is_exact_and_fail_closed(void)
 	return 0;
 }
 
+static int advsimd_structure_registry_accounts_for_exact_issue_126_cohort(void)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_linux_proof_disposition_row *rows;
+	enum orlix_tcti_target_proof_registry_error error;
+	size_t entry_count;
+	size_t row_count;
+	size_t binding_count = 0;
+	size_t disposition_count = 0;
+	unsigned int ordinal;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&entry_count);
+	rows = orlix_tcti_target_linux_proof_dispositions(&row_count);
+	EXPECT(entries && rows);
+	EXPECT(!orlix_tcti_target_proof_registry_source_bound_projection_validate(
+		entries, entry_count, &error));
+	for (ordinal = 2353U; ordinal <= 2504U; ordinal++) {
+		size_t binding_matches = 0;
+		size_t disposition_matches = 0;
+
+		for (index = 0; index < entry_count; index++) {
+			size_t binding;
+
+			if (strncmp(entries[index].id,
+				    "kunit:advsimd-structure-",
+				    strlen("kunit:advsimd-structure-")))
+				continue;
+			for (binding = 0; binding < entries[index].binding_count;
+			     binding++)
+				if (entries[index].bindings[binding].source_ordinal ==
+				    ordinal)
+					binding_matches++;
+		}
+		for (index = 0; index < row_count; index++) {
+			if (rows[index].subject_kind !=
+			    ORLIX_TCTI_TARGET_LINUX_PROOF_SOURCE_LEAF ||
+			    rows[index].source.source_index != ordinal)
+				continue;
+			disposition_matches++;
+			EXPECT(rows[index].disposition ==
+				ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED ||
+			       rows[index].disposition ==
+				ORLIX_TCTI_TARGET_LINUX_PROOF_NOT_APPLICABLE);
+			if (rows[index].disposition ==
+			    ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED)
+				EXPECT(rows[index].kselftests &&
+				       rows[index].kselftest_count);
+			else
+				EXPECT(rows[index].not_applicable_reason !=
+				       ORLIX_TCTI_TARGET_LINUX_NA_NONE);
+		}
+		EXPECT(binding_matches == 1U);
+		EXPECT(disposition_matches == 1U);
+		binding_count += binding_matches;
+		disposition_count += disposition_matches;
+	}
+	EXPECT(binding_count == 152U);
+	EXPECT(disposition_count == 152U);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
@@ -1462,6 +1524,8 @@ int main(void)
 	} tests[] = {
 		{ "operational_note_mapping_is_exact_and_fail_closed",
 		 operational_note_mapping_is_exact_and_fail_closed },
+		{ "advsimd_structure_registry_accounts_for_exact_issue_126_cohort",
+		  advsimd_structure_registry_accounts_for_exact_issue_126_cohort },
 		{ "canonical_first_use_is_concurrent_and_immutable",
 		  canonical_first_use_is_concurrent_and_immutable },
 		{ "real_manifest_bindings_are_exact",
