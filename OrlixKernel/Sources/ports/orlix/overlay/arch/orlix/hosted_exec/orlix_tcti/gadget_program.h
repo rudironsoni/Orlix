@@ -28,6 +28,11 @@ typedef int (*orlix_tcti_gadget_fn)(struct mm_struct *mm, struct pt_regs *regs,
 			      unsigned long *fault_address,
 			      struct orlix_tcti_native_capture *capture);
 
+enum orlix_tcti_gadget_program_kind {
+	ORLIX_TCTI_GADGET_PROGRAM_GENERIC,
+	ORLIX_TCTI_GADGET_PROGRAM_CRC32,
+};
+
 int orlix_tcti_lower_decoded_instruction(
 	const struct orlix_tcti_decoded_instruction *decoded,
 	struct orlix_tcti_gadget_word *program,
@@ -57,6 +62,8 @@ int orlix_tcti_execute_gadget_program_authorized_captured(
 	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
 	unsigned long *entry_pc, u32 *entry_instruction,
 	struct orlix_tcti_native_capture *capture);
+enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
+	const struct orlix_tcti_gadget_word *program, size_t word_count);
 #ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
 void orlix_tcti_gadget_program_set_pre_authorized_test_hook(
 	void (*hook)(void *), void *data);
