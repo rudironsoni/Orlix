@@ -790,37 +790,333 @@ static void orlix_tcti_decode_memory_common(struct orlix_tcti_decoded_instructio
 				       &decoded->result_size);
 }
 
-/*
- * AARCHMRS 2026-06 leaves 2245-2249 and 2256-2265.  These encodings overlap the
- * generic HINT class, but their PAuth and BTI ASL operations are absent from
- * the pinned source bundle.  Do not turn an unimplemented extension into a
- * silently successful HINT.  They remain undefined to the OrlixTCTI guest until
- * their individual source leaves have production semantics and proof.
- */
-static bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
+static void orlix_tcti_pauth_decoded_base(
+	struct orlix_tcti_decoded_instruction *decoded,
+	enum orlix_tcti_pauth_op op, enum orlix_tcti_pauth_key_select key)
 {
-	static const u32 pauth_hints[] = {
-		0xd50320ffU, /* XPACLRI */
-		0xd503211fU, /* PACIA1716 */
-		0xd503215fU, /* PACIB1716 */
-		0xd503219fU, /* AUTIA1716 */
-		0xd50321dfU, /* AUTIB1716 */
-		0xd503231fU, /* PACIAZ */
-		0xd503233fU, /* PACIASP */
-		0xd503235fU, /* PACIBZ */
-		0xd503237fU, /* PACIBSP */
-		0xd503239fU, /* AUTIAZ */
-		0xd50323bfU, /* AUTIASP */
-		0xd50323dfU, /* AUTIBZ */
-		0xd50323ffU, /* AUTIBSP */
-		0xd50324ffU, /* PACM, FEAT_PAuth_LR */
+	decoded->decode_class = ORLIX_TCTI_DECODE_POINTER_AUTHENTICATION;
+	decoded->pauth_op = op;
+	decoded->pauth_key = key;
+}
+
+static bool orlix_tcti_decode_pauth_hint(
+	u32 instruction, struct orlix_tcti_decoded_instruction *decoded)
+{
+	switch (instruction) {
+	case 0xd50320ffU: /* XPACLRI */
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_STRIP,
+					      ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		return true;
+	case 0xd503211fU: /* PACIA1716 */
+	case 0xd503215fU: /* PACIB1716 */
+	case 0xd503219fU: /* AUTIA1716 */
+	case 0xd50321dfU: /* AUTIB1716 */
+		orlix_tcti_pauth_decoded_base(decoded,
+			instruction & BIT(7) ? ORLIX_TCTI_PAUTH_AUTHENTICATE :
+					       ORLIX_TCTI_PAUTH_ADD,
+			instruction & BIT(6) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+					       ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 17;
+		decoded->rn = 16;
+		decoded->rm = 15;
+		decoded->pauth_pacm_modifier2 = true;
+		return true;
+	case 0xd503231fU: /* PACIAZ */
+	case 0xd503235fU: /* PACIBZ */
+	case 0xd503239fU: /* AUTIAZ */
+	case 0xd50323dfU: /* AUTIBZ */
+		orlix_tcti_pauth_decoded_base(decoded,
+			instruction & BIT(7) ? ORLIX_TCTI_PAUTH_AUTHENTICATE :
+					       ORLIX_TCTI_PAUTH_ADD,
+			instruction & BIT(6) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+					       ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->pauth_modifier_zero = true;
+		return true;
+	case 0xd503233fU: /* PACIASP */
+	case 0xd503237fU: /* PACIBSP */
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_ADD,
+			instruction & BIT(6) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+					       ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_pacm_modifier2 = true;
+		decoded->pauth_modifier2_is_pc = true;
+		return true;
+	case 0xd50323bfU: /* AUTIASP */
+	case 0xd50323ffU: /* AUTIBSP */
+		orlix_tcti_pauth_decoded_base(decoded,
+			ORLIX_TCTI_PAUTH_AUTHENTICATE,
+			instruction & BIT(6) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+					       ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->rm = 16;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_pacm_modifier2 = true;
+		return true;
+	case 0xd50324ffU: /* PACM */
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_SET_PACM,
+					      ORLIX_TCTI_PAUTH_KEY_APIA);
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool orlix_tcti_decode_pauth_data_processing(
+	u32 instruction, struct orlix_tcti_decoded_instruction *decoded)
+{
+	struct pauth_dp_encoding {
+		u32 mask;
+		u32 pattern;
+		enum orlix_tcti_pauth_op op;
+		enum orlix_tcti_pauth_key_select key;
+		bool zero_modifier;
+	};
+	static const struct pauth_dp_encoding encodings[] = {
+		{ 0xfffffc00U, 0xdac10000U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APIA, false },
+		{ 0xfffffc00U, 0xdac10400U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APIB, false },
+		{ 0xfffffc00U, 0xdac10800U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APDA, false },
+		{ 0xfffffc00U, 0xdac10c00U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APDB, false },
+		{ 0xfffffc00U, 0xdac11000U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APIA, false },
+		{ 0xfffffc00U, 0xdac11400U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APIB, false },
+		{ 0xfffffc00U, 0xdac11800U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APDA, false },
+		{ 0xfffffc00U, 0xdac11c00U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APDB, false },
+		{ 0xffffffe0U, 0xdac123e0U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APIA, true },
+		{ 0xffffffe0U, 0xdac127e0U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APIB, true },
+		{ 0xffffffe0U, 0xdac12be0U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APDA, true },
+		{ 0xffffffe0U, 0xdac12fe0U, ORLIX_TCTI_PAUTH_ADD, ORLIX_TCTI_PAUTH_KEY_APDB, true },
+		{ 0xffffffe0U, 0xdac133e0U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APIA, true },
+		{ 0xffffffe0U, 0xdac137e0U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APIB, true },
+		{ 0xffffffe0U, 0xdac13be0U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APDA, true },
+		{ 0xffffffe0U, 0xdac13fe0U, ORLIX_TCTI_PAUTH_AUTHENTICATE, ORLIX_TCTI_PAUTH_KEY_APDB, true },
+		{ 0xffffffe0U, 0xdac143e0U, ORLIX_TCTI_PAUTH_STRIP, ORLIX_TCTI_PAUTH_KEY_APIA, false },
+		{ 0xffffffe0U, 0xdac147e0U, ORLIX_TCTI_PAUTH_STRIP, ORLIX_TCTI_PAUTH_KEY_APDA, false },
 	};
 	size_t index;
 
-	for (index = 0; index < ARRAY_SIZE(pauth_hints); index++)
-		if (instruction == pauth_hints[index])
-			return true;
+	for (index = 0; index < ARRAY_SIZE(encodings); index++) {
+		const struct pauth_dp_encoding *encoding = &encodings[index];
 
+		if ((instruction & encoding->mask) != encoding->pattern)
+			continue;
+		orlix_tcti_pauth_decoded_base(decoded, encoding->op, encoding->key);
+		decoded->rd = instruction & 0x1fU;
+		decoded->rn = (instruction >> 5) & 0x1fU;
+		decoded->pauth_modifier_zero = encoding->zero_modifier;
+		decoded->pauth_modifier_is_sp = !encoding->zero_modifier &&
+			decoded->rn == 31;
+		return true;
+	}
+
+	if ((instruction & 0xffe0fc00U) == 0x9ac03000U) {
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_GENERIC,
+					      ORLIX_TCTI_PAUTH_KEY_APGA);
+		decoded->rd = instruction & 0x1fU;
+		decoded->rn = (instruction >> 5) & 0x1fU;
+		decoded->rm = (instruction >> 16) & 0x1fU;
+		decoded->pauth_modifier_reg_is_rm = true;
+		/* PACGA's modifier register is Rm, while its data register is Rn. */
+		decoded->rn = (instruction >> 5) & 0x1fU;
+		return true;
+	}
+
+	return false;
+}
+
+static bool orlix_tcti_decode_pauth_lr(
+	u32 instruction, struct orlix_tcti_decoded_instruction *decoded)
+{
+	switch (instruction) {
+	case 0xdac183feU: /* PACNBIASPPC */
+	case 0xdac187feU: /* PACNBIBSPPC */
+	case 0xdac1a3feU: /* PACIASPPC */
+	case 0xdac1a7feU: /* PACIBSPPC */
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_ADD,
+			instruction & BIT(10) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+						ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_use_modifier2 = true;
+		decoded->pauth_modifier2_is_pc = true;
+		return true;
+	case 0xdac18bfeU: /* PACIA171615 */
+	case 0xdac18ffeU: /* PACIB171615 */
+	case 0xdac1bbfeU: /* AUTIA171615 */
+	case 0xdac1bffeU: /* AUTIB171615 */
+		orlix_tcti_pauth_decoded_base(decoded,
+			(instruction == 0xdac1bbfeU || instruction == 0xdac1bffeU) ?
+				ORLIX_TCTI_PAUTH_AUTHENTICATE :
+						ORLIX_TCTI_PAUTH_ADD,
+			instruction & BIT(10) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+						ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 17;
+		decoded->rn = 16;
+		decoded->rm = 15;
+		decoded->pauth_use_modifier2 = true;
+		return true;
+	default:
+		break;
+	}
+
+	if ((instruction & 0xfffffc1fU) == 0xdac1901eU ||
+	    (instruction & 0xfffffc1fU) == 0xdac1941eU) {
+		orlix_tcti_pauth_decoded_base(decoded,
+			ORLIX_TCTI_PAUTH_AUTHENTICATE,
+			instruction & BIT(10) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+						ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->rn = 31;
+		decoded->rm = (instruction >> 5) & 0x1fU;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_use_modifier2 = true;
+		return true;
+	}
+
+	return false;
+}
+
+static bool orlix_tcti_decode_pauth_branch(
+	u32 instruction, struct orlix_tcti_decoded_instruction *decoded)
+{
+	struct pauth_branch_encoding {
+		u32 mask;
+		u32 pattern;
+		bool key_b;
+		bool link;
+		bool zero_modifier;
+	};
+	static const struct pauth_branch_encoding encodings[] = {
+		{ 0xfffffc1fU, 0xd61f081fU, false, false, true },
+		{ 0xfffffc1fU, 0xd61f0c1fU, true, false, true },
+		{ 0xfffffc1fU, 0xd63f081fU, false, true, true },
+		{ 0xfffffc1fU, 0xd63f0c1fU, true, true, true },
+		{ 0xfffffc00U, 0xd71f0800U, false, false, false },
+		{ 0xfffffc00U, 0xd71f0c00U, true, false, false },
+		{ 0xfffffc00U, 0xd73f0800U, false, true, false },
+		{ 0xfffffc00U, 0xd73f0c00U, true, true, false },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(encodings); index++) {
+		const struct pauth_branch_encoding *encoding = &encodings[index];
+
+		if ((instruction & encoding->mask) != encoding->pattern)
+			continue;
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_BRANCH,
+			encoding->key_b ? ORLIX_TCTI_PAUTH_KEY_APIB :
+					  ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rn = (instruction >> 5) & 0x1fU;
+		decoded->rm = instruction & 0x1fU;
+		decoded->link = encoding->link;
+		decoded->pauth_modifier_zero = encoding->zero_modifier;
+		decoded->pauth_modifier_is_sp = !encoding->zero_modifier &&
+			decoded->rm == 31;
+		decoded->pauth_modifier_reg_is_rm = !encoding->zero_modifier;
+		if (!encoding->zero_modifier)
+			decoded->rn = (instruction >> 5) & 0x1fU;
+		return true;
+	}
+
+	if (instruction == 0xd65f0bffU || instruction == 0xd65f0fffU) {
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_BRANCH,
+			instruction & BIT(10) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+						ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->pauth_return = true;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_pacm_modifier2 = true;
+		decoded->rm = 16;
+		return true;
+	}
+
+	if ((instruction & 0xffffffe0U) == 0xd65f0be0U ||
+	    (instruction & 0xffffffe0U) == 0xd65f0fe0U) {
+		if ((instruction & 0x1fU) == 31)
+			return false;
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_BRANCH,
+			instruction & BIT(10) ? ORLIX_TCTI_PAUTH_KEY_APIB :
+						ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->pauth_return = true;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_use_modifier2 = true;
+		decoded->rm = instruction & 0x1fU;
+		return true;
+	}
+
+	return false;
+}
+
+static bool orlix_tcti_decode_pointer_authentication(
+	u32 instruction, struct orlix_tcti_decoded_instruction *decoded)
+{
+	u32 immediate_pattern = instruction & 0xffe0001fU;
+
+	if (orlix_tcti_decode_pauth_hint(instruction, decoded) ||
+	    orlix_tcti_decode_pauth_lr(instruction, decoded) ||
+	    orlix_tcti_decode_pauth_branch(instruction, decoded) ||
+	    orlix_tcti_decode_pauth_data_processing(instruction, decoded))
+		return true;
+
+	if (immediate_pattern == 0xf380001fU ||
+	    immediate_pattern == 0xf3a0001fU) {
+		orlix_tcti_pauth_decoded_base(decoded,
+			ORLIX_TCTI_PAUTH_AUTHENTICATE,
+			immediate_pattern == 0xf3a0001fU ?
+				ORLIX_TCTI_PAUTH_KEY_APIB : ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->rd = 30;
+		decoded->imm16 = (instruction >> 5) & 0xffffU;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_use_modifier2 = true;
+		decoded->pauth_modifier2_is_pc = true;
+		decoded->pauth_modifier2_pc_relative = true;
+		return true;
+	}
+
+	if (immediate_pattern == 0x5500001fU ||
+	    immediate_pattern == 0x5520001fU) {
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_BRANCH,
+			immediate_pattern == 0x5520001fU ?
+				ORLIX_TCTI_PAUTH_KEY_APIB : ORLIX_TCTI_PAUTH_KEY_APIA);
+		decoded->imm16 = (instruction >> 5) & 0xffffU;
+		decoded->pauth_return = true;
+		decoded->pauth_modifier_is_sp = true;
+		decoded->pauth_use_modifier2 = true;
+		decoded->pauth_modifier2_is_pc = true;
+		decoded->pauth_modifier2_pc_relative = true;
+		return true;
+	}
+
+	if ((instruction & 0xffa00c00U) == 0xf8200400U ||
+	    (instruction & 0xffa00c00U) == 0xf8200c00U ||
+	    (instruction & 0xffa00c00U) == 0xf8a00400U ||
+	    (instruction & 0xffa00c00U) == 0xf8a00c00U) {
+		u16 signed_imm10 = ((instruction >> 22) & 1U) << 9 |
+			((instruction >> 12) & 0x1ffU);
+		bool writeback = instruction & BIT(11);
+
+		orlix_tcti_pauth_decoded_base(decoded, ORLIX_TCTI_PAUTH_LOAD,
+			instruction & BIT(23) ? ORLIX_TCTI_PAUTH_KEY_APDB :
+						ORLIX_TCTI_PAUTH_KEY_APDA);
+		decoded->rt = instruction & 0x1fU;
+		decoded->rn = (instruction >> 5) & 0x1fU;
+		decoded->load = true;
+		decoded->access_size = sizeof(u64);
+		decoded->result_size = sizeof(u64);
+		decoded->memory_offset = sign_extend64(signed_imm10, 9) * 8;
+		/* Select the permitted WBSUPPRESS outcome for WBOVERLAPLD. */
+		if (writeback && decoded->rn == decoded->rt && decoded->rn != 31)
+			writeback = false;
+		decoded->memory_index_mode = writeback ? ORLIX_TCTI_MEMORY_INDEX_PRE :
+			ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
+		return true;
+	}
+
+	return false;
+}
+
+static bool orlix_tcti_is_unimplemented_bti_hint(u32 instruction)
+{
 	/* BTI permits the four BType encodings selected by bits [7:6]. */
 	return (instruction & 0xffffff3fU) == 0xd503241fU;
 }
@@ -883,6 +1179,9 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
+	if (orlix_tcti_decode_pointer_authentication(instruction, &decoded))
+		return decoded;
+
 	switch (instruction) {
 	case AARCH64_SMSTART_SM:
 	case AARCH64_SMSTART_ZA:
@@ -922,7 +1221,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	if (sve_ret == -EINVAL)
 		return decoded;
 
-	if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction))
+	if (orlix_tcti_is_unimplemented_bti_hint(instruction))
 		return decoded;
 
 	/* DDI0602 2026-06: CPYFP/CPYFM/CPYFE and CPYP/CPYM/CPYE. */

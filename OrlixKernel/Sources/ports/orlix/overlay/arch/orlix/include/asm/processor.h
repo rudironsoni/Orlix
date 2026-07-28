@@ -57,6 +57,20 @@ struct orlix_cpu_context {
 	unsigned long pc;
 };
 
+struct orlix_tcti_pauth_key {
+	u64 high;
+	u64 low;
+};
+
+struct orlix_tcti_pauth_state {
+	struct orlix_tcti_pauth_key apia;
+	struct orlix_tcti_pauth_key apib;
+	struct orlix_tcti_pauth_key apda;
+	struct orlix_tcti_pauth_key apdb;
+	struct orlix_tcti_pauth_key apga;
+	bool pacm;
+};
+
 struct thread_struct {
 	struct orlix_cpu_context cpu_context;
 #if defined(ORLIX_APP_HOSTED_BOOT)
@@ -70,6 +84,7 @@ struct thread_struct {
 	unsigned long user_simd_valid;
 	struct orlix_tcti_sve_state user_sve;
 	struct orlix_tcti_sme_state user_sme;
+	struct orlix_tcti_pauth_state user_pauth;
 #endif
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;

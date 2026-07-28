@@ -603,6 +603,13 @@ production_capture_bindings[] = {
 #define MOPS_COPY_SUITE "orlix-tcti-mops-copy"
 #define MOPS_COPY_SUITE_SYMBOL "orlix_tcti_mops_copy_suite"
 #define MOPS_COPY_CASE_ARRAY "orlix_tcti_mops_copy_cases"
+#define POINTER_AUTH_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_pauth_bti_gcs_obligation_test.c"
+#define POINTER_AUTH_SUITE \
+	"orlix-tcti-pointer-authentication-source-bound"
+#define POINTER_AUTH_SUITE_SYMBOL \
+	"orlix_tcti_pointer_authentication_source_bound_test_suite"
+#define POINTER_AUTH_CASE_ARRAY "pauth_cases"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define DECODE_SUITE "orlix-tcti-decode"
@@ -656,6 +663,15 @@ production_capture_bindings[] = {
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+#define POINTER_AUTH_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define POINTER_AUTH_BRANCH_OBLIGATIONS \
+	(POINTER_AUTH_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+#define POINTER_AUTH_LOAD_OBLIGATIONS \
+	(POINTER_AUTH_BRANCH_OBLIGATIONS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
@@ -759,6 +775,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ TRANSLATION_CHANGE_SOURCE,
 	  "4ec2fbd8141dd9ee73b5292637fbaa674a04720f159b61d6b3677f07ee8024c7",
 	  "orlix_tcti_translation_change_source_bound_test.o", NULL, NULL, NULL },
+	{ POINTER_AUTH_SOURCE,
+	  "a12e9f72d444c0f6e28d6634e6ff9cfc0c16d15e39ef3757d645971ed8934b8a",
+	  "orlix_tcti_pauth_bti_gcs_obligation_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
@@ -1086,9 +1105,9 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
 	  SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY,
-	  "orlix_tcti_source_leaf_rejections_are_structured_el0_exits",
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  "orlix_tcti_source_leaf_rejections_are_structured_el0_exits",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 #define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
 		object_value, suite_value, suite_symbol_value, case_array_value, \
 		decode_case_value, production_case_value) \
@@ -1096,8 +1115,8 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  decode_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS }, \
 	{ source_value, suite_value, suite_symbol_value, case_array_value, \
-	  production_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  production_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 	{ TRANSLATION_CHANGE_SOURCE, TRANSLATION_CHANGE_SUITE,
@@ -1118,6 +1137,47 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY, "pauth_exact_63_leaf_free_field_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY, "pauth_reserved_invalid_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY, "pauth_qarma5_architectural_vector",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY, "pauth_insert_authenticate_strip_and_failure",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY, "pauth_production_data_key_modifier_and_flags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY,
+	  "pauth_production_generic_branch_link_return_pacm",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY,
+	  "pauth_production_ldra_and_auth_failure_fault",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ POINTER_AUTH_SOURCE, POINTER_AUTH_SUITE, POINTER_AUTH_SUITE_SYMBOL,
+	  POINTER_AUTH_CASE_ARRAY,
+	  "pauth_non_el0_rejections_preserve_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_unsigned_immediate_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1366,16 +1426,45 @@ static const struct operation_requirements operation_requirements[] = {
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "SUBS_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+		{ "SUBS_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) \
-	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+		{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
-	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
+		{ "AUTDA", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTDB", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIA", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIA171615", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIASPPCR", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIASPPC_imm", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIB", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIB171615", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIBSPPCR", POINTER_AUTH_OBLIGATIONS },
+	{ "AUTIBSPPC_imm", POINTER_AUTH_OBLIGATIONS },
+	{ "BLRA", POINTER_AUTH_BRANCH_OBLIGATIONS },
+	{ "BRA", POINTER_AUTH_BRANCH_OBLIGATIONS },
+	{ "LDRA", POINTER_AUTH_LOAD_OBLIGATIONS },
+	{ "PACDA", POINTER_AUTH_OBLIGATIONS },
+	{ "PACDB", POINTER_AUTH_OBLIGATIONS },
+	{ "PACGA", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIA", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIA171615", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIASPPC", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIB", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIB171615", POINTER_AUTH_OBLIGATIONS },
+	{ "PACIBSPPC", POINTER_AUTH_OBLIGATIONS },
+	{ "PACM", POINTER_AUTH_OBLIGATIONS },
+	{ "PACNBIASPPC", POINTER_AUTH_OBLIGATIONS },
+	{ "PACNBIBSPPC", POINTER_AUTH_OBLIGATIONS },
+	{ "RETA", POINTER_AUTH_BRANCH_OBLIGATIONS },
+		{ "RETASPPCR_reg", POINTER_AUTH_BRANCH_OBLIGATIONS },
+		{ "RETASPPC_imm", POINTER_AUTH_BRANCH_OBLIGATIONS },
+		{ "XPAC", POINTER_AUTH_OBLIGATIONS },
+		{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORN_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -2383,6 +2472,8 @@ enum {
 #define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 15U
 #define MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT 32U
 #define MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT 96U
+#define POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT 29U
+#define POINTER_AUTH_PROOF_REGISTRY_BINDING_COUNT 63U
 
 static bool proof_registry_initialized;
 static bool proof_registry_initialization_attempted;
@@ -2401,7 +2492,8 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT +
-	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT] = {
+	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT +
+	POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -3348,7 +3440,8 @@ static bool build_ordinary_load_store_registry(void)
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -3609,7 +3702,8 @@ static bool build_source_leaf_rejection_registry(void)
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -3787,7 +3881,8 @@ static bool build_production_capture_family_registry(void)
 {
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (production_capture_family_registry_ready)
 		return true;
@@ -3807,6 +3902,14 @@ static bool build_production_capture_family_registry(void)
 struct mops_copy_registry_operation {
 	const char *proof_id;
 	const char *operation_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+struct pointer_auth_registry_operation {
+	const char *proof_id;
+	const char *operation_id;
+	size_t expected_bindings;
 	size_t binding_offset;
 	size_t binding_count;
 };
@@ -3908,7 +4011,8 @@ static bool build_mops_copy_registry(void)
 {
 	size_t binding_offset = 0;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (mops_copy_registry_ready)
@@ -3986,6 +4090,246 @@ static bool build_mops_copy_registry(void)
 			};
 	}
 	mops_copy_registry_ready = true;
+	return true;
+}
+
+
+#define POINTER_AUTH_REGISTRY_OPERATION(proof, operation, count) \
+	{ .proof_id = proof, .operation_id = operation, .expected_bindings = count }
+static struct pointer_auth_registry_operation pointer_auth_registry_operations[] = {
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autda", "AUTDA", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autdb", "AUTDB", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autia", "AUTIA", 5),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autia171615", "AUTIA171615", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autiasppcr", "AUTIASPPCR", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autiasppc-imm", "AUTIASPPC_imm", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autib", "AUTIB", 5),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autib171615", "AUTIB171615", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autibsppcr", "AUTIBSPPCR", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-autibsppc-imm", "AUTIBSPPC_imm", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-blra", "BLRA", 4),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-bra", "BRA", 4),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-ldra", "LDRA", 4),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacda", "PACDA", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacdb", "PACDB", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacga", "PACGA", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacia", "PACIA", 5),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacia171615", "PACIA171615", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-paciasppc", "PACIASPPC", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacib", "PACIB", 5),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacib171615", "PACIB171615", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacibsppc", "PACIBSPPC", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacm", "PACM", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacnbiasppc", "PACNBIASPPC", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-pacnbibsppc", "PACNBIBSPPC", 1),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-reta", "RETA", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-retasppcr-reg", "RETASPPCR_reg", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-retasppc-imm", "RETASPPC_imm", 2),
+	POINTER_AUTH_REGISTRY_OPERATION("kunit:pointer-auth-xpac", "XPAC", 3),
+};
+#undef POINTER_AUTH_REGISTRY_OPERATION
+
+static const struct orlix_tcti_target_proof_case pointer_auth_cases[] = {
+	{ "pauth_exact_63_leaf_free_field_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "pauth_reserved_invalid_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "pauth_qarma5_architectural_vector",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_insert_authenticate_strip_and_failure",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_production_data_key_modifier_and_flags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "pauth_non_el0_rejections_preserve_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct orlix_tcti_target_proof_case pointer_auth_branch_cases[] = {
+	{ "pauth_exact_63_leaf_free_field_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "pauth_reserved_invalid_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "pauth_qarma5_architectural_vector",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_insert_authenticate_strip_and_failure",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_production_data_key_modifier_and_flags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "pauth_production_generic_branch_link_return_pacm",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "pauth_non_el0_rejections_preserve_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static const struct orlix_tcti_target_proof_case pointer_auth_load_cases[] = {
+	{ "pauth_exact_63_leaf_free_field_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "pauth_reserved_invalid_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "pauth_qarma5_architectural_vector",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_insert_authenticate_strip_and_failure",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "pauth_production_data_key_modifier_and_flags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "pauth_production_ldra_and_auth_failure_fault",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "pauth_non_el0_rejections_preserve_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+
+static struct orlix_tcti_target_proof_binding pointer_auth_registry_bindings[
+	POINTER_AUTH_PROOF_REGISTRY_BINDING_COUNT];
+static bool pointer_auth_registry_ready;
+
+static struct pointer_auth_registry_operation *
+pointer_auth_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(pointer_auth_registry_operations); index++)
+		if (!strcmp(proof_id,
+			    pointer_auth_registry_operations[index].proof_id))
+			return &pointer_auth_registry_operations[index];
+	return NULL;
+}
+
+static bool pointer_auth_operation_has_faults(const char *operation_id)
+{
+	return !strcmp(operation_id, "BLRA") || !strcmp(operation_id, "BRA") ||
+		!strcmp(operation_id, "LDRA") || !strcmp(operation_id, "RETA") ||
+		!strcmp(operation_id, "RETASPPCR_reg") ||
+		!strcmp(operation_id, "RETASPPC_imm");
+}
+
+static bool build_pointer_auth_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t index;
+
+	if (pointer_auth_registry_ready)
+		return true;
+	if (ARRAY_COUNT(pointer_auth_registry_operations) !=
+	    POINTER_AUTH_PROOF_REGISTRY_ENTRY_COUNT)
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct pointer_auth_registry_operation *operation =
+			pointer_auth_registry_operation_for(source_bound_proofs[index].proof_id);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(pointer_auth_registry_operations); index++) {
+		struct pointer_auth_registry_operation *operation =
+			&pointer_auth_registry_operations[index];
+
+		if (operation->binding_count != operation->expected_bindings)
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != ARRAY_COUNT(pointer_auth_registry_bindings))
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct pointer_auth_registry_operation *operation =
+			pointer_auth_registry_operation_for(source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct orlix_tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
+		if (!source || strcmp(source->operation_id, operation->operation_id))
+			return false;
+		binding = &pointer_auth_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		*binding = (struct orlix_tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask =
+				pointer_auth_operation_has_faults(operation->operation_id) ?
+				ORLIX_TCTI_PROOF_U64_C(0x7f) :
+				ORLIX_TCTI_PROOF_U64_C(0x3f),
+			.source_ordinal = source->ordinal,
+		};
+	}
+	for (index = 0; index < ARRAY_COUNT(pointer_auth_registry_operations); index++) {
+		struct pointer_auth_registry_operation *operation =
+			&pointer_auth_registry_operations[index];
+		orlix_tcti_proof_u32 obligations;
+		const struct orlix_tcti_target_proof_case *cases;
+		size_t case_count;
+
+		if (operation->binding_count != operation->expected_bindings ||
+		    orlix_tcti_target_proof_operation_requirements(
+			operation->operation_id, 1, &obligations))
+			return false;
+		if (!strcmp(operation->operation_id, "LDRA")) {
+			cases = pointer_auth_load_cases;
+			case_count = ARRAY_COUNT(pointer_auth_load_cases);
+		} else if (obligations & ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS) {
+			cases = pointer_auth_branch_cases;
+			case_count = ARRAY_COUNT(pointer_auth_branch_cases);
+		} else {
+			cases = pointer_auth_cases;
+			case_count = ARRAY_COUNT(pointer_auth_cases);
+		}
+		proof_registry_entries[entry_base + index] =
+			(struct orlix_tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask =
+					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+				.obligations = obligations,
+				.linux_interface =
+					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = POINTER_AUTH_SOURCE,
+				.kunit_suite = POINTER_AUTH_SUITE,
+				.kunit_cases = cases,
+				.kunit_case_count = case_count,
+				.bindings = &pointer_auth_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations = obligations,
+			};
+	}
+	pointer_auth_registry_ready = true;
 	return true;
 }
 
@@ -5238,7 +5582,8 @@ static void proof_registry_initialize(void)
 	    !build_exclusive_registry() || !build_ordinary_load_store_registry() ||
 	    !build_source_leaf_rejection_registry() ||
 	    !build_production_capture_family_registry() ||
-	    !build_mops_copy_registry())
+	    !build_mops_copy_registry() ||
+	    !build_pointer_auth_registry())
 		return;
 	if (orlix_tcti_target_production_capture_bindings_validate(
 			production_capture_bindings,

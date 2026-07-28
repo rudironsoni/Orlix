@@ -543,6 +543,10 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_REPLICATE:
 	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
+	case ORLIX_TCTI_DECODE_POINTER_AUTHENTICATION:
+		if (decoded->decode_class == ORLIX_TCTI_DECODE_POINTER_AUTHENTICATION &&
+		    decoded->pauth_op != ORLIX_TCTI_PAUTH_LOAD)
+			return ORLIX_TCTI_ACCESS_FETCH;
 		return decoded->load ? ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
@@ -571,6 +575,8 @@ orlix_tcti_decoded_ends_block(const struct orlix_tcti_decoded_instruction *decod
 	case ORLIX_TCTI_DECODE_TEST_BRANCH_IMMEDIATE:
 	case ORLIX_TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE:
 		return true;
+	case ORLIX_TCTI_DECODE_POINTER_AUTHENTICATION:
+		return decoded->pauth_op == ORLIX_TCTI_PAUTH_BRANCH;
 	default:
 		return false;
 	}

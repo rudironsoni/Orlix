@@ -16,6 +16,8 @@
 #include <asm/orlix_tcti.h>
 #include <asm/tlbflush.h>
 
+#include "../hosted_exec/orlix_tcti/pointer_authentication.h"
+
 struct task_struct *orlix_current_task = &init_task;
 #ifndef CONFIG_THREAD_INFO_IN_TASK
 struct thread_info *orlix_current_thread_info = &init_thread_info;
@@ -102,6 +104,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	orlix_tcti_sme_state_release(&current->thread.user_sme);
+	orlix_tcti_pauth_randomize_task(current);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -129,6 +132,7 @@ void flush_thread(void)
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	orlix_tcti_sme_state_release(&current->thread.user_sme);
+	orlix_tcti_pauth_randomize_task(current);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -160,6 +164,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
 	/* task_struct duplication may have copied parent-owned SME pointers. */
 	memset(&p->thread.user_sme, 0, sizeof(p->thread.user_sme));
+	orlix_tcti_pauth_clear_task(p);
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
@@ -202,6 +207,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 						&current->thread.user_sme);
 		if (ret)
 			return ret;
+		orlix_tcti_pauth_copy_task(p, current);
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
