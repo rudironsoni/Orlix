@@ -182,6 +182,51 @@ static void native_result_and_gpr_are_captured_not_injected(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
+static void native_encoding_domains_and_flags_require_typed_witnesses(
+		struct kunit *test)
+{
+	static const enum orlix_tcti_native_obligation domains[] = {
+		ORLIX_TCTI_NATIVE_OBLIGATION_DECODE,
+		ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS,
+		ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS,
+	};
+	struct orlix_tcti_native_observation_spec spec;
+	struct orlix_tcti_native_observation *observation;
+	struct pt_regs regs;
+	unsigned long mapped = native_map_program(test, NATIVE_NOP);
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(domains); index++) {
+		native_seed_execution(&spec, &regs, domains[index], mapped);
+		observation = native_create_and_execute(test, &spec, &regs);
+		KUNIT_EXPECT_EQ(test, -EINPROGRESS,
+			orlix_tcti_native_observation_compare(observation));
+		KUNIT_ASSERT_EQ(test, 0,
+			orlix_tcti_native_observation_add_encoding_domain(observation));
+		KUNIT_EXPECT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+		orlix_tcti_native_observation_destroy(observation);
+	}
+
+	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
+			      mapped);
+	observation = native_create_and_execute(test, &spec, &regs);
+	KUNIT_EXPECT_EQ(test, 0,
+			orlix_tcti_native_observation_compare(observation));
+	orlix_tcti_native_observation_destroy(observation);
+
+	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS,
+			      mapped);
+	spec.gpr.pstate ^= PSR_Z_BIT;
+	observation = native_create_and_execute(test, &spec, &regs);
+	KUNIT_EXPECT_EQ(test, -EBADE,
+			orlix_tcti_native_observation_compare(observation));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_FLAGS_MISMATCH,
+			orlix_tcti_native_observation_state(observation));
+	orlix_tcti_native_observation_destroy(observation);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
 static void native_memory_and_fp_simd_compare_after_production(struct kunit *test)
 {
 	u8 memory_bytes[] = { 0, 0, 0, 0 };
@@ -352,14 +397,6 @@ static void native_sme_optional_state_is_explicit_and_unavailable(
 
 	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_SME,
 			      mapped);
-	spec.expected.sme.sm_present = true;
-	spec.expected.sme.streaming_mode = true;
-	spec.expected.sme.za_control_present = false;
-	spec.expected.sme.za_enabled = false;
-	spec.expected.sme.vl_present = true;
-	spec.expected.sme.vl_bytes = ORLIX_TCTI_SVE_MIN_VL_BYTES;
-	spec.expected.sme.svl_present = true;
-	spec.expected.sme.svl_bytes = ORLIX_TCTI_SVE_MIN_VL_BYTES;
 	spec.expected.sme.valid = true;
 	spec.expected.sme.production_available = false;
 	observation = native_create_and_execute(test, &spec, &regs);
@@ -563,19 +600,35 @@ static void native_negative_witnesses_are_typed_mismatches_not_malformed(
 	spec.result.pc = fault_mapped;
 	spec.result.instruction = NATIVE_LDR_X0_X1;
 	orlix_tcti_native_gpr_capture(&spec.gpr, &regs);
-	spec.expected.fault.address = 0;
-	spec.expected.fault.access = ORLIX_TCTI_ACCESS_READ;
-	spec.expected.fault.valid = true;
-	spec.expected.fault.occurred = true;
-	spec.expected.fault.precise = true;
 	observation = native_create_and_execute(test, &spec, &regs);
-	fault = spec.expected.fault;
+	fault = (struct orlix_tcti_native_fault_witness) {
+		.address = 0,
+		.access = ORLIX_TCTI_ACCESS_READ,
+		.valid = true,
+		.occurred = true,
+		.precise = true,
+	};
 	fault.side_effects_committed = true;
-	KUNIT_ASSERT_EQ(test, 0,
+	KUNIT_EXPECT_EQ(test, -EPERM,
 			orlix_tcti_native_observation_add_fault(observation, &fault));
-	KUNIT_EXPECT_EQ(test, -EBADE,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_POISONED,
+			orlix_tcti_native_observation_state(observation));
+	orlix_tcti_native_observation_destroy(observation);
+
+	native_seed_execution(&spec, &regs, ORLIX_TCTI_NATIVE_OBLIGATION_FAULT,
+			      fault_mapped);
+	regs.regs[1] = 0;
+	spec.source_ordinal = NATIVE_LDR_64_ORDINAL;
+	spec.result.reason = ORLIX_TCTI_EXIT_USER_FAULT;
+	spec.result.status = -EFAULT;
+	spec.result.fault_access = ORLIX_TCTI_ACCESS_READ;
+	spec.result.pc = fault_mapped;
+	spec.result.instruction = NATIVE_LDR_X0_X1;
+	orlix_tcti_native_gpr_capture(&spec.gpr, &regs);
+	observation = native_create_and_execute(test, &spec, &regs);
+	KUNIT_EXPECT_EQ(test, 0,
 			orlix_tcti_native_observation_compare(observation));
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_FAULT_MISMATCH,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_OBSERVATION_MATCH,
 			orlix_tcti_native_observation_state(observation));
 	orlix_tcti_native_observation_destroy(observation);
 
@@ -667,6 +720,7 @@ static void native_export_is_opaque_single_use_and_production_only(
 static struct kunit_case orlix_tcti_native_observation_test_cases[] = {
 	KUNIT_CASE(native_no_synthetic_or_recoverable_match),
 	KUNIT_CASE(native_result_and_gpr_are_captured_not_injected),
+	KUNIT_CASE(native_encoding_domains_and_flags_require_typed_witnesses),
 	KUNIT_CASE(native_memory_and_fp_simd_compare_after_production),
 	KUNIT_CASE(native_sve_uses_heap_owned_complete_state),
 	KUNIT_CASE(native_sme_optional_state_is_explicit_and_unavailable),

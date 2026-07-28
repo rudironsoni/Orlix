@@ -7,6 +7,7 @@
 #include <linux/string.h>
 #include <linux/utsname.h>
 
+#include "../decode_aarch64.h"
 #include "orlix_tcti_native_observation.h"
 #include "target_instruction_artifact.h"
 #include "target_proof_ingestion_private.h"
@@ -53,7 +54,16 @@ struct orlix_tcti_native_owned_sme {
 	bool production_available;
 };
 
+struct orlix_tcti_native_encoding_domain {
+	u32 legal_count;
+	u32 rejected_count;
+	u64 digest;
+	bool valid;
+};
+
 union orlix_tcti_native_owned_witness {
+	struct orlix_tcti_native_encoding_domain encoding;
+	struct orlix_tcti_native_flags_state flags;
 	struct {
 		unsigned long address;
 		struct orlix_tcti_native_owned_bytes bytes;
@@ -157,21 +167,6 @@ static bool orlix_tcti_native_ordering_success(
 	       witness->edge_observed && !witness->forbidden_outcome;
 }
 
-static bool orlix_tcti_native_fault_structurally_valid(
-		const struct orlix_tcti_native_fault_witness *witness)
-{
-	return witness && witness->valid &&
-	       orlix_tcti_native_access_valid(witness->access);
-}
-
-static bool orlix_tcti_native_fault_success(
-		const struct orlix_tcti_native_fault_witness *witness)
-{
-	return orlix_tcti_native_fault_structurally_valid(witness) &&
-	       witness->occurred && witness->precise &&
-	       !witness->side_effects_committed;
-}
-
 static int orlix_tcti_native_copy_bytes(
 		struct orlix_tcti_native_owned_bytes *destination,
 		const u8 *source, size_t size)
@@ -248,7 +243,20 @@ static int orlix_tcti_native_copy_sme(
 	size_t required_za_size;
 	int ret;
 
-	if (!destination || !source || !source->valid || !source->sm_present ||
+	if (!destination || !source || !source->valid)
+		return -EINVAL;
+	if (!source->production_available) {
+		if (source->sm_present || source->streaming_mode ||
+		    source->za_control_present || source->za_enabled ||
+		    source->vl_present || source->vl_bytes || source->svl_present ||
+		    source->svl_bytes || source->za_applicable || source->za_present ||
+		    source->za || source->za_size || source->zt0_applicable ||
+		    source->zt0_present || source->zt0 || source->zt0_size)
+			return -EINVAL;
+		destination->valid = true;
+		return 0;
+	}
+	if (!source->sm_present ||
 	    !source->vl_present || !orlix_tcti_native_vl_valid(source->vl_bytes) ||
 	    !source->svl_present ||
 	    !orlix_tcti_native_vl_valid(source->svl_bytes) ||
@@ -342,6 +350,13 @@ static int orlix_tcti_native_copy_expected_witness(
 	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
 		return 0;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS:
+		observation->expected.flags = (struct orlix_tcti_native_flags_state) {
+			.nzcv = spec->gpr.pstate &
+				(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT),
+			.valid = true,
+		};
+		return 0;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY:
 		if (!spec->expected.memory.size || !spec->expected.memory.bytes ||
 		    spec->expected.memory.size >
@@ -364,24 +379,22 @@ static int orlix_tcti_native_copy_expected_witness(
 		return orlix_tcti_native_copy_sme(&observation->expected.sme,
 						   &spec->expected.sme);
 	case ORLIX_TCTI_NATIVE_OBLIGATION_FAULT:
-		if (!orlix_tcti_native_fault_success(&spec->expected.fault) ||
-		    spec->expected.fault.access != spec->result.fault_access)
-			return -EINVAL;
-		if ((spec->result.reason == ORLIX_TCTI_EXIT_USER_FAULT ||
-		     spec->result.reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT) &&
-		    spec->expected.fault.address != spec->result.fault_address)
-			return -EINVAL;
-		if ((spec->result.reason == ORLIX_TCTI_EXIT_BREAKPOINT ||
-		     spec->result.reason == ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION) &&
-		    (spec->expected.fault.address != spec->result.pc ||
-		     spec->expected.fault.access != ORLIX_TCTI_ACCESS_FETCH))
-			return -EINVAL;
 		if (spec->result.reason != ORLIX_TCTI_EXIT_USER_FAULT &&
 		    spec->result.reason != ORLIX_TCTI_EXIT_ALIGNMENT_FAULT &&
 		    spec->result.reason != ORLIX_TCTI_EXIT_BREAKPOINT &&
 		    spec->result.reason != ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION)
 			return -EINVAL;
-		observation->expected.fault = spec->expected.fault;
+		observation->expected.fault = (struct orlix_tcti_native_fault_witness) {
+			.address = spec->result.reason == ORLIX_TCTI_EXIT_USER_FAULT ||
+				spec->result.reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT ?
+				spec->result.fault_address : spec->result.pc,
+			.access = spec->result.reason == ORLIX_TCTI_EXIT_USER_FAULT ||
+				spec->result.reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT ?
+				spec->result.fault_access : ORLIX_TCTI_ACCESS_FETCH,
+			.valid = true,
+			.occurred = true,
+			.precise = true,
+		};
 		return 0;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_ATOMICITY:
 		if (!orlix_tcti_native_atomicity_success(&spec->expected.atomicity))
@@ -419,10 +432,7 @@ orlix_tcti_native_observation_create(
 	observation->expected_result = spec->result;
 	observation->expected_gpr = spec->gpr;
 	observation->expected_mask = ORLIX_TCTI_NATIVE_HAVE_EXECUTION;
-	if (spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_DECODE &&
-	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS &&
-	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS &&
-	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
+	if (spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_RESULT &&
 	    spec->obligation != ORLIX_TCTI_NATIVE_OBLIGATION_GPR)
 		observation->expected_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
 	ret = orlix_tcti_native_copy_expected_witness(observation, spec);
@@ -588,6 +598,129 @@ static int orlix_tcti_native_bind_unique_leaf(
 	return 0;
 }
 
+static u64 orlix_tcti_native_encoding_hash(u64 hash, u32 instruction,
+					   u32 decode_class)
+{
+	u32 values[] = { instruction, decode_class };
+	const u8 *bytes = (const u8 *)values;
+	size_t index;
+
+	for (index = 0; index < sizeof(values); index++) {
+		hash ^= bytes[index];
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+
+int orlix_tcti_native_observation_add_encoding_domain(
+		struct orlix_tcti_native_observation *observation)
+{
+	const struct orlix_tcti_target_instruction_artifact *artifact;
+	struct orlix_tcti_native_encoding_domain domain = {
+		.digest = 1469598103934665603ULL,
+	};
+	u32 mask;
+	u32 pattern;
+	u32 variable_mask;
+	u32 variable_fields = 0;
+	u32 bit;
+	enum orlix_tcti_decode_class canonical_class;
+	int ret;
+
+	if (!orlix_tcti_native_observation_valid(observation))
+		return -EINVAL;
+	if (observation->expected_obligation != ORLIX_TCTI_NATIVE_OBLIGATION_DECODE &&
+	    observation->expected_obligation !=
+		    ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS &&
+	    observation->expected_obligation !=
+		    ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS)
+		return orlix_tcti_native_poison(observation, -EPROTOTYPE);
+	ret = orlix_tcti_native_prepare_add(observation,
+					ORLIX_TCTI_NATIVE_HAVE_WITNESS,
+					observation->expected_obligation);
+	if (ret)
+		return ret;
+	if (!(observation->observed_mask & ORLIX_TCTI_NATIVE_HAVE_EXECUTION))
+		return orlix_tcti_native_poison(observation, -EINPROGRESS);
+	artifact = orlix_tcti_target_instruction_artifact_canonical();
+	ret = orlix_tcti_native_effective_encoding(
+		artifact, observation->expected_source_ordinal, &mask, &pattern);
+	if (ret)
+		return orlix_tcti_native_poison(observation, ret);
+	variable_mask = ~mask;
+	if (hweight32(variable_mask) > 16)
+		return orlix_tcti_native_poison(observation, -E2BIG);
+	canonical_class = orlix_tcti_decode_aarch64(pattern).decode_class;
+
+	if (observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_DECODE) {
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(
+				observation->observed_result.entry_instruction);
+
+		domain.legal_count = 1;
+		domain.digest = orlix_tcti_native_encoding_hash(
+			domain.digest, observation->observed_result.entry_instruction,
+			decoded.decode_class);
+	} else if (observation->expected_obligation ==
+		   ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS) {
+		do {
+			u32 instruction = pattern | variable_fields;
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(instruction);
+
+			if ((instruction & mask) != pattern ||
+			    decoded.decode_class != canonical_class)
+				return orlix_tcti_native_poison(observation, -EBADMSG);
+			domain.legal_count++;
+			domain.digest = orlix_tcti_native_encoding_hash(
+				domain.digest, instruction, decoded.decode_class);
+			variable_fields =
+				(variable_fields - variable_mask) & variable_mask;
+		} while (variable_fields);
+		if (domain.legal_count != (1U << hweight32(variable_mask)))
+			return orlix_tcti_native_poison(observation, -EBADMSG);
+	} else {
+		for (bit = 0; bit < 32; bit++) {
+			u32 instruction;
+			u32 ordinal;
+			bool allocated = false;
+			struct orlix_tcti_decoded_instruction decoded;
+
+			if (!(mask & BIT(bit)))
+				continue;
+			instruction = pattern ^ BIT(bit);
+			if ((instruction & mask) == pattern)
+				return orlix_tcti_native_poison(observation, -EBADMSG);
+			for (ordinal = 0; ordinal < artifact->leaf_count; ordinal++) {
+				u32 other_mask;
+				u32 other_pattern;
+
+				ret = orlix_tcti_native_effective_encoding(
+					artifact, ordinal, &other_mask, &other_pattern);
+				if (ret)
+					return orlix_tcti_native_poison(observation, ret);
+				if ((instruction & other_mask) == other_pattern) {
+					allocated = true;
+					break;
+				}
+			}
+			if (allocated)
+				continue;
+			decoded = orlix_tcti_decode_aarch64(instruction);
+			domain.rejected_count++;
+			domain.digest = orlix_tcti_native_encoding_hash(
+				domain.digest, instruction, decoded.decode_class);
+		}
+		if (!domain.rejected_count)
+			return orlix_tcti_native_poison(observation, -EBADMSG);
+	}
+	domain.valid = true;
+	observation->observed.encoding = domain;
+	observation->expected.encoding = domain;
+	observation->observed_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
+	return 0;
+}
+
 int orlix_tcti_native_observation_execute(
 		struct orlix_tcti_native_observation *observation,
 		struct task_struct *task, struct pt_regs *regs, struct mm_struct *mm)
@@ -631,6 +764,36 @@ int orlix_tcti_native_observation_execute(
 
 	observation->source_bound = true;
 	observation->observed_mask |= ORLIX_TCTI_NATIVE_HAVE_EXECUTION;
+	if (observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS) {
+		observation->observed.flags = (struct orlix_tcti_native_flags_state) {
+			.nzcv = observation->observed_gpr.pstate &
+				(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT),
+			.valid = true,
+		};
+		observation->observed_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
+	} else if (observation->expected_obligation ==
+		   ORLIX_TCTI_NATIVE_OBLIGATION_FAULT) {
+		const struct orlix_tcti_result *result = &observation->observed_result;
+
+		if (result->reason != ORLIX_TCTI_EXIT_USER_FAULT &&
+		    result->reason != ORLIX_TCTI_EXIT_ALIGNMENT_FAULT &&
+		    result->reason != ORLIX_TCTI_EXIT_BREAKPOINT &&
+		    result->reason != ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION)
+			return orlix_tcti_native_poison(observation, -EBADMSG);
+		observation->observed.fault =
+			(struct orlix_tcti_native_fault_witness) {
+				.address = result->reason == ORLIX_TCTI_EXIT_USER_FAULT ||
+					result->reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT ?
+					result->fault_address : result->pc,
+				.access = result->reason == ORLIX_TCTI_EXIT_USER_FAULT ||
+					result->reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT ?
+					result->fault_access : ORLIX_TCTI_ACCESS_FETCH,
+				.valid = true,
+				.occurred = true,
+				.precise = true,
+			};
+		observation->observed_mask |= ORLIX_TCTI_NATIVE_HAVE_WITNESS;
+	}
 	return 0;
 }
 
@@ -723,9 +886,13 @@ int orlix_tcti_native_observation_add_##name( \
 	return 0; \
 }
 
-ORLIX_TCTI_NATIVE_ADD_SMALL(fault, orlix_tcti_native_fault_witness, fault,
-	ORLIX_TCTI_NATIVE_OBLIGATION_FAULT,
-	orlix_tcti_native_fault_structurally_valid)
+int orlix_tcti_native_observation_add_fault(
+		struct orlix_tcti_native_observation *observation,
+		const struct orlix_tcti_native_fault_witness *fault)
+{
+	(void)fault;
+	return orlix_tcti_native_poison(observation, -EPERM);
+}
 ORLIX_TCTI_NATIVE_ADD_SMALL(atomicity, orlix_tcti_native_atomicity_witness,
 	atomicity, ORLIX_TCTI_NATIVE_OBLIGATION_ATOMICITY,
 	orlix_tcti_native_atomicity_structurally_valid)
@@ -750,6 +917,18 @@ static bool orlix_tcti_native_gpr_equal(
 	return !memcmp(left->x, right->x, sizeof(left->x)) &&
 	       left->sp == right->sp && left->pc == right->pc &&
 	       left->pstate == right->pstate;
+}
+
+static bool orlix_tcti_native_gpr_without_flags_equal(
+		const struct orlix_tcti_native_gpr_state *left,
+		const struct orlix_tcti_native_gpr_state *right)
+{
+	return !memcmp(left->x, right->x, sizeof(left->x)) &&
+	       left->sp == right->sp && left->pc == right->pc &&
+	       (left->pstate &
+		~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)) ==
+	       (right->pstate &
+		~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT));
 }
 
 static bool orlix_tcti_native_owned_bytes_equal(
@@ -813,9 +992,28 @@ static int orlix_tcti_native_compare_witness(
 	case ORLIX_TCTI_NATIVE_OBLIGATION_DECODE:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS:
+		if (!observation->expected.encoding.valid ||
+		    !observation->observed.encoding.valid ||
+		    observation->expected.encoding.legal_count !=
+			    observation->observed.encoding.legal_count ||
+		    observation->expected.encoding.rejected_count !=
+			    observation->observed.encoding.rejected_count ||
+		    observation->expected.encoding.digest !=
+			    observation->observed.encoding.digest)
+			observation->state =
+				ORLIX_TCTI_NATIVE_OBSERVATION_IDENTITY_MISMATCH;
+		break;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_RESULT:
 	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
 		return 0;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS:
+		if (!observation->expected.flags.valid ||
+		    !observation->observed.flags.valid ||
+		    observation->expected.flags.nzcv !=
+			    observation->observed.flags.nzcv)
+			observation->state =
+				ORLIX_TCTI_NATIVE_OBSERVATION_FLAGS_MISMATCH;
+		break;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY:
 		if (observation->expected.memory.address !=
 			    observation->observed.memory.address ||
@@ -944,8 +1142,11 @@ int orlix_tcti_native_observation_compare(
 		observation->state = ORLIX_TCTI_NATIVE_OBSERVATION_RESULT_MISMATCH;
 		return -EBADE;
 	}
-	if (!orlix_tcti_native_gpr_equal(&observation->expected_gpr,
-					 &observation->observed_gpr)) {
+	if ((observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS ?
+	     !orlix_tcti_native_gpr_without_flags_equal(
+		     &observation->expected_gpr, &observation->observed_gpr) :
+	     !orlix_tcti_native_gpr_equal(&observation->expected_gpr,
+					  &observation->observed_gpr))) {
 		observation->state = ORLIX_TCTI_NATIVE_OBSERVATION_GPR_MISMATCH;
 		return -EBADE;
 	}
@@ -975,7 +1176,9 @@ int orlix_tcti_native_observation_export(
 		return -EINVAL;
 	if (observation->exported)
 		return orlix_tcti_native_poison(observation, -EALREADY);
-	if (observation->state != ORLIX_TCTI_NATIVE_OBSERVATION_MATCH ||
+	if ((observation->state != ORLIX_TCTI_NATIVE_OBSERVATION_MATCH &&
+	     !(observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_SME &&
+	       observation->state == ORLIX_TCTI_NATIVE_OBSERVATION_STATE_UNAVAILABLE)) ||
 	    !observation->source_bound || observation->execution_count != 1 ||
 	    observation->execution_path !=
 		    ORLIX_TCTI_NATIVE_INTERNAL_PATH_RESUME_USER)
@@ -998,6 +1201,18 @@ int orlix_tcti_native_observation_export(
 	exported->encoding_mask = mask;
 	exported->encoding_pattern = pattern;
 	exported->entry_instruction = observation->observed_result.entry_instruction;
+	if (observation->expected_obligation == ORLIX_TCTI_NATIVE_OBLIGATION_DECODE ||
+	    observation->expected_obligation ==
+		    ORLIX_TCTI_NATIVE_OBLIGATION_LEGAL_ENCODINGS ||
+	    observation->expected_obligation ==
+		    ORLIX_TCTI_NATIVE_OBLIGATION_REJECTED_ENCODINGS) {
+		exported->legal_encoding_count =
+			observation->observed.encoding.legal_count;
+		exported->rejected_encoding_count =
+			observation->observed.encoding.rejected_count;
+		exported->encoding_domain_digest =
+			observation->observed.encoding.digest;
+	}
 	switch (observation->expected_obligation) {
 	case ORLIX_TCTI_NATIVE_OBLIGATION_DECODE:
 		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_DECODE;
@@ -1014,6 +1229,9 @@ int orlix_tcti_native_observation_export(
 	case ORLIX_TCTI_NATIVE_OBLIGATION_GPR:
 		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_GPR;
 		break;
+	case ORLIX_TCTI_NATIVE_OBLIGATION_FLAGS:
+		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FLAGS;
+		break;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_MEMORY:
 		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_MEMORY;
 		break;
@@ -1024,7 +1242,10 @@ int orlix_tcti_native_observation_export(
 		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_SVE;
 		break;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_SME:
-		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_SME;
+		exported->kind = observation->state ==
+			ORLIX_TCTI_NATIVE_OBSERVATION_STATE_UNAVAILABLE ?
+			ORLIX_TCTI_TARGET_NATIVE_RESULT_SME_UNAVAILABLE :
+			ORLIX_TCTI_TARGET_NATIVE_RESULT_SME;
 		break;
 	case ORLIX_TCTI_NATIVE_OBLIGATION_FAULT:
 		exported->kind = ORLIX_TCTI_TARGET_NATIVE_RESULT_FAULT;
@@ -1041,7 +1262,7 @@ int orlix_tcti_native_observation_export(
 	}
 	exported->production_resume = true;
 	exported->source_bound = true;
-	exported->match = true;
+	exported->match = observation->state == ORLIX_TCTI_NATIVE_OBSERVATION_MATCH;
 	exported->resume_count = 1;
 #define COPY_EXPORT_FIELD(field, source) \
 	do { \
@@ -1080,6 +1301,8 @@ int orlix_tcti_native_observation_export(
 	HASH_EXPORT_BYTES(&exported->entry_instruction,
 			  sizeof(exported->entry_instruction));
 	HASH_EXPORT_BYTES(&exported->kind, sizeof(exported->kind));
+	HASH_EXPORT_BYTES(&exported->encoding_domain_digest,
+			  sizeof(exported->encoding_domain_digest));
 	HASH_EXPORT_BYTES(exported->artifact_source_sha256,
 			  strlen(exported->artifact_source_sha256));
 	HASH_EXPORT_BYTES(exported->executing_kernel_identity,

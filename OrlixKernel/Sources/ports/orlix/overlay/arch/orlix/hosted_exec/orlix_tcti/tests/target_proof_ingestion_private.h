@@ -22,6 +22,9 @@ struct orlix_tcti_target_native_result_record {
 	orlix_tcti_proof_u32 encoding_pattern;
 	orlix_tcti_proof_u32 entry_instruction;
 	enum orlix_tcti_target_native_result_kind kind;
+	orlix_tcti_proof_u32 legal_encoding_count;
+	orlix_tcti_proof_u32 rejected_encoding_count;
+	orlix_tcti_proof_u64 encoding_domain_digest;
 	bool production_resume;
 	bool source_bound;
 	bool match;
@@ -77,6 +80,9 @@ struct orlix_tcti_target_native_result_test_input {
 	orlix_tcti_proof_u32 encoding_pattern;
 	orlix_tcti_proof_u32 entry_instruction;
 	enum orlix_tcti_target_native_result_kind kind;
+	orlix_tcti_proof_u32 legal_encoding_count;
+	orlix_tcti_proof_u32 rejected_encoding_count;
+	orlix_tcti_proof_u64 encoding_domain_digest;
 	const char *artifact_architecture;
 	const char *artifact_build;
 	const char *artifact_reference;
