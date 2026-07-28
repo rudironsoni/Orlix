@@ -7798,9 +7798,10 @@ struct orlix_tcti_result orlix_tcti_switch_debug_resume_user(struct task_struct 
 			result.instruction = instruction;
 			return result;
 		}
-		if (decoded.decode_class == ORLIX_TCTI_DECODE_HLT) {
-			result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
-			result.status = -EOPNOTSUPP;
+		if (decoded.decode_class == ORLIX_TCTI_DECODE_HLT ||
+		    decoded.decode_class == ORLIX_TCTI_DECODE_UNDEFINED) {
+			result.reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
+			result.status = 0;
 			result.pc = regs->pc;
 			result.instruction = instruction;
 			return result;

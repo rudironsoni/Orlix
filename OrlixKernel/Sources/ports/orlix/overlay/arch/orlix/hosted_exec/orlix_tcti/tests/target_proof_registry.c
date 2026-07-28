@@ -618,7 +618,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KSELFTEST_SIGNAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/signal_wait_probe.c"
 #define KSELFTEST_SIGNAL_SOURCE_SHA256 \
-	"f782e3e950729f96a598fea10f97b88ee31d54b7ddf91a09b161fa14a2f95b9f"
+	"7bd1f57a30c9b6c2ab1db2839252784de7ddee0ae37fa595d9745c6db8c47e50"
 #define KSELFTEST_STACK_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/stack_growth_probe.c"
 #define KSELFTEST_STACK_SOURCE_SHA256 \
@@ -676,13 +676,13 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o" },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "6fbe8cfcbfb448a20ea521f25438f4152509013d23949d0ebc33f4b33064ac7e",
+	  "71457fd8f8abe145cdb3b4a2d4a9794ee4446caec86449ec51c6eeed8e7316e8",
 	  "orlix_tcti_source_leaf_classification_test.o" },
 	{ BRANCH_CONTROL_SOURCE,
-	  "921dd3aab709c395710d1def823fae09394233a2360d51463c87fc7cdd7ea659",
+	  "f8da93be3c2680112cc9dc7d8427c239a65b2f70fed16f575e1c5c0c52bb2d11",
 	  "orlix_tcti_branch_control_source_bound_test.o" },
 	{ DECODE_SOURCE,
-	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
+	  "bfd3ba4e001c0080399f49323a502cb0f881ea81dcf8708f013a370098ab46a3",
 	  "orlix_tcti_decode_test.o" },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",

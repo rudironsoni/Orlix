@@ -127,6 +127,13 @@ static unsigned long source_leaf_map(struct kunit *test, u32 instruction)
 
 #include "orlix_tcti_system_accessor_partition_test.h"
 
+static bool orlix_tcti_source_leaf_is_base_exception(
+	const struct orlix_tcti_source_leaf_rejection *leaf)
+{
+	return leaf->ordinal == 2166U ||
+	       (leaf->ordinal >= 2228U && leaf->ordinal <= 2234U);
+}
+
 static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *test)
 {
 	size_t index;
@@ -161,7 +168,10 @@ static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *
 					    "%s source ordinal %u variable fields %#x",
 					    leaf->name, leaf->ordinal,
 					    variable_fields);
-			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+			KUNIT_ASSERT_EQ_MSG(test,
+				    orlix_tcti_source_leaf_is_base_exception(leaf) ?
+					    ORLIX_TCTI_DECODE_UNDEFINED :
+					    ORLIX_TCTI_DECODE_UNSUPPORTED,
 					    decoded.decode_class,
 					    "%s (%s) source ordinal %u accepted encoding %#x",
 					    leaf->name, leaf->operation,
@@ -188,7 +198,11 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 		struct pt_regs regs = { };
 		struct pt_regs before;
 		struct orlix_tcti_result result;
+		u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+		unsigned long before_simd_valid;
+		u32 observed_instruction = 0;
 		unsigned long mapped;
+		int ret;
 
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
 		mapped = source_leaf_map(test, leaf->pattern);
@@ -198,12 +212,20 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 		regs.syscallno = NO_SYSCALL;
 		regs.regs[0] = 0x123456789abcdef0ULL;
 		before = regs;
+		memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+		before_simd_valid = current->thread.user_simd_valid;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+		KUNIT_EXPECT_EQ_MSG(test,
+				    orlix_tcti_source_leaf_is_base_exception(leaf) ?
+					    ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION :
+					    ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 				    result.reason, "%s source ordinal %u",
 				    leaf->name, leaf->ordinal);
-		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+		KUNIT_EXPECT_EQ_MSG(test,
+				    orlix_tcti_source_leaf_is_base_exception(leaf) ?
+					    0L : -EOPNOTSUPP,
+				    result.status,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, result.instruction,
@@ -212,7 +234,24 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 		KUNIT_EXPECT_EQ_MSG(test, before.pc, result.pc,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, 0UL, result.fault_address,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_ACCESS_FETCH,
+				    result.fault_access, "%s source ordinal %u",
+				    leaf->name, leaf->ordinal);
 		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_MEMEQ(test, before_simd, current->thread.user_simd,
+				   sizeof(before_simd));
+		KUNIT_EXPECT_EQ(test, before_simd_valid,
+				current->thread.user_simd_valid);
+		ret = orlix_tcti_read_user_data(current->mm, mapped,
+						&observed_instruction,
+						sizeof(observed_instruction));
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, observed_instruction,
+				    "%s source ordinal %u", leaf->name,
+				    leaf->ordinal);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 }
