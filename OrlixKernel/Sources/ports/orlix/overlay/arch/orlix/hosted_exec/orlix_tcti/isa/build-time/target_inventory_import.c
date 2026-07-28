@@ -1785,6 +1785,7 @@ static int import_operations(struct importer *importer, int root)
 			int target = object_find(importer, value, "operation_id");
 
 			operation.alias_operation_id = copy_token(importer, target);
+			operation.alias_predicate_unconditional = true;
 			if (!operation.alias_operation_id) {
 				free(operation.id);
 				set_error(importer->error,

@@ -20,6 +20,16 @@
 #define ORLIX_TCTI_ARTIFACT_MAX_BYTES (64U * 1024U * 1024U)
 #define ORLIX_TCTI_ARTIFACT_MAX_SOURCE_BYTES (128U * 1024U * 1024U)
 
+enum artifact_alias_relation_kind {
+	ARTIFACT_ALIAS_RELATION_SEMANTIC = 3,
+	ARTIFACT_ALIAS_RELATION_ASSEMBLER_ONLY = 4,
+};
+
+enum artifact_alias_predicate_kind {
+	ARTIFACT_ALIAS_PREDICATE_SOURCE_CONDITION = 1,
+	ARTIFACT_ALIAS_PREDICATE_SCHEMA_UNCONDITIONAL = 2,
+};
+
 static const char source_architecture[] = "vFATAp1-A";
 static const char source_build[] = "818";
 static const char source_reference[] = "2026-06_rel";
@@ -92,6 +102,9 @@ struct artifact_instruction_alias {
 	uint32_t preferred_source_offset;
 	uint32_t preferred_source_length;
 	uint32_t preferred_identity_offset;
+	uint32_t predicate_sha256_offset;
+	uint8_t relation_kind;
+	uint8_t predicate_kind;
 	uint8_t preferred_present;
 };
 
@@ -102,6 +115,11 @@ struct artifact_operation_alias {
 	uint32_t source_offset;
 	uint32_t source_length;
 	uint32_t source_identity_offset;
+	uint32_t predicate_offset;
+	uint32_t predicate_length;
+	uint32_t predicate_sha256_offset;
+	uint8_t relation_kind;
+	uint8_t predicate_kind;
 };
 
 struct artifact_model {
@@ -389,11 +407,30 @@ static int append_span_identity(struct artifact_bytes *strings,
 	return bytes_append_string(strings, identity, identity_offset);
 }
 
+static int append_predicate_sha256(struct artifact_model *model,
+				   uint32_t offset, uint32_t length,
+				   uint32_t *digest_offset)
+{
+	char digest[65];
+
+	if (!length || offset > model->conditions.length ||
+	    length > model->conditions.length - offset)
+		return -1;
+	orlix_tcti_target_inventory_sha256(model->conditions.data + offset,
+		length, digest);
+	return bytes_append_string(&model->strings, digest, digest_offset);
+}
+
 static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 	const struct orlix_tcti_target_inventory *inventory, struct artifact_model *model)
 {
+	static const unsigned char unconditional_predicate[] = {
+		'T', 'C', 'N', 'D', 1U,
+		ORLIX_TCTI_TARGET_CONDITION_BOOL, 0U, 0U, 0U, 1U, 1U,
+	};
 	size_t index;
 	size_t operation_alias_index = 0;
+	uint32_t unconditional_offset;
 
 	if (inventory->instruction_alias_count !=
 		ORLIX_TCTI_A64_TARGET_INSTRUCTION_ALIAS_COUNT ||
@@ -406,6 +443,12 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 					 sizeof(*model->operation_aliases));
 	if (!model->instruction_aliases || !model->operation_aliases)
 		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_NO_MEMORY;
+	if (model->conditions.length > UINT32_MAX ||
+	    bytes_append(&model->conditions, unconditional_predicate,
+		 sizeof(unconditional_predicate)))
+		return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
+	unconditional_offset = (uint32_t)(model->conditions.length -
+		sizeof(unconditional_predicate));
 	for (index = 0; index < inventory->instruction_alias_count; index++) {
 		const struct orlix_tcti_target_instruction_alias *source =
 			&inventory->instruction_aliases[index];
@@ -426,7 +469,11 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		    bytes_append_string(&model->strings, source->operation_id,
 				&alias->declared_operation_offset) ||
 		    bytes_append_string(&model->strings, source->canonical_operation_id,
-				&alias->resolved_operation_offset))
+				&alias->resolved_operation_offset) ||
+		    append_predicate_sha256(model,
+			model->condition_map[source->condition].offset,
+			model->condition_map[source->condition].length,
+			&alias->predicate_sha256_offset))
 			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
 		alias->ordinal = source->ordinal;
 		alias->condition_offset = model->condition_map[source->condition].offset;
@@ -438,6 +485,8 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		alias->preferred_source_offset = (uint32_t)source->preferred_source_offset;
 		alias->preferred_source_length = (uint32_t)source->preferred_source_length;
 		alias->preferred_present = source->preferred_present;
+		alias->relation_kind = ARTIFACT_ALIAS_RELATION_ASSEMBLER_ONLY;
+		alias->predicate_kind = ARTIFACT_ALIAS_PREDICATE_SOURCE_CONDITION;
 	}
 	for (index = 0; index < inventory->operation_count; index++) {
 		const struct orlix_tcti_target_operation *source = &inventory->operations[index];
@@ -445,6 +494,8 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 
 		if (!source->is_alias || !source->canonical_operation_id)
 			continue;
+		if (!source->alias_predicate_unconditional)
+			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_PARSE;
 		if (operation_alias_index >= inventory->reachable_operation_alias_count)
 			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_COUNT;
 		alias = &model->operation_aliases[operation_alias_index];
@@ -455,10 +506,17 @@ static enum orlix_tcti_target_instruction_artifact_error build_aliases(
 		    bytes_append_string(&model->strings, source->alias_operation_id,
 				&alias->target_operation_offset) ||
 		    bytes_append_string(&model->strings, source->canonical_operation_id,
-				&alias->resolved_operation_offset))
+				&alias->resolved_operation_offset) ||
+		    append_predicate_sha256(model, unconditional_offset,
+			sizeof(unconditional_predicate),
+			&alias->predicate_sha256_offset))
 			return ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_OVERFLOW;
 		alias->source_offset = (uint32_t)source->source_offset;
 		alias->source_length = (uint32_t)source->source_length;
+		alias->predicate_offset = unconditional_offset;
+		alias->predicate_length = sizeof(unconditional_predicate);
+		alias->relation_kind = ARTIFACT_ALIAS_RELATION_SEMANTIC;
+		alias->predicate_kind = ARTIFACT_ALIAS_PREDICATE_SCHEMA_UNCONDITIONAL;
 		operation_alias_index++;
 	}
 	if (operation_alias_index != inventory->reachable_operation_alias_count)
@@ -684,7 +742,7 @@ static int emit_artifact(struct artifact_bytes *output,
 		"#ifndef ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_GENERATED_H\n"
 		"#include \"target_instruction_artifact.h\"\n\n"
-		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 3U\n"
+		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 4U\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_ARCHITECTURE \"%s\"\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_BUILD \"%s\"\n"
 		"#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_REFERENCE \"%s\"\n"
@@ -760,7 +818,7 @@ static int emit_artifact(struct artifact_bytes *output,
 			&model->instruction_aliases[index];
 
 		if (outputf(output,
-			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU },\n",
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU, %uU },\n",
 			alias->ordinal, alias->name_offset,
 			alias->declared_operation_offset, alias->resolved_operation_offset,
 			alias->condition_offset, alias->condition_length,
@@ -769,6 +827,9 @@ static int emit_artifact(struct artifact_bytes *output,
 			alias->condition_source_length, alias->condition_identity_offset,
 			alias->preferred_source_offset, alias->preferred_source_length,
 			alias->preferred_identity_offset,
+			alias->predicate_sha256_offset,
+			(unsigned int)alias->relation_kind,
+			(unsigned int)alias->predicate_kind,
 			(unsigned int)alias->preferred_present))
 			return -1;
 	}
@@ -782,11 +843,14 @@ static int emit_artifact(struct artifact_bytes *output,
 			&model->operation_aliases[index];
 
 		if (outputf(output,
-			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U },\n",
+			"    { %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %" PRIu32 "U, %uU, %uU },\n",
 			alias->declared_operation_offset,
 			alias->target_operation_offset, alias->resolved_operation_offset,
 			alias->source_offset, alias->source_length,
-			alias->source_identity_offset))
+			alias->source_identity_offset, alias->predicate_offset,
+			alias->predicate_length, alias->predicate_sha256_offset,
+			(unsigned int)alias->relation_kind,
+			(unsigned int)alias->predicate_kind))
 			return -1;
 	}
 	if (outputf(output, "};\n\n"))

@@ -836,3 +836,15 @@ grants no implementation, proof, runtime-capability, or readiness credit. A
 pinned OpenMinis AArch64 gadget map records reusable algorithms, edge cases,
 test ideas, and rejected iOS-incompatible patterns for independent Orlix-owned
 implementation without copying or adopting the external runtime.
+
+## [2026-07-28] implement | Type the canonical AArch64 alias graph
+
+Instruction artifact V4 preserves all 4,350 direct leaves plus the 292
+source-declared instruction aliases and 171 reachable operation aliases as
+supplemental graph rows. Every edge retains its declared and canonical concrete
+operation target, source identity, typed relation, serialized predicate, and
+predicate digest. Instruction aliases are source-conditioned assembler-only
+edges; operation aliases are semantic redirects with an explicit unconditional
+predicate. Encoding and decode kinds remain reserved because the pinned source
+declares no such duplicate rows. Graph mutations fail closed and aliases grant
+no classification, implementation, execution, proof, or runtime credit.

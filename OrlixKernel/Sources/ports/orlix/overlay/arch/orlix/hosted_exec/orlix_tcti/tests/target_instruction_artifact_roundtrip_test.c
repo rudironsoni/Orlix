@@ -46,6 +46,7 @@ int main(void)
 	const struct orlix_tcti_target_instruction_artifact *artifact =
 		orlix_tcti_target_instruction_artifact_canonical();
 	struct orlix_tcti_target_instruction_artifact_validation_result result;
+	size_t index;
 
 	if (orlix_tcti_target_instruction_artifact_validate(
 			artifact, &result)) {
@@ -54,6 +55,39 @@ int main(void)
 			orlix_tcti_target_instruction_artifact_validation_error_name(result.error),
 			result.leaf_index, result.operand_index);
 		return EXIT_FAILURE;
+	}
+	if (artifact->leaf_count != 4350U || artifact->instruction_alias_count != 292U ||
+	    artifact->operation_alias_count != 171U) {
+		fputs("generated instruction alias graph count mismatch\n", stderr);
+		return EXIT_FAILURE;
+	}
+	for (index = 0; index < artifact->instruction_alias_count; index++) {
+		const struct orlix_tcti_target_instruction_artifact_instruction_alias *alias =
+			&artifact->instruction_aliases[index];
+
+		if (alias->relation_kind !=
+			ORLIX_TCTI_TARGET_ALIAS_RELATION_ASSEMBLER_ONLY ||
+		    alias->predicate_kind !=
+			ORLIX_TCTI_TARGET_ALIAS_PREDICATE_SOURCE_CONDITION ||
+		    !alias->condition_source_length || !alias->predicate_sha256_offset) {
+			fputs("generated InstructionAlias lost typed predicate provenance\n",
+			      stderr);
+			return EXIT_FAILURE;
+		}
+	}
+	for (index = 0; index < artifact->operation_alias_count; index++) {
+		const struct orlix_tcti_target_instruction_artifact_operation_alias *alias =
+			&artifact->operation_aliases[index];
+
+		if (alias->relation_kind !=
+			ORLIX_TCTI_TARGET_ALIAS_RELATION_SEMANTIC ||
+		    alias->predicate_kind !=
+			ORLIX_TCTI_TARGET_ALIAS_PREDICATE_SCHEMA_UNCONDITIONAL ||
+		    alias->predicate_length != 11U || !alias->predicate_sha256_offset) {
+			fputs("generated OperationAlias lost unconditional semantic edge\n",
+			      stderr);
+			return EXIT_FAILURE;
+		}
 	}
 	if (expect_fixed_operand(artifact, 203U, "opc", 22U, 2U, 0U) ||
 	    expect_fixed_operand(artifact, 204U, "opc", 22U, 2U, 0x00400000U) ||

@@ -123,6 +123,8 @@ struct orlix_tcti_target_operation {
 	/* Canonical concrete operation after bounded alias-chain resolution. */
 	char *canonical_operation_id;
 	bool is_alias;
+	/* The OperationAlias object type declares an unconditional semantic edge. */
+	bool alias_predicate_unconditional;
 	size_t source_offset;
 	size_t source_length;
 	/* Raw source provenance of the operation's optional operational_note. */

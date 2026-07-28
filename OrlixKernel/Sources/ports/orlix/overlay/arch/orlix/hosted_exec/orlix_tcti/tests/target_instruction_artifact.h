@@ -21,11 +21,25 @@ typedef uint8_t u8;
  * untrusted C pointers, because C cannot validate pointer provenance before
  * dereferencing the fixed-width view.
  */
-#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 3U
+#define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_VERSION 4U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT 4350U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_INSTRUCTION_ALIAS_COUNT 292U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_OPERATION_ALIAS_COUNT 171U
 #define ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_EXPECTED_FIXED_OPERAND_COUNT 16675U
+
+enum orlix_tcti_target_alias_relation_kind {
+	/* Reserved for a future source-declared direct-leaf duplicate edge. */
+	ORLIX_TCTI_TARGET_ALIAS_RELATION_ENCODING = 1,
+	/* Reserved for a future source-declared direct-leaf duplicate edge. */
+	ORLIX_TCTI_TARGET_ALIAS_RELATION_DECODE = 2,
+	ORLIX_TCTI_TARGET_ALIAS_RELATION_SEMANTIC = 3,
+	ORLIX_TCTI_TARGET_ALIAS_RELATION_ASSEMBLER_ONLY = 4,
+};
+
+enum orlix_tcti_target_alias_predicate_kind {
+	ORLIX_TCTI_TARGET_ALIAS_PREDICATE_SOURCE_CONDITION = 1,
+	ORLIX_TCTI_TARGET_ALIAS_PREDICATE_SCHEMA_UNCONDITIONAL = 2,
+};
 
 struct orlix_tcti_target_instruction_artifact_leaf {
 	u32 name_offset;
@@ -92,6 +106,9 @@ struct orlix_tcti_target_instruction_artifact_instruction_alias {
 	u32 preferred_source_offset;
 	u32 preferred_source_length;
 	u32 preferred_identity_offset;
+	u32 predicate_sha256_offset;
+	u8 relation_kind;
+	u8 predicate_kind;
 	u8 preferred_present;
 };
 
@@ -109,6 +126,11 @@ struct orlix_tcti_target_instruction_artifact_operation_alias {
 	u32 source_offset;
 	u32 source_length;
 	u32 source_identity_offset;
+	u32 predicate_offset;
+	u32 predicate_length;
+	u32 predicate_sha256_offset;
+	u8 relation_kind;
+	u8 predicate_kind;
 };
 
 struct orlix_tcti_target_instruction_artifact {

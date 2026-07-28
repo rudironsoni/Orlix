@@ -262,6 +262,17 @@ static int model_is_lossless(const char *source, size_t source_length)
 		CHECK(alias->preferred_source_offset == source_alias->preferred_source_offset);
 		CHECK(alias->preferred_source_length == source_alias->preferred_source_length);
 		CHECK(alias->preferred_present == source_alias->preferred_present);
+		CHECK(alias->relation_kind == ARTIFACT_ALIAS_RELATION_ASSEMBLER_ONLY);
+		CHECK(alias->predicate_kind == ARTIFACT_ALIAS_PREDICATE_SOURCE_CONDITION);
+		{
+			char predicate_sha256[65];
+
+			orlix_tcti_target_inventory_sha256(
+				model.conditions.data + alias->condition_offset,
+				alias->condition_length, predicate_sha256);
+			CHECK(!strcmp((char *)model.strings.data +
+				alias->predicate_sha256_offset, predicate_sha256));
+		}
 		CHECK(snprintf(source_identity, sizeof(source_identity), "%s:%zu:%zu",
 			source_sha256, source_alias->source_offset,
 			source_alias->source_length) > 0);
@@ -289,8 +300,24 @@ static int model_is_lossless(const char *source, size_t source_length)
 			CHECK(!strcmp((char *)model.strings.data +
 				alias->resolved_operation_offset,
 				source_operation->canonical_operation_id));
-			CHECK(alias->source_offset == source_operation->source_offset);
-			CHECK(alias->source_length == source_operation->source_length);
+		CHECK(alias->source_offset == source_operation->source_offset);
+		CHECK(alias->source_length == source_operation->source_length);
+		CHECK(source_operation->alias_predicate_unconditional);
+		CHECK(alias->relation_kind == ARTIFACT_ALIAS_RELATION_SEMANTIC);
+		CHECK(alias->predicate_kind ==
+			ARTIFACT_ALIAS_PREDICATE_SCHEMA_UNCONDITIONAL);
+		CHECK(alias->predicate_length == 11U);
+		CHECK(!memcmp(model.conditions.data + alias->predicate_offset,
+			"TCND\1\1\0\0\0\1\1", 11U));
+		{
+			char predicate_sha256[65];
+
+			orlix_tcti_target_inventory_sha256(
+				model.conditions.data + alias->predicate_offset,
+				alias->predicate_length, predicate_sha256);
+			CHECK(!strcmp((char *)model.strings.data +
+				alias->predicate_sha256_offset, predicate_sha256));
+		}
 			operation_alias_index++;
 		}
 		CHECK(operation_alias_index == model.operation_alias_count);
