@@ -175,8 +175,6 @@ int orlix_tcti_atomic_transform_user_data(
 	void *old_value, size_t size, orlix_tcti_atomic_transform_fn transform,
 	void *context);
 int orlix_tcti_rcw_el1_state_read(struct orlix_tcti_rcw_el1_state *state);
-int orlix_tcti_rcw_el1_state_write(
-	const struct orlix_tcti_rcw_el1_state *state);
 int orlix_tcti_compare_exchange_user_data(struct mm_struct *mm,
 				     unsigned long user_va,
 				     const void *expected,

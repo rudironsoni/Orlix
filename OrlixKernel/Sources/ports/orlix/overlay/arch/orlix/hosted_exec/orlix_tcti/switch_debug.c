@@ -4,7 +4,6 @@
 #include <linux/limits.h>
 #include <linux/log2.h>
 #include <linux/preempt.h>
-#include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
@@ -35,36 +34,6 @@
 	(BIT_ULL(29) | BIT_ULL(28) | (4ULL << 16) | (3ULL << 14) | 4ULL)
 #define AARCH64_DCZID_EL0_VALUE BIT_ULL(4)
 #define AARCH64_CNTFRQ_EL0_VALUE 1000000000ULL
-
-static DEFINE_SPINLOCK(orlix_tcti_rcw_el1_lock);
-static struct orlix_tcti_rcw_el1_state orlix_tcti_rcw_el1 = {
-	.feat_the = true,
-};
-
-int orlix_tcti_rcw_el1_state_read(struct orlix_tcti_rcw_el1_state *state)
-{
-	unsigned long flags;
-
-	if (!state)
-		return -EINVAL;
-	spin_lock_irqsave(&orlix_tcti_rcw_el1_lock, flags);
-	*state = orlix_tcti_rcw_el1;
-	spin_unlock_irqrestore(&orlix_tcti_rcw_el1_lock, flags);
-	return 0;
-}
-
-int orlix_tcti_rcw_el1_state_write(
-	const struct orlix_tcti_rcw_el1_state *state)
-{
-	unsigned long flags;
-
-	if (!state)
-		return -EINVAL;
-	spin_lock_irqsave(&orlix_tcti_rcw_el1_lock, flags);
-	orlix_tcti_rcw_el1 = *state;
-	spin_unlock_irqrestore(&orlix_tcti_rcw_el1_lock, flags);
-	return 0;
-}
 
 extern u64 orlix_tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
 extern u64 orlix_tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
@@ -2802,6 +2771,35 @@ static int orlix_tcti_rcw_transform(void *result, const void *old_value,
 	context->wrote_new = context->nzcv == 0x2U;
 	/* Arm permits the failed RCW access to write back the old value. */
 	memcpy(result, context->wrote_new ? new : old, size);
+	return 0;
+}
+
+int orlix_tcti_rcw_evaluate(
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct orlix_tcti_rcw_el1_state *state, const void *old_value,
+	const void *expected, const void *operand, void *result, u8 *nzcv,
+	bool *wrote_new)
+{
+	struct orlix_tcti_rcw_transform_context context = {};
+	size_t size;
+	int ret;
+
+	if (!decoded || !state || !old_value || !expected || !operand || !result ||
+	    !nzcv || !wrote_new || !decoded->atomic_rcw)
+		return -EINVAL;
+	size = decoded->access_size * (decoded->pair ? 2U : 1U);
+	if ((size != sizeof(u64) && size != 2U * sizeof(u64)) ||
+	    decoded->pair != state->feat_d128 || !state->feat_the)
+		return -ENOEXEC;
+	context.operation = decoded->lse_atomic_op;
+	context.state = *state;
+	context.soft = decoded->atomic_rcw_soft;
+	memcpy(context.expected, expected, size);
+	ret = orlix_tcti_rcw_transform(result, old_value, operand, size, &context);
+	if (ret)
+		return ret;
+	*nzcv = context.nzcv;
+	*wrote_new = context.wrote_new;
 	return 0;
 }
 

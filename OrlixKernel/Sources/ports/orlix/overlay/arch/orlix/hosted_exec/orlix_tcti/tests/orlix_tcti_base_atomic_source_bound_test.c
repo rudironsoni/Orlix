@@ -43,11 +43,12 @@ struct orlix_tcti_test_atomic_source {
 	const char *operation;
 	u32 mask;
 	u32 pattern;
+	const char *condition_tcnd_hex;
 };
 
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(i, name, mnemonic, operation, mask, \
-	pattern, ...) { i, name, operation, mask, pattern },
+	pattern, condition, ...) { i, name, operation, mask, pattern, condition },
 static const struct orlix_tcti_test_atomic_source orlix_tcti_test_sources[] = {
 #include "../isa/source_manifest.def"
 };
@@ -142,6 +143,10 @@ static void orlix_tcti_base_atomic_decodes_exact_source_cohort(struct kunit *tes
 				instruction);
 		KUNIT_EXPECT_EQ_MSG(test, source->ordinal, decoded.source_ordinal,
 				"%s %#x", source->name, instruction);
+		KUNIT_ASSERT_NOT_NULL_MSG(test, source->condition_tcnd_hex, "%s",
+			source->name);
+		KUNIT_EXPECT_STREQ_MSG(test, source->condition_tcnd_hex,
+			decoded.source_condition_tcnd_hex, "%s", source->name);
 		count++;
 	}
 	KUNIT_EXPECT_EQ(test, 498U, count);
@@ -380,15 +385,12 @@ static void orlix_tcti_base_atomic_decodes_ordered_access_shapes(struct kunit *t
 
 static void orlix_tcti_base_atomic_executes_every_source_leaf(struct kunit *test)
 {
-	struct orlix_tcti_rcw_el1_state saved_rcw;
-	struct orlix_tcti_rcw_el1_state rcw = { .feat_the = true };
 	unsigned long mapped;
 	unsigned long address;
 	size_t index;
 	size_t executed = 0;
 	size_t rcw_executed = 0;
 
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&saved_rcw));
 	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
 				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
@@ -399,9 +401,6 @@ static void orlix_tcti_base_atomic_executes_every_source_leaf(struct kunit *test
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
 		unsigned long fault_address = 0;
-		u64 rcw_old[2] = {};
-		u64 rcw_expected[2] = {};
-		u64 rcw_observed[2] = {};
 		u32 instruction;
 		int ret;
 
@@ -411,73 +410,46 @@ static void orlix_tcti_base_atomic_executes_every_source_leaf(struct kunit *test
 		decoded = orlix_tcti_decode_aarch64(instruction);
 		if (decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED)
 			continue;
+		if (decoded.atomic_rcw) {
+			struct orlix_tcti_rcw_el1_state state = {
+				.feat_the = true,
+				.feat_d128 = decoded.pair,
+			};
+			u64 old[2] = {};
+			u64 expected[2] = {};
+			u64 operand[2] = { 1, 1 };
+			u64 result[2] = {};
+			u8 nzcv = 0;
+			bool wrote_new = false;
+
+			KUNIT_ASSERT_EQ_MSG(test, 0,
+				orlix_tcti_rcw_evaluate(&decoded, &state, old, expected,
+					operand, result, &nzcv, &wrote_new), "%s",
+				source->name);
+			KUNIT_EXPECT_EQ_MSG(test, 0x2, nzcv, "%s", source->name);
+			KUNIT_EXPECT_TRUE_MSG(test, wrote_new, "%s", source->name);
+			executed++;
+			rcw_executed++;
+			continue;
+		}
 		regs.regs[decoded.rn] = address;
 		regs.regs[decoded.rs] = 2;
 		regs.regs[decoded.rt] = 8;
 		if (decoded.rt2 < 31)
 			regs.regs[decoded.rt2] = 4;
 		regs.pc = 0x1000;
-		if (decoded.atomic_rcw) {
-			rcw.feat_d128 = decoded.pair;
-			KUNIT_ASSERT_EQ(test, 0,
-				orlix_tcti_rcw_el1_state_write(&rcw));
-			if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS) {
-				rcw_old[0] = regs.regs[decoded.rs];
-				rcw_expected[0] = regs.regs[decoded.rt];
-				if (decoded.pair) {
-					rcw_old[1] = regs.regs[decoded.rs + 1U];
-					rcw_expected[1] = regs.regs[decoded.rt + 1U];
-				}
-			} else if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_SET ||
-				   decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_SWP) {
-				rcw_expected[0] = regs.regs[decoded.rs];
-				if (decoded.pair)
-					rcw_expected[1] = regs.regs[decoded.rs + 1U];
-			}
-			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
-				address, rcw_old, decoded.pair ? sizeof(rcw_old) : sizeof(u64)));
-		}
 		ret = orlix_tcti_switch_debug_execute_decoded(current->mm, &regs,
 							 &decoded, &fault_address);
 		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s class=%u fault=%#lx",
 				source->name, decoded.decode_class, fault_address);
 		if (!ret) {
 			executed++;
-			if (decoded.atomic_rcw)
-				rcw_executed++;
 			KUNIT_EXPECT_EQ_MSG(test, 0x1004ULL, regs.pc, "%s",
 				source->name);
-			if (decoded.atomic_rcw) {
-				KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
-					address, rcw_observed,
-					decoded.pair ? sizeof(rcw_observed) : sizeof(u64)));
-				KUNIT_EXPECT_MEMEQ_MSG(test, rcw_expected, rcw_observed,
-					decoded.pair ? sizeof(rcw_observed) : sizeof(u64),
-					"%s", source->name);
-				KUNIT_EXPECT_EQ_MSG(test, PSR_C_BIT,
-					regs.pstate & (PSR_N_BIT | PSR_Z_BIT |
-						PSR_C_BIT | PSR_V_BIT), "%s", source->name);
-				if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS) {
-					KUNIT_EXPECT_EQ_MSG(test, rcw_old[0],
-						regs.regs[decoded.rs], "%s", source->name);
-					if (decoded.pair)
-						KUNIT_EXPECT_EQ_MSG(test, rcw_old[1],
-							regs.regs[decoded.rs + 1U], "%s",
-							source->name);
-				} else {
-					KUNIT_EXPECT_EQ_MSG(test, rcw_old[0],
-						regs.regs[decoded.rt], "%s", source->name);
-					if (decoded.pair)
-						KUNIT_EXPECT_EQ_MSG(test, rcw_old[1],
-							regs.regs[decoded.rt2], "%s",
-							source->name);
-				}
-			}
 		}
 	}
 	KUNIT_EXPECT_EQ(test, 498U, executed);
 	KUNIT_EXPECT_EQ(test, 64U, rcw_executed);
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_rcw_el1_state_write(&saved_rcw));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
@@ -571,90 +543,75 @@ static void orlix_tcti_base_atomic_rcw_conditional_writes_and_flags(
 	struct kunit *test)
 {
 	const struct orlix_tcti_test_atomic_source *source;
-	struct orlix_tcti_rcw_el1_state saved;
 	struct orlix_tcti_rcw_el1_state state = {
 		.feat_the = true,
 		.tcr2_el1_enabled = true,
 		.tcr2_el1_pnch = true,
 	};
 	struct orlix_tcti_decoded_instruction decoded;
-	struct pt_regs regs = {};
-	unsigned long fault_address = 0;
-	unsigned long mapped;
-	u64 old;
-	u64 observed;
-
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&saved));
-	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
-				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	u64 old[2] = {};
+	u64 expected[2] = {};
+	u64 operand[2] = {};
+	u64 result[2] = {};
+	u8 nzcv;
+	bool wrote_new;
 
 	/* Protected-state mask failure: no new value, Z=1 and C=1. */
 	source = orlix_tcti_test_base_atomic_operation("RCWSET");
 	KUNIT_ASSERT_NOT_NULL(test, source);
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
-	old = BIT_ULL(52) | BIT_ULL(0);
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_write_user_data(current->mm, mapped, &old, sizeof(old)));
-	regs.regs[decoded.rn] = mapped;
-	regs.regs[decoded.rs] = BIT_ULL(2);
-	regs.pc = 0x5000;
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_write(&state));
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(
-		current->mm, &regs, &decoded, &fault_address));
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_read_user_data(current->mm, mapped, &observed, sizeof(observed)));
-	KUNIT_EXPECT_EQ(test, old, observed);
-	KUNIT_EXPECT_EQ(test, old, regs.regs[decoded.rt]);
-	KUNIT_EXPECT_EQ(test, PSR_Z_BIT | PSR_C_BIT,
-		regs.pstate & (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT));
-	KUNIT_EXPECT_EQ(test, 0x5004ULL, regs.pc);
+	old[0] = BIT_ULL(52) | BIT_ULL(0);
+	operand[0] = BIT_ULL(2);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+		expected, operand, result, &nzcv, &wrote_new));
+	KUNIT_EXPECT_EQ(test, old[0], result[0]);
+	KUNIT_EXPECT_EQ(test, 0x6, nzcv);
+	KUNIT_EXPECT_FALSE(test, wrote_new);
 
 	/* RCWS state failure with protection disabled clears C and preserves memory. */
 	source = orlix_tcti_test_base_atomic_operation("RCWSSET");
 	KUNIT_ASSERT_NOT_NULL(test, source);
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
-	old = 0;
+	memset(old, 0, sizeof(old));
+	memset(result, 0, sizeof(result));
+	operand[0] = BIT_ULL(0);
 	state.tcr2_el1_enabled = false;
 	state.tcr2_el1_pnch = false;
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_write_user_data(current->mm, mapped, &old, sizeof(old)));
-	memset(&regs, 0, sizeof(regs));
-	regs.regs[decoded.rn] = mapped;
-	regs.regs[decoded.rs] = BIT_ULL(0);
-	regs.pc = 0x5100;
-	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_write(&state));
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(
-		current->mm, &regs, &decoded, &fault_address));
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_read_user_data(current->mm, mapped, &observed, sizeof(observed)));
-	KUNIT_EXPECT_EQ(test, old, observed);
-	KUNIT_EXPECT_EQ(test, 0ULL,
-		regs.pstate & (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+		expected, operand, result, &nzcv, &wrote_new));
+	KUNIT_EXPECT_EQ(test, 0ULL, result[0]);
+	KUNIT_EXPECT_EQ(test, 0, nzcv);
+	KUNIT_EXPECT_FALSE(test, wrote_new);
 
 	/* CAS compare failure is N=1,C=1 and returns the old value. */
 	source = orlix_tcti_test_base_atomic_operation("RCWCAS");
 	KUNIT_ASSERT_NOT_NULL(test, source);
 	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
-	old = 0x44;
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_write_user_data(current->mm, mapped, &old, sizeof(old)));
-	memset(&regs, 0, sizeof(regs));
-	regs.regs[decoded.rn] = mapped;
-	regs.regs[decoded.rs] = 0x33;
-	regs.regs[decoded.rt] = 0x55;
-	regs.pc = 0x5200;
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_switch_debug_execute_decoded(
-		current->mm, &regs, &decoded, &fault_address));
-	KUNIT_ASSERT_EQ(test, 0,
-		orlix_tcti_read_user_data(current->mm, mapped, &observed, sizeof(observed)));
-	KUNIT_EXPECT_EQ(test, old, observed);
-	KUNIT_EXPECT_EQ(test, old, regs.regs[decoded.rs]);
-	KUNIT_EXPECT_EQ(test, PSR_N_BIT | PSR_C_BIT,
-		regs.pstate & (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT));
+	old[0] = 0x44;
+	expected[0] = 0x33;
+	operand[0] = 0x55;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+		expected, operand, result, &nzcv, &wrote_new));
+	KUNIT_EXPECT_EQ(test, old[0], result[0]);
+	KUNIT_EXPECT_EQ(test, 0xa, nzcv);
+	KUNIT_EXPECT_FALSE(test, wrote_new);
 
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_rcw_el1_state_write(&saved));
-	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	/* The same owning core proves the D128 pair domain and its high mask lane. */
+	source = orlix_tcti_test_base_atomic_operation("RCWSETP");
+	KUNIT_ASSERT_NOT_NULL(test, source);
+	decoded = orlix_tcti_decode_aarch64(orlix_tcti_test_legal_instruction(source));
+	state.feat_d128 = true;
+	state.rcwmask_el1[1] = BIT_ULL(63);
+	old[0] = BIT_ULL(0);
+	old[1] = BIT_ULL(50);
+	operand[0] = 0;
+	operand[1] = BIT_ULL(63);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_evaluate(&decoded, &state, old,
+		expected, operand, result, &nzcv, &wrote_new));
+	KUNIT_EXPECT_EQ(test, old[0], result[0]);
+	KUNIT_EXPECT_EQ(test, old[1] | BIT_ULL(63), result[1]);
+	KUNIT_EXPECT_EQ(test, 0x2, nzcv);
+	KUNIT_EXPECT_TRUE(test, wrote_new);
 }
 
 static void orlix_tcti_base_atomic_executes_ls64_state(struct kunit *test)

@@ -13,5 +13,10 @@ int orlix_tcti_switch_debug_execute_decoded(struct mm_struct *mm,
 struct orlix_tcti_result orlix_tcti_switch_debug_resume_user(struct task_struct *task,
 						 struct pt_regs *regs,
 						 struct mm_struct *mm);
+int orlix_tcti_rcw_evaluate(
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct orlix_tcti_rcw_el1_state *state, const void *old_value,
+	const void *expected, const void *operand, void *result, u8 *nzcv,
+	bool *wrote_new);
 
 #endif /* ORLIX_TCTI_SWITCH_DEBUG_H */
