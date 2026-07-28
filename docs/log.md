@@ -814,3 +814,12 @@ Instructions, Features, and Registers byte lengths and digests, plus a computed
 three-source reconciliation identity. Verification rejects field or row
 tampering. Normal kernel, KUnit, kselftest, product, and audit graphs remain
 isolated from Arm JSON inputs; canonical publication completed through Make.
+
+## [2026-07-28] decide | Keep Arm shared ASL external
+
+ADR 0031 records the official 2026-06 Arm XML and shared-ASL identities while
+keeping their bodies external and non-redistributed because no applicable
+authorization is verified. The 4,350-leaf AARCHMRS target remains unchanged;
+independently authored OrlixTCTI behavior and source-bound production-path
+KUnit and Linux kselftest evidence now own semantic completion. OpenMinis and
+other implementations remain non-authoritative implementation references.

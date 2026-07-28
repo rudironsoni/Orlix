@@ -3,7 +3,7 @@ type: architecture-decision
 tags:
   - architecture
   - decision
-updated: 2026-07-27
+updated: 2026-07-28
 status: accepted
 external_id: "ADR-0029"
 summary: "Separate the complete AArch64 ISA-on-ISA target inventory from the Linux runtime HWCAP projection."
@@ -11,6 +11,8 @@ part_of:
   - "[Orlix](../product/orlix.md)"
 amends:
   - "[ADR 0022](0022-use-hosted-linux-elf-execution.md)"
+amended_by:
+  - "[ADR 0031](0031-keep-arm-shared-asl-external-and-prove-orlixtcti-independently.md)"
 targets:
   - "[OrlixTCTI](../software-component/orlixtcti.md)"
 ---

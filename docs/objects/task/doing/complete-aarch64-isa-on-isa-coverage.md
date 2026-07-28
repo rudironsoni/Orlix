@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-27
+updated: 2026-07-28
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
@@ -16,7 +16,9 @@ targets:
   - "[OrlixHostAdapter](../../software-component/orlixhostadapter.md)"
 derived_from:
   - "[TCTI reference review](../../../sources/tcti/reference-review.md)"
+  - "[Official Arm shared-ASL source research](../../../sources/tcti/shared-asl-source-research.md)"
   - "[ADR 0029](../../architecture-decision/0029-separate-complete-aarch64-target-from-runtime-profile.md)"
+  - "[ADR 0031](../../architecture-decision/0031-keep-arm-shared-asl-external-and-prove-orlixtcti-independently.md)"
 ---
 
 # Complete AArch64 ISA-on-ISA coverage
@@ -50,23 +52,14 @@ Completion requires:
 - deterministic architectural handling of reserved, unallocated, privileged, unsupported-at-EL0, and not-yet-advertised optional-extension encodings;
 - typed leaf-level KUnit evidence connecting each authoritative leaf to its expected decoder class, decoded operation, production lowering and execution path, legal encoding boundaries, register and flag transitions, memory effects, faults, PC changes, aliasing, atomicity, ordering, and exception results;
 - a machine-checkable source-to-proof contract for every direct leaf. Each
-  record must retain the pinned three-source bundle identity, source ordinal,
-  AARCHMRS identifier, instruction family, complete inheritance and alias path,
-  encoding and operand source span, effective feature-condition AST and
-  canonical digest, effective `operation_id`, ASL semantic locator, shared
-  decode and operation digests, EL classification, semantic classification,
-  canonical alias or duplicate relationship, implementation owner,
-  implementation status, KUnit owner, applicable Linux-visible kselftest owner,
-  proof status, and runtime `HWCAP` or `HWCAP2` dependency. Inapplicable
-  kselftest or runtime-advertisement edges require explicit typed
-  `not_applicable` dispositions rather than missing values;
-- a separately pinned Arm shared-ASL corpus identity for every semantic record,
-  including its release, digest, corpus-relative entry locator, normalized
-  source digest, and referenced shared-helper identifiers. `operation_id`
-  alone is not ASL provenance. Any non-empty AARCHMRS `operational_note` must
-  have a separate authoritative-note digest and an explicit behavior and proof
-  obligation, because the source defines it as behavior that ASL cannot
-  express;
+  record binds the pinned bundle, ordinal, AARCHMRS identifier, family, alias
+  path, source spans, condition AST and digest, `operation_id`, external ASL
+  locator and digest, classifications, independent implementation owner, KUnit
+  and kselftest owners and results, and runtime capability dependency. External
+  ASL grants no implementation or proof credit, and no Arm XML or ASL body may
+  enter repository artifacts under ADR 0031. Inapplicable edges require typed
+  `not_applicable`; each `operational_note` retains its digest and explicit
+  behavior and proof obligation;
 - explicit applicability and ownership statuses for every leaf and every
   feature-conditioned semantic variant. Applicability is one of
   `applicable_el0`, `non_el0`, `undefined_or_unallocated`,
@@ -80,15 +73,17 @@ Completion requires:
 - a hard audit failure for a missing, stale, malformed, ambiguous, or
   non-canonical source, semantic, applicability, implementation, proof, alias,
   operational-note, or advertisement edge. The audit must also fail when an
-  ASL reference, source span, helper dependency, condition branch, required
-  result field, or Linux-visible proof obligation is absent;
-- Arm AARCHMRS and the pinned Arm shared-ASL corpus as the sole authority for
-  ISA inventory and semantic expectations. Linux remains authoritative for
-  Linux-visible interfaces and exception delivery. Sail, Isla, Islaris, QEMU,
-  Unicorn, LLVM, binutils, KVM selftests, OpenMinis, hardware experiments, and
-  terminal or log output may inform test selection or investigation only. They
-  must never supply completion semantics, replace an Arm source edge, become a
-  runtime dependency, or decide an HWCAP or HWCAP2 advertisement;
+  external ASL locator or digest, source span, condition branch, required result
+  field, or Linux-visible proof obligation required by ADR 0031 is absent;
+- Arm AARCHMRS as the authority for the complete ISA inventory and
+  applicability contract, and external versioned DDI0602 documentation as the
+  official semantic specification. Independent OrlixTCTI behavior and
+  production-path proof must bind exact external locators and digests; Linux
+  owns Linux-visible interfaces and exception delivery. External
+  implementations, including OpenMinis, may inform independent implementation,
+  tests, and diagnosis, but cannot replace Arm authority, receive implementation
+  or proof credit, become a runtime dependency, or decide capability
+  advertisement;
 - executable-block construction, TLB lookup, and guest memory execution authorized by one stable per-mm mapping generation, with PTE mutations forcing stale cached authorization to miss, retry, or fault;
 - postcommit host-refresh failure that reports the failed refresh and discards the stale host shadow without copying it back over the authoritative Linux page;
 - Linux kselftest proof for representative live execution and Linux-visible integration without moving ISA assertions into XCTest or a host-side Swift gate;
@@ -161,8 +156,10 @@ supplemental alias graph records 292 instruction aliases and 171 reachable
 operation aliases without using aliases as proof or denominator substitutions.
 Canonical V3 artifacts bind every row to architecture, build, release, schema,
 timestamp, exact three-source lengths and digests, and reconciliation identity.
-Normal proof graphs remain JSON-free. Official XML provenance is pinned, but
-legal authorization, semantic implementation, and owning proof remain open.
+Normal proof graphs remain JSON-free. Official XML provenance is pinned. ADR
+0031 records that no applicable authorization is verified, so the corpus stays
+external and non-redistributed. Independently authored OrlixTCTI semantics and
+owning production-path proof remain open.
 LSE128 production resume fault
 matrix expanded fault coverage, but it makes no atomicity or ordering claim.
 Runtime HWCAP and HWCAP2 promotion remains zero.
