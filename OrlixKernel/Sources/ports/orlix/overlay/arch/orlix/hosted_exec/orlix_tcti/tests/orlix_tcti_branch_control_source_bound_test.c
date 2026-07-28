@@ -23,6 +23,8 @@
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
 #include "orlix_tcti_test_suites.h"
+#include "orlix_tcti_source_leaf_rejection_catalog.h"
+#include "target_execution_slice_map.h"
 
 #define BCS_SVC_NOT_TAKEN 0xd4000021U
 #define BCS_SVC_TAKEN 0xd4000041U
@@ -52,6 +54,22 @@ struct bcs_leaf {
 	enum bcs_kind kind;
 	bool wide;
 };
+
+struct bcs_semantics_gap {
+	u32 ordinal;
+	const char *name;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, name, ...) \
+	{ ordinal, name },
+static const struct bcs_semantics_gap bcs_semantics_gaps[] = {
+#include "../isa/generations/current/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
 
 /* Pinned source_manifest.def ordinals and source encodings. */
 static const struct bcs_leaf bcs_leaves[] = {
@@ -114,6 +132,59 @@ static enum orlix_tcti_decode_class bcs_decode_class(const struct bcs_leaf *leaf
 	}
 
 	return ORLIX_TCTI_DECODE_UNSUPPORTED;
+}
+
+static void bcs_issue_132_exact_source_cohort(struct kunit *test)
+{
+	static const u32 expected_ordinals[] = {
+		2166U, 2227U, 2228U, 2229U, 2230U,
+		2231U, 2232U, 2233U, 2234U, 2235U,
+	};
+	const struct orlix_tcti_execution_slice_map *map =
+		orlix_tcti_execution_slice_map_canonical();
+	const struct orlix_tcti_source_leaf_manifest_row *tenter;
+	size_t family_index;
+	size_t expected_index = 0;
+	size_t gap_index;
+	bool found_gap = false;
+
+	for (family_index = 0; family_index < map->counts.family_count;
+	     family_index++)
+		if (map->families[family_index].issue_id == 132U)
+			break;
+	KUNIT_ASSERT_LT(test, family_index, map->counts.family_count);
+	KUNIT_ASSERT_STREQ(test, "BASE_EXCEPTIONS",
+			   map->families[family_index].stable_id);
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(expected_ordinals),
+			map->families[family_index].declared_member_count);
+
+	for (gap_index = 0; gap_index < map->counts.leaf_count; gap_index++) {
+		const struct orlix_tcti_execution_slice_member *member =
+			&map->members[gap_index];
+
+		if (member->family_index != family_index)
+			continue;
+		KUNIT_ASSERT_LT(test, expected_index,
+				ARRAY_SIZE(expected_ordinals));
+		KUNIT_EXPECT_EQ(test, expected_ordinals[expected_index],
+				member->ordinal);
+		expected_index++;
+	}
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(expected_ordinals), expected_index);
+
+	for (gap_index = 0; gap_index < ARRAY_SIZE(bcs_semantics_gaps);
+	     gap_index++)
+		if (bcs_semantics_gaps[gap_index].ordinal == 2235U &&
+		    !strcmp(bcs_semantics_gaps[gap_index].name,
+			    "TENTER_te_exception"))
+			found_gap = true;
+	KUNIT_EXPECT_TRUE(test, found_gap);
+
+	tenter = orlix_tcti_source_leaf_manifest_row(2235U);
+	KUNIT_ASSERT_NOT_NULL(test, tenter);
+	KUNIT_EXPECT_STREQ(test, "TENTER_te_exception", tenter->name);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+			orlix_tcti_decode_aarch64(tenter->pattern).decode_class);
 }
 
 static u32 bcs_instruction(const struct bcs_leaf *leaf, bool taken)
@@ -240,8 +311,8 @@ static void bcs_expect_exception_control(struct kunit *test,
 		expected_status = 0x1234;
 		break;
 	case BCS_HLT:
-		expected_reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
-		expected_status = -EOPNOTSUPP;
+		expected_reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
+		expected_status = 0;
 		break;
 	default:
 		return;
@@ -872,6 +943,7 @@ static void cbe_narrow_sf_encodings_fail_closed(struct kunit *test)
 }
 
 static struct kunit_case bcs_cases[] = {
+	KUNIT_CASE(bcs_issue_132_exact_source_cohort),
 	KUNIT_CASE(bcs_source_decode),
 	KUNIT_CASE(bcs_production_resume),
 	KUNIT_CASE(bcs_x31_semantics_production),

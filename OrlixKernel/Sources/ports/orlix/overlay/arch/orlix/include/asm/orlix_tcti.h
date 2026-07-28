@@ -20,6 +20,7 @@ enum orlix_tcti_exit_reason {
 	ORLIX_TCTI_EXIT_YIELD,
 	ORLIX_TCTI_EXIT_TASK_EXIT,
 	ORLIX_TCTI_EXIT_ALIGNMENT_FAULT,
+	ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
 };
 
 enum orlix_tcti_access {

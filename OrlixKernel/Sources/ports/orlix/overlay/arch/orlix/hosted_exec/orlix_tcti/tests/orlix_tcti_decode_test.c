@@ -592,8 +592,13 @@ static void orlix_tcti_decode_covers_complete_exception_generation_family(
 		enum orlix_tcti_decode_class decode_class;
 	} el0_exits[] = {
 		{ 0, 1, ORLIX_TCTI_DECODE_SVC },
+		{ 0, 2, ORLIX_TCTI_DECODE_UNDEFINED },
+		{ 0, 3, ORLIX_TCTI_DECODE_UNDEFINED },
 		{ 1, 0, ORLIX_TCTI_DECODE_BRK },
 		{ 2, 0, ORLIX_TCTI_DECODE_HLT },
+		{ 5, 1, ORLIX_TCTI_DECODE_UNDEFINED },
+		{ 5, 2, ORLIX_TCTI_DECODE_UNDEFINED },
+		{ 5, 3, ORLIX_TCTI_DECODE_UNDEFINED },
 	};
 	u32 imm;
 	u8 op1;
@@ -626,9 +631,10 @@ static void orlix_tcti_decode_covers_complete_exception_generation_family(
 		for (ll = 0; ll < 4; ll++) {
 			unsigned int boundary;
 
-			if ((op1 == 0 && ll == 1) ||
+			if ((op1 == 0 && ll >= 1) ||
 			    (op1 == 1 && ll == 0) ||
-			    (op1 == 2 && ll == 0))
+			    (op1 == 2 && ll == 0) ||
+			    (op1 == 5 && ll >= 1))
 				continue;
 
 			for (boundary = 0;
@@ -9646,9 +9652,9 @@ static void orlix_tcti_resume_user_reports_hlt_as_undefined(struct kunit *test)
 
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
 			result.reason);
-	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
 	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
 	KUNIT_EXPECT_EQ(test, instructions[1], result.instruction);
 	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);
@@ -9680,9 +9686,9 @@ static void orlix_tcti_switch_resume_user_reports_hlt_as_undefined(struct kunit 
 
 	result = orlix_tcti_switch_debug_resume_user(current, &regs, current->mm);
 
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
 			result.reason);
-	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, 0L, result.status);
 	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
 	KUNIT_EXPECT_EQ(test, instructions[1], result.instruction);
 	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);

@@ -12,6 +12,13 @@
 #define AARCH64_BRK_PATTERN 0xd4200000U
 #define AARCH64_HLT_MASK 0xffe0001fU
 #define AARCH64_HLT_PATTERN 0xd4400000U
+#define AARCH64_UDF_MASK 0xffff0000U
+#define AARCH64_UDF_PATTERN 0x00000000U
+#define AARCH64_HVC_PATTERN 0xd4000002U
+#define AARCH64_SMC_PATTERN 0xd4000003U
+#define AARCH64_DCPS1_PATTERN 0xd4a00001U
+#define AARCH64_DCPS2_PATTERN 0xd4a00002U
+#define AARCH64_DCPS3_PATTERN 0xd4a00003U
 #define AARCH64_SMSTOP_SM 0xd503427fU
 #define AARCH64_SMSTART_SM 0xd503437fU
 #define AARCH64_SMSTOP_ZA 0xd503447fU
@@ -838,6 +845,17 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_HLT_MASK) == AARCH64_HLT_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_HLT;
+		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_UDF_MASK) == AARCH64_UDF_PATTERN ||
+	    (instruction & AARCH64_SVC_MASK) == AARCH64_HVC_PATTERN ||
+	    (instruction & AARCH64_SVC_MASK) == AARCH64_SMC_PATTERN ||
+	    (instruction & AARCH64_SVC_MASK) == AARCH64_DCPS1_PATTERN ||
+	    (instruction & AARCH64_SVC_MASK) == AARCH64_DCPS2_PATTERN ||
+	    (instruction & AARCH64_SVC_MASK) == AARCH64_DCPS3_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_UNDEFINED;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
 		return decoded;
 	}

@@ -646,7 +646,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KSELFTEST_SIGNAL_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/signal_wait_probe.c"
 #define KSELFTEST_SIGNAL_SOURCE_SHA256 \
-	"f782e3e950729f96a598fea10f97b88ee31d54b7ddf91a09b161fa14a2f95b9f"
+	"7bd1f57a30c9b6c2ab1db2839252784de7ddee0ae37fa595d9745c6db8c47e50"
 #define KSELFTEST_STACK_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/stack_growth_probe.c"
 #define KSELFTEST_STACK_SOURCE_SHA256 \
