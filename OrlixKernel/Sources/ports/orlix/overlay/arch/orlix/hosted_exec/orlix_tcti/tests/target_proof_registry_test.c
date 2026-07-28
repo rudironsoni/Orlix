@@ -742,7 +742,7 @@ static int lse_registry_cannot_clear_unproved_duties_statically(void)
 static int scalar_source_bindings_are_complete_and_fail_closed(void)
 {
 	const struct orlix_tcti_target_proof_registry_entry *entries;
-	struct orlix_tcti_target_proof_registry_entry copied[512];
+	struct orlix_tcti_target_proof_registry_entry copied[1024];
 	struct orlix_tcti_target_proof_binding duplicate[2];
 	struct orlix_tcti_target_proof_registry_entry entry;
 	enum orlix_tcti_target_proof_registry_error error;

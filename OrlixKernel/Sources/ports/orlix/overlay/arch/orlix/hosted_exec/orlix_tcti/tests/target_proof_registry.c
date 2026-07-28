@@ -314,6 +314,10 @@ struct operation_requirements {
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+#define BASE_ATOMIC_REQUIRED_OBLIGATIONS LSE_REQUIRED_OBLIGATIONS
+#define BASE_ATOMIC_FLAGS_REQUIRED_OBLIGATIONS \
+	(BASE_ATOMIC_REQUIRED_OBLIGATIONS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define EXCLUSIVE_REQUIRED_OBLIGATIONS LSE_REQUIRED_OBLIGATIONS
 
 struct kunit_source_provenance {
@@ -750,7 +754,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "5d80460fba9cebadbe3f54b3b9a7f8deeb2be0c8d341826a9af8f0fb09ebb0bd",
 	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ BASE_ATOMIC_SOURCE,
-	  "36e932c85fda2aabfa8f307024cbb9a420fc683924034da51ade43ae8bf83419",
+	  "085a54fdb9b47435dbb9fc292a7ded83a7c6d1ac6b4182c2cec09dcf5f54707b",
 	  "orlix_tcti_base_atomic_source_bound_test.o", NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "44ebc99fb0297ee4353472b931f888986e80d5aecf84096dc3ab58cb58a95e64",
@@ -867,23 +871,32 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
 	  BASE_ATOMIC_CASE_ARRAY,
-	  "orlix_tcti_base_atomic_rejects_fixed_bit_neighbours",
+	  "orlix_tcti_base_atomic_classifies_fixed_bit_neighbours",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
 	  BASE_ATOMIC_CASE_ARRAY,
 	  "orlix_tcti_base_atomic_decodes_ordered_access_shapes",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
 	  BASE_ATOMIC_CASE_ARRAY,
 	  "orlix_tcti_base_atomic_executes_every_source_leaf",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
 	  BASE_ATOMIC_CASE_ARRAY,
 	  "orlix_tcti_base_atomic_executes_every_fp_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_rcw_conditional_writes_and_flags",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
@@ -894,6 +907,16 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY, "orlix_tcti_base_atomic_faults_are_precise",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_atomicity_is_page_serialized",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY, "orlix_tcti_base_atomic_order_classes_are_exact",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2273,6 +2296,54 @@ static const struct orlix_tcti_target_proof_case lse_source_bound_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case base_atomic_source_bound_cases[] = {
+	{ "orlix_tcti_base_atomic_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_atomic_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_atomic_decodes_register_variants",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "orlix_tcti_base_atomic_rejects_reserved_registers",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_base_atomic_classifies_fixed_bit_neighbours",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_base_atomic_decodes_ordered_access_shapes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "orlix_tcti_base_atomic_executes_every_source_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_atomic_executes_every_fp_leaf",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_atomic_rcw_conditional_writes_and_flags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_atomic_executes_ls64_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_atomic_faults_are_precise",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_base_atomic_atomicity_is_page_serialized",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ "orlix_tcti_base_atomic_order_classes_are_exact",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+};
+
 static const struct orlix_tcti_target_proof_case lse128_source_bound_cases[] = {
 	{ "orlix_tcti_lse128_resume_all_source_leaves",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2642,6 +2713,7 @@ enum {
 #define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 15U
 #define MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT 32U
 #define MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT 96U
+#define BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT 294U
 
 static bool proof_registry_initialized;
 static bool proof_registry_initialization_attempted;
@@ -2661,7 +2733,8 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT +
-	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT] = {
+	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT +
+	BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -3674,7 +3747,8 @@ static bool build_ordinary_load_store_registry(void)
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		ADVSIMD_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -4067,7 +4141,8 @@ static bool build_source_leaf_rejection_registry(void)
 		ADVSIMD_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -4378,7 +4453,8 @@ static bool build_mops_copy_registry(void)
 {
 	size_t binding_offset = 0;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (mops_copy_registry_ready)
@@ -4459,6 +4535,100 @@ static bool build_mops_copy_registry(void)
 	return true;
 }
 
+static struct orlix_tcti_target_proof_binding base_atomic_missing_bindings[
+	BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT];
+static bool base_atomic_missing_registry_ready;
+
+static bool base_atomic_missing_proof_id(const char *proof_id)
+{
+	static const char prefix[] = "kunit:base-atomic-leaf-";
+
+	return proof_id && !strncmp(proof_id, prefix, sizeof(prefix) - 1U);
+}
+
+static orlix_tcti_proof_u32 base_atomic_obligations(const char *operation_id)
+{
+	(void)operation_id;
+	/* Unchanged NZCV/FP status is itself an observed per-leaf obligation. */
+	return BASE_ATOMIC_FLAGS_REQUIRED_OBLIGATIONS;
+}
+
+static bool base_atomic_missing_operation(const char *operation_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		const struct source_manifest_binding *source;
+
+		if (!base_atomic_missing_proof_id(source_bound_proofs[index].proof_id))
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (source && !strcmp(source->operation_id, operation_id))
+			return true;
+	}
+	return false;
+}
+
+static bool build_base_atomic_missing_registry(void)
+{
+	const size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t count = 0;
+	size_t index;
+
+	if (base_atomic_missing_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		const struct source_manifest_binding *source;
+		struct orlix_tcti_target_proof_binding *binding;
+		struct orlix_tcti_target_proof_registry_entry *entry;
+		orlix_tcti_proof_u32 obligations;
+
+		if (!base_atomic_missing_proof_id(source_bound_proofs[index].proof_id))
+			continue;
+		if (count >= ARRAY_COUNT(base_atomic_missing_bindings))
+			return false;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (!source)
+			return false;
+		obligations = base_atomic_obligations(source->operation_id);
+		binding = &base_atomic_missing_bindings[count];
+		*binding = (struct orlix_tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask = (ORLIX_TCTI_PROOF_U64_C(1) <<
+				ARRAY_COUNT(base_atomic_source_bound_cases)) - 1U,
+			.source_ordinal = source->ordinal,
+		};
+		entry = &proof_registry_entries[entry_base + count];
+		*entry = (struct orlix_tcti_target_proof_registry_entry) {
+			.id = source_bound_proofs[index].proof_id,
+			.operation_id = source->operation_id,
+			.classification_mask =
+				ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+			.obligations = obligations,
+			.linux_interface =
+				ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+			.kunit_source = BASE_ATOMIC_SOURCE,
+			.kunit_suite = BASE_ATOMIC_SUITE,
+			.kunit_cases = base_atomic_source_bound_cases,
+			.kunit_case_count = ARRAY_COUNT(base_atomic_source_bound_cases),
+			.bindings = binding,
+			.binding_count = 1,
+			.kselftest = NULL,
+			.unproved_obligations = obligations,
+		};
+		count++;
+	}
+	if (count != ARRAY_COUNT(base_atomic_missing_bindings))
+		return false;
+	base_atomic_missing_registry_ready = true;
+	return true;
+}
+
 int orlix_tcti_target_proof_operation_requirements(
 	const char *operation_id, unsigned int classification,
 	orlix_tcti_proof_u32 *requirements)
@@ -4484,6 +4654,10 @@ int orlix_tcti_target_proof_operation_requirements(
 			*requirements = operation_requirements[index].obligations;
 			return 0;
 		}
+	if (base_atomic_missing_operation(operation_id)) {
+		*requirements = base_atomic_obligations(operation_id);
+		return 0;
+	}
 	return -1;
 }
 
@@ -5588,7 +5762,9 @@ int orlix_tcti_target_proof_registry_validate(
 			if (entry->classification_mask ==
 				    entries[previous].classification_mask &&
 			    !strcmp(entry->operation_id,
-				    entries[previous].operation_id))
+				    entries[previous].operation_id) &&
+			    !(base_atomic_missing_proof_id(entry->id) &&
+			      base_atomic_missing_proof_id(entries[previous].id)))
 				goto invalid;
 		}
 	}
@@ -5709,7 +5885,8 @@ static void proof_registry_initialize(void)
 	    !build_advsimd_load_store_registry() ||
 	    !build_source_leaf_rejection_registry() ||
 	    !build_production_capture_family_registry() ||
-	    !build_mops_copy_registry())
+	    !build_mops_copy_registry() ||
+	    !build_base_atomic_missing_registry())
 		return;
 	if (orlix_tcti_target_production_capture_bindings_validate(
 			production_capture_bindings,

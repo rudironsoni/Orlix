@@ -662,9 +662,14 @@ static int orlix_tcti_atomic_memory_order_before(enum orlix_tcti_atomic_memory_o
 	switch (order) {
 	case ORLIX_TCTI_ATOMIC_MEMORY_RELAXED:
 	case ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE:
+	case ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE_RCPC:
+	case ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_ACQUIRE:
 		return 0;
 	case ORLIX_TCTI_ATOMIC_MEMORY_RELEASE:
 	case ORLIX_TCTI_ATOMIC_MEMORY_ACQ_REL:
+		smp_mb();
+		return 0;
+	case ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_RELEASE:
 		smp_wmb();
 		return 0;
 	default:
@@ -677,6 +682,9 @@ static void orlix_tcti_atomic_memory_order_after(enum orlix_tcti_atomic_memory_o
 {
 	if (order == ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE ||
 	    order == ORLIX_TCTI_ATOMIC_MEMORY_ACQ_REL)
+		smp_mb();
+	else if (order == ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE_RCPC ||
+		 order == ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_ACQUIRE)
 		smp_rmb();
 }
 
@@ -875,11 +883,12 @@ int orlix_tcti_atomic_transform_user_data(
 	unsigned long linux_perms;
 	void *host_page;
 	void *host_data;
-	u8 result[sizeof(u64)];
+	u8 result[2 * sizeof(u64)];
 	int ret;
 
 	if (!mm || !operand || !old_value || !transform ||
-	    (size != sizeof(u16) && size != sizeof(u32) && size != sizeof(u64)))
+	    (size != sizeof(u16) && size != sizeof(u32) && size != sizeof(u64) &&
+	     size != 2 * sizeof(u64)))
 		return -EINVAL;
 	if (!IS_ALIGNED(user_va, size) ||
 	    size > PAGE_SIZE - offset_in_page(user_va) || user_va >= TASK_SIZE ||

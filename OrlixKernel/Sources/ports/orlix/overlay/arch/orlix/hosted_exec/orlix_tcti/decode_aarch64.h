@@ -687,9 +687,11 @@ struct orlix_tcti_decoded_instruction {
 	bool atomic_rcw_soft;
 	bool unprivileged;
 	bool limited_ordering;
+	bool rcpc_acquire;
 	bool ls64_status;
 	bool ls64_accdata;
 	u32 source_ordinal;
+	const char *source_condition_tcnd_hex;
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);

@@ -4,6 +4,7 @@
 #include <linux/limits.h>
 #include <linux/log2.h>
 #include <linux/preempt.h>
+#include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
@@ -34,6 +35,36 @@
 	(BIT_ULL(29) | BIT_ULL(28) | (4ULL << 16) | (3ULL << 14) | 4ULL)
 #define AARCH64_DCZID_EL0_VALUE BIT_ULL(4)
 #define AARCH64_CNTFRQ_EL0_VALUE 1000000000ULL
+
+static DEFINE_SPINLOCK(orlix_tcti_rcw_el1_lock);
+static struct orlix_tcti_rcw_el1_state orlix_tcti_rcw_el1 = {
+	.feat_the = true,
+};
+
+int orlix_tcti_rcw_el1_state_read(struct orlix_tcti_rcw_el1_state *state)
+{
+	unsigned long flags;
+
+	if (!state)
+		return -EINVAL;
+	spin_lock_irqsave(&orlix_tcti_rcw_el1_lock, flags);
+	*state = orlix_tcti_rcw_el1;
+	spin_unlock_irqrestore(&orlix_tcti_rcw_el1_lock, flags);
+	return 0;
+}
+
+int orlix_tcti_rcw_el1_state_write(
+	const struct orlix_tcti_rcw_el1_state *state)
+{
+	unsigned long flags;
+
+	if (!state)
+		return -EINVAL;
+	spin_lock_irqsave(&orlix_tcti_rcw_el1_lock, flags);
+	orlix_tcti_rcw_el1 = *state;
+	spin_unlock_irqrestore(&orlix_tcti_rcw_el1_lock, flags);
+	return 0;
+}
 
 extern u64 orlix_tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
 extern u64 orlix_tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
@@ -2252,7 +2283,7 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		if (ret)
 			return ret;
 		if (decoded->acquire) {
-			if (decoded->limited_ordering)
+			if (decoded->limited_ordering || decoded->rcpc_acquire)
 				smp_rmb();
 			else
 				smp_mb();
@@ -2299,7 +2330,7 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 			current->thread.user_exclusive_valid = 1;
 		}
 		if (decoded->acquire) {
-			if (decoded->limited_ordering)
+			if (decoded->limited_ordering || decoded->rcpc_acquire)
 				smp_rmb();
 			else
 				smp_mb();
@@ -2622,6 +2653,158 @@ orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *deco
 	return size && !IS_ALIGNED(address, size);
 }
 
+struct orlix_tcti_rcw_transform_context {
+	enum orlix_tcti_lse_atomic_op operation;
+	struct orlix_tcti_rcw_el1_state state;
+	u8 expected[2 * sizeof(u64)];
+	u8 nzcv;
+	bool soft;
+	bool wrote_new;
+};
+
+static bool orlix_tcti_rcw_bit(const u64 value[2], unsigned int bit)
+{
+	return value[bit / 64U] & BIT_ULL(bit % 64U);
+}
+
+static void orlix_tcti_rcw_assign_bit(u64 value[2], unsigned int bit, bool set)
+{
+	if (set)
+		value[bit / 64U] |= BIT_ULL(bit % 64U);
+	else
+		value[bit / 64U] &= ~BIT_ULL(bit % 64U);
+}
+
+static void orlix_tcti_rcw_assign_range(u64 value[2], unsigned int first,
+				       unsigned int last, bool set)
+{
+	unsigned int bit;
+
+	for (bit = first; bit <= last; bit++)
+		orlix_tcti_rcw_assign_bit(value, bit, set);
+}
+
+static void orlix_tcti_rcw_effective_mask(u64 mask[2], size_t size,
+					 bool soft, bool protection)
+{
+	if (size == sizeof(u64)) {
+		orlix_tcti_rcw_assign_range(mask, 18, 49,
+					    orlix_tcti_rcw_bit(mask, 17));
+		orlix_tcti_rcw_assign_bit(mask, 0, false);
+		if (soft && protection)
+			orlix_tcti_rcw_assign_bit(mask, 52, false);
+		mask[1] = 0;
+		return;
+	}
+
+	orlix_tcti_rcw_assign_range(mask, 17, 55,
+				    orlix_tcti_rcw_bit(mask, 16));
+	orlix_tcti_rcw_assign_range(mask, 0, 1, false);
+	orlix_tcti_rcw_assign_range(mask, 56, 90, false);
+	orlix_tcti_rcw_assign_range(mask, 101, 107, false);
+	orlix_tcti_rcw_assign_range(mask, 119, 120, false);
+	orlix_tcti_rcw_assign_range(mask, 125, 126, false);
+	if (soft)
+		orlix_tcti_rcw_assign_bit(mask, 114, false);
+}
+
+static bool orlix_tcti_rcw_changed_outside(const u64 old[2],
+					   const u64 new[2],
+					   const u64 mask[2], size_t size)
+{
+	if ((old[0] ^ new[0]) & ~mask[0])
+		return true;
+	return size == 2 * sizeof(u64) && ((old[1] ^ new[1]) & ~mask[1]);
+}
+
+static u8 orlix_tcti_rcw_check(const u64 old[2], const u64 new[2], size_t size,
+			      const struct orlix_tcti_rcw_transform_context *context)
+{
+	u64 rcwmask[2] = { context->state.rcwmask_el1[0],
+			    context->state.rcwmask_el1[1] };
+	u64 rcwsmask[2] = { context->state.rcwsmask_el1[0],
+			     context->state.rcwsmask_el1[1] };
+	const bool protection = context->state.feat_d128 ||
+		(context->state.tcr2_el1_enabled && context->state.tcr2_el1_pnch);
+	const unsigned int protected_bit = size == 2 * sizeof(u64) ? 114 : 52;
+	bool rcw_state_fail = false;
+	bool rcws_state_fail = false;
+	bool rcw_mask_fail = false;
+	bool rcws_mask_fail = false;
+
+	orlix_tcti_rcw_effective_mask(rcwmask, size, false, protection);
+	orlix_tcti_rcw_effective_mask(rcwsmask, size, true, protection);
+	if (protection) {
+		if (orlix_tcti_rcw_bit(old, protected_bit))
+			rcw_state_fail =
+				orlix_tcti_rcw_bit(new, protected_bit) !=
+					orlix_tcti_rcw_bit(old, protected_bit) ||
+				orlix_tcti_rcw_bit(new, 0) != orlix_tcti_rcw_bit(old, 0);
+		else
+			rcw_state_fail =
+				orlix_tcti_rcw_bit(new, protected_bit) !=
+					orlix_tcti_rcw_bit(old, protected_bit);
+		if (orlix_tcti_rcw_bit(old, protected_bit) &&
+		    orlix_tcti_rcw_bit(old, 0))
+			rcw_mask_fail = orlix_tcti_rcw_changed_outside(
+				old, new, rcwmask, size);
+	}
+	if (context->soft) {
+		if (orlix_tcti_rcw_bit(old, 0) || !protection ||
+		    !orlix_tcti_rcw_bit(old, protected_bit))
+			rcws_state_fail = orlix_tcti_rcw_bit(new, 0) !=
+				orlix_tcti_rcw_bit(old, 0);
+		if (orlix_tcti_rcw_bit(old, 0))
+			rcws_mask_fail = orlix_tcti_rcw_changed_outside(
+				old, new, rcwsmask, size);
+	}
+	/* N=0, Z=RCW failure, C=!RCWS failure, V=0. */
+	return ((rcw_state_fail || rcw_mask_fail) ? 0x4U : 0U) |
+		((rcws_state_fail || rcws_mask_fail) ? 0U : 0x2U);
+}
+
+static int orlix_tcti_rcw_transform(void *result, const void *old_value,
+				   const void *operand, size_t size, void *opaque)
+{
+	struct orlix_tcti_rcw_transform_context *context = opaque;
+	u64 old[2] = {};
+	u64 new[2] = {};
+	u64 value[2] = {};
+	unsigned int lane;
+
+	if (!context || (size != sizeof(u64) && size != 2 * sizeof(u64)))
+		return -EINVAL;
+	memcpy(old, old_value, size);
+	memcpy(value, operand, size);
+	if (context->operation == ORLIX_TCTI_LSE_ATOMIC_CAS &&
+	    memcmp(old_value, context->expected, size)) {
+		context->nzcv = 0xaU;
+		memcpy(result, old_value, size);
+		return 0;
+	}
+	for (lane = 0; lane < size / sizeof(u64); lane++) {
+		switch (context->operation) {
+		case ORLIX_TCTI_LSE_ATOMIC_CAS:
+		case ORLIX_TCTI_LSE_ATOMIC_SWP:
+			new[lane] = value[lane];
+			break;
+		case ORLIX_TCTI_LSE_ATOMIC_CLR:
+			new[lane] = old[lane] & ~value[lane];
+			break;
+		case ORLIX_TCTI_LSE_ATOMIC_SET:
+			new[lane] = old[lane] | value[lane];
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+	context->nzcv = orlix_tcti_rcw_check(old, new, size, context);
+	context->wrote_new = context->nzcv == 0x2U;
+	/* Arm permits the failed RCW access to write back the old value. */
+	memcpy(result, context->wrote_new ? new : old, size);
+	return 0;
+}
+
 static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 				   struct pt_regs *regs,
 				   const struct orlix_tcti_decoded_instruction *decoded,
@@ -2639,6 +2822,7 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 	u64 old;
 	u64 old2;
 	bool exchanged;
+	struct orlix_tcti_rcw_transform_context rcw_context = {};
 	int ret;
 
 	if (!mm || !regs || !decoded)
@@ -2665,14 +2849,6 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 	ret = orlix_tcti_lse_memory_order(decoded, &order);
 	if (ret)
 		return ret;
-	/*
-	 * FEAT_THE RCW/RCWS execution depends on the EL1 RCWMASK_EL1 and
-	 * RCWSMASK_EL1 protection state.  Orlix does not yet expose that state to
-	 * TCTI, so fail before touching guest memory instead of approximating the
-	 * architected conditional write and NZCV result.
-	 */
-	if (decoded->atomic_rcw)
-		return -EOPNOTSUPP;
 	if (decoded->atomic_fp)
 		return orlix_tcti_execute_fp_atomic(mm, regs, decoded, address,
 						     order);
@@ -2714,6 +2890,36 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 				return ret;
 		}
 	}
+	if (decoded->atomic_rcw) {
+		ret = orlix_tcti_rcw_el1_state_read(&rcw_context.state);
+		if (ret)
+			return ret;
+		if (!rcw_context.state.feat_the)
+			return -EOPNOTSUPP;
+		/* Scalar RCW is UNDEFINED with D128; pair RCW is UNDEFINED without it. */
+		if (decoded->pair != rcw_context.state.feat_d128)
+			return -ENOEXEC;
+		rcw_context.operation = decoded->lse_atomic_op;
+		rcw_context.soft = decoded->atomic_rcw_soft;
+		memcpy(rcw_context.expected, expected, total_size);
+		ret = orlix_tcti_atomic_transform_user_data(
+			mm, address, order, operand, old_value, total_size,
+			orlix_tcti_rcw_transform, &rcw_context);
+		if (ret)
+			return ret;
+		exchanged = true;
+		orlix_tcti_clear_exclusive_monitor();
+		regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
+		if (rcw_context.nzcv & 0x8U)
+			regs->pstate |= PSR_N_BIT;
+		if (rcw_context.nzcv & 0x4U)
+			regs->pstate |= PSR_Z_BIT;
+		if (rcw_context.nzcv & 0x2U)
+			regs->pstate |= PSR_C_BIT;
+		if (rcw_context.nzcv & 0x1U)
+			regs->pstate |= PSR_V_BIT;
+		goto writeback;
+	}
 
 	ret = orlix_tcti_atomic_user_data(mm, address, operation, order,
 				    operation == ORLIX_TCTI_ATOMIC_MEMORY_CAS ? expected : NULL,
@@ -2722,6 +2928,7 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 		return ret;
 	if (operation != ORLIX_TCTI_ATOMIC_MEMORY_CAS || exchanged)
 		orlix_tcti_clear_exclusive_monitor();
+writeback:
 	ret = orlix_tcti_decode_integer(old_value, decoded->access_size, &old);
 	if (ret)
 		return ret;

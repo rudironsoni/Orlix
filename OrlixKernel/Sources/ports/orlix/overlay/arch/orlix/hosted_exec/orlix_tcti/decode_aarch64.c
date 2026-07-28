@@ -869,11 +869,13 @@ struct orlix_tcti_atomic_source_row {
 	const char *operation;
 	u32 mask;
 	u32 pattern;
+	const char *condition_tcnd_hex;
 };
 
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(i, name, mnemonic, operation, mask, \
-	pattern, ...) { i, name, mnemonic, operation, mask, pattern },
+	pattern, condition, ...) \
+	{ i, name, mnemonic, operation, mask, pattern, condition },
 static const struct orlix_tcti_atomic_source_row orlix_tcti_atomic_source_rows[] = {
 #include "isa/source_manifest.def"
 };
@@ -1051,6 +1053,7 @@ orlix_tcti_decode_base_atomic_source(u32 instruction, bool *matched)
 		return decoded;
 	operation = row->operation;
 	decoded.source_ordinal = row->ordinal;
+	decoded.source_condition_tcnd_hex = row->condition_tcnd_hex;
 	decoded.rn = orlix_tcti_bits(instruction, 5, 5);
 	decoded.rt = orlix_tcti_bits(instruction, 0, 5);
 	decoded.rs = orlix_tcti_bits(instruction, 16, 5);
@@ -1101,7 +1104,8 @@ orlix_tcti_decode_base_atomic_source(u32 instruction, bool *matched)
 		decoded.acquire = decoded.load;
 		decoded.release = !decoded.load;
 		decoded.limited_ordering = strstr(operation, "LDLAR") ||
-			strstr(operation, "STLLR") ||
+			strstr(operation, "STLLR");
+		decoded.rcpc_acquire = decoded.load &&
 			orlix_tcti_text_has_prefix(operation, "LDAP");
 		decoded.unprivileged = strstr(operation, "LDAPUR") ||
 			strstr(operation, "STLUR");
@@ -1181,6 +1185,8 @@ orlix_tcti_decode_base_atomic_source(u32 instruction, bool *matched)
 		decoded.atomic_rcw_soft =
 			orlix_tcti_text_has_prefix(operation, "RCWS");
 		decoded.pair = orlix_tcti_atomic_pair_operation(operation);
+		if (decoded.atomic_rcw && decoded.pair)
+			decoded.rt2 = decoded.rt + 1U;
 		decoded.lse128 = !strcmp(operation, "LDCLRP") ||
 			!strcmp(operation, "LDSETP") || !strcmp(operation, "SWPP");
 		decoded.unprivileged = strchr(operation, 'T') != NULL;
