@@ -14,10 +14,15 @@
 #include <asm/orlix_tcti.h>
 
 #include "../decode_aarch64.h"
+#include "orlix_tcti_native_observation.h"
 #include "target_instruction_artifact.h"
 
 #define ORLIX_TCTI_MINMAXV_SVC 0xd4000001U
 #define ORLIX_TCTI_MINMAXV_VARIABLE_MASK 0x40c003ffU
+#define ORLIX_TCTI_ISSUE_125_LEAF_COUNT 240U
+#define ORLIX_TCTI_MINMAXV_LEAF_COUNT 4U
+#define ORLIX_TCTI_ISSUE_125_REMAINING_LEAF_COUNT \
+	(ORLIX_TCTI_ISSUE_125_LEAF_COUNT - ORLIX_TCTI_MINMAXV_LEAF_COUNT)
 
 struct orlix_tcti_minmaxv_leaf {
 	u16 source_ordinal;
@@ -39,6 +44,10 @@ static const struct orlix_tcti_minmaxv_leaf orlix_tcti_minmaxv_leaves[] = {
 	{ 3864U, "UMINV_asimdall_only", "UMINV", "UMINV_advsimd", 0xbf3ffc00U,
 	  0x2e31a800U, ORLIX_TCTI_SIMD_REDUCTION_UMINV },
 };
+
+static_assert(ARRAY_SIZE(orlix_tcti_minmaxv_leaves) ==
+	      ORLIX_TCTI_MINMAXV_LEAF_COUNT);
+static_assert(ORLIX_TCTI_ISSUE_125_REMAINING_LEAF_COUNT == 236U);
 
 struct orlix_tcti_minmaxv_context {
 	struct mm_struct *mm;
@@ -207,7 +216,8 @@ static void orlix_tcti_minmaxv_source_bindings(struct kunit *test)
 			orlix_tcti_target_instruction_artifact_validate(artifact,
 								  &validation));
 	KUNIT_ASSERT_GT(test, artifact->leaf_count, 3864U);
-	KUNIT_ASSERT_EQ(test, 4U, ARRAY_SIZE(orlix_tcti_minmaxv_leaves));
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_MINMAXV_LEAF_COUNT,
+			ARRAY_SIZE(orlix_tcti_minmaxv_leaves));
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_minmaxv_leaves); index++) {
 		const struct orlix_tcti_minmaxv_leaf *leaf =
 			&orlix_tcti_minmaxv_leaves[index];
@@ -231,7 +241,20 @@ static void orlix_tcti_minmaxv_source_bindings(struct kunit *test)
 				source->encoding_pattern);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_MINMAXV_VARIABLE_MASK,
 				~source->encoding_mask);
+		if (index)
+			KUNIT_EXPECT_LT(test,
+					orlix_tcti_minmaxv_leaves[index - 1].source_ordinal,
+					leaf->source_ordinal);
 	}
+}
+
+static void orlix_tcti_minmaxv_capture_fp_simd(
+	struct orlix_tcti_native_fp_simd_state *state)
+{
+	memcpy(state->v, current->thread.user_simd, sizeof(state->v));
+	state->fpcr = current->thread.user_fpcr;
+	state->fpsr = current->thread.user_fpsr;
+	state->valid = !!current->thread.user_simd_valid;
 }
 
 static int orlix_tcti_minmaxv_read_program(struct kunit *test, u32 program[2])
@@ -346,10 +369,11 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 				};
 				u32 before_program[ARRAY_SIZE(program)];
 				u32 after_program[ARRAY_SIZE(program)];
-				u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+				struct orlix_tcti_native_observation_spec spec = {};
+				struct orlix_tcti_native_observation *observation;
+				struct orlix_tcti_native_fp_simd_state observed_fp_simd;
 				struct pt_regs regs;
 				struct pt_regs expected_regs;
-				struct orlix_tcti_result result;
 				u64 source[2];
 				u32 expected;
 				int ret;
@@ -366,11 +390,7 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 				source[0] = current->thread.user_simd[rn * 2U];
 				source[1] =
 					current->thread.user_simd[rn * 2U + 1U];
-				memcpy(expected_simd, current->thread.user_simd,
-				       sizeof(expected_simd));
 				expected = minmaxv_oracle(operation, q, size, source);
-				expected_simd[rd * 2U] = expected;
-				expected_simd[rd * 2U + 1U] = 0;
 				current->thread.user_simd_valid = 0;
 				current->thread.user_fpcr = BIT(22) | BIT(24);
 				current->thread.user_fpsr = BIT(27) | BIT(4);
@@ -380,25 +400,33 @@ static void orlix_tcti_minmaxv_legal_arrangements_resume(struct kunit *test)
 				expected_regs = regs;
 				expected_regs.pc += sizeof(u32);
 
-				result = orlix_tcti_resume_user(current, &regs,
-							  current->mm);
+				spec.source_ordinal = leaf->source_ordinal;
+				spec.obligation = ORLIX_TCTI_NATIVE_OBLIGATION_FP_SIMD;
+				spec.result.reason = ORLIX_TCTI_EXIT_SYSCALL;
+				spec.result.status = 0;
+				spec.result.fault_access = ORLIX_TCTI_ACCESS_FETCH;
+				spec.result.pc = context->instructions + sizeof(u32);
+				spec.result.instruction = ORLIX_TCTI_MINMAXV_SVC;
+				orlix_tcti_native_gpr_capture(&spec.gpr, &expected_regs);
+				orlix_tcti_minmaxv_capture_fp_simd(&spec.expected.fp_simd);
+				memset(spec.expected.fp_simd.v[rd], 0,
+				       sizeof(spec.expected.fp_simd.v[rd]));
+				memcpy(spec.expected.fp_simd.v[rd], &expected,
+				       sizeof(expected));
+				spec.expected.fp_simd.valid = true;
 
-				KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL,
-						result.reason);
-				KUNIT_EXPECT_EQ(test, 0L, result.status);
-				KUNIT_EXPECT_EQ(test, 0UL,
-						result.fault_address);
-				KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_FETCH,
-						result.fault_access);
-				KUNIT_EXPECT_EQ(test,
-						context->instructions +
-							sizeof(u32),
-						result.pc);
-				KUNIT_EXPECT_EQ(test, ORLIX_TCTI_MINMAXV_SVC,
-						result.instruction);
-				KUNIT_EXPECT_MEMEQ(test, expected_simd,
-						   current->thread.user_simd,
-						   sizeof(expected_simd));
+				observation = orlix_tcti_native_observation_create(&spec);
+				KUNIT_ASSERT_NOT_NULL(test, observation);
+				KUNIT_ASSERT_EQ(test, 0,
+					orlix_tcti_native_observation_execute(
+						observation, current, &regs, current->mm));
+				orlix_tcti_minmaxv_capture_fp_simd(&observed_fp_simd);
+				KUNIT_ASSERT_EQ(test, 0,
+					orlix_tcti_native_observation_add_fp_simd(
+						observation, &observed_fp_simd));
+				KUNIT_EXPECT_EQ(test, 0,
+					orlix_tcti_native_observation_compare(observation));
+				orlix_tcti_native_observation_destroy(observation);
 				KUNIT_EXPECT_EQ(test, 1UL,
 						current->thread.user_simd_valid);
 				KUNIT_EXPECT_EQ(test, BIT(22) | BIT(24),

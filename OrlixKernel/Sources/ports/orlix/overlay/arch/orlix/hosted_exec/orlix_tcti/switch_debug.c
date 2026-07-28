@@ -6249,6 +6249,63 @@ static int orlix_tcti_execute_simd_vector_compare(
 	return 0;
 }
 
+static int orlix_tcti_execute_simd_integer_minmax_reduction(
+	struct pt_regs *regs, const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u32 result = 0;
+	u8 lane_bits;
+	u8 lane;
+	u8 lane_count;
+
+	if (decoded->simd_reduction_op < ORLIX_TCTI_SIMD_REDUCTION_UMAXV ||
+	    decoded->simd_reduction_op > ORLIX_TCTI_SIMD_REDUCTION_SMINV ||
+	    (decoded->access_size != sizeof(u8) &&
+	     decoded->access_size != sizeof(u16) &&
+	     decoded->access_size != sizeof(u32)) ||
+	    decoded->result_size != decoded->access_size)
+		return -EOPNOTSUPP;
+
+	lane_bits = decoded->access_size * 8;
+	lane_count = (decoded->simd_q ? 2 * sizeof(u64) : sizeof(u64)) /
+		     decoded->access_size;
+	for (lane = 0; lane < lane_count; lane++) {
+		u8 byte_offset = lane * decoded->access_size;
+		u8 word = byte_offset / sizeof(u64);
+		u8 shift = (byte_offset % sizeof(u64)) * 8;
+		u32 value = (current->thread.user_simd[decoded->rn * 2 + word] >>
+			     shift) & GENMASK(lane_bits - 1, 0);
+
+		switch (decoded->simd_reduction_op) {
+		case ORLIX_TCTI_SIMD_REDUCTION_UMAXV:
+			if (lane == 0 || value > result)
+				result = value;
+			break;
+		case ORLIX_TCTI_SIMD_REDUCTION_UMINV:
+			if (lane == 0 || value < result)
+				result = value;
+			break;
+		case ORLIX_TCTI_SIMD_REDUCTION_SMAXV:
+			if (lane == 0 ||
+			    sign_extend32(value, lane_bits - 1) >
+			    sign_extend32(result, lane_bits - 1))
+				result = value;
+			break;
+		case ORLIX_TCTI_SIMD_REDUCTION_SMINV:
+			if (lane == 0 ||
+			    sign_extend32(value, lane_bits - 1) <
+			    sign_extend32(result, lane_bits - 1))
+				result = value;
+			break;
+		default:
+			return -EOPNOTSUPP;
+		}
+	}
+
+	orlix_tcti_write_simd_fp_register(decoded->rd, 2 * sizeof(u64), result, 0);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int orlix_tcti_execute_simd_vector_reduction(
 	struct pt_regs *regs, const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -6321,11 +6378,12 @@ static int orlix_tcti_execute_simd_vector_reduction(
 		return 0;
 	}
 
-	if ((decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_UMAXV ||
-	     decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_UMINV ||
-	     decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_SMAXV ||
-	     decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_SMINV ||
-	     decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_ADDV) &&
+	if (decoded->simd_reduction_op >= ORLIX_TCTI_SIMD_REDUCTION_UMAXV &&
+	    decoded->simd_reduction_op <= ORLIX_TCTI_SIMD_REDUCTION_SMINV)
+		return orlix_tcti_execute_simd_integer_minmax_reduction(regs,
+								 decoded);
+
+	if (decoded->simd_reduction_op == ORLIX_TCTI_SIMD_REDUCTION_ADDV &&
 	    (decoded->access_size == sizeof(u8) ||
 	     decoded->access_size == sizeof(u16) ||
 	     decoded->access_size == sizeof(u32)) &&
@@ -6345,26 +6403,6 @@ static int orlix_tcti_execute_simd_vector_reduction(
 			     shift) & GENMASK(lane_bits - 1, 0);
 
 		switch (decoded->simd_reduction_op) {
-		case ORLIX_TCTI_SIMD_REDUCTION_UMAXV:
-			if (lane == 0 || value > result)
-				result = value;
-			break;
-		case ORLIX_TCTI_SIMD_REDUCTION_UMINV:
-			if (lane == 0 || value < result)
-				result = value;
-			break;
-		case ORLIX_TCTI_SIMD_REDUCTION_SMAXV:
-			if (lane == 0 ||
-			    sign_extend32(value, lane_bits - 1) >
-			    sign_extend32(result, lane_bits - 1))
-				result = value;
-			break;
-		case ORLIX_TCTI_SIMD_REDUCTION_SMINV:
-			if (lane == 0 ||
-			    sign_extend32(value, lane_bits - 1) <
-			    sign_extend32(result, lane_bits - 1))
-				result = value;
-			break;
 		case ORLIX_TCTI_SIMD_REDUCTION_ADDV:
 			result = (result + value) & GENMASK(lane_bits - 1, 0);
 			break;

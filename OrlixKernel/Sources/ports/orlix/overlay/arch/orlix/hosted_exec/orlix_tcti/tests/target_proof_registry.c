@@ -697,7 +697,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "93e647a701efdf32967ddc75229e6c56e081d1dd0d534f4a9de41803d93ea558",
 	  "orlix_tcti_advsimd_mul_source_bound_test.o" },
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
-	  "0458c2ac841380d2e535e55e6a766268d86de4e42c82c66e9ede5ebd1558581e",
+	  "04b12956e0aac089c38b7271a6f4509e4df6754a0e2ac1aa29af9b87a8c64d57",
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o" },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
