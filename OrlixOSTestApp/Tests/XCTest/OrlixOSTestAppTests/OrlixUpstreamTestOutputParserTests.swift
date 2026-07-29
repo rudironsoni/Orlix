@@ -45,6 +45,51 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         )
     }
 
+    func testCombinedOutputPreservesConsoleCompletionAfterTerminalOutput() {
+        let output = OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
+            terminal: "terminal boot progress",
+            console: "ORLIX-KSELFTEST-END"
+        )
+
+        XCTAssertTrue(parser.containsTerminalCondition(output, for: .kernel))
+        XCTAssertEqual(output, "terminal boot progress\nORLIX-KSELFTEST-END")
+    }
+
+    func testConsolePollerSignalsForConsoleCompletionAfterTerminalOutput() {
+        let completion = expectation(description: "console completion")
+        let poller = OrlixUpstreamTestConsoleCompletionPoller(
+            interval: 0.001,
+            terminalOutput: { "terminal boot progress" },
+            consoleOutput: { "ORLIX-KSELFTEST-END" },
+            containsTerminalCondition: { [parser] text in
+                parser.containsTerminalCondition(text, for: .kernel)
+            },
+            signalCompletion: { completion.fulfill() }
+        )
+
+        poller.start()
+        wait(for: [completion], timeout: 1)
+        poller.cancel()
+    }
+
+    func testCancelledConsolePollerDoesNotReadConsoleOutput() {
+        let consoleRead = expectation(description: "console output was not read")
+        consoleRead.isInverted = true
+        let poller = OrlixUpstreamTestConsoleCompletionPoller(
+            interval: 0.001,
+            terminalOutput: { "terminal boot progress" },
+            consoleOutput: {
+                consoleRead.fulfill()
+                return "ORLIX-KSELFTEST-END"
+            },
+            containsTerminalCondition: { _ in true },
+            signalCompletion: {}
+        )
+
+        poller.cancel()
+        wait(for: [consoleRead], timeout: 0.02)
+    }
+
     func testAcceptsKselftestCompletionWithPassingTAP() throws {
         let output = """
         ORLIX-KSELFTEST-INIT

@@ -112,6 +112,16 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIDecodeDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-decode",
+        expectedKUnitSuite: "orlix-tcti-decode",
+        hostDirectoryFixture: true
+    )
+
     static let kernelTCTINativeObservationDiagnostic = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
@@ -894,16 +904,24 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
             )
         }
         let recorder = TerminalOutputRecorder()
+		let completionMarker = Data(spec.completionMarker.utf8)
 		session.terminal.resize(rows: 24, columns: 80)
 		let completion = OrlixUpstreamTestCompletion(signalCompletion)
         let bootStatus = BootStatusRecorder()
+		let consolePoller = OrlixUpstreamTestConsoleCompletionPoller(
+			interval: 0.1,
+			terminalOutput: { recorder.text },
+			consoleOutput: { session.recentConsoleOutputText },
+			containsTerminalCondition: { text in
+				self.parser.containsTerminalCondition(text, for: self.spec)
+			},
+			signalCompletion: { completion.signal() }
+		)
+		consolePoller.start()
+		defer { consolePoller.cancel() }
         let output = session.terminal.attachOutput { data in
             recorder.append(data)
-            let text = Self.combinedUpstreamOutput(
-                terminal: recorder.text,
-                console: session.recentConsoleOutputText
-            )
-            if self.parser.containsTerminalCondition(text, for: self.spec) {
+            if recorder.contains(completionMarker) {
                 completion.signal()
             }
         }
@@ -990,7 +1008,13 @@ final class OrlixUpstreamTestSessionRunner: @unchecked Sendable {
         if terminal.isEmpty {
             return console
         }
-        return terminal
+        if console.isEmpty || console == terminal || terminal.contains(console) {
+            return terminal
+        }
+        if console.contains(terminal) {
+            return console
+        }
+        return terminal + "\n" + console
     }
 
     private static func prepareHostDirectoryFixture(
@@ -1058,6 +1082,89 @@ private final class OrlixUpstreamTestCompletion: @unchecked Sendable {
 	}
 }
 
+final class OrlixUpstreamTestConsoleCompletionPoller: @unchecked Sendable {
+    private let lock = NSLock()
+    private let timer: DispatchSourceTimer
+    private let terminalOutput: () -> String
+    private let consoleOutput: () -> String
+    private let containsTerminalCondition: (String) -> Bool
+    private let signalCompletion: () -> Void
+    private var started = false
+    private var cancelled = false
+    private var signaled = false
+
+    init(
+        interval: TimeInterval,
+        terminalOutput: @escaping () -> String,
+        consoleOutput: @escaping () -> String,
+        containsTerminalCondition: @escaping (String) -> Bool,
+        signalCompletion: @escaping () -> Void
+    ) {
+        self.timer = DispatchSource.makeTimerSource(
+            queue: DispatchQueue(label: "org.orlix.upstream-test-console-poller")
+        )
+        self.terminalOutput = terminalOutput
+        self.consoleOutput = consoleOutput
+        self.containsTerminalCondition = containsTerminalCondition
+        self.signalCompletion = signalCompletion
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            self?.poll()
+        }
+    }
+
+    func start() {
+        lock.lock()
+        guard !started, !cancelled else {
+            lock.unlock()
+            return
+        }
+        started = true
+        timer.resume()
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        guard !cancelled else {
+            lock.unlock()
+            return
+        }
+        cancelled = true
+        if !started {
+            started = true
+            timer.resume()
+        }
+        timer.cancel()
+        lock.unlock()
+    }
+
+    private func poll() {
+        lock.lock()
+        guard !cancelled else {
+            lock.unlock()
+            return
+        }
+
+        let output = OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
+            terminal: terminalOutput(),
+            console: consoleOutput()
+        )
+        guard containsTerminalCondition(output) else {
+            lock.unlock()
+            return
+        }
+
+        guard !signaled else {
+            lock.unlock()
+            return
+        }
+        signaled = true
+        signalCompletion()
+        lock.unlock()
+    }
+}
+
 private final class BootStatusRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: OrlixBootStatus?
@@ -1078,6 +1185,7 @@ private final class BootStatusRecorder: @unchecked Sendable {
 private final class TerminalOutputRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = Data()
+    private var recentStorage = Data()
 
     var text: String {
         lock.lock()
@@ -1088,7 +1196,17 @@ private final class TerminalOutputRecorder: @unchecked Sendable {
     func append(_ data: Data) {
         lock.lock()
         storage.append(data)
+        recentStorage.append(data)
+        if recentStorage.count > 4_096 {
+            recentStorage.removeFirst(recentStorage.count - 4_096)
+        }
         lock.unlock()
+    }
+
+    func contains(_ marker: Data) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return recentStorage.range(of: marker) != nil
     }
 }
 

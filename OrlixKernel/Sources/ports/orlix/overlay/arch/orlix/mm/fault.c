@@ -5,6 +5,7 @@
 #include <linux/sched/signal.h>
 #include <linux/signal.h>
 #include <asm/hosted_exec.h>
+#include <asm/mte.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
@@ -12,6 +13,15 @@
 
 #if defined(ORLIX_APP_HOSTED_BOOT)
 extern unsigned long orlix_hosted_active_user_tls;
+
+void orlix_mte_signal_sync_fault(struct pt_regs *regs, unsigned long address)
+{
+	/* A precise tag mismatch does not advance regs->pc. */
+	if (!regs || !user_mode(regs))
+		return;
+	force_sig_fault(SIGSEGV, SEGV_MTESERR,
+			(void __user *)(address & GENMASK_ULL(55, 0)));
+}
 
 static void orlix_force_user_fault_signal(unsigned long address,
 					  unsigned long fault_flags,
@@ -35,6 +45,8 @@ int orlix_handle_host_user_fault(struct pt_regs *regs, unsigned long address,
 	unsigned int flags = FAULT_FLAG_DEFAULT | FAULT_FLAG_USER;
 	int si_code = SEGV_MAPERR;
 
+	/* A logical tag is not part of the Linux virtual address. */
+	address = orlix_mte_untagged_address(address);
 	if (!user_mode(regs) || faulthandler_disabled() || !mm)
 		return -EFAULT;
 
@@ -159,6 +171,8 @@ int orlix_tcti_handle_user_fault(struct pt_regs *regs, unsigned long address,
 	int si_code = SEGV_MAPERR;
 	int ret;
 
+	/* Keep find_vma(), handle_mm_fault(), and signal si_addr canonical. */
+	address = orlix_mte_untagged_address(address);
 	if (!user_mode(regs) || faulthandler_disabled() || !mm)
 		return -EFAULT;
 
