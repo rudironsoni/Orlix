@@ -14,6 +14,7 @@
 #include <asm/pgtable.h>
 #include <asm/processor.h>
 #include <asm/orlix_tcti.h>
+#include <asm/mte.h>
 #include <internal/asm/host_trap.h>
 
 #include "../hosted_exec/orlix_tcti/block_cache.h"
@@ -269,6 +270,7 @@ static int orlix_tcti_resolve_user_data_locked(struct mm_struct *mm,
 	pte_t entry;
 	spinlock_t *ptl;
 	struct page *resolved_page;
+	bool mte_exposure;
 	int ret;
 
 	ret = orlix_tcti_access_required_vm_flags(access, &required);
@@ -307,14 +309,43 @@ static int orlix_tcti_resolve_user_data_locked(struct mm_struct *mm,
 	ret = orlix_tcti_resolve_refcounted_pte_page(entry, &resolved_page);
 	if (ret)
 		goto out;
-	if (page && !get_page_unless_zero(resolved_page)) {
+	mte_exposure = vma->vm_flags & VM_MTE;
+	/*
+	 * Keep the PTE's page alive before dropping its spinlock. First exposure
+	 * may allocate tag storage, so it must never run below pte_lockptr().
+	 */
+	if (!get_page_unless_zero(resolved_page)) {
 		ret = -EFAULT;
 		goto out;
+	}
+	if (mte_exposure) {
+		pte_unmap_unlock(pte, ptl);
+		orlix_mte_sync_page_tags(resolved_page);
+		pte = pte_offset_map_lock(mm, pmd, user_va, &ptl);
+		entry = READ_ONCE(*pte);
+		if (!(pte_val(entry) & _PAGE_PRESENT) ||
+		    !(pte_val(entry) & _PAGE_USER) ||
+		    pte_pfn(entry) != page_to_pfn(resolved_page)) {
+			put_page(resolved_page);
+			ret = -EFAULT;
+			goto out;
+		}
+		if (access == ORLIX_TCTI_ACCESS_FETCH && !(pte_val(entry) & _PAGE_EXEC)) {
+			put_page(resolved_page);
+			ret = -EACCES;
+			goto out;
+		}
+		if (access == ORLIX_TCTI_ACCESS_WRITE && !pte_write(entry)) {
+			put_page(resolved_page);
+			ret = -EACCES;
+			goto out;
+		}
 	}
 
 	if (access == ORLIX_TCTI_ACCESS_WRITE &&
 	    (!pte_dirty(entry) || !pte_young(entry))) {
 		entry = pte_mkdirty(pte_mkyoung(entry));
+		/* This direct PTE publication bypasses set_ptes(). */
 		set_pte(pte, entry);
 	}
 	if (access == ORLIX_TCTI_ACCESS_WRITE)
@@ -327,6 +358,8 @@ static int orlix_tcti_resolve_user_data_locked(struct mm_struct *mm,
 		*linux_perms = vma->vm_flags;
 	if (page)
 		*page = resolved_page;
+	else
+		put_page(resolved_page);
 	if (translation_generation)
 		*translation_generation = orlix_tcti_translation_generation(mm);
 	ret = 0;
@@ -351,6 +384,8 @@ int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 
 	if (!mm || !out)
 		return -EINVAL;
+	/* Linux VMA and PTE lookups never receive an AArch64 logical tag. */
+	user_va = orlix_mte_untagged_address(user_va);
 	if (user_va >= TASK_SIZE)
 		return -EFAULT;
 
@@ -419,6 +454,7 @@ int orlix_tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 
 	if (!mm || !instruction)
 		return -EINVAL;
+	pc = orlix_mte_untagged_address(pc);
 	if (pc & (sizeof(u32) - 1))
 		return -EFAULT;
 	if (pc >= TASK_SIZE || pc > TASK_SIZE - sizeof(u32))
@@ -458,10 +494,12 @@ static int orlix_tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va
 			       void *buffer, size_t size,
 			       enum orlix_tcti_access access)
 {
+	unsigned long logical_user_va = user_va;
 	size_t copied = 0;
 
 	if (!mm || !buffer)
 		return -EINVAL;
+	user_va = orlix_mte_untagged_address(user_va);
 	if (access != ORLIX_TCTI_ACCESS_READ && access != ORLIX_TCTI_ACCESS_WRITE)
 		return -EINVAL;
 	if (!size)
@@ -479,6 +517,13 @@ static int orlix_tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va
 		void *host_page = NULL;
 		void *host_data = NULL;
 		int ret;
+
+		/* The pin below uses the canonical address; the check retains its tag. */
+		ret = orlix_mte_check_access(mm, logical_user_va + copied,
+					     chunk,
+					     access == ORLIX_TCTI_ACCESS_WRITE);
+		if (ret)
+			return ret;
 
 		ret = orlix_tcti_pin_user_page(mm, current_va, access, &page);
 		if (!ret) {
@@ -556,6 +601,8 @@ int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,
 {
 	int ret;
 
+	user_va = orlix_mte_untagged_address(user_va);
+
 	for (;;) {
 		ret = orlix_tcti_pin_user_page(mm, user_va, access, page);
 		if (!ret)
@@ -584,6 +631,9 @@ int orlix_tcti_load_exclusive_user_data(struct mm_struct *mm,
 	    size > PAGE_SIZE - offset_in_page(user_va) ||
 	    user_va >= TASK_SIZE || size > TASK_SIZE - user_va)
 		return -EINVAL;
+	ret = orlix_mte_check_access(mm, user_va, size, false);
+	if (ret)
+		return ret;
 
 retry:
 	ret = orlix_tcti_pin_user_page_faulting(mm, user_va, ORLIX_TCTI_ACCESS_READ, &page);
@@ -622,6 +672,9 @@ int orlix_tcti_store_exclusive_user_data(struct mm_struct *mm,
 	    user_va >= TASK_SIZE || size > TASK_SIZE - user_va)
 		return -EINVAL;
 	*stored = false;
+	ret = orlix_mte_check_access(mm, user_va, size, true);
+	if (ret)
+		return ret;
 	ret = orlix_tcti_pin_user_page_faulting(mm, user_va, ORLIX_TCTI_ACCESS_WRITE, &page);
 	if (ret)
 		return ret;
@@ -802,6 +855,10 @@ int orlix_tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
 	    size > PAGE_SIZE - offset_in_page(user_va) ||
 	    user_va >= TASK_SIZE || size > TASK_SIZE - user_va)
 		return -EFAULT;
+	/* LSE operations read and may mutate one tagged granule atomically. */
+	ret = orlix_mte_check_access(mm, user_va, size, true);
+	if (ret)
+		return ret;
 
 	ret = orlix_tcti_atomic_memory_order_before(order);
 	if (ret)

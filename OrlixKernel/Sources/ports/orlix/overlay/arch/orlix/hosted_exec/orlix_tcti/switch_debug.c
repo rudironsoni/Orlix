@@ -8,6 +8,7 @@
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
+#include <asm/mte.h>
 #include <asm/processor.h>
 #include <linux/sched.h>
 #include <asm/hosted_exec.h>
@@ -194,9 +195,11 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 		tag = decoded->memory_tagging_op == ORLIX_TCTI_MTE_ADDG ?
 			orlix_tcti_mte_logical_tag(base) + decoded->tag_offset :
 			orlix_tcti_mte_logical_tag(base) - decoded->tag_offset;
-		address = decoded->memory_tagging_op == ORLIX_TCTI_MTE_ADDG ?
-			base + ((u64)decoded->imm6 << 4) :
-			base - ((u64)decoded->imm6 << 4);
+		address = (base & ~AARCH64_MTE_ADDRESS_MASK) |
+			((decoded->memory_tagging_op == ORLIX_TCTI_MTE_ADDG ?
+			  (base & AARCH64_MTE_ADDRESS_MASK) + ((u64)decoded->imm6 << 4) :
+			  (base & AARCH64_MTE_ADDRESS_MASK) - ((u64)decoded->imm6 << 4)) &
+			 AARCH64_MTE_ADDRESS_MASK);
 		orlix_tcti_write_gpr_or_sp(regs, decoded->rd, sizeof(u64),
 					orlix_tcti_mte_with_tag(address, tag));
 		regs->pc += sizeof(u32);
@@ -249,14 +252,12 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 	if (fault_address)
 		*fault_address = address & AARCH64_MTE_ADDRESS_MASK;
 
-	if ((decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZG ||
-	     decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G) &&
-	    !IS_ALIGNED(address & AARCH64_MTE_ADDRESS_MASK,
+	if (!IS_ALIGNED(address & AARCH64_MTE_ADDRESS_MASK,
 			AARCH64_MTE_GRANULE_SIZE))
 		return -EFAULT;
 
 	if (decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG) {
-		ret = orlix_tcti_mte_load_allocation_tag(mm, address, &tag);
+		ret = orlix_mte_load_allocation_tag(mm, address, &tag);
 		if (ret)
 			return ret;
 		if (decoded->rt != 31)
@@ -274,16 +275,11 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 			if (ret)
 				return ret;
 		}
-		ret = orlix_tcti_mte_store_allocation_tag(mm, address, tag);
+		ret = orlix_mte_store_allocation_tags(mm, address, tag,
+			(decoded->memory_tagging_op == ORLIX_TCTI_MTE_ST2G ||
+			 decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G) ? 2 : 1);
 		if (ret)
 			return ret;
-		if (decoded->memory_tagging_op == ORLIX_TCTI_MTE_ST2G ||
-		    decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G) {
-			ret = orlix_tcti_mte_store_allocation_tag(
-				mm, address + AARCH64_MTE_GRANULE_SIZE, tag);
-			if (ret)
-				return ret;
-		}
 	}
 
 	if (decoded->memory_index_mode != ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET)
@@ -1608,6 +1604,9 @@ static int orlix_tcti_store_integer(struct mm_struct *mm, unsigned long address,
 	ret = orlix_tcti_encode_integer(buffer, access_size, value);
 	if (ret)
 		return ret;
+	ret = orlix_mte_check_access(mm, address, access_size, true);
+	if (ret)
+		return ret;
 
 	ret = orlix_tcti_write_user_data(mm, address, buffer, access_size);
 	if (!ret)
@@ -1623,6 +1622,9 @@ static int orlix_tcti_load_integer(struct mm_struct *mm, unsigned long address,
 
 	if (!value)
 		return -EINVAL;
+	ret = orlix_mte_check_access(mm, address, access_size, false);
+	if (ret)
+		return ret;
 
 	ret = orlix_tcti_read_user_data(mm, address, buffer, access_size);
 	if (ret)
@@ -1755,6 +1757,9 @@ static int orlix_tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
 	if (access_size == 2 * sizeof(u64))
 		put_unaligned_le64(current->thread.user_simd[reg * 2 + 1],
 				   buffer + sizeof(u64));
+	ret = orlix_mte_check_access(mm, address, access_size, true);
+	if (ret)
+		return ret;
 	ret = orlix_tcti_write_user_data(mm, address, buffer, access_size);
 	if (!ret)
 		orlix_tcti_clear_exclusive_monitor();
@@ -1782,6 +1787,9 @@ static int orlix_tcti_read_simd_fp(struct mm_struct *mm, unsigned long address,
 	    access_size != sizeof(u64) &&
 	    access_size != 2 * sizeof(u64))
 		return -EOPNOTSUPP;
+	ret = orlix_mte_check_access(mm, address, access_size, false);
+	if (ret)
+		return ret;
 
 	ret = orlix_tcti_read_user_data(mm, address, buffer, access_size);
 	if (ret)
@@ -8123,8 +8131,9 @@ struct orlix_tcti_result orlix_tcti_switch_debug_resume_user(struct task_struct 
 		if (!ret)
 			continue;
 
-		if (ret == -EFAULT || ret == -EACCES) {
+		if (ret == -EFAULT || ret == -EACCES || ret == -EHWPOISON) {
 			result.reason =
+				ret == -EHWPOISON ? ORLIX_TCTI_EXIT_MTE_TAG_FAULT :
 				ret == -EFAULT &&
 				orlix_tcti_memory_alignment_fault(&decoded,
 							    fault_address) ?

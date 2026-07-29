@@ -36,6 +36,10 @@ struct task_struct;
 
 void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp);
 unsigned long __get_wchan(struct task_struct *p);
+long set_tagged_addr_ctrl(struct task_struct *task, unsigned long arg);
+long get_tagged_addr_ctrl(struct task_struct *task);
+#define SET_TAGGED_ADDR_CTRL(arg) set_tagged_addr_ctrl(current, arg)
+#define GET_TAGGED_ADDR_CTRL() get_tagged_addr_ctrl(current)
 #if defined(ORLIX_APP_HOSTED_BOOT)
 void orlix_timer_poll(void);
 #define arch_cond_resched() orlix_timer_poll()
@@ -70,8 +74,10 @@ struct thread_struct {
 	unsigned long user_simd_valid;
 	struct orlix_tcti_sve_state user_sve;
 	struct orlix_tcti_sme_state user_sme;
-	u16 user_mte_exclude_mask;
 #endif
+	/* Linux ABI state is task-local even when hosted execution is disabled. */
+	u16 user_mte_exclude_mask;
+	unsigned long user_mte_ctrl;
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;
 	unsigned long user_exclusive_value2;

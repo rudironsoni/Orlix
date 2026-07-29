@@ -50,12 +50,20 @@
 #define AARCH64_SUBG_PATTERN 0xd1800000U
 #define AARCH64_MTE_TAG_MEMORY_MASK 0xffe00c00U
 #define AARCH64_STG_PATTERN 0xd9200400U
+#define AARCH64_STG_OFFSET_PATTERN 0xd9200800U
+#define AARCH64_STG_PRE_PATTERN 0xd9200c00U
 #define AARCH64_STZGM_PATTERN 0xd9200000U
 #define AARCH64_LDG_PATTERN 0xd9600000U
 #define AARCH64_STZG_PATTERN 0xd9600400U
+#define AARCH64_STZG_OFFSET_PATTERN 0xd9600800U
+#define AARCH64_STZG_PRE_PATTERN 0xd9600c00U
 #define AARCH64_ST2G_PATTERN 0xd9a00400U
+#define AARCH64_ST2G_OFFSET_PATTERN 0xd9a00800U
+#define AARCH64_ST2G_PRE_PATTERN 0xd9a00c00U
 #define AARCH64_STGM_PATTERN 0xd9a00000U
 #define AARCH64_STZ2G_PATTERN 0xd9e00400U
+#define AARCH64_STZ2G_OFFSET_PATTERN 0xd9e00800U
+#define AARCH64_STZ2G_PRE_PATTERN 0xd9e00c00U
 #define AARCH64_LDGM_PATTERN 0xd9e00000U
 #define AARCH64_MTE_DP2_MASK 0xffe0fc00U
 #define AARCH64_IRG_PATTERN 0x9ac01000U
@@ -1138,12 +1146,20 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	}
 
 	if ((instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STG_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STG_OFFSET_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STG_PRE_PATTERN ||
 	    (instruction & 0xfffffc00U) == AARCH64_STZGM_PATTERN ||
 	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_LDG_PATTERN ||
 	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZG_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZG_OFFSET_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZG_PRE_PATTERN ||
 	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_ST2G_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_ST2G_OFFSET_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_ST2G_PRE_PATTERN ||
 	    (instruction & 0xfffffc00U) == AARCH64_STGM_PATTERN ||
 	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZ2G_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZ2G_OFFSET_PATTERN ||
+	    (instruction & AARCH64_MTE_TAG_MEMORY_MASK) == AARCH64_STZ2G_PRE_PATTERN ||
 	    (instruction & 0xfffffc00U) == AARCH64_LDGM_PATTERN) {
 		u32 pattern = instruction & AARCH64_MTE_TAG_MEMORY_MASK;
 
@@ -1158,6 +1174,8 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET;
 		switch (pattern) {
 		case AARCH64_STG_PATTERN:
+		case AARCH64_STG_OFFSET_PATTERN:
+		case AARCH64_STG_PRE_PATTERN:
 			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STG;
 			break;
 		case AARCH64_STZGM_PATTERN:
@@ -1168,15 +1186,21 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			decoded.load = true;
 			break;
 		case AARCH64_STZG_PATTERN:
+		case AARCH64_STZG_OFFSET_PATTERN:
+		case AARCH64_STZG_PRE_PATTERN:
 			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STZG;
 			break;
 		case AARCH64_ST2G_PATTERN:
+		case AARCH64_ST2G_OFFSET_PATTERN:
+		case AARCH64_ST2G_PRE_PATTERN:
 			decoded.memory_tagging_op = ORLIX_TCTI_MTE_ST2G;
 			break;
 		case AARCH64_STGM_PATTERN:
 			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STGM;
 			break;
 		case AARCH64_STZ2G_PATTERN:
+		case AARCH64_STZ2G_OFFSET_PATTERN:
+		case AARCH64_STZ2G_PRE_PATTERN:
 			decoded.memory_tagging_op = ORLIX_TCTI_MTE_STZ2G;
 			break;
 		default:

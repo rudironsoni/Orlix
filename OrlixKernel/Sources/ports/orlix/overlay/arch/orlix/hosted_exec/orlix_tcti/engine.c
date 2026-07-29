@@ -21,6 +21,7 @@
 #include <asm/signal.h>
 #include <asm/termios.h>
 #include <asm/orlix_tcti.h>
+#include <asm/mte.h>
 #include <asm/unistd.h>
 
 #include "block_cache.h"
@@ -114,6 +115,7 @@ static bool orlix_tcti_address_has_vma(struct mm_struct *mm, unsigned long addre
 	vm_flags_t required;
 	bool valid = false;
 
+	address = orlix_mte_untagged_address(address);
 	switch (access) {
 	case ORLIX_TCTI_ACCESS_READ:
 		required = VM_READ;
@@ -921,7 +923,7 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 					regs->regs[30], before_sp, regs->sp,
 					block_instruction, ret, block_program_words,
 					block->instruction_count);
-			if (ret == -EFAULT || ret == -EACCES) {
+			if (ret == -EFAULT || ret == -EACCES || ret == -EHWPOISON) {
 				block_decoded_valid = orlix_tcti_decoded_for_program_pc(
 					block->program, block->program_words,
 					block->guest_start_pc,
@@ -948,13 +950,14 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 							       successful_gadget_execution);
 			}
 
-			if (ret == -EFAULT || ret == -EACCES) {
+			if (ret == -EFAULT || ret == -EACCES || ret == -EHWPOISON) {
 				pr_info("OrlixTCTI: cached block fault task=%s pid=%d pc=%#llx ret=%d fault=%#lx insn=%#x code_generation=%llu words=%u\n",
 					task->comm, task_pid_nr(task), regs->pc,
 					ret, fault_address, block_instruction,
 					(unsigned long long)code_generation,
 					block_program_words);
-				result.reason =
+				result.reason = ret == -EHWPOISON ?
+					ORLIX_TCTI_EXIT_MTE_TAG_FAULT :
 					ret == -EFAULT && block_decoded_valid &&
 					orlix_tcti_memory_alignment_fault(
 						&block_decoded, fault_address) ?
@@ -1094,14 +1097,15 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 						       successful_gadget_execution);
 		}
 
-		if (ret == -EFAULT || ret == -EACCES) {
+		if (ret == -EFAULT || ret == -EACCES || ret == -EHWPOISON) {
 			fault_decoded = orlix_tcti_decoded_for_program_pc(
 				program, word_count, block_pc,
 				block_instruction_count, regs->pc, &decoded);
 
 			if (fault_decoded)
 				instruction = decoded.instruction;
-			result.reason =
+			result.reason = ret == -EHWPOISON ?
+				ORLIX_TCTI_EXIT_MTE_TAG_FAULT :
 				ret == -EFAULT && fault_decoded &&
 				orlix_tcti_memory_alignment_fault(&decoded,
 							 fault_address) ?
@@ -1434,6 +1438,10 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 		case ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION:
 			force_sig_fault(SIGILL, ILL_ILLOPC,
 					(void __user *)result.pc);
+			orlix_exit_to_user_mode_work(regs);
+			break;
+		case ORLIX_TCTI_EXIT_MTE_TAG_FAULT:
+			orlix_mte_signal_sync_fault(regs, result.fault_address);
 			orlix_exit_to_user_mode_work(regs);
 			break;
 		case ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION:
