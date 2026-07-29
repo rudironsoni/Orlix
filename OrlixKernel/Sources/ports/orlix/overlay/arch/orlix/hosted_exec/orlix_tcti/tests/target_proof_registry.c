@@ -546,6 +546,11 @@ proof_registry_projection[] = {
 	"orlix_tcti_source_leaf_classification_test_suite"
 #define SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY \
 	"orlix_tcti_source_leaf_classification_test_cases"
+#define TRANSLATION_CHANGE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_translation_change_source_bound_test.c"
+#define TRANSLATION_CHANGE_SUITE "orlix-tcti-translation-change-source-bound"
+#define TRANSLATION_CHANGE_SUITE_SYMBOL "tchange_suite"
+#define TRANSLATION_CHANGE_CASE_ARRAY "tchange_cases"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
@@ -720,6 +725,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ source_value, source_sha256_value, object_value, NULL, NULL, NULL },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
+	{ TRANSLATION_CHANGE_SOURCE,
+	  "4ec2fbd8141dd9ee73b5292637fbaa674a04720f159b61d6b3677f07ee8024c7",
+	  "orlix_tcti_translation_change_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
@@ -1049,6 +1057,24 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
+	{ TRANSLATION_CHANGE_SOURCE, TRANSLATION_CHANGE_SUITE,
+	  TRANSLATION_CHANGE_SUITE_SYMBOL, TRANSLATION_CHANGE_CASE_ARRAY,
+	  "tchange_source_and_feature_domain",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ TRANSLATION_CHANGE_SOURCE, TRANSLATION_CHANGE_SUITE,
+	  TRANSLATION_CHANGE_SUITE_SYMBOL, TRANSLATION_CHANGE_CASE_ARRAY,
+	  "tchange_all_source_encodings_decode_unsupported",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ TRANSLATION_CHANGE_SOURCE, TRANSLATION_CHANGE_SUITE,
+	  TRANSLATION_CHANGE_SUITE_SYMBOL, TRANSLATION_CHANGE_CASE_ARRAY,
+	  "tchange_production_el0_rejection_preserves_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_unsigned_immediate_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2233,8 +2259,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define SCALAR_PROOF_REGISTRY_BINDING_COUNT 73U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 10U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 13U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 14U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
@@ -3349,10 +3375,29 @@ static size_t source_bound_proof_matches_registry(
 	return matches;
 }
 
+static const struct orlix_tcti_target_proof_case translation_change_cases[] = {
+	{ "tchange_source_and_feature_domain",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "tchange_all_source_encodings_decode_unsupported",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "tchange_production_el0_rejection_preserves_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+};
+
 struct source_leaf_rejection_registry_operation {
 	const char *proof_id;
 	unsigned int classification;
 	const char *operation_id;
+	const char *source;
+	const char *suite;
+	const struct orlix_tcti_target_proof_case *cases;
+	size_t case_count;
 	size_t binding_offset;
 	size_t binding_count;
 };
@@ -3377,6 +3422,30 @@ source_leaf_rejection_registry_operations[] = {
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-drps-non-el0",
 	  .classification = 2 },
+	{ .proof_id = "kunit:translation-change-tchangeb-reg-el0-rejection",
+	  .classification = 2,
+	  .source = TRANSLATION_CHANGE_SOURCE,
+	  .suite = TRANSLATION_CHANGE_SUITE,
+	  .cases = translation_change_cases,
+	  .case_count = ARRAY_COUNT(translation_change_cases) },
+	{ .proof_id = "kunit:translation-change-tchangef-reg-el0-rejection",
+	  .classification = 2,
+	  .source = TRANSLATION_CHANGE_SOURCE,
+	  .suite = TRANSLATION_CHANGE_SUITE,
+	  .cases = translation_change_cases,
+	  .case_count = ARRAY_COUNT(translation_change_cases) },
+	{ .proof_id = "kunit:translation-change-tchangeb-imm-el0-rejection",
+	  .classification = 2,
+	  .source = TRANSLATION_CHANGE_SOURCE,
+	  .suite = TRANSLATION_CHANGE_SUITE,
+	  .cases = translation_change_cases,
+	  .case_count = ARRAY_COUNT(translation_change_cases) },
+	{ .proof_id = "kunit:translation-change-tchangef-imm-el0-rejection",
+	  .classification = 2,
+	  .source = TRANSLATION_CHANGE_SOURCE,
+	  .suite = TRANSLATION_CHANGE_SUITE,
+	  .cases = translation_change_cases,
+	  .case_count = ARRAY_COUNT(translation_change_cases) },
 };
 static struct orlix_tcti_target_proof_binding
 source_leaf_rejection_registry_bindings[
@@ -3471,7 +3540,9 @@ static bool build_source_leaf_rejection_registry(void)
 			.encoding_mask = source->encoding_mask,
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
-			.kunit_case_mask = ORLIX_TCTI_PROOF_U64_C(0x3),
+			.kunit_case_mask = operation->cases ?
+				ORLIX_TCTI_PROOF_U64_C(0x7) :
+				ORLIX_TCTI_PROOF_U64_C(0x3),
 			.source_ordinal = source->ordinal,
 		};
 		if (operation->operation_id &&
@@ -3498,11 +3569,16 @@ static bool build_source_leaf_rejection_registry(void)
 				.obligations = obligations,
 				.linux_interface =
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
-				.kunit_source = SOURCE_LEAF_CLASSIFICATION_SOURCE,
-				.kunit_suite = SOURCE_LEAF_CLASSIFICATION_SUITE,
-			.kunit_cases = operation->classification == 2 ?
-				source_leaf_rejection_cases : source_leaf_undefined_cases,
-			.kunit_case_count = operation->classification == 2 ?
+				.kunit_source = operation->source ? operation->source :
+					SOURCE_LEAF_CLASSIFICATION_SOURCE,
+				.kunit_suite = operation->suite ? operation->suite :
+					SOURCE_LEAF_CLASSIFICATION_SUITE,
+			.kunit_cases = operation->cases ? operation->cases :
+				operation->classification == 2 ?
+				source_leaf_rejection_cases :
+				source_leaf_undefined_cases,
+			.kunit_case_count = operation->cases ? operation->case_count :
+				operation->classification == 2 ?
 				ARRAY_COUNT(source_leaf_rejection_cases) :
 				ARRAY_COUNT(source_leaf_undefined_cases),
 				.bindings = &source_leaf_rejection_registry_bindings[
