@@ -11,6 +11,7 @@
 static int orlix_test_index;
 static int orlix_test_failures;
 static int orlix_test_first_failure;
+static int orlix_test_skips;
 
 static size_t orlix_strlen(const char *s)
 {
@@ -155,11 +156,28 @@ static void orlix_test_result(bool passed, const char *name)
 	orlix_write_bytes(line, pos);
 }
 
+static void orlix_test_skip(const char *name)
+{
+	char line[256];
+	size_t pos = 0;
+
+	orlix_test_index++;
+	orlix_test_skips++;
+	pos = orlix_append_cstr(line, pos, sizeof(line), "ok ");
+	pos = orlix_append_uint(line, pos, sizeof(line),
+				(unsigned int)orlix_test_index);
+	pos = orlix_append_cstr(line, pos, sizeof(line), " - ");
+	pos = orlix_append_cstr(line, pos, sizeof(line), name);
+	pos = orlix_append_cstr(line, pos, sizeof(line), " # SKIP upstream kselftest\n");
+	orlix_write_bytes(line, pos);
+}
+
 static void orlix_test_exit(void)
 {
 	if (orlix_test_first_failure > 0 && orlix_test_first_failure < 125)
 		_exit(orlix_test_first_failure);
-	_exit(orlix_test_failures ? 1 : 0);
+	/* Upstream conformance is successful only with zero failures and skips. */
+	_exit(orlix_test_failures || orlix_test_skips ? 1 : 0);
 }
 
 static bool orlix_contains(const char *haystack, size_t size, const char *needle)

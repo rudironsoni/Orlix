@@ -1,0 +1,20 @@
+diff --git a/options/linux/include/sys/prctl.h b/options/linux/include/sys/prctl.h
+--- a/options/linux/include/sys/prctl.h
++++ b/options/linux/include/sys/prctl.h
+@@ -105,5 +105,16 @@
+ #define PR_FP_MODE_FRE (1 << 1)
+ 
++#define PR_SET_TAGGED_ADDR_CTRL 55
++#define PR_GET_TAGGED_ADDR_CTRL 56
++#define PR_TAGGED_ADDR_ENABLE (1UL << 0)
++#define PR_MTE_TCF_NONE 0UL
++#define PR_MTE_TCF_SYNC (1UL << 1)
++#define PR_MTE_TCF_ASYNC (1UL << 2)
++#define PR_MTE_TCF_MASK (PR_MTE_TCF_SYNC | PR_MTE_TCF_ASYNC)
++#define PR_MTE_TAG_SHIFT 3
++#define PR_MTE_TAG_MASK (0xffffUL << PR_MTE_TAG_SHIFT)
++#define PR_MTE_TCF_SHIFT 1
++
+ #define PR_CAP_AMBIENT 47
+ #define PR_CAP_AMBIENT_IS_SET 1
+ #define PR_CAP_AMBIENT_RAISE 2

@@ -185,6 +185,10 @@ final class OrlixKernelConformanceTests: XCTestCase {
         try OrlixUpstreamXCTest.run(.kernelTCTIKthreadHandoffDiagnostic)
     }
 
+    func testOrlixTCTIDecodeKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIDecodeDiagnostic)
+    }
+
     func testOrlixTCTINativeObservationKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTINativeObservationDiagnostic)
     }

@@ -21,6 +21,7 @@ enum orlix_tcti_exit_reason {
 	ORLIX_TCTI_EXIT_TASK_EXIT,
 	ORLIX_TCTI_EXIT_ALIGNMENT_FAULT,
 	ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
+	ORLIX_TCTI_EXIT_MTE_TAG_FAULT,
 };
 
 enum orlix_tcti_access {
@@ -176,11 +177,5 @@ void orlix_tcti_note_pte_update_address(struct mm_struct *mm,
 void orlix_tcti_flush_task_state(struct task_struct *task);
 void orlix_tcti_release_task_state(struct task_struct *task);
 void orlix_tcti_prepare_signal_delivery(void);
-int orlix_tcti_mte_load_allocation_tag(struct mm_struct *mm,
-				 unsigned long address, u8 *tag);
-int orlix_tcti_mte_store_allocation_tag(struct mm_struct *mm,
-				  unsigned long address, u8 tag);
-int orlix_tcti_mte_init_mm(struct mm_struct *mm);
-void orlix_tcti_mte_destroy_mm(struct mm_struct *mm);
 
 #endif /* _ASM_ORLIX_TCTI_H */

@@ -117,6 +117,20 @@ static bool parse_orlix_test(const char *line, size_t len, const char **name,
 	return *name_len > 0;
 }
 
+static bool parse_arm64_mte_test(const char *line, size_t len, const char **name,
+				 size_t *name_len)
+{
+	static const char prefix[] = "arm64-mte:";
+	size_t i;
+
+	for (i = 0; prefix[i]; i++)
+		if (i >= len || line[i] != prefix[i])
+			return false;
+	*name = line + i;
+	*name_len = len - i;
+	return *name_len > 0;
+}
+
 static void read_selected_test(void)
 {
 	static const char prefix[] = "orlix.kselftest=";
@@ -250,6 +264,37 @@ static int run_test(const char *name, size_t name_len)
 	return WEXITSTATUS(status);
 }
 
+static int run_arm64_mte_test(const char *name, size_t name_len)
+{
+	char path[160] = "/arm64/mte/";
+	size_t pos = sizeof("/arm64/mte/") - 1;
+	pid_t child;
+	int status;
+
+	if (name_len + pos + 1 > sizeof(path))
+		return -1;
+	for (size_t i = 0; i < name_len; i++)
+		path[pos + i] = name[i];
+	path[pos + name_len] = '\0';
+	orlix_test_comment("exec pristine upstream ", name, name_len);
+	child = fork();
+	if (child == 0) {
+		char *const argv[] = { path, NULL };
+		execv(path, argv);
+		_exit(127);
+	}
+	if (child < 0 || waitpid(child, &status, 0) != child)
+		return -1;
+	if (!WIFEXITED(status))
+		return -1;
+	/* Linux kselftest's canonical skip status is accounted, never hidden. */
+	if (WEXITSTATUS(status) == 4) {
+		orlix_test_comment("upstream skipped ", name, name_len);
+		return 4;
+	}
+	return WEXITSTATUS(status);
+}
+
 static unsigned int count_orlix_tests(const char *data, size_t size)
 {
 	unsigned int count = 0;
@@ -263,10 +308,12 @@ static unsigned int count_orlix_tests(const char *data, size_t size)
 		const char *name;
 		size_t name_len;
 
-		if (parse_orlix_test(data + line_start, pos - line_start,
+		if ((parse_orlix_test(data + line_start, pos - line_start,
 				     &name, &name_len) &&
 		    selected_test_matches(name, name_len) &&
-		    default_test_is_runnable(name, name_len))
+		    default_test_is_runnable(name, name_len)) ||
+		    parse_arm64_mte_test(data + line_start, pos - line_start,
+					 &name, &name_len))
 			count++;
 		line_start = pos + 1;
 	}
@@ -292,6 +339,30 @@ static void run_orlix_tests(const char *data, size_t size)
 			int result = run_test(name, name_len);
 
 			orlix_test_result(result == 0, name);
+		}
+		line_start = pos + 1;
+	}
+}
+
+static void run_arm64_mte_tests(const char *data, size_t size)
+{
+	size_t line_start = 0;
+	size_t pos;
+
+	for (pos = 0; pos <= size; pos++) {
+		const char *name;
+		size_t name_len;
+		int result;
+
+		if (pos != size && data[pos] != '\n')
+			continue;
+		if (parse_arm64_mte_test(data + line_start, pos - line_start,
+					 &name, &name_len)) {
+			result = run_arm64_mte_test(name, name_len);
+			if (result == 4)
+				orlix_test_skip(name);
+			else
+				orlix_test_result(result == 0, name);
 		}
 		line_start = pos + 1;
 	}
@@ -419,6 +490,8 @@ int main(void)
 	apply_boot_identity_tokens();
 	if (have_list)
 		run_orlix_tests(test_list, list_size);
+	if (have_list)
+		run_arm64_mte_tests(test_list, list_size);
 	orlix_write_all("ORLIX-KSELFTEST-END\n");
 	park_init();
 }

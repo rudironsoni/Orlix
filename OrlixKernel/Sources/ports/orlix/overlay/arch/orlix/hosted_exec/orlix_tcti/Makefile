@@ -1,4 +1,5 @@
 # FP16 scalar and AdvSIMD instructions use host H registers in these units.
+CFLAGS_REMOVE_switch_debug.o += -mgeneral-regs-only
 CFLAGS_switch_debug.o += -march=armv8.2-a+fp16
 CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
 

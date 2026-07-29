@@ -258,7 +258,6 @@ static inline pte_t pte_mkyoung(pte_t pte)
 #if defined(ORLIX_APP_HOSTED_BOOT)
 void orlix_sync_hosted_kernel_pte(unsigned long address);
 #endif
-
 #define set_ptes set_ptes
 static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
 			    pte_t *ptep, pte_t pte, unsigned int nr)

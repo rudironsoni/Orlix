@@ -61,6 +61,29 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 	return ret;
 }
 
+/*
+ * MTE is deliberately not lowered through the generic decoded gadget.  Its
+ * allocation-tag and fault contract crosses the Linux MM boundary, so this
+ * fixed family gadget is the production dispatch point that keeps the TCTI
+ * side limited to instruction execution.
+ */
+static int orlix_tcti_gadget_execute_memory_tagging(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	(void)capture;
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	if (decoded.decode_class != ORLIX_TCTI_DECODE_MEMORY_TAGGING)
+		return -EINVAL;
+	return orlix_tcti_execute_decoded_semantics(mm, regs, &decoded,
+						      fault_address);
+}
+
 static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
 				     struct pt_regs *regs,
 				     const struct orlix_tcti_gadget_word **cursor,
@@ -96,6 +119,8 @@ static int orlix_tcti_gadget_execute_flag_manipulation(
 static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_MEMORY_TAGGING)
+		return orlix_tcti_gadget_execute_memory_tagging;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return orlix_tcti_gadget_execute_flag_manipulation;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&

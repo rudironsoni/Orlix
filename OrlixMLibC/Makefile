@@ -414,6 +414,10 @@ __build: __write-cross-file __build-compiler-rt
 	$(MLIBC_HOST_TOOL_ENV) DESTDIR="$(MLIBC_SYSROOT)" "$(MESON)" install -C "$(MLIBC_BUILD_DIR)"; \
 	[ -d "$(MLIBC_SYSROOT)/usr/include" ] || { echo "missing OrlixMLibC installed headers: $(MLIBC_SYSROOT)/usr/include" >&2; exit 1; }; \
 	[ -d "$(MLIBC_SYSROOT)/usr/lib" ] || { echo "missing OrlixMLibC installed libraries: $(MLIBC_SYSROOT)/usr/lib" >&2; exit 1; }; \
+	prctl_header="$(MLIBC_SYSROOT)/usr/include/sys/prctl.h"; \
+	for definition in '#define PR_SET_TAGGED_ADDR_CTRL 55' '#define PR_GET_TAGGED_ADDR_CTRL 56' '#define PR_TAGGED_ADDR_ENABLE (1UL << 0)' '#define PR_MTE_TCF_NONE 0UL' '#define PR_MTE_TCF_SYNC (1UL << 1)' '#define PR_MTE_TCF_ASYNC (1UL << 2)' '#define PR_MTE_TCF_MASK (PR_MTE_TCF_SYNC | PR_MTE_TCF_ASYNC)' '#define PR_MTE_TAG_SHIFT 3' '#define PR_MTE_TAG_MASK (0xffffUL << PR_MTE_TAG_SHIFT)' '#define PR_MTE_TCF_SHIFT 1'; do \
+		grep -Fqx "$$definition" "$$prctl_header" || { echo "OrlixMLibC sys/prctl.h is missing required arm64 tagged-address definition: $$definition" >&2; exit 1; }; \
+	done; \
 	[ -s "$(MLIBC_RTLIB)" ] || { echo "missing Orlix compiler runtime archive: $(MLIBC_RTLIB)" >&2; exit 1; }; \
 	printf 'profile=%s\nproduct_version=%s\nproduct_build_id=%s\nmlibc_commit=%s\n' "$(PROFILE)" "$(ORLIX_PRODUCT_VERSION)" "$(ORLIX_PRODUCT_BUILD_ID)" "$(MLIBC_COMMIT)" > "$(MLIBC_SYSROOT)/.orlixmlibc-sysroot-ready"; \
 	echo "built OrlixMLibC sysroot: $(MLIBC_SYSROOT)"
