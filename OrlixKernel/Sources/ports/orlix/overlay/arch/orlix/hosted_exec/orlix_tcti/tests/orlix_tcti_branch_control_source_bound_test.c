@@ -61,6 +61,14 @@ struct bcs_leaf {
 	bool wide;
 };
 
+struct bcs_exception_domain_leaf {
+	u16 ordinal;
+	const char *name;
+	u32 mask;
+	u32 pattern;
+	enum orlix_tcti_decode_class decode_class;
+};
+
 struct bcs_semantics_gap {
 	u32 ordinal;
 	const char *name;
@@ -114,6 +122,30 @@ static const struct bcs_leaf bcs_leaves[] = {
 	  BCS_TBZ, false },
 	{ 2343, "TBNZ_only_testbranch", "TBNZ", 0x7f000000U, 0x37000000U,
 	  BCS_TBNZ, false },
+};
+
+/* Exact #132 source leaves, including the fail-closed TENTER provenance gap. */
+static const struct bcs_exception_domain_leaf bcs_exception_domain_leaves[] = {
+	{ 2166U, "UDF_only_perm_undef", 0xffff0000U, 0x00000000U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2227U, "SVC_EX_exception", 0xffe0001fU, 0xd4000001U,
+	  ORLIX_TCTI_DECODE_SVC },
+	{ 2228U, "HVC_EX_exception", 0xffe0001fU, 0xd4000002U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2229U, "SMC_EX_exception", 0xffe0001fU, 0xd4000003U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2230U, "BRK_EX_exception", 0xffe0001fU, 0xd4200000U,
+	  ORLIX_TCTI_DECODE_BRK },
+	{ 2231U, "HLT_EX_exception", 0xffe0001fU, 0xd4400000U,
+	  ORLIX_TCTI_DECODE_HLT },
+	{ 2232U, "DCPS1_DC_exception", 0xffe0001fU, 0xd4a00001U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2233U, "DCPS2_DC_exception", 0xffe0001fU, 0xd4a00002U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2234U, "DCPS3_DC_exception", 0xffe0001fU, 0xd4a00003U,
+	  ORLIX_TCTI_DECODE_UNDEFINED },
+	{ 2235U, "TENTER_te_exception", 0xfffdf01fU, 0xd4e00000U,
+	  ORLIX_TCTI_DECODE_UNSUPPORTED },
 };
 
 static enum orlix_tcti_decode_class bcs_decode_class(const struct bcs_leaf *leaf)
@@ -641,6 +673,47 @@ static void bcs_source_decode(struct kunit *test)
 				    leaf->ordinal);
 		if (leaf->kind == BCS_CBZ || leaf->kind == BCS_CBNZ)
 			KUNIT_EXPECT_EQ(test, leaf->wide, decoded.is_64bit);
+	}
+}
+
+static void bcs_exception_domain_decode_precedence_and_reserved(struct kunit *test)
+{
+	/* One unallocated neighbor per #132 leaf, all outside its legal mask. */
+	static const u32 reserved[] = {
+		0x00010000U, 0xd4000000U, 0xd4000006U, 0xd4000007U,
+		0xd4200001U, 0xd4400001U, 0xd4a00000U, 0xd4a00004U,
+		0xd4a00005U, 0xd4e20000U,
+	};
+	size_t index;
+
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(bcs_exception_domain_leaves),
+			ARRAY_SIZE(reserved));
+	for (index = 0; index < ARRAY_SIZE(bcs_exception_domain_leaves); index++) {
+		const struct bcs_exception_domain_leaf *leaf =
+			&bcs_exception_domain_leaves[index];
+		const struct orlix_tcti_source_leaf_manifest_row *source =
+			orlix_tcti_source_leaf_manifest_row(leaf->ordinal);
+		u32 variable_mask = ~leaf->mask;
+		u32 variable = 0;
+
+		KUNIT_ASSERT_NOT_NULL(test, source);
+		KUNIT_EXPECT_EQ(test, leaf->ordinal, source->ordinal);
+		KUNIT_EXPECT_STREQ(test, leaf->name, source->name);
+		KUNIT_EXPECT_EQ(test, leaf->mask, source->encoding_mask);
+		KUNIT_EXPECT_EQ(test, leaf->pattern, source->encoding_pattern);
+		do {
+			u32 instruction = leaf->pattern | variable;
+
+			KUNIT_EXPECT_EQ_MSG(test, leaf->decode_class,
+				orlix_tcti_decode_aarch64(instruction).decode_class,
+				"%s ordinal %u instruction %#x", leaf->name,
+				leaf->ordinal, instruction);
+			variable = (variable - variable_mask) & variable_mask;
+		} while (variable);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+			orlix_tcti_decode_aarch64(reserved[index]).decode_class,
+			"%s ordinal %u reserved %#x", leaf->name, leaf->ordinal,
+			reserved[index]);
 	}
 }
 
@@ -1243,6 +1316,7 @@ static void cbe_narrow_sf_encodings_fail_closed(struct kunit *test)
 static struct kunit_case bcs_cases[] = {
 	KUNIT_CASE(bcs_issue_132_exact_source_cohort),
 	KUNIT_CASE(bcs_source_decode),
+	KUNIT_CASE(bcs_exception_domain_decode_precedence_and_reserved),
 	KUNIT_CASE(bcs_production_resume),
 	KUNIT_CASE(bcs_issue_132_exceptions_emit_typed_observations),
 	KUNIT_CASE(bcs_x31_semantics_production),

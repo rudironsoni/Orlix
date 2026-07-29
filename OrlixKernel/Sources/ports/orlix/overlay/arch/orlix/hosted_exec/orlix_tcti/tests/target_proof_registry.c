@@ -665,7 +665,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KSELFTEST_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile"
 #define KSELFTEST_BUILD_SOURCE_SHA256 \
-	"4383acf5e999267d59c0bf3035eb024e0e43180da9597ea8c15ee14d45a802fd"
+	"fc07605b3988ee31d01a2c01ff8d1324266d3b7ece8a3c44055eccf7c0c5ce72"
 #define KSELFTEST_PROCESS_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/process_lifecycle_probe.c"
 #define KSELFTEST_PROCESS_SOURCE_SHA256 \
@@ -694,6 +694,10 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_system_probe.c"
 #define KSELFTEST_SYSTEM_SOURCE_SHA256 \
 	"9bd80e30688b50056fd9400270ba068733f97115efb589c47c8f6671fa9a9693"
+#define KSELFTEST_EXCEPTION_INTERFACE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_exception_interface_probe.c"
+#define KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256 \
+	"a40d475d27be1bef1cdd0f2aea646a692780ef071e54390034de65467fe343b9"
 
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
@@ -737,7 +741,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
 	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
 	{ BRANCH_CONTROL_SOURCE,
-	  "2f5f497dad1b3ae007995f15215cacd8700e9fe37867ea363b967d7ed369cca9",
+	  "6a05b404e94d1c4447f179fa26267224bcfad41eb19a1dd57b90d20940db77c7",
 	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  "4d6598bbc39dac5fabb2e43576a7dcde86386f00b4ea0f8d7f379b01119cbb99",
@@ -3501,8 +3505,8 @@ branch_control_exception_cases[] = {
 	  BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
 };
 static bool branch_control_registry_ready;
-static const struct orlix_tcti_target_kselftest_provenance syscall_kselftests[6];
-static const struct orlix_tcti_target_kselftest_provenance signal_kselftests[1];
+static const struct orlix_tcti_target_kselftest_provenance
+	branch_control_exception_interface_kselftest;
 
 static struct branch_control_registry_operation *
 branch_control_registry_operation_for(const char *proof_id)
@@ -3594,8 +3598,8 @@ static bool build_branch_control_registry(void)
 			 BRANCH_CONTROL_OBLIGATIONS);
 		bool linux_visible = operation->exception_kind;
 		const struct orlix_tcti_target_kselftest_provenance *kselftest =
-			operation->exception_kind == 1 ? syscall_kselftests :
-			(operation->exception_kind == 2 ? signal_kselftests : NULL);
+			operation->exception_kind ?
+			&branch_control_exception_interface_kselftest : NULL;
 
 		if (linux_visible)
 			obligations |= ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
@@ -4129,6 +4133,10 @@ int orlix_tcti_target_kselftest_provenance_validate(
 		{ KSELFTEST_SYSTEM_SOURCE, KSELFTEST_SYSTEM_SOURCE_SHA256,
 		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
 		  "orlix_tcti_system_probe", "main" },
+		{ KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+		  KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "orlix_tcti_exception_interface_probe", "main" },
 	};
 	static bool checked[ARRAY_COUNT(allowed)];
 	static bool cached_valid[ARRAY_COUNT(allowed)];
@@ -4491,6 +4499,9 @@ orlix_tcti_target_proof_registry_entries(size_t *count)
 	  KSELFTEST_BUILD_SOURCE_SHA256, program_value, "main" }
 
 static const struct orlix_tcti_target_kselftest_provenance syscall_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+			     KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+			     "orlix_tcti_exception_interface_probe"),
 	KSELFTEST_PROVENANCE(KSELFTEST_PROCESS_SOURCE,
 			     KSELFTEST_PROCESS_SOURCE_SHA256,
 			     "process_lifecycle_probe"),
@@ -4508,9 +4519,18 @@ static const struct orlix_tcti_target_kselftest_provenance syscall_kselftests[] 
 };
 
 static const struct orlix_tcti_target_kselftest_provenance signal_kselftests[] = {
+	KSELFTEST_PROVENANCE(KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+			     KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+			     "orlix_tcti_exception_interface_probe"),
 	KSELFTEST_PROVENANCE(KSELFTEST_SIGNAL_SOURCE,
 			     KSELFTEST_SIGNAL_SOURCE_SHA256, "signal_wait_probe"),
 };
+
+static const struct orlix_tcti_target_kselftest_provenance
+branch_control_exception_interface_kselftest =
+	KSELFTEST_PROVENANCE(KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+			    KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+			    "orlix_tcti_exception_interface_probe");
 
 static const struct orlix_tcti_target_kselftest_provenance memory_kselftests[] = {
 	KSELFTEST_PROVENANCE(KSELFTEST_STACK_SOURCE,
