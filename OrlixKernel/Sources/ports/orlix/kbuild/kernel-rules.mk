@@ -1129,6 +1129,9 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 endif
 
 ORLIX_KUNIT_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/kunit/$(PROFILE)
+ORLIX_KUNIT_TCTI_TEST_DIR := arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests
+ORLIX_KUNIT_TCTI_TEST_ARCHIVE := $(ORLIX_KUNIT_TCTI_TEST_DIR)/built-in.a
+ORLIX_KUNIT_TCTI_BUILD_TARGET := arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/
 ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)
 ORLIX_MLIBC_SYSROOT ?= $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
 ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kselftest/$(PROFILE)
@@ -1245,7 +1248,7 @@ include OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/disposable-tree.mk
 include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/rules.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1840,8 +1843,23 @@ __kunit: __prepare-kbuild
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET); \
+	[ -s "$(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" ] || { echo "missing OrlixTCTI KUnit archive: $(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" >&2; exit 1; }; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
+
+__kunit-object-contract-tests:
+	@set -euo pipefail; \
+	output_parent="$$(dirname "$(ORLIX_KUNIT_BUILD_DIR)")"; \
+	mkdir -p "$$output_parent"; \
+	tmp="$$(mktemp -d "$$output_parent/orlix-kunit-object-contract.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	archive="$$tmp/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)"; \
+	[ ! -e "$$archive" ] || { echo "KUnit object contract regression output already exists: $$archive" >&2; exit 1; }; \
+	echo "KUnit object contract output initially absent: $$archive"; \
+	$(MAKE) -f OrlixKernel/Makefile kunit PROFILE=development ORLIX_KERNEL_KUNIT=1 ORLIX_KUNIT_BUILD_DIR="$$tmp"; \
+	[ -s "$$archive" ] || { echo "KUnit object contract regression missing archive: $$archive" >&2; exit 1; }; \
+	archive_bytes="$$(wc -c < "$$archive")"; \
+	echo "Orlix KUnit object contract archive: $$archive ($$archive_bytes bytes)"
 
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \
