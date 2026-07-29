@@ -904,7 +904,8 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				result.status = (instruction >> 5) & 0xffffU;
 			} else {
 				result.reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
-				result.status = 0;
+				result.status = first_exit_class == ORLIX_TCTI_DECODE_HLT ?
+					(instruction >> 5) & 0xffffU : 0;
 			}
 			result.pc = regs->pc;
 			result.instruction = instruction;

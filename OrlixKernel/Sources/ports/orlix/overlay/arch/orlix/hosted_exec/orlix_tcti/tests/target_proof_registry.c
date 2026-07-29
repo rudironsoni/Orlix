@@ -737,7 +737,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
 	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
 	{ BRANCH_CONTROL_SOURCE,
-	  "01f0a5d61b132e0e7e7d1f439f503d7d09802b888de36c17b29de76aa6ecf0bc",
+	  "2f5f497dad1b3ae007995f15215cacd8700e9fe37867ea363b967d7ed369cca9",
 	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
 	  "4d6598bbc39dac5fabb2e43576a7dcde86386f00b4ea0f8d7f379b01119cbb99",
@@ -2154,8 +2154,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define SCALAR_PROOF_REGISTRY_BINDING_COUNT 73U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 9U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 10U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 11U
 #define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 13U
 #define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 15U
 
@@ -3262,6 +3262,8 @@ static struct source_leaf_rejection_registry_operation
 source_leaf_rejection_registry_operations[] = {
 	{ .proof_id = "kunit:source-leaf-udf-undefined",
 	  .classification = 3, .base_exception = true },
+	{ .proof_id = "kunit:source-leaf-tenter-source-unavailable",
+	  .classification = 1 },
 	{ .proof_id = "kunit:source-leaf-hvc-non-el0",
 	  .classification = 2, .base_exception = true },
 	{ .proof_id = "kunit:source-leaf-smc-non-el0",
@@ -3300,6 +3302,10 @@ static const struct orlix_tcti_target_proof_case source_leaf_undefined_cases[] =
 	{ "orlix_tcti_source_leaf_rejections_are_structured_el0_exits",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+static const struct orlix_tcti_target_proof_case source_leaf_semantic_blocker_cases[] = {
+	{ "orlix_tcti_source_leaf_rejections_match_pinned_tuples",
+	  BASELINE_OBLIGATIONS },
 };
 static const struct orlix_tcti_target_proof_case
 source_leaf_base_exception_cases[] = {
@@ -3382,7 +3388,8 @@ static bool build_source_leaf_rejection_registry(void)
 			.encoding_mask = source->encoding_mask,
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
-			.kunit_case_mask = operation->base_exception ?
+			.kunit_case_mask = operation->classification == 1 ?
+				ORLIX_TCTI_PROOF_U64_C(0x1) : operation->base_exception ?
 				ORLIX_TCTI_PROOF_U64_C(0x7) :
 				ORLIX_TCTI_PROOF_U64_C(0x3),
 			.source_ordinal = source->ordinal,
@@ -3397,14 +3404,17 @@ static bool build_source_leaf_rejection_registry(void)
 	     index++) {
 		const struct source_leaf_rejection_registry_operation *operation =
 			&source_leaf_rejection_registry_operations[index];
-		orlix_tcti_proof_u32 obligations = operation->classification == 2 ?
+		orlix_tcti_proof_u32 obligations = operation->classification == 1 ?
+			BASELINE_OBLIGATIONS : operation->classification == 2 ?
 			NON_EL0_REJECTION_OBLIGATIONS :
 			UNDEFINED_REJECTION_OBLIGATIONS;
 		const struct orlix_tcti_target_proof_case *cases =
+			operation->classification == 1 ? source_leaf_semantic_blocker_cases :
 			operation->base_exception ? source_leaf_base_exception_cases :
 			(operation->classification == 2 ? source_leaf_rejection_cases :
 			 source_leaf_undefined_cases);
-		size_t case_count = operation->base_exception ?
+		size_t case_count = operation->classification == 1 ?
+			ARRAY_COUNT(source_leaf_semantic_blocker_cases) : operation->base_exception ?
 			ARRAY_COUNT(source_leaf_base_exception_cases) :
 			(operation->classification == 2 ?
 			 ARRAY_COUNT(source_leaf_rejection_cases) :
@@ -3491,6 +3501,8 @@ branch_control_exception_cases[] = {
 	  BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
 };
 static bool branch_control_registry_ready;
+static const struct orlix_tcti_target_kselftest_provenance syscall_kselftests[6];
+static const struct orlix_tcti_target_kselftest_provenance signal_kselftests[1];
 
 static struct branch_control_registry_operation *
 branch_control_registry_operation_for(const char *proof_id)
@@ -3580,6 +3592,13 @@ static bool build_branch_control_registry(void)
 			(operation->exception_kind == 1 ?
 			 BRANCH_CONTROL_STATE_OBLIGATIONS :
 			 BRANCH_CONTROL_OBLIGATIONS);
+		bool linux_visible = operation->exception_kind;
+		const struct orlix_tcti_target_kselftest_provenance *kselftest =
+			operation->exception_kind == 1 ? syscall_kselftests :
+			(operation->exception_kind == 2 ? signal_kselftests : NULL);
+
+		if (linux_visible)
+			obligations |= ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
 
 		if (!operation->binding_count)
 			return false;
@@ -3590,7 +3609,8 @@ static bool build_branch_control_registry(void)
 				.classification_mask =
 					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
 				.obligations = obligations,
-				.linux_interface =
+				.linux_interface = linux_visible ?
+					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 				.kunit_source = BRANCH_CONTROL_SOURCE,
 				.kunit_suite = BRANCH_CONTROL_SUITE,
@@ -3599,7 +3619,7 @@ static bool build_branch_control_registry(void)
 				.bindings = &branch_control_registry_bindings[
 					operation->binding_offset],
 				.binding_count = operation->binding_count,
-				.kselftest = NULL,
+				.kselftest = kselftest,
 				.unproved_obligations = obligations,
 			};
 	}
@@ -3633,6 +3653,11 @@ int orlix_tcti_target_proof_operation_requirements(
 	}
 	if (classification != 1)
 		return -1;
+	/* The manifest establishes EL0 applicability, but no official body exists. */
+	if (!strcmp(operation_id, "TENTER")) {
+		*requirements = BASELINE_OBLIGATIONS;
+		return 0;
+	}
 	for (index = 0; index < sizeof(operation_requirements) /
 				      sizeof(operation_requirements[0]); index++)
 		if (!strcmp(operation_id,

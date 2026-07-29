@@ -610,7 +610,7 @@ static void bcs_expect_exception_control(struct kunit *test,
 		break;
 	case BCS_HLT:
 		expected_reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
-		expected_status = 0;
+		expected_status = (instruction >> 5) & 0xffffU;
 		break;
 	default:
 		return;

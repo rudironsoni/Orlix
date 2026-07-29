@@ -19,6 +19,8 @@
 #define AARCH64_DCPS1_PATTERN 0xd4a00001U
 #define AARCH64_DCPS2_PATTERN 0xd4a00002U
 #define AARCH64_DCPS3_PATTERN 0xd4a00003U
+#define AARCH64_TENTER_MASK 0xfffdf01fU
+#define AARCH64_TENTER_PATTERN 0xd4e00000U
 #define AARCH64_SMSTOP_SM 0xd503427fU
 #define AARCH64_SMSTART_SM 0xd503437fU
 #define AARCH64_SMSTOP_ZA 0xd503447fU
@@ -857,6 +859,12 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	    (instruction & AARCH64_SVC_MASK) == AARCH64_DCPS3_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_UNDEFINED;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		return decoded;
+	}
+
+	/* The pinned TENTER operation body is explicitly unspecified. */
+	if ((instruction & AARCH64_TENTER_MASK) == AARCH64_TENTER_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
 		return decoded;
 	}
 
