@@ -66,6 +66,13 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_FP_SCALAR_COMPARE,
 	ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT,
 	ORLIX_TCTI_DECODE_FP_INT_CONVERT,
+	ORLIX_TCTI_DECODE_MOPS_COPY,
+};
+
+enum orlix_tcti_mops_copy_stage {
+	ORLIX_TCTI_MOPS_COPY_PROLOGUE = 0,
+	ORLIX_TCTI_MOPS_COPY_MAIN,
+	ORLIX_TCTI_MOPS_COPY_EPILOGUE,
 };
 
 enum orlix_tcti_memory_index_mode {
@@ -630,6 +637,7 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_simd_reduction_op simd_reduction_op;
 	enum orlix_tcti_simd_element_move_op simd_element_move_op;
 	enum orlix_tcti_simd_table_lookup_op simd_table_lookup_op;
+	enum orlix_tcti_mops_copy_stage mops_copy_stage;
 	bool system_register_write;
 	bool sme_streaming_mode;
 	bool sme_za;
@@ -650,6 +658,9 @@ struct orlix_tcti_decoded_instruction {
 	bool exclusive;
 	bool pair;
 	bool lse128;
+	bool mops_forward_only;
+	u8 mops_options;
+	u32 mops_source_ordinal;
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);

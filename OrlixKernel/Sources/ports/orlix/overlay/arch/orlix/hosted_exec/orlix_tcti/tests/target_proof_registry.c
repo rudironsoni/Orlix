@@ -562,6 +562,11 @@ production_capture_bindings[] = {
 #undef ORLIX_TCTI_PRODUCTION_CAPTURE
 };
 
+#define MOPS_COPY_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_mops_copy_test.c"
+#define MOPS_COPY_SUITE "orlix-tcti-mops-copy"
+#define MOPS_COPY_SUITE_SYMBOL "orlix_tcti_mops_copy_suite"
+#define MOPS_COPY_CASE_ARRAY "orlix_tcti_mops_copy_cases"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define DECODE_SUITE "orlix-tcti-decode"
@@ -609,6 +614,12 @@ production_capture_bindings[] = {
 #define PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define MOPS_COPY_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
@@ -731,6 +742,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
 	  "orlix_tcti_integer_conditional_source_bound_test.o", NULL, NULL, NULL },
+	{ MOPS_COPY_SOURCE,
+	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
+	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -1187,6 +1201,55 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_decode_all_96_source_leaves",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY,
+	  "mops_rejects_reserved_and_constrained_unpredictable_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_production_gadget_forwards_and_writes_back",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY,
+	  "mops_production_gadget_selects_backward_overlap_direction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_production_gadget_executes_all_options",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_production_rejects_constrained_register_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_epilogue_preserves_partial_guest_progress_on_fault",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_epilogue_preserves_destination_fault_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MOPS_COPY_SOURCE, MOPS_COPY_SUITE, MOPS_COPY_SUITE_SYMBOL,
+	  MOPS_COPY_CASE_ARRAY, "mops_epilogue_preserves_backward_fault_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 
 };
 
@@ -1454,6 +1517,40 @@ static const struct operation_requirements operation_requirements[] = {
 	EXCLUSIVE_REQUIREMENT("LDXR"),
 	EXCLUSIVE_REQUIREMENT("LDAXR"),
 #undef EXCLUSIVE_REQUIREMENT
+#define MOPS_COPY_REQUIREMENT(operation) { operation, MOPS_COPY_OBLIGATIONS }
+	MOPS_COPY_REQUIREMENT("CPYFP"),
+	MOPS_COPY_REQUIREMENT("CPYFPWT"),
+	MOPS_COPY_REQUIREMENT("CPYFPRT"),
+	MOPS_COPY_REQUIREMENT("CPYFPT"),
+	MOPS_COPY_REQUIREMENT("CPYFPWN"),
+	MOPS_COPY_REQUIREMENT("CPYFPWTWN"),
+	MOPS_COPY_REQUIREMENT("CPYFPRTWN"),
+	MOPS_COPY_REQUIREMENT("CPYFPTWN"),
+	MOPS_COPY_REQUIREMENT("CPYFPRN"),
+	MOPS_COPY_REQUIREMENT("CPYFPWTRN"),
+	MOPS_COPY_REQUIREMENT("CPYFPRTRN"),
+	MOPS_COPY_REQUIREMENT("CPYFPTRN"),
+	MOPS_COPY_REQUIREMENT("CPYFPN"),
+	MOPS_COPY_REQUIREMENT("CPYFPWTN"),
+	MOPS_COPY_REQUIREMENT("CPYFPRTN"),
+	MOPS_COPY_REQUIREMENT("CPYFPTN"),
+	MOPS_COPY_REQUIREMENT("CPYP"),
+	MOPS_COPY_REQUIREMENT("CPYPWT"),
+	MOPS_COPY_REQUIREMENT("CPYPRT"),
+	MOPS_COPY_REQUIREMENT("CPYPT"),
+	MOPS_COPY_REQUIREMENT("CPYPWN"),
+	MOPS_COPY_REQUIREMENT("CPYPWTWN"),
+	MOPS_COPY_REQUIREMENT("CPYPRTWN"),
+	MOPS_COPY_REQUIREMENT("CPYPTWN"),
+	MOPS_COPY_REQUIREMENT("CPYPRN"),
+	MOPS_COPY_REQUIREMENT("CPYPWTRN"),
+	MOPS_COPY_REQUIREMENT("CPYPRTRN"),
+	MOPS_COPY_REQUIREMENT("CPYPTRN"),
+	MOPS_COPY_REQUIREMENT("CPYPN"),
+	MOPS_COPY_REQUIREMENT("CPYPWTN"),
+	MOPS_COPY_REQUIREMENT("CPYPRTN"),
+	MOPS_COPY_REQUIREMENT("CPYPTN"),
+#undef MOPS_COPY_REQUIREMENT
 };
 
 static const struct orlix_tcti_target_proof_case logical_base_cases[] = {
@@ -2145,6 +2242,8 @@ enum {
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
 };
 #define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 15U
+#define MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT 32U
+#define MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT 96U
 
 static bool proof_registry_initialized;
 static bool proof_registry_initialization_attempted;
@@ -2162,7 +2261,8 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	SCALAR_PROOF_REGISTRY_ENTRY_COUNT +
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
-	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT] = {
+	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT +
+	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -3104,7 +3204,8 @@ static bool build_ordinary_load_store_registry(void)
 	size_t index;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
-			PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
+		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -3321,7 +3422,8 @@ static bool build_source_leaf_rejection_registry(void)
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
-			PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
+		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -3491,7 +3593,8 @@ static int production_capture_family_build(
 static bool build_production_capture_family_registry(void)
 {
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
+		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (production_capture_family_registry_ready)
 		return true;
@@ -3505,6 +3608,191 @@ static bool build_production_capture_family_registry(void)
 			ARRAY_COUNT(production_capture_family_registry_bindings)))
 		return false;
 	production_capture_family_registry_ready = true;
+	return true;
+}
+
+struct mops_copy_registry_operation {
+	const char *proof_id;
+	const char *operation_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+#define MOPS_COPY_OPERATION(operation, slug) \
+	{ .proof_id = "kunit:mops-copy-" slug, .operation_id = operation }
+static struct mops_copy_registry_operation mops_copy_registry_operations[] = {
+	MOPS_COPY_OPERATION("CPYFP", "cpyfp"),
+	MOPS_COPY_OPERATION("CPYFPWT", "cpyfpwt"),
+	MOPS_COPY_OPERATION("CPYFPRT", "cpyfprt"),
+	MOPS_COPY_OPERATION("CPYFPT", "cpyfpt"),
+	MOPS_COPY_OPERATION("CPYFPWN", "cpyfpwn"),
+	MOPS_COPY_OPERATION("CPYFPWTWN", "cpyfpwtwn"),
+	MOPS_COPY_OPERATION("CPYFPRTWN", "cpyfprtwn"),
+	MOPS_COPY_OPERATION("CPYFPTWN", "cpyfptwn"),
+	MOPS_COPY_OPERATION("CPYFPRN", "cpyfprn"),
+	MOPS_COPY_OPERATION("CPYFPWTRN", "cpyfpwtrn"),
+	MOPS_COPY_OPERATION("CPYFPRTRN", "cpyfprtrn"),
+	MOPS_COPY_OPERATION("CPYFPTRN", "cpyfptrn"),
+	MOPS_COPY_OPERATION("CPYFPN", "cpyfpn"),
+	MOPS_COPY_OPERATION("CPYFPWTN", "cpyfpwtn"),
+	MOPS_COPY_OPERATION("CPYFPRTN", "cpyfprtn"),
+	MOPS_COPY_OPERATION("CPYFPTN", "cpyfptn"),
+	MOPS_COPY_OPERATION("CPYP", "cpyp"),
+	MOPS_COPY_OPERATION("CPYPWT", "cpypwt"),
+	MOPS_COPY_OPERATION("CPYPRT", "cpyprt"),
+	MOPS_COPY_OPERATION("CPYPT", "cpypt"),
+	MOPS_COPY_OPERATION("CPYPWN", "cpypwn"),
+	MOPS_COPY_OPERATION("CPYPWTWN", "cpypwtwn"),
+	MOPS_COPY_OPERATION("CPYPRTWN", "cpyprtwn"),
+	MOPS_COPY_OPERATION("CPYPTWN", "cpyptwn"),
+	MOPS_COPY_OPERATION("CPYPRN", "cpyprn"),
+	MOPS_COPY_OPERATION("CPYPWTRN", "cpypwtrn"),
+	MOPS_COPY_OPERATION("CPYPRTRN", "cpyprtrn"),
+	MOPS_COPY_OPERATION("CPYPTRN", "cpyptrn"),
+	MOPS_COPY_OPERATION("CPYPN", "cpypn"),
+	MOPS_COPY_OPERATION("CPYPWTN", "cpypwtn"),
+	MOPS_COPY_OPERATION("CPYPRTN", "cpyprtn"),
+	MOPS_COPY_OPERATION("CPYPTN", "cpyptn"),
+};
+#undef MOPS_COPY_OPERATION
+
+static struct orlix_tcti_target_proof_binding mops_copy_registry_bindings[
+	MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT];
+static const struct orlix_tcti_target_proof_case mops_copy_cases[] = {
+	{ "mops_decode_all_96_source_leaves",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "mops_rejects_reserved_and_constrained_unpredictable_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "mops_production_gadget_forwards_and_writes_back",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mops_production_gadget_selects_backward_overlap_direction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mops_production_gadget_executes_all_options",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "mops_production_rejects_constrained_register_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "mops_epilogue_preserves_partial_guest_progress_on_fault",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "mops_epilogue_preserves_destination_fault_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "mops_epilogue_preserves_backward_fault_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+};
+static bool mops_copy_registry_ready;
+
+static struct mops_copy_registry_operation *
+mops_copy_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(mops_copy_registry_operations); index++)
+		if (!strcmp(proof_id, mops_copy_registry_operations[index].proof_id))
+			return &mops_copy_registry_operations[index];
+	return NULL;
+}
+
+static bool build_mops_copy_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t index;
+
+	if (mops_copy_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct mops_copy_registry_operation *operation =
+			mops_copy_registry_operation_for(source_bound_proofs[index].proof_id);
+
+		if (operation)
+			operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(mops_copy_registry_operations); index++) {
+		struct mops_copy_registry_operation *operation =
+			&mops_copy_registry_operations[index];
+
+		if (operation->binding_count != 3U ||
+		    binding_offset + operation->binding_count >
+			ARRAY_COUNT(mops_copy_registry_bindings))
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != ARRAY_COUNT(mops_copy_registry_bindings))
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct mops_copy_registry_operation *operation =
+			mops_copy_registry_operation_for(source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct orlix_tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
+		if (!source || strcmp(operation->operation_id, source->operation_id))
+			return false;
+		binding = &mops_copy_registry_bindings[
+			operation->binding_offset + operation->binding_count++];
+		*binding = (struct orlix_tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask =
+				(ORLIX_TCTI_PROOF_U64_C(1) << ARRAY_COUNT(mops_copy_cases)) - 1,
+			.source_ordinal = source->ordinal,
+		};
+	}
+	for (index = 0; index < ARRAY_COUNT(mops_copy_registry_operations); index++) {
+		const struct mops_copy_registry_operation *operation =
+			&mops_copy_registry_operations[index];
+
+		if (operation->binding_count != 3U)
+			return false;
+		proof_registry_entries[entry_base + index] =
+			(struct orlix_tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask =
+					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+				.obligations = MOPS_COPY_OBLIGATIONS,
+				.linux_interface =
+					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = MOPS_COPY_SOURCE,
+				.kunit_suite = MOPS_COPY_SUITE,
+				.kunit_cases = mops_copy_cases,
+				.kunit_case_count = ARRAY_COUNT(mops_copy_cases),
+				.bindings = &mops_copy_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations = MOPS_COPY_OBLIGATIONS,
+			};
+	}
+	mops_copy_registry_ready = true;
 	return true;
 }
 
@@ -4641,7 +4929,8 @@ static void proof_registry_initialize(void)
 	if (!build_lse_registry() || !build_scalar_registry() ||
 	    !build_exclusive_registry() || !build_ordinary_load_store_registry() ||
 	    !build_source_leaf_rejection_registry() ||
-	    !build_production_capture_family_registry())
+	    !build_production_capture_family_registry() ||
+	    !build_mops_copy_registry())
 		return;
 	if (orlix_tcti_target_production_capture_bindings_validate(
 			production_capture_bindings,

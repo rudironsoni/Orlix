@@ -16,10 +16,12 @@ enum orlix_tcti_mops_semantic_provenance {
 
 enum orlix_tcti_mops_implementation_status {
 	ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED = 0,
+	ORLIX_TCTI_MOPS_IMPLEMENTATION_PRODUCTION,
 };
 
 enum orlix_tcti_mops_proof_status {
 	ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN = 0,
+	ORLIX_TCTI_MOPS_PROOF_KUNIT_OWNER,
 };
 
 enum orlix_tcti_mops_phase {
@@ -43,6 +45,11 @@ struct orlix_tcti_mops_leaf_provenance {
 	const char *feature;
 	const char *operation;
 	const char *asl_operation;
+	const char *ddi0602_locator;
+	const char *ddi0602_archive_sha256;
+	const char *production_owner;
+	const char *kunit_suite;
+	const char *linux_proof_disposition;
 	enum orlix_tcti_mops_phase phase;
 	enum orlix_tcti_mops_semantic_provenance semantic_provenance;
 	enum orlix_tcti_mops_implementation_status implementation_status;

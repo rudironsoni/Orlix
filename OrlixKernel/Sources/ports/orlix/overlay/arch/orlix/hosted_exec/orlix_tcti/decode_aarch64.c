@@ -113,6 +113,8 @@
 #define AARCH64_LSE_RMW_PATTERN 0x38200000U
 #define AARCH64_LSE128_RMW_MASK 0xff200c00U
 #define AARCH64_LSE128_RMW_PATTERN 0x19200000U
+#define AARCH64_MOPS_COPY_MASK 0x3b200c00U
+#define AARCH64_MOPS_COPY_PATTERN 0x19000400U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_MASK 0x9ff80c00U
 #define AARCH64_SIMD_MODIFIED_IMMEDIATE_PATTERN 0x0f000400U
 #define AARCH64_SIMD_VECTOR_ELEMENT_MOVE_MASK 0xffe08400U
@@ -897,6 +899,27 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 	if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction))
 		return decoded;
+
+	/* DDI0602 2026-06: CPYFP/CPYFM/CPYFE and CPYP/CPYM/CPYE. */
+	if ((instruction & AARCH64_MOPS_COPY_MASK) ==
+	    AARCH64_MOPS_COPY_PATTERN) {
+		u8 stage = (instruction >> 22) & 0x3U;
+		bool forward_only = !(instruction & BIT(26));
+
+		/* sz != 00 and op1 == 11 are reserved. */
+		if ((instruction & GENMASK(31, 30)) || stage == 3)
+			return decoded;
+		decoded.decode_class = ORLIX_TCTI_DECODE_MOPS_COPY;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.mops_copy_stage = stage;
+		decoded.mops_forward_only = forward_only;
+		decoded.mops_options = (instruction >> 12) & 0xfU;
+		decoded.mops_source_ordinal = (forward_only ? 2704U : 2764U) +
+			stage * 16U + decoded.mops_options;
+		return decoded;
+	}
 
 	if ((instruction & AARCH64_HINT_MASK) == AARCH64_HINT_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
