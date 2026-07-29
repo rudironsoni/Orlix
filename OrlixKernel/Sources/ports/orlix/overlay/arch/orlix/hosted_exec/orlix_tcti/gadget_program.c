@@ -6,6 +6,7 @@
 #include "block_cache.h"
 #include "crc32.h"
 #include "decode_aarch64.h"
+#include "fixed_integer.h"
 #include "gadget_program.h"
 #include "native_capture.h"
 #include "semantics.h"
@@ -61,6 +62,49 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 	return ret;
 }
 
+static int orlix_tcti_gadget_execute_fixed_integer(struct mm_struct *mm,
+							    struct pt_regs *regs,
+							    const struct orlix_tcti_gadget_word **cursor,
+							    unsigned long *fault_address,
+							    struct orlix_tcti_native_capture *capture)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+	int ret;
+
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+
+	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
+	ret = orlix_tcti_fixed_integer_execute(regs, &decoded);
+	if (ret)
+		orlix_tcti_native_capture_fault(capture, &decoded, *fault_address, ret);
+	else
+		orlix_tcti_native_capture_after_decoded(capture, mm, regs, &decoded);
+	return ret;
+}
+
+static bool orlix_tcti_decoded_uses_fixed_integer(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_BITFIELD ||
+	    decoded->decode_class == ORLIX_TCTI_DECODE_EXTRACT)
+		return true;
+	if (decoded->decode_class != ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE)
+		return false;
+
+	switch (decoded->dp1_op) {
+	case ORLIX_TCTI_DP1_CLZ:
+	case ORLIX_TCTI_DP1_RBIT:
+	case ORLIX_TCTI_DP1_REV:
+	case ORLIX_TCTI_DP1_REV16:
+	case ORLIX_TCTI_DP1_REV32:
+	case ORLIX_TCTI_DP1_CLS:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
 				     struct pt_regs *regs,
 				     const struct orlix_tcti_gadget_word **cursor,
@@ -96,6 +140,8 @@ static int orlix_tcti_gadget_execute_flag_manipulation(
 static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	if (orlix_tcti_decoded_uses_fixed_integer(decoded))
+		return orlix_tcti_gadget_execute_fixed_integer;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return orlix_tcti_gadget_execute_flag_manipulation;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
@@ -108,6 +154,7 @@ static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
 {
 	return gadget == orlix_tcti_gadget_execute_decoded ||
+		gadget == orlix_tcti_gadget_execute_fixed_integer ||
 		gadget == orlix_tcti_gadget_execute_crc32 ||
 		gadget == orlix_tcti_gadget_execute_flag_manipulation;
 }
@@ -167,6 +214,7 @@ int orlix_tcti_append_decoded_instruction(
 {
 	size_t start;
 	size_t words;
+	orlix_tcti_gadget_fn gadget;
 
 	if (!decoded || !program || !word_count)
 		return -EINVAL;
@@ -174,13 +222,14 @@ int orlix_tcti_append_decoded_instruction(
 	    decoded->decode_class == ORLIX_TCTI_DECODE_SVC ||
 	    decoded->decode_class == ORLIX_TCTI_DECODE_BRK)
 		return -EOPNOTSUPP;
+	gadget = orlix_tcti_gadget_for_decoded(decoded);
 
 	start = *word_count ? *word_count - 1 : 0;
 	words = start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS + 1;
 	if (capacity < words)
 		return -ENOSPC;
 
-	program[start].value = (unsigned long)orlix_tcti_gadget_for_decoded(decoded);
+	program[start].value = (unsigned long)gadget;
 	memcpy(&program[start + 1], decoded, sizeof(*decoded));
 	program[start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)orlix_tcti_gadget_halt;
