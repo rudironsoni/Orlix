@@ -71,6 +71,11 @@
 #define AARCH64_CONDITIONAL_COMPARE_PATTERN 0x3a400000U
 #define AARCH64_CONDITIONAL_SELECT_MASK 0x3fe00800U
 #define AARCH64_CONDITIONAL_SELECT_PATTERN 0x1a800000U
+#define AARCH64_RMIF_MASK 0xffe07c10U
+#define AARCH64_RMIF_PATTERN 0xba000400U
+#define AARCH64_SETF_MASK 0xfffffc1fU
+#define AARCH64_SETF8_PATTERN 0x3a00080dU
+#define AARCH64_SETF16_PATTERN 0x3a00480dU
 #define AARCH64_LOAD_LITERAL_MASK 0x3b000000U
 #define AARCH64_LOAD_LITERAL_PATTERN 0x18000000U
 #define AARCH64_LOAD_STORE_PAIR_MASK 0x3a000000U
@@ -844,6 +849,26 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	if ((instruction & AARCH64_HLT_MASK) == AARCH64_HLT_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_HLT;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_RMIF_MASK) == AARCH64_RMIF_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_FLAG_MANIPULATION;
+		decoded.flag_manipulation_op = ORLIX_TCTI_FLAG_MANIPULATION_RMIF;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.imm6 = (instruction >> 15) & 0x3fU;
+		decoded.nzcv = instruction & 0xfU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SETF_MASK) == AARCH64_SETF8_PATTERN ||
+	    (instruction & AARCH64_SETF_MASK) == AARCH64_SETF16_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_FLAG_MANIPULATION;
+		decoded.flag_manipulation_op =
+			(instruction & AARCH64_SETF_MASK) == AARCH64_SETF8_PATTERN ?
+			ORLIX_TCTI_FLAG_MANIPULATION_SETF8 :
+			ORLIX_TCTI_FLAG_MANIPULATION_SETF16;
+		decoded.rn = (instruction >> 5) & 0x1fU;
 		return decoded;
 	}
 

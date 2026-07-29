@@ -538,6 +538,16 @@ proof_registry_projection[] = {
 	"orlix_tcti_integer_conditional_source_bound_test_suite"
 #define INTEGER_CONDITIONAL_CASE_ARRAY \
 	"orlix_tcti_integer_conditional_source_bound_test_cases"
+#define FLAG_MANIPULATION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_flag_manipulation_source_bound_test.c"
+#define FLAG_MANIPULATION_SUITE \
+	"orlix-tcti-flag-manipulation-source-bound"
+#define FLAG_MANIPULATION_SUITE_SYMBOL \
+	"orlix_tcti_flag_manipulation_test_suite"
+#define FLAG_MANIPULATION_CASE_ARRAY \
+	"orlix_tcti_flag_manipulation_test_cases"
+#define FLAG_MANIPULATION_CONDITION \
+	"54434e4401070000002f0700000017070000000c010000000101010000000101010000000101020000000e0000000a464541545f466c61674d"
 #define SOURCE_LEAF_CLASSIFICATION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_source_leaf_classification_test.c"
 #define SOURCE_LEAF_CLASSIFICATION_SUITE \
@@ -753,6 +763,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ MOPS_COPY_SOURCE,
 	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
 	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
+	{ FLAG_MANIPULATION_SOURCE,
+	  "1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab",
+	  "orlix_tcti_flag_manipulation_source_bound_test.o", NULL, NULL, NULL },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -1276,11 +1289,40 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE,
+	  FLAG_MANIPULATION_SUITE_SYMBOL, FLAG_MANIPULATION_CASE_ARRAY,
+	  "orlix_tcti_flag_source_and_slice_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE,
+	  FLAG_MANIPULATION_SUITE_SYMBOL, FLAG_MANIPULATION_CASE_ARRAY,
+	  "orlix_tcti_flag_legal_encoding_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE,
+	  FLAG_MANIPULATION_SUITE_SYMBOL, FLAG_MANIPULATION_CASE_ARRAY,
+	  "orlix_tcti_flag_reserved_fixed_bit_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE,
+	  FLAG_MANIPULATION_SUITE_SYMBOL, FLAG_MANIPULATION_CASE_ARRAY,
+	  "orlix_tcti_flag_pstate_semantics_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE,
+	  FLAG_MANIPULATION_SUITE_SYMBOL, FLAG_MANIPULATION_CASE_ARRAY,
+	  "orlix_tcti_flag_non_el0_rejected_without_state_change",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 
 };
 
 /* Exact Arm operation_id values. Missing rows are audit blockers. */
 static const struct operation_requirements operation_requirements[] = {
+	{ "RMIF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
+	{ "SETF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
 	{ "ADD_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -2117,6 +2159,39 @@ static const struct orlix_tcti_target_proof_case integer_conditional_flags_cases
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
+static const struct orlix_tcti_target_proof_case flag_manipulation_cases[] = {
+	{ "orlix_tcti_flag_source_and_slice_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_flag_legal_encoding_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_flag_reserved_fixed_bit_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_flag_pstate_semantics_matrix",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_flag_non_el0_rejected_without_state_change",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
+#define FLAG_MANIPULATION_CASES ORLIX_TCTI_PROOF_U64_C(0x1f)
+static const struct orlix_tcti_target_proof_binding flag_rmif_bindings[] = {
+	{ "RMIF_only_rmif", "RMIF", 0xffe07c10U, 0xba000400U,
+	  FLAG_MANIPULATION_CONDITION, FLAG_MANIPULATION_CASES, 3476U },
+};
+static const struct orlix_tcti_target_proof_binding flag_setf_bindings[] = {
+	{ "SETF8_only_setf", "SETF8", 0xfffffc1fU, 0x3a00080dU,
+	  FLAG_MANIPULATION_CONDITION, FLAG_MANIPULATION_CASES, 3477U },
+	{ "SETF16_only_setf", "SETF16", 0xfffffc1fU, 0x3a00480dU,
+	  FLAG_MANIPULATION_CONDITION, FLAG_MANIPULATION_CASES, 3478U },
+};
+#undef FLAG_MANIPULATION_CASES
+
 #define INTEGER_CONDITIONAL_BINDING(ordinal, leaf, mnemonic, mask, pattern, cases) \
 	{ leaf, mnemonic, mask, pattern, ADD_SUB_IMMEDIATE_CONDITION, cases, ordinal }
 #define INTEGER_CONDITIONAL_PAIR_BINDINGS(name, ordinal32, leaf32, ordinal64, leaf64, \
@@ -2213,6 +2288,14 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE, \
 	  cases, ARRAY_COUNT(cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, obligations }
+#define FLAG_MANIPULATION_ENTRY(proof_id, operation, bindings) \
+	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SUITE, \
+	  flag_manipulation_cases, ARRAY_COUNT(flag_manipulation_cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL, \
+	  INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS }
 
 #define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
@@ -2250,7 +2333,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 62U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -2389,6 +2472,10 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umulh", "UMULH",
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
 		integer_umulh_bindings),
+	FLAG_MANIPULATION_ENTRY("kunit:flag-manipulation-rmif", "RMIF",
+		flag_rmif_bindings),
+	FLAG_MANIPULATION_ENTRY("kunit:flag-manipulation-setf", "SETF",
+		flag_setf_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-add", "ADD_addsub_imm",
 				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
 				add_sub_immediate_base_cases,
