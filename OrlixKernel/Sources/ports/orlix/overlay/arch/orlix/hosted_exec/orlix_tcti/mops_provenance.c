@@ -208,6 +208,11 @@ bool orlix_tcti_mops_leaf_provenance(u32 source_ordinal,
 			group->phase == ORLIX_TCTI_MOPS_PHASE_SET_GO ?
 			ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED :
 			ORLIX_TCTI_MOPS_PROVENANCE_EXTERNAL_DDI0602;
+		provenance->ddi0602_locator = NULL;
+		provenance->ddi0602_archive_sha256 = NULL;
+		provenance->production_owner = NULL;
+		provenance->kunit_suite = NULL;
+		provenance->linux_proof_disposition = NULL;
 		if ((source_ordinal >= 2704U && source_ordinal <= 2751U) ||
 		    (source_ordinal >= 2764U && source_ordinal <= 2811U)) {
 			provenance->ddi0602_locator =
@@ -223,12 +228,13 @@ bool orlix_tcti_mops_leaf_provenance(u32 source_ordinal,
 				ORLIX_TCTI_MOPS_IMPLEMENTATION_PRODUCTION;
 			provenance->proof_status =
 				ORLIX_TCTI_MOPS_PROOF_KUNIT_OWNER;
+		} else if ((source_ordinal >= 2752U && source_ordinal <= 2763U) ||
+			   (source_ordinal >= 2812U && source_ordinal <= 2823U)) {
+			provenance->implementation_status =
+				ORLIX_TCTI_MOPS_IMPLEMENTATION_PRESENT_RUNTIME_HELD;
+			provenance->proof_status =
+				ORLIX_TCTI_MOPS_PROOF_SOURCE_BOUND_UNEXECUTED;
 		} else {
-			provenance->ddi0602_locator = NULL;
-			provenance->ddi0602_archive_sha256 = NULL;
-			provenance->production_owner = NULL;
-			provenance->kunit_suite = NULL;
-			provenance->linux_proof_disposition = NULL;
 			provenance->implementation_status =
 				ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED;
 			provenance->proof_status =

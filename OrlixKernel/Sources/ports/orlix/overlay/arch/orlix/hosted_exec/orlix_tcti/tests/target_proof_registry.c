@@ -502,6 +502,11 @@ proof_registry_projection[] = {
 	"orlix_tcti_logical_immediate_source_bound_test_suite"
 #define LOGICAL_IMMEDIATE_CASE_ARRAY \
 	"orlix_tcti_logical_immediate_source_bound_test_cases"
+#define MEMORY_SET_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_memory_set_source_bound_test.c"
+#define MEMORY_SET_SUITE "orlix-tcti-memory-set-source-bound"
+#define MEMORY_SET_SUITE_SYMBOL "orlix_tcti_memory_set_source_bound_test_suite"
+#define MEMORY_SET_CASE_ARRAY "orlix_tcti_memory_set_source_bound_cases"
 #define MOVE_WIDE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_move_wide_source_bound_test.c"
 #define MOVE_WIDE_SUITE "orlix-tcti-move-wide-source-bound"
@@ -675,6 +680,16 @@ production_capture_bindings[] = {
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+#define MEMORY_SET_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+#define BRANCH_CONTROL_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
@@ -768,6 +783,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ LOGICAL_IMMEDIATE_SOURCE,
 	  "2870f5ec26ff59f7f9d1c95997a1badbb95c0099aace28ebf487853c418ac7c2",
 	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL },
+	{ MEMORY_SET_SOURCE,
+	  "4c26947db331c35dc89346e4b858a0e74847afe24cd8e07928923c54995d46a6",
+	  "orlix_tcti_memory_set_source_bound_test.o", NULL, NULL, NULL },
 	{ MOVE_WIDE_SOURCE,
 	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
 	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
@@ -836,6 +854,67 @@ static const struct kunit_dependency_terminal_artifact
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY, "orlix_tcti_memory_set_source_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_rejects_reserved_and_tagged_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY, "orlix_tcti_memory_set_production_resume_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_faults_and_constrained_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_tagged_mismatch_preserves_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_tagged_cross_page_transaction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_prologue_fault_commit_ordering",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY, "orlix_tcti_memory_set_unprivileged_access",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY,
+	  "orlix_tcti_memory_set_n_form_orders_completed_bytes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ MEMORY_SET_SOURCE, MEMORY_SET_SUITE, MEMORY_SET_SUITE_SYMBOL,
+	  MEMORY_SET_CASE_ARRAY, "orlix_tcti_memory_set_rejects_operand_overlaps",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1514,6 +1593,14 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "EON", LOGICAL_BASE_OBLIGATIONS },
 	{ "ANDS_log_shift", LOGICAL_FLAGS_OBLIGATIONS },
 	{ "BICS", LOGICAL_FLAGS_OBLIGATIONS },
+	{ "SETP", MEMORY_SET_OBLIGATIONS },
+	{ "SETPT", MEMORY_SET_OBLIGATIONS },
+	{ "SETPN", MEMORY_SET_OBLIGATIONS },
+	{ "SETPTN", MEMORY_SET_OBLIGATIONS },
+	{ "SETGP", MEMORY_SET_OBLIGATIONS },
+	{ "SETGPT", MEMORY_SET_OBLIGATIONS },
+	{ "SETGPN", MEMORY_SET_OBLIGATIONS },
+	{ "SETGPTN", MEMORY_SET_OBLIGATIONS },
 	{ "SMAX_imm", BASELINE_OBLIGATIONS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
@@ -2609,8 +2696,113 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 74U
+static const struct orlix_tcti_target_proof_case memory_set_cases[] = {
+	{ "orlix_tcti_memory_set_source_bindings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_memory_set_rejects_reserved_and_tagged_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_memory_set_production_resume_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_memory_set_faults_and_constrained_forms",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_memory_set_tagged_mismatch_preserves_progress",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_memory_set_tagged_cross_page_transaction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_memory_set_prologue_fault_commit_ordering",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_memory_set_unprivileged_access",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_memory_set_n_form_orders_completed_bytes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "orlix_tcti_memory_set_rejects_operand_overlaps",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+};
+
+#define MEMORY_SET_CONDITION \
+	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f4d4f5053"
+#define MEMORY_SET_TAGGED_CONDITION \
+	"54434e440107000000440700000017070000000c0100000001010100000001010100000001010700000023020000000d00000009464541545f4d4f5053020000000c00000008464541545f4d5445"
+#define MEMORY_SET_BINDING(ordinal, leaf, mnemonic, operation, pattern) \
+	{ leaf, mnemonic, 0x3fe0fc00U, pattern, MEMORY_SET_CONDITION, 0xfU, ordinal }
+#define MEMORY_SET_TAGGED_BINDING(ordinal, leaf, mnemonic, operation, pattern) \
+	{ leaf, mnemonic, 0x3fe0fc00U, pattern, MEMORY_SET_TAGGED_CONDITION, 0x3U, ordinal }
+static const struct orlix_tcti_target_proof_binding memory_set_setp_bindings[] = {
+	MEMORY_SET_BINDING(2752U, "SETP_SET_memcms", "SETP", "SETP", 0x19c00400U),
+	MEMORY_SET_BINDING(2756U, "SETM_SET_memcms", "SETM", "SETP", 0x19c04400U),
+	MEMORY_SET_BINDING(2760U, "SETE_SET_memcms", "SETE", "SETP", 0x19c08400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setpt_bindings[] = {
+	MEMORY_SET_BINDING(2753U, "SETPT_SET_memcms", "SETPT", "SETPT", 0x19c01400U),
+	MEMORY_SET_BINDING(2757U, "SETMT_SET_memcms", "SETMT", "SETPT", 0x19c05400U),
+	MEMORY_SET_BINDING(2761U, "SETET_SET_memcms", "SETET", "SETPT", 0x19c09400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setpn_bindings[] = {
+	MEMORY_SET_BINDING(2754U, "SETPN_SET_memcms", "SETPN", "SETPN", 0x19c02400U),
+	MEMORY_SET_BINDING(2758U, "SETMN_SET_memcms", "SETMN", "SETPN", 0x19c06400U),
+	MEMORY_SET_BINDING(2762U, "SETEN_SET_memcms", "SETEN", "SETPN", 0x19c0a400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setptn_bindings[] = {
+	MEMORY_SET_BINDING(2755U, "SETPTN_SET_memcms", "SETPTN", "SETPTN", 0x19c03400U),
+	MEMORY_SET_BINDING(2759U, "SETMTN_SET_memcms", "SETMTN", "SETPTN", 0x19c07400U),
+	MEMORY_SET_BINDING(2763U, "SETETN_SET_memcms", "SETETN", "SETPTN", 0x19c0b400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setgp_bindings[] = {
+	MEMORY_SET_TAGGED_BINDING(2812U, "SETGP_SET_memcms", "SETGP", "SETGP", 0x1dc00400U),
+	MEMORY_SET_TAGGED_BINDING(2816U, "SETGM_SET_memcms", "SETGM", "SETGP", 0x1dc04400U),
+	MEMORY_SET_TAGGED_BINDING(2820U, "SETGE_SET_memcms", "SETGE", "SETGP", 0x1dc08400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setgpt_bindings[] = {
+	MEMORY_SET_TAGGED_BINDING(2813U, "SETGPT_SET_memcms", "SETGPT", "SETGPT", 0x1dc01400U),
+	MEMORY_SET_TAGGED_BINDING(2817U, "SETGMT_SET_memcms", "SETGMT", "SETGPT", 0x1dc05400U),
+	MEMORY_SET_TAGGED_BINDING(2821U, "SETGET_SET_memcms", "SETGET", "SETGPT", 0x1dc09400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setgpn_bindings[] = {
+	MEMORY_SET_TAGGED_BINDING(2814U, "SETGPN_SET_memcms", "SETGPN", "SETGPN", 0x1dc02400U),
+	MEMORY_SET_TAGGED_BINDING(2818U, "SETGMN_SET_memcms", "SETGMN", "SETGPN", 0x1dc06400U),
+	MEMORY_SET_TAGGED_BINDING(2822U, "SETGEN_SET_memcms", "SETGEN", "SETGPN", 0x1dc0a400U),
+};
+static const struct orlix_tcti_target_proof_binding memory_set_setgptn_bindings[] = {
+	MEMORY_SET_TAGGED_BINDING(2815U, "SETGPTN_SET_memcms", "SETGPTN", "SETGPTN", 0x1dc03400U),
+	MEMORY_SET_TAGGED_BINDING(2819U, "SETGMTN_SET_memcms", "SETGMTN", "SETGPTN", 0x1dc07400U),
+	MEMORY_SET_TAGGED_BINDING(2823U, "SETGETN_SET_memcms", "SETGETN", "SETGPTN", 0x1dc0b400U),
+};
+#undef MEMORY_SET_TAGGED_BINDING
+#undef MEMORY_SET_BINDING
+
+#define MEMORY_SET_ENTRY(proof, operation, bindings) \
+	{ proof, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  MEMORY_SET_OBLIGATIONS, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  MEMORY_SET_SOURCE, MEMORY_SET_SUITE, memory_set_cases, \
+	  ARRAY_COUNT(memory_set_cases), bindings, ARRAY_COUNT(bindings), NULL, \
+	  MEMORY_SET_OBLIGATIONS }
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 82U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -2648,7 +2840,15 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT +
-	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT] = {
+	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT + 8U] = {
+	MEMORY_SET_ENTRY("kunit:memory-set-setp", "SETP", memory_set_setp_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setpt", "SETPT", memory_set_setpt_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setpn", "SETPN", memory_set_setpn_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setptn", "SETPTN", memory_set_setptn_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setgp", "SETGP", memory_set_setgp_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setgpt", "SETGPT", memory_set_setgpt_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setgpn", "SETGPN", memory_set_setgpn_bindings),
+	MEMORY_SET_ENTRY("kunit:memory-set-setgptn", "SETGPTN", memory_set_setgptn_bindings),
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -2846,6 +3046,7 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 };
 
 #undef LOGICAL_ENTRY
+#undef MEMORY_SET_ENTRY
 #undef INTEGER_CONDITIONAL_ENTRY
 #undef CSSC_DATA_ENTRY
 #undef CSSC_ENTRY

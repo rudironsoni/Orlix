@@ -74,7 +74,7 @@ static int orlix_tcti_access_required_vm_flags(enum orlix_tcti_access access,
 }
 
 static int orlix_tcti_fault_in_user_page(struct mm_struct *mm, unsigned long address,
-				   enum orlix_tcti_access access)
+				   enum orlix_tcti_access access, bool unprivileged)
 {
 	struct pt_regs *regs = task_pt_regs(current);
 	vm_flags_t required;
@@ -91,6 +91,13 @@ static int orlix_tcti_fault_in_user_page(struct mm_struct *mm, unsigned long add
 retry:
 	{
 		struct vm_area_struct *vma;
+		pgd_t *pgd;
+		p4d_t *p4d;
+		pud_t *pud;
+		pmd_t *pmd;
+		pte_t *pte;
+		pte_t entry;
+		spinlock_t *ptl;
 		unsigned int flags = FAULT_FLAG_DEFAULT | FAULT_FLAG_USER;
 		vm_fault_t fault;
 
@@ -108,6 +115,31 @@ retry:
 		if (!(vma->vm_flags & required)) {
 			mmap_read_unlock(mm);
 			return -EACCES;
+		}
+		/*
+		 * A forced-EL0 access may fault in an absent user mapping, but it
+		 * must never repair or retry through a present supervisor mapping.
+		 * Keep this policy at the demand-fault boundary as well as at the
+		 * pinned-PTE resolver so every retry preserves the access mode.
+		 */
+		if (unprivileged) {
+			pgd = pgd_offset(mm, address);
+			p4d = p4d_offset(pgd, address);
+			pud = pud_offset(p4d, address);
+			pmd = pmd_offset(pud, address);
+			if (!pgd_none(*pgd) && !pgd_bad(*pgd) &&
+			    !p4d_none(*p4d) && !p4d_bad(*p4d) &&
+			    !pud_none(*pud) && !pud_bad(*pud) &&
+			    !pmd_none(*pmd) && !pmd_bad(*pmd)) {
+				pte = pte_offset_map_lock(mm, pmd, address, &ptl);
+				entry = READ_ONCE(*pte);
+				pte_unmap_unlock(pte, ptl);
+				if ((pte_val(entry) & _PAGE_PRESENT) &&
+				    !(pte_val(entry) & _PAGE_USER)) {
+					mmap_read_unlock(mm);
+					return -EFAULT;
+				}
+			}
 		}
 
 		fault = handle_mm_fault(vma, address, flags, regs);
@@ -255,6 +287,7 @@ static void orlix_tcti_log_fetch_resolution_failure(struct mm_struct *mm,
 static int orlix_tcti_resolve_user_data_locked(struct mm_struct *mm,
 					 unsigned long user_va,
 					 enum orlix_tcti_access access,
+					 bool unprivileged,
 					 void **host_data,
 					 unsigned long *linux_perms,
 					 struct page **page,
@@ -299,7 +332,8 @@ static int orlix_tcti_resolve_user_data_locked(struct mm_struct *mm,
 
 	pte = pte_offset_map_lock(mm, pmd, user_va, &ptl);
 	entry = READ_ONCE(*pte);
-	if (!(pte_val(entry) & _PAGE_PRESENT) || !(pte_val(entry) & _PAGE_USER))
+	if (!(pte_val(entry) & _PAGE_PRESENT) ||
+	    (unprivileged && !(pte_val(entry) & _PAGE_USER)))
 		goto out_fault;
 	if (access == ORLIX_TCTI_ACCESS_FETCH && !(pte_val(entry) & _PAGE_EXEC))
 		goto out_access;
@@ -374,8 +408,9 @@ out_fault:
 	goto out;
 }
 
-int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
-		       enum orlix_tcti_access access, struct orlix_tcti_user_page *out)
+static int orlix_tcti_pin_data_page(struct mm_struct *mm, unsigned long user_va,
+			    enum orlix_tcti_access access, bool unprivileged,
+			    struct orlix_tcti_user_page *out)
 {
 	unsigned long linux_perms = 0;
 	void *host_data = NULL;
@@ -393,7 +428,8 @@ int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 	out->user_page = user_va & PAGE_MASK;
 
 	mmap_read_lock(mm);
-	ret = orlix_tcti_resolve_user_data_locked(mm, user_va, access, &host_data,
+	ret = orlix_tcti_resolve_user_data_locked(mm, user_va, access, unprivileged,
+					    &host_data,
 					    &linux_perms, &page,
 					    &out->translation_generation);
 	if (!ret) {
@@ -405,6 +441,12 @@ int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 	mmap_read_unlock(mm);
 
 	return ret;
+}
+
+int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
+		       enum orlix_tcti_access access, struct orlix_tcti_user_page *out)
+{
+	return orlix_tcti_pin_data_page(mm, user_va, access, true, out);
 }
 
 void orlix_tcti_unpin_user_page(struct orlix_tcti_user_page *page)
@@ -462,7 +504,8 @@ int orlix_tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 
 	ret = orlix_tcti_fetch_instruction_pinned(mm, pc, instruction);
 	if (ret == -EFAULT || ret == -EACCES) {
-		ret = orlix_tcti_fault_in_user_page(mm, pc, ORLIX_TCTI_ACCESS_FETCH);
+		ret = orlix_tcti_fault_in_user_page(mm, pc, ORLIX_TCTI_ACCESS_FETCH,
+						   true);
 		if (ret) {
 			orlix_tcti_log_fetch_resolution_failure(mm, pc, ret);
 			return ret;
@@ -476,7 +519,8 @@ int orlix_tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 			 * file-backed pages a data-fault population pass before
 			 * OrlixTCTI retries the executable fetch resolution.
 			 */
-			if (orlix_tcti_fault_in_user_page(mm, pc, ORLIX_TCTI_ACCESS_READ))
+			if (orlix_tcti_fault_in_user_page(mm, pc, ORLIX_TCTI_ACCESS_READ,
+							  true))
 				return ret;
 
 			ret = orlix_tcti_fetch_instruction_pinned(mm, pc,
@@ -492,7 +536,7 @@ int orlix_tcti_fetch_instruction(struct mm_struct *mm, unsigned long pc,
 
 static int orlix_tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va,
 			       void *buffer, size_t size,
-			       enum orlix_tcti_access access)
+			       enum orlix_tcti_access access, bool unprivileged)
 {
 	unsigned long logical_user_va = user_va;
 	size_t copied = 0;
@@ -525,13 +569,15 @@ static int orlix_tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va
 		if (ret)
 			return ret;
 
-		ret = orlix_tcti_pin_user_page(mm, current_va, access, &page);
+		ret = orlix_tcti_pin_data_page(mm, current_va, access, unprivileged,
+						     &page);
 		if (!ret) {
 			host_data = (char *)page.host_data + offset_in_page(current_va);
 			linux_perms = page.linux_perms;
 		}
 		if (ret) {
-			ret = orlix_tcti_fault_in_user_page(mm, current_va, access);
+			ret = orlix_tcti_fault_in_user_page(mm, current_va, access,
+							   unprivileged);
 			if (!ret) {
 				ret = orlix_tcti_sync_faulted_user_window(mm, current_va,
 								   access);
@@ -584,14 +630,22 @@ static int orlix_tcti_copy_user_data(struct mm_struct *mm, unsigned long user_va
 int orlix_tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size)
 {
-	return orlix_tcti_copy_user_data(mm, user_va, buffer, size, ORLIX_TCTI_ACCESS_READ);
+	return orlix_tcti_copy_user_data(mm, user_va, buffer, size,
+					 ORLIX_TCTI_ACCESS_READ, true);
 }
 
 int orlix_tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 			 const void *buffer, size_t size)
 {
 	return orlix_tcti_copy_user_data(mm, user_va, (void *)buffer, size,
-				   ORLIX_TCTI_ACCESS_WRITE);
+				   ORLIX_TCTI_ACCESS_WRITE, true);
+}
+
+int orlix_tcti_write_data_access(struct mm_struct *mm, unsigned long user_va,
+				 const void *buffer, size_t size, bool unprivileged)
+{
+	return orlix_tcti_copy_user_data(mm, user_va, (void *)buffer, size,
+				   ORLIX_TCTI_ACCESS_WRITE, unprivileged);
 }
 
 int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,
@@ -609,7 +663,7 @@ int orlix_tcti_pin_user_page_faulting(struct mm_struct *mm,
 			return 0;
 		if (ret != -EFAULT && ret != -EACCES)
 			return ret;
-		ret = orlix_tcti_fault_in_user_page(mm, user_va, access);
+		ret = orlix_tcti_fault_in_user_page(mm, user_va, access, true);
 		if (ret)
 			return ret;
 		ret = orlix_tcti_sync_faulted_user_window(mm, user_va, access);
@@ -865,7 +919,8 @@ int orlix_tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
 		return ret;
 
 	for (;;) {
-		ret = orlix_tcti_fault_in_user_page(mm, user_va, ORLIX_TCTI_ACCESS_WRITE);
+		ret = orlix_tcti_fault_in_user_page(mm, user_va,
+						   ORLIX_TCTI_ACCESS_WRITE, true);
 		if (ret)
 			return ret;
 		ret = orlix_tcti_sync_faulted_user_window(mm, user_va,

@@ -37,6 +37,12 @@ static void orlix_tcti_mops_provenance_covers_every_pinned_leaf(struct kunit *te
 				"orlix-tcti-mops-copy");
 			KUNIT_EXPECT_STREQ(test, leaf.linux_proof_disposition,
 				"not_applicable_no_linux_visible_abi");
+		} else if ((ordinal >= 2752U && ordinal <= 2763U) ||
+			   (ordinal >= 2812U && ordinal <= 2823U)) {
+			KUNIT_EXPECT_EQ(test, leaf.implementation_status,
+				ORLIX_TCTI_MOPS_IMPLEMENTATION_PRESENT_RUNTIME_HELD);
+			KUNIT_EXPECT_EQ(test, leaf.proof_status,
+				ORLIX_TCTI_MOPS_PROOF_SOURCE_BOUND_UNEXECUTED);
 		} else {
 			KUNIT_EXPECT_EQ(test, leaf.implementation_status,
 				ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED);
@@ -91,6 +97,20 @@ static void orlix_tcti_mops_provenance_preserves_phase_partitions(struct kunit *
 	KUNIT_EXPECT_EQ(test, leaf.phase,
 			ORLIX_TCTI_MOPS_PHASE_COPY_BACKWARD_PROLOGUE);
 	KUNIT_EXPECT_STREQ(test, leaf.operation, "CPYP");
+
+	KUNIT_ASSERT_TRUE(test, orlix_tcti_mops_leaf_provenance(2752U, &leaf));
+	KUNIT_EXPECT_EQ(test, leaf.phase, ORLIX_TCTI_MOPS_PHASE_SET_PROLOGUE);
+	KUNIT_EXPECT_EQ(test, leaf.implementation_status,
+			ORLIX_TCTI_MOPS_IMPLEMENTATION_PRESENT_RUNTIME_HELD);
+	KUNIT_EXPECT_EQ(test, leaf.proof_status,
+			ORLIX_TCTI_MOPS_PROOF_SOURCE_BOUND_UNEXECUTED);
+	KUNIT_ASSERT_TRUE(test, orlix_tcti_mops_leaf_provenance(2812U, &leaf));
+	KUNIT_EXPECT_EQ(test, leaf.phase,
+			ORLIX_TCTI_MOPS_PHASE_SET_TAGGED_PROLOGUE);
+	KUNIT_EXPECT_EQ(test, leaf.implementation_status,
+			ORLIX_TCTI_MOPS_IMPLEMENTATION_PRESENT_RUNTIME_HELD);
+	KUNIT_EXPECT_EQ(test, leaf.proof_status,
+			ORLIX_TCTI_MOPS_PROOF_SOURCE_BOUND_UNEXECUTED);
 
 	KUNIT_ASSERT_TRUE(test, orlix_tcti_mops_leaf_provenance(2796U, &leaf));
 	KUNIT_EXPECT_EQ(test, leaf.phase,

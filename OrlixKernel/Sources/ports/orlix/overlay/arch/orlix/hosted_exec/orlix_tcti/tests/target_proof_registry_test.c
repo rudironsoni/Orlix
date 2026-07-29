@@ -208,6 +208,13 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+#define MEMORY_SET_OBLIGATIONS \
+	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
 #define CSSC_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
@@ -523,15 +530,15 @@ static int logical_shifted_register_registry_is_source_bound(void)
 	for (index = 0; index < sizeof(operations) / sizeof(operations[0]); index++) {
 		uint32_t requirements;
 
-		EXPECT(!strcmp(entries[index].operation_id, operations[index]));
-		EXPECT(entries[index].classification_mask ==
+		EXPECT(!strcmp(entries[index + 8].operation_id, operations[index]));
+		EXPECT(entries[index + 8].classification_mask ==
 		       ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
-		EXPECT(entries[index].linux_interface ==
+		EXPECT(entries[index + 8].linux_interface ==
 		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
-		EXPECT(entries[index].binding_count == 2);
+		EXPECT(entries[index + 8].binding_count == 2);
 		EXPECT(orlix_tcti_target_proof_operation_requirements(
 			       operations[index], 1, &requirements) == 0);
-		EXPECT(entries[index].obligations == requirements);
+		EXPECT(entries[index + 8].obligations == requirements);
 	}
 	return 0;
 }
@@ -736,6 +743,87 @@ static int lse_registry_cannot_clear_unproved_duties_statically(void)
 	entry.unproved_obligations = 0;
 	EXPECT(orlix_tcti_target_proof_registry_validate(&entry, 1, &error) == -1);
 	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_INSUFFICIENT_OBLIGATIONS);
+	return 0;
+}
+
+static int memory_set_registry_binds_permission_and_overlap_cases(void)
+{
+	static const struct orlix_tcti_target_proof_case expected_cases[] = {
+		{ "orlix_tcti_memory_set_source_bindings",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+		{ "orlix_tcti_memory_set_rejects_reserved_and_tagged_forms",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+		{ "orlix_tcti_memory_set_production_resume_semantics",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+		{ "orlix_tcti_memory_set_faults_and_constrained_forms",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+		{ "orlix_tcti_memory_set_tagged_mismatch_preserves_progress",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+		{ "orlix_tcti_memory_set_tagged_cross_page_transaction",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		{ "orlix_tcti_memory_set_prologue_fault_commit_ordering",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+		{ "orlix_tcti_memory_set_unprivileged_access",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+		{ "orlix_tcti_memory_set_n_form_orders_completed_bytes",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+		{ "orlix_tcti_memory_set_rejects_operand_overlaps",
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	};
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t entry_count = 0;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < count; index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			&entries[index];
+		size_t case_index;
+
+		if (!strncmp(entry->id, "kunit:memory-set-", 17)) {
+			EXPECT(entry->obligations == MEMORY_SET_OBLIGATIONS);
+			EXPECT(entry->unproved_obligations == MEMORY_SET_OBLIGATIONS);
+			EXPECT(entry->kunit_case_count ==
+			       sizeof(expected_cases) / sizeof(expected_cases[0]));
+			for (case_index = 0; case_index < entry->kunit_case_count;
+			     case_index++) {
+				EXPECT(!strcmp(entry->kunit_cases[case_index].name,
+					       expected_cases[case_index].name));
+				EXPECT(entry->kunit_cases[case_index].obligations ==
+				       expected_cases[case_index].obligations);
+			}
+			entry_count++;
+			continue;
+		}
+	}
+	EXPECT(entry_count == 8U);
 	return 0;
 }
 
@@ -1825,6 +1913,8 @@ int main(void)
 		  lse_registry_binds_180_leaves_without_claiming_completion },
 		{ "lse_registry_cannot_clear_unproved_duties_statically",
 		  lse_registry_cannot_clear_unproved_duties_statically },
+		{ "memory_set_registry_binds_permission_and_overlap_cases",
+		  memory_set_registry_binds_permission_and_overlap_cases },
 		{ "scalar_source_bindings_are_complete_and_fail_closed",
 		  scalar_source_bindings_are_complete_and_fail_closed },
 		{ "scalar_bitops_registry_binds_exact_source_rows",

@@ -100,6 +100,13 @@ static bool orlix_tcti_decoded_runtime_available(
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return false;
+	/*
+	 * The complete source inventory authorizes production MOPS lowering even
+	 * while HWCAP/HWCAP2 advertisement stays held. Advertisement projects a
+	 * proved runtime profile; it must not erase canonical EL0 leaf coverage.
+	 */
+	if (decoded && decoded->decode_class == ORLIX_TCTI_DECODE_MEMORY_SET)
+		return true;
 	if (orlix_tcti_decoded_requires_fp16(decoded))
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :
@@ -550,6 +557,8 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 		return decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG ||
 		       decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDGM ?
 			ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
+	case ORLIX_TCTI_DECODE_MEMORY_SET:
+		return ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
 	}

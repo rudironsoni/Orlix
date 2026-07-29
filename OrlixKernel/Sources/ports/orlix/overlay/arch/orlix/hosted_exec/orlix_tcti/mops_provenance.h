@@ -17,11 +17,13 @@ enum orlix_tcti_mops_semantic_provenance {
 enum orlix_tcti_mops_implementation_status {
 	ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED = 0,
 	ORLIX_TCTI_MOPS_IMPLEMENTATION_PRODUCTION,
+	ORLIX_TCTI_MOPS_IMPLEMENTATION_PRESENT_RUNTIME_HELD,
 };
 
 enum orlix_tcti_mops_proof_status {
 	ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN = 0,
 	ORLIX_TCTI_MOPS_PROOF_KUNIT_OWNER,
+	ORLIX_TCTI_MOPS_PROOF_SOURCE_BOUND_UNEXECUTED,
 };
 
 enum orlix_tcti_mops_phase {

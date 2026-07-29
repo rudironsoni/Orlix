@@ -139,6 +139,9 @@ int orlix_tcti_read_user_data(struct mm_struct *mm, unsigned long user_va,
 			void *buffer, size_t size);
 int orlix_tcti_write_user_data(struct mm_struct *mm, unsigned long user_va,
 			  const void *buffer, size_t size);
+/* MOPS selects current-EL or forced-EL0 permissions for each store. */
+int orlix_tcti_write_data_access(struct mm_struct *mm, unsigned long user_va,
+				 const void *buffer, size_t size, bool unprivileged);
 int orlix_tcti_load_exclusive_user_data(struct mm_struct *mm,
 				  unsigned long user_va, void *buffer, size_t size,
 				  unsigned long *pfn, u64 *generation,

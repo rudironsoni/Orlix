@@ -36,6 +36,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
 	ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE,
 	ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET,
+	ORLIX_TCTI_DECODE_MEMORY_SET,
 	ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER,
 	ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE,
 	ORLIX_TCTI_DECODE_BITFIELD,
@@ -96,6 +97,12 @@ enum orlix_tcti_memory_tagging_op {
 	ORLIX_TCTI_MTE_LDGM,
 	ORLIX_TCTI_MTE_IRG,
 	ORLIX_TCTI_MTE_GMI,
+};
+
+enum orlix_tcti_memory_set_phase {
+	ORLIX_TCTI_MEMORY_SET_PROLOGUE = 0,
+	ORLIX_TCTI_MEMORY_SET_MAIN,
+	ORLIX_TCTI_MEMORY_SET_EPILOGUE,
 };
 
 enum orlix_tcti_logical_op {
@@ -687,6 +694,10 @@ struct orlix_tcti_decoded_instruction {
 	bool mops_forward_only;
 	u8 mops_options;
 	u32 mops_source_ordinal;
+	enum orlix_tcti_memory_set_phase memory_set_phase;
+	bool memory_set_tagged;
+	bool memory_set_unprivileged;
+	bool memory_set_nontemporal;
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);

@@ -36,10 +36,7 @@
 	(BIT_ULL(29) | BIT_ULL(28) | (4ULL << 16) | (3ULL << 14) | 4ULL)
 #define AARCH64_DCZID_EL0_VALUE BIT_ULL(4)
 #define AARCH64_CNTFRQ_EL0_VALUE 1000000000ULL
-#define AARCH64_MTE_TAG_SHIFT 56U
-#define AARCH64_MTE_TAG_MASK (0xfULL << AARCH64_MTE_TAG_SHIFT)
-#define AARCH64_MTE_ADDRESS_MASK GENMASK_ULL(55, 0)
-#define AARCH64_MTE_GRANULE_SIZE 16U
+#define ORLIX_TCTI_MEMORY_SET_STAGE_BYTES 16U
 
 extern u64 orlix_tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
 extern u64 orlix_tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
@@ -84,6 +81,8 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 		return decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG ||
 		       decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDGM ?
 			ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
+	case ORLIX_TCTI_DECODE_MEMORY_SET:
+		return ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
 	}
@@ -137,7 +136,7 @@ static u64 orlix_tcti_read_gpr_or_sp(const struct pt_regs *regs, u8 reg,
 }
 
 static void orlix_tcti_write_gpr_or_sp(struct pt_regs *regs, u8 reg,
-				 u8 access_size, u64 value)
+					 u8 access_size, u64 value)
 {
 	if (access_size == sizeof(u32))
 		value = (u32)value;
@@ -150,13 +149,13 @@ static void orlix_tcti_write_gpr_or_sp(struct pt_regs *regs, u8 reg,
 
 static u8 orlix_tcti_mte_logical_tag(u64 value)
 {
-	return (value >> AARCH64_MTE_TAG_SHIFT) & 0xfU;
+	return (value >> ORLIX_MTE_TAG_SHIFT) & 0xfU;
 }
 
 static u64 orlix_tcti_mte_with_tag(u64 value, u8 tag)
 {
-	return (value & ~AARCH64_MTE_TAG_MASK) |
-		((u64)(tag & 0xfU) << AARCH64_MTE_TAG_SHIFT);
+	return (value & ~ORLIX_MTE_TAG_MASK) |
+		((u64)(tag & 0xfU) << ORLIX_MTE_TAG_SHIFT);
 }
 
 static u8 orlix_tcti_mte_choose_tag(u8 start, u16 exclude)
@@ -179,7 +178,7 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 	u64 address;
 	u64 source;
 	u8 tag;
-	u8 zero[2 * AARCH64_MTE_GRANULE_SIZE] = {};
+	u8 zero[2 * ORLIX_MTE_GRANULE_SIZE] = {};
 	u16 exclude;
 	int ret;
 
@@ -189,17 +188,17 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 		base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
 		if (decoded->rn == 31 && !IS_ALIGNED(base, 16)) {
 			if (fault_address)
-				*fault_address = base & AARCH64_MTE_ADDRESS_MASK;
+				*fault_address = base & ORLIX_MTE_ADDRESS_MASK;
 			return -EFAULT;
 		}
 		tag = decoded->memory_tagging_op == ORLIX_TCTI_MTE_ADDG ?
 			orlix_tcti_mte_logical_tag(base) + decoded->tag_offset :
 			orlix_tcti_mte_logical_tag(base) - decoded->tag_offset;
-		address = (base & ~AARCH64_MTE_ADDRESS_MASK) |
+		address = (base & ~ORLIX_MTE_ADDRESS_MASK) |
 			((decoded->memory_tagging_op == ORLIX_TCTI_MTE_ADDG ?
-			  (base & AARCH64_MTE_ADDRESS_MASK) + ((u64)decoded->imm6 << 4) :
-			  (base & AARCH64_MTE_ADDRESS_MASK) - ((u64)decoded->imm6 << 4)) &
-			 AARCH64_MTE_ADDRESS_MASK);
+			  (base & ORLIX_MTE_ADDRESS_MASK) + ((u64)decoded->imm6 << 4) :
+			  (base & ORLIX_MTE_ADDRESS_MASK) - ((u64)decoded->imm6 << 4)) &
+				 ORLIX_MTE_ADDRESS_MASK);
 		orlix_tcti_write_gpr_or_sp(regs, decoded->rd, sizeof(u64),
 					orlix_tcti_mte_with_tag(address, tag));
 		regs->pc += sizeof(u32);
@@ -208,7 +207,7 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 		base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
 		if (decoded->rn == 31 && !IS_ALIGNED(base, 16)) {
 			if (fault_address)
-				*fault_address = base & AARCH64_MTE_ADDRESS_MASK;
+				*fault_address = base & ORLIX_MTE_ADDRESS_MASK;
 			return -EFAULT;
 		}
 		exclude = current->thread.user_mte_exclude_mask |
@@ -222,7 +221,7 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 		base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
 		if (decoded->rn == 31 && !IS_ALIGNED(base, 16)) {
 			if (fault_address)
-				*fault_address = base & AARCH64_MTE_ADDRESS_MASK;
+				*fault_address = base & ORLIX_MTE_ADDRESS_MASK;
 			return -EFAULT;
 		}
 		source = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
@@ -244,16 +243,16 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 	base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
 	if (decoded->rn == 31 && !IS_ALIGNED(base, 16)) {
 		if (fault_address)
-			*fault_address = base & AARCH64_MTE_ADDRESS_MASK;
+			*fault_address = base & ORLIX_MTE_ADDRESS_MASK;
 		return -EFAULT;
 	}
 	address = decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST ?
 		base : base + decoded->memory_offset;
 	if (fault_address)
-		*fault_address = address & AARCH64_MTE_ADDRESS_MASK;
+		*fault_address = address & ORLIX_MTE_ADDRESS_MASK;
 
-	if (!IS_ALIGNED(address & AARCH64_MTE_ADDRESS_MASK,
-			AARCH64_MTE_GRANULE_SIZE))
+	if (!IS_ALIGNED(address & ORLIX_MTE_ADDRESS_MASK,
+			ORLIX_MTE_GRANULE_SIZE))
 		return -EFAULT;
 
 	if (decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG) {
@@ -269,9 +268,9 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 		if (decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZG ||
 		    decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G) {
 			ret = orlix_tcti_write_user_data(mm,
-					address & AARCH64_MTE_ADDRESS_MASK, zero,
+					address & ORLIX_MTE_ADDRESS_MASK, zero,
 					decoded->memory_tagging_op == ORLIX_TCTI_MTE_STZ2G ?
-					2 * AARCH64_MTE_GRANULE_SIZE : AARCH64_MTE_GRANULE_SIZE);
+					2 * ORLIX_MTE_GRANULE_SIZE : ORLIX_MTE_GRANULE_SIZE);
 			if (ret)
 				return ret;
 		}
@@ -285,6 +284,170 @@ static int orlix_tcti_execute_memory_tagging(struct mm_struct *mm,
 	if (decoded->memory_index_mode != ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET)
 		orlix_tcti_write_gpr_or_sp(regs, decoded->rn, sizeof(u64),
 					base + decoded->memory_offset);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+#ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
+static void (*orlix_tcti_memory_set_ordering_test_hook)(
+	void *data, const struct pt_regs *regs, u8 destination_reg,
+	unsigned long destination);
+static void *orlix_tcti_memory_set_ordering_test_hook_data;
+
+void orlix_tcti_memory_set_set_ordering_test_hook(
+	void (*hook)(void *data, const struct pt_regs *regs, u8 destination_reg,
+		     unsigned long destination), void *data)
+{
+	orlix_tcti_memory_set_ordering_test_hook = hook;
+	orlix_tcti_memory_set_ordering_test_hook_data = data;
+}
+
+static void orlix_tcti_memory_set_run_ordering_test_hook(
+	const struct pt_regs *regs, u8 destination_reg, unsigned long destination)
+{
+	void (*hook)(void *data, const struct pt_regs *regs, u8 destination_reg,
+		     unsigned long destination) =
+		orlix_tcti_memory_set_ordering_test_hook;
+
+	if (hook)
+		hook(orlix_tcti_memory_set_ordering_test_hook_data, regs,
+		     destination_reg, destination);
+}
+#else
+static void orlix_tcti_memory_set_run_ordering_test_hook(
+	const struct pt_regs *regs, u8 destination_reg, unsigned long destination)
+{
+	(void)regs;
+	(void)destination_reg;
+	(void)destination;
+}
+#endif
+
+static void orlix_tcti_memory_set_publish_progress(struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded,
+	unsigned long destination, unsigned long remaining)
+{
+	if (decoded->memory_set_nontemporal) {
+		smp_store_release(&regs->regs[decoded->rd], destination);
+		smp_store_release(&regs->regs[decoded->rn], remaining);
+		orlix_tcti_memory_set_run_ordering_test_hook(regs, decoded->rd,
+							    destination);
+		return;
+	}
+	WRITE_ONCE(regs->regs[decoded->rd], destination);
+	WRITE_ONCE(regs->regs[decoded->rn], remaining);
+}
+
+/*
+ * DDI0602 SetMem Option B profile. The architectural SETSizeChoice is
+ * implementation-defined; this backend chooses 16 bytes. Every byte is sent
+ * through the Linux-owned uaccess path, so permissions, COW, dirtying, page
+ * boundaries, and fault delivery are never replaced by a host bulk operation.
+ */
+static int orlix_tcti_execute_memory_set(struct mm_struct *mm,
+					  struct pt_regs *regs,
+					  const struct orlix_tcti_decoded_instruction *decoded,
+					  unsigned long *fault_address)
+{
+	u64 destination;
+	u64 remaining;
+	u64 source;
+	u8 value;
+	u8 allocation_tag;
+	u64 count;
+	u64 chunk_destination;
+	u64 chunk_count;
+	u64 prologue_pstate;
+	bool prologue_flags_pending;
+	bool unprivileged;
+	int ret;
+
+	if (!mm)
+		return -EINVAL;
+	/* Xd/Xn equal 31 is constrained unpredictable for these SET leaves. */
+	if (decoded->rd == 31 || decoded->rn == 31)
+		return -EOPNOTSUPP;
+	/* DDI0602 CheckSETConstrainedUnpredictable: choose UNDEF, never alias. */
+	if (decoded->rd == decoded->rn || decoded->rd == decoded->rs ||
+	    decoded->rn == decoded->rs)
+		return -EOPNOTSUPP;
+	destination = regs->regs[decoded->rd];
+	remaining = regs->regs[decoded->rn];
+	source = orlix_tcti_read_gpr_or_zero(regs, decoded->rs, sizeof(u64));
+	value = source;
+	/*
+	 * DDI0602 MemSetTags derives SETG's allocation tag from
+	 * memset.toaddress.  Option B advances that tagged destination between
+	 * stages, so retaining its logical tag both selects the architectural tag
+	 * and keeps ordinary MTE access checking valid after a completed stage.
+	 */
+	allocation_tag = orlix_tcti_mte_logical_tag(destination);
+	/* T forces EL0 permission; non-T follows the current guest EL. */
+	unprivileged = decoded->memory_set_unprivileged ||
+		(regs->pstate & PSR_MODE_MASK) == PSR_MODE_EL0t;
+
+	prologue_flags_pending =
+		decoded->memory_set_phase == ORLIX_TCTI_MEMORY_SET_PROLOGUE;
+	if (prologue_flags_pending) {
+		/*
+		 * SETP's Option B flags become architectural state only with the
+		 * first completed byte. A fault before that byte must leave NZCV
+		 * exactly as it was on entry.
+		 */
+		prologue_pstate =
+			(regs->pstate & ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)) |
+			PSR_C_BIT;
+	} else if (remaining && !(regs->pstate & PSR_C_BIT)) {
+		/* MismatchedMemSetException is not a Linux-visible fault. */
+		return -EOPNOTSUPP;
+	}
+
+	do {
+		count = min_t(u64, remaining, ORLIX_TCTI_MEMORY_SET_STAGE_BYTES);
+		chunk_destination = destination;
+		chunk_count = count;
+		while (count) {
+			ret = orlix_tcti_write_data_access(mm, destination, &value,
+							  sizeof(value), unprivileged);
+			if (ret) {
+				if (fault_address)
+					*fault_address = destination;
+				return ret;
+			}
+			destination++;
+			remaining--;
+			count--;
+			if (prologue_flags_pending) {
+				WRITE_ONCE(regs->pstate, prologue_pstate);
+				prologue_flags_pending = false;
+			}
+			/* UpdateSetRegisters publishes each N-form completed byte. */
+			orlix_tcti_memory_set_publish_progress(regs, decoded, destination,
+							      remaining);
+		}
+		if (decoded->memory_set_tagged && chunk_count) {
+			unsigned long first_granule =
+				(destination - chunk_count) & ORLIX_MTE_ADDRESS_MASK &
+				~(ORLIX_MTE_GRANULE_SIZE - 1);
+			unsigned long last_granule =
+				(chunk_destination + chunk_count - 1) &
+				ORLIX_MTE_ADDRESS_MASK &
+				~(ORLIX_MTE_GRANULE_SIZE - 1);
+			unsigned int granules = (last_granule - first_granule) /
+				ORLIX_MTE_GRANULE_SIZE + 1;
+
+			/* #135 owns the durable allocation-tag transaction and its locks. */
+			ret = orlix_mte_store_allocation_tags(mm, first_granule,
+				allocation_tag, granules);
+			if (ret) {
+				if (fault_address)
+					*fault_address = chunk_destination;
+				return ret;
+			}
+		}
+	} while (decoded->memory_set_phase == ORLIX_TCTI_MEMORY_SET_EPILOGUE &&
+		 remaining);
+
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -7911,6 +8074,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 		return orlix_tcti_execute_load_store_register_offset(mm, regs, decoded,
 							       fault_address);
+	case ORLIX_TCTI_DECODE_MEMORY_SET:
+		return orlix_tcti_execute_memory_set(mm, regs, decoded, fault_address);
 	case ORLIX_TCTI_DECODE_LOGICAL_SHIFTED_REGISTER:
 		return orlix_tcti_execute_logical_shifted_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_LOGICAL_IMMEDIATE:
@@ -8069,7 +8234,9 @@ struct orlix_tcti_result orlix_tcti_switch_debug_resume_user(struct task_struct 
 		}
 
 		result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
-		result.status = -ENOSYS;
+		/* Preserve #175 constrained/tagged rejection for production callers. */
+		result.status = decoded.decode_class == ORLIX_TCTI_DECODE_MEMORY_SET ?
+			ret : -ENOSYS;
 		result.pc = regs->pc;
 		result.instruction = instruction;
 		return result;

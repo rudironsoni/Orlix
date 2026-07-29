@@ -109,6 +109,10 @@
 #define AARCH64_LOAD_STORE_SIGNED_IMM_PATTERN 0x38000000U
 #define AARCH64_LOAD_STORE_REGISTER_OFFSET_MASK 0x3b200c00U
 #define AARCH64_LOAD_STORE_REGISTER_OFFSET_PATTERN 0x38200800U
+/* DDI0602/AARCHMRS 2026-06 ordinals 2752-2763, SETP/SETM/SETE. */
+#define AARCH64_MEMORY_SET_MASK 0x3fe00c00U
+#define AARCH64_MEMORY_SET_PATTERN 0x19c00400U
+#define AARCH64_MEMORY_SET_TAGGED_PATTERN 0x1dc00400U
 #define AARCH64_LOGICAL_SHIFTED_REGISTER_MASK 0x1f000000U
 #define AARCH64_LOGICAL_SHIFTED_REGISTER_PATTERN 0x0a000000U
 #define AARCH64_LOGICAL_IMMEDIATE_MASK 0x1f800000U
@@ -944,6 +948,27 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	}
 	if (sve_ret == -EINVAL)
 		return decoded;
+
+	if ((instruction & AARCH64_MEMORY_SET_MASK) == AARCH64_MEMORY_SET_PATTERN ||
+	    (instruction & AARCH64_MEMORY_SET_MASK) ==
+		    AARCH64_MEMORY_SET_TAGGED_PATTERN) {
+		u8 op = (instruction >> 12) & 0xfU;
+
+		/* sz == 00 and op<3:2> selects SETP, SETM, or SETE. */
+		if ((instruction & BIT(31)) || (op >> 2) == 3)
+			return decoded;
+		decoded.decode_class = ORLIX_TCTI_DECODE_MEMORY_SET;
+		decoded.memory_set_tagged =
+			(instruction & AARCH64_MEMORY_SET_MASK) ==
+			AARCH64_MEMORY_SET_TAGGED_PATTERN;
+		decoded.memory_set_phase = op >> 2;
+		decoded.memory_set_unprivileged = op & BIT(0);
+		decoded.memory_set_nontemporal = op & BIT(1);
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rs = (instruction >> 16) & 0x1fU;
+		return decoded;
+	}
 
 	if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction))
 		return decoded;
