@@ -9,8 +9,15 @@
 #include "../gadget_program.h"
 #include "target_execution_slice_map.h"
 #include "target_instruction_artifact.h"
+#include "target_proof_registry.h"
 
 #define FLAG_NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
+#define ORLIX_TCTI_FLAG_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_flag_manipulation_source_bound_test.c"
+#define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
+#define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST_SHA256 \
+	"3ac25a4747de516f7a787b37b3661f3a08fbf1bf5cc43f800f8ee7791ab5c6ef"
 
 enum orlix_tcti_flag_linux_visibility {
 	ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE = 0,
@@ -18,33 +25,60 @@ enum orlix_tcti_flag_linux_visibility {
 
 struct orlix_tcti_flag_leaf {
 	u16 ordinal;
-	const char *name;
 	const char *mnemonic;
 	const char *operation;
 	u32 mask;
 	u32 pattern;
 	enum orlix_tcti_flag_manipulation_op op;
-	const char *source_file;
-	const char *decode_locator;
-	const char *execute_locator;
 	enum orlix_tcti_flag_linux_visibility linux_visibility;
 };
 
+struct orlix_tcti_flag_semantic_provenance_row {
+	u32 ordinal;
+	const char *name;
+	const char *relative_file;
+	const char *decode_locator;
+	const char *decode_sha256;
+	const char *execute_locator;
+	const char *execute_sha256;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(identity_value) \
+	static const char *const orlix_tcti_flag_semantic_source_identity = identity_value;
+
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
+#include "../isa/generations/current/target_asl_availability.def"
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(ordinal_value, leaf_name_value, \
+		relative_file_value, decode_locator_value, decode_digest_value, \
+		decode_sections_value, decode_helpers_value, decode_closure_value, \
+		execute_locator_value, execute_digest_value, execute_sections_value, \
+		execute_helpers_value, execute_closure_value) \
+	{ ordinal_value, leaf_name_value, relative_file_value, decode_locator_value, \
+	  decode_digest_value, execute_locator_value, execute_digest_value },
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
+static const struct orlix_tcti_flag_semantic_provenance_row
+	orlix_tcti_flag_semantic_provenance_rows[] = {
+#include "../isa/generations/current/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
 static const struct orlix_tcti_flag_leaf orlix_tcti_flag_leaves[] = {
-	{3476, "RMIF_only_rmif", "RMIF", "RMIF", 0xffe07c10U, 0xba000400U,
-	 ORLIX_TCTI_FLAG_MANIPULATION_RMIF, "rmif.xml",
-	 "rmif.xml#A64.dpreg.rmif.RMIF_only_rmif/decode",
-	 "rmif.xml#A64.dpreg.rmif.RMIF_only_rmif/execute",
+	{3476, "RMIF", "RMIF", 0xffe07c10U, 0xba000400U,
+	 ORLIX_TCTI_FLAG_MANIPULATION_RMIF,
 	 ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE},
-	{3477, "SETF8_only_setf", "SETF8", "SETF", 0xfffffc1fU, 0x3a00080dU,
-	 ORLIX_TCTI_FLAG_MANIPULATION_SETF8, "setf.xml",
-	 "setf.xml#A64.dpreg.setf.SETF16_only_setf/decode",
-	 "setf.xml#A64.dpreg.setf.SETF16_only_setf/execute",
+	{3477, "SETF8", "SETF", 0xfffffc1fU, 0x3a00080dU,
+	 ORLIX_TCTI_FLAG_MANIPULATION_SETF8,
 	 ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE},
-	{3478, "SETF16_only_setf", "SETF16", "SETF", 0xfffffc1fU, 0x3a00480dU,
-	 ORLIX_TCTI_FLAG_MANIPULATION_SETF16, "setf.xml",
-	 "setf.xml#A64.dpreg.setf.SETF8_only_setf/decode",
-	 "setf.xml#A64.dpreg.setf.SETF8_only_setf/execute",
+	{3478, "SETF16", "SETF", 0xfffffc1fU, 0x3a00480dU,
+	 ORLIX_TCTI_FLAG_MANIPULATION_SETF16,
 	 ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE},
 };
 
@@ -53,6 +87,18 @@ static const char *orlix_tcti_flag_artifact_string(
 {
 	return offset < artifact->string_pool_size ?
 		(const char *)artifact->string_pool + offset : NULL;
+}
+
+static const struct orlix_tcti_flag_semantic_provenance_row *
+orlix_tcti_flag_semantic_provenance_row(u16 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_flag_semantic_provenance_rows);
+	     index++)
+		if (orlix_tcti_flag_semantic_provenance_rows[index].ordinal == ordinal)
+			return &orlix_tcti_flag_semantic_provenance_rows[index];
+	return NULL;
 }
 
 static void orlix_tcti_flag_source_and_slice_bindings(struct kunit *test)
@@ -67,6 +113,14 @@ static void orlix_tcti_flag_source_and_slice_bindings(struct kunit *test)
 
 	KUNIT_ASSERT_NOT_NULL(test, artifact);
 	KUNIT_ASSERT_NOT_NULL(test, map);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_kunit_dependency_validate_for_test(
+			ORLIX_TCTI_FLAG_SOURCE,
+			ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST,
+			ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST_SHA256));
+	KUNIT_ASSERT_NOT_NULL(test, orlix_tcti_flag_semantic_source_identity);
+	KUNIT_ASSERT_NOT_NULL(test, strstr(orlix_tcti_flag_semantic_source_identity,
+		artifact->source_sha256));
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_target_instruction_artifact_validate(
 		artifact, &artifact_result));
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_execution_slice_map_validate(
@@ -81,8 +135,12 @@ static void orlix_tcti_flag_source_and_slice_bindings(struct kunit *test)
 			&map->members[leaf->ordinal];
 		const struct orlix_tcti_execution_slice_family *family =
 			&map->families[member->family_index];
+		const struct orlix_tcti_flag_semantic_provenance_row *
+			semantic_row = orlix_tcti_flag_semantic_provenance_row(leaf->ordinal);
 
-		KUNIT_EXPECT_STREQ(test, leaf->name,
+		KUNIT_ASSERT_NOT_NULL(test, semantic_row);
+		KUNIT_EXPECT_EQ(test, (u32)leaf->ordinal, semantic_row->ordinal);
+		KUNIT_EXPECT_STREQ(test, semantic_row->name,
 			orlix_tcti_flag_artifact_string(artifact, source->name_offset));
 		KUNIT_EXPECT_STREQ(test, leaf->mnemonic,
 			orlix_tcti_flag_artifact_string(artifact, source->mnemonic_offset));
@@ -91,16 +149,20 @@ static void orlix_tcti_flag_source_and_slice_bindings(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, leaf->mask, source->encoding_mask);
 		KUNIT_EXPECT_EQ(test, leaf->pattern, source->encoding_pattern);
 		KUNIT_EXPECT_EQ(test, (u32)leaf->ordinal, member->ordinal);
-		KUNIT_EXPECT_STREQ(test, leaf->name, member->source_name);
+		KUNIT_EXPECT_STREQ(test, semantic_row->name, member->source_name);
 		KUNIT_EXPECT_STREQ(test, "base-residual-flags", family->stable_id);
 		KUNIT_EXPECT_EQ(test, 181U, family->issue_id);
 		KUNIT_EXPECT_EQ(test, 3U, family->declared_member_count);
+		KUNIT_EXPECT_NOT_NULL(test, semantic_row->relative_file);
+		KUNIT_EXPECT_NOT_NULL(test, semantic_row->decode_locator);
+		KUNIT_EXPECT_NOT_NULL(test, semantic_row->decode_sha256);
+		KUNIT_EXPECT_NOT_NULL(test, semantic_row->execute_locator);
+		KUNIT_EXPECT_NOT_NULL(test, semantic_row->execute_sha256);
+		KUNIT_EXPECT_TRUE(test, strcmp(semantic_row->decode_sha256,
+			semantic_row->execute_sha256));
 		KUNIT_EXPECT_EQ(test,
 			ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE,
 			leaf->linux_visibility);
-		KUNIT_EXPECT_NOT_NULL(test, leaf->source_file);
-		KUNIT_EXPECT_NOT_NULL(test, leaf->decode_locator);
-		KUNIT_EXPECT_NOT_NULL(test, leaf->execute_locator);
 	}
 }
 
@@ -280,6 +342,9 @@ static void orlix_tcti_flag_pstate_semantics_matrix(struct kunit *test)
 			orlix_tcti_flag_expected_setf(source, 16, FLAG_NZCV));
 	}
 	/* Rn == 31 is XZR/WZR, not SP. */
+	/* RMIF must read XZR as zero, even when the caller supplies a nonzero source. */
+	orlix_tcti_flag_expect_lowered_execution(test, 0xba0007efU,
+		U64_MAX, FLAG_NZCV, 0);
 	orlix_tcti_flag_expect_lowered_execution(test, 0x3a000bedU,
 		U64_MAX, FLAG_NZCV, PSR_Z_BIT | PSR_C_BIT);
 }

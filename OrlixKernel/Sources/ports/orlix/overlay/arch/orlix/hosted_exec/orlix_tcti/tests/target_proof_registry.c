@@ -295,6 +295,11 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+#define ORLIX_TCTI_TARGET_PROOF_MAX_ENTRIES 4350U
+#define ORLIX_TCTI_TARGET_PROOF_MAX_BINDINGS 4350U
+#define ORLIX_TCTI_TARGET_PROOF_MAX_SOURCE_BYTES (2U * 1024U * 1024U)
+#define ORLIX_TCTI_TARGET_PROOF_MAX_SEMANTIC_PROVENANCE_ARTIFACT_BYTES \
+	(4U * 1024U * 1024U)
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 struct operation_requirements {
@@ -318,6 +323,12 @@ struct kunit_source_provenance {
 	const char *dependency;
 	const char *dependency_sha256;
 	const char *include_directive;
+};
+
+struct kunit_dependency_terminal_artifact {
+	const char *source;
+	const char *name;
+	const char *path;
 };
 
 struct kunit_case_provenance {
@@ -546,6 +557,16 @@ proof_registry_projection[] = {
 	"orlix_tcti_flag_manipulation_test_suite"
 #define FLAG_MANIPULATION_CASE_ARRAY \
 	"orlix_tcti_flag_manipulation_test_cases"
+#define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
+#define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256 \
+	"3ac25a4747de516f7a787b37b3661f3a08fbf1bf5cc43f800f8ee7791ab5c6ef"
+#define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE \
+	"#include \"../isa/generations/current/target_asl_availability.def\""
+#define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT_NAME \
+	"target_asl_availability.def"
+#define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/target_asl_availability.def"
 #define FLAG_MANIPULATION_CONDITION \
 	"54434e4401070000002f0700000017070000000c010000000101010000000101010000000101020000000e0000000a464541545f466c61674d"
 #define SOURCE_LEAF_CLASSIFICATION_SOURCE \
@@ -764,8 +785,17 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
 	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
 	{ FLAG_MANIPULATION_SOURCE,
-	  "1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab",
-	  "orlix_tcti_flag_manipulation_source_bound_test.o", NULL, NULL, NULL },
+	  "cd6657db509ba00659e9434d742e92d2e443e860988c41e27aa9404cadac47e2",
+	  "orlix_tcti_flag_manipulation_source_bound_test.o",
+	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE,
+	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256,
+	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE },
+	};
+
+static const struct kunit_dependency_terminal_artifact
+	kunit_dependency_terminal_artifacts[] = {
+	{ FLAG_MANIPULATION_SOURCE, FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT_NAME,
+	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT },
 };
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
@@ -4133,7 +4163,7 @@ int orlix_tcti_target_proof_source_size_allowed(orlix_tcti_proof_u64 size)
 }
 
 #ifndef __KERNEL__
-static char *read_source(const char *path, size_t *length)
+static char *read_file_limited(const char *path, size_t *length, size_t maximum_size)
 {
 	FILE *file;
 	char *data;
@@ -4142,7 +4172,7 @@ static char *read_source(const char *path, size_t *length)
 	file = fopen(path, "rb");
 	if (!length || !file || fseek(file, 0, SEEK_END) ||
 	    (size = ftell(file)) < 0 ||
-	    !orlix_tcti_target_proof_source_size_allowed((orlix_tcti_proof_u64)size) ||
+	    (unsigned long long)size > maximum_size ||
 	    fseek(file, 0, SEEK_SET))
 		goto fail;
 	data = malloc((size_t)size + 1);
@@ -4158,6 +4188,100 @@ fail:
 	if (file)
 		fclose(file);
 	return NULL;
+}
+
+static char *read_source(const char *path, size_t *length)
+{
+	return read_file_limited(path, length, ORLIX_TCTI_TARGET_PROOF_MAX_SOURCE_BYTES);
+}
+
+static bool manifest_artifact_digest(const char *manifest, size_t manifest_length,
+	const char *artifact_name, char digest[65], size_t *artifact_length)
+{
+	const char *line = manifest;
+	const char *manifest_end = manifest + manifest_length;
+	size_t name_length;
+	size_t matches = 0;
+
+	if (empty(artifact_name))
+		return false;
+	name_length = strlen(artifact_name);
+	while (line < manifest_end) {
+		const char *line_end = memchr(line, '\n', manifest_end - line);
+		const char *cursor;
+		size_t length = 0;
+		size_t index;
+
+		if (!line_end)
+			line_end = manifest_end;
+		if ((size_t)(line_end - line) <= strlen("artifact=") + name_length ||
+		    strncmp(line, "artifact=", strlen("artifact=")) ||
+		    strncmp(line + strlen("artifact="), artifact_name, name_length) ||
+		    line[strlen("artifact=") + name_length] != ' ') {
+
+			line = line_end < manifest_end ? line_end + 1 : manifest_end;
+			continue;
+		}
+		cursor = line + strlen("artifact=") + name_length + 1;
+		if (cursor == line_end)
+			return false;
+		while (cursor < line_end && isdigit((unsigned char)*cursor)) {
+			if (length > (SIZE_MAX - (size_t)(*cursor - '0')) / 10U)
+				return false;
+			length = length * 10U + (size_t)(*cursor - '0');
+			cursor++;
+		}
+		if (cursor == line + strlen("artifact=") + name_length + 1 ||
+		    (size_t)(line_end - cursor) < strlen(" sha256=") + 64U ||
+		    strncmp(cursor, " sha256=", strlen(" sha256=")))
+			return false;
+		cursor += strlen(" sha256=");
+		for (index = 0; index < 64U; index++)
+			if (!isxdigit((unsigned char)cursor[index]) ||
+			    isupper((unsigned char)cursor[index]))
+				return false;
+		if (cursor + 64U < line_end &&
+		    !isspace((unsigned char)cursor[64]))
+			return false;
+		if (++matches != 1U)
+			return false;
+		memcpy(digest, cursor, 64U);
+		digest[64] = '\0';
+		*artifact_length = length;
+		line = line_end < manifest_end ? line_end + 1 : manifest_end;
+	}
+	return matches == 1U;
+}
+
+static int valid_kunit_manifest_terminal_artifact(
+	const char *manifest_path, const char *artifact_name, const char *artifact_path)
+{
+	char *manifest;
+	char *artifact;
+	char digest[65];
+	size_t manifest_length;
+	size_t artifact_length;
+	size_t expected_length;
+	int result = -1;
+
+	if (empty(manifest_path) || empty(artifact_name) || empty(artifact_path))
+		return -1;
+	manifest = read_source(manifest_path, &manifest_length);
+	if (!manifest || memchr(manifest, '\0', manifest_length) ||
+	    !manifest_artifact_digest(manifest, manifest_length, artifact_name, digest,
+				      &expected_length))
+		goto out_manifest;
+	artifact = read_file_limited(artifact_path, &artifact_length,
+		ORLIX_TCTI_TARGET_PROOF_MAX_SEMANTIC_PROVENANCE_ARTIFACT_BYTES);
+	if (artifact && !memchr(artifact, '\0', artifact_length) &&
+	    artifact_length == expected_length &&
+	    sha256_matches((const orlix_tcti_proof_u8 *)artifact, artifact_length,
+			   digest))
+		result = 0;
+	free(artifact);
+out_manifest:
+	free(manifest);
+	return result;
 }
 
 static bool source_registers_case(const char *source, const char *case_name)
@@ -4253,6 +4377,18 @@ find_kunit_source(const char *path)
 	return NULL;
 }
 
+static const struct kunit_dependency_terminal_artifact *
+find_kunit_dependency_terminal_artifact(const char *source)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(kunit_dependency_terminal_artifacts);
+	     index++)
+		if (!strcmp(source, kunit_dependency_terminal_artifacts[index].source))
+			return &kunit_dependency_terminal_artifacts[index];
+	return NULL;
+}
+
 static const struct kunit_case_provenance *
 find_kunit_case(const struct orlix_tcti_target_proof_registry_entry *entry,
 		const struct orlix_tcti_target_proof_case *proof_case)
@@ -4283,6 +4419,7 @@ static bool valid_kunit_dependency(
 		!strcmp(source_metadata->dependency_sha256, dependency_sha256);
 #else
 	char *dependency;
+	const struct kunit_dependency_terminal_artifact *terminal_artifact;
 	size_t dependency_length;
 	bool valid;
 
@@ -4291,9 +4428,15 @@ static bool valid_kunit_dependency(
 	dependency = read_source(source_metadata->dependency, &dependency_length);
 	if (!dependency)
 		return false;
+	terminal_artifact = find_kunit_dependency_terminal_artifact(
+		source_metadata->source);
 	valid = !memchr(dependency, '\0', dependency_length) &&
 		sha256_matches((const orlix_tcti_proof_u8 *)dependency,
-			       dependency_length, dependency_sha256);
+			       dependency_length, dependency_sha256) &&
+		(!terminal_artifact ||
+		 valid_kunit_manifest_terminal_artifact(
+			source_metadata->dependency,
+			terminal_artifact->name, terminal_artifact->path) == 0);
 	free(dependency);
 	return valid;
 #endif
@@ -4310,9 +4453,11 @@ int orlix_tcti_target_kunit_dependency_validate_for_test(
 	if (!source_metadata || empty(source_metadata->dependency) ||
 	    empty(source_metadata->dependency_sha256) ||
 	    empty(source_metadata->include_directive) ||
-	    strcmp(dependency, source_metadata->dependency))
+	    strcmp(dependency, source_metadata->dependency) ||
+	    strcmp(dependency_sha256, source_metadata->dependency_sha256))
 		return -1;
-	return valid_kunit_dependency(source_metadata, dependency_sha256) ? 0 : -1;
+	return valid_kunit_dependency(source_metadata,
+			      source_metadata->dependency_sha256) ? 0 : -1;
 }
 
 static bool valid_kunit_provenance(
