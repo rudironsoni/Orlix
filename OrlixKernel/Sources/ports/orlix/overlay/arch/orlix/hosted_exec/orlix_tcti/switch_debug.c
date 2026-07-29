@@ -15,8 +15,10 @@
 #include <internal/asm/host_time.h>
 
 #include "decode_aarch64.h"
+#include "barrier_gadgets.h"
 #include "fixed_fp.h"
 #include "semantics.h"
+#include "system_accessor.h"
 #include "sve_state.h"
 #include "switch_debug.h"
 
@@ -1373,86 +1375,6 @@ static bool orlix_tcti_condition_passed(const struct pt_regs *regs, u8 condition
 	}
 }
 
-static int orlix_tcti_execute_system_register(struct pt_regs *regs,
-					const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u64 value;
-
-	if (decoded->rt == 31 && decoded->system_register_write)
-		value = 0;
-	else
-		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rt, sizeof(u64));
-
-	switch (decoded->system_register) {
-	case ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0:
-		if (decoded->system_register_write) {
-#if defined(ORLIX_APP_HOSTED_BOOT)
-			orlix_hosted_set_current_user_tls(value);
-#else
-			current->thread.user_tls = value;
-#endif
-		} else if (decoded->rt != 31) {
-			regs->regs[decoded->rt] = current->thread.user_tls;
-		}
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_NZCV:
-		if (decoded->system_register_write) {
-			regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT |
-					  PSR_C_BIT | PSR_V_BIT);
-			regs->pstate |= value & (PSR_N_BIT | PSR_Z_BIT |
-						 PSR_C_BIT | PSR_V_BIT);
-		} else if (decoded->rt != 31) {
-			regs->regs[decoded->rt] =
-				regs->pstate & (PSR_N_BIT | PSR_Z_BIT |
-						PSR_C_BIT | PSR_V_BIT);
-		}
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_FPCR:
-		if (decoded->system_register_write)
-			current->thread.user_fpcr =
-				value & AARCH64_FPCR_WRITABLE_MASK;
-		else if (decoded->rt != 31)
-			regs->regs[decoded->rt] = current->thread.user_fpcr;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_FPSR:
-		if (decoded->system_register_write)
-			current->thread.user_fpsr =
-				value & AARCH64_FPSR_WRITABLE_MASK;
-		else if (decoded->rt != 31)
-			regs->regs[decoded->rt] = current->thread.user_fpsr;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = 0;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_CTR_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_DCZID_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_CNTFRQ_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] =
-				orlix_host_time_monotonic_ns();
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	regs->pc += sizeof(u32);
-	return 0;
-}
-
-static void orlix_tcti_clear_exclusive_monitor(void)
-{
-	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
 	current->thread.user_exclusive_pfn = 0;
@@ -7528,15 +7450,46 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		regs->pc += sizeof(u32);
 		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3 ?
 			-EAGAIN : 0;
+	case ORLIX_TCTI_DECODE_EVENT:
+		switch (decoded->event_op) {
+		case ORLIX_TCTI_EVENT_NOP:
+			regs->pc += sizeof(u32);
+			return 0;
+		case ORLIX_TCTI_EVENT_YIELD:
+			regs->pc += sizeof(u32);
+			return -EAGAIN;
+		case ORLIX_TCTI_EVENT_SEV:
+			orlix_tcti_event_sev();
+			regs->pc += sizeof(u32);
+			return 0;
+		case ORLIX_TCTI_EVENT_SEVL:
+			orlix_tcti_event_sevl();
+			regs->pc += sizeof(u32);
+			return 0;
+		case ORLIX_TCTI_EVENT_WFE:
+		case ORLIX_TCTI_EVENT_WFET:
+			regs->pc += sizeof(u32);
+			return orlix_tcti_event_wfe_consumed(NULL) ? 0 : -EWOULDBLOCK;
+		case ORLIX_TCTI_EVENT_WFI:
+		case ORLIX_TCTI_EVENT_WFIT:
+			regs->pc += sizeof(u32);
+			return -EINPROGRESS;
+		default:
+			return -EINVAL;
+		}
+	case ORLIX_TCTI_DECODE_SPECULATION_BARRIER:
+		orlix_tcti_native_csdb();
+		regs->pc += sizeof(u32);
+		return 0;
 	case ORLIX_TCTI_DECODE_BARRIER:
 		/*
 		 * DSB <imm2>nXS is a distinct FEAT_XS completion contract. Do not
 		 * collapse it into the ordinary host fence until that guest-visible
 		 * ordering semantics has authoritative implementation and proof.
 		 */
-		if (decoded->barrier_nxs)
+		if (!mm || orlix_tcti_native_barrier_execute(decoded->barrier_op,
+					     decoded->barrier_option, decoded->barrier_nxs))
 			return -EOPNOTSUPP;
-		__atomic_thread_fence(__ATOMIC_SEQ_CST);
 		regs->pc += sizeof(u32);
 		return 0;
 	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE:
@@ -7687,12 +7640,75 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return orlix_tcti_execute_multiply_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_MOVE_WIDE_IMMEDIATE:
 		return orlix_tcti_execute_move_wide_immediate(regs, decoded);
-	case ORLIX_TCTI_DECODE_SYSTEM_REGISTER:
-		return orlix_tcti_execute_system_register(regs, decoded);
+		/* The source leaf is known, but its target feature is unadvertised. */
+		return -EOPNOTSUPP;
+	case ORLIX_TCTI_DECODE_PSTATE_FLAG:
+		{
+			u64 nzcv = regs->pstate & (PSR_N_BIT | PSR_Z_BIT |
+						PSR_C_BIT | PSR_V_BIT);
+			bool n = nzcv & PSR_N_BIT;
+			bool z = nzcv & PSR_Z_BIT;
+			bool c = nzcv & PSR_C_BIT;
+			bool v = nzcv & PSR_V_BIT;
+
+			switch (decoded->pstate_flag_op) {
+			case ORLIX_TCTI_PSTATE_FLAG_CFINV:
+				nzcv ^= PSR_C_BIT;
+				break;
+			case ORLIX_TCTI_PSTATE_FLAG_XAFLAG:
+				nzcv = (!c && !z ? PSR_N_BIT : 0) |
+					(z && c ? PSR_Z_BIT : 0) |
+					(c || z ? PSR_C_BIT : 0) |
+					(!c && z ? PSR_V_BIT : 0);
+				break;
+			case ORLIX_TCTI_PSTATE_FLAG_AXFLAG:
+				nzcv = (z || v ? PSR_Z_BIT : 0) |
+					(c && !v ? PSR_C_BIT : 0);
+				break;
+			default:
+				return -EINVAL;
+			}
+			regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
+			regs->pstate |= nzcv;
+			regs->pc += sizeof(u32);
+			return 0;
+		}
+	case ORLIX_TCTI_DECODE_FEATURE_HINT:
+		/*
+		 * DDI0602's named hint operations affect implementation state only in
+		 * this executor's feature-on model.  They deliberately preserve EL0
+		 * GPRs and NZCV while consuming exactly one instruction.  Keeping the
+		 * op distinct prevents an encoding from falling into generic HINT.
+		 */
+		switch (decoded->feature_hint_op) {
+		case ORLIX_TCTI_FEATURE_HINT_DGH:
+		case ORLIX_TCTI_FEATURE_HINT_ESB:
+		case ORLIX_TCTI_FEATURE_HINT_PSB:
+		case ORLIX_TCTI_FEATURE_HINT_TSB:
+		case ORLIX_TCTI_FEATURE_HINT_GCSB:
+		case ORLIX_TCTI_FEATURE_HINT_CLRBHB:
+		case ORLIX_TCTI_FEATURE_HINT_BTI:
+		case ORLIX_TCTI_FEATURE_HINT_CHKFEAT:
+		case ORLIX_TCTI_FEATURE_HINT_STSHH:
+		case ORLIX_TCTI_FEATURE_HINT_SHUH:
+		case ORLIX_TCTI_FEATURE_HINT_STCPH:
+		case ORLIX_TCTI_FEATURE_HINT_HINTE:
+			regs->pc += sizeof(u32);
+			return 0;
+		case ORLIX_TCTI_FEATURE_HINT_SB:
+			/* FEAT_SB fixed native gadget encoding, distinct from CSDB. */
+			asm volatile(".inst 0xd50330ff" : : : "memory");
+			regs->pc += sizeof(u32);
+			return 0;
+		default:
+			return -EINVAL;
+		}
 	case ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE:
 		return -EOPNOTSUPP;
 	case ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR:
 		orlix_tcti_clear_exclusive_monitor();
+		/* CLREX also clears the host PE's architectural exclusive monitor. */
+		asm volatile(".inst 0xd503305f" : : : "memory");
 		regs->pc += sizeof(u32);
 		return 0;
 	case ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE:

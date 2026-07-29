@@ -13,6 +13,7 @@
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <linux/utsname.h>
+#include <linux/wait.h>
 #include <asm/hosted_exec.h>
 #include <asm/elf.h>
 #include <asm/ioctls.h>
@@ -47,6 +48,18 @@ struct orlix_tcti_hot_block {
 };
 
 static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
+static atomic64_t orlix_tcti_event_generation = ATOMIC64_INIT(0);
+static DECLARE_WAIT_QUEUE_HEAD(orlix_tcti_event_wq);
+void orlix_tcti_set_private_feature_state(struct task_struct *task, bool enabled)
+{
+	if (task)
+		task->thread.orlix_tcti_private_features_enabled = enabled;
+}
+
+bool orlix_tcti_private_feature_state_enabled(struct task_struct *task)
+{
+	return task && task->thread.orlix_tcti_private_features_enabled;
+}
 #ifndef R_AARCH64_RELATIVE
 #define R_AARCH64_RELATIVE 1027
 #endif
@@ -94,6 +107,11 @@ static bool orlix_tcti_decoded_requires_fp16(
 static bool orlix_tcti_decoded_runtime_available(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	/* Feature-on semantics exist below this gate; EL0 advertises none yet. */
+	if (decoded && (decoded->decode_class == ORLIX_TCTI_DECODE_FEATURE_HINT ||
+		decoded->decode_class == ORLIX_TCTI_DECODE_PSTATE_FLAG ||
+		decoded->barrier_nxs || decoded->event_timeout))
+		return orlix_tcti_private_feature_state_enabled(current);
 	if (orlix_tcti_decoded_requires_fp16(decoded))
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :
@@ -557,6 +575,8 @@ orlix_tcti_decoded_ends_block(const struct orlix_tcti_decoded_instruction *decod
 	case ORLIX_TCTI_DECODE_BRK:
 	case ORLIX_TCTI_DECODE_HLT:
 	case ORLIX_TCTI_DECODE_BARRIER:
+	case ORLIX_TCTI_DECODE_EVENT:
+	case ORLIX_TCTI_DECODE_SPECULATION_BARRIER:
 	case ORLIX_TCTI_DECODE_CACHE_MAINTENANCE:
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_REGISTER:
@@ -567,6 +587,38 @@ orlix_tcti_decoded_ends_block(const struct orlix_tcti_decoded_instruction *decod
 		return true;
 	default:
 		return false;
+	}
+}
+
+void orlix_tcti_event_sev(void)
+{
+	atomic64_inc(&orlix_tcti_event_generation);
+	wake_up_all(&orlix_tcti_event_wq);
+}
+
+void orlix_tcti_event_sevl(void)
+{
+	current->thread.user_event_seen_generation =
+		atomic64_read(&orlix_tcti_event_generation) - 1;
+}
+
+bool orlix_tcti_event_wfe_consumed(u64 *observed_generation)
+{
+	u64 generation = atomic64_read(&orlix_tcti_event_generation);
+
+	if (observed_generation)
+		*observed_generation = generation;
+	if (current->thread.user_event_seen_generation == generation)
+		return false;
+	current->thread.user_event_seen_generation = generation;
+	return true;
+}
+
+void orlix_tcti_event_reset_task(struct task_struct *task)
+{
+	if (task) {
+		task->thread.user_event_seen_generation =
+			atomic64_read(&orlix_tcti_event_generation);
 	}
 }
 
@@ -582,6 +634,21 @@ static void orlix_tcti_set_yield_result(struct mm_struct *mm,
 	result->status = (instruction >> 5) & 0x7fU;
 	result->pc = regs->pc;
 	result->instruction = instruction;
+}
+
+static void orlix_tcti_set_wait_result(const struct pt_regs *regs,
+		const struct orlix_tcti_decoded_instruction *decoded,
+		struct orlix_tcti_result *result)
+{
+	result->reason = ORLIX_TCTI_EXIT_WAIT;
+	result->status = decoded->event_timeout ? regs->regs[decoded->rt] : 0;
+	result->pc = regs->pc;
+	result->instruction = decoded->instruction;
+	result->wait_kind = (decoded->event_op == ORLIX_TCTI_EVENT_WFE ||
+		decoded->event_op == ORLIX_TCTI_EVENT_WFET) ?
+		ORLIX_TCTI_WAIT_WFE : ORLIX_TCTI_WAIT_WFI;
+	result->observed_event_generation =
+		current->thread.user_event_seen_generation;
 }
 
 static bool orlix_tcti_decoded_for_program_pc(
@@ -845,6 +912,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				continue;
 			if (ret == -ESTALE)
 				continue;
+			if (ret == -EWOULDBLOCK || ret == -EINPROGRESS) {
+				orlix_tcti_set_wait_result(regs, &block_decoded, &result);
+				orlix_tcti_hot_blocks_release(hot_blocks);
+				return result;
+			}
 			if (ret == -EAGAIN) {
 				orlix_tcti_set_yield_result(mm, regs, &result);
 				orlix_tcti_hot_blocks_release(hot_blocks);
@@ -979,6 +1051,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			continue;
 		if (ret == -ESTALE)
 			continue;
+		if (ret == -EWOULDBLOCK || ret == -EINPROGRESS) {
+			orlix_tcti_set_wait_result(regs, &decoded, &result);
+			orlix_tcti_hot_blocks_release(hot_blocks);
+			return result;
+		}
 		if (ret == -EAGAIN) {
 			orlix_tcti_set_yield_result(mm, regs, &result);
 			orlix_tcti_hot_blocks_release(hot_blocks);
@@ -1026,6 +1103,7 @@ void orlix_tcti_prepare_syscall_handoff(struct pt_regs *regs)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_tcti_event_reset_task(current);
 	regs->orig_x0 = regs->regs[0];
 	regs->syscallno = regs->regs[8];
 	regs->pc += sizeof(u32);
@@ -1291,6 +1369,16 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 			break;
 		case ORLIX_TCTI_EXIT_YIELD:
 			cond_resched();
+			orlix_exit_to_user_mode_work(regs);
+			break;
+		case ORLIX_TCTI_EXIT_WAIT:
+			if (result.wait_kind == ORLIX_TCTI_WAIT_WFE)
+				wait_event_interruptible(orlix_tcti_event_wq,
+					atomic64_read(&orlix_tcti_event_generation) !=
+					result.observed_event_generation ||
+					signal_pending(current));
+			else
+				cond_resched();
 			orlix_exit_to_user_mode_work(regs);
 			break;
 		case ORLIX_TCTI_EXIT_USER_FAULT:

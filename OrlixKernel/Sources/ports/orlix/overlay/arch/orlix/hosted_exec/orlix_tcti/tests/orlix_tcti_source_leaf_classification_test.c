@@ -17,6 +17,7 @@
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
 
 #define SOURCE_LEAF_SVC 0xd4000001U
+#define SOURCE_LEAF_SYSL 0xd5280300U
 
 enum orlix_tcti_system_leaf_el0_classification {
 	ORLIX_TCTI_SYSTEM_LEAF_EL0_VARIANT_REQUIRED,
@@ -99,14 +100,22 @@ static void orlix_tcti_system_leaf_catalog_tracks_authoritative_fanout(
 			system_leaf_classifications[1].el0_classification);
 
 	for (index = 0; index < ARRAY_SIZE(system_leaf_classifications); index++) {
+		const struct system_leaf_classification *leaf =
+			&system_leaf_classifications[index];
+
+		if (leaf->ordinal <= 2284U) {
+			KUNIT_EXPECT_EQ_MSG(test,
+				ORLIX_TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
+				leaf->implementation_status, "source ordinal %u",
+				leaf->ordinal);
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PROVED,
+				leaf->proof_status, "source ordinal %u", leaf->ordinal);
+		} else {
 			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PENDING,
-					    system_leaf_classifications[index].implementation_status,
-					    "source ordinal %u",
-					    system_leaf_classifications[index].ordinal);
+				leaf->implementation_status, "source ordinal %u", leaf->ordinal);
 			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_UNPROVED,
-					    system_leaf_classifications[index].proof_status,
-					    "source ordinal %u",
-					    system_leaf_classifications[index].ordinal);
+				leaf->proof_status, "source ordinal %u", leaf->ordinal);
+		}
 	}
 }
 
@@ -219,6 +228,40 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 	}
 }
 
+static void orlix_tcti_system_instruction_wildcard_rejection_is_production_path(
+	struct kunit *test)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+	struct pt_regs regs = { };
+	struct pt_regs before;
+	struct orlix_tcti_result result;
+	unsigned long mapped;
+
+	decoded = orlix_tcti_decode_aarch64(SOURCE_LEAF_SYSL);
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_INSTRUCTION,
+			decoded.decode_class);
+	KUNIT_EXPECT_TRUE(test, decoded.system_instruction_read);
+	KUNIT_EXPECT_EQ(test, 0x18U, decoded.system_instruction_selector);
+	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
+
+	mapped = source_leaf_map(test, SOURCE_LEAF_SYSL);
+	regs.pc = mapped;
+	regs.sp = STACK_TOP - 16;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = 0x123456789abcdef0ULL;
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason);
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, SOURCE_LEAF_SYSL, result.instruction);
+	KUNIT_EXPECT_EQ(test, before.pc, result.pc);
+	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+}
+
 static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_leaf_catalog_tracks_authoritative_fanout),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_binds_source_metadata),
@@ -226,6 +269,7 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_rejections_are_structured_el0_exits),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_match_pinned_tuples),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_are_structured_el0_exits),
+	KUNIT_CASE(orlix_tcti_system_instruction_wildcard_rejection_is_production_path),
 	{}
 };
 

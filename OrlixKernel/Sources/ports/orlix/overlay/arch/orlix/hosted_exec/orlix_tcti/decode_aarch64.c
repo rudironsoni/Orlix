@@ -4,7 +4,9 @@
 #include <linux/bitops.h>
 #include <linux/errno.h>
 
+#include "base_system_139.h"
 #include "decode_aarch64.h"
+#include "system_accessor.h"
 
 #define AARCH64_SVC_MASK 0xffe0001fU
 #define AARCH64_SVC_PATTERN 0xd4000001U
@@ -20,6 +22,19 @@
 #define AARCH64_SMSTART_SM_ZA 0xd503477fU
 #define AARCH64_HINT_MASK 0xfffff01fU
 #define AARCH64_HINT_PATTERN 0xd503201fU
+#define AARCH64_YIELD_PATTERN 0xd503203fU
+#define AARCH64_WFE_PATTERN 0xd503205fU
+#define AARCH64_WFI_PATTERN 0xd503207fU
+#define AARCH64_SEV_PATTERN 0xd503209fU
+#define AARCH64_SEVL_PATTERN 0xd50320bfU
+#define AARCH64_WFET_MASK 0xffffffe0U
+#define AARCH64_WFET_PATTERN 0xd5031000U
+#define AARCH64_WFIT_PATTERN 0xd5031020U
+#define AARCH64_CSDB_PATTERN 0xd503229fU
+#define AARCH64_SB_PATTERN 0xd50330ffU
+#define AARCH64_CFINV_PATTERN 0xd500401fU
+#define AARCH64_XAFLAG_PATTERN 0xd500403fU
+#define AARCH64_AXFLAG_PATTERN 0xd500405fU
 #define AARCH64_BARRIER_MASK 0xfffff0ffU
 #define AARCH64_DSB_PATTERN 0xd503309fU
 /* AARCHMRS 2026-06 source ordinal 2276, DSB_BOn_barriers, FEAT_XS. */
@@ -499,16 +514,14 @@
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
-#define AARCH64_SYSREG_TPIDR_EL0 0xde82U
-#define AARCH64_SYSREG_NZCV 0xda10U
-#define AARCH64_SYSREG_FPCR 0xda20U
-#define AARCH64_SYSREG_FPSR 0xda21U
-#define AARCH64_SYSREG_TPIDRRO_EL0 0xde83U
-#define AARCH64_SYSREG_CTR_EL0 0xd801U
-#define AARCH64_SYSREG_DCZID_EL0 0xd807U
-#define AARCH64_SYSREG_CNTFRQ_EL0 0xdf00U
-#define AARCH64_SYSREG_CNTVCT_EL0 0xdf02U
-
+/* AARCHMRS 2026-06 source ordinal 2277, MSR_SI_pstate. */
+#define AARCH64_SYSTEM_PSTATE_IMMEDIATE_MASK 0xfff8f01fU
+#define AARCH64_SYSTEM_PSTATE_IMMEDIATE_PATTERN 0xd500401fU
+/* AARCHMRS 2026-06 source ordinals 2281 and 2282. */
+#define AARCH64_SYSTEM_INSTRUCTION_MASK 0xfff80000U
+#define AARCH64_SYSTEM_INSTRUCTION_SELECTOR_MASK 0x0007ffe0U
+#define AARCH64_SYS_PATTERN 0xd5080000U
+#define AARCH64_SYSL_PATTERN 0xd5280000U
 static u32 orlix_tcti_bits(u32 value, u8 shift, u8 width)
 {
 	return (value >> shift) & ((1U << width) - 1U);
@@ -787,32 +800,46 @@ static void orlix_tcti_decode_memory_common(struct orlix_tcti_decoded_instructio
  * silently successful HINT.  They remain undefined to the OrlixTCTI guest until
  * their individual source leaves have production semantics and proof.
  */
-static bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
+static const struct orlix_tcti_hint_precedence_leaf *
+orlix_tcti_hint_precedence_leaf(u32 instruction)
 {
-	static const u32 pauth_hints[] = {
-		0xd50320ffU, /* XPACLRI */
-		0xd503211fU, /* PACIA1716 */
-		0xd503215fU, /* PACIB1716 */
-		0xd503219fU, /* AUTIA1716 */
-		0xd50321dfU, /* AUTIB1716 */
-		0xd503231fU, /* PACIAZ */
-		0xd503233fU, /* PACIASP */
-		0xd503235fU, /* PACIBZ */
-		0xd503237fU, /* PACIBSP */
-		0xd503239fU, /* AUTIAZ */
-		0xd50323bfU, /* AUTIASP */
-		0xd50323dfU, /* AUTIBZ */
-		0xd50323ffU, /* AUTIBSP */
-		0xd50324ffU, /* PACM, FEAT_PAuth_LR */
+	static const struct orlix_tcti_hint_precedence_leaf leaves[] = {
+		ORLIX_TCTI_HINT_PRECEDENCE_LEAVES,
 	};
 	size_t index;
 
-	for (index = 0; index < ARRAY_SIZE(pauth_hints); index++)
-		if (instruction == pauth_hints[index])
-			return true;
+	for (index = 0; index < ARRAY_SIZE(leaves); index++)
+		if ((instruction & leaves[index].mask) == leaves[index].pattern)
+			return &leaves[index];
+	return NULL;
+}
 
-	/* BTI permits the four BType encodings selected by bits [7:6]. */
-	return (instruction & 0xffffff3fU) == 0xd503241fU;
+static const struct orlix_tcti_base_system_139_feature_leaf *
+orlix_tcti_base_system_139_feature_leaf(u32 instruction)
+{
+	static const struct orlix_tcti_base_system_139_feature_leaf leaves[] = {
+		ORLIX_TCTI_BASE_SYSTEM_139_FEATURE_HINT_LEAVES,
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(leaves); index++)
+		if ((instruction & leaves[index].mask) == leaves[index].pattern)
+			return &leaves[index];
+	return NULL;
+}
+
+static const struct orlix_tcti_base_system_139_feature_leaf *
+orlix_tcti_base_system_139_unavailable_feature_leaf(u32 instruction)
+{
+	static const struct orlix_tcti_base_system_139_feature_leaf leaves[] = {
+		ORLIX_TCTI_BASE_SYSTEM_139_FEATURE_UNAVAILABLE_LEAVES,
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(leaves); index++)
+		if ((instruction & leaves[index].mask) == leaves[index].pattern)
+			return &leaves[index];
+	return NULL;
 }
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
@@ -881,11 +908,117 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	if (sve_ret == -EINVAL)
 		return decoded;
 
-	if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction))
+	{
+		const struct orlix_tcti_base_system_139_feature_leaf *leaf =
+			orlix_tcti_base_system_139_feature_leaf(instruction);
+
+		if (leaf) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_FEATURE_HINT;
+			decoded.source_ordinal = leaf->source_ordinal;
+			decoded.feature_hint_op = leaf->operation;
+			return decoded;
+		}
+	}
+	/* These exact feature encodings precede the broad PSTATE/SB spaces. */
+	if ((instruction & AARCH64_WFET_MASK) == AARCH64_WFET_PATTERN ||
+	    (instruction & AARCH64_WFET_MASK) == AARCH64_WFIT_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = (instruction & AARCH64_WFET_MASK) ==
+			AARCH64_WFET_PATTERN ? ORLIX_TCTI_EVENT_WFET :
+			ORLIX_TCTI_EVENT_WFIT;
+		decoded.event_timeout = true;
+		decoded.rt = instruction & 0x1fU;
+		decoded.source_ordinal = decoded.event_op == ORLIX_TCTI_EVENT_WFET ?
+			2236U : 2237U;
 		return decoded;
+	}
+	switch (instruction) {
+	case AARCH64_SB_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_FEATURE_HINT;
+		decoded.source_ordinal = 2275U;
+		decoded.feature_hint_op = ORLIX_TCTI_FEATURE_HINT_SB;
+		return decoded;
+	case AARCH64_CFINV_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_PSTATE_FLAG;
+		decoded.source_ordinal = 2278U;
+		decoded.pstate_flag_op = ORLIX_TCTI_PSTATE_FLAG_CFINV;
+		return decoded;
+	case AARCH64_XAFLAG_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_PSTATE_FLAG;
+		decoded.source_ordinal = 2279U;
+		decoded.pstate_flag_op = ORLIX_TCTI_PSTATE_FLAG_XAFLAG;
+		return decoded;
+	case AARCH64_AXFLAG_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_PSTATE_FLAG;
+		decoded.source_ordinal = 2280U;
+		decoded.pstate_flag_op = ORLIX_TCTI_PSTATE_FLAG_AXFLAG;
+		return decoded;
+	default:
+		break;
+	}
+	{
+		const struct orlix_tcti_hint_precedence_leaf *leaf =
+			orlix_tcti_hint_precedence_leaf(instruction);
+
+		if (leaf) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_FEATURE_UNAVAILABLE;
+			decoded.source_ordinal = leaf->source_ordinal;
+			return decoded;
+		}
+	}
+	{
+		const struct orlix_tcti_base_system_139_feature_leaf *leaf =
+			orlix_tcti_base_system_139_unavailable_feature_leaf(instruction);
+
+		if (leaf) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_FEATURE_UNAVAILABLE;
+			decoded.source_ordinal = leaf->source_ordinal;
+			return decoded;
+		}
+	}
+
+	switch (instruction) {
+	case AARCH64_HINT_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_NOP;
+		decoded.source_ordinal = 2238U;
+		return decoded;
+	case AARCH64_YIELD_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_YIELD;
+		decoded.source_ordinal = 2239U;
+		return decoded;
+	case AARCH64_WFE_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_WFE;
+		decoded.source_ordinal = 2240U;
+		return decoded;
+	case AARCH64_WFI_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_WFI;
+		decoded.source_ordinal = 2241U;
+		return decoded;
+	case AARCH64_SEV_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_SEV;
+		decoded.source_ordinal = 2242U;
+		return decoded;
+	case AARCH64_SEVL_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_EVENT;
+		decoded.event_op = ORLIX_TCTI_EVENT_SEVL;
+		decoded.source_ordinal = 2243U;
+		return decoded;
+	case AARCH64_CSDB_PATTERN:
+		decoded.decode_class = ORLIX_TCTI_DECODE_SPECULATION_BARRIER;
+		decoded.source_ordinal = 2254U;
+		return decoded;
+	default:
+		break;
+	}
 
 	if ((instruction & AARCH64_HINT_MASK) == AARCH64_HINT_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+		decoded.source_ordinal = 2270U;
 		decoded.hint_imm = (instruction >> 5) & 0x7fU;
 		return decoded;
 	}
@@ -905,15 +1038,19 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 				return decoded;
 			decoded.barrier_op = ORLIX_TCTI_BARRIER_DSB;
 			decoded.barrier_nxs = true;
+			decoded.source_ordinal = 2276U;
 		} else if (pattern == AARCH64_ISB_PATTERN) {
 			if (decoded.barrier_option != 0xfU)
 				return decoded;
 			decoded.barrier_op = ORLIX_TCTI_BARRIER_ISB;
+			decoded.source_ordinal = 2274U;
 		} else {
 			if (!(decoded.barrier_option & 0x3U))
 				return decoded;
 			decoded.barrier_op = pattern == AARCH64_DSB_PATTERN ?
 				ORLIX_TCTI_BARRIER_DSB : ORLIX_TCTI_BARRIER_DMB;
+			decoded.source_ordinal = pattern == AARCH64_DSB_PATTERN ?
+				2272U : 2273U;
 		}
 		decoded.decode_class = ORLIX_TCTI_DECODE_BARRIER;
 		return decoded;
@@ -921,6 +1058,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 	if ((instruction & AARCH64_BARRIER_MASK) == AARCH64_CLREX_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR;
+		decoded.source_ordinal = 2271U;
 		decoded.barrier_option = (instruction >> 8) & 0xfU;
 		return decoded;
 	}
@@ -4997,57 +5135,46 @@ fp_int_gpr_unclaimed:
 	    (instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN) {
 		u16 sysreg = (instruction >> 5) & 0xffffU;
 
-		if (sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
-		    sysreg != AARCH64_SYSREG_NZCV &&
-		    sysreg != AARCH64_SYSREG_FPCR &&
-		    sysreg != AARCH64_SYSREG_FPSR &&
-		    sysreg != AARCH64_SYSREG_TPIDRRO_EL0 &&
-		    sysreg != AARCH64_SYSREG_CTR_EL0 &&
-		    sysreg != AARCH64_SYSREG_DCZID_EL0 &&
-		    sysreg != AARCH64_SYSREG_CNTFRQ_EL0 &&
-		    sysreg != AARCH64_SYSREG_CNTVCT_EL0)
+		if (!orlix_tcti_system_accessor_decode(sysreg,
+			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN,
+			&decoded))
 			return decoded;
-		decoded.system_register_write =
-			(instruction & AARCH64_SYSTEM_REGISTER_MASK) ==
-			AARCH64_MSR_PATTERN;
-		if (decoded.system_register_write &&
-		    sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
-		    sysreg != AARCH64_SYSREG_NZCV &&
-		    sysreg != AARCH64_SYSREG_FPCR &&
-		    sysreg != AARCH64_SYSREG_FPSR)
-			return decoded;
-
-		decoded.decode_class = ORLIX_TCTI_DECODE_SYSTEM_REGISTER;
 		decoded.rt = instruction & 0x1fU;
-		switch (sysreg) {
-		case AARCH64_SYSREG_TPIDR_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0;
-			break;
-		case AARCH64_SYSREG_NZCV:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_NZCV;
-			break;
-		case AARCH64_SYSREG_FPCR:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_FPCR;
-			break;
-		case AARCH64_SYSREG_FPSR:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_FPSR;
-			break;
-		case AARCH64_SYSREG_TPIDRRO_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0;
-			break;
-		case AARCH64_SYSREG_CTR_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0;
-			break;
-		case AARCH64_SYSREG_DCZID_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0;
-			break;
-		case AARCH64_SYSREG_CNTFRQ_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0;
-			break;
-		case AARCH64_SYSREG_CNTVCT_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0;
-			break;
-		}
+		decoded.source_ordinal = decoded.system_register_write ? 2283U : 2284U;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SYSTEM_PSTATE_IMMEDIATE_MASK) ==
+	    AARCH64_SYSTEM_PSTATE_IMMEDIATE_PATTERN) {
+		/*
+		 * The generated accessor ledger has no implemented MSR-immediate
+		 * selector. Preserve its partition fields for a typed no-mutation
+		 * rejection rather than letting this legal encoding become generic
+		 * unsupported decode.
+		 */
+		decoded.decode_class = ORLIX_TCTI_DECODE_SYSTEM_PSTATE_IMMEDIATE;
+		decoded.source_ordinal = 2277U;
+		decoded.system_pstate_op1 = (instruction >> 16) & 0x7U;
+		decoded.system_pstate_op2 = (instruction >> 8) & 0xfU;
+		decoded.system_pstate_imm = (instruction >> 5) & 0x7U;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) == AARCH64_SYS_PATTERN ||
+	    (instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) == AARCH64_SYSL_PATTERN) {
+		/*
+		 * SYS and SYSL selectors are source-derived wildcard spaces.  Decode
+		 * the architecturally legal form here; the generated accessor
+		 * partition owns selector-specific execution or rejection.
+		 */
+		decoded.decode_class = ORLIX_TCTI_DECODE_SYSTEM_INSTRUCTION;
+		decoded.system_instruction_read =
+			(instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) ==
+			AARCH64_SYSL_PATTERN;
+		decoded.source_ordinal = decoded.system_instruction_read ? 2282U : 2281U;
+		decoded.system_instruction_selector =
+			(instruction & AARCH64_SYSTEM_INSTRUCTION_SELECTOR_MASK) >> 5;
+		decoded.rt = instruction & 0x1fU;
 		return decoded;
 	}
 

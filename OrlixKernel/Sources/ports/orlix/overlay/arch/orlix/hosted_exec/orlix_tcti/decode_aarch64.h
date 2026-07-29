@@ -12,6 +12,8 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_BRK,
 	ORLIX_TCTI_DECODE_HLT,
 	ORLIX_TCTI_DECODE_HINT,
+	ORLIX_TCTI_DECODE_EVENT,
+	ORLIX_TCTI_DECODE_SPECULATION_BARRIER,
 	ORLIX_TCTI_DECODE_BARRIER,
 	ORLIX_TCTI_DECODE_CACHE_MAINTENANCE,
 	ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE,
@@ -42,6 +44,11 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_MULTIPLY_ADD_SUB,
 	ORLIX_TCTI_DECODE_MOVE_WIDE_IMMEDIATE,
 	ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
+	ORLIX_TCTI_DECODE_SYSTEM_INSTRUCTION,
+	ORLIX_TCTI_DECODE_SYSTEM_PSTATE_IMMEDIATE,
+	ORLIX_TCTI_DECODE_FEATURE_UNAVAILABLE,
+	ORLIX_TCTI_DECODE_FEATURE_HINT,
+	ORLIX_TCTI_DECODE_PSTATE_FLAG,
 	ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE,
 	ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY,
 	ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
@@ -157,16 +164,9 @@ enum orlix_tcti_compare_branch_condition {
 	ORLIX_TCTI_COMPARE_BRANCH_LO,
 };
 
-enum orlix_tcti_system_register {
-	ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0 = 0,
-	ORLIX_TCTI_SYSTEM_REGISTER_NZCV,
-	ORLIX_TCTI_SYSTEM_REGISTER_FPCR,
-	ORLIX_TCTI_SYSTEM_REGISTER_FPSR,
-	ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0,
+struct orlix_tcti_system_accessor_semantic_key {
+	u64 condition_identity;
+	u64 access_identity;
 };
 
 enum orlix_tcti_sme_pstate_operation {
@@ -178,6 +178,40 @@ enum orlix_tcti_barrier_op {
 	ORLIX_TCTI_BARRIER_DSB = 0,
 	ORLIX_TCTI_BARRIER_DMB,
 	ORLIX_TCTI_BARRIER_ISB,
+};
+
+enum orlix_tcti_event_op {
+	ORLIX_TCTI_EVENT_NOP,
+	ORLIX_TCTI_EVENT_YIELD,
+	ORLIX_TCTI_EVENT_WFET,
+	ORLIX_TCTI_EVENT_WFIT,
+	ORLIX_TCTI_EVENT_WFE,
+	ORLIX_TCTI_EVENT_WFI,
+	ORLIX_TCTI_EVENT_SEV,
+	ORLIX_TCTI_EVENT_SEVL,
+};
+
+/* Named EL0 feature-hint semantics, never a generic HINT fallback. */
+enum orlix_tcti_feature_hint_op {
+	ORLIX_TCTI_FEATURE_HINT_DGH,
+	ORLIX_TCTI_FEATURE_HINT_ESB,
+	ORLIX_TCTI_FEATURE_HINT_PSB,
+	ORLIX_TCTI_FEATURE_HINT_TSB,
+	ORLIX_TCTI_FEATURE_HINT_GCSB,
+	ORLIX_TCTI_FEATURE_HINT_CLRBHB,
+	ORLIX_TCTI_FEATURE_HINT_BTI,
+	ORLIX_TCTI_FEATURE_HINT_CHKFEAT,
+	ORLIX_TCTI_FEATURE_HINT_STSHH,
+	ORLIX_TCTI_FEATURE_HINT_SHUH,
+	ORLIX_TCTI_FEATURE_HINT_STCPH,
+	ORLIX_TCTI_FEATURE_HINT_HINTE,
+	ORLIX_TCTI_FEATURE_HINT_SB,
+};
+
+enum orlix_tcti_pstate_flag_op {
+	ORLIX_TCTI_PSTATE_FLAG_CFINV,
+	ORLIX_TCTI_PSTATE_FLAG_XAFLAG,
+	ORLIX_TCTI_PSTATE_FLAG_AXFLAG,
 };
 
 enum orlix_tcti_cache_maintenance_op {
@@ -541,6 +575,19 @@ struct orlix_tcti_decoded_instruction {
 	u8 ra;
 	u8 rt;
 	u8 rt2;
+	u16 system_accessor_selector;
+	u32 system_accessor_id;
+	u32 system_accessor_condition;
+	u32 system_accessor_access;
+	u8 system_accessor_disposition;
+	u8 system_accessor_implementation;
+	u64 system_accessor_selector_identity;
+	u64 system_accessor_condition_identity;
+	u64 system_accessor_access_identity;
+	/* Source-derived canonical identity for aliases sharing one encoding. */
+	struct orlix_tcti_system_accessor_semantic_key system_accessor_semantic_key;
+	const char *system_accessor_decoder_owner;
+	const char *system_accessor_execution_owner;
 	u16 imm12;
 	u16 imm16;
 	u8 min_max_immediate;
@@ -589,11 +636,20 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_simd_vector_compare_op simd_compare_op;
 	enum orlix_tcti_move_wide_op move_wide_op;
 	enum orlix_tcti_branch_register_op branch_register_op;
-	enum orlix_tcti_system_register system_register;
+	u16 source_ordinal;
+	u16 system_instruction_selector;
+	u8 system_pstate_op1;
+	u8 system_pstate_op2;
+	u8 system_pstate_imm;
+	bool system_instruction_read;
 	enum orlix_tcti_sme_pstate_operation sme_pstate_operation;
 	enum orlix_tcti_sve_integer_binary_op sve_integer_binary_op;
 	enum orlix_tcti_sve_predication sve_predication;
 	enum orlix_tcti_barrier_op barrier_op;
+	enum orlix_tcti_event_op event_op;
+	bool event_timeout;
+	enum orlix_tcti_feature_hint_op feature_hint_op;
+	enum orlix_tcti_pstate_flag_op pstate_flag_op;
 	enum orlix_tcti_cache_maintenance_op cache_maintenance_op;
 	enum orlix_tcti_conditional_select_op conditional_select_op;
 	enum orlix_tcti_bitfield_op bitfield_op;

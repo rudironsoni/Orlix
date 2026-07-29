@@ -5,12 +5,15 @@ CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
 obj-y += engine.o
 obj-y += report.o
 obj-y += switch_debug.o
+obj-y += system_accessor.o
 obj-y += fixed_fp.o
 obj-y += sve_state.o
 obj-y += sve_decode.o
 obj-y += decode_aarch64.o
 obj-y += tls_repair.o
 obj-y += gadget_program.o
+obj-y += barrier_gadgets.o
+obj-y += base_system_139_gadgets.o
 obj-y += block_cache.o
 obj-y += tlb.o
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += tests/

@@ -44,6 +44,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_pair_load_store_source_bound_test.o \
 	orlix_tcti_load_literal_resume_regression_test.o \
 	orlix_tcti_branch_control_source_bound_test.o \
+	orlix_tcti_base_system_139_source_bound_test.o \
 	orlix_tcti_source_leaf_classification_test.o \
 	orlix_tcti_scalar_fp_semantics_test.o \
 	orlix_tcti_baseline_decoder_regression_test.o \

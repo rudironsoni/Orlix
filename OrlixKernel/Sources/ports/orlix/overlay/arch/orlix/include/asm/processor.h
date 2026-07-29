@@ -76,6 +76,8 @@ struct thread_struct {
 	u64 user_exclusive_mapping_generation;
 	unsigned char user_exclusive_size;
 	unsigned char user_exclusive_valid;
+	u64 user_event_seen_generation;
+	bool orlix_tcti_private_features_enabled;
 };
 
 #define INIT_THREAD			\

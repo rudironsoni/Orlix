@@ -582,6 +582,13 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define BRANCH_CONTROL_CASE_ARRAY "bcs_cases"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
+#define BASE_SYSTEM_139_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_139_source_bound_test.c"
+#define BASE_SYSTEM_139_SUITE "orlix-tcti-base-system-139-source-bound"
+#define BASE_SYSTEM_139_SUITE_SYMBOL \
+	"orlix_tcti_base_system_139_source_bound_suite"
+#define BASE_SYSTEM_139_CASE_ARRAY \
+	"orlix_tcti_base_system_139_source_bound_cases"
 #define DECODE_SUITE "orlix-tcti-decode"
 #define DECODE_SUITE_SYMBOL "orlix_tcti_decode_test_suite"
 #define DECODE_CASE_ARRAY "orlix_tcti_decode_test_cases"
@@ -630,7 +637,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"10e58fbe7aa8ac5e9bed7df97fcb6378d4ee505a04cde84fa5cf35f8a748bd39"
+	"a0b58ff1e3787c54194b6b5563c155c3abb3baca43feb59c6d4eefebe521fdf2"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -704,7 +711,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "204da86599452c221e3f5c08ba35ac8f84b8e534e67bb5cc81d97db3c467ec8a",
+	  "f028ec7fc38c8bf932aa5bba0def782aca836b2730cac7dfb36c11684641259e",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
@@ -713,8 +720,11 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "921dd3aab709c395710d1def823fae09394233a2360d51463c87fc7cdd7ea659",
 	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
 	{ DECODE_SOURCE,
-	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
+	  "6ebc5e0b1fc25c0af24f5011963aefe1d6079aa4517c52444e100a71ed99706a",
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
+	{ BASE_SYSTEM_139_SOURCE,
+	  "610e0ecb5c5e638cde9995ee5bda2bd8ea62c4bae9b378c82e9cb429476a7688",
+	  "orlix_tcti_base_system_139_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
 	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
@@ -738,6 +748,35 @@ static const struct kunit_source_provenance kunit_sources[] = {
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_feature_hints_have_named_feature_on_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_feature_hints_are_rejected_when_unadvertised",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_events_use_typed_resume_exits",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_selector_rejections_preserve_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
