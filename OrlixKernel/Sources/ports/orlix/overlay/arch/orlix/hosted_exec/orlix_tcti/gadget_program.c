@@ -5,6 +5,7 @@
 
 #include "block_cache.h"
 #include "crc32.h"
+#include "branch_control.h"
 #include "decode_aarch64.h"
 #include "gadget_program.h"
 #include "native_capture.h"
@@ -52,7 +53,11 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
 
 	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
-	ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded, fault_address);
+	if (orlix_tcti_branch_control_decoded(&decoded))
+		ret = orlix_tcti_execute_branch_control_semantics(regs, &decoded);
+	else
+		ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded,
+						      fault_address);
 	if (ret)
 		orlix_tcti_native_capture_fault(capture, &decoded, *fault_address, ret);
 	else {

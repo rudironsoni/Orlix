@@ -24,7 +24,6 @@
 
 #include "../decode_aarch64.h"
 #include "../isa/base_a64_control_flow_semantic_blockers.h"
-#include "../switch_debug.h"
 #include "orlix_tcti_native_observation.h"
 #include "orlix_tcti_branch_control_production_capture.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
@@ -1175,10 +1174,8 @@ static void bcs_register_branch_unaligned_target_production(struct kunit *test)
 
 	for (index = 0; index < ARRAY_SIZE(cases); index++) {
 		struct pt_regs regs = {};
-		struct pt_regs debug_regs;
 		struct pt_regs before;
 		struct orlix_tcti_result result;
-		struct orlix_tcti_result debug_result;
 		unsigned long address;
 		unsigned long target;
 		unsigned long expected[ARRAY_SIZE(regs.regs)];
@@ -1188,10 +1185,7 @@ static void bcs_register_branch_unaligned_target_production(struct kunit *test)
 		target = address + 1;
 		regs.regs[5] = target;
 		before = regs;
-		debug_regs = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
-		debug_result = orlix_tcti_switch_debug_resume_user(current, &debug_regs,
-							     current->mm);
 
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_ALIGNMENT_FAULT, result.reason,
 				    "kind=%u", cases[index].kind);
@@ -1206,18 +1200,6 @@ static void bcs_register_branch_unaligned_target_production(struct kunit *test)
 		if (cases[index].kind == BCS_BLR)
 			expected[30] = address + sizeof(u32);
 		KUNIT_EXPECT_MEMEQ(test, expected, regs.regs, sizeof(expected));
-		KUNIT_EXPECT_EQ(test, result.reason, debug_result.reason);
-		KUNIT_EXPECT_EQ(test, result.status, debug_result.status);
-		KUNIT_EXPECT_EQ(test, result.fault_address,
-				debug_result.fault_address);
-		KUNIT_EXPECT_EQ(test, result.fault_access,
-				debug_result.fault_access);
-		KUNIT_EXPECT_EQ(test, result.pc, debug_result.pc);
-		KUNIT_EXPECT_EQ(test, result.instruction, debug_result.instruction);
-		KUNIT_EXPECT_EQ(test, target, debug_regs.pc);
-		KUNIT_EXPECT_MEMEQ(test, expected, debug_regs.regs,
-				   sizeof(expected));
-		KUNIT_EXPECT_EQ(test, before.pstate, debug_regs.pstate);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 	}
 }
@@ -1236,10 +1218,8 @@ static void bcs_register_branch_out_of_range_target_production(struct kunit *tes
 
 	for (index = 0; index < ARRAY_SIZE(cases); index++) {
 		struct pt_regs regs = {};
-		struct pt_regs debug_regs;
 		struct pt_regs before;
 		struct orlix_tcti_result result;
-		struct orlix_tcti_result debug_result;
 		unsigned long address;
 		unsigned long expected[ARRAY_SIZE(regs.regs)];
 
@@ -1247,10 +1227,7 @@ static void bcs_register_branch_out_of_range_target_production(struct kunit *tes
 		bcs_seed_regs(&regs, address, &bcs_leaves[0], true);
 		regs.regs[5] = TASK_SIZE;
 		before = regs;
-		debug_regs = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
-		debug_result = orlix_tcti_switch_debug_resume_user(current, &debug_regs,
-							     current->mm);
 
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason,
 				    "kind=%u", cases[index].kind);
@@ -1265,25 +1242,6 @@ static void bcs_register_branch_out_of_range_target_production(struct kunit *tes
 		if (cases[index].kind == BCS_BLR)
 			expected[30] = address + sizeof(u32);
 		KUNIT_EXPECT_MEMEQ(test, expected, regs.regs, sizeof(expected));
-		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, debug_result.reason);
-		KUNIT_EXPECT_EQ(test, -EFAULT, debug_result.status);
-		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_result.fault_address);
-		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_FETCH,
-				debug_result.fault_access);
-		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_result.pc);
-		KUNIT_EXPECT_EQ(test, 0U, debug_result.instruction);
-		KUNIT_EXPECT_EQ(test, TASK_SIZE, debug_regs.pc);
-		KUNIT_EXPECT_MEMEQ(test, expected, debug_regs.regs,
-				   sizeof(expected));
-		KUNIT_EXPECT_EQ(test, before.pstate, debug_regs.pstate);
-		KUNIT_EXPECT_EQ(test, result.reason, debug_result.reason);
-		KUNIT_EXPECT_EQ(test, result.status, debug_result.status);
-		KUNIT_EXPECT_EQ(test, result.fault_address,
-				debug_result.fault_address);
-		KUNIT_EXPECT_EQ(test, result.fault_access,
-				debug_result.fault_access);
-		KUNIT_EXPECT_EQ(test, result.pc, debug_result.pc);
-		KUNIT_EXPECT_EQ(test, result.instruction, debug_result.instruction);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 	}
 }

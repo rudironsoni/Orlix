@@ -595,7 +595,7 @@ proof_registry_projection[] = {
 	"orlix_tcti_branch_control_source_bound_test_suite"
 #define BRANCH_CONTROL_CASE_ARRAY "bcs_cases"
 #define BRANCH_CONTROL_SOURCE_SHA256 \
-	"923d1316d1e97c177a4ee46bd1215f731e8b9fff2a1ee6a108bdd6de009c6b3f"
+	"7fce838756c93a9ae89bcc256bd76e0b732d09a2aa4e83b6623f3b440423a616"
 static const struct orlix_tcti_target_production_capture_binding
 production_capture_bindings[] = {
 #define ORLIX_TCTI_PRODUCTION_CAPTURE(source, suite, case_name, ordinal, \

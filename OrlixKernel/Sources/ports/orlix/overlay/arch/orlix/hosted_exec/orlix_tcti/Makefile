@@ -5,6 +5,7 @@ CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
 obj-y += engine.o
 obj-y += native_capture.o
 obj-y += report.o
+obj-y += branch_control.o
 obj-y += switch_debug.o
 obj-y += system_accessor.o
 obj-y += fpmr_state.o
