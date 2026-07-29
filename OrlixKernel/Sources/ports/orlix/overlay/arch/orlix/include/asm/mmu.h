@@ -6,8 +6,6 @@
 #include <linux/atomic.h>
 #include <linux/rwlock.h>
 
-struct orlix_tcti_mte_state;
-
 typedef struct {
 	unsigned long end_brk;
 #ifdef CONFIG_BINFMT_ELF_FDPIC
@@ -17,7 +15,6 @@ typedef struct {
 	unsigned long orlix_tcti_static_pie_base;
 	atomic64_t orlix_tcti_mapping_sequence;
 	rwlock_t orlix_tcti_mapping_lock;
-	struct orlix_tcti_mte_state *orlix_tcti_mte;
 } mm_context_t;
 #endif
 

@@ -284,12 +284,16 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS)
-#define MTE_OBLIGATIONS \
+#define MTE_KUNIT_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define MTE_OBLIGATIONS \
+	(MTE_KUNIT_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE)
 #define NON_EL0_REJECTION_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
@@ -682,7 +686,7 @@ production_capture_bindings[] = {
 #define KSELFTEST_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile"
 #define KSELFTEST_BUILD_SOURCE_SHA256 \
-	"fc07605b3988ee31d01a2c01ff8d1324266d3b7ece8a3c44055eccf7c0c5ce72"
+	"43ac6fd843b9e55a041e65a8077f676cb248e42df46babb6ad166a18191ec58e"
 #define KSELFTEST_PROCESS_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/process_lifecycle_probe.c"
 #define KSELFTEST_PROCESS_SOURCE_SHA256 \
@@ -723,6 +727,20 @@ static const struct orlix_tcti_target_kselftest_provenance
 		KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
 		"orlix_tcti_exception_interface_probe", "main",
 	};
+#define KSELFTEST_MTE_SOURCE \
+	"linux-v6.12@adc218676eef25575469234709c2d87185ca223a:tools/testing/selftests/arm64/mte/check_tags_inclusion.c"
+#define KSELFTEST_MTE_SOURCE_SHA256 \
+	"2cacbe4e1fcec75525e3c53e342da8be6a46bada6aa0b42920572fe4dec0a7c1"
+#define KSELFTEST_MTE_BUILD_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"
+#define KSELFTEST_MTE_BUILD_SOURCE_SHA256 \
+	"89d93165f184790f9211fb574542a90970d22710ded4586e40c3f939ca480737"
+
+static const struct orlix_tcti_target_kselftest_provenance mte_kselftest = {
+	KSELFTEST_MTE_SOURCE, KSELFTEST_MTE_SOURCE_SHA256,
+	KSELFTEST_MTE_BUILD_SOURCE, KSELFTEST_MTE_BUILD_SOURCE_SHA256,
+	"check_tags_inclusion", "main"
+};
 
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
@@ -742,7 +760,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "0b6ca93fe5268d8f2f67e9559d6472ad5f9fe45e56c3e23316937d0f5bf72466",
 	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
 	{ MTE_SOURCE,
-	  "d907ddb7935fb5a3c689297c0ffa6f9cfe35d33b85e9e792cdbac310cefb2b53",
+	  "bf81e0338e0c9249a84fb8aaf0829d407280580c772cf64f335c25456e475693",
 	  "orlix_tcti_memory_tagging_source_bound_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
@@ -955,7 +973,55 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
-	  "mte_production_resume_all_el0_leaves", MTE_OBLIGATIONS },
+	  "mte_tagged_user_addresses_use_linux_untagged_lookup",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_ordinary_accesses_produce_sync_fault_signal_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_prctl_tcf_dispositions_are_source_classified",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_st2g_pair_contention_has_no_torn_pair",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_stz2g_pair_contention_orders_zero_before_tags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_allocator_and_first_exposure_start_with_zero_tags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_madvise_discard_and_refault_clear_page_tags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_copy_highpage_copies_tags_then_keeps_pages_independent",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_shared_mapping_aliases_observe_one_page_tag_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_mapping_teardown_does_not_reuse_stale_pfn_tags",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_exclusive_and_lse_atomic_check_before_access",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_tag_lifetime_and_allocator_hooks_are_atomic_safe",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
+	  "mte_production_resume_all_el0_leaves", MTE_KUNIT_OBLIGATIONS },
 	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
 	  "mte_production_resume_register_memory_and_faults",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -2013,13 +2079,49 @@ static const struct orlix_tcti_target_proof_case mte_cases[] = {
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ "mte_production_resume_all_el0_leaves", MTE_OBLIGATIONS },
+	{ "mte_tagged_user_addresses_use_linux_untagged_lookup",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "mte_ordinary_accesses_produce_sync_fault_signal_state",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mte_prctl_tcf_dispositions_are_source_classified",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "mte_st2g_pair_contention_has_no_torn_pair",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ "mte_stz2g_pair_contention_orders_zero_before_tags",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "mte_production_resume_all_el0_leaves", MTE_KUNIT_OBLIGATIONS },
 	{ "mte_production_resume_register_memory_and_faults",
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "mte_allocator_and_first_exposure_start_with_zero_tags",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "mte_madvise_discard_and_refault_clear_page_tags",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "mte_copy_highpage_copies_tags_then_keeps_pages_independent",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "mte_shared_mapping_aliases_observe_one_page_tag_state",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "mte_mapping_teardown_does_not_reuse_stale_pfn_tags",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "mte_exclusive_and_lse_atomic_check_before_access",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ "mte_tag_lifetime_and_allocator_hooks_are_atomic_safe",
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 };
 
 static const struct orlix_tcti_target_proof_case mte_non_el0_cases[] = {
@@ -2443,10 +2545,12 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  bindings, ARRAY_COUNT(bindings), NULL, CSSC_OBLIGATIONS }
 
 #define MTE_ENTRY(proof_id, operation, proof_class, obligations, cases, bindings, count) \
-	{ proof_id, operation, proof_class, obligations, \
-	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	{ proof_id, operation, proof_class, \
+	  (obligations) | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED, \
 	  MTE_SOURCE, MTE_SUITE, cases, ARRAY_COUNT(cases), \
-	  bindings, count, NULL, obligations }
+	  bindings, count, &mte_kselftest, \
+	  (obligations) | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE }
 
 #define CSSC_DATA_ENTRY(proof_id, operation, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
@@ -5066,6 +5170,9 @@ int orlix_tcti_target_kselftest_provenance_validate(
 		  KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
 		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
 		  "orlix_tcti_exception_interface_probe", "main" },
+		{ KSELFTEST_MTE_SOURCE, KSELFTEST_MTE_SOURCE_SHA256,
+		  KSELFTEST_MTE_BUILD_SOURCE, KSELFTEST_MTE_BUILD_SOURCE_SHA256,
+		  "check_tags_inclusion", "main" },
 	};
 #ifndef __KERNEL__
 	static bool checked[ARRAY_COUNT(allowed)];
@@ -5084,15 +5191,16 @@ int orlix_tcti_target_kselftest_provenance_validate(
 	    empty(provenance->source_sha256) ||
 	    empty(provenance->build_source) ||
 	    empty(provenance->build_source_sha256) ||
-	    empty(provenance->program) || empty(provenance->case_name) ||
-	    strcmp(provenance->build_source, KSELFTEST_BUILD_SOURCE) ||
-	    strcmp(provenance->build_source_sha256,
-		   KSELFTEST_BUILD_SOURCE_SHA256))
+	    empty(provenance->program) || empty(provenance->case_name))
 		return -1;
 	for (index = 0; index < ARRAY_COUNT(allowed); index++)
 		if (!strcmp(provenance->source, allowed[index].source) &&
 		    !strcmp(provenance->source_sha256,
 			    allowed[index].source_sha256) &&
+		    !strcmp(provenance->build_source,
+			    allowed[index].build_source) &&
+		    !strcmp(provenance->build_source_sha256,
+			    allowed[index].build_source_sha256) &&
 		    !strcmp(provenance->program, allowed[index].program) &&
 		    !strcmp(provenance->case_name, allowed[index].case_name))
 			break;
@@ -5106,6 +5214,15 @@ int orlix_tcti_target_kselftest_provenance_validate(
 	build_source = read_source(provenance->build_source, &build_length);
 	if (!build_source)
 		return -1;
+	if (!strcmp(provenance->source, KSELFTEST_MTE_SOURCE)) {
+		valid = !memchr(build_source, '\0', build_length) &&
+			sha256_matches((const orlix_tcti_proof_u8 *)build_source,
+				       build_length, provenance->build_source_sha256);
+		free(build_source);
+		checked[index] = true;
+		cached_valid[index] = valid;
+		return valid ? 0 : -1;
+	}
 	source = read_source(provenance->source, &source_length);
 	if (!source) {
 		free(build_source);
@@ -5506,6 +5623,14 @@ static const struct orlix_tcti_target_kselftest_provenance atomic_kselftests[] =
 			     "orlix_tcti_lse_atomic_probe"),
 };
 
+static const struct orlix_tcti_target_kselftest_provenance mte_kselftests[] = {
+	{
+		KSELFTEST_MTE_SOURCE, KSELFTEST_MTE_SOURCE_SHA256,
+		KSELFTEST_MTE_BUILD_SOURCE, KSELFTEST_MTE_BUILD_SOURCE_SHA256,
+		"check_tags_inclusion", "main"
+	},
+};
+
 static const struct orlix_tcti_target_kselftest_provenance system_kselftests[] = {
 	KSELFTEST_PROVENANCE(KSELFTEST_SYSTEM_SOURCE,
 			     KSELFTEST_SYSTEM_SOURCE_SHA256,
@@ -5657,6 +5782,20 @@ static bool source_is_memory_operation(
 		 source_text_starts_with(source->mnemonic, "ST"));
 }
 
+static bool source_is_mte_operation(const struct source_manifest_binding *source)
+{
+	static const char *const mnemonics[] = {
+		"ADDG", "SUBG", "STG", "STZGM", "LDG", "STZG", "ST2G",
+		"STGM", "STZ2G", "LDGM", "IRG", "GMI",
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(mnemonics); index++)
+		if (!strcmp(source->mnemonic, mnemonics[index]))
+			return true;
+	return false;
+}
+
 static bool source_is_system_access_operation(
 	const struct source_manifest_binding *source)
 {
@@ -5736,6 +5875,18 @@ static struct linux_proof_policy source_linux_policy(
 	const struct source_manifest_binding *source)
 {
 	struct linux_proof_policy policy = { 0 };
+
+	/* MTE has a pinned pristine arm64 kselftest obligation for every leaf. */
+	if (source_is_mte_operation(source))
+		return (struct linux_proof_policy) {
+			.disposition = ORLIX_TCTI_TARGET_LINUX_PROOF_KSELFTEST_OWNED,
+			.reason = ORLIX_TCTI_TARGET_LINUX_NA_NONE,
+			.owner_mask = ORLIX_TCTI_TARGET_LINUX_OWNER_SIGNAL_FAULT |
+				ORLIX_TCTI_TARGET_LINUX_OWNER_MEMORY_VFS |
+				ORLIX_TCTI_TARGET_LINUX_OWNER_ATOMIC_ORDERING,
+			.kselftests = mte_kselftests,
+			.kselftest_count = ARRAY_COUNT(mte_kselftests),
+		};
 
 	switch (source_linux_policy_class(source)) {
 	case SOURCE_LINUX_POLICY_SYSCALL:

@@ -9,8 +9,10 @@
 #include <linux/mm.h>
 #include <linux/panic.h>
 #include <linux/pid.h>
+#include <linux/prctl.h>
 #include <linux/stddef.h>
 #include <asm/hosted_exec.h>
+#include <asm/mte.h>
 #include <asm/processor.h>
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
@@ -26,6 +28,44 @@ asmlinkage void orlix_ret_from_fork_user(struct pt_regs *regs);
 extern struct task_struct *orlix_cpu_switch_context(struct orlix_cpu_context *prev,
 						    struct orlix_cpu_context *next,
 						    struct task_struct *last);
+
+long set_tagged_addr_ctrl(struct task_struct *task, unsigned long arg)
+{
+	unsigned long valid = PR_TAGGED_ADDR_ENABLE | ORLIX_MTE_SUPPORTED_TCF |
+		PR_MTE_TAG_MASK;
+
+	/*
+	 * arm64 v6.12 arch/arm64/kernel/mte.c requires a return-to-user consumer
+	 * for async TCF.  Orlix has no such consumer, so reject it rather than
+	 * advertising a signal contract it cannot deliver.  v6.12's
+	 * PR_MTE_TCF_MASK contains only sync and async, so there is no asymmetric
+	 * UAPI mode to accept or advertise in this source baseline.
+	 */
+	if (!task || arg & ~valid ||
+	    orlix_mte_prctl_tcf_disposition(arg) !=
+		ORLIX_MTE_PRCTL_TCF_SYNC_SUPPORTED)
+		return -EINVAL;
+	task->thread.user_mte_ctrl = arg &
+		(PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_SYNC);
+	task->thread.user_mte_exclude_mask =
+		~((arg & PR_MTE_TAG_MASK) >> PR_MTE_TAG_SHIFT);
+	return 0;
+}
+
+long get_tagged_addr_ctrl(struct task_struct *task)
+{
+	if (!task)
+		return -EINVAL;
+	return task->thread.user_mte_ctrl |
+		((unsigned long)(~task->thread.user_mte_exclude_mask & 0xffff)
+		 << PR_MTE_TAG_SHIFT);
+}
+
+static void orlix_mte_reset_task_state(struct task_struct *task)
+{
+	task->thread.user_mte_ctrl = 0;
+	task->thread.user_mte_exclude_mask = 0xffff;
+}
 
 asm(
 ".p2align 2\n"
@@ -110,6 +150,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_mte_reset_task_state(current);
 #endif
 }
 
@@ -137,6 +178,7 @@ void flush_thread(void)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_mte_reset_task_state(current);
 #endif
 }
 
@@ -168,6 +210,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_exclusive_mapping_generation = 0;
 	p->thread.user_exclusive_size = 0;
 	p->thread.user_exclusive_valid = 0;
+	p->thread.user_mte_ctrl = current->thread.user_mte_ctrl;
+	p->thread.user_mte_exclude_mask = current->thread.user_mte_exclude_mask;
 #endif
 
 	if (!args->fn) {

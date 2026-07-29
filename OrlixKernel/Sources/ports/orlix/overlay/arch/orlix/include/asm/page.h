@@ -17,13 +17,26 @@
 #include <linux/compiler.h>
 #include <linux/pfn.h>
 #include <linux/types.h>
+#include <linux/string.h>
 
 struct page;
+struct vm_area_struct;
+
+#define HAVE_ARCH_ALLOC_PAGE
+#define HAVE_ARCH_FREE_PAGE
+#define __HAVE_ARCH_COPY_HIGHPAGE
+#define __HAVE_ARCH_COPY_USER_HIGHPAGE
+void arch_alloc_page(struct page *page, int order);
+void arch_free_page(struct page *page, int order);
 
 extern phys_addr_t orlix_phys_ram_base;
 #define ARCH_PFN_OFFSET		PFN_DOWN(orlix_phys_ram_base)
 
 #define clear_page(page)		memset((page), 0, PAGE_SIZE)
+void copy_highpage(struct page *to, struct page *from);
+void copy_user_highpage(struct page *to, struct page *from,
+			unsigned long vaddr, struct vm_area_struct *vma);
+
 #define copy_page(to, from)	memcpy((to), (from), PAGE_SIZE)
 
 #define clear_user_page(page, vaddr, pg)	clear_page(page)

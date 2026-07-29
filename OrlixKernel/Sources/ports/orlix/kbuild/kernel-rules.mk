@@ -129,7 +129,6 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/switch_debug.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/system_accessor.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fpmr_state.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/memory_tagging.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fixed_fp.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sme_state.c \
@@ -156,6 +155,8 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/mm/iomem.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/init.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/mmap.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/mte.c \
+	arch/$(ORLIX_PORT_ARCH)/mm/copypage.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_user_page.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_invalidate.c \
 	arch/$(ORLIX_PORT_ARCH)/mm/uaccess.c \
@@ -1239,6 +1240,7 @@ KSELFTEST_SYSROOT := $(ORLIX_MLIBC_SYSROOT)
 KSELFTEST_INSTALL_DIR := $(ORLIX_MLIBC_KSELFTEST_INSTALL_DIR)
 KSELFTEST_INITRAMFS_DIR := $(ORLIX_MLIBC_TEST_INITRAMFS_DIR)
 KSELFTEST_HEADER_FLAGS := -isystem $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include
+KSELFTEST_RTLIB := $(ORLIX_BUILD_ROOT)/OrlixMLibC/compiler-rt/$(PROFILE)/liborlix_compiler_rt.a
 KSELFTEST_PROOF_LABEL := orlixmlibc-kselftest-syscall-uapi
 KSELFTEST_PREREQS := __orlixmlibc-sysroot
 else
@@ -1246,6 +1248,7 @@ KSELFTEST_SYSROOT :=
 KSELFTEST_INSTALL_DIR :=
 KSELFTEST_INITRAMFS_DIR :=
 KSELFTEST_HEADER_FLAGS :=
+KSELFTEST_RTLIB :=
 KSELFTEST_PROOF_LABEL :=
 KSELFTEST_PREREQS :=
 endif
@@ -2038,8 +2041,11 @@ __kunit: __prepare-kbuild
 	proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$$kunit_config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk)" || exit 1; \
 	$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
 	proof_kcflags="-DORLIX_APP_HOSTED_BOOT=1 -DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\\\"$$proof_archive_sha256\\\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\\\"$$proof_config_sha256\\\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\\\"$$proof_profile_sha256\\\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\\\"$$proof_source_revision\\\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\\\"$$proof_artifact_sha256\\\""; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS="$$proof_kcflags" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/vdso.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET); \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS="$$proof_kcflags" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/kernel/vdso.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET) arch/$(ORLIX_PORT_ARCH)/mm/mte.o arch/$(ORLIX_PORT_ARCH)/mm/copypage.o arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_user_page.o; \
 	[ -s "$(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" ] || { echo "missing OrlixTCTI KUnit archive: $(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" >&2; exit 1; }; \
+	for object in arch/$(ORLIX_PORT_ARCH)/mm/mte.o arch/$(ORLIX_PORT_ARCH)/mm/copypage.o arch/$(ORLIX_PORT_ARCH)/mm/orlix_tcti_user_page.o; do \
+		[ -s "$(ORLIX_KUNIT_BUILD_DIR)/$$object" ] || { echo "KUnit build omitted required Orlix object: $$object" >&2; exit 1; }; \
+	done; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
 
 __kunit-object-contract-tests:
@@ -2248,7 +2254,7 @@ __kernel-archive: __prepare-kbuild
 					"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
 			done; \
-			if ! object_dependencies_current "$$obj" "$$dep"; then object_set_ready=0; break; fi; \
+			if ! orlix_object_dependencies_current "$$obj" "$$dep"; then object_set_ready=0; break; fi; \
 			objects_probe+=("$$obj"); \
 		done; \
 		if [ "$$object_set_ready" -eq 1 ]; then \
@@ -2457,13 +2463,14 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 	header_flags="$(KSELFTEST_HEADER_FLAGS)"; \
 	case "$$sysroot" in /*) ;; *) sysroot="$(CURDIR)/$$sysroot" ;; esac; \
 	[ -d "$$sysroot" ] || { echo "missing OrlixMLibC sysroot: $$sysroot; run make -f OrlixMLibC/Makefile build PROFILE=$(PROFILE)" >&2; exit 1; }; \
+	[ -s "$(KSELFTEST_RTLIB)" ] || { echo "missing OrlixMLibC compiler runtime: $(KSELFTEST_RTLIB)" >&2; exit 1; }; \
 	hosted_user_base="$(ORLIX_HOSTED_USER_BASE_ADDRESS)"; \
 	boot_source="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/boot/boot.c"; \
 	host_mapping_source="OrlixHostAdapter/Sources/OrlixHostAdapter/memory/kernel_mapping.c"; \
 	grep -Eq "orlix_hosted_user_base[[:space:]]*=[[:space:]]*$$hosted_user_base(UL|U|L)*;" "$$boot_source" || { echo "Orlix kselftest link base $$hosted_user_base does not match orlix_hosted_user_base default in $$boot_source" >&2; exit 1; }; \
 	grep -Eq "ORLIX_HOST_HOSTED_USER_BASE_DEFAULT[[:space:]]+$$hosted_user_base(UL|U|L)*" "$$host_mapping_source" || { echo "Orlix kselftest link base $$hosted_user_base does not match HostAdapter hosted user base default in $$host_mapping_source" >&2; exit 1; }; \
 	orlix_crt_flags="$$sysroot/usr/lib/crt1.o $$sysroot/usr/lib/crti.o"; \
-	orlix_ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
+	orlix_ldlibs="-Wl,--start-group $$sysroot/usr/lib/libc.a $$sysroot/usr/lib/libssp_nonshared.a $$sysroot/usr/lib/libssp.a $(KSELFTEST_RTLIB) -Wl,--end-group $$sysroot/usr/lib/crtn.o"; \
 	linux_make="$(LINUX_MAKE)"; \
 	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
 	if [ -z "$$linux_make" ]; then echo "GNU Make >= 4.0 is required by Linux kselftest; install gmake or set LINUX_MAKE=/path/to/gmake" >&2; exit 1; fi; \
@@ -2483,6 +2490,24 @@ __kselftest-install: __prepare-kbuild $(KSELFTEST_PREREQS) __validate-profile
 		ORLIX_FIXED_EXEC_BASE_ADDRESS="$$hosted_user_base" \
 		LDLIBS="$$orlix_ldlibs" \
 		install; \
+	upstream_kselftest_src="$$kselftest_build_dir/upstream-v6.12-selftests"; \
+	mkdir -p "$$upstream_kselftest_src"; \
+	git --git-dir="$(LINUX_UPSTREAM_DIR)" archive adc218676eef25575469234709c2d87185ca223a tools/testing/selftests | \
+		tar -x -C "$$upstream_kselftest_src"; \
+	mkdir -p "$$kselftest_build_dir/arm64-mte"; \
+	"$$linux_make" -C "$$upstream_kselftest_src/tools/testing/selftests/arm64/mte" \
+		OUTPUT="$$kselftest_build_dir/arm64-mte" \
+		KSFT_INSTALL_PATH="$$install_dir" \
+		INSTALL_PATH="$$install_dir/arm64/mte" \
+		ARCH=arm64 LLVM=1 \
+		USERCFLAGS="--sysroot=$$sysroot $$header_flags -I$$upstream_kselftest_src/tools/testing/selftests -fPIE -DORLIX_HOSTED_USER_BASE_ADDRESS=$$hosted_user_base" \
+		USERLDFLAGS="--sysroot=$$sysroot -static-pie -fuse-ld=lld -nostdlib -Wl,--gc-sections -Wl,-z,max-page-size=0x4000 $$orlix_crt_flags" \
+		LDLIBS="$$orlix_ldlibs" \
+		install; \
+	[ -d "$$install_dir/arm64/mte" ] || { echo "missing pristine upstream arm64/mte kselftest payload" >&2; exit 1; }; \
+	find "$$install_dir/arm64/mte" -maxdepth 1 -type f -perm -0100 -print | \
+		while IFS= read -r test_binary; do printf 'arm64-mte:%s\\n' "$$(basename "$$test_binary")"; done \
+		>> "$$install_dir/kselftest-list.txt"; \
 	find "$$install_dir/orlix" -type f -perm -0100 \
 		-exec llvm-strip --strip-all {} +; \
 	printf 'proof_lane=%s\n' "$$proof_label" > "$$install_dir/proof_lane.txt"; \
@@ -2519,6 +2544,8 @@ __kselftest-initramfs:
 		printf '%s\n' 'dir /proc 555 0 0'; \
 		printf '%s\n' 'dir /sys 555 0 0'; \
 		printf '%s\n' 'dir /orlix 755 0 0'; \
+		printf '%s\n' 'dir /arm64 755 0 0'; \
+		printf '%s\n' 'dir /arm64/mte 755 0 0'; \
 		printf '%s\n' 'nod /dev/console 600 0 0 c 5 1'; \
 		printf 'file /init %s 755 0 0\n' "$$init_binary"; \
 		printf 'file /kselftest-list.txt %s 644 0 0\n' "$$kselftest_list"; \
@@ -2528,7 +2555,11 @@ __kselftest-initramfs:
 				[ -s "$$test_binary" ] || { echo "missing installed Orlix kselftest binary: $$test_binary" >&2; exit 1; }; \
 				printf 'file /orlix/%s %s 755 0 0\n' "$$test_name" "$$test_binary"; \
 			fi; \
-		done < "$$kselftest_list"; \
+			done < "$$kselftest_list"; \
+		for test_binary in "$$install_dir"/arm64/mte/*; do \
+			[ -f "$$test_binary" ] && [ -x "$$test_binary" ] || continue; \
+			printf 'file /arm64/mte/%s %s 755 0 0\n' "$$(basename "$$test_binary")" "$$test_binary"; \
+		done; \
 	} > "$$cpio_list"; \
 	"$$gen_init_cpio" "$$cpio_list" > "$$output/rootfs/initramfs.cpio"; \
 	gzip -n -f "$$output/rootfs/initramfs.cpio"; \

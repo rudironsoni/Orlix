@@ -5,3 +5,5 @@ obj-y += fault.o
 obj-y += mmap.o
 obj-$(CONFIG_ORLIX_TCTI_HOSTED_EXEC) += orlix_tcti_user_page.o
 obj-$(CONFIG_ORLIX_TCTI_HOSTED_EXEC) += orlix_tcti_invalidate.o
+obj-$(CONFIG_ORLIX_TCTI_HOSTED_EXEC) += mte.o
+obj-y += copypage.o

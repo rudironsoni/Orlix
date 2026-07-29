@@ -93,9 +93,17 @@ static int orlix_tcti_gadget_execute_flag_manipulation(
 	return orlix_tcti_execute_flag_manipulation_semantics(regs, &decoded);
 }
 
+static int orlix_tcti_gadget_execute_memory_tagging(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture);
+
 static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_MEMORY_TAGGING)
+		return orlix_tcti_gadget_execute_memory_tagging;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return orlix_tcti_gadget_execute_flag_manipulation;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
@@ -109,7 +117,8 @@ static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
 {
 	return gadget == orlix_tcti_gadget_execute_decoded ||
 		gadget == orlix_tcti_gadget_execute_crc32 ||
-		gadget == orlix_tcti_gadget_execute_flag_manipulation;
+		gadget == orlix_tcti_gadget_execute_flag_manipulation ||
+		gadget == orlix_tcti_gadget_execute_memory_tagging;
 }
 
 enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
@@ -119,6 +128,37 @@ enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
 		return ORLIX_TCTI_GADGET_PROGRAM_GENERIC;
 	return program[0].value == (unsigned long)orlix_tcti_gadget_execute_crc32 ?
 		ORLIX_TCTI_GADGET_PROGRAM_CRC32 : ORLIX_TCTI_GADGET_PROGRAM_GENERIC;
+}
+
+/*
+ * MTE is deliberately not lowered through the generic decoded gadget.  Its
+ * allocation-tag and fault contract crosses the Linux MM boundary, so this
+ * fixed family gadget is the production dispatch point that keeps the TCTI
+ * side limited to instruction execution.
+ */
+static int orlix_tcti_gadget_execute_memory_tagging(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+	int ret;
+
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	if (decoded.decode_class != ORLIX_TCTI_DECODE_MEMORY_TAGGING)
+		return -EINVAL;
+	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
+	ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded,
+					      fault_address);
+	if (ret)
+		orlix_tcti_native_capture_fault(capture, &decoded,
+						*fault_address, ret);
+	else
+		orlix_tcti_native_capture_after_decoded(capture, mm, regs,
+							&decoded);
+	return ret;
 }
 
 static int orlix_tcti_gadget_halt(struct mm_struct *mm, struct pt_regs *regs,

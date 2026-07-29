@@ -121,7 +121,7 @@ ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests orlix-tcti-kernel-decode-diagnostic mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: orlix-tcti-native-proof-symbol-check-dependency-regression
@@ -708,6 +708,9 @@ orlix-tcti-xcodebuild-watchdog-tests:
 		build_arguments=$${arguments%%ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=\"202\"*}; \
 		if [[ "$$build_arguments" == *"-test-timeouts-enabled"* || "$$build_arguments" == *"-only-testing:"* ]]; then echo "build-for-testing received XCTest-only arguments" >&2; exit 1; fi; \
 	echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_TEST normal_status=$$normal_status timeout_status=$$timeout_status blocked_timeout_status=$$blocked_timeout_status child_gone=$$child descendant_gone=$$descendant blocked_child_gone=$$blocked_child blocked_descendant_gone=$$blocked_descendant invocations=2"'
+
+orlix-tcti-kernel-decode-diagnostic:
+	@$(MAKE) ORLIX_TCTI_TEST_ONLY_TESTING=OrlixKernelConformanceTests/OrlixKernelConformanceTests/testOrlixTCTIDecodeKUnitDiagnosticRunsThroughOrlixOSTerminalSession orlix-tcti-kernel-tests
 
 mlibc-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
