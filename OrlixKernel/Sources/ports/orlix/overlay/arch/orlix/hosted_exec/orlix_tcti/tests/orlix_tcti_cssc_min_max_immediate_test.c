@@ -13,14 +13,17 @@
 #include <asm/elf.h>
 
 #include "../decode_aarch64.h"
+#include "../gadget_program.h"
 #include "../switch_debug.h"
 #include "orlix_tcti_test_suites.h"
 
 #define CSSC_MIN_MAX_IMMEDIATE_COMMON_MASK 0x7ff00000U
 #define CSSC_MIN_MAX_IMMEDIATE_COMMON_PATTERN 0x11c00000U
+#define CSSC_MIN_MAX_REGISTER_LEAF_COUNT 8U
 #define CSSC_SVC 0xd4000001U
 
 struct orlix_tcti_cssc_min_max_immediate_leaf {
+	u32 ordinal;
 	const char *source_name;
 	u32 source_mask;
 	u32 source_pattern;
@@ -29,6 +32,7 @@ struct orlix_tcti_cssc_min_max_immediate_leaf {
 };
 
 struct orlix_tcti_cssc_data_processing_leaf {
+	u32 ordinal;
 	const char *source_name;
 	u32 source_mask;
 	u32 source_pattern;
@@ -36,6 +40,12 @@ struct orlix_tcti_cssc_data_processing_leaf {
 	bool two_source;
 	enum orlix_tcti_data_processing_1source_op dp1_op;
 	enum orlix_tcti_data_processing_2source_op dp2_op;
+};
+
+struct orlix_tcti_cssc_minmax_overlap_operands {
+	u8 rd;
+	u8 rn;
+	u8 rm;
 };
 
 /*
@@ -49,21 +59,21 @@ struct orlix_tcti_cssc_data_processing_leaf {
  */
 static const struct orlix_tcti_cssc_min_max_immediate_leaf
 orlix_tcti_cssc_min_max_immediate_leaves[] = {
-	{ "SMAX_32_minmax_imm", 0xfffc0000U, 0x11c00000U,
+	{ 2183U, "SMAX_32_minmax_imm", 0xfffc0000U, 0x11c00000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_SMAX, false },
-	{ "UMAX_32U_minmax_imm", 0xfffc0000U, 0x11c40000U,
+	{ 2184U, "UMAX_32U_minmax_imm", 0xfffc0000U, 0x11c40000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_UMAX, false },
-	{ "SMIN_32_minmax_imm", 0xfffc0000U, 0x11c80000U,
+	{ 2185U, "SMIN_32_minmax_imm", 0xfffc0000U, 0x11c80000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_SMIN, false },
-	{ "UMIN_32U_minmax_imm", 0xfffc0000U, 0x11cc0000U,
+	{ 2186U, "UMIN_32U_minmax_imm", 0xfffc0000U, 0x11cc0000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_UMIN, false },
-	{ "SMAX_64_minmax_imm", 0xfffc0000U, 0x91c00000U,
+	{ 2187U, "SMAX_64_minmax_imm", 0xfffc0000U, 0x91c00000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_SMAX, true },
-	{ "UMAX_64U_minmax_imm", 0xfffc0000U, 0x91c40000U,
+	{ 2188U, "UMAX_64U_minmax_imm", 0xfffc0000U, 0x91c40000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_UMAX, true },
-	{ "SMIN_64_minmax_imm", 0xfffc0000U, 0x91c80000U,
+	{ 2189U, "SMIN_64_minmax_imm", 0xfffc0000U, 0x91c80000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_SMIN, true },
-	{ "UMIN_64U_minmax_imm", 0xfffc0000U, 0x91cc0000U,
+	{ 2190U, "UMIN_64U_minmax_imm", 0xfffc0000U, 0x91cc0000U,
 	  ORLIX_TCTI_MIN_MAX_IMMEDIATE_UMIN, true },
 };
 
@@ -74,33 +84,33 @@ orlix_tcti_cssc_min_max_immediate_leaves[] = {
  */
 static const struct orlix_tcti_cssc_data_processing_leaf
 orlix_tcti_cssc_data_processing_leaves[] = {
-	{ "SMAX_32_dp_2src", 0xffe0fc00U, 0x1ac06000U, false, true,
+	{ 3368U, "SMAX_32_dp_2src", 0xffe0fc00U, 0x1ac06000U, false, true,
 	  0, ORLIX_TCTI_DP2_SMAX },
-	{ "UMAX_32_dp_2src", 0xffe0fc00U, 0x1ac06400U, false, true,
+	{ 3369U, "UMAX_32_dp_2src", 0xffe0fc00U, 0x1ac06400U, false, true,
 	  0, ORLIX_TCTI_DP2_UMAX },
-	{ "SMIN_32_dp_2src", 0xffe0fc00U, 0x1ac06800U, false, true,
+	{ 3370U, "SMIN_32_dp_2src", 0xffe0fc00U, 0x1ac06800U, false, true,
 	  0, ORLIX_TCTI_DP2_SMIN },
-	{ "UMIN_32_dp_2src", 0xffe0fc00U, 0x1ac06c00U, false, true,
+	{ 3371U, "UMIN_32_dp_2src", 0xffe0fc00U, 0x1ac06c00U, false, true,
 	  0, ORLIX_TCTI_DP2_UMIN },
-	{ "SMAX_64_dp_2src", 0xffe0fc00U, 0x9ac06000U, true, true,
+	{ 3384U, "SMAX_64_dp_2src", 0xffe0fc00U, 0x9ac06000U, true, true,
 	  0, ORLIX_TCTI_DP2_SMAX },
-	{ "UMAX_64_dp_2src", 0xffe0fc00U, 0x9ac06400U, true, true,
+	{ 3385U, "UMAX_64_dp_2src", 0xffe0fc00U, 0x9ac06400U, true, true,
 	  0, ORLIX_TCTI_DP2_UMAX },
-	{ "SMIN_64_dp_2src", 0xffe0fc00U, 0x9ac06800U, true, true,
+	{ 3386U, "SMIN_64_dp_2src", 0xffe0fc00U, 0x9ac06800U, true, true,
 	  0, ORLIX_TCTI_DP2_SMIN },
-	{ "UMIN_64_dp_2src", 0xffe0fc00U, 0x9ac06c00U, true, true,
+	{ 3387U, "UMIN_64_dp_2src", 0xffe0fc00U, 0x9ac06c00U, true, true,
 	  0, ORLIX_TCTI_DP2_UMIN },
-	{ "CTZ_32_dp_1src", 0xfffffc00U, 0x5ac01800U, false, false,
+	{ 3394U, "CTZ_32_dp_1src", 0xfffffc00U, 0x5ac01800U, false, false,
 	  ORLIX_TCTI_DP1_CTZ, 0 },
-	{ "CNT_32_dp_1src", 0xfffffc00U, 0x5ac01c00U, false, false,
+	{ 3395U, "CNT_32_dp_1src", 0xfffffc00U, 0x5ac01c00U, false, false,
 	  ORLIX_TCTI_DP1_CNT, 0 },
-	{ "ABS_32_dp_1src", 0xfffffc00U, 0x5ac02000U, false, false,
+	{ 3396U, "ABS_32_dp_1src", 0xfffffc00U, 0x5ac02000U, false, false,
 	  ORLIX_TCTI_DP1_ABS, 0 },
-	{ "CTZ_64_dp_1src", 0xfffffc00U, 0xdac01800U, true, false,
+	{ 3403U, "CTZ_64_dp_1src", 0xfffffc00U, 0xdac01800U, true, false,
 	  ORLIX_TCTI_DP1_CTZ, 0 },
-	{ "CNT_64_dp_1src", 0xfffffc00U, 0xdac01c00U, true, false,
+	{ 3404U, "CNT_64_dp_1src", 0xfffffc00U, 0xdac01c00U, true, false,
 	  ORLIX_TCTI_DP1_CNT, 0 },
-	{ "ABS_64_dp_1src", 0xfffffc00U, 0xdac02000U, true, false,
+	{ 3405U, "ABS_64_dp_1src", 0xfffffc00U, 0xdac02000U, true, false,
 	  ORLIX_TCTI_DP1_ABS, 0 },
 };
 
@@ -157,6 +167,47 @@ static u32 orlix_tcti_cssc_min_max_immediate_instruction(
 {
 	return leaf->source_pattern | ((u32)immediate << 10) |
 		((u32)rn << 5) | rd;
+}
+
+static int orlix_tcti_cssc_execute_fixed_gadget(
+	struct pt_regs *regs, const struct orlix_tcti_decoded_instruction *decoded)
+{
+	struct orlix_tcti_gadget_word
+		program[ORLIX_TCTI_SINGLE_INSTRUCTION_PROGRAM_WORDS];
+	size_t word_count;
+	int ret;
+
+	ret = orlix_tcti_lower_decoded_instruction(decoded, program,
+					     ARRAY_SIZE(program), &word_count);
+	if (ret)
+		return ret;
+	return orlix_tcti_execute_gadget_program(NULL, regs, program, word_count,
+						 NULL);
+}
+
+static void orlix_tcti_integer_minmax_exact_source_cohort(struct kunit *test)
+{
+	static const u32 expected_ordinals[] = {
+		2183U, 2184U, 2185U, 2186U, 2187U, 2188U, 2189U, 2190U,
+		3368U, 3369U, 3370U, 3371U, 3384U, 3385U, 3386U, 3387U,
+	};
+	size_t index;
+	size_t other;
+
+	KUNIT_ASSERT_EQ(test, CSSC_MIN_MAX_REGISTER_LEAF_COUNT,
+			ARRAY_SIZE(orlix_tcti_cssc_min_max_immediate_leaves));
+	KUNIT_ASSERT_EQ(test, CSSC_MIN_MAX_REGISTER_LEAF_COUNT,
+			ARRAY_SIZE(orlix_tcti_cssc_data_processing_leaves) - 6);
+	for (index = 0; index < ARRAY_SIZE(expected_ordinals); index++) {
+		u32 ordinal = index < ARRAY_SIZE(orlix_tcti_cssc_min_max_immediate_leaves) ?
+			orlix_tcti_cssc_min_max_immediate_leaves[index].ordinal :
+			orlix_tcti_cssc_data_processing_leaves[index -
+				ARRAY_SIZE(orlix_tcti_cssc_min_max_immediate_leaves)].ordinal;
+
+		KUNIT_EXPECT_EQ(test, expected_ordinals[index], ordinal);
+		for (other = 0; other < index; other++)
+			KUNIT_EXPECT_NE(test, expected_ordinals[other], ordinal);
+	}
 }
 
 static u64 orlix_tcti_cssc_min_max_immediate_expected(
@@ -333,8 +384,7 @@ static void orlix_tcti_cssc_min_max_immediate_execute_all_immediates(
 				regs.regs[1] = U64_MAX;
 				regs.pstate = pstate;
 				regs.pc = 0x1000;
-				ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs,
-								      &decoded, NULL);
+				ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
 				KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s imm %#x",
 						     leaf->source_name, immediate);
 				KUNIT_EXPECT_EQ(test, expected, regs.regs[1]);
@@ -364,12 +414,40 @@ static void orlix_tcti_cssc_min_max_immediate_zero_registers_and_pstate(
 		regs.regs[0] = U64_MAX;
 		regs.pstate = pstate;
 		regs.pc = 0x2000;
-		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded,
-							      NULL);
+		ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
 		KUNIT_ASSERT_EQ(test, 0, ret);
 		KUNIT_EXPECT_EQ(test, pstate, regs.pstate);
 		KUNIT_EXPECT_EQ(test, 0x2004ULL, regs.pc);
 		KUNIT_EXPECT_EQ(test, U64_MAX, regs.regs[0]);
+	}
+}
+
+static void orlix_tcti_cssc_min_max_immediate_overlap(struct kunit *test)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_cssc_min_max_immediate_leaves);
+	     index++) {
+		const struct orlix_tcti_cssc_min_max_immediate_leaf *leaf =
+			&orlix_tcti_cssc_min_max_immediate_leaves[index];
+		struct pt_regs regs = {};
+		struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
+			orlix_tcti_cssc_min_max_immediate_instruction(leaf, 0x80, 1, 1));
+		u64 source = leaf->is_64bit ? (u64)S64_MIN : 0x80000000ULL;
+		u64 pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT;
+		int ret;
+
+		regs.regs[1] = source;
+		regs.pstate = pstate;
+		regs.pc = 0x2800;
+		ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
+		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%u %s", leaf->ordinal,
+				    leaf->source_name);
+		KUNIT_EXPECT_EQ(test,
+			orlix_tcti_cssc_min_max_immediate_expected(leaf, source, 0x80),
+			regs.regs[1]);
+		KUNIT_EXPECT_EQ(test, pstate, regs.pstate);
+		KUNIT_EXPECT_EQ(test, 0x2804ULL, regs.pc);
 	}
 }
 
@@ -503,8 +581,7 @@ static void orlix_tcti_cssc_data_processing_execute_boundaries(struct kunit *tes
 				regs.regs[3] = values[right_index];
 				regs.pstate = pstate;
 				regs.pc = 0x4000;
-				ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs,
-								      &decoded, NULL);
+				ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
 				KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s", leaf->source_name);
 				KUNIT_EXPECT_EQ(test, expected, regs.regs[1]);
 				KUNIT_EXPECT_EQ(test, pstate, regs.pstate);
@@ -531,11 +608,55 @@ static void orlix_tcti_cssc_data_processing_zero_registers(struct kunit *test)
 		regs.regs[0] = U64_MAX;
 		regs.pstate = pstate;
 		regs.pc = 0x5000;
-		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+		ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s", leaf->source_name);
 		KUNIT_EXPECT_EQ(test, pstate, regs.pstate);
 		KUNIT_EXPECT_EQ(test, 0x5004ULL, regs.pc);
 		KUNIT_EXPECT_EQ(test, U64_MAX, regs.regs[0]);
+	}
+}
+
+static void orlix_tcti_cssc_data_processing_minmax_overlap(struct kunit *test)
+{
+	static const struct orlix_tcti_cssc_minmax_overlap_operands operands[] = {
+		{ 1, 1, 2 }, { 2, 1, 2 }, { 1, 1, 1 },
+	};
+	size_t leaf_index;
+	size_t operand_index;
+
+	for (leaf_index = 0; leaf_index < CSSC_MIN_MAX_REGISTER_LEAF_COUNT;
+	     leaf_index++) {
+		const struct orlix_tcti_cssc_data_processing_leaf *leaf =
+			&orlix_tcti_cssc_data_processing_leaves[leaf_index];
+
+		for (operand_index = 0; operand_index < ARRAY_SIZE(operands);
+		     operand_index++) {
+			const struct orlix_tcti_cssc_minmax_overlap_operands *operand =
+				&operands[operand_index];
+			struct pt_regs regs = {};
+			u64 left = leaf->is_64bit ? (u64)S64_MIN : 0x80000000ULL;
+			u64 right = leaf->is_64bit ? 1 : U32_MAX;
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(
+					orlix_tcti_cssc_data_processing_instruction(
+						leaf, operand->rm, operand->rn, operand->rd));
+			u64 pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT;
+			u64 expected;
+			int ret;
+
+			regs.regs[operand->rn] = left;
+			regs.regs[operand->rm] = right;
+			expected = orlix_tcti_cssc_data_processing_expected(
+				leaf, regs.regs[operand->rn], regs.regs[operand->rm]);
+			regs.pstate = pstate;
+			regs.pc = 0x5800;
+			ret = orlix_tcti_cssc_execute_fixed_gadget(&regs, &decoded);
+			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%u %s", leaf->ordinal,
+					    leaf->source_name);
+			KUNIT_EXPECT_EQ(test, expected, regs.regs[operand->rd]);
+			KUNIT_EXPECT_EQ(test, pstate, regs.pstate);
+			KUNIT_EXPECT_EQ(test, 0x5804ULL, regs.pc);
+		}
 	}
 }
 
@@ -675,16 +796,19 @@ static void orlix_tcti_cssc_data_processing_rejects_reserved_opcodes(
 }
 
 static struct kunit_case orlix_tcti_cssc_min_max_immediate_test_cases[] = {
+	KUNIT_CASE(orlix_tcti_integer_minmax_exact_source_cohort),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_source_fingerprints),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_all_legal_fields),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_execute_all_immediates),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_zero_registers_and_pstate),
+	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_overlap),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_resume_user_rejects_unavailable_feature),
 	KUNIT_CASE(orlix_tcti_cssc_min_max_immediate_rejects_non_cssc_encodings),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_source_fingerprints),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_all_legal_register_fields),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_execute_boundaries),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_zero_registers),
+	KUNIT_CASE(orlix_tcti_cssc_data_processing_minmax_overlap),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_resume_user_rejects_unavailable_feature),
 	KUNIT_CASE(orlix_tcti_cssc_data_processing_rejects_reserved_opcodes),
 	{}
