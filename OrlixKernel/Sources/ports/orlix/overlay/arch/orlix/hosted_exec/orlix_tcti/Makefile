@@ -5,6 +5,7 @@ CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
 obj-y += engine.o
 obj-y += report.o
 obj-y += switch_debug.o
+obj-y += system_accessor.o
 obj-y += fixed_fp.o
 obj-y += sve_state.o
 obj-y += sve_decode.o

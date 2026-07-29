@@ -17,6 +17,7 @@
 #include "decode_aarch64.h"
 #include "fixed_fp.h"
 #include "semantics.h"
+#include "system_accessor.h"
 #include "sve_state.h"
 #include "switch_debug.h"
 
@@ -1371,83 +1372,6 @@ static bool orlix_tcti_condition_passed(const struct pt_regs *regs, u8 condition
 	default:
 		return false;
 	}
-}
-
-static int orlix_tcti_execute_system_register(struct pt_regs *regs,
-					const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u64 value;
-
-	if (decoded->rt == 31 && decoded->system_register_write)
-		value = 0;
-	else
-		value = orlix_tcti_read_gpr_or_zero(regs, decoded->rt, sizeof(u64));
-
-	switch (decoded->system_register) {
-	case ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0:
-		if (decoded->system_register_write) {
-#if defined(ORLIX_APP_HOSTED_BOOT)
-			orlix_hosted_set_current_user_tls(value);
-#else
-			current->thread.user_tls = value;
-#endif
-		} else if (decoded->rt != 31) {
-			regs->regs[decoded->rt] = current->thread.user_tls;
-		}
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_NZCV:
-		if (decoded->system_register_write) {
-			regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT |
-					  PSR_C_BIT | PSR_V_BIT);
-			regs->pstate |= value & (PSR_N_BIT | PSR_Z_BIT |
-						 PSR_C_BIT | PSR_V_BIT);
-		} else if (decoded->rt != 31) {
-			regs->regs[decoded->rt] =
-				regs->pstate & (PSR_N_BIT | PSR_Z_BIT |
-						PSR_C_BIT | PSR_V_BIT);
-		}
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_FPCR:
-		if (decoded->system_register_write)
-			current->thread.user_fpcr =
-				value & AARCH64_FPCR_WRITABLE_MASK;
-		else if (decoded->rt != 31)
-			regs->regs[decoded->rt] = current->thread.user_fpcr;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_FPSR:
-		if (decoded->system_register_write)
-			current->thread.user_fpsr =
-				value & AARCH64_FPSR_WRITABLE_MASK;
-		else if (decoded->rt != 31)
-			regs->regs[decoded->rt] = current->thread.user_fpsr;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = 0;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_CTR_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_DCZID_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] = AARCH64_CNTFRQ_EL0_VALUE;
-		break;
-	case ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0:
-		if (decoded->rt != 31)
-			regs->regs[decoded->rt] =
-				orlix_host_time_monotonic_ns();
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	regs->pc += sizeof(u32);
-	return 0;
 }
 
 static void orlix_tcti_clear_exclusive_monitor(void)

@@ -157,16 +157,9 @@ enum orlix_tcti_compare_branch_condition {
 	ORLIX_TCTI_COMPARE_BRANCH_LO,
 };
 
-enum orlix_tcti_system_register {
-	ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0 = 0,
-	ORLIX_TCTI_SYSTEM_REGISTER_NZCV,
-	ORLIX_TCTI_SYSTEM_REGISTER_FPCR,
-	ORLIX_TCTI_SYSTEM_REGISTER_FPSR,
-	ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0,
-	ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0,
+struct orlix_tcti_system_accessor_semantic_key {
+	u64 condition_identity;
+	u64 access_identity;
 };
 
 enum orlix_tcti_sme_pstate_operation {
@@ -541,6 +534,19 @@ struct orlix_tcti_decoded_instruction {
 	u8 ra;
 	u8 rt;
 	u8 rt2;
+	u16 system_accessor_selector;
+	u32 system_accessor_id;
+	u32 system_accessor_condition;
+	u32 system_accessor_access;
+	u8 system_accessor_disposition;
+	u8 system_accessor_implementation;
+	u64 system_accessor_selector_identity;
+	u64 system_accessor_condition_identity;
+	u64 system_accessor_access_identity;
+	/* Source-derived canonical identity for aliases sharing one encoding. */
+	struct orlix_tcti_system_accessor_semantic_key system_accessor_semantic_key;
+	const char *system_accessor_decoder_owner;
+	const char *system_accessor_execution_owner;
 	u16 imm12;
 	u16 imm16;
 	u8 min_max_immediate;
@@ -589,7 +595,6 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_simd_vector_compare_op simd_compare_op;
 	enum orlix_tcti_move_wide_op move_wide_op;
 	enum orlix_tcti_branch_register_op branch_register_op;
-	enum orlix_tcti_system_register system_register;
 	enum orlix_tcti_sme_pstate_operation sme_pstate_operation;
 	enum orlix_tcti_sve_integer_binary_op sve_integer_binary_op;
 	enum orlix_tcti_sve_predication sve_predication;
