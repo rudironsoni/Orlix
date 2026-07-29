@@ -101,6 +101,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_mapping_invalidation_test.o \
 	orlix_tcti_pmull_semantic_test.o \
 	orlix_tcti_integer_conditional_source_bound_test.o \
+	orlix_tcti_flag_manipulation_source_bound_test.o \
 	orlix_tcti_sve_state_test.o \
 	orlix_tcti_sve_decode_test.o \
 	orlix_tcti_sve_resume_test.o \

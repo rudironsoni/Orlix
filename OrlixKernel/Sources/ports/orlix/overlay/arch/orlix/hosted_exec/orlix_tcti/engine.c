@@ -95,6 +95,10 @@ static bool orlix_tcti_decoded_requires_fp16(
 static bool orlix_tcti_decoded_runtime_available(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
+	if (decoded &&
+	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
+		return false;
 	if (orlix_tcti_decoded_requires_fp16(decoded))
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :

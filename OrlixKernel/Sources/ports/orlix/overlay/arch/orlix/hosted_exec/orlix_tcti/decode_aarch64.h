@@ -29,6 +29,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE,
 	ORLIX_TCTI_DECODE_CONDITIONAL_COMPARE,
 	ORLIX_TCTI_DECODE_CONDITIONAL_SELECT,
+	ORLIX_TCTI_DECODE_FLAG_MANIPULATION,
 	ORLIX_TCTI_DECODE_LOAD_LITERAL,
 	ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
 	ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE,
@@ -207,6 +208,12 @@ enum orlix_tcti_conditional_select_op {
 	ORLIX_TCTI_CONDITIONAL_SELECT_CSINC,
 	ORLIX_TCTI_CONDITIONAL_SELECT_CSINV,
 	ORLIX_TCTI_CONDITIONAL_SELECT_CSNEG,
+};
+
+enum orlix_tcti_flag_manipulation_op {
+	ORLIX_TCTI_FLAG_MANIPULATION_RMIF = 0,
+	ORLIX_TCTI_FLAG_MANIPULATION_SETF8,
+	ORLIX_TCTI_FLAG_MANIPULATION_SETF16,
 };
 
 enum orlix_tcti_bitfield_op {
@@ -623,6 +630,7 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_barrier_op barrier_op;
 	enum orlix_tcti_cache_maintenance_op cache_maintenance_op;
 	enum orlix_tcti_conditional_select_op conditional_select_op;
+	enum orlix_tcti_flag_manipulation_op flag_manipulation_op;
 	enum orlix_tcti_bitfield_op bitfield_op;
 	enum orlix_tcti_data_processing_1source_op dp1_op;
 	enum orlix_tcti_data_processing_2source_op dp2_op;

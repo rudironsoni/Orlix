@@ -7521,6 +7521,55 @@ static int orlix_tcti_execute_fp_int_convert(
 	return -EINVAL;
 }
 
+int orlix_tcti_execute_flag_manipulation_semantics(
+	struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	unsigned long flags;
+	u64 source;
+	u8 width;
+
+	if (!regs || !decoded ||
+	    decoded->decode_class != ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
+		return -EINVAL;
+	if ((regs->pstate & PSR_MODE_MASK) != PSR_MODE_EL0t)
+		return -EOPNOTSUPP;
+
+	source = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u64));
+	switch (decoded->flag_manipulation_op) {
+	case ORLIX_TCTI_FLAG_MANIPULATION_RMIF: {
+		unsigned long mask = (unsigned long)(decoded->nzcv & 0xfU) << 28;
+
+		flags = (unsigned long)(ror64(source, decoded->imm6) & 0xfU) << 28;
+		regs->pstate = (regs->pstate & ~mask) | (flags & mask);
+		break;
+	}
+	case ORLIX_TCTI_FLAG_MANIPULATION_SETF8:
+		width = 8;
+		break;
+	case ORLIX_TCTI_FLAG_MANIPULATION_SETF16:
+		width = 16;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (decoded->flag_manipulation_op != ORLIX_TCTI_FLAG_MANIPULATION_RMIF) {
+		u64 value = source & (BIT_ULL(width) - 1);
+		bool sign = value & BIT_ULL(width - 1);
+		bool extension = source & BIT_ULL(width);
+
+		flags = (sign ? PSR_N_BIT : 0) |
+			(!value ? PSR_Z_BIT : 0) |
+			(sign != extension ? PSR_V_BIT : 0);
+		regs->pstate = (regs->pstate &
+			~(PSR_N_BIT | PSR_Z_BIT | PSR_V_BIT)) | flags;
+	}
+
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 				   struct pt_regs *regs,
 				 const struct orlix_tcti_decoded_instruction *decoded,
@@ -7533,6 +7582,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return -EINVAL;
 
 	switch (decoded->decode_class) {
+	case ORLIX_TCTI_DECODE_FLAG_MANIPULATION:
+		return orlix_tcti_execute_flag_manipulation_semantics(regs, decoded);
 	case ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY:
 		return orlix_tcti_execute_sve_predicated_integer_binary(regs, decoded);
 	case ORLIX_TCTI_DECODE_MOPS_COPY:

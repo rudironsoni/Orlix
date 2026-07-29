@@ -75,10 +75,37 @@ static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
 	return orlix_tcti_execute_crc32(regs, &decoded);
 }
 
+static int orlix_tcti_gadget_execute_flag_manipulation(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	(void)mm;
+	(void)fault_address;
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	return orlix_tcti_execute_flag_manipulation_semantics(regs, &decoded);
+}
+
+static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
+		return orlix_tcti_gadget_execute_flag_manipulation;
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
+	    (decoded->dp2_op == ORLIX_TCTI_DP2_CRC32 ||
+	     decoded->dp2_op == ORLIX_TCTI_DP2_CRC32C))
+		return orlix_tcti_gadget_execute_crc32;
+	return orlix_tcti_gadget_execute_decoded;
+}
+
 static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
 {
 	return gadget == orlix_tcti_gadget_execute_decoded ||
-		gadget == orlix_tcti_gadget_execute_crc32;
+		gadget == orlix_tcti_gadget_execute_crc32 ||
+		gadget == orlix_tcti_gadget_execute_flag_manipulation;
 }
 
 enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
@@ -149,11 +176,7 @@ int orlix_tcti_append_decoded_instruction(
 	if (capacity < words)
 		return -ENOSPC;
 
-	program[start].value = (unsigned long)
-		(decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
-		 (decoded->dp2_op == ORLIX_TCTI_DP2_CRC32 ||
-		  decoded->dp2_op == ORLIX_TCTI_DP2_CRC32C) ?
-		 orlix_tcti_gadget_execute_crc32 : orlix_tcti_gadget_execute_decoded);
+	program[start].value = (unsigned long)orlix_tcti_gadget_for_decoded(decoded);
 	memcpy(&program[start + 1], decoded, sizeof(*decoded));
 	program[start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)orlix_tcti_gadget_halt;
