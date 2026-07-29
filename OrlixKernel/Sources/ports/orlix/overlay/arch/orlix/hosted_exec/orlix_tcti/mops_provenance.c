@@ -3,6 +3,37 @@
 
 #include "mops_provenance.h"
 
+#define ORLIX_TCTI_DDI0602_2026_06_ARCHIVE_SHA256 \
+	"63a01a1696483bbe2edfef9e0f0cd053d6c1c619ec0587876cb7a60bb344f354"
+
+struct orlix_tcti_mops_ddi0602_row {
+	u32 ordinal;
+	const char *execute_locator;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(ordinal, leaf, file, decode, \
+		decode_digest, decode_lines, decode_size, decode_source_digest, execute, \
+		execute_digest, execute_lines, execute_size, execute_source_digest) \
+	{ ordinal, execute },
+static const struct orlix_tcti_mops_ddi0602_row mops_ddi0602_rows[] = {
+#include "isa/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
+static const char *orlix_tcti_mops_ddi0602_locator(u32 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(mops_ddi0602_rows); index++)
+		if (mops_ddi0602_rows[index].ordinal == ordinal)
+			return mops_ddi0602_rows[index].execute_locator;
+	return NULL;
+}
+
 /*
  * The groups below are the exact contiguous source-ordinal partitions in the
  * pinned AARCHMRS 2026-06 artifact.  `operation` is selected from the source
@@ -177,10 +208,32 @@ bool orlix_tcti_mops_leaf_provenance(u32 source_ordinal,
 			group->phase == ORLIX_TCTI_MOPS_PHASE_SET_GO ?
 			ORLIX_TCTI_MOPS_PROVENANCE_OFFICIAL_NOT_SPECIFIED :
 			ORLIX_TCTI_MOPS_PROVENANCE_EXTERNAL_DDI0602;
-		provenance->implementation_status =
-			ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED;
-		provenance->proof_status =
-			ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN;
+		if ((source_ordinal >= 2704U && source_ordinal <= 2751U) ||
+		    (source_ordinal >= 2764U && source_ordinal <= 2811U)) {
+			provenance->ddi0602_locator =
+				orlix_tcti_mops_ddi0602_locator(source_ordinal);
+			provenance->ddi0602_archive_sha256 =
+				ORLIX_TCTI_DDI0602_2026_06_ARCHIVE_SHA256;
+			provenance->production_owner =
+				"orlix_tcti_execute_mops_copy";
+			provenance->kunit_suite = "orlix-tcti-mops-copy";
+			provenance->linux_proof_disposition =
+				"not_applicable_no_linux_visible_abi";
+			provenance->implementation_status =
+				ORLIX_TCTI_MOPS_IMPLEMENTATION_PRODUCTION;
+			provenance->proof_status =
+				ORLIX_TCTI_MOPS_PROOF_KUNIT_OWNER;
+		} else {
+			provenance->ddi0602_locator = NULL;
+			provenance->ddi0602_archive_sha256 = NULL;
+			provenance->production_owner = NULL;
+			provenance->kunit_suite = NULL;
+			provenance->linux_proof_disposition = NULL;
+			provenance->implementation_status =
+				ORLIX_TCTI_MOPS_IMPLEMENTATION_REQUIRED_UNIMPLEMENTED;
+			provenance->proof_status =
+				ORLIX_TCTI_MOPS_PROOF_REQUIRED_UNPROVEN;
+		}
 		return true;
 	}
 

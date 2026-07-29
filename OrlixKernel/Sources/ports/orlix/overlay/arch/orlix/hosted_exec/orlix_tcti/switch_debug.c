@@ -63,6 +63,8 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 		return ORLIX_TCTI_ACCESS_FETCH;
 
 	switch (decoded->decode_class) {
+	case ORLIX_TCTI_DECODE_MOPS_COPY:
+		return ORLIX_TCTI_ACCESS_WRITE;
 	case ORLIX_TCTI_DECODE_LOAD_LITERAL:
 		return ORLIX_TCTI_ACCESS_READ;
 	case ORLIX_TCTI_DECODE_LOAD_STORE_PAIR:
@@ -1487,6 +1489,91 @@ static int orlix_tcti_load_integer(struct mm_struct *mm, unsigned long address,
 	default:
 		return -EINVAL;
 	}
+}
+
+/*
+ * DDI0602 2026-06 CPY* permits an implementation-defined stage size.
+ * OrlixTCTI selects option B with zero-byte prologue and main stages, then
+ * completes the epilogue one guest byte at a time. This never substitutes a
+ * host bulk-memory operation: each completed byte writes architectural state
+ * before the next guest access, preserving partial completion on fault.
+ *
+ * All sixteen option encodings are legal EL0 forms. Their privilege and
+ * non-temporal descriptors retain the current guest-memory permission path;
+ * no host tag operation is synthesized because TCTI does not advertise MTE.
+ */
+static int orlix_tcti_execute_mops_copy(struct mm_struct *mm,
+					struct pt_regs *regs,
+					const struct orlix_tcti_decoded_instruction *decoded,
+					unsigned long *fault_address)
+{
+	u64 remaining;
+	u64 source;
+	u64 destination;
+	bool backward;
+	int ret;
+
+	if (!mm)
+		return -EINVAL;
+	if (decoded->rd == 31 || decoded->rm == 31 || decoded->rn == 31 ||
+	    decoded->rd == decoded->rm || decoded->rd == decoded->rn ||
+	    decoded->rm == decoded->rn)
+		return -EOPNOTSUPP;
+
+	destination = regs->regs[decoded->rd];
+	source = regs->regs[decoded->rm];
+	remaining = regs->regs[decoded->rn];
+	if (decoded->mops_copy_stage == ORLIX_TCTI_MOPS_COPY_PROLOGUE) {
+		if (remaining & BIT_ULL(63))
+			remaining = S64_MAX;
+		backward = !decoded->mops_forward_only && source < destination;
+		regs->regs[decoded->rn] = remaining;
+		regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
+		if (backward)
+			regs->pstate |= PSR_N_BIT;
+		regs->pstate |= PSR_C_BIT;
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	if (!(regs->pstate & PSR_C_BIT) ||
+	    (regs->pstate & (PSR_Z_BIT | PSR_V_BIT)) ||
+	    (decoded->mops_forward_only && (regs->pstate & PSR_N_BIT)))
+		return -EOPNOTSUPP;
+	backward = !decoded->mops_forward_only && (regs->pstate & PSR_N_BIT);
+	if (decoded->mops_copy_stage == ORLIX_TCTI_MOPS_COPY_MAIN) {
+		regs->pc += sizeof(u32);
+		return 0;
+	}
+
+	while (remaining) {
+		u64 value;
+		unsigned long read_address = source;
+		unsigned long write_address = destination;
+
+		if (backward) {
+			read_address--;
+			write_address--;
+		}
+		if (fault_address)
+			*fault_address = read_address;
+		ret = orlix_tcti_load_integer(mm, read_address, sizeof(u8), &value);
+		if (ret)
+			return ret;
+		if (fault_address)
+			*fault_address = write_address;
+		ret = orlix_tcti_store_integer(mm, write_address, sizeof(u8), value);
+		if (ret)
+			return ret;
+		source = backward ? source - 1 : source + 1;
+		destination = backward ? destination - 1 : destination + 1;
+		remaining--;
+		regs->regs[decoded->rm] = source;
+		regs->regs[decoded->rd] = destination;
+		regs->regs[decoded->rn] = remaining;
+	}
+	regs->pc += sizeof(u32);
+	return 0;
 }
 
 static int orlix_tcti_store_simd_fp(struct mm_struct *mm, unsigned long address,
@@ -7448,6 +7535,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 	switch (decoded->decode_class) {
 	case ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY:
 		return orlix_tcti_execute_sve_predicated_integer_binary(regs, decoded);
+	case ORLIX_TCTI_DECODE_MOPS_COPY:
+		return orlix_tcti_execute_mops_copy(mm, regs, decoded, fault_address);
 	case ORLIX_TCTI_DECODE_HINT:
 		regs->pc += sizeof(u32);
 		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3 ?
