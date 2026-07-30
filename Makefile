@@ -126,7 +126,9 @@ include $(CURDIR)/make/tcti-proof-registry-provenance.mk
 .PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: orlix-tcti-native-proof-symbol-check-dependency-regression
 .PHONY: orlix-tcti-proof-registry-provenance-regression
+.PHONY: orlix-tcti-isa-host-provenance-dependency-regression
 .PHONY: __orlix-tcti-proof-registry-provenance-write
+.PHONY: __orlix-tcti-isa-host-provenance-ready
 .PHONY: __orlix-root-gnu-make-contract-source-check
 
 all: build
@@ -412,7 +414,7 @@ orlix-tcti-isa-maintainer-source-check:
 	}
 	@$(KERNEL_MAKE) __tcti-instruction-source-check
 
-orlix-tcti-isa-host-tests: orlix-tcti-proof-registry-provenance-regression orlix-tcti-semantic-provenance-tests __orlix-tcti-instruction-artifact-inputs-source-check
+orlix-tcti-isa-host-tests: __orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check
 
 ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_registry_provenance.h
 ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS := \
@@ -436,10 +438,30 @@ orlix-tcti-proof-registry-provenance-regression:
 	printf '%s\n' 'mutated decode source' >> "$$decode"; printf '%s\n' 'stale output' > "$$header"; \
 	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
 	cmp -s "$$regression_root/initial.h" "$$header" && { echo 'provenance header did not refresh after input mutation' >&2; exit 1; }; \
+	cp "$$header" "$$regression_root/valid.h"; \
 	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$regression_root/missing.c" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'missing provenance input unexpectedly succeeded' >&2; exit 1; fi; \
+	cmp -s "$$regression_root/valid.h" "$$header" || { echo 'missing provenance input corrupted the valid header' >&2; exit 1; }; \
 	printf '%s\n' '#!/bin/sh' 'printf "%s\\n" "not-a-sha256  -"' > "$$regression_root/malformed-shasum"; chmod +x "$$regression_root/malformed-shasum"; \
 	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_SHASUM="$$regression_root/malformed-shasum" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'malformed provenance hash unexpectedly succeeded' >&2; exit 1; fi; \
+	cmp -s "$$regression_root/valid.h" "$$header" || { echo 'malformed provenance hash corrupted the valid header' >&2; exit 1; }; \
 	if find "$$regression_root" -name 'target_proof_registry_provenance.h.tmp.*' -exec false \;; then :; else echo 'provenance temporary files were retained' >&2; exit 1; fi
+
+__orlix-tcti-isa-host-provenance-ready: orlix-tcti-proof-registry-provenance-regression
+	@$(MAKE) --no-print-directory orlix-tcti-semantic-provenance-tests
+
+orlix-tcti-isa-host-provenance-dependency-regression:
+	@set -euo pipefail; \
+	makefile="$(CURDIR)/Makefile"; \
+	fail() { printf 'OrlixTCTI provenance dependency regression failed: %s\n' "$$*" >&2; exit 1; }; \
+	host_prerequisites="$$(awk '/^orlix-tcti-isa-host-tests:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
+	[ "$$host_prerequisites" = '__orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check' ] || fail 'host target bypasses the provenance readiness chain'; \
+	audit_prerequisites="$$(awk '/^orlix-tcti-isa-audit:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
+	[ "$$audit_prerequisites" = 'orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check' ] || fail 'aggregate target retains a direct semantic provenance prerequisite'; \
+	readiness_prerequisites="$$(awk '/^__orlix-tcti-isa-host-provenance-ready:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
+	[ "$$readiness_prerequisites" = 'orlix-tcti-proof-registry-provenance-regression' ] || fail 'readiness target does not begin with the negative fixture'; \
+	semantic_invocations="$$(awk '/^__orlix-tcti-isa-host-provenance-ready:/ { in_readiness=1; next } in_readiness && /^[^[:space:]#][^:]*:/ { exit } in_readiness && /orlix-tcti-semantic-provenance-tests/ { count++ } END { print count + 0 }' "$$makefile")"; \
+	[ "$$semantic_invocations" = 1 ] || fail "expected one semantic provenance generation invocation, got $$semantic_invocations"; \
+	printf '%s\n' 'OrlixTCTI provenance dependency regression: passed'
 
 orlix-tcti-isa-host-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
@@ -588,7 +610,7 @@ orlix-tcti-native-proof-symbol-check-dependency-regression:
 orlix-tcti-proof-source-linkage-tests:
 	@$(KERNEL_MAKE) orlix-tcti-proof-source-linkage-tests
 
-orlix-tcti-isa-audit: orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
+orlix-tcti-isa-audit: orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
