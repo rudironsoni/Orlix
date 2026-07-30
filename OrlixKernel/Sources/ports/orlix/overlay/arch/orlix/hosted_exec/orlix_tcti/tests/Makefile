@@ -12,6 +12,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
 	target_execution_slice_map.o \
+	target_proof_registry.o \
+	target_native_proof_registry.o \
 	target_execution_slice_map_test.o \
 	orlix_tcti_atomic_memory_test.o orlix_tcti_lse_decode_test.o orlix_tcti_uaccess_test.o \
 	orlix_tcti_cssc_min_max_immediate_test.o \
@@ -27,7 +29,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_lse_resume_production_test.o \
 	orlix_tcti_lse_scalar_rmw_resume_test.o \
 	orlix_tcti_exclusive_resume_production_test.o \
-	orlix_tcti_native_observation.o \
+	target_native_proof_contract.o \
+	target_proof_ingestion.o \
 	orlix_tcti_native_observation_test.o \
 	orlix_tcti_native_observation_production_test.o \
 	orlix_tcti_tls_repair_test.o \
@@ -115,5 +118,6 @@ $(obj)/target_feature_field_domain_binding_artifact.o: \
 	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
 	$(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/current/target_feature_applicability.def
+$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def
 
 ccflags-y += -I$(obj)

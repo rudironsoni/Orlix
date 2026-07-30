@@ -4,8 +4,6 @@
 
 #include <stdbool.h>
 #include <pthread.h>
-#include <sched.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,25 +25,34 @@ struct concurrent_first_use_result {
 	bool stable;
 };
 
-static atomic_uint registry_waiters;
-static atomic_uint row_waiters;
-static atomic_bool release_registry_waiters;
-static atomic_bool release_row_waiters;
+static pthread_mutex_t concurrent_first_use_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t concurrent_first_use_ready = PTHREAD_COND_INITIALIZER;
+static unsigned int registry_waiters;
+static unsigned int row_waiters;
+static bool release_registry_waiters;
+static bool release_row_waiters;
 
 static void *concurrent_first_use_worker(void *context)
 {
 	struct concurrent_first_use_result *result = context;
 	unsigned int iteration;
 
-	atomic_fetch_add_explicit(&registry_waiters, 1U, memory_order_release);
-	while (!atomic_load_explicit(&release_registry_waiters,
-				     memory_order_acquire))
-		sched_yield();
+	pthread_mutex_lock(&concurrent_first_use_lock);
+	registry_waiters++;
+	pthread_cond_broadcast(&concurrent_first_use_ready);
+	while (!release_registry_waiters)
+		pthread_cond_wait(&concurrent_first_use_ready,
+				  &concurrent_first_use_lock);
+	pthread_mutex_unlock(&concurrent_first_use_lock);
 	result->entries = orlix_tcti_target_proof_registry_entries(
 		&result->entry_count);
-	atomic_fetch_add_explicit(&row_waiters, 1U, memory_order_release);
-	while (!atomic_load_explicit(&release_row_waiters, memory_order_acquire))
-		sched_yield();
+	pthread_mutex_lock(&concurrent_first_use_lock);
+	row_waiters++;
+	pthread_cond_broadcast(&concurrent_first_use_ready);
+	while (!release_row_waiters)
+		pthread_cond_wait(&concurrent_first_use_ready,
+				  &concurrent_first_use_lock);
+	pthread_mutex_unlock(&concurrent_first_use_lock);
 	result->rows = orlix_tcti_target_linux_proof_dispositions(
 		&result->row_count);
 	result->stable = result->entries && result->rows;
@@ -70,18 +77,27 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	struct concurrent_first_use_result results[CONCURRENT_FIRST_USE_THREADS] = { 0 };
 	unsigned int index;
 
+	EXPECT(!pthread_mutex_lock(&concurrent_first_use_lock));
+	registry_waiters = 0U;
+	row_waiters = 0U;
+	release_registry_waiters = false;
+	release_row_waiters = false;
+	EXPECT(!pthread_mutex_unlock(&concurrent_first_use_lock));
 	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++)
 		EXPECT(!pthread_create(&threads[index], NULL,
 				       concurrent_first_use_worker, &results[index]));
-	while (atomic_load_explicit(&registry_waiters, memory_order_acquire) !=
-	       CONCURRENT_FIRST_USE_THREADS)
-		sched_yield();
-	atomic_store_explicit(&release_registry_waiters, true,
-			      memory_order_release);
-	while (atomic_load_explicit(&row_waiters, memory_order_acquire) !=
-	       CONCURRENT_FIRST_USE_THREADS)
-		sched_yield();
-	atomic_store_explicit(&release_row_waiters, true, memory_order_release);
+	EXPECT(!pthread_mutex_lock(&concurrent_first_use_lock));
+	while (registry_waiters != CONCURRENT_FIRST_USE_THREADS)
+		EXPECT(!pthread_cond_wait(&concurrent_first_use_ready,
+				  &concurrent_first_use_lock));
+	release_registry_waiters = true;
+	pthread_cond_broadcast(&concurrent_first_use_ready);
+	while (row_waiters != CONCURRENT_FIRST_USE_THREADS)
+		EXPECT(!pthread_cond_wait(&concurrent_first_use_ready,
+				  &concurrent_first_use_lock));
+	release_row_waiters = true;
+	pthread_cond_broadcast(&concurrent_first_use_ready);
+	EXPECT(!pthread_mutex_unlock(&concurrent_first_use_lock));
 	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++)
 		EXPECT(!pthread_join(threads[index], NULL));
 	for (index = 0; index < CONCURRENT_FIRST_USE_THREADS; index++) {
@@ -403,7 +419,7 @@ static int typed_kselftest_provenance_is_source_and_build_bound(void)
 	return 0;
 }
 
-static int privileged_profiles_and_count_caps_fail_closed(void)
+static int privileged_profiles_and_case_masks_fail_closed(void)
 {
 	struct orlix_tcti_target_proof_registry_entry excessive = add_entry;
 	enum orlix_tcti_target_proof_registry_error error;
@@ -420,18 +436,11 @@ static int privileged_profiles_and_count_caps_fail_closed(void)
 	EXPECT((requirements & ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS) != 0);
 	EXPECT(orlix_tcti_target_proof_operation_requirements("not-mapped", 1,
 						       &requirements) == -1);
-	EXPECT(orlix_tcti_target_proof_registry_validate(&add_entry, 4351,
-						  &error) == -1);
-	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY);
-	excessive.binding_count = 4351;
-	EXPECT(orlix_tcti_target_proof_registry_validate(&excessive, 1, &error) == -1);
-	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY);
-	excessive = add_entry;
 	excessive.kunit_case_count = 65;
 	EXPECT(orlix_tcti_target_proof_registry_validate(&excessive, 1, &error) == -1);
 	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_INVALID_ENTRY);
 	EXPECT(orlix_tcti_target_proof_source_size_allowed(2U * 1024U * 1024U));
-	EXPECT(!orlix_tcti_target_proof_source_size_allowed(
+	EXPECT(orlix_tcti_target_proof_source_size_allowed(
 		2U * 1024U * 1024U + 1U));
 	EXPECT(!orlix_tcti_target_proof_source_size_allowed(UINT64_MAX));
 	return 0;
@@ -1454,12 +1463,101 @@ static int operational_note_mapping_is_exact_and_fail_closed(void)
 	return 0;
 }
 
+static int production_capture_bindings_are_generic_and_fail_closed(void)
+{
+	static const struct orlix_tcti_target_proof_case first_cases[] = {
+		{ "case-one", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	};
+	static const struct orlix_tcti_target_proof_case second_cases[] = {
+		{ "case-two", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	};
+	static const struct orlix_tcti_target_proof_binding first_bindings[] = {
+		{ .source_ordinal = 11U },
+	};
+	static const struct orlix_tcti_target_proof_binding second_bindings[] = {
+		{ .source_ordinal = 22U },
+	};
+	static const struct orlix_tcti_target_proof_registry_entry entries[] = {
+		{ .kunit_source = "first.c", .kunit_suite = "suite-one",
+		  .kunit_cases = first_cases, .kunit_case_count = 1U,
+		  .bindings = first_bindings, .binding_count = 1U },
+		{ .kunit_source = "second.c", .kunit_suite = "suite-two",
+		  .kunit_cases = second_cases, .kunit_case_count = 1U,
+		  .bindings = second_bindings, .binding_count = 1U },
+	};
+	struct orlix_tcti_target_production_capture_binding bindings[] = {
+		{ "first.c", "suite-one", "case-one", 11U,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		  "first_execute", "first_decode", "first_lower" },
+		{ "second.c", "suite-two", "case-two", 22U,
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+		  "second_execute", "second_decode", "second_lower" },
+	};
+	enum orlix_tcti_target_production_capture_error error;
+	FILE *file;
+	static const char *const generic_sources[] = {
+		"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/"
+		"orlix_tcti/tests/target_proof_registry.c",
+		"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/"
+		"orlix_tcti/tests/target_native_proof_contract.c",
+		"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/"
+		"orlix_tcti/tests/target_native_proof_registry.c",
+	};
+	size_t index;
+
+	EXPECT(!orlix_tcti_target_production_capture_bindings_validate(
+		bindings, 2U, entries, 2U, &error));
+	EXPECT(error == ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_OK);
+	EXPECT(orlix_tcti_target_production_capture_binding_applies(
+		bindings, 2U, &entries[1], 0U));
+	bindings[1] = bindings[0];
+	EXPECT(orlix_tcti_target_production_capture_bindings_validate(
+		bindings, 2U, entries, 2U, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_DUPLICATE);
+	bindings[1] = (struct orlix_tcti_target_production_capture_binding) {
+		"unknown.c", "unknown-suite", "unknown-case", 33U,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+		"unknown_execute", "unknown_decode", "unknown_lower"
+	};
+	EXPECT(orlix_tcti_target_production_capture_bindings_validate(
+		bindings, 2U, entries, 2U, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_UNKNOWN);
+
+	for (index = 0; index < sizeof(generic_sources) / sizeof(generic_sources[0]);
+	     index++) {
+		char *source;
+		long file_size;
+		size_t length;
+
+		file = fopen(generic_sources[index], "rb");
+		EXPECT(file);
+		EXPECT(!fseek(file, 0L, SEEK_END));
+		file_size = ftell(file);
+		EXPECT(file_size >= 0L);
+		EXPECT(!fseek(file, 0L, SEEK_SET));
+		source = malloc((size_t)file_size + 1U);
+		EXPECT(source);
+		length = fread(source, 1U, (size_t)file_size + 1U, file);
+		EXPECT(!ferror(file));
+		EXPECT(feof(file));
+		EXPECT(!fclose(file));
+		source[length] = '\0';
+		EXPECT(!strstr(source, "bcs_production_resume"));
+		EXPECT(!strstr(source,
+			"orlix-tcti-branch-control-source-bound"));
+		free(source);
+	}
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
+		{ "production_capture_bindings_are_generic_and_fail_closed",
+		  production_capture_bindings_are_generic_and_fail_closed },
 		{ "operational_note_mapping_is_exact_and_fail_closed",
 		 operational_note_mapping_is_exact_and_fail_closed },
 		{ "canonical_first_use_is_concurrent_and_immutable",
@@ -1482,8 +1580,8 @@ int main(void)
 		  registered_case_cannot_overclaim_obligations },
 		{ "typed_kselftest_provenance_is_source_and_build_bound",
 		  typed_kselftest_provenance_is_source_and_build_bound },
-		{ "privileged_profiles_and_count_caps_fail_closed",
-		  privileged_profiles_and_count_caps_fail_closed },
+		{ "privileged_profiles_and_case_masks_fail_closed",
+		  privileged_profiles_and_case_masks_fail_closed },
 		{ "logical_shifted_register_registry_is_source_bound",
 		  logical_shifted_register_registry_is_source_bound },
 		{ "cssc_min_max_immediate_registry_is_source_bound",

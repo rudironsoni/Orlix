@@ -1,0 +1,43 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Family-owned proof metadata and production exporters. */
+#ifdef ORLIX_TCTI_PROOF_FAMILY_METADATA
+ORLIX_TCTI_PROOF_FAMILY_METADATA(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
+	"a5aeca380597683ba71e5f512634819d9ce770b141608b2aee579a09b079e3a7",
+	"orlix_tcti_branch_control_source_bound_test.o",
+	"orlix-tcti-branch-control-source-bound",
+	"orlix_tcti_branch_control_source_bound_test_suite", "bcs_cases",
+	"bcs_source_decode", "bcs_production_resume")
+#endif
+
+#ifdef ORLIX_TCTI_PROOF_FAMILY_OPERATION
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-svc", "SVC")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-brk", "BRK")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-hlt", "HLT")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-b-cond", "B_cond")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-br", "BR")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-blr", "BLR")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-ret", "RET")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-b-uncond", "B_uncond")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-bl", "BL")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbz", "CBZ")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbnz", "CBNZ")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbz", "TBZ")
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbnz", "TBNZ")
+#endif
+
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+/* Keep one exact source/obligation per executable row. */
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
+	"orlix-tcti-branch-control-source-bound", "bcs_production_resume",
+	2227U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
+	"orlix-tcti-branch-control-source-bound", "bcs_production_resume",
+	2230U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif
