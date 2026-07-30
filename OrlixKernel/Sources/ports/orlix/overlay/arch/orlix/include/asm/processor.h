@@ -67,6 +67,7 @@ struct thread_struct {
 	unsigned long user_fpcr;
 	unsigned long user_simd_valid;
 	struct orlix_tcti_sve_state user_sve;
+	struct orlix_tcti_sme_state user_sme;
 #endif
 	unsigned long user_exclusive_address;
 	unsigned long user_exclusive_value;

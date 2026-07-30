@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Current Orlix EL0 architectural feature profile.
+ *
+ * This is a product capability declaration, separate from the AARCHMRS
+ * satisfiability artifact: a source leaf can be architecturally applicable
+ * without being enabled in the current EL0 execution profile.
+ */
+ORLIX_TCTI_A64_EL0_FEATURE_PROFILE(FEAT_TEV, ABSENT,
+	"orlix-el0-profile:v1:FEAT_TEV=absent")

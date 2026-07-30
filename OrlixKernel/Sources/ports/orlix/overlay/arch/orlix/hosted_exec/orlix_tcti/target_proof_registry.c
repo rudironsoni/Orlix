@@ -4,17 +4,16 @@
 #include "target_instruction_artifact.h"
 
 #ifdef __KERNEL__
-#include <linux/bits.h>
-#include <linux/const.h>
 #include <linux/ctype.h>
+#include <linux/kernel.h>
 #include <linux/limits.h>
+#include <linux/mutex.h>
 #include <linux/string.h>
-#define CHAR_BIT BITS_PER_BYTE
-#define UINT64_C(value) _ULL(value)
 #else
 #include <ctype.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -230,7 +229,7 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
 			return -1;
 		}
-		if (selected_case >= sizeof(orlix_tcti_proof_u64) * CHAR_BIT) {
+		if (selected_case >= sizeof(orlix_tcti_proof_u64) * 8U) {
 			operational_note_mapping_fail(result,
 				ORLIX_TCTI_TARGET_OPERATIONAL_NOTE_MAPPING_MALFORMED,
 				ORLIX_TCTI_OPERATIONAL_NOTE_INDEX_NONE, mapping_index);
@@ -263,47 +262,6 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 	return 0;
 }
 
-enum canonical_initialization_state {
-	CANONICAL_UNINITIALIZED,
-	CANONICAL_INITIALIZING,
-	CANONICAL_READY,
-	CANONICAL_FAILED,
-};
-
-static bool canonical_initialization_enter(unsigned int *state,
-					   bool *initialize)
-{
-	unsigned int observed;
-
-	if (!state || !initialize)
-		return false;
-	for (;;) {
-		observed = __atomic_load_n(state, __ATOMIC_ACQUIRE);
-		if (observed == CANONICAL_READY) {
-			*initialize = false;
-			return true;
-		}
-		if (observed == CANONICAL_FAILED)
-			return false;
-		if (observed == CANONICAL_UNINITIALIZED) {
-			unsigned int expected = CANONICAL_UNINITIALIZED;
-
-			if (__atomic_compare_exchange_n(state, &expected,
-						CANONICAL_INITIALIZING, false,
-						__ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-				*initialize = true;
-				return true;
-			}
-		}
-	}
-}
-
-static void canonical_initialization_publish(unsigned int *state, bool success)
-{
-	__atomic_store_n(state, success ? CANONICAL_READY : CANONICAL_FAILED,
-			 __ATOMIC_RELEASE);
-}
-
 #define KNOWN_CLASS_MASK \
 	(ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0 | \
 	 ORLIX_TCTI_TARGET_PROOF_CLASS_NON_EL0 | \
@@ -323,7 +281,9 @@ static void canonical_initialization_publish(unsigned int *state, bool success)
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SYSTEM_PT_CONTROL)
 #define BASELINE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
@@ -343,12 +303,9 @@ static void canonical_initialization_publish(unsigned int *state, bool success)
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE)
 #define BASE_EXCEPTION_OBLIGATIONS \
 	(UNDEFINED_REJECTION_OBLIGATIONS | BASE_EXCEPTION_STATE_OBLIGATIONS)
-#define ORLIX_TCTI_TARGET_PROOF_MAX_ENTRIES 4350U
-#define ORLIX_TCTI_TARGET_PROOF_MAX_BINDINGS 4350U
-#define ORLIX_TCTI_TARGET_PROOF_MAX_SOURCE_BYTES (2U * 1024U * 1024U)
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
 struct operation_requirements {
@@ -407,7 +364,7 @@ struct source_bound_proof {
 					     mask, pattern, condition, offset, length) \
 	{ ordinal, leaf, mnemonic, operation, mask, pattern, condition, offset, length },
 static const struct source_manifest_binding source_manifest_bindings[] = {
-#include "../isa/source_manifest.def"
+#include "isa/source_manifest.def"
 };
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
@@ -462,7 +419,13 @@ struct system_accessor_binding {
 	  encoding_length, condition_offset, condition_length, access_offset, \
 	  access_length },
 static const struct system_accessor_binding system_accessor_bindings[] = {
-#include "../isa/target_system_accessor_reconciliation.def"
+#ifdef __KERNEL__
+#define UINT64_C(value) value##ULL
+#endif
+#include "isa/target_system_accessor_reconciliation.def"
+#ifdef __KERNEL__
+#undef UINT64_C
+#endif
 };
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
@@ -480,7 +443,7 @@ _Static_assert(ARRAY_COUNT(system_accessor_bindings) ==
 #define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
 	{ ordinal, proof_id },
 static const struct source_bound_proof source_bound_proofs[] = {
-#include "../isa/source_bound_proof.def"
+#include "isa/source_bound_proof.def"
 };
 #undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
 
@@ -594,12 +557,38 @@ static const struct source_bound_proof source_bound_proofs[] = {
 	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
 #define SYSTEM_ACCESSOR_PARTITION_INCLUDE \
 	"#include \"orlix_tcti_system_accessor_partition_test.h\""
-#define BRANCH_CONTROL_SOURCE \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c"
-#define BRANCH_CONTROL_SUITE "orlix-tcti-branch-control-source-bound"
-#define BRANCH_CONTROL_SUITE_SYMBOL \
-	"orlix_tcti_branch_control_source_bound_test_suite"
-#define BRANCH_CONTROL_CASE_ARRAY "bcs_cases"
+static const struct orlix_tcti_target_production_capture_binding
+production_capture_bindings[] = {
+#define ORLIX_TCTI_PRODUCTION_CAPTURE(source, suite, case_name, ordinal, \
+		obligation_value, implementation, decoder, lowering) \
+	{ source, suite, case_name, ordinal, obligation_value, implementation, \
+	  decoder, lowering },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PRODUCTION_CAPTURE
+};
+
+struct production_capture_family_metadata {
+	const char *source;
+	const char *source_sha256;
+	const char *object;
+	const char *suite;
+	const char *suite_symbol;
+	const char *case_array;
+	const char *decode_case;
+	const char *production_case;
+};
+
+#define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
+		object_value, suite_value, suite_symbol_value, case_array_value, \
+		decode_case_value, production_case_value) \
+static const struct production_capture_family_metadata \
+production_capture_family = { \
+	source_value, source_sha256_value, object_value, suite_value, \
+	suite_symbol_value, case_array_value, decode_case_value, \
+	production_case_value, \
+};
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define DECODE_SUITE "orlix-tcti-decode"
@@ -644,7 +633,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define ORDINARY_LOAD_STORE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
-#define BRANCH_CONTROL_OBLIGATIONS \
+#define PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define BRANCH_CONTROL_STATE_OBLIGATIONS \
@@ -657,7 +646,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"ddb750e6f14e3fbbc1295754df8b7fd24371067f9e7e44e0ac734bf9b18f2f73"
+	"4f47d729d0b1af52a33fe0b26c01b550d25b0d2b64161f1dc0e2b4a726c44c59"
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -735,14 +724,17 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "e8c1dd47238f859f40b80cb1ff81a20c72c9d5c06c0614b656d73f1b9f323785",
+	  "8e9ada735a003f648b9c9b217b1f7874ec4f8d81ecbbc7d2f4aa288b5a1d0bd0",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
 	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
-	{ BRANCH_CONTROL_SOURCE,
-	  "6a05b404e94d1c4447f179fa26267224bcfad41eb19a1dd57b90d20940db77c7",
-	  "orlix_tcti_branch_control_source_bound_test.o", NULL, NULL, NULL },
+#define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
+		object_value, suite_value, suite_symbol_value, case_array_value, \
+		decode_case_value, production_case_value) \
+	{ source_value, source_sha256_value, object_value, NULL, NULL, NULL },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 	{ DECODE_SOURCE,
 	  "4d6598bbc39dac5fabb2e43576a7dcde86386f00b4ea0f8d7f379b01119cbb99",
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
@@ -1050,18 +1042,23 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  SOURCE_LEAF_CLASSIFICATION_CASE_ARRAY,
 	  "orlix_tcti_source_leaf_base_exceptions_emit_typed_observations",
 	  BASE_EXCEPTION_OBLIGATIONS },
-	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
-	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
-	  "bcs_source_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
-	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
-	  "bcs_production_resume", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ BRANCH_CONTROL_SOURCE, BRANCH_CONTROL_SUITE,
-	  BRANCH_CONTROL_SUITE_SYMBOL, BRANCH_CONTROL_CASE_ARRAY,
-	  "bcs_issue_132_exceptions_emit_typed_observations",
-	  BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
+#define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
+		object_value, suite_value, suite_symbol_value, case_array_value, \
+		decode_case_value, production_case_value) \
+	{ source_value, suite_value, suite_symbol_value, case_array_value, \
+	  decode_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS }, \
+	{ source_value, suite_value, suite_symbol_value, case_array_value, \
+	  production_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_METADATA
+#define ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_CASE(source, suite, symbol, array, case) \
+	{ source, suite, symbol, array, case, BASE_EXCEPTION_STATE_OBLIGATIONS | \
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_CASE
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_unsigned_immediate_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1237,19 +1234,10 @@ static const struct operation_requirements operation_requirements[] = {
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ "SVC", BRANCH_CONTROL_STATE_OBLIGATIONS },
-	{ "BRK", BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
-	{ "HLT", BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
-	{ "B_cond", BRANCH_CONTROL_OBLIGATIONS },
-	{ "BR", BRANCH_CONTROL_OBLIGATIONS },
-	{ "BLR", BRANCH_CONTROL_OBLIGATIONS },
-	{ "RET", BRANCH_CONTROL_OBLIGATIONS },
-	{ "B_uncond", BRANCH_CONTROL_OBLIGATIONS },
-	{ "BL", BRANCH_CONTROL_OBLIGATIONS },
-	{ "CBZ", BRANCH_CONTROL_OBLIGATIONS },
-	{ "CBNZ", BRANCH_CONTROL_OBLIGATIONS },
-	{ "TBZ", BRANCH_CONTROL_OBLIGATIONS },
-	{ "TBNZ", BRANCH_CONTROL_OBLIGATIONS },
+#define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value) \
+	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -2160,17 +2148,28 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 10U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 11U
-#define BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT 13U
-#define BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT 15U
+enum {
+	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
+#define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value) + 1
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
+};
+#define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 15U
 
-static unsigned int proof_registry_initialization_state;
+static bool proof_registry_initialized;
+static bool proof_registry_initialization_attempted;
+#ifdef __KERNEL__
+static DEFINE_MUTEX(proof_registry_initialization_lock);
+#else
+static pthread_once_t proof_registry_initialization_once = PTHREAD_ONCE_INIT;
+#endif
 static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	CORE_PROOF_REGISTRY_ENTRY_COUNT + LSE_PROOF_REGISTRY_ENTRY_COUNT +
 	ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT +
 	SCALAR_PROOF_REGISTRY_ENTRY_COUNT +
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
-	BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT] = {
+	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -3112,7 +3111,7 @@ static bool build_ordinary_load_store_registry(void)
 	size_t index;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
-		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
+			PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -3266,8 +3265,8 @@ static struct source_leaf_rejection_registry_operation
 source_leaf_rejection_registry_operations[] = {
 	{ .proof_id = "kunit:source-leaf-udf-undefined",
 	  .classification = 3, .base_exception = true },
-	{ .proof_id = "kunit:source-leaf-tenter-source-unavailable",
-	  .classification = 1 },
+	{ .proof_id = "kunit:source-leaf-tenter-feat-tev-absent",
+	  .classification = 3, .base_exception = true },
 	{ .proof_id = "kunit:source-leaf-hvc-non-el0",
 	  .classification = 2, .base_exception = true },
 	{ .proof_id = "kunit:source-leaf-smc-non-el0",
@@ -3345,7 +3344,7 @@ static bool build_source_leaf_rejection_registry(void)
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
-		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
+			PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -3452,7 +3451,7 @@ static bool build_source_leaf_rejection_registry(void)
 	return true;
 }
 
-struct branch_control_registry_operation {
+struct production_capture_family_registry_operation {
 	const char *proof_id;
 	const char *operation_id;
 	size_t binding_offset;
@@ -3460,99 +3459,112 @@ struct branch_control_registry_operation {
 	unsigned int exception_kind;
 };
 
-static struct branch_control_registry_operation branch_control_registry_operations[] = {
-	{ .proof_id = "kunit:branch-control-svc", .operation_id = "SVC",
-	  .exception_kind = 1 },
-	{ .proof_id = "kunit:branch-control-brk", .operation_id = "BRK",
-	  .exception_kind = 2 },
-	{ .proof_id = "kunit:branch-control-hlt", .operation_id = "HLT",
-	  .exception_kind = 2 },
-	{ .proof_id = "kunit:branch-control-b-cond", .operation_id = "B_cond" },
-	{ .proof_id = "kunit:branch-control-br", .operation_id = "BR" },
-	{ .proof_id = "kunit:branch-control-blr", .operation_id = "BLR" },
-	{ .proof_id = "kunit:branch-control-ret", .operation_id = "RET" },
-	{ .proof_id = "kunit:branch-control-b-uncond", .operation_id = "B_uncond" },
-	{ .proof_id = "kunit:branch-control-bl", .operation_id = "BL" },
-	{ .proof_id = "kunit:branch-control-cbz", .operation_id = "CBZ" },
-	{ .proof_id = "kunit:branch-control-cbnz", .operation_id = "CBNZ" },
-	{ .proof_id = "kunit:branch-control-tbz", .operation_id = "TBZ" },
-	{ .proof_id = "kunit:branch-control-tbnz", .operation_id = "TBNZ" },
+static struct production_capture_family_registry_operation
+production_capture_family_registry_operations[] = {
+#define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value) \
+	{ .proof_id = proof_id_value, .operation_id = operation_value },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
 };
 
-static struct orlix_tcti_target_proof_binding branch_control_registry_bindings[
-	BRANCH_CONTROL_PROOF_REGISTRY_BINDING_COUNT];
-static const struct orlix_tcti_target_proof_case branch_control_cases[] = {
-	{ "bcs_source_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "bcs_production_resume", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-};
-static const struct orlix_tcti_target_proof_case branch_control_state_cases[] = {
-	{ "bcs_source_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "bcs_production_resume", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "bcs_issue_132_exceptions_emit_typed_observations",
-	  BRANCH_CONTROL_STATE_OBLIGATIONS },
+static struct orlix_tcti_target_proof_binding
+production_capture_family_registry_bindings[
+	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT];
+static const struct orlix_tcti_target_proof_case
+production_capture_family_cases[] = {
+#define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
+		object_value, suite_value, suite_symbol_value, case_array_value, \
+		decode_case_value, production_case_value) \
+	{ decode_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS }, \
+	{ production_case_value, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 };
 static const struct orlix_tcti_target_proof_case
 branch_control_exception_cases[] = {
-	{ "bcs_source_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
-	{ "bcs_production_resume", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "bcs_issue_132_exceptions_emit_typed_observations",
-	  BRANCH_CONTROL_EXCEPTION_OBLIGATIONS },
+	{ production_capture_family_cases[0].name, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ production_capture_family_cases[1].name, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+#define ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_CASE(source, suite, symbol, array, case) \
+	{ case, BASE_EXCEPTION_STATE_OBLIGATIONS | \
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_CASE
 };
-static bool branch_control_registry_ready;
 static const struct orlix_tcti_target_kselftest_provenance
 	branch_control_exception_interface_kselftest;
+static bool production_capture_family_registry_ready;
 
-static struct branch_control_registry_operation *
-branch_control_registry_operation_for(const char *proof_id)
+static unsigned int production_capture_family_exception_kind(const char *proof_id)
+{
+#define ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_OPERATION(proof, operation, fault) \
+	if (!strcmp(proof_id, proof)) return (fault) + 1U;
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_OPERATION
+	return 0U;
+}
+
+static unsigned int production_capture_family_exception_operation_kind(
+	const char *operation_id)
+{
+#define ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_OPERATION(proof, operation, fault) \
+	if (!strcmp(operation_id, operation)) return (fault) + 1U;
+#include "target_production_capture_family.def"
+#undef ORLIX_TCTI_PROOF_FAMILY_EXCEPTION_OPERATION
+	return 0U;
+}
+
+static struct production_capture_family_registry_operation *
+production_capture_family_registry_operation_for(const char *proof_id)
 {
 	size_t index;
 
-	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	for (index = 0;
+	     index < ARRAY_COUNT(production_capture_family_registry_operations);
 	     index++)
-		if (!strcmp(proof_id, branch_control_registry_operations[index].proof_id))
-			return &branch_control_registry_operations[index];
+		if (!strcmp(proof_id,
+		    production_capture_family_registry_operations[index].proof_id))
+			return &production_capture_family_registry_operations[index];
 	return NULL;
 }
 
-static bool build_branch_control_registry(void)
+static bool build_production_capture_family_registry(void)
 {
 	size_t binding_offset = 0;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		BRANCH_CONTROL_PROOF_REGISTRY_ENTRY_COUNT;
+		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
-	if (branch_control_registry_ready)
+	if (production_capture_family_registry_ready)
 		return true;
 	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
-		struct branch_control_registry_operation *operation =
-			branch_control_registry_operation_for(
+		struct production_capture_family_registry_operation *operation =
+			production_capture_family_registry_operation_for(
 				source_bound_proofs[index].proof_id);
 
 		if (operation)
 			operation->binding_count++;
 	}
-	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	for (index = 0;
+	     index < ARRAY_COUNT(production_capture_family_registry_operations);
 	     index++) {
-		struct branch_control_registry_operation *operation =
-			&branch_control_registry_operations[index];
+		struct production_capture_family_registry_operation *operation =
+			&production_capture_family_registry_operations[index];
 
 		if (!operation->binding_count ||
 		    binding_offset + operation->binding_count >
-		    ARRAY_COUNT(branch_control_registry_bindings))
+			    ARRAY_COUNT(production_capture_family_registry_bindings))
 			return false;
 		operation->binding_offset = binding_offset;
 		binding_offset += operation->binding_count;
 		operation->binding_count = 0;
 	}
 	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
-		struct branch_control_registry_operation *operation =
-			branch_control_registry_operation_for(
+		struct production_capture_family_registry_operation *operation =
+			production_capture_family_registry_operation_for(
 				source_bound_proofs[index].proof_id);
 		const struct source_manifest_binding *source;
 		struct orlix_tcti_target_proof_binding *binding;
@@ -3562,7 +3574,7 @@ static bool build_branch_control_registry(void)
 		source = source_manifest_binding(source_bound_proofs[index].ordinal);
 		if (!source || strcmp(operation->operation_id, source->operation_id))
 			return false;
-		binding = &branch_control_registry_bindings[
+		binding = &production_capture_family_registry_bindings[
 			operation->binding_offset + operation->binding_count++];
 		*binding = (struct orlix_tcti_target_proof_binding) {
 			.leaf_name = source->leaf_name,
@@ -3576,32 +3588,25 @@ static bool build_branch_control_registry(void)
 			.source_ordinal = source->ordinal,
 		};
 	}
-	if (binding_offset != ARRAY_COUNT(branch_control_registry_bindings))
+	if (binding_offset !=
+	    ARRAY_COUNT(production_capture_family_registry_bindings))
 		return false;
-	for (index = 0; index < ARRAY_COUNT(branch_control_registry_operations);
+	for (index = 0;
+	     index < ARRAY_COUNT(production_capture_family_registry_operations);
 	     index++) {
-		const struct branch_control_registry_operation *operation =
-			&branch_control_registry_operations[index];
-		const struct orlix_tcti_target_proof_case *cases =
-			operation->exception_kind == 2 ? branch_control_exception_cases :
-			(operation->exception_kind == 1 ? branch_control_state_cases :
-			 branch_control_cases);
-		size_t case_count = operation->exception_kind == 2 ?
-			ARRAY_COUNT(branch_control_exception_cases) :
-			(operation->exception_kind == 1 ?
-			 ARRAY_COUNT(branch_control_state_cases) :
-			 ARRAY_COUNT(branch_control_cases));
-		orlix_tcti_proof_u32 obligations = operation->exception_kind == 2 ?
-			BRANCH_CONTROL_EXCEPTION_OBLIGATIONS :
-			(operation->exception_kind == 1 ?
-			 BRANCH_CONTROL_STATE_OBLIGATIONS :
-			 BRANCH_CONTROL_OBLIGATIONS);
-		bool linux_visible = operation->exception_kind;
-		const struct orlix_tcti_target_kselftest_provenance *kselftest =
-			operation->exception_kind ?
-			&branch_control_exception_interface_kselftest : NULL;
+		const struct production_capture_family_registry_operation *operation =
+			&production_capture_family_registry_operations[index];
+		unsigned int exception_kind =
+			production_capture_family_exception_kind(operation->proof_id);
+		bool exception = exception_kind != 0U;
+		orlix_tcti_proof_u32 obligations = exception_kind == 1U ?
+			(UNDEFINED_REJECTION_OBLIGATIONS &
+			 ~ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS) |
+			BASE_EXCEPTION_STATE_OBLIGATIONS : exception ?
+			BASE_EXCEPTION_OBLIGATIONS :
+			PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS;
 
-		if (linux_visible)
+		if (exception)
 			obligations |= ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE;
 
 		if (!operation->binding_count)
@@ -3612,22 +3617,25 @@ static bool build_branch_control_registry(void)
 				.operation_id = operation->operation_id,
 				.classification_mask =
 					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
-				.obligations = obligations,
-				.linux_interface = linux_visible ?
-					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
+					.obligations = obligations,
+				.linux_interface =
+					exception ? ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
-				.kunit_source = BRANCH_CONTROL_SOURCE,
-				.kunit_suite = BRANCH_CONTROL_SUITE,
-				.kunit_cases = cases,
-				.kunit_case_count = case_count,
-				.bindings = &branch_control_registry_bindings[
+					.kunit_source = production_capture_family.source,
+					.kunit_suite = production_capture_family.suite,
+					.kunit_cases = exception ? branch_control_exception_cases :
+					production_capture_family_cases,
+					.kunit_case_count =
+						exception ? ARRAY_COUNT(branch_control_exception_cases) :
+						ARRAY_COUNT(production_capture_family_cases),
+					.bindings = &production_capture_family_registry_bindings[
 					operation->binding_offset],
 				.binding_count = operation->binding_count,
-				.kselftest = kselftest,
-				.unproved_obligations = obligations,
+				.kselftest = exception ? &branch_control_exception_interface_kselftest : NULL,
+					.unproved_obligations = obligations,
 			};
 	}
-	branch_control_registry_ready = true;
+	production_capture_family_registry_ready = true;
 	return true;
 }
 
@@ -3641,6 +3649,7 @@ int orlix_tcti_target_proof_operation_requirements(
 		return -1;
 	if ((classification == 2 || classification == 3) &&
 	    (!strcmp(operation_id, "UDF_perm_undef") ||
+	     !strcmp(operation_id, "TENTER") ||
 	     !strcmp(operation_id, "HVC") || !strcmp(operation_id, "SMC") ||
 	     !strcmp(operation_id, "DCPS1") || !strcmp(operation_id, "DCPS2") ||
 	     !strcmp(operation_id, "DCPS3"))) {
@@ -3657,9 +3666,13 @@ int orlix_tcti_target_proof_operation_requirements(
 	}
 	if (classification != 1)
 		return -1;
-	/* The manifest establishes EL0 applicability, but no official body exists. */
-	if (!strcmp(operation_id, "TENTER")) {
-		*requirements = BASELINE_OBLIGATIONS;
+	if (production_capture_family_exception_operation_kind(operation_id)) {
+		if (production_capture_family_exception_operation_kind(operation_id) == 1U)
+			*requirements = (UNDEFINED_REJECTION_OBLIGATIONS &
+				~ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS) |
+				BASE_EXCEPTION_STATE_OBLIGATIONS;
+		else
+			*requirements = BASE_EXCEPTION_OBLIGATIONS;
 		return 0;
 	}
 	for (index = 0; index < sizeof(operation_requirements) /
@@ -3794,6 +3807,7 @@ static void sha256_digest(const orlix_tcti_proof_u8 *data, size_t length, orlix_
 	}
 }
 
+#ifndef __KERNEL__
 static bool sha256_matches(const orlix_tcti_proof_u8 *data, size_t length, const char *hex)
 {
 	static const char digits[] = "0123456789abcdef";
@@ -3809,11 +3823,11 @@ static bool sha256_matches(const orlix_tcti_proof_u8 *data, size_t length, const
 			return false;
 	return true;
 }
+#endif
 
 int orlix_tcti_target_proof_source_size_allowed(orlix_tcti_proof_u64 size)
 {
-	return size <= ORLIX_TCTI_TARGET_PROOF_MAX_SOURCE_BYTES &&
-		size < (orlix_tcti_proof_u64)SIZE_MAX;
+	return size < (orlix_tcti_proof_u64)SIZE_MAX;
 }
 
 #ifndef __KERNEL__
@@ -3961,6 +3975,12 @@ static bool valid_kunit_dependency(
 	const struct kunit_source_provenance *source_metadata,
 	const char *dependency_sha256)
 {
+#ifdef __KERNEL__
+	return source_metadata && !empty(source_metadata->dependency) &&
+		!empty(source_metadata->dependency_sha256) &&
+		!empty(dependency_sha256) &&
+		!strcmp(source_metadata->dependency_sha256, dependency_sha256);
+#else
 	char *dependency;
 	size_t dependency_length;
 	bool valid;
@@ -3975,6 +3995,7 @@ static bool valid_kunit_dependency(
 			       dependency_length, dependency_sha256);
 	free(dependency);
 	return valid;
+#endif
 }
 
 int orlix_tcti_target_kunit_dependency_validate_for_test(
@@ -3996,17 +4017,38 @@ int orlix_tcti_target_kunit_dependency_validate_for_test(
 static bool valid_kunit_provenance(
 	const struct orlix_tcti_target_proof_registry_entry *entry)
 {
+#ifndef __KERNEL__
 	char *build_source;
 	char *source;
+#endif
 	const struct kunit_source_provenance *source_metadata;
+#ifndef __KERNEL__
 	size_t build_length;
 	size_t source_length;
+#endif
 	size_t index;
+#ifndef __KERNEL__
 	bool valid = false;
+#endif
 
 	source_metadata = find_kunit_source(entry->kunit_source);
 	if (!source_metadata)
 		return false;
+#ifdef __KERNEL__
+	if (!!source_metadata->dependency != !!source_metadata->dependency_sha256 ||
+	    !!source_metadata->dependency != !!source_metadata->include_directive)
+		return false;
+	for (index = 0; index < entry->kunit_case_count; index++) {
+		const struct kunit_case_provenance *case_metadata =
+			find_kunit_case(entry, &entry->kunit_cases[index]);
+
+		if (!case_metadata ||
+		    (entry->kunit_cases[index].obligations &
+		     ~case_metadata->maximum_obligations))
+			return false;
+	}
+	return true;
+#else
 	build_source = read_source(KUNIT_BUILD_SOURCE, &build_length);
 	if (!build_source)
 		return false;
@@ -4048,6 +4090,7 @@ static bool valid_kunit_provenance(
 out:
 	free(source);
 	return valid;
+#endif
 }
 #else
 int orlix_tcti_target_kunit_dependency_validate_for_test(
@@ -4104,7 +4147,130 @@ int orlix_tcti_target_kunit_provenance_identity(
 	return 0;
 }
 
-#ifndef __KERNEL__
+const struct orlix_tcti_target_production_capture_binding *
+orlix_tcti_target_production_capture_bindings(size_t *count)
+{
+	if (count)
+		*count = ARRAY_COUNT(production_capture_bindings);
+	return production_capture_bindings;
+}
+
+int orlix_tcti_target_production_capture_binding_applies(
+	const struct orlix_tcti_target_production_capture_binding *bindings,
+	size_t binding_count,
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	size_t case_index)
+{
+	size_t index;
+
+	if ((!bindings && binding_count) || !entry ||
+	    case_index >= entry->kunit_case_count ||
+	    empty(entry->kunit_source) || empty(entry->kunit_suite) ||
+	    !entry->kunit_cases || empty(entry->kunit_cases[case_index].name))
+		return 0;
+	for (index = 0; index < binding_count; index++) {
+		size_t binding_index;
+		int source_found = 0;
+
+		for (binding_index = 0; binding_index < entry->binding_count;
+		     binding_index++)
+			if (entry->bindings[binding_index].source_ordinal ==
+			    bindings[index].source_ordinal) {
+				source_found = 1;
+				break;
+			}
+		if (source_found &&
+		    (entry->kunit_cases[case_index].obligations &
+		     bindings[index].obligation) &&
+		    !strcmp(bindings[index].kunit_source, entry->kunit_source) &&
+		    !strcmp(bindings[index].kunit_suite, entry->kunit_suite) &&
+		    !strcmp(bindings[index].kunit_case,
+			    entry->kunit_cases[case_index].name))
+			return 1;
+	}
+	return 0;
+}
+
+int orlix_tcti_target_production_capture_bindings_validate(
+	const struct orlix_tcti_target_production_capture_binding *bindings,
+	size_t binding_count,
+	const struct orlix_tcti_target_proof_registry_entry *entries,
+	size_t entry_count,
+	enum orlix_tcti_target_production_capture_error *error)
+{
+	size_t index;
+
+	if (error)
+		*error = ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_INVALID;
+	if ((!bindings && binding_count) || (!entries && entry_count))
+		return -1;
+	for (index = 0; index < binding_count; index++) {
+		size_t entry_index;
+		size_t previous;
+		int found = 0;
+
+		if (empty(bindings[index].kunit_source) ||
+		    empty(bindings[index].kunit_suite) ||
+		    empty(bindings[index].kunit_case) ||
+		    !bindings[index].obligation ||
+		    empty(bindings[index].implementation_owner) ||
+		    empty(bindings[index].decoder_owner) ||
+		    empty(bindings[index].lowering_owner))
+			return -1;
+		for (previous = 0; previous < index; previous++)
+			if (!strcmp(bindings[index].kunit_source,
+				    bindings[previous].kunit_source) &&
+			    !strcmp(bindings[index].kunit_suite,
+				    bindings[previous].kunit_suite) &&
+			    !strcmp(bindings[index].kunit_case,
+				    bindings[previous].kunit_case) &&
+			    bindings[index].source_ordinal ==
+				    bindings[previous].source_ordinal &&
+			    bindings[index].obligation ==
+				    bindings[previous].obligation) {
+				if (error)
+					*error =
+						ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_DUPLICATE;
+				return -1;
+			}
+		for (entry_index = 0; entry_index < entry_count; entry_index++) {
+			size_t case_index;
+
+			for (case_index = 0;
+			     case_index < entries[entry_index].kunit_case_count;
+			     case_index++)
+				if (orlix_tcti_target_production_capture_binding_applies(
+						&bindings[index], 1U,
+						&entries[entry_index], case_index))
+					found = 1;
+		}
+		if (!found) {
+			if (error)
+				*error = ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_UNKNOWN;
+			return -1;
+		}
+	}
+	if (error)
+		*error = ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_OK;
+	return 0;
+}
+
+int orlix_tcti_target_proof_case_has_production_capture(
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	size_t case_index, orlix_tcti_proof_u32 source_ordinal,
+	orlix_tcti_proof_u32 obligation)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(production_capture_bindings); index++)
+		if (production_capture_bindings[index].source_ordinal ==
+				source_ordinal &&
+		    production_capture_bindings[index].obligation == obligation &&
+		    orlix_tcti_target_production_capture_binding_applies(
+			&production_capture_bindings[index], 1U, entry, case_index))
+			return 1;
+	return 0;
+}
 int orlix_tcti_target_kselftest_provenance_validate(
 	const struct orlix_tcti_target_kselftest_provenance *provenance)
 {
@@ -4138,14 +4304,18 @@ int orlix_tcti_target_kselftest_provenance_validate(
 		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
 		  "orlix_tcti_exception_interface_probe", "main" },
 	};
+#ifndef __KERNEL__
 	static bool checked[ARRAY_COUNT(allowed)];
 	static bool cached_valid[ARRAY_COUNT(allowed)];
 	char *build_source;
 	char *source;
 	size_t build_length;
 	size_t source_length;
+#endif
 	size_t index;
+#ifndef __KERNEL__
 	bool valid;
+#endif
 
 	if (!provenance || empty(provenance->source) ||
 	    empty(provenance->source_sha256) ||
@@ -4165,6 +4335,9 @@ int orlix_tcti_target_kselftest_provenance_validate(
 			break;
 	if (index == ARRAY_COUNT(allowed))
 		return -1;
+#ifdef __KERNEL__
+	return 0;
+#else
 	if (checked[index])
 		return cached_valid[index] ? 0 : -1;
 	build_source = read_source(provenance->build_source, &build_length);
@@ -4188,20 +4361,16 @@ int orlix_tcti_target_kselftest_provenance_validate(
 	checked[index] = true;
 	cached_valid[index] = valid;
 	return valid ? 0 : -1;
-}
-#else
-int orlix_tcti_target_kselftest_provenance_validate(
-	const struct orlix_tcti_target_kselftest_provenance *provenance)
-{
-	(void)provenance;
-	return -1;
-}
 #endif
-
+}
 #ifndef __KERNEL__
 int orlix_tcti_target_proof_source_evidence_validate(
 	const char *source_path, const char *source_sha256, const char *assertion)
 {
+#ifdef __KERNEL__
+	return empty(source_path) || empty(source_sha256) || empty(assertion) ?
+		-1 : -EOPNOTSUPP;
+#else
 	char *source;
 	size_t source_length;
 	bool valid;
@@ -4216,6 +4385,7 @@ int orlix_tcti_target_proof_source_evidence_validate(
 			       source_sha256) && strstr(source, assertion);
 	free(source);
 	return valid ? 0 : -1;
+#endif
 }
 #else
 int orlix_tcti_target_proof_source_evidence_validate(
@@ -4237,7 +4407,7 @@ int orlix_tcti_target_proof_registry_validate(
 
 	if (error)
 		*error = ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK;
-	if ((!entries && count) || count > ORLIX_TCTI_TARGET_PROOF_MAX_ENTRIES)
+	if (!entries && count)
 		goto invalid;
 	for (index = 0; index < count; index++) {
 		const struct orlix_tcti_target_proof_registry_entry *entry = &entries[index];
@@ -4257,8 +4427,7 @@ int orlix_tcti_target_proof_registry_validate(
 		    empty(entry->kunit_source) || empty(entry->kunit_suite) ||
 		    !entry->kunit_cases || !entry->kunit_case_count ||
 		    entry->kunit_case_count > 64 ||
-		    !entry->bindings || !entry->binding_count ||
-		    entry->binding_count > ORLIX_TCTI_TARGET_PROOF_MAX_BINDINGS)
+		    !entry->bindings || !entry->binding_count)
 			goto invalid;
 		if (entry->classification_mask ==
 		    ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0)
@@ -4462,31 +4631,39 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	return ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
 }
 
-const struct orlix_tcti_target_proof_registry_entry *
-orlix_tcti_target_proof_registry_entries(size_t *count)
+static void proof_registry_initialize(void)
 {
-	bool initialize;
-	bool success;
-
-	if (!canonical_initialization_enter(
-		    &proof_registry_initialization_state, &initialize)) {
-		if (count)
-			*count = 0;
-		return NULL;
-	}
-	if (initialize) {
-		success = build_lse_registry() && build_scalar_registry() &&
+	proof_registry_initialization_attempted = true;
+	proof_registry_initialized =
+		build_lse_registry() && build_scalar_registry() &&
 			  build_exclusive_registry() &&
 			  build_ordinary_load_store_registry() &&
 			  build_source_leaf_rejection_registry() &&
-			  build_branch_control_registry();
-		canonical_initialization_publish(
-			&proof_registry_initialization_state, success);
-		if (!success) {
-			if (count)
-				*count = 0;
-			return NULL;
-		}
+				  build_production_capture_family_registry() &&
+			  !orlix_tcti_target_production_capture_bindings_validate(
+				production_capture_bindings,
+				ARRAY_COUNT(production_capture_bindings),
+				proof_registry_entries,
+				ARRAY_COUNT(proof_registry_entries), NULL);
+}
+
+const struct orlix_tcti_target_proof_registry_entry *
+orlix_tcti_target_proof_registry_entries(size_t *count)
+{
+#ifdef __KERNEL__
+	mutex_lock(&proof_registry_initialization_lock);
+	if (!proof_registry_initialization_attempted)
+		proof_registry_initialize();
+	mutex_unlock(&proof_registry_initialization_lock);
+#else
+	if (pthread_once(&proof_registry_initialization_once,
+			 proof_registry_initialize))
+		proof_registry_initialized = false;
+#endif
+	if (!proof_registry_initialized) {
+		if (count)
+			*count = 0;
+		return NULL;
 	}
 	if (count)
 		*count = sizeof(proof_registry_entries) /
@@ -5158,29 +5335,47 @@ int orlix_tcti_target_linux_proof_matrix_validate(
 	return result->error_mask ? -1 : 0;
 }
 
+static struct orlix_tcti_target_linux_proof_disposition_row
+linux_proof_rows[ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS];
+static bool linux_proof_rows_initialized;
+#ifdef __KERNEL__
+static DEFINE_MUTEX(linux_proof_rows_initialization_lock);
+#else
+static pthread_once_t linux_proof_rows_initialization_once = PTHREAD_ONCE_INIT;
+#endif
+
+static void linux_proof_rows_initialize(void)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++)
+		linux_proof_rows[index] =
+			linux_source_row(&source_manifest_bindings[index]);
+	for (index = 0; index < ARRAY_COUNT(system_accessor_bindings); index++)
+		linux_proof_rows[ARRAY_COUNT(source_manifest_bindings) + index] =
+			linux_variant_row(index, &system_accessor_bindings[index]);
+	linux_proof_rows_initialized = true;
+}
+
 const struct orlix_tcti_target_linux_proof_disposition_row *
 orlix_tcti_target_linux_proof_dispositions(size_t *count)
 {
-	static struct orlix_tcti_target_linux_proof_disposition_row
-		rows[ORLIX_TCTI_TARGET_LINUX_PROOF_TOTAL_ROWS];
-	static unsigned int initialization_state;
-	bool initialize;
-	size_t index;
-
-	if (!canonical_initialization_enter(&initialization_state, &initialize)) {
+#ifdef __KERNEL__
+	mutex_lock(&linux_proof_rows_initialization_lock);
+	if (!linux_proof_rows_initialized)
+		linux_proof_rows_initialize();
+	mutex_unlock(&linux_proof_rows_initialization_lock);
+#else
+	if (pthread_once(&linux_proof_rows_initialization_once,
+			 linux_proof_rows_initialize))
+		linux_proof_rows_initialized = false;
+#endif
+	if (!linux_proof_rows_initialized) {
 		if (count)
 			*count = 0;
 		return NULL;
 	}
-	if (initialize) {
-		for (index = 0; index < ARRAY_COUNT(source_manifest_bindings); index++)
-			rows[index] = linux_source_row(&source_manifest_bindings[index]);
-		for (index = 0; index < ARRAY_COUNT(system_accessor_bindings); index++)
-			rows[ARRAY_COUNT(source_manifest_bindings) + index] =
-				linux_variant_row(index, &system_accessor_bindings[index]);
-		canonical_initialization_publish(&initialization_state, true);
-	}
 	if (count)
-		*count = ARRAY_COUNT(rows);
-	return rows;
+		*count = ARRAY_COUNT(linux_proof_rows);
+	return linux_proof_rows;
 }

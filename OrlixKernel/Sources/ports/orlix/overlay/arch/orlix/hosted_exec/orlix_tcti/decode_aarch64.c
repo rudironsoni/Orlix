@@ -862,9 +862,9 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		return decoded;
 	}
 
-	/* The pinned TENTER operation body is explicitly unspecified. */
+	/* FEAT_TEV is absent from the Orlix EL0 capability profile. */
 	if ((instruction & AARCH64_TENTER_MASK) == AARCH64_TENTER_PATTERN) {
-		decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
+		decoded.decode_class = ORLIX_TCTI_DECODE_UNDEFINED;
 		return decoded;
 	}
 

@@ -118,10 +118,17 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/engine.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_capture.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_instruction_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_proof_registry.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_proof_ingestion.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_native_proof_contract.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_native_proof_registry.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/report.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/switch_debug.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fixed_fp.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sme_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_decode.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/decode_aarch64.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tls_repair.c \
@@ -1046,14 +1053,11 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_ordinal_ledger.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_ordinal_ledger_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_decode_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_uaccess_test.c \
@@ -1069,9 +1073,8 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_resume_production_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_scalar_rmw_resume_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_exclusive_resume_production_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation_test.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_observation_production_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_capture_test.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_native_capture_production_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_tls_repair_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_logical_shifted_register_test.c \
@@ -1135,6 +1138,9 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 endif
 
 ORLIX_KUNIT_BUILD_DIR := $(ORLIX_BUILD_ROOT)/OrlixKernel/kunit/$(PROFILE)
+ORLIX_KUNIT_TCTI_TEST_DIR := arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests
+ORLIX_KUNIT_TCTI_TEST_ARCHIVE := $(ORLIX_KUNIT_TCTI_TEST_DIR)/built-in.a
+ORLIX_KUNIT_TCTI_BUILD_TARGET := arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/
 ORLIX_MLIBC_KERNEL_HEADERS_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kernel-headers/$(PROFILE)
 ORLIX_MLIBC_SYSROOT ?= $(ORLIX_BUILD_ROOT)/OrlixMLibC/sysroot/$(PROFILE)
 ORLIX_MLIBC_KSELFTEST_INSTALL_DIR := $(ORLIX_BUILD_ROOT)/OrlixMLibC/kselftest/$(PROFILE)
@@ -1250,8 +1256,16 @@ include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/disposable-tree.mk
 include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/rules.mk
+include OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kernel-archive __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+# The ISA build-time declaration is the only accepted contributor encoding.
+# It rejects command-line and environment overrides before a value reaches a
+# shell array below.
+ifneq ($(origin ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS),file)
+$(error instruction-artifact-contributors.mk must define ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS)
+endif
+
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __candidate-source-revision-tests __candidate-source-revision-artifact-override-rejection-probe __profile-lock-held-probe __target-refresh-syntax-source-check __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1285,6 +1299,145 @@ kunit: __kunit
 kselftest-install: __kselftest-install
 
 kselftest: kselftest-install __kselftest-initramfs
+
+__profile-lock-held-probe:
+	@test "$${ORLIX_KERNEL_PROFILE_LOCK_HELD:-0}" = 1
+
+__candidate-source-revision-artifact-override-rejection-probe:
+	@:
+
+__target-refresh-syntax-source-check:
+	@set -euo pipefail; \
+	"$(ORLIX_COMPILER_LAUNCHER)" "$(CC)" -std=c11 -fsyntax-only "$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/target_refresh.c"
+
+__candidate-source-revision-tests:
+	@set -euo pipefail; \
+	$(orlix_tcti_file_sha256) \
+	$(orlix_tcti_candidate_source_revision) \
+	$(orlix_tcti_manifest_sha256) \
+	$(orlix_tcti_proof_profile_sha256) \
+	$(orlix_tcti_proof_inputs_sha256) \
+	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-tcti-candidate-source.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	fail() { printf 'candidate source revision test failed: %s\n' "$$*" >&2; exit 1; }; \
+	mkdir -p "$$tmp/candidate"; \
+	printf 'first candidate input\n' > "$$tmp/candidate/first.c"; \
+	printf 'second candidate input\n' > "$$tmp/candidate/second.h"; \
+	ln -s first.c "$$tmp/candidate/current"; \
+	printf 'current\0first.c\0second.h\0space name\0-leading-dash\0embedded\nnewline\0terminal-newline\n\0' > "$$tmp/paths"; \
+	printf 'space candidate input\n' > "$$tmp/candidate/space name"; \
+	printf 'leading-dash candidate input\n' > "$$tmp/candidate/-leading-dash"; \
+	printf 'embedded newline candidate input\n' > "$$tmp/candidate/embedded"$$'\n'"newline"; \
+	printf 'terminal newline candidate input\n' > "$$tmp/candidate/terminal-newline"$$'\n'; \
+	before="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/paths")"; \
+	repeated="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/paths")"; \
+	[ "$$before" = "$$repeated" ] || fail 'candidate source identity is not deterministic'; \
+	printf 'staged-or-working candidate change\n' >> "$$tmp/candidate/second.h"; \
+	after="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/paths")"; \
+	[ "$$before" != "$$after" ] || fail 'candidate source change retained its previous identity'; \
+	target_with_terminal_newline="$$(printf 'target\nx')"; target_with_terminal_newline="$${target_with_terminal_newline%x}"; \
+	ln -s target "$$tmp/candidate/symlink-target-comparison"; \
+	printf 'symlink-target-comparison\0' > "$$tmp/symlink-comparison-paths"; \
+	symlink_plain_revision="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/symlink-comparison-paths")"; \
+	rm -f "$$tmp/candidate/symlink-target-comparison"; ln -s "$$target_with_terminal_newline" "$$tmp/candidate/symlink-target-comparison"; \
+	symlink_newline_revision="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/symlink-comparison-paths")"; \
+	[ "$$symlink_plain_revision" != "$$symlink_newline_revision" ] || fail 'terminal-newline symlink target retained its previous identity'; \
+	ln -s 'target with space' "$$tmp/candidate/symlink space"; \
+	: > "$$tmp/candidate/-target"; ln -s -- -target "$$tmp/candidate/-symlink-leading-dash"; \
+	printf '%s' '-target' > "$$tmp/symlink-leading-dash-target-expected"; readlink -n "$$tmp/candidate/-symlink-leading-dash" > "$$tmp/symlink-leading-dash-target-actual"; cmp -s "$$tmp/symlink-leading-dash-target-expected" "$$tmp/symlink-leading-dash-target-actual" || fail 'leading-dash symlink target bytes changed'; \
+	ln -s $$'target-embedded\nnewline' "$$tmp/candidate/symlink-embedded"$$'\n'"newline"; \
+	ln -s "$$target_with_terminal_newline" "$$tmp/candidate/symlink-terminal-newline"$$'\n'; \
+	printf 'symlink space\0-symlink-leading-dash\0symlink-embedded\nnewline\0symlink-terminal-newline\n\0' > "$$tmp/symlink-hostile-paths"; \
+	symlink_hostile_revision="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/symlink-hostile-paths")"; \
+	[ -n "$$symlink_hostile_revision" ] || fail 'hostile symlink path or target was rejected'; \
+	: > "$$tmp/large-paths"; \
+	for index in $$(seq 1 512); do file="large-$$index"; printf '%s\n' "$$index" > "$$tmp/candidate/$$file"; printf '%s\0' "$$file" >> "$$tmp/large-paths"; done; \
+	large_before="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/large-paths")"; \
+	large_repeated="$$(orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/large-paths")"; \
+	[ "$$large_before" = "$$large_repeated" ] || fail 'large candidate manifest is not deterministic'; \
+	canonical_inputs=( $(foreach proof_artifact_input,$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS),"$(proof_artifact_input)") ); \
+	publisher_source="$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/target_refresh.c"; publisher_declaration="$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/target_refresh_artifacts.def"; kbuild_source="$(ORLIX_TCTI_ISA_TEST_ROOT)/Makefile"; kernel_rules_source="$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"; root_make_source="$(CURDIR)/Makefile"; \
+	make_source_paths="$$tmp/make-source-paths"; \
+	git -C "$(CURDIR)" ls-files -z -- '*Makefile' '*.mk' > "$$make_source_paths" || fail 'cannot enumerate tracked Make sources for retired helper absence'; \
+	retired_helper_name='orlix_tcti_instruction''_artifact_sha256'; \
+	while IFS= read -r -d '' make_source; do \
+		if LC_ALL=C grep -Fq -- "$$retired_helper_name" "$$make_source"; then fail "retired instruction-artifact helper remains in $$make_source"; fi; \
+	done < "$$make_source_paths"; \
+	publisher_actual="$$tmp/publisher-actual"; publisher_expected="$$tmp/publisher-expected"; kbuild_actual="$$tmp/kbuild-actual"; kbuild_expected="$$tmp/kbuild-expected"; \
+	grep -Fq '#include "target_refresh_artifacts.def"' "$$publisher_source" || fail 'target_refresh does not consume its publisher-owned X-macro declaration'; \
+	$(orlix_tcti_target_refresh_artifact_parser) "$$publisher_declaration" > "$$publisher_actual"; \
+	: > "$$publisher_expected"; : > "$$kbuild_expected"; \
+	for contributor in "$${canonical_inputs[@]}"; do contributor_rel="$${contributor##*/isa/}"; case "$$contributor_rel" in generations/current/manifest) ;; generations/current/*) printf '%s\n' "$${contributor_rel##*/}" >> "$$publisher_expected"; printf '%s\n' "$$contributor_rel" >> "$$kbuild_expected" ;; *) printf '%s\n' "$$contributor_rel" >> "$$kbuild_expected" ;; esac; done; \
+	cmp -s "$$publisher_expected" "$$publisher_actual" || fail 'canonical contributor declaration diverges from target_refresh publisher artifacts'; \
+	awk '/isa\// { line = $$0; while (match(line, /isa\/[^ \\]+[.](def|h)/)) { value = substr(line, RSTART, RLENGTH); sub(/^isa\//, "", value); print value; line = substr(line, RSTART + RLENGTH); } }' "$$kbuild_source" | sort -u > "$$kbuild_actual"; \
+	sort -u "$$kbuild_expected" -o "$$kbuild_expected"; comm -23 "$$kbuild_actual" "$$kbuild_expected" | grep -q . && fail 'direct OrlixTCTI Kbuild input is absent from the canonical contributor declaration'; \
+	[ "$$(grep -Fc '"$$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)"' "$$kernel_rules_source")" -eq 3 ] || fail 'product archive cache does not bind every consumer to the canonical contributor declaration'; \
+	[ "$$(grep -Fc '"$$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)"' "$$kernel_rules_source")" -eq 3 ] || fail 'product archive cache does not bind every consumer to the publisher declaration'; \
+	grep -Fq 'include $$(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/instruction-artifact-contributors.mk' "$$root_make_source" || fail 'root host surface does not include the canonical contributor declaration'; \
+	contract_make='$(MAKE) -f $(CURDIR)/OrlixKernel/Makefile __orlix-tcti-instruction-artifact-contract-check'; \
+	contract_inputs="$${canonical_inputs[*]}"; publisher_copy="$$tmp/target_refresh_artifacts.def"; kbuild_copy="$$tmp/Kbuild"; \
+	parse_time_makefile="$$tmp/parse-time-publisher.mk"; parse_time_target_marker="$$tmp/parse-time-target-ran"; parse_time_later_marker="$$tmp/parse-time-later-shell-ran"; \
+	printf '%s\n' 'include $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/instruction-artifact-contributors.mk' 'parse_time_later_success := $$(shell touch "$$(ORLIX_TCTI_PARSE_TIME_LATER_MARKER)")' '.PHONY: __orlix-tcti-parse-time-no-op' '__orlix-tcti-parse-time-no-op:' > "$$parse_time_makefile"; printf '\t@touch "%s"\n' '$$(ORLIX_TCTI_PARSE_TIME_TARGET_MARKER)' >> "$$parse_time_makefile"; \
+	parse_time_make='$(MAKE) -f '"$$parse_time_makefile"' __orlix-tcti-parse-time-no-op'; \
+	parse_time_failure_must_stop_before_later_shell_or_target() { mode="$$1"; declaration="$$2"; shift 2; rm -f "$$parse_time_target_marker" "$$parse_time_later_marker"; if "$$@" $$parse_time_make ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$$declaration" ORLIX_TCTI_PARSE_TIME_LATER_MARKER="$$parse_time_later_marker" ORLIX_TCTI_PARSE_TIME_TARGET_MARKER="$$parse_time_target_marker"; then fail "$$mode publisher parsing reached an unrelated no-op target"; fi; [ ! -e "$$parse_time_later_marker" ] || fail "$$mode publisher parsing was masked by a later successful shell expansion"; [ ! -e "$$parse_time_target_marker" ] || fail "$$mode publisher parsing ran an unrelated no-op target"; }; \
+	printf 'ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(bad, bad.def, manifest) trailing\n' > "$$publisher_copy"; parse_time_failure_must_stop_before_later_shell_or_target malformed "$$publisher_copy" env; \
+	parse_time_failure_must_stop_before_later_shell_or_target missing "$$tmp/missing-target-refresh-artifacts.def" env; \
+	mkdir "$$tmp/parse-time-bin"; printf '%s\n' '#!/bin/sh' 'exit 97' > "$$tmp/parse-time-bin/awk"; chmod +x "$$tmp/parse-time-bin/awk"; \
+	parse_time_failure_must_stop_before_later_shell_or_target failed "$$publisher_declaration" env PATH="$$tmp/parse-time-bin:$$PATH"; \
+	sed 's/^ORLIX_TCTI_TARGET_REFRESH_ARTIFACT/  ORLIX_TCTI_TARGET_REFRESH_ARTIFACT/' "$$publisher_declaration" > "$$publisher_copy"; printf '\n# valid declaration comment\n' >> "$$publisher_copy"; \
+	$$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_copy" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs" || fail 'valid publisher whitespace or comments changed contract ownership'; \
+	publisher_live="$$tmp/publisher-live"; $(MAKE) --no-print-directory -f OrlixKernel/Makefile __orlix-tcti-target-refresh-publisher-list-source-check ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION="$$publisher_copy" > "$$publisher_live"; cmp -s "$$publisher_actual" "$$publisher_live" || fail 'live publisher list diverges from shared X-macro grammar'; \
+	printf 'ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(bad, bad.def, manifest) trailing\n' > "$$publisher_copy"; if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_copy" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs"; then fail 'malformed publisher row was accepted'; fi; \
+	cp "$$publisher_declaration" "$$publisher_copy"; printf 'ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(future,future.def,manifest)\n' >> "$$publisher_copy"; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_copy" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs"; then fail 'publisher addition absent from canonical/direct ownership was accepted'; fi; \
+	cp "$$publisher_declaration" "$$publisher_copy"; head -n 3 "$$publisher_declaration" | tail -n 1 >> "$$publisher_copy"; if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_copy" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs"; then fail 'duplicate publisher row was accepted'; fi; \
+	cp "$$kbuild_source" "$$kbuild_copy"; printf '\n$$(obj)/future.o: $$(src)/../isa/future.def\n' >> "$$kbuild_copy"; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_copy" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs"; then fail 'direct Kbuild addition absent from canonical declaration was accepted'; fi; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/unowned.def"; then fail 'canonical contributor without publisher/direct owner was accepted'; fi; \
+	contract_without_source_bound=(); for contributor in "$${canonical_inputs[@]}"; do [ "$${contributor##*/}" = source_bound_proof.def ] || contract_without_source_bound+=("$$contributor"); done; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$${contract_without_source_bound[*]}"; then fail 'direct Kbuild contributor absent from canonical declaration was accepted'; fi; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs $${canonical_inputs[0]}"; then fail 'duplicate canonical contributor was accepted'; fi; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/other/source_manifest.def"; then fail 'basename alias canonical contributor was accepted'; fi; \
+	if $$contract_make ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION="$$publisher_declaration" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION="$$kbuild_source" ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_INPUTS="$$contract_inputs OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/./source_manifest.def"; then fail 'path alias canonical contributor was accepted'; fi; \
+	mkdir "$$tmp/bin"; real_shasum="$$(command -v shasum)"; \
+	mkdir "$$tmp/fanout-bin"; fanout_count="$$tmp/fanout-count"; \
+	printf '%s\n' '#!/bin/sh' 'printf x >> "$$ORLIX_TCTI_FANOUT_COUNT"' 'exec "$$ORLIX_TCTI_REAL_SHASUM" "$$@"' > "$$tmp/fanout-bin/shasum"; chmod +x "$$tmp/fanout-bin/shasum"; \
+	: > "$$fanout_count"; fanout_revision="$$(ORLIX_TCTI_FANOUT_COUNT="$$fanout_count" ORLIX_TCTI_REAL_SHASUM="$$real_shasum" PATH="$$tmp/fanout-bin:$$PATH" orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/large-paths")"; \
+	[ -n "$$fanout_revision" ] || fail 'bounded candidate provenance did not produce an identity'; \
+	[ "$$(wc -c < "$$fanout_count" | tr -d ' ')" = 1 ] || fail 'candidate provenance spawned per-file hash processes'; \
+	printf '%s\n' '#!/bin/sh' 'if [ -n "$${ORLIX_TCTI_TEST_SHASUM_MATCH:-}" ]; then case "$${ORLIX_TCTI_TEST_SHASUM_MODE}" in fail) exit 97 ;; malformed) printf "not-a-sha256  -\\n" ;; empty) : ;; extra) printf "%064d  -\\nextra\\n" 0 ;; *) exit 98 ;; esac; exit 0; fi' 'exec "$$ORLIX_TCTI_REAL_SHASUM" "$$@"' > "$$tmp/bin/shasum"; chmod +x "$$tmp/bin/shasum"; \
+	for aggregate in candidate profile archive artifact; do for mode in fail malformed empty extra; do \
+		case "$$aggregate" in candidate) aggregate_match=orlix-tcti-candidate-source.; aggregate_call='orlix_tcti_candidate_source_revision "$$tmp/candidate" "$$tmp/paths"' ;; profile) aggregate_match=orlix-tcti-proof-profile.; aggregate_call='orlix_tcti_proof_profile_sha256 release "$$tmp/profile-aggregate"' ;; archive) aggregate_match=orlix-tcti-proof-inputs.; aggregate_call='orlix_tcti_proof_inputs_sha256 archive "$$tmp/archive-aggregate"' ;; artifact) aggregate_match=orlix-tcti-proof-inputs.; aggregate_call='$(call orlix_tcti_assign_instruction_artifact_sha256,aggregate_digest,false)' ;; esac; \
+		printf '%s\n' "$$aggregate" > "$$tmp/$$aggregate-aggregate"; \
+		if TMPDIR="$$tmp" ORLIX_TCTI_REAL_SHASUM="$$real_shasum" ORLIX_TCTI_TEST_SHASUM_MATCH="$$aggregate_match" ORLIX_TCTI_TEST_SHASUM_MODE="$$mode" PATH="$$tmp/bin:$$PATH" eval "$$aggregate_call"; then fail "aggregate helper accepted $$mode $$aggregate digest output"; fi; \
+		if find "$$tmp" -type f -name 'orlix-tcti-*' -print -quit | grep -q .; then fail "aggregate helper leaked a temporary manifest after $$mode $$aggregate digest output"; fi; \
+	done; done; \
+	provenance_preflight() { \
+		lane="$$1"; marker="$$2"; source_paths="$$(mktemp "$$tmp/source-paths.XXXXXX")" || return 1; printf 'candidate-%s\0' "$$lane" > "$$source_paths"; \
+		if ! source_revision="$$(orlix_tcti_candidate_source_revision "$$tmp/preflight-$$lane" "$$source_paths")"; then rm -f "$$source_paths"; return 1; fi; rm -f "$$source_paths"; \
+		proof_config_sha256="$$(orlix_tcti_file_sha256 "$$tmp/config-$$lane")" || return 1; \
+		proof_profile_sha256="$$(orlix_tcti_proof_profile_sha256 "$$lane" "$$tmp/profile-$$lane")" || return 1; \
+		printf -v proof_archive_prefix 'lane=%s\nsource_revision=%s\n' "$$lane" "$$source_revision"; \
+		printf 'lane=%s\nsource_revision=%s\n' "$$lane" "$$source_revision" > "$$tmp/$$lane-prefix-expected"; \
+		printf '%s' "$$proof_archive_prefix" > "$$tmp/$$lane-prefix-actual"; \
+		cmp -s "$$tmp/$$lane-prefix-expected" "$$tmp/$$lane-prefix-actual" || return 1; \
+		proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$$tmp/archive-$$lane")" || return 1; \
+		$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,return 1) \
+		[ -n "$$proof_config_sha256" ] && [ -n "$$proof_profile_sha256" ] && [ -n "$$proof_archive_sha256" ] && [ -n "$$proof_artifact_sha256" ] || return 1; \
+		printf 'compile-%s\n' "$$lane" > "$$marker"; \
+	}; \
+	for lane in kunit product; do \
+		mkdir "$$tmp/preflight-$$lane"; printf 'candidate\n' > "$$tmp/preflight-$$lane/candidate-$$lane"; \
+		printf 'config\n' > "$$tmp/config-$$lane"; printf 'profile\n' > "$$tmp/profile-$$lane"; printf 'archive\n' > "$$tmp/archive-$$lane"; \
+		marker="$$tmp/$$lane-normal-compile"; TMPDIR="$$tmp" ORLIX_TCTI_REAL_SHASUM="$$real_shasum" PATH="$$tmp/bin:$$PATH" provenance_preflight "$$lane" "$$marker" || fail "$$lane production preflight did not complete"; [ -e "$$marker" ] || fail "$$lane production preflight did not reach compilation"; \
+		for contributor in candidate config profile archive artifact aggregate; do for mode in fail malformed empty extra; do \
+			marker="$$tmp/$$lane-$$contributor-$$mode-compile"; match="$$contributor-$$lane"; [ "$$contributor" = artifact ] && match=orlix-tcti-proof-inputs.; [ "$$contributor" = aggregate ] && match=orlix-tcti-; \
+			if TMPDIR="$$tmp" ORLIX_TCTI_REAL_SHASUM="$$real_shasum" ORLIX_TCTI_TEST_SHASUM_MATCH="$$match" ORLIX_TCTI_TEST_SHASUM_MODE="$$mode" PATH="$$tmp/bin:$$PATH" provenance_preflight "$$lane" "$$marker"; then fail "$$lane preflight accepted $$mode $$contributor digest output"; fi; \
+			[ ! -e "$$marker" ] || fail "$$lane preflight reached compilation after $$mode $$contributor digest output"; \
+			if find "$$tmp" -type f -name 'orlix-tcti-*' -print -quit | grep -q .; then fail "$$lane preflight leaked helper-owned temporary manifests after $$mode $$contributor digest output"; fi; \
+		done; done; \
+	done; \
+	printf 'candidate source revision regression: passed\n'
 
 test:
 	@set -euo pipefail; \
@@ -1807,6 +1960,11 @@ __headers-install: __prepare-port
 
 __kunit: __prepare-kbuild
 	@set -euo pipefail; \
+	$(orlix_tcti_file_sha256) \
+	$(orlix_tcti_candidate_source_revision) \
+	$(orlix_tcti_manifest_sha256) \
+	$(orlix_tcti_proof_profile_sha256) \
+	$(orlix_tcti_proof_inputs_sha256) \
 	linux_make="$(LINUX_MAKE)"; \
 	if [ -z "$$linux_make" ]; then linux_make="$$(command -v gmake || true)"; fi; \
 	if [ -z "$$linux_make" ]; then \
@@ -1846,11 +2004,42 @@ __kunit: __prepare-kbuild
 	else \
 		echo "reusing Orlix KUnit config: $$kunit_config"; \
 	fi; \
-	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS=-DORLIX_APP_HOSTED_BOOT=1 olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/; \
+	proof_config_sha256="$$(orlix_tcti_file_sha256 "$$kunit_config")" || exit 1; \
+	proof_profile_sha256="$$(orlix_tcti_proof_profile_sha256 '$(PROFILE)' "$(ORLIX_PROFILE_CONFIG)")" || exit 1; \
+	proof_source_tmp_root="$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}"; mkdir -p "$$proof_source_tmp_root"; \
+	proof_source_paths="$$(mktemp "$$proof_source_tmp_root/orlix-tcti-candidate-paths.XXXXXX")"; \
+	if ! git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; then rm -f "$$proof_source_paths"; exit 1; fi; \
+	if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
+	rm -f "$$proof_source_paths"; \
+	printf -v proof_archive_prefix 'lane=kunit\nsource_revision=%s\n' "$$proof_source_revision"; \
+	proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$$kunit_config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk)" || exit 1; \
+	$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
+	proof_kcflags="-DORLIX_APP_HOSTED_BOOT=1 -DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\\\"$$proof_archive_sha256\\\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\\\"$$proof_config_sha256\\\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\\\"$$proof_profile_sha256\\\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\\\"$$proof_source_revision\\\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\\\"$$proof_artifact_sha256\\\""; \
+	env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" KBUILD_BUILD_TIMESTAMP="$(ORLIX_KERNEL_KBUILD_BUILD_TIMESTAMP)" KBUILD_BUILD_USER="$(ORLIX_KERNEL_KBUILD_BUILD_USER)" KBUILD_BUILD_HOST="$(ORLIX_KERNEL_KBUILD_BUILD_HOST)" "$$linux_make" -C "$(ORLIX_KERNEL_PORT_ABS)" O="$(ORLIX_KUNIT_BUILD_DIR)" ARCH="$(ORLIX_PORT_ARCH)" LLVM=1 CC="$(ORLIX_KERNEL_KBUILD_CC)" HOSTCC="$(ORLIX_KERNEL_KBUILD_HOSTCC)" CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="$(ORLIX_KERNEL_HOSTCFLAGS)" KCFLAGS="$$proof_kcflags" olddefconfig arch/$(ORLIX_PORT_ARCH)/boot/boot_test.o arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.o $(ORLIX_KUNIT_TCTI_BUILD_TARGET); \
+	[ -s "$(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" ] || { echo "missing OrlixTCTI KUnit archive: $(ORLIX_KUNIT_BUILD_DIR)/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)" >&2; exit 1; }; \
 	echo "built Orlix KUnit objects: $(ORLIX_KUNIT_BUILD_DIR)"
+
+__kunit-object-contract-tests:
+	@set -euo pipefail; \
+	output_parent="$$(dirname "$(ORLIX_KUNIT_BUILD_DIR)")"; \
+	mkdir -p "$$output_parent"; \
+	tmp="$$(mktemp -d "$$output_parent/orlix-kunit-object-contract.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	archive="$$tmp/$(ORLIX_KUNIT_TCTI_TEST_ARCHIVE)"; \
+	[ ! -e "$$archive" ] || { echo "KUnit object contract regression output already exists: $$archive" >&2; exit 1; }; \
+	echo "KUnit object contract output initially absent: $$archive"; \
+	$(MAKE) -f OrlixKernel/Makefile kunit PROFILE=development ORLIX_KERNEL_KUNIT=1 ORLIX_KUNIT_BUILD_DIR="$$tmp"; \
+	[ -s "$$archive" ] || { echo "KUnit object contract regression missing archive: $$archive" >&2; exit 1; }; \
+	archive_bytes="$$(wc -c < "$$archive")"; \
+	echo "Orlix KUnit object contract archive: $$archive ($$archive_bytes bytes)"
 
 __kernel-archive: __prepare-kbuild
 	@set -euo pipefail; \
+	$(orlix_tcti_file_sha256) \
+	$(orlix_tcti_candidate_source_revision) \
+	$(orlix_tcti_manifest_sha256) \
+	$(orlix_tcti_proof_profile_sha256) \
+	$(orlix_tcti_proof_inputs_sha256) \
 	$(call orlix_kernel_acquire_profile_lock); \
 	cc="$(ORLIX_KERNEL_CC)"; \
 	hostcc="$(ORLIX_KERNEL_HOSTCC)"; \
@@ -1959,12 +2148,7 @@ __kernel-archive: __prepare-kbuild
 		mkdir -p "$$obj_dir"; \
 		$(orlix_archive_cache_predicate) \
 		object_dependencies_current() { \
-			object="$$1"; depfile="$$2"; \
-			[ -s "$$depfile" ] || return 1; \
-			while IFS= read -r dependency; do \
-				[ -n "$$dependency" ] || continue; \
-				[ -e "$$dependency" ] && [ "$$object" -nt "$$dependency" ] || return 1; \
-			done < <(perl -0pe 's/\\\n/ /g; s/^[^:]*:\s*//' "$$depfile" | tr ' ' '\n'); \
+			[ -s "$$2" ] && orlix_depfile_dependencies_current "$$1" "$$2"; \
 		}; \
 		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ]; then \
 			symbols="$$output_dir/symbols.txt"; \
@@ -1973,6 +2157,8 @@ __kernel-archive: __prepare-kbuild
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
+				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
+				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
 				"$$orlix_tcti_kbuild" \
 				OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk \
 				"$$inventory_generator" \
@@ -2009,6 +2195,8 @@ __kernel-archive: __prepare-kbuild
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
+				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
+				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
 				"$$orlix_tcti_kbuild" \
 				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
@@ -2022,6 +2210,19 @@ __kernel-archive: __prepare-kbuild
 		else \
 			objs=(); \
 			config_fingerprint="$$(shasum -a 256 "$(ORLIX_KERNEL_BUILD_DIR)/.config" | awk '{ print substr($$1, 1, 16) }')"; \
+			proof_config_sha256="$$(orlix_tcti_file_sha256 "$(ORLIX_KERNEL_BUILD_DIR)/.config")" || exit 1; \
+			proof_profile_sha256="$$(orlix_tcti_proof_profile_sha256 '$(PROFILE)' "$(ORLIX_PROFILE_CONFIG)")" || exit 1; \
+			proof_source_tmp_root="$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}"; mkdir -p "$$proof_source_tmp_root"; \
+			proof_source_paths="$$(mktemp "$$proof_source_tmp_root/orlix-tcti-candidate-paths.XXXXXX")"; \
+			if ! git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; then rm -f "$$proof_source_paths"; exit 1; fi; \
+			if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
+			rm -f "$$proof_source_paths"; \
+			proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk); \
+			for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do proof_archive_inputs+=("$$(orlix_product_adapter_source_for "$$proof_src_rel")"); done; \
+			printf -v proof_archive_prefix 'platform=%s\ntarget=%s\nsource_revision=%s\n' "$$platform" "$$target" "$$proof_source_revision"; \
+			proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$${proof_archive_inputs[@]}")" || exit 1; \
+			$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
+			proof_cflags="-DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\"$$proof_archive_sha256\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\"$$proof_config_sha256\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\"$$proof_profile_sha256\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\"$$proof_source_revision\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\"$$proof_artifact_sha256\""; \
 			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
 			src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
 			product_cflags="$$(orlix_product_adapter_source_cflags_for "$$src_rel")"; \
@@ -2040,6 +2241,7 @@ __kernel-archive: __prepare-kbuild
 			local_cflags="-I$$src_local_dir -I$(ORLIX_KERNEL_PORT_ABS)/$$src_dir -I$(ORLIX_KERNEL_BUILD_DIR)/$$src_dir"; \
 			extra_cflags=""; \
 			case "$$src_rel" in \
+				arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/target_native_proof_registry.c) extra_cflags="$$extra_cflags $$proof_cflags" ;; \
 				init/version.c) extra_cflags="-include $(ORLIX_KERNEL_BUILD_DIR)/init/utsversion-tmp.h" ;; \
 				drivers/of/of_reserved_mem.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/drivers/of" ;; \
 				drivers/char/virtio_console.c) extra_cflags="-I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty/hvc -I$(ORLIX_KERNEL_PORT_ABS)/drivers/tty" ;; \
@@ -2057,6 +2259,8 @@ __kernel-archive: __prepare-kbuild
 				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
+				[ "$$obj" -nt "$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" ] && \
+				[ "$$obj" -nt "$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" ] && \
 				[ "$$obj" -nt "$$orlix_tcti_kbuild" ] && \
 				object_dependencies_current "$$obj" "$$dep"; then \
 				needs_build=0; \
@@ -2542,7 +2746,7 @@ __kernel-payload: $(ORLIX_KERNEL_PAYLOAD_PREREQS)
 __ios-simulator-framework: xcodeproj
 	@set -euo pipefail; \
 	$(call orlix_kernel_acquire_profile_lock); \
-	$(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE="$(PROFILE)" type="$(type)" libc="$(libc)" ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphonesimulator; \
+	ORLIX_KERNEL_PROFILE_LOCK_HELD=1 $(MAKE) -f OrlixKernel/Makefile __kernel-archive PROFILE="$(PROFILE)" type="$(type)" libc="$(libc)" ORLIX_KERNEL_ARCHIVE_PLATFORMS=iphonesimulator; \
 	command -v "$(XCODEBUILD_MCP)" >/dev/null 2>&1 || { echo "XcodeBuildMCP is required; install xcodebuildmcp or set XCODEBUILD_MCP=/path/to/xcodebuildmcp" >&2; exit 1; }; \
 	selector=(); \
 	if [ -n "$(ORLIX_IOS_SIMULATOR_ID)" ]; then \

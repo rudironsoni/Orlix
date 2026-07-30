@@ -17,6 +17,7 @@ struct orlix_tcti_source_leaf_rejection {
 	u32 ordinal;
 	const char *name;
 	const char *operation;
+	const char *proof_id;
 	u32 mask;
 	u32 pattern;
 };
@@ -54,12 +55,10 @@ static const struct orlix_tcti_source_leaf_proof_binding
 };
 #undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
 
-static inline bool
-orlix_tcti_source_leaf_is_unconditional_el0_rejection(const char *proof_id)
-{
-	/* Selector-dependent generic encodings have separate partition tests. */
-	static const char * const proof_ids[] = {
+/* Selector-dependent generic encodings have separate partition tests. */
+static const char * const orlix_tcti_source_leaf_rejection_proof_ids[] = {
 		"kunit:source-leaf-udf-undefined",
+		"kunit:source-leaf-tenter-feat-tev-absent",
 		"kunit:source-leaf-hvc-non-el0",
 		"kunit:source-leaf-smc-non-el0",
 		"kunit:source-leaf-dcps1-non-el0",
@@ -69,10 +68,16 @@ orlix_tcti_source_leaf_is_unconditional_el0_rejection(const char *proof_id)
 		"kunit:source-leaf-ereta-non-el0",
 		"kunit:source-leaf-drps-non-el0",
 	};
+
+static inline bool
+orlix_tcti_source_leaf_is_unconditional_el0_rejection(const char *proof_id)
+{
 	size_t index;
 
-	for (index = 0; index < ARRAY_SIZE(proof_ids); index++)
-		if (!strcmp(proof_id, proof_ids[index]))
+	for (index = 0; index <
+	     ARRAY_SIZE(orlix_tcti_source_leaf_rejection_proof_ids); index++)
+		if (!strcmp(proof_id,
+			    orlix_tcti_source_leaf_rejection_proof_ids[index]))
 			return true;
 
 	return false;
@@ -91,7 +96,12 @@ orlix_tcti_source_leaf_manifest_row(u32 ordinal)
 	return NULL;
 }
 
-static inline size_t orlix_tcti_source_leaf_rejection_count(void)
+static inline size_t orlix_tcti_source_leaf_rejection_proof_count(void)
+{
+	return ARRAY_SIZE(orlix_tcti_source_leaf_rejection_proof_ids);
+}
+
+static inline size_t orlix_tcti_source_leaf_rejection_encoding_count(void)
 {
 	size_t index;
 	size_t count = 0;
@@ -130,6 +140,7 @@ orlix_tcti_source_leaf_rejection_at(size_t rejection_index,
 			.ordinal = source->ordinal,
 			.name = source->name,
 			.operation = source->operation,
+			.proof_id = binding->proof_id,
 			.mask = source->mask,
 			.pattern = source->pattern,
 		};

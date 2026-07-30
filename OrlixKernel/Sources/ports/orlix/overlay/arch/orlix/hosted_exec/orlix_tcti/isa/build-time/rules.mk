@@ -6,11 +6,12 @@
 
 ORLIX_TCTI_ISA_BUILD_TIME_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time
 ORLIX_TCTI_ISA_CANONICAL_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa
+ORLIX_TCTI_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti
 ORLIX_TCTI_ISA_TEST_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests
 ORLIX_TCTI_ISA_MAINTAINER_OUT := $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-target-refresh
 ORLIX_TCTI_ISA_MAINTAINER_CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
 ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS := -I$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)
-ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS := -I$(ORLIX_TCTI_ISA_TEST_ROOT)
+ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS := -I$(ORLIX_TCTI_ROOT) -I$(ORLIX_TCTI_ISA_TEST_ROOT)
 ORLIX_TCTI_ISA_MAINTAINER_COMPILE = cd '$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)' && $(ORLIX_KERNEL_HOSTCC) $(ORLIX_TCTI_ISA_MAINTAINER_CFLAGS)
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES := \
 	-DTARGET_MANIFEST_GENERATOR_NO_MAIN \
@@ -34,6 +35,8 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_register_model.c target_register_artifact_generator.c \
 	target_arm_xml_package.c target_asl_availability.c \
 	target_system_accessor_reconciliation.c
+
+include $(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/instruction-artifact-contributors.mk
 
 .PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
 
@@ -69,8 +72,9 @@ __tcti-operational-note-pipeline-test:
 		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
 		target_inventory_import.c \
-		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_instruction_artifact.c' \
-		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_proof_registry.c' \
+		'$(ORLIX_TCTI_ROOT)/target_instruction_artifact.c' \
+		'$(ORLIX_TCTI_ROOT)/target_proof_registry.c' \
+		'$(ORLIX_TCTI_ROOT)/target_proof_ingestion.c' \
 		target_operational_note_pipeline_validate_test.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_validate_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_operational_note_pipeline_validate_test' \

@@ -6,6 +6,7 @@
 #include "block_cache.h"
 #include "decode_aarch64.h"
 #include "gadget_program.h"
+#include "native_capture.h"
 #include "semantics.h"
 
 #define ORLIX_TCTI_GADGET_DONE 1
@@ -40,25 +41,35 @@ static void orlix_tcti_gadget_program_run_pre_authorized_test_hook(void)
 static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 				       struct pt_regs *regs,
 				       const struct orlix_tcti_gadget_word **cursor,
-				       unsigned long *fault_address)
+				       unsigned long *fault_address,
+				       struct orlix_tcti_native_capture *capture)
 {
 	struct orlix_tcti_decoded_instruction decoded;
+	int ret;
 
 	memcpy(&decoded, *cursor, sizeof(decoded));
 	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
 
-	return orlix_tcti_execute_decoded_semantics(mm, regs, &decoded,
-					      fault_address);
+	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
+	ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded, fault_address);
+	if (ret)
+		orlix_tcti_native_capture_fault(capture, &decoded, *fault_address, ret);
+	else {
+		orlix_tcti_native_capture_after_decoded(capture, mm, regs, &decoded);
+	}
+	return ret;
 }
 
 static int orlix_tcti_gadget_halt(struct mm_struct *mm, struct pt_regs *regs,
 			    const struct orlix_tcti_gadget_word **cursor,
-			    unsigned long *fault_address)
+			    unsigned long *fault_address,
+			    struct orlix_tcti_native_capture *capture)
 {
 	(void)mm;
 	(void)regs;
 	(void)cursor;
 	(void)fault_address;
+	(void)capture;
 	return ORLIX_TCTI_GADGET_DONE;
 }
 
@@ -121,7 +132,8 @@ static int orlix_tcti_execute_gadget_program_checked(
 	struct mm_struct *mm, struct pt_regs *regs,
 	const struct orlix_tcti_gadget_word *program, size_t word_count,
 	unsigned long *fault_address, bool authorize, u64 code_generation,
-	bool *entry_valid, unsigned long *entry_pc, u32 *entry_instruction)
+	bool *entry_valid, unsigned long *entry_pc, u32 *entry_instruction,
+	struct orlix_tcti_native_capture *capture)
 {
 	const struct orlix_tcti_gadget_word *cursor = program;
 	const struct orlix_tcti_gadget_word *end = program + word_count;
@@ -153,7 +165,7 @@ static int orlix_tcti_execute_gadget_program_checked(
 			candidate = true;
 		}
 
-		ret = gadget(mm, regs, &cursor, fault_address);
+		ret = gadget(mm, regs, &cursor, fault_address, capture);
 		if (candidate && ret != -ESTALE) {
 			*entry_valid = true;
 			*entry_pc = candidate_pc;
@@ -175,7 +187,7 @@ int orlix_tcti_execute_gadget_program(struct mm_struct *mm, struct pt_regs *regs
 {
 	return orlix_tcti_execute_gadget_program_checked(mm, regs, program, word_count,
 						  fault_address, false, 0,
-						  NULL, NULL, NULL);
+					  NULL, NULL, NULL, NULL);
 }
 
 int orlix_tcti_execute_gadget_program_authorized(
@@ -185,7 +197,7 @@ int orlix_tcti_execute_gadget_program_authorized(
 {
 	return orlix_tcti_execute_gadget_program_checked(
 		mm, regs, program, word_count, fault_address, true,
-		code_generation, NULL, NULL, NULL);
+		code_generation, NULL, NULL, NULL, NULL);
 }
 
 int orlix_tcti_execute_gadget_program_authorized_observed(
@@ -198,5 +210,19 @@ int orlix_tcti_execute_gadget_program_authorized_observed(
 		return -EINVAL;
 	return orlix_tcti_execute_gadget_program_checked(
 		mm, regs, program, word_count, fault_address, true,
-		code_generation, entry_valid, entry_pc, entry_instruction);
+		code_generation, entry_valid, entry_pc, entry_instruction, NULL);
+}
+
+int orlix_tcti_execute_gadget_program_authorized_captured(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
+	unsigned long *entry_pc, u32 *entry_instruction,
+	struct orlix_tcti_native_capture *capture)
+{
+	if (!entry_valid || !entry_pc || !entry_instruction || !capture)
+		return -EINVAL;
+	return orlix_tcti_execute_gadget_program_checked(
+		mm, regs, program, word_count, fault_address, true, code_generation,
+		entry_valid, entry_pc, entry_instruction, capture);
 }

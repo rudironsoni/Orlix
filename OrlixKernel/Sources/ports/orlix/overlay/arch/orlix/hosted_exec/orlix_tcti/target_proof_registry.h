@@ -6,6 +6,7 @@
 #include <linux/stddef.h>
 #include <linux/types.h>
 typedef u8 orlix_tcti_proof_u8;
+typedef u16 orlix_tcti_proof_u16;
 typedef u32 orlix_tcti_proof_u32;
 typedef u64 orlix_tcti_proof_u64;
 #define ORLIX_TCTI_PROOF_U64_C(value) value##ULL
@@ -13,6 +14,7 @@ typedef u64 orlix_tcti_proof_u64;
 #include <stddef.h>
 #include <stdint.h>
 typedef uint8_t orlix_tcti_proof_u8;
+typedef uint16_t orlix_tcti_proof_u16;
 typedef uint32_t orlix_tcti_proof_u32;
 typedef uint64_t orlix_tcti_proof_u64;
 #define ORLIX_TCTI_PROOF_U64_C(value) UINT64_C(value)
@@ -44,9 +46,12 @@ enum orlix_tcti_target_proof_obligation {
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS = 1U << 9,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE = 1U << 10,
 	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_OPERATIONAL_NOTE = 1U << 11,
-	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD = 1U << 12,
-	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE = 1U << 13,
-	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME = 1U << 14,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_RESULT = 1U << 12,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD = 1U << 13,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE = 1U << 14,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE = 1U << 15,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC = 1U << 16,
+	ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SYSTEM_PT_CONTROL = 1U << 17,
 };
 
 enum orlix_tcti_target_proof_linux_interface {
@@ -230,6 +235,33 @@ struct orlix_tcti_target_proof_registry_entry {
 	orlix_tcti_proof_u32 unproved_obligations;
 };
 
+struct orlix_tcti_target_kunit_provenance_identity {
+	const char *source;
+	const char *source_sha256;
+	const char *build_source;
+	const char *build_source_sha256;
+	const char *suite;
+	const char *case_name;
+};
+
+struct orlix_tcti_target_production_capture_binding {
+	const char *kunit_source;
+	const char *kunit_suite;
+	const char *kunit_case;
+	orlix_tcti_proof_u32 source_ordinal;
+	orlix_tcti_proof_u32 obligation;
+	const char *implementation_owner;
+	const char *decoder_owner;
+	const char *lowering_owner;
+};
+
+enum orlix_tcti_target_production_capture_error {
+	ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_OK,
+	ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_INVALID,
+	ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_DUPLICATE,
+	ORLIX_TCTI_TARGET_PRODUCTION_CAPTURE_UNKNOWN,
+};
+
 struct orlix_tcti_target_proof_reference {
 	const char *id;
 	const char *leaf_name;
@@ -306,6 +338,27 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	const struct orlix_tcti_target_proof_reference *reference);
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count);
+int orlix_tcti_target_kunit_provenance_identity(
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	const char *case_name,
+	struct orlix_tcti_target_kunit_provenance_identity *identity);
+int orlix_tcti_target_proof_case_has_production_capture(
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	size_t case_index, orlix_tcti_proof_u32 source_ordinal,
+	orlix_tcti_proof_u32 obligation);
+const struct orlix_tcti_target_production_capture_binding *
+orlix_tcti_target_production_capture_bindings(size_t *count);
+int orlix_tcti_target_production_capture_bindings_validate(
+	const struct orlix_tcti_target_production_capture_binding *bindings,
+	size_t binding_count,
+	const struct orlix_tcti_target_proof_registry_entry *entries,
+	size_t entry_count,
+	enum orlix_tcti_target_production_capture_error *error);
+int orlix_tcti_target_production_capture_binding_applies(
+	const struct orlix_tcti_target_production_capture_binding *bindings,
+	size_t binding_count,
+	const struct orlix_tcti_target_proof_registry_entry *entry,
+	size_t case_index);
 const struct orlix_tcti_target_operational_note_proof_mapping *
 orlix_tcti_target_operational_note_proof_mappings(size_t *count);
 int orlix_tcti_target_operational_note_proof_mappings_validate(

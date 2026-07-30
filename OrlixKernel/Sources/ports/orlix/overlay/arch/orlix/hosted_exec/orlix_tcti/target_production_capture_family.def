@@ -1,0 +1,3 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Generic registry input. Family workers extend this list with owning data. */
+#include "branch_control_production_capture.def"

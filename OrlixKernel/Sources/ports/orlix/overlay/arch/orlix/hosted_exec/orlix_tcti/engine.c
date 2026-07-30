@@ -27,6 +27,7 @@
 #include "decode_aarch64.h"
 #include "engine.h"
 #include "gadget_program.h"
+#include "native_capture.h"
 #include "report.h"
 
 #define ORLIX_TCTI_ELF_IMAGE_SCAN_GRANULE (64UL * 1024UL)
@@ -738,20 +739,82 @@ static void orlix_tcti_hot_blocks_remember(struct orlix_tcti_hot_block *hot_bloc
 	slot->block = block;
 }
 
-struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
+static int orlix_tcti_execute_authorized_capture(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
+	unsigned long *entry_pc, u32 *entry_instruction,
+	struct orlix_tcti_native_capture *capture,
+	bool *successful_gadget_execution)
+{
+	int ret;
+
+	if (capture)
+		ret = orlix_tcti_execute_gadget_program_authorized_captured(
+			mm, regs, program, word_count, fault_address, code_generation,
+			entry_valid, entry_pc, entry_instruction, capture);
+	else
+		ret = orlix_tcti_execute_gadget_program_authorized_observed(
+		mm, regs, program, word_count, fault_address, code_generation,
+		entry_valid, entry_pc, entry_instruction);
+	if (!ret && successful_gadget_execution)
+		*successful_gadget_execution = true;
+	return ret;
+}
+
+/* This private capability is wrapped in a stack evidence object created only
+ * at the ordinary successful-gadget boundary below. */
+struct orlix_tcti_successful_gadget_evidence {
+	const void *engine_capability;
+};
+
+static const u8 orlix_tcti_engine_execution_capability;
+
+bool orlix_tcti_native_capture_engine_evidence_valid(const void *evidence)
+{
+	const struct orlix_tcti_successful_gadget_evidence *successful = evidence;
+
+	return successful &&
+		successful->engine_capability == &orlix_tcti_engine_execution_capability;
+}
+
+#define ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(_capture, _result, _regs, _hot, \
+							_normal_resume, _successful_gadget_execution) \
+	do { \
+		orlix_tcti_native_capture_exit((_capture), &(_result), (_regs)); \
+		if ((_normal_resume) && (_successful_gadget_execution) && \
+		    (_result).reason == ORLIX_TCTI_EXIT_SYSCALL && \
+		    (_result).status == 0) { \
+			const struct orlix_tcti_successful_gadget_evidence evidence = { \
+				.engine_capability = &orlix_tcti_engine_execution_capability, \
+			}; \
+			orlix_tcti_native_capture_complete_successful_gadget((_capture), \
+				&evidence); \
+		} \
+		orlix_tcti_native_capture_finalize((_capture), &(_result), (_regs)); \
+		orlix_tcti_hot_blocks_release((_hot)); \
+		return (_result); \
+	} while (0)
+
+static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_struct *task,
 				    struct pt_regs *regs,
-				    struct mm_struct *mm)
+				    struct mm_struct *mm,
+				    struct orlix_tcti_native_capture *capture,
+				    bool normal_resume)
 {
 	unsigned long long instruction_count = 0;
 	struct orlix_tcti_hot_block hot_blocks[ORLIX_TCTI_LOCAL_HOT_BLOCKS] = {};
 	u32 hot_block_cursor = 0;
+	bool successful_gadget_execution = false;
 	struct orlix_tcti_result result = {
 		.reason = ORLIX_TCTI_EXIT_TASK_EXIT,
 		.status = -EINVAL,
 	};
 
-	if (!task || !regs || !mm)
+	if (!task || !regs || !mm) {
+		orlix_tcti_native_capture_finalize(capture, &result, regs);
 		return result;
+	}
 
 	for (;;) {
 		struct orlix_tcti_gadget_word program[ORLIX_TCTI_BLOCK_PROGRAM_WORDS];
@@ -815,11 +878,12 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 					orlix_tcti_fault_access_for_decoded(&block_decoded);
 				block_instruction = block_decoded.instruction;
 			}
-			ret = orlix_tcti_execute_gadget_program_authorized_observed(
+			ret = orlix_tcti_execute_authorized_capture(
 				mm, regs, block->program, block->program_words,
 				&fault_address, block->code_generation,
 				&result.entry_valid, &result.entry_pc,
-				&result.entry_instruction);
+				&result.entry_instruction, capture,
+				&successful_gadget_execution);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=1\n",
 					task->comm, task_pid_nr(task),
@@ -849,8 +913,9 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				continue;
 			if (ret == -EAGAIN) {
 				orlix_tcti_set_yield_result(mm, regs, &result);
-				orlix_tcti_hot_blocks_release(hot_blocks);
-				return result;
+				ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+							       hot_blocks, normal_resume,
+							       successful_gadget_execution);
 			}
 
 			if (ret == -EFAULT || ret == -EACCES) {
@@ -870,16 +935,18 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				result.fault_access = block_fault_access;
 				result.pc = regs->pc;
 				result.instruction = block_instruction;
-				orlix_tcti_hot_blocks_release(hot_blocks);
-				return result;
+				ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+							       hot_blocks, normal_resume,
+							       successful_gadget_execution);
 			}
 
 			result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
 			result.status = ret;
 			result.pc = regs->pc;
 			result.instruction = block_instruction;
-			orlix_tcti_hot_blocks_release(hot_blocks);
-			return result;
+			ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+						       hot_blocks, normal_resume,
+						       successful_gadget_execution);
 		}
 
 		ret = orlix_tcti_build_straight_line_block(mm, regs->pc, program,
@@ -891,6 +958,10 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 		if (code_generation != orlix_tcti_code_generation(mm))
 			continue;
 		if (ret == -EINTR) {
+			/* Exception exits bypass a gadget, but remain a real decoder path. */
+			decoded = orlix_tcti_decode_aarch64(instruction);
+			orlix_tcti_native_capture_before_decoded(capture, mm, regs,
+							 &decoded);
 			if (!result.entry_valid) {
 				result.entry_valid = true;
 				result.entry_pc = regs->pc;
@@ -909,8 +980,9 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			}
 			result.pc = regs->pc;
 			result.instruction = instruction;
-			orlix_tcti_hot_blocks_release(hot_blocks);
-			return result;
+			ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+						       hot_blocks, normal_resume,
+						       successful_gadget_execution);
 		}
 		if (ret) {
 			result.status = ret;
@@ -929,8 +1001,9 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			} else {
 				result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
 			}
-			orlix_tcti_hot_blocks_release(hot_blocks);
-			return result;
+			ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+						       hot_blocks, normal_resume,
+						       successful_gadget_execution);
 		}
 
 		decoded = orlix_tcti_decode_aarch64(instruction);
@@ -948,11 +1021,12 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 
 			orlix_tcti_hot_blocks_remember(hot_blocks, &hot_block_cursor,
 						 block);
-			ret = orlix_tcti_execute_gadget_program_authorized_observed(
+			ret = orlix_tcti_execute_authorized_capture(
 				mm, regs, block->program, block->program_words,
 				&fault_address, block->code_generation,
 				&result.entry_valid, &result.entry_pc,
-				&result.entry_instruction);
+				&result.entry_instruction, capture,
+				&successful_gadget_execution);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%u count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
@@ -966,10 +1040,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			unsigned long long before_sp = regs->sp;
 			unsigned long long before_lr = regs->regs[30];
 
-			ret = orlix_tcti_execute_gadget_program_authorized_observed(
+			ret = orlix_tcti_execute_authorized_capture(
 				mm, regs, program, word_count, &fault_address,
 				code_generation, &result.entry_valid,
-				&result.entry_pc, &result.entry_instruction);
+				&result.entry_pc, &result.entry_instruction, capture,
+				&successful_gadget_execution);
 			if (atomic_dec_if_positive(&orlix_tcti_block_trace_budget) >= 0)
 		pr_debug("OrlixTCTI: block exec task=%s pid=%d start_pc=%#llx end_pc=%#llx before_lr=%#llx after_lr=%#llx before_sp=%#llx after_sp=%#llx insn=%#x ret=%d words=%zu count=%u cached=0\n",
 					task->comm, task_pid_nr(task),
@@ -984,8 +1059,9 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			continue;
 		if (ret == -EAGAIN) {
 			orlix_tcti_set_yield_result(mm, regs, &result);
-			orlix_tcti_hot_blocks_release(hot_blocks);
-			return result;
+			ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+						       hot_blocks, normal_resume,
+						       successful_gadget_execution);
 		}
 
 		if (ret == -EFAULT || ret == -EACCES) {
@@ -1006,17 +1082,33 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 			result.fault_access = orlix_tcti_fault_access_for_decoded(&decoded);
 			result.pc = regs->pc;
 			result.instruction = instruction;
-			orlix_tcti_hot_blocks_release(hot_blocks);
-			return result;
+			ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+						       hot_blocks, normal_resume,
+						       successful_gadget_execution);
 		}
 
 		result.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
 		result.status = ret;
 		result.pc = regs->pc;
 		result.instruction = instruction;
-		orlix_tcti_hot_blocks_release(hot_blocks);
-		return result;
+		ORLIX_TCTI_CAPTURE_RELEASE_AND_RETURN(capture, result, regs,
+					       hot_blocks, normal_resume,
+					       successful_gadget_execution);
 	}
+}
+
+struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
+				    struct pt_regs *regs, struct mm_struct *mm)
+{
+	return orlix_tcti_resume_user_internal(task, regs, mm,
+		orlix_tcti_native_capture_claim_resume(task), true);
+}
+
+struct orlix_tcti_result orlix_tcti_resume_user_captured(
+	struct task_struct *task, struct pt_regs *regs, struct mm_struct *mm,
+	struct orlix_tcti_native_capture *capture)
+{
+	return orlix_tcti_resume_user_internal(task, regs, mm, capture, false);
 }
 
 void orlix_tcti_prepare_syscall_handoff(struct pt_regs *regs)

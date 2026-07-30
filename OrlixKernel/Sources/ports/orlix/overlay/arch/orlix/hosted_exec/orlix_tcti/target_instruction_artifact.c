@@ -4,7 +4,7 @@
 #ifdef ORLIX_TCTI_TARGET_INSTRUCTION_ARTIFACT_EXTERNAL_GENERATED
 #include <target_instruction_artifact_generated.h>
 #else
-#include "../isa/target_instruction_artifact_generated.h"
+#include "isa/target_instruction_artifact_generated.h"
 #endif
 
 #ifdef __KERNEL__

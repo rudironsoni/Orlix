@@ -600,9 +600,8 @@ orlix_product_adapter_generate_boundaries() { \
 	[ "$${#product_objects[@]}" -gt 0 ] || { echo "cannot generate product boundaries without product objects" >&2; exit 1; }; \
 	metadata_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)/object-metadata-$$platform"; \
 	mkdir -p "$$metadata_root"; \
-	object_metadata_key() { basename "$$1" | tr -c 'A-Za-z0-9_.-' '_'; }; \
-	object_sections_for() { candidate="$$1"; cache="$$metadata_root/$$(object_metadata_key "$$candidate").sections"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$otool_cmd" -l "$$candidate" | awk '/sectname / { section=$$2; next } /segname / { if (section != "") print $$2 "," section; section="" }' > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
-	object_undefined_for() { candidate="$$1"; cache="$$metadata_root/$$(object_metadata_key "$$candidate").undefined"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$nm_cmd" -u "$$candidate" | awk 'NF { print $$NF }' > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
+	object_sections_for() { candidate="$$1"; candidate_key="$${candidate##*/}"; cache="$$metadata_root/$$candidate_key.sections"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$otool_cmd" -l "$$candidate" | awk '/sectname / { section=$$2; next } /segname / { if (section != "") print $$2 "," section; section="" }' > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
+	object_undefined_for() { candidate="$$1"; candidate_key="$${candidate##*/}"; cache="$$metadata_root/$$candidate_key.undefined"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$nm_cmd" -u "$$candidate" | awk 'NF { print $$NF }' > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
 	present_sections="$$(for candidate in "$${product_objects[@]}"; do object_sections_for "$$candidate"; done | LC_ALL=C sort -u)"; \
 	present_section_names="$$(printf '%s\n' "$$present_sections" | awk -F, 'NF == 2 { print $$2 }' | LC_ALL=C sort -u)"; \
 	undefined_symbols="$$(for candidate in "$${product_objects[@]}"; do object_undefined_for "$$candidate"; done | LC_ALL=C sort -u)"; \
@@ -807,8 +806,7 @@ orlix_product_adapter_finalize_archive() { \
 	mkdir -p "$$link_root/chunks"; \
 	metadata_root="$(ORLIX_PRODUCT_ADAPTER_ROOT)/object-metadata-$$platform"; \
 	mkdir -p "$$metadata_root"; \
-	object_metadata_key() { basename "$$1" | tr -c 'A-Za-z0-9_.-' '_'; }; \
-	object_macho_symbols_for() { candidate="$$1"; cache="$$metadata_root/$$(object_metadata_key "$$candidate").nm-m"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$nm_cmd" -m "$$candidate" > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
+	object_macho_symbols_for() { candidate="$$1"; candidate_key="$${candidate##*/}"; cache="$$metadata_root/$$candidate_key.nm-m"; if [ ! -s "$$cache" ] || [ "$$cache" -ot "$$candidate" ]; then tmp_cache="$$cache.tmp.$$$$"; "$$nm_cmd" -m "$$candidate" > "$$tmp_cache"; mv -f "$$tmp_cache" "$$cache"; fi; cat "$$cache"; }; \
 	product_objects_rsp="$$link_root/product-objects.rsp"; \
 	objects_rsp="$$link_root/objects.rsp"; \
 	linked_obj="$$link_root/orlix-product-kernel.o"; \

@@ -1,3 +1,8 @@
+override ORLIX_GNU_MAKE_CONTRACT_ENTRYPOINT := Makefile
+include $(CURDIR)/make/gnu-make-contract.mk
+
+ifeq ($(ORLIX_GNU_MAKE_CONTRACT_READY),1)
+
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
 
@@ -50,6 +55,8 @@ ORLIX_TCTI_INVENTORY_CONTRACT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/i
 ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/host_lane_boundary_test
 ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_registry_test
 ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_ingestion_test
+include $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/instruction-artifact-contributors.mk
+include $(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk
 ORLIX_TCTI_RUNTIME_PROJECTION_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_runtime_projection_test
 ORLIX_TCTI_SYSTEM_ACCESS_SELECTOR_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_system_access_selector_test
 ORLIX_TCTI_SCALAR_OPERATION_CATALOG_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_scalar_operation_catalog_test
@@ -69,9 +76,11 @@ ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
-.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-harness-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
+.PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework
+.PHONY: orlix-tcti-native-proof-symbol-check-dependency-regression
+.PHONY: __orlix-root-gnu-make-contract-source-check
 
 all: build
 
@@ -107,6 +116,39 @@ help:
 	@printf '%s\n' '  beta-archive        generate Xcode project and archive Orlix Release'
 	@printf '%s\n' '  beta-validate-archive inspect required app/framework/payload archive contents'
 	@printf '%s\n' '  beta-export-archive export archived Orlix for upload'
+
+__orlix-root-gnu-make-contract-source-check:
+	@set -euo pipefail; \
+	tmp="$$(mktemp -d "$${TMPDIR:-/tmp}/orlix-root-gmake-contract.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	fail() { printf 'root GNU Make contract test failed: %s\n' "$$*" >&2; exit 1; }; \
+	mac_make=/usr/bin/make; root_make="$(CURDIR)/Makefile"; \
+	[ -x "$$mac_make" ] || fail 'missing macOS /usr/bin/make'; \
+	"$$mac_make" --no-print-directory -f "$$root_make" help > "$$tmp/help" || fail '/usr/bin/make help did not re-exec GNU Make'; \
+	grep -Fq 'Project Makefiles:' "$$tmp/help" || fail '/usr/bin/make help did not run the root help target'; \
+	"$$mac_make" --no-print-directory -f "$$root_make" __orlix-tcti-instruction-artifact-inputs-source-check > "$$tmp/source-check" || fail '/usr/bin/make source target did not re-exec GNU Make'; \
+	grep -Fq 'instruction artifact sha256:' "$$tmp/source-check" || fail '/usr/bin/make source target did not complete'; \
+	"$$mac_make" --no-print-directory -f "$$root_make" Makefile > "$$tmp/arbitrary-goal" || fail '/usr/bin/make arbitrary existing goal did not preserve child success'; \
+	grep -Fq "Nothing to be done for 'Makefile'." "$$tmp/arbitrary-goal" || fail '/usr/bin/make arbitrary existing goal did not run the re-exec child'; \
+	if "$$mac_make" --no-print-directory -f "$$root_make" __orlix_root_gmake_contract_nonexistent_goal > "$$tmp/exit-status" 2>&1; then fail '/usr/bin/make arbitrary missing goal accepted'; fi; \
+	grep -Fq "No rule to make target '__orlix_root_gmake_contract_nonexistent_goal'" "$$tmp/exit-status" || fail '/usr/bin/make arbitrary missing goal did not preserve child failure'; \
+	if ORLIX_GMAKE="$$tmp/missing-gmake" "$$mac_make" --no-print-directory -f "$$root_make" help > "$$tmp/missing" 2>&1; then fail 'missing GNU Make was accepted'; fi; \
+	grep -Fq 'missing required GNU Make >= 4.0 tool' "$$tmp/missing" || fail 'missing GNU Make diagnostic changed'; \
+	if ORLIX_GMAKE="$$mac_make" "$$mac_make" --no-print-directory -f "$$root_make" help > "$$tmp/incompatible" 2>&1; then fail 'incompatible GNU Make was accepted'; fi; \
+	grep -Fq 'requires GNU Make >= 4.0' "$$tmp/incompatible" || fail 'incompatible GNU Make diagnostic changed'; \
+	if ORLIX_ROOT_GMAKE_REEXEC=1 "$$mac_make" --no-print-directory -f "$$root_make" help > "$$tmp/guard" 2>&1; then fail 'GNU Make re-exec guard was accepted'; fi; \
+	grep -Fq 're-exec guard tripped' "$$tmp/guard" || fail 'GNU Make re-exec guard diagnostic changed'; \
+	if "$$mac_make" --no-print-directory -f "$$root_make" MAKE_VERSION=4.4.1 help > "$$tmp/make-version-command" 2>&1; then fail 'command-line MAKE_VERSION override was accepted'; fi; \
+	grep -Fq 'refuses caller override of MAKE_VERSION' "$$tmp/make-version-command" || fail 'command-line MAKE_VERSION override diagnostic changed'; \
+	if MAKE_VERSION=4.4.1 "$$mac_make" --no-print-directory -f "$$root_make" help > "$$tmp/make-version-environment" 2>&1; then fail 'environment MAKE_VERSION override was accepted'; fi; \
+	grep -Fq 'refuses caller override of MAKE_VERSION' "$$tmp/make-version-environment" || fail 'environment MAKE_VERSION override diagnostic changed'; \
+	"$$mac_make" --no-print-directory -f OrlixKernel/Makefile __orlix-tcti-instruction-artifact-inputs-source-check > "$$tmp/kernel-source-check" || fail 'direct /usr/bin/make OrlixKernel source target did not re-exec GNU Make'; \
+	grep -Fq 'instruction artifact sha256:' "$$tmp/kernel-source-check" || fail 'direct /usr/bin/make OrlixKernel source target did not complete'; \
+	if "$$mac_make" --no-print-directory -f OrlixKernel/Makefile ORLIX_GNU_MAKE_CONTRACT_MAJOR=4 __orlix-tcti-instruction-artifact-inputs-source-check > "$$tmp/kernel-make-major-command" 2>&1; then fail 'direct OrlixKernel command-line Make major override was accepted'; fi; \
+	grep -Fq 'refuses caller override of ORLIX_GNU_MAKE_CONTRACT_MAJOR' "$$tmp/kernel-make-major-command" || fail 'direct OrlixKernel command-line Make major override diagnostic changed'; \
+	if ORLIX_GNU_MAKE_CONTRACT_MAJOR=4 "$$mac_make" --no-print-directory -f OrlixKernel/Makefile __orlix-tcti-instruction-artifact-inputs-source-check > "$$tmp/kernel-make-major-environment" 2>&1; then fail 'direct OrlixKernel environment Make major override was accepted'; fi; \
+	grep -Fq 'refuses caller override of ORLIX_GNU_MAKE_CONTRACT_MAJOR' "$$tmp/kernel-make-major-environment" || fail 'direct OrlixKernel environment Make major override diagnostic changed'; \
+	printf '%s\n' 'root GNU Make contract source check: passed'
 
 setup-env: check-build-tools
 	@$(KERNEL_MAKE) setup-env
@@ -294,14 +336,15 @@ beta-simulator-gate: beta-prerequisites
 orlix-tcti-semantic-provenance-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_completion_audit.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_completion_semantic_provenance_test.c \
 		-o '$(ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST)'
@@ -321,7 +364,7 @@ orlix-tcti-isa-maintainer-source-check:
 	}
 	@$(KERNEL_MAKE) __tcti-instruction-source-check
 
-orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
+orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests __orlix-tcti-instruction-artifact-inputs-source-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
 	@$(CC) -std=c17 -Wall -Wextra -Werror \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/inventory_contract.c \
@@ -333,15 +376,29 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 		-o '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)'
 	@env -i PATH="$(PATH)" '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)' .
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pthread \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry_test.c \
 		-o '$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
 	@'$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
-	@$(CC) -DORLIX_TCTI_PROOF_INGESTION_HOST_TEST -std=c11 -Wall -Wextra -Werror -pedantic \
+	@set -euo pipefail; \
+	$(orlix_tcti_file_sha256) \
+	$(orlix_tcti_candidate_source_revision) \
+	$(orlix_tcti_manifest_sha256) \
+	$(orlix_tcti_proof_profile_sha256) \
+	$(orlix_tcti_proof_inputs_sha256) \
+	$(call orlix_tcti_assign_instruction_artifact_sha256,proof_artifact_sha256,exit 1) \
+	proof_source_paths="$$(mktemp "$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}/orlix-tcti-host-candidate-paths.XXXXXX")"; \
+	trap 'rm -f "$$proof_source_paths"' EXIT; \
+	git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- Makefile OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; \
+	proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; \
+	proof_config_sha256="$$(orlix_tcti_file_sha256 "OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig")"; \
+	proof_profile_sha256="$$(orlix_tcti_proof_profile_sha256 "$(PROFILE)" "OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig")"; \
+	printf -v proof_archive_prefix 'lane=host-proof-ingestion\nsource_revision=%s\n' "$$proof_source_revision"; \
+	proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" Makefile OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_proof_ingestion.c OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_ingestion_test.c)"; \
+	$(CC) -DORLIX_TCTI_PROOF_INGESTION_HOST_TEST -DORLIX_TCTI_KERNEL_ARCHIVE_INPUT_SHA256=\"$$proof_archive_sha256\" -DORLIX_TCTI_KERNEL_CONFIG_SHA256=\"$$proof_config_sha256\" -DORLIX_TCTI_BUILD_PROFILE_SHA256=\"$$proof_profile_sha256\" -DORLIX_TCTI_DURABLE_SOURCE_REVISION=\"$$proof_source_revision\" -DORLIX_TCTI_INSTRUCTION_ARTIFACT_SHA256=\"$$proof_artifact_sha256\" -std=c11 -Wall -Wextra -Werror -pedantic \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_proof_ingestion.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_ingestion_test.c \
 		-o '$(ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST)'
 	@'$(ORLIX_TCTI_TARGET_PROOF_INGESTION_TEST)'
@@ -379,15 +436,17 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 	@'$(ORLIX_TCTI_TARGET_KBUILD_GENERATOR_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact_roundtrip_test.c \
 		-o '$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_ROUNDTRIP_TEST)'
 	@'$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_ROUNDTRIP_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact_generated_mutation_test.c \
 		-o '$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST)'
 	@'$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_MUTATION_TEST)'
@@ -399,9 +458,10 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 	@'$(ORLIX_TCTI_FEATURE_ARTIFACT_VALIDATOR_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
@@ -410,9 +470,10 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 	@'$(ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain_test.c \
 		-o '$(ORLIX_TCTI_FEATURE_DOMAIN_TEST)'
@@ -433,7 +494,8 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 	@'$(ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_TEST)'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_execution_slice_map_test.c \
 		-o '$(ORLIX_TCTI_EXECUTION_SLICE_MAP_TEST)'
@@ -445,17 +507,24 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests
 		-o '$(ORLIX_TCTI_ORDINAL_LEDGER_TEST)'
 	@'$(ORLIX_TCTI_ORDINAL_LEDGER_TEST)'
 
-orlix-tcti-isa-audit: orlix-tcti-isa-host-tests
+orlix-tcti-native-proof-symbol-check:
+	@$(KERNEL_MAKE) orlix-tcti-native-proof-symbol-check
+
+orlix-tcti-native-proof-symbol-check-dependency-regression:
+	@$(KERNEL_MAKE) orlix-tcti-native-proof-symbol-check-dependency-regression
+
+orlix-tcti-isa-audit: orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_field_domain_binding_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
-		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_instruction_artifact.c \
+		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_completion_audit.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_completion_audit_main.c \
 		-o '$(ORLIX_TCTI_INVENTORY_AUDITOR)'
@@ -772,3 +841,5 @@ console-policy-tests:
 		OrlixOS/Tests/ConsolePolicy/console_policy_tests.c \
 		-o '$(ORLIX_BUILD_ROOT)/Tests/console-policy/console_policy_tests'
 	@'$(ORLIX_BUILD_ROOT)/Tests/console-policy/console_policy_tests'
+
+endif

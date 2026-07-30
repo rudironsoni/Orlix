@@ -2,7 +2,6 @@
 
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
-	target_instruction_artifact.o \
 	../mops_provenance.o \
 	../isa/target_ordinal_ledger.o \
 	target_ordinal_ledger_test.o \
@@ -12,8 +11,6 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
 	target_execution_slice_map.o \
-	target_proof_registry.o \
-	target_proof_ingestion.o \
 	target_execution_slice_map_test.o \
 	orlix_tcti_atomic_memory_test.o orlix_tcti_lse_decode_test.o orlix_tcti_uaccess_test.o \
 	orlix_tcti_cssc_min_max_immediate_test.o \
@@ -29,9 +26,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_lse_resume_production_test.o \
 	orlix_tcti_lse_scalar_rmw_resume_test.o \
 	orlix_tcti_exclusive_resume_production_test.o \
-	orlix_tcti_native_observation.o \
-	orlix_tcti_native_observation_test.o \
-	orlix_tcti_native_observation_production_test.o \
+	orlix_tcti_native_capture_test.o \
+	orlix_tcti_native_capture_production_test.o \
 	orlix_tcti_tls_repair_test.o \
 	orlix_tcti_add_sub_immediate_test.o \
 	orlix_tcti_logical_shifted_register_test.o \
@@ -103,7 +99,8 @@ $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 	$(call if_changed,orlix_tcti_target_inventory)
 
 $(obj)/orlix_tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
-$(obj)/orlix_tcti_source_leaf_classification_test.o: $(obj)/target_inventory.h
+$(obj)/orlix_tcti_source_leaf_classification_test.o: $(obj)/target_inventory.h \
+	$(src)/../isa/el0_feature_profile.def
 $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
 	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
 $(obj)/target_runtime_capability_cohort_artifact.o: \
@@ -117,5 +114,6 @@ $(obj)/target_feature_field_domain_binding_artifact.o: \
 	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
 	$(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/current/target_feature_applicability.def
+$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def
 
-ccflags-y += -I$(obj)
+ccflags-y += -I$(obj) -I$(src)/..

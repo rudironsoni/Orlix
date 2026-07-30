@@ -3,6 +3,12 @@ CFLAGS_switch_debug.o += -march=armv8.2-a+fp16
 CFLAGS_fixed_fp.o += -march=armv8.2-a+fp16
 
 obj-y += engine.o
+obj-y += native_capture.o
+obj-y += target_instruction_artifact.o
+obj-y += target_proof_registry.o
+obj-y += target_proof_ingestion.o
+obj-y += target_native_proof_contract.o
+obj-y += target_native_proof_registry.o
 obj-y += report.o
 obj-y += switch_debug.o
 obj-y += fixed_fp.o

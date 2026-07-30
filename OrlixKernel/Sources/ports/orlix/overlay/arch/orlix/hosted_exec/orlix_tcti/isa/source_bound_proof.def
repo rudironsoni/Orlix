@@ -7,7 +7,7 @@
  * This file carries no KUnit or kselftest execution result.
  */
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2166U, "kunit:source-leaf-udf-undefined")
-ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2235U, "kunit:source-leaf-tenter-source-unavailable")
+ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2235U, "kunit:source-leaf-tenter-feat-tev-absent")
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2228U, "kunit:source-leaf-hvc-non-el0")
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2229U, "kunit:source-leaf-smc-non-el0")
 ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(2232U, "kunit:source-leaf-dcps1-non-el0")
