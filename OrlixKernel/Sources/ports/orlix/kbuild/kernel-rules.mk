@@ -1255,7 +1255,8 @@ include OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/archive-cache.mk
 include OrlixKernel/Sources/ports/orlix/kbuild/disposable-tree.mk
 include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time/rules.mk
-include OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk
+ORLIX_TCTI_PROOF_PROVENANCE_SOURCE := OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk
+include $(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)
 
 # The ISA build-time declaration is the only accepted contributor encoding.
 # It rejects command-line and environment overrides before a value reaches a
@@ -2159,6 +2160,7 @@ __kernel-archive: __prepare-kbuild
 			cache_deps=(); sources=(); objects=(); depfiles=(); \
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
+				"$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
 				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
@@ -2197,6 +2199,7 @@ __kernel-archive: __prepare-kbuild
 			if [ ! -s "$$src" ] || [ ! "$$obj" -nt "$$src" ]; then object_set_ready=0; break; fi; \
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
+				"$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
 				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
@@ -2220,7 +2223,7 @@ __kernel-archive: __prepare-kbuild
 			if ! git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			rm -f "$$proof_source_paths"; \
-			proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk); \
+			proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)"); \
 			for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do proof_archive_inputs+=("$$(orlix_product_adapter_source_for "$$proof_src_rel")"); done; \
 			printf -v proof_archive_prefix 'platform=%s\ntarget=%s\nsource_revision=%s\n' "$$platform" "$$target" "$$proof_source_revision"; \
 			proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$${proof_archive_inputs[@]}")" || exit 1; \
@@ -2261,6 +2264,7 @@ __kernel-archive: __prepare-kbuild
 				[ "$$obj" -nt "$$src" ] && \
 				[ "$$obj" -nt "$(ORLIX_KERNEL_BUILD_DIR)/.config" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk" ] && \
+				[ "$$obj" -nt "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
 				[ "$$obj" -nt "$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" ] && \
 				[ "$$obj" -nt "$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" ] && \
