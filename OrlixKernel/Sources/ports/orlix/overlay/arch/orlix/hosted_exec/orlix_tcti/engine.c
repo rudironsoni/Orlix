@@ -29,6 +29,7 @@
 #include "gadget_program.h"
 #include "native_capture.h"
 #include "report.h"
+#include "runtime_feature_condition.h"
 
 #define ORLIX_TCTI_ELF_IMAGE_SCAN_GRANULE (64UL * 1024UL)
 #define ORLIX_TCTI_ELF_IMAGE_SCAN_LIMIT (16UL * 1024UL * 1024UL)
@@ -51,61 +52,6 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
 #ifndef R_AARCH64_RELATIVE
 #define R_AARCH64_RELATIVE 1027
 #endif
-
-/*
- * The decoder retains feature-conditioned leaves so the complete target
- * inventory can audit them.  Execution is a separate contract: a decoded
- * FEAT_CSSC instruction may enter a guest only after Linux advertises CSSC.
- * ORLIX_EL0_HWCAP2 is currently zero, so all CSSC forms must take the normal
- * unsupported-instruction exit without changing guest architectural state.
- * Scalar FP16 uses HWCAP_FPHP and AdvSIMD FP16 uses HWCAP_ASIMDHP. Both are
- * likewise zero until their owning complete-target proof authorizes them.
- */
-static bool orlix_tcti_decoded_requires_cssc(
-	const struct orlix_tcti_decoded_instruction *decoded)
-{
-	if (!decoded)
-		return false;
-
-	switch (decoded->decode_class) {
-	case ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE:
-		return true;
-	case ORLIX_TCTI_DECODE_DATA_PROCESSING_1SOURCE:
-		return decoded->dp1_op == ORLIX_TCTI_DP1_CTZ ||
-			decoded->dp1_op == ORLIX_TCTI_DP1_CNT ||
-			decoded->dp1_op == ORLIX_TCTI_DP1_ABS;
-	case ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE:
-		return decoded->dp2_op == ORLIX_TCTI_DP2_SMAX ||
-			decoded->dp2_op == ORLIX_TCTI_DP2_UMAX ||
-			decoded->dp2_op == ORLIX_TCTI_DP2_SMIN ||
-			decoded->dp2_op == ORLIX_TCTI_DP2_UMIN;
-	default:
-		return false;
-	}
-}
-
-static bool orlix_tcti_decoded_requires_fp16(
-	const struct orlix_tcti_decoded_instruction *decoded)
-{
-	return decoded && decoded->simd_fp &&
-		(decoded->access_size == sizeof(u16) ||
-		 decoded->result_size == sizeof(u16));
-}
-
-static bool orlix_tcti_decoded_runtime_available(
-	const struct orlix_tcti_decoded_instruction *decoded)
-{
-	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
-	if (decoded &&
-	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
-		return false;
-	if (orlix_tcti_decoded_requires_fp16(decoded))
-		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
-			(ELF_HWCAP & HWCAP_ASIMDHP) :
-			(ELF_HWCAP & HWCAP_FPHP);
-	return !orlix_tcti_decoded_requires_cssc(decoded) ||
-		(ELF_HWCAP2 & HWCAP2_CSSC);
-}
 
 static bool orlix_tcti_address_has_vma(struct mm_struct *mm, unsigned long address,
 				 enum orlix_tcti_access access)
@@ -651,6 +597,7 @@ static int orlix_tcti_build_straight_line_block(struct mm_struct *mm,
 
 	for (count = 0; count < ORLIX_TCTI_MAX_BLOCK_INSTRUCTIONS; count++) {
 		struct orlix_tcti_decoded_instruction decoded;
+		struct orlix_tcti_runtime_feature_condition_result authorization;
 		unsigned long pc = start_pc + count * sizeof(u32);
 		u32 instruction = 0;
 
@@ -670,8 +617,11 @@ static int orlix_tcti_build_straight_line_block(struct mm_struct *mm,
 				*first_exit_class = decoded.decode_class;
 			return count ? 0 : -EINTR;
 		}
-		if (decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED ||
-		    !orlix_tcti_decoded_runtime_available(&decoded))
+		if (decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED)
+			return count ? 0 : -EOPNOTSUPP;
+		ret = orlix_tcti_runtime_feature_condition_authorize(instruction, &decoded,
+			orlix_tcti_production_el0_execution_profile(), &authorization);
+		if (ret || authorization.status != ORLIX_TCTI_RUNTIME_FEATURE_CONDITION_ALLOWED)
 			return count ? 0 : -EOPNOTSUPP;
 
 		ret = orlix_tcti_append_decoded_instruction(&decoded, program,

@@ -335,11 +335,15 @@ static int all_injected_failures_are_atomic(
 {
 	size_t artifact;
 
+	EXPECT(ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_INDEX_runtime_feature_condition == 8U);
+	EXPECT(ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_COUNT == 10U);
+
 	EXPECT(!injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 0U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release));
-	for (artifact = 0; artifact < 9U; artifact++) {
+	for (artifact = 0; artifact < ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_COUNT;
+	     artifact++) {
 		char *root = make_root();
 		char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 		char after[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];

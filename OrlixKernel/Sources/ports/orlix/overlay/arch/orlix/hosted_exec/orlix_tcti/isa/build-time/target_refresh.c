@@ -6,6 +6,7 @@
 #include "target_feature_field_domain_binding_artifact_generator.h"
 #include "target_feature_sat.h"
 #include "target_runtime_capability_cohort_artifact_generator.h"
+#include "target_runtime_feature_condition_artifact_generator.h"
 #include "target_instruction_artifact_generator.h"
 #include "target_manifest_generator.h"
 #include "target_refresh.h"
@@ -866,16 +867,26 @@ static int validate_feature_applicability_artifact_packed(
 	return cursor == end ? 0 : -1;
 }
 
-static int validate_artifact_bundle(const struct artifact_bytes *manifest,
-				    const struct artifact_bytes *asl_availability,
-				    const struct artifact_bytes *instruction_artifact,
-				    const struct artifact_bytes *feature_artifact,
-				    const struct artifact_bytes *feature_applicability,
-				    const struct artifact_bytes *feature_field_domains,
-	const struct artifact_bytes *runtime_capability_cohort,
-	const struct artifact_bytes *register_artifact,
-	const struct artifact_bytes *system_accessors)
+struct validation_artifact_bundle {
+	const struct artifact_bytes *manifest, *asl_availability, *instruction_artifact;
+	const struct artifact_bytes *runtime_feature_condition, *feature_artifact;
+	const struct artifact_bytes *feature_applicability, *feature_field_domains;
+	const struct artifact_bytes *runtime_capability_cohort, *register_artifact;
+	const struct artifact_bytes *system_accessors;
+};
+
+static int validate_artifact_bundle(const struct validation_artifact_bundle *bundle)
 {
+	const struct artifact_bytes *manifest = bundle->manifest;
+	const struct artifact_bytes *asl_availability = bundle->asl_availability;
+	const struct artifact_bytes *instruction_artifact = bundle->instruction_artifact;
+	const struct artifact_bytes *runtime_feature_condition = bundle->runtime_feature_condition;
+	const struct artifact_bytes *feature_artifact = bundle->feature_artifact;
+	const struct artifact_bytes *feature_applicability = bundle->feature_applicability;
+	const struct artifact_bytes *feature_field_domains = bundle->feature_field_domains;
+	const struct artifact_bytes *runtime_capability_cohort = bundle->runtime_capability_cohort;
+	const struct artifact_bytes *register_artifact = bundle->register_artifact;
+	const struct artifact_bytes *system_accessors = bundle->system_accessors;
 	size_t feature_counts[6], cohort_counts[4];
 	size_t register_counts[24], accessor_counts[8], accessor_semantic_counts[9];
 	size_t index;
@@ -907,6 +918,16 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 		       "ORLIX_TCTI_A64_INSTRUCTION_ARTIFACT_LEAF_COUNT 4350U") ||
 	    !has_token(instruction_artifact,
 		       "orlix_tcti_a64_instruction_artifact_leaves[4350]") ||
+	    !has_token(runtime_feature_condition,
+		       "ORLIX_TCTI_A64_RUNTIME_FEATURE_CONDITION_SOURCE(\"") ||
+	    !has_token(runtime_feature_condition,
+		       ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256) ||
+	    !has_token(runtime_feature_condition,
+		       ORLIX_TCTI_TARGET_REFRESH_FEATURES_SHA256) ||
+	    !has_token(runtime_feature_condition,
+		       "ORLIX_TCTI_A64_RUNTIME_FEATURE_CONDITION_CANDIDATE_COUNT(4350U)") ||
+	    count_token(runtime_feature_condition,
+		       "ORLIX_TCTI_A64_RUNTIME_FEATURE_CONDITION_CANDIDATE(") != 4350U ||
 	    !has_token(runtime_capability_cohort,
 		       ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256))
 		return -1;
@@ -1020,6 +1041,8 @@ const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_
 		return "feature applicability artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT:
 		return "runtime capability cohort artifact generation failed";
+	case ORLIX_TCTI_TARGET_REFRESH_RUNTIME_FEATURE_CONDITION:
+		return "runtime feature-condition artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_REGISTERS: return "register artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS: return "system accessor reconciliation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_PUBLISH: return "transactional publication failed";
@@ -1204,6 +1227,21 @@ static int emit_runtime_capability_cohort(const struct source_bytes *instruction
 	return result;
 }
 
+static int emit_runtime_feature_condition(const struct source_bytes *instructions,
+	const struct source_bytes *features, struct artifact_bytes *artifact)
+{
+	FILE *output = tmpfile();
+	int result;
+
+	if (!output)
+		return -1;
+	result = !orlix_tcti_runtime_feature_condition_artifact_emit(
+		instructions->data, instructions->length, features->data, features->length,
+		output) && !capture(output, artifact) ? 0 : -1;
+	fclose(output);
+	return result;
+}
+
 static int emit_feature_applicability(const struct source_bytes *instructions,
 				      const struct source_bytes *features,
 				      const struct source_bytes *registers,
@@ -1315,13 +1353,10 @@ int orlix_tcti_target_refresh_with_fault(
 	struct artifact_bytes feature_applicability = { 0 };
 	struct artifact_bytes feature_field_domains = { 0 };
 	struct artifact_bytes runtime_capability_cohort = { 0 };
+	struct artifact_bytes runtime_feature_condition = { 0 };
 	struct artifact_bytes system_accessors = { 0 };
-	struct orlix_tcti_target_artifact artifacts[] = {
-#define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
-		{ .name = #artifact_name, .data = bytes.data, .length = bytes.length },
-#include "target_refresh_artifacts.def"
-#undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
-	};
+	struct orlix_tcti_target_artifact
+		artifacts[ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_COUNT] = { 0 };
 	struct orlix_tcti_target_artifact_provenance provenance = {
 		.schema = ORLIX_TCTI_TARGET_REFRESH_SCHEMA,
 		.generator = ORLIX_TCTI_TARGET_REFRESH_GENERATOR,
@@ -1339,7 +1374,6 @@ int orlix_tcti_target_refresh_with_fault(
 	char register_digest[65];
 	char reconciliation_identity[65];
 	enum orlix_tcti_target_refresh_error error = ORLIX_TCTI_TARGET_REFRESH_OK;
-	size_t artifact_index;
 
 	if (result)
 		*result = (struct orlix_tcti_target_refresh_result) { 0 };
@@ -1430,6 +1464,11 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT;
 		goto out;
 	}
+	if (emit_runtime_feature_condition(&instructions, &features,
+					   &runtime_feature_condition)) {
+		error = ORLIX_TCTI_TARGET_REFRESH_RUNTIME_FEATURE_CONDITION;
+		goto out;
+	}
 	if (emit_registers(&registers, &register_artifact)) {
 		error = ORLIX_TCTI_TARGET_REFRESH_REGISTERS;
 		goto out;
@@ -1438,12 +1477,11 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS;
 		goto out;
 	}
-	artifact_index = 0;
+	/* Capture emitted bytes only after every producer has completed. */
 #define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
-	do { \
-		artifacts[artifact_index].data = bytes.data; \
-		artifacts[artifact_index++].length = bytes.length; \
-	} while (0);
+	artifacts[ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_INDEX_##identifier] = \
+		(struct orlix_tcti_target_artifact) { \
+			.name = #artifact_name, .data = bytes.data, .length = bytes.length };
 #include "target_refresh_artifacts.def"
 #undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
 
@@ -1460,7 +1498,8 @@ int orlix_tcti_target_refresh_with_fault(
 		 * the real validator rather than bypassing it synthetically. The
 		 * field-domain fixture preserves its V3 header and removes the rows. */
 		corruption = (char *)artifacts[fault->validation_artifact].data;
-		if (fault->validation_artifact == 4U) {
+		if (fault->validation_artifact ==
+		    ORLIX_TCTI_TARGET_REFRESH_ARTIFACT_INDEX_feature_field_domains) {
 			char *occurrence = strstr(
 				corruption,
 				ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCE_V3);
@@ -1470,12 +1509,18 @@ int orlix_tcti_target_refresh_with_fault(
 		}
 		*corruption = '\0';
 	}
-	if (validate_artifact_bundle(&manifest, &asl_availability,
-				     &instruction_artifact, &feature_artifact,
-				     &feature_applicability,
-				     &feature_field_domains,
-				     &runtime_capability_cohort,
-				     &register_artifact, &system_accessors)) {
+	if (validate_artifact_bundle(&(struct validation_artifact_bundle) {
+			.manifest = &manifest,
+			.asl_availability = &asl_availability,
+			.instruction_artifact = &instruction_artifact,
+			.runtime_feature_condition = &runtime_feature_condition,
+			.feature_artifact = &feature_artifact,
+			.feature_applicability = &feature_applicability,
+			.feature_field_domains = &feature_field_domains,
+			.runtime_capability_cohort = &runtime_capability_cohort,
+			.register_artifact = &register_artifact,
+			.system_accessors = &system_accessors,
+		})) {
 		error = ORLIX_TCTI_TARGET_REFRESH_VALIDATION;
 		errno = EINVAL;
 		goto out;
@@ -1508,6 +1553,7 @@ out:
 	free(feature_applicability.data);
 	free(feature_field_domains.data);
 	free(runtime_capability_cohort.data);
+	free(runtime_feature_condition.data);
 	free(register_artifact.data);
 	free(system_accessors.data);
 	set_result(result, error);

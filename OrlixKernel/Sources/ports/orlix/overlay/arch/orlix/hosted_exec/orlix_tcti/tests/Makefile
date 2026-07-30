@@ -46,12 +46,14 @@ override ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS = \
 
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
-	target_instruction_artifact.o \
+	../runtime_feature_condition.o \
+	orlix_tcti_runtime_feature_condition_test.o \
+	../target_instruction_artifact.o \
 	../mops_provenance.o \
 	../isa/target_ordinal_ledger.o \
 	target_ordinal_ledger_test.o \
-	target_feature_artifact.o \
-	target_feature_domain.o \
+	../target_feature_artifact.o \
+	../target_feature_domain.o \
 	target_feature_field_domain_binding_artifact.o \
 	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \

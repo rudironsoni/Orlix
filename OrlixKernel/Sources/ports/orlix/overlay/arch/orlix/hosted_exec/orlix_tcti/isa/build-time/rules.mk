@@ -31,6 +31,7 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_feature_sat.c target_feature_applicability_generator.c \
 	target_feature_field_domain_binding_artifact_generator.c \
 	target_runtime_capability_cohort_artifact_generator.c \
+	target_runtime_feature_condition_artifact_generator.c \
 	target_register_model.c target_register_artifact_generator.c \
 	target_arm_xml_package.c target_asl_availability.c \
 	target_system_accessor_reconciliation.c
@@ -156,6 +157,12 @@ __tcti-isa-check:
 		target_runtime_capability_cohort_artifact_generator_test.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_runtime_capability_cohort_artifact_generator_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_runtime_capability_cohort_artifact_generator_test' \
+		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' '$(ORLIX_AARCHMRS_FEATURES)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		target_inventory_import.c target_feature_model.c \
+		target_runtime_feature_condition_artifact_generator_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_runtime_feature_condition_artifact_generator_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_runtime_feature_condition_artifact_generator_test' \
 		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' '$(ORLIX_AARCHMRS_FEATURES)'
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		target_register_model.c target_register_model_test.c \

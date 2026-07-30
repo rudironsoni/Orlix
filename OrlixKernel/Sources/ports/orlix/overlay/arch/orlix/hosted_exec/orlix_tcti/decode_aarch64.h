@@ -557,6 +557,8 @@ enum orlix_tcti_min_max_immediate_op {
 struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_decode_class decode_class;
 	u32 instruction;
+	u32 source_ordinal;
+	bool source_ordinal_valid;
 	u8 rd;
 	u8 rn;
 	u8 rm;
