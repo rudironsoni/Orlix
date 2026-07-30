@@ -6,6 +6,7 @@
 #include "block_cache.h"
 #include "crc32.h"
 #include "decode_aarch64.h"
+#include "fixed_add_sub.h"
 #include "gadget_program.h"
 #include "native_capture.h"
 #include "semantics.h"
@@ -52,7 +53,19 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
 
 	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
-	ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded, fault_address);
+	switch (decoded.decode_class) {
+	case ORLIX_TCTI_DECODE_ADD_SUB_IMMEDIATE:
+	case ORLIX_TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER:
+	case ORLIX_TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER:
+	case ORLIX_TCTI_DECODE_ADD_SUB_WITH_CARRY:
+	case ORLIX_TCTI_DECODE_ADD_SUB_POINTER_CHECKED:
+		ret = orlix_tcti_fixed_execute_add_sub(regs, &decoded);
+		break;
+	default:
+		ret = orlix_tcti_execute_decoded_semantics(mm, regs, &decoded,
+						      fault_address);
+		break;
+	}
 	if (ret)
 		orlix_tcti_native_capture_fault(capture, &decoded, *fault_address, ret);
 	else {

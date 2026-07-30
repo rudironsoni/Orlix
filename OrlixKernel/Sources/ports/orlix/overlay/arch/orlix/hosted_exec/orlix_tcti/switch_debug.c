@@ -4,7 +4,6 @@
 #include <linux/limits.h>
 #include <linux/log2.h>
 #include <linux/preempt.h>
-#include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 #include <asm/page.h>
@@ -16,39 +15,12 @@
 #include <internal/asm/host_time.h>
 
 #include "decode_aarch64.h"
+#include "fixed_add_sub.h"
 #include "fixed_fp.h"
 #include "semantics.h"
 #include "system_accessor.h"
 #include "sve_state.h"
 #include "switch_debug.h"
-
-struct orlix_tcti_cpu_system_state {
-	struct orlix_tcti_cpa_control cpa_control;
-};
-
-static DEFINE_SPINLOCK(orlix_tcti_cpu_system_state_lock);
-static struct orlix_tcti_cpu_system_state orlix_tcti_cpu_system_state = {
-	.cpa_control.feat_cpa = true,
-};
-
-void orlix_tcti_cpu_cpa_control_get(struct orlix_tcti_cpa_control *control)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&orlix_tcti_cpu_system_state_lock, flags);
-	*control = orlix_tcti_cpu_system_state.cpa_control;
-	spin_unlock_irqrestore(&orlix_tcti_cpu_system_state_lock, flags);
-}
-
-void orlix_tcti_cpu_cpa_control_set(
-	const struct orlix_tcti_cpa_control *control)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&orlix_tcti_cpu_system_state_lock, flags);
-	orlix_tcti_cpu_system_state.cpa_control = *control;
-	spin_unlock_irqrestore(&orlix_tcti_cpu_system_state_lock, flags);
-}
 
 #define AARCH64_ADRP_PAGE_MASK (~0xfffULL)
 #define AARCH64_FPSR_IOC BIT(0)
@@ -106,19 +78,6 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
 	}
-}
-
-static u64 orlix_tcti_read_add_sub_immediate_source(const struct pt_regs *regs,
-					      const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u64 value;
-
-	if (decoded->rn == 31)
-		value = regs->sp;
-	else
-		value = regs->regs[decoded->rn];
-
-	return decoded->is_64bit ? value : (u32)value;
 }
 
 static u64 orlix_tcti_read_gpr_or_zero(const struct pt_regs *regs, u8 reg,
@@ -670,55 +629,6 @@ static u64 orlix_tcti_shift_logical_source(u64 value,
 	return value;
 }
 
-static u64 orlix_tcti_extend_register_source(u64 value, u8 option)
-{
-	switch (option) {
-	case 0:
-		return (u8)value;
-	case 1:
-		return (u16)value;
-	case 2:
-		return (u32)value;
-	case 3:
-		return value;
-	case 4:
-		return (s64)(s8)value;
-	case 5:
-		return (s64)(s16)value;
-	case 6:
-		return (s64)(s32)value;
-	case 7:
-		return (s64)value;
-	default:
-		return value;
-	}
-}
-
-static int orlix_tcti_execute_add_sub_result(struct pt_regs *regs,
-				       const struct orlix_tcti_decoded_instruction *decoded,
-				       u64 left, u64 right, bool sp_allowed)
-{
-	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 result = decoded->subtract ? left - right : left + right;
-
-	if (decoded->set_flags)
-		orlix_tcti_update_add_sub_flags(regs, left, right, result,
-					  access_size, decoded->subtract);
-
-	if (decoded->set_flags && decoded->rd == 31) {
-		regs->pc += sizeof(u32);
-		return 0;
-	}
-
-	if (decoded->set_flags || !sp_allowed)
-		orlix_tcti_write_gpr_or_zero(regs, decoded->rd, access_size, result);
-	else
-		orlix_tcti_write_gpr_or_sp(regs, decoded->rd, access_size, result);
-
-	regs->pc += sizeof(u32);
-	return 0;
-}
-
 static int orlix_tcti_execute_min_max_immediate(
 	struct pt_regs *regs,
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -781,125 +691,6 @@ static int orlix_tcti_execute_min_max_immediate(
 	}
 
 	orlix_tcti_write_gpr_or_zero(regs, decoded->rd, access_size, result);
-	regs->pc += sizeof(u32);
-	return 0;
-}
-
-static int orlix_tcti_execute_add_sub_shifted_register(struct pt_regs *regs,
-						 const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
-	u64 right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
-
-	right = orlix_tcti_shift_logical_source(right, decoded);
-	return orlix_tcti_execute_add_sub_result(regs, decoded, left, right, false);
-}
-
-static int orlix_tcti_execute_add_sub_extended_register(struct pt_regs *regs,
-						 const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 left = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, access_size);
-	u64 right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
-
-	right = orlix_tcti_extend_register_source(right, decoded->offset_extend);
-	right <<= decoded->shift_amount;
-	if (!decoded->is_64bit) {
-		left = (u32)left;
-		right = (u32)right;
-	}
-
-	return orlix_tcti_execute_add_sub_result(regs, decoded, left, right, true);
-}
-
-static int orlix_tcti_execute_add_sub_with_carry(struct pt_regs *regs,
-					   const struct orlix_tcti_decoded_instruction *decoded)
-{
-	u8 access_size = decoded->is_64bit ? sizeof(u64) : sizeof(u32);
-	u64 left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, access_size);
-	u64 right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, access_size);
-	u64 carry = regs->pstate & PSR_C_BIT ? 1 : 0;
-	u64 mask = decoded->is_64bit ? U64_MAX : U32_MAX;
-	u64 addend = decoded->subtract ? ~right : right;
-	__uint128_t wide_result;
-	u64 result;
-
-	left &= mask;
-	addend &= mask;
-	wide_result = (__uint128_t)left + addend + carry;
-	result = (u64)wide_result & mask;
-
-	if (decoded->set_flags) {
-		u64 sign_bit = decoded->is_64bit ? BIT_ULL(63) : BIT_ULL(31);
-		u64 flags = 0;
-		bool left_negative = left & sign_bit;
-		bool addend_negative = addend & sign_bit;
-		bool result_negative = result & sign_bit;
-
-		if (result_negative)
-			flags |= PSR_N_BIT;
-		if (!result)
-			flags |= PSR_Z_BIT;
-		if (wide_result >> (decoded->is_64bit ? 64 : 32))
-			flags |= PSR_C_BIT;
-		if (left_negative == addend_negative &&
-		    left_negative != result_negative)
-			flags |= PSR_V_BIT;
-
-		regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT |
-				  PSR_C_BIT | PSR_V_BIT);
-		regs->pstate |= flags;
-	}
-	if (!decoded->set_flags || decoded->rd != 31)
-		orlix_tcti_write_gpr_or_zero(regs, decoded->rd, access_size, result);
-	regs->pc += sizeof(u32);
-	return 0;
-}
-
-static int orlix_tcti_execute_add_sub_pointer_checked(
-	struct pt_regs *regs,
-	const struct orlix_tcti_decoded_instruction *decoded)
-{
-	struct orlix_tcti_cpa_control control;
-	struct orlix_tcti_pointer_add_observation *observation =
-		&current->thread.user_cpa_add_observation;
-	u64 base;
-	u64 offset;
-	u64 result;
-
-	memset(observation, 0, sizeof(*observation));
-	orlix_tcti_cpu_cpa_control_get(&control);
-	if (!control.feat_cpa)
-		return -EOPNOTSUPP;
-	base = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
-	offset = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
-	offset <<= decoded->shift_amount;
-	result = decoded->subtract ? base - offset : base + offset;
-
-	observation->base = base;
-	observation->arithmetic_result = result;
-	observation->previous_detection =
-		!!(base & BIT_ULL(55)) != !!(base & BIT_ULL(54));
-	observation->cpta_detected =
-		((result ^ base) & GENMASK_ULL(63, 56)) != 0 ||
-		observation->previous_detection;
-	observation->effective_cpta = control.feat_cpa2 &&
-		control.sctlr2_el1_enabled && control.sctlr2_el1_cpta0;
-	observation->poisoned = observation->cpta_detected &&
-		observation->effective_cpta;
-	if (observation->poisoned) {
-		result &= GENMASK_ULL(53, 0);
-		result |= base & GENMASK_ULL(63, 55);
-		if (!(base & BIT_ULL(55)))
-			result |= BIT_ULL(54);
-	}
-	observation->result = result;
-	observation->valid = true;
-	if (decoded->rd == 31)
-		regs->sp = result;
-	else
-		regs->regs[decoded->rd] = result;
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -7698,20 +7489,17 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		regs->pc += sizeof(u32);
 		return 0;
 	case ORLIX_TCTI_DECODE_ADD_SUB_IMMEDIATE:
-		immediate = (u64)decoded->imm12 << (decoded->shift ? 12 : 0);
-		source = orlix_tcti_read_add_sub_immediate_source(regs, decoded);
-		return orlix_tcti_execute_add_sub_result(regs, decoded, source,
-						   immediate, true);
+		return orlix_tcti_fixed_execute_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_MIN_MAX_IMMEDIATE:
 		return orlix_tcti_execute_min_max_immediate(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER:
-		return orlix_tcti_execute_add_sub_shifted_register(regs, decoded);
+		return orlix_tcti_fixed_execute_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_EXTENDED_REGISTER:
-		return orlix_tcti_execute_add_sub_extended_register(regs, decoded);
+		return orlix_tcti_fixed_execute_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_WITH_CARRY:
-		return orlix_tcti_execute_add_sub_with_carry(regs, decoded);
+		return orlix_tcti_fixed_execute_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_POINTER_CHECKED:
-		return orlix_tcti_execute_add_sub_pointer_checked(regs, decoded);
+		return orlix_tcti_fixed_execute_add_sub(regs, decoded);
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 		if (decoded->link)
 			regs->regs[30] = regs->pc + sizeof(u32);
