@@ -122,6 +122,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o \
 	orlix_tcti_advsimd_structure_load_store_source_bound_test.o \
 	orlix_tcti_pauth_bti_gcs_obligation_test.o \
+	pauth_qemu_oracle.o \
 	orlix_tcti_sme_state_contract_test.o \
 	orlix_tcti_mops_provenance_test.o \
 	orlix_tcti_mops_copy_test.o

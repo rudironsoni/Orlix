@@ -424,6 +424,39 @@ static int kunit_transitive_header_drift_fails_closed(void)
 	return 0;
 }
 
+static int kunit_auxiliary_source_drift_fails_closed(void)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *pointer_auth = NULL;
+	const char *auxiliary;
+	const char *auxiliary_sha256;
+	char mutated_sha256[65];
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	for (index = 0; index < count; index++)
+		if (!strcmp(entries[index].kunit_suite,
+			    "orlix-tcti-pointer-authentication-source-bound")) {
+			pointer_auth = &entries[index];
+			break;
+		}
+	EXPECT(pointer_auth != NULL);
+	EXPECT(!orlix_tcti_target_kunit_auxiliary_identity_for_test(
+		pointer_auth->kunit_source, &auxiliary, &auxiliary_sha256));
+	memcpy(mutated_sha256, auxiliary_sha256, sizeof(mutated_sha256));
+
+	EXPECT(orlix_tcti_target_kunit_auxiliary_validate_for_test(
+		       pointer_auth->kunit_source, auxiliary, auxiliary_sha256) == 0);
+	mutated_sha256[0] = mutated_sha256[0] == '0' ? '1' : '0';
+	EXPECT(orlix_tcti_target_kunit_auxiliary_validate_for_test(
+		       pointer_auth->kunit_source, auxiliary,
+		       mutated_sha256) == -1);
+	EXPECT(orlix_tcti_target_kunit_auxiliary_validate_for_test(
+		       entries[0].kunit_source, auxiliary, auxiliary_sha256) == -1);
+	return 0;
+}
+
 static int registered_case_cannot_overclaim_obligations(void)
 {
 	static const struct orlix_tcti_target_proof_binding bindings[] = {
@@ -1809,6 +1842,8 @@ int main(void)
 		  kunit_provenance_must_be_registered },
 		{ "kunit_transitive_header_drift_fails_closed",
 		  kunit_transitive_header_drift_fails_closed },
+		{ "kunit_auxiliary_source_drift_fails_closed",
+		  kunit_auxiliary_source_drift_fails_closed },
 		{ "registered_case_cannot_overclaim_obligations",
 		  registered_case_cannot_overclaim_obligations },
 		{ "typed_kselftest_provenance_is_source_and_build_bound",

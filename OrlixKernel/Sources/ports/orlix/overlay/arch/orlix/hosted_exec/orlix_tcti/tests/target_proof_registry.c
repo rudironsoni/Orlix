@@ -323,6 +323,9 @@ struct kunit_source_provenance {
 	const char *dependency;
 	const char *dependency_sha256;
 	const char *include_directive;
+	const char *auxiliary_source;
+	const char *auxiliary_sha256;
+	const char *auxiliary_object;
 };
 
 struct kunit_dependency_terminal_artifact {
@@ -610,6 +613,11 @@ production_capture_bindings[] = {
 #define POINTER_AUTH_SUITE_SYMBOL \
 	"orlix_tcti_pointer_authentication_source_bound_test_suite"
 #define POINTER_AUTH_CASE_ARRAY "pauth_cases"
+#define POINTER_AUTH_QEMU_ORACLE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/pauth_qemu_oracle.c"
+#define POINTER_AUTH_QEMU_ORACLE_SHA256 \
+	"4ef3b92096f216f0b5ada366f6266d68e7ea4ffc494471349d3b1c25cfd40b86"
+#define POINTER_AUTH_QEMU_ORACLE_OBJECT "pauth_qemu_oracle.o"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define DECODE_SUITE "orlix-tcti-decode"
@@ -729,37 +737,37 @@ static const struct orlix_tcti_target_kselftest_provenance
 static const struct kunit_source_provenance kunit_sources[] = {
 	{ LSE_SOURCE,
 	  "909b0b8965d9cb90c095c8baa1c48c118116cb658be090a354f03b3acdbbe970",
-	  "orlix_tcti_lse_decode_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_lse_decode_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ LSE_SOURCE_BOUND_SOURCE,
 	  "22559391c3da9cdcef9fbeb53d2707b712f592fd1d9bfa7c37f6458c632ce2e0",
-	  "orlix_tcti_lse_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_lse_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ LSE128_SOURCE,
 	  "a5bd42cc32291145e9115b41715fef59d93fb0bb34c0ec445805017503153a5f",
-	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "4f042bd635beaf8ce0a7c9ae9d55d04b1e56e4c93a3a50508ce94afcc454953d",
-	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ CSSC_SOURCE,
 	  "0b6ca93fe5268d8f2f67e9559d6472ad5f9fe45e56c3e23316937d0f5bf72466",
-	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_cssc_min_max_immediate_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
-	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ LOGICAL_IMMEDIATE_SOURCE,
 	  "2870f5ec26ff59f7f9d1c95997a1badbb95c0099aace28ebf487853c418ac7c2",
-	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_logical_immediate_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ MOVE_WIDE_SOURCE,
 	  "41df23a17d924a86f5793de4299229deb5b3a96dae65d6593114f3d08b905b70",
-	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_move_wide_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ SCALAR_BITOPS_SOURCE,
 	  "5ddd5c7002f5c7735f862d43f28981f0b68fb8018dbf65276cb089716e789b9f",
-	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_scalar_bitops_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ VARIABLE_SHIFT_SOURCE,
 	  "a7d8f93e3319c1175ae940763d7c044e9e73a95b8ed01b7d641cdc54cadee181",
-	  "orlix_tcti_variable_shift_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_variable_shift_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADD_SUB_REGISTER_SOURCE,
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
-	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  "24e7fb99660e243f9cc13305dd6b0d8d389a2185b0904e3a2bd7c2dda1d79618",
 	  "orlix_tcti_source_leaf_classification_test.o",
@@ -774,41 +782,45 @@ static const struct kunit_source_provenance kunit_sources[] = {
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 	{ TRANSLATION_CHANGE_SOURCE,
 	  "4ec2fbd8141dd9ee73b5292637fbaa674a04720f159b61d6b3677f07ee8024c7",
-	  "orlix_tcti_translation_change_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_translation_change_source_bound_test.o", NULL, NULL, NULL,
+	  NULL, NULL, NULL },
 	{ POINTER_AUTH_SOURCE,
-	  "a12e9f72d444c0f6e28d6634e6ff9cfc0c16d15e39ef3757d645971ed8934b8a",
-	  "orlix_tcti_pauth_bti_gcs_obligation_test.o", NULL, NULL, NULL },
+	  "7e686835412888fecad8941ae9722b6598ad6a0f5f3370c86556deb98856227a",
+	  "orlix_tcti_pauth_bti_gcs_obligation_test.o", NULL, NULL, NULL,
+	  POINTER_AUTH_QEMU_ORACLE_SOURCE, POINTER_AUTH_QEMU_ORACLE_SHA256,
+	  POINTER_AUTH_QEMU_ORACLE_OBJECT },
 	{ DECODE_SOURCE,
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
-	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_decode_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
-	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADVSIMD_FP_ARITHMETIC_SOURCE,
 	  "c1e420d4451b386a8d8af24740bf445c4fbef8701b4a02f4f882416e26f4e1ed",
-	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_advsimd_fp_arithmetic_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADVSIMD_HALVING_SOURCE,
 	  "a0889b69d1cafddf5088b800e00d89b7a123b02ee847645e9a0a8583c1819d62",
-	  "orlix_tcti_advsimd_halving_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_advsimd_halving_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADVSIMD_MUL_SOURCE,
 	  "93e647a701efdf32967ddc75229e6c56e081d1dd0d534f4a9de41803d93ea558",
-	  "orlix_tcti_advsimd_mul_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_advsimd_mul_source_bound_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ ADVSIMD_MINMAX_REDUCTION_SOURCE,
 	  "0458c2ac841380d2e535e55e6a766268d86de4e42c82c66e9ede5ebd1558581e",
 	  "orlix_tcti_advsimd_integer_minmax_reduction_source_bound_test.o",
-	  NULL, NULL, NULL },
+	  NULL, NULL, NULL, NULL, NULL, NULL },
 	{ INTEGER_CONDITIONAL_SOURCE,
 	  "f8522c499c84f0909321277da232d65504fbd393627a61f8e9f179a75d72e897",
-	  "orlix_tcti_integer_conditional_source_bound_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_integer_conditional_source_bound_test.o", NULL, NULL, NULL,
+	  NULL, NULL, NULL },
 	{ MOPS_COPY_SOURCE,
 	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
-	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
+	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL, NULL, NULL, NULL },
 	{ FLAG_MANIPULATION_SOURCE,
 	  "c58ee600547be6fd79a87b9776d1c6e380d524dbefb4a2e9dbd4e3a351cb2099",
 	  "orlix_tcti_flag_manipulation_source_bound_test.o",
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE,
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256,
-	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE },
+	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE, NULL, NULL, NULL },
 	};
 
 static const struct kunit_dependency_terminal_artifact
@@ -4786,6 +4798,36 @@ static bool valid_kunit_dependency(
 #endif
 }
 
+static bool valid_kunit_auxiliary(
+	const struct kunit_source_provenance *source_metadata,
+	const char *auxiliary_sha256)
+{
+#ifdef __KERNEL__
+	return source_metadata && !empty(source_metadata->auxiliary_source) &&
+		!empty(source_metadata->auxiliary_sha256) &&
+		!empty(source_metadata->auxiliary_object) &&
+		!empty(auxiliary_sha256) &&
+		!strcmp(source_metadata->auxiliary_sha256, auxiliary_sha256);
+#else
+	char *auxiliary;
+	size_t auxiliary_length;
+	bool valid;
+
+	if (!source_metadata || empty(source_metadata->auxiliary_source) ||
+	    empty(auxiliary_sha256))
+		return false;
+	auxiliary = read_source(source_metadata->auxiliary_source,
+				&auxiliary_length);
+	if (!auxiliary)
+		return false;
+	valid = !memchr(auxiliary, '\0', auxiliary_length) &&
+		sha256_matches((const orlix_tcti_proof_u8 *)auxiliary,
+				       auxiliary_length, auxiliary_sha256);
+	free(auxiliary);
+	return valid;
+#endif
+}
+
 int orlix_tcti_target_kunit_dependency_validate_for_test(
 	const char *source, const char *dependency, const char *dependency_sha256)
 {
@@ -4802,6 +4844,39 @@ int orlix_tcti_target_kunit_dependency_validate_for_test(
 		return -1;
 	return valid_kunit_dependency(source_metadata,
 			      source_metadata->dependency_sha256) ? 0 : -1;
+}
+
+int orlix_tcti_target_kunit_auxiliary_validate_for_test(
+	const char *source, const char *auxiliary, const char *auxiliary_sha256)
+{
+	const struct kunit_source_provenance *source_metadata;
+
+	if (empty(source) || empty(auxiliary) || empty(auxiliary_sha256))
+		return -1;
+	source_metadata = find_kunit_source(source);
+	if (!source_metadata || empty(source_metadata->auxiliary_source) ||
+	    empty(source_metadata->auxiliary_sha256) ||
+	    empty(source_metadata->auxiliary_object) ||
+	    strcmp(auxiliary, source_metadata->auxiliary_source))
+		return -1;
+	return valid_kunit_auxiliary(source_metadata, auxiliary_sha256) ? 0 : -1;
+}
+
+int orlix_tcti_target_kunit_auxiliary_identity_for_test(
+	const char *source, const char **auxiliary, const char **auxiliary_sha256)
+{
+	const struct kunit_source_provenance *source_metadata;
+
+	if (empty(source) || !auxiliary || !auxiliary_sha256)
+		return -1;
+	source_metadata = find_kunit_source(source);
+	if (!source_metadata || empty(source_metadata->auxiliary_source) ||
+	    empty(source_metadata->auxiliary_sha256) ||
+	    empty(source_metadata->auxiliary_object))
+		return -1;
+	*auxiliary = source_metadata->auxiliary_source;
+	*auxiliary_sha256 = source_metadata->auxiliary_sha256;
+	return 0;
 }
 
 static bool valid_kunit_provenance(
@@ -4826,7 +4901,11 @@ static bool valid_kunit_provenance(
 		return false;
 #ifdef __KERNEL__
 	if (!!source_metadata->dependency != !!source_metadata->dependency_sha256 ||
-	    !!source_metadata->dependency != !!source_metadata->include_directive)
+	    !!source_metadata->dependency != !!source_metadata->include_directive ||
+	    !!source_metadata->auxiliary_source !=
+	    !!source_metadata->auxiliary_sha256 ||
+	    !!source_metadata->auxiliary_source !=
+	    !!source_metadata->auxiliary_object)
 		return false;
 	for (index = 0; index < entry->kunit_case_count; index++) {
 		const struct kunit_case_provenance *case_metadata =
@@ -4844,7 +4923,15 @@ static bool valid_kunit_provenance(
 		return false;
 	if (!sha256_matches((const orlix_tcti_proof_u8 *)build_source, build_length,
 			    KUNIT_BUILD_SOURCE_SHA256) ||
-	    !strstr(build_source, source_metadata->object)) {
+	    !strstr(build_source, source_metadata->object) ||
+	    (!!source_metadata->auxiliary_source !=
+	     !!source_metadata->auxiliary_sha256) ||
+	    (!!source_metadata->auxiliary_source !=
+	     !!source_metadata->auxiliary_object) ||
+	    (source_metadata->auxiliary_source &&
+	     (!strstr(build_source, source_metadata->auxiliary_object) ||
+	      !valid_kunit_auxiliary(source_metadata,
+				     source_metadata->auxiliary_sha256)))) {
 		free(build_source);
 		return false;
 	}

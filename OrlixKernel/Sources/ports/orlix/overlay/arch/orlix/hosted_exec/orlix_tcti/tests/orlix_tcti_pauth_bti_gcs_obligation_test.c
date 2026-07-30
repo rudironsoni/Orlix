@@ -23,6 +23,9 @@
 #include "../pointer_authentication.h"
 #include "orlix_tcti_test_suites.h"
 
+u64 orlix_tcti_pauth_qemu_oracle_qarma5(u64 data, u64 modifier,
+	struct orlix_tcti_pauth_key key);
+
 #define PAUTH_BTI_GCS_RECORD(ordinal, source_id, operation, feature, asl, mask, pattern, behavior) \
 	{ ordinal, source_id, operation, feature, asl, mask, pattern, behavior, \
 	  ORLIX_TCTI_PAUTH_BTI_GCS_PROVENANCE_EXTERNAL_DDI0602, \
@@ -253,6 +256,70 @@ static void pauth_set_test_keys(void)
 	current->thread.user_pauth.pacm = false;
 }
 
+/* Test-local PAUTH field rules. QARMA5 itself comes from the pinned QEMU oracle. */
+#define PAUTH_TEST_LOW_ADDRESS_MASK GENMASK_ULL(47, 0)
+#define PAUTH_TEST_HIGH_PAC_MASK GENMASK_ULL(63, 56)
+#define PAUTH_TEST_LOW_PAC_MASK GENMASK_ULL(54, 48)
+
+static u64 pauth_oracle_canonicalize(u64 pointer, unsigned int select_bit)
+{
+	u64 result = pointer & PAUTH_TEST_LOW_ADDRESS_MASK;
+
+	if (pointer & BIT_ULL(select_bit))
+		result |= ~PAUTH_TEST_LOW_ADDRESS_MASK;
+	return result;
+}
+
+static u64 pauth_oracle_qarma5_two_modifiers(
+	u64 data, u64 modifier1, u64 modifier2, struct orlix_tcti_pauth_key key)
+{
+	u64 combined = ((modifier2 >> 5) & 0xffffffffULL) << 32;
+
+	combined |= (modifier1 >> 4) & 0xffffffffULL;
+	return orlix_tcti_pauth_qemu_oracle_qarma5(data, combined, key);
+}
+
+static u64 pauth_oracle_add(u64 pointer, u64 modifier, u64 modifier2,
+			    bool use_modifier2, struct orlix_tcti_pauth_key key)
+{
+	bool upper = pointer & BIT_ULL(63);
+	u64 extended = pauth_oracle_canonicalize(pointer, 63);
+	u64 pac = use_modifier2 ?
+		pauth_oracle_qarma5_two_modifiers(extended, modifier, modifier2, key) :
+		orlix_tcti_pauth_qemu_oracle_qarma5(extended, modifier, key);
+	u64 extension = pointer >> ORLIX_TCTI_PAUTH_BOTTOM_BIT;
+
+	if (extension != 0 && extension != GENMASK_ULL(15, 0))
+		pac ^= BIT_ULL(62);
+	return (pac & PAUTH_TEST_HIGH_PAC_MASK) |
+		(upper ? BIT_ULL(55) : 0) |
+		(pac & PAUTH_TEST_LOW_PAC_MASK) |
+		(pointer & PAUTH_TEST_LOW_ADDRESS_MASK);
+}
+
+static u64 pauth_oracle_authenticate(u64 pointer, u64 modifier, u64 modifier2,
+				     bool use_modifier2, bool key_b,
+				     struct orlix_tcti_pauth_key key)
+{
+	u64 original = pauth_oracle_canonicalize(pointer, 55);
+	u64 pac = use_modifier2 ?
+		pauth_oracle_qarma5_two_modifiers(original, modifier, modifier2, key) :
+		orlix_tcti_pauth_qemu_oracle_qarma5(original, modifier, key);
+
+	if ((pac & PAUTH_TEST_HIGH_PAC_MASK) ==
+		(pointer & PAUTH_TEST_HIGH_PAC_MASK) &&
+	    (pac & PAUTH_TEST_LOW_PAC_MASK) ==
+		(pointer & PAUTH_TEST_LOW_PAC_MASK))
+		return original;
+	original &= ~GENMASK_ULL(62, 61);
+	return original | ((key_b ? 2ULL : 1ULL) << 61);
+}
+
+static u64 pauth_oracle_strip(u64 pointer)
+{
+	return pauth_oracle_canonicalize(pointer, 55);
+}
+
 static u32 pauth_spread_free_bits(u32 value, u32 free_mask)
 {
 	u32 instruction = 0;
@@ -456,41 +523,57 @@ static void pauth_qarma5_architectural_vector(struct kunit *test)
 
 	/* QARMA-64 r=5 reference vector used by Arm's ComputePAC model. */
 	KUNIT_EXPECT_EQ(test, 0x3ee99a6c82af0c38ULL,
-		orlix_tcti_pauth_compute_qarma5(0xfb623599da6e8127ULL,
-			0x477d469dec0b8762ULL, &key));
+		orlix_tcti_pauth_qemu_oracle_qarma5(0xfb623599da6e8127ULL,
+			0x477d469dec0b8762ULL, key));
 }
 
 static void pauth_insert_authenticate_strip_and_failure(struct kunit *test)
 {
-	const struct orlix_tcti_pauth_key key_a = {
-		.high = 0x84be85ce9804e94bULL,
-		.low = 0xec2802d4e0a488e9ULL,
+	static const struct {
+		u64 pointer;
+		u64 modifier;
+		u64 modifier2;
+		bool use_modifier2;
+		bool key_b;
+		struct orlix_tcti_pauth_key key;
+	} vectors[] = {
+		{ 0x0000123456789abcULL, 0x477d469dec0b8762ULL, 0, false, false,
+		  { 0x84be85ce9804e94bULL, 0xec2802d4e0a488e9ULL } },
+		{ 0xffff923456789abcULL, 0x1020304050607080ULL,
+		  0x8877665544332211ULL, true, true,
+		  { 0x0123456789abcdefULL, 0xfedcba9876543210ULL } },
+		{ 0x000056789abcdef0ULL, 0xfedcba9876543210ULL,
+		  0x0123456789abcdefULL, true, false,
+		  { 0x1122334455667788ULL, 0x99aabbccddeeff00ULL } },
 	};
-	const struct orlix_tcti_pauth_key key_b = {
-		.high = 0x0123456789abcdefULL,
-		.low = 0xfedcba9876543210ULL,
-	};
-	const u64 pointer = 0x0000123456789abcULL;
-	const u64 modifier = 0x477d469dec0b8762ULL;
-	u64 signed_pointer = orlix_tcti_pauth_add(pointer, modifier, 0, false,
-		&key_a);
-	u64 failed_a;
-	u64 failed_b;
+	size_t index;
 
-	KUNIT_EXPECT_NE(test, pointer, signed_pointer);
-	KUNIT_EXPECT_EQ(test, pointer,
-		orlix_tcti_pauth_authenticate(signed_pointer, modifier, 0, false,
-			false, &key_a));
-	KUNIT_EXPECT_EQ(test, pointer, orlix_tcti_pauth_strip(signed_pointer));
-	failed_a = orlix_tcti_pauth_authenticate(signed_pointer, modifier ^ 1, 0,
-		false, false, &key_a);
-	failed_b = orlix_tcti_pauth_authenticate(signed_pointer, modifier, 0,
-		false, true, &key_b);
-	KUNIT_EXPECT_EQ(test, 1ULL, (failed_a >> 61) & 3ULL);
-	KUNIT_EXPECT_EQ(test, 2ULL, (failed_b >> 61) & 3ULL);
-	KUNIT_EXPECT_NE(test,
-		orlix_tcti_pauth_add(pointer, modifier, 0, false, &key_a),
-		orlix_tcti_pauth_add(pointer, modifier, 1, true, &key_a));
+	for (index = 0; index < ARRAY_SIZE(vectors); index++) {
+		const typeof(vectors[0]) *vector = &vectors[index];
+		u64 signed_pointer = pauth_oracle_add(vector->pointer,
+			vector->modifier, vector->modifier2, vector->use_modifier2,
+			vector->key);
+		u64 corrupted = signed_pointer ^ BIT_ULL(56);
+
+		KUNIT_EXPECT_NE(test, vector->pointer, signed_pointer);
+		KUNIT_EXPECT_EQ(test, signed_pointer,
+			orlix_tcti_pauth_add(vector->pointer, vector->modifier,
+				vector->modifier2, vector->use_modifier2, &vector->key));
+		KUNIT_EXPECT_EQ(test, pauth_oracle_authenticate(signed_pointer,
+			vector->modifier, vector->modifier2, vector->use_modifier2,
+			vector->key_b, vector->key),
+			orlix_tcti_pauth_authenticate(signed_pointer, vector->modifier,
+				vector->modifier2, vector->use_modifier2, vector->key_b,
+				&vector->key));
+		KUNIT_EXPECT_EQ(test, pauth_oracle_authenticate(corrupted,
+			vector->modifier, vector->modifier2, vector->use_modifier2,
+			vector->key_b, vector->key),
+			orlix_tcti_pauth_authenticate(corrupted, vector->modifier,
+				vector->modifier2, vector->use_modifier2, vector->key_b,
+				&vector->key));
+		KUNIT_EXPECT_EQ(test, pauth_oracle_strip(signed_pointer),
+			orlix_tcti_pauth_strip(signed_pointer));
+	}
 }
 
 static unsigned long pauth_map_page(struct kunit *test, int protection)
@@ -595,8 +678,8 @@ static void pauth_production_generic_branch_link_return_pacm(struct kunit *test)
 	regs = pauth_regs(program);
 	regs.regs[1] = 0x0123456789abcdefULL;
 	regs.regs[2] = 0xfedcba9876543210ULL;
-	expected_generic = orlix_tcti_pauth_compute_qarma5(regs.regs[1],
-		regs.regs[2], &current->thread.user_pauth.apga) & GENMASK_ULL(63, 32);
+	expected_generic = orlix_tcti_pauth_qemu_oracle_qarma5(regs.regs[1],
+		regs.regs[2], current->thread.user_pauth.apga) & GENMASK_ULL(63, 32);
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	pauth_expect_svc(test, &result, program + sizeof(u32));
 	KUNIT_EXPECT_EQ(test, expected_generic, regs.regs[0]);
@@ -606,15 +689,15 @@ static void pauth_production_generic_branch_link_return_pacm(struct kunit *test)
 	regs = pauth_regs(program);
 	regs.regs[1] = 0x0123456789abcdefULL;
 	regs.sp = 0xfedcba9876543210ULL;
-	expected_generic = orlix_tcti_pauth_compute_qarma5(regs.regs[1], 0,
-		&current->thread.user_pauth.apga) & GENMASK_ULL(63, 32);
+	expected_generic = orlix_tcti_pauth_qemu_oracle_qarma5(regs.regs[1], 0,
+		current->thread.user_pauth.apga) & GENMASK_ULL(63, 32);
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	pauth_expect_svc(test, &result, program + sizeof(u32));
 	KUNIT_EXPECT_EQ(test, expected_generic, regs.regs[0]);
 
 	/* BLRAA x1, x2 authenticates the target and writes the exact link PC. */
-	signed_target = orlix_tcti_pauth_add(target, 0xabcULL, 0, false,
-		&current->thread.user_pauth.apia);
+	signed_target = pauth_oracle_add(target, 0xabcULL, 0, false,
+		current->thread.user_pauth.apia);
 	pauth_write_program(test, program, 0xd73f0822U, PAUTH_SVC);
 	regs = pauth_regs(program);
 	regs.regs[1] = signed_target;
@@ -635,8 +718,8 @@ static void pauth_production_generic_branch_link_return_pacm(struct kunit *test)
 	pauth_write_program(test, program, 0xd50324ffU, 0xd65f0bffU);
 	regs = pauth_regs(program);
 	regs.regs[16] = 0x1020304050607080ULL;
-	regs.regs[30] = orlix_tcti_pauth_add(target, regs.sp, regs.regs[16], true,
-		&current->thread.user_pauth.apia);
+	regs.regs[30] = pauth_oracle_add(target, regs.sp, regs.regs[16], true,
+		current->thread.user_pauth.apia);
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	pauth_expect_svc(test, &result, target);
 	KUNIT_EXPECT_TRUE(test, current->thread.user_pauth.pacm);
@@ -662,8 +745,8 @@ static void pauth_production_ldra_and_auth_failure_fault(struct kunit *test)
 
 	/* LDRAA x0, [x1] */
 	pauth_write_program(test, program, 0xf8200420U, PAUTH_SVC);
-	signed_base = orlix_tcti_pauth_add(data, 0, 0, false,
-		&current->thread.user_pauth.apda);
+	signed_base = pauth_oracle_add(data, 0, 0, false,
+		current->thread.user_pauth.apda);
 	regs = pauth_regs(program);
 	regs.regs[1] = signed_base;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
@@ -673,8 +756,8 @@ static void pauth_production_ldra_and_auth_failure_fault(struct kunit *test)
 
 	/* Pre-indexed LDRAA authenticates first, adds +8, then writes back. */
 	pauth_write_program(test, program, 0xf8201c20U, PAUTH_SVC);
-	signed_base = orlix_tcti_pauth_add(data - 8, 0, 0, false,
-		&current->thread.user_pauth.apda);
+	signed_base = pauth_oracle_add(data - 8, 0, 0, false,
+		current->thread.user_pauth.apda);
 	regs = pauth_regs(program);
 	regs.regs[1] = signed_base;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
