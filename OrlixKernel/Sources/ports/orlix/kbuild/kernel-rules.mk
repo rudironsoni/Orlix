@@ -31,6 +31,7 @@ ORLIX_LINUX_OVERLAY ?= OrlixKernel/Sources/ports/orlix/overlay
 ORLIX_LINUX_PATCH_DIR ?= OrlixKernel/Sources/ports/orlix/patches
 ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE ?= $(CURDIR)/make/tcti-proof-registry-provenance.mk
 export ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE
+include $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE)
 override ORLIX_PROFILE_CONFIG := OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig
 
 ORLIX_KERNEL_PORT_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/src/linux-$(LINUX_VERSION)-port
@@ -1058,8 +1059,6 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c \
-	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_decode_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_uaccess_test.c \
@@ -2074,11 +2073,16 @@ __kernel-archive: __prepare-kbuild
 	target_inventory_source_manifest="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/source_manifest.def"; \
 	target_inventory_classification="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_classification.def"; \
 	target_inventory_system_accessors="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/isa/target_system_accessor_reconciliation.def"; \
-	target_inventory_tool="$$inventory_dir/target_isa_kbuild_generator"; \
-	target_inventory_header="$$inventory_dir/target_inventory.h"; \
-	if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
+		target_inventory_tool="$$inventory_dir/target_isa_kbuild_generator"; \
+		target_inventory_header="$$inventory_dir/target_inventory.h"; \
+		target_proof_registry_provenance_header="$$inventory_dir/target_proof_registry_provenance.h"; \
+		target_proof_registry_decode_source="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"; \
+		target_proof_registry_partition_source="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"; \
+		target_proof_registry_build_source="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/Makefile"; \
 		mkdir -p "$$inventory_dir"; \
-		if [ ! -x "$$inventory_tool" ] || [ "$$inventory_generator" -nt "$$inventory_tool" ] || [ "$$inventory_definition" -nt "$$inventory_tool" ]; then \
+		$(call orlix_tcti_write_proof_registry_provenance,$$target_proof_registry_provenance_header,$$target_proof_registry_decode_source,$$target_proof_registry_partition_source,$$target_proof_registry_build_source); \
+		if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
+			if [ ! -x "$$inventory_tool" ] || [ "$$inventory_generator" -nt "$$inventory_tool" ] || [ "$$inventory_definition" -nt "$$inventory_tool" ]; then \
 			/usr/bin/env -u IPHONEOS_DEPLOYMENT_TARGET \
 				-u TVOS_DEPLOYMENT_TARGET -u WATCHOS_DEPLOYMENT_TARGET \
 				SDKROOT="$(ORLIX_KERNEL_HOST_SDKROOT)" \
@@ -2174,9 +2178,13 @@ __kernel-archive: __prepare-kbuild
 				"$$target_inventory_generator" \
 				"$$target_inventory_generator_header" \
 				"$$target_inventory_source_manifest" \
-				"$$target_inventory_classification" \
-				"$$target_inventory_system_accessors" \
-				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do cache_deps+=("$$cache_dep"); done; \
+					"$$target_inventory_classification" \
+					"$$target_inventory_system_accessors" \
+					"$$target_proof_registry_provenance_header" \
+					"$$target_proof_registry_decode_source" \
+					"$$target_proof_registry_partition_source" \
+					"$$target_proof_registry_build_source" \
+					"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do cache_deps+=("$$cache_dep"); done; \
 			for src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do \
 				src="$$(orlix_product_adapter_source_for "$$src_rel")"; \
 				obj_name="$${src_rel//\//_}.o"; \
@@ -2205,9 +2213,13 @@ __kernel-archive: __prepare-kbuild
 				"$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" \
 				OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk \
 				"$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" \
-				"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
-				"$$orlix_tcti_kbuild" \
-				"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
+					"$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" \
+					"$$orlix_tcti_kbuild" \
+					"$$target_proof_registry_provenance_header" \
+					"$$target_proof_registry_decode_source" \
+					"$$target_proof_registry_partition_source" \
+					"$$target_proof_registry_build_source" \
+					"$(ORLIX_KERNEL_BUILD_DIR)/.config"; do \
 				if [ ! -e "$$cache_dep" ] || [ ! "$$obj" -nt "$$cache_dep" ]; then object_set_ready=0; break 2; fi; \
 			done; \
 			if ! object_dependencies_current "$$obj" "$$dep"; then object_set_ready=0; break; fi; \
@@ -2226,7 +2238,7 @@ __kernel-archive: __prepare-kbuild
 			if ! git -C "$(CURDIR)" ls-files -co --exclude-standard -z -- OrlixKernel/Makefile OrlixKernel/Sources/ports/orlix > "$$proof_source_paths"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			if ! proof_source_revision="$$(orlix_tcti_candidate_source_revision "$(CURDIR)" "$$proof_source_paths")"; then rm -f "$$proof_source_paths"; exit 1; fi; \
 			rm -f "$$proof_source_paths"; \
-			proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)"); \
+				proof_archive_inputs=("$(ORLIX_KERNEL_BUILD_DIR)/.config" "$(ORLIX_PROFILE_CONFIG)" OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" "$$target_proof_registry_provenance_header" "$$target_proof_registry_decode_source" "$$target_proof_registry_partition_source" "$$target_proof_registry_build_source"); \
 			for proof_src_rel in $(ORLIX_KERNEL_LINUX_SOURCES); do proof_archive_inputs+=("$$(orlix_product_adapter_source_for "$$proof_src_rel")"); done; \
 			printf -v proof_archive_prefix 'platform=%s\ntarget=%s\nsource_revision=%s\n' "$$platform" "$$target" "$$proof_source_revision"; \
 			proof_archive_sha256="$$(orlix_tcti_proof_inputs_sha256 "$$proof_archive_prefix" "$${proof_archive_inputs[@]}")" || exit 1; \
@@ -2270,9 +2282,13 @@ __kernel-archive: __prepare-kbuild
 				[ "$$obj" -nt "$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" ] && \
 				[ "$$obj" -nt "OrlixKernel/Sources/ports/orlix/kbuild/product-compile-adapter.mk" ] && \
 				[ "$$obj" -nt "$(ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS_DECLARATION)" ] && \
-				[ "$$obj" -nt "$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" ] && \
-				[ "$$obj" -nt "$$orlix_tcti_kbuild" ] && \
-				object_dependencies_current "$$obj" "$$dep"; then \
+					[ "$$obj" -nt "$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)" ] && \
+					[ "$$obj" -nt "$$orlix_tcti_kbuild" ] && \
+					[ "$$obj" -nt "$$target_proof_registry_provenance_header" ] && \
+					[ "$$obj" -nt "$$target_proof_registry_decode_source" ] && \
+					[ "$$obj" -nt "$$target_proof_registry_partition_source" ] && \
+					[ "$$obj" -nt "$$target_proof_registry_build_source" ] && \
+					object_dependencies_current "$$obj" "$$dep"; then \
 				needs_build=0; \
 			fi; \
 			if [ "$$needs_build" -eq 1 ]; then \

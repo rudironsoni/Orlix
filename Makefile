@@ -50,6 +50,50 @@ ORLIX_BETA_SIMULATOR_DESTINATION ?= platform=iOS Simulator,id=$(ORLIX_BETA_SIMUL
 ORLIX_TCTI_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_TEST_DESTINATION ?= $(ORLIX_BETA_SIMULATOR_DESTINATION)
 ORLIX_KUNIT_PRODUCT_BUILD_ROOT ?= $(ORLIX_BUILD_ROOT)/KUnitTest
+ORLIX_TCTI_DERIVED_DATA_PATH ?= $(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/DerivedData
+ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS ?= 330
+ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS ?= 1800
+ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
+ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS ?= $(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)
+ORLIX_TCTI_TEST_ONLY_TESTING ?= OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession
+ORLIX_TCTI_XCODEBUILD ?= /usr/bin/xcodebuild
+
+define ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS
+run_xcodebuild() { \
+	local timeout_marker="$$1" timeout_state marker_parent marker_ready child watchdog status wall_timeout process_group controller_group; \
+	shift; \
+	wall_timeout="$${ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS:-$(ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS)}"; \
+	timeout_state="$$(mktemp "$${TMPDIR:-/tmp}/orlix-tcti-xcodebuild-timeout.XXXXXX")" || return 1; \
+	marker_parent="$$(dirname "$$timeout_marker")"; marker_ready=1; \
+	if ! mkdir -p "$$marker_parent" || ! rm -f "$$timeout_marker"; then marker_ready=0; echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_MARKER_UNAVAILABLE path=$$timeout_marker" >&2; fi; \
+	set -m; \
+	"$$@" & child=$$!; \
+	process_group=$$(/bin/ps -o pgid= -p "$$child"); process_group=$${process_group//[[:space:]]/}; \
+	controller_group=$$(/bin/ps -o pgid= -p "$$$$"); controller_group=$${controller_group//[[:space:]]/}; \
+	if [[ ! "$$process_group" =~ ^[0-9]+$$ ]]; then echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_INVALID_GROUP pid=$$child pgid=$$process_group" >&2; kill -TERM "$$child" 2>/dev/null || true; wait "$$child" 2>/dev/null || true; rm -f "$$timeout_state"; return 1; fi; \
+	if [ "$$process_group" = "$$controller_group" ]; then echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_CONTROLLER_GROUP pid=$$child pgid=$$process_group" >&2; kill -TERM "$$child" 2>/dev/null || true; wait "$$child" 2>/dev/null || true; rm -f "$$timeout_state"; return 1; fi; \
+	( sleep "$$wall_timeout"; \
+		if kill -0 -- "-$$process_group" 2>/dev/null; then \
+			echo "ORLIX_TCTI_XCODEBUILD_TIMEOUT seconds=$$wall_timeout pid=$$child pgid=$$process_group" >&2; \
+			printf '%s\n' 124 > "$$timeout_state"; \
+			if [ "$$marker_ready" -eq 1 ]; then : > "$$timeout_marker" || echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_MARKER_WRITE_FAILED path=$$timeout_marker" >&2; fi; \
+			kill -TERM -- "-$$process_group" 2>/dev/null || true; \
+			sleep 1; \
+			if kill -0 -- "-$$process_group" 2>/dev/null; then kill -KILL -- "-$$process_group" 2>/dev/null || true; fi; \
+		fi \
+	) & watchdog=$$!; \
+	if wait "$$child"; then status=0; else status=$$?; fi; \
+	if [ -s "$$timeout_state" ]; then \
+		wait "$$watchdog" 2>/dev/null || true; rm -f "$$timeout_state"; \
+		echo "ORLIX_TCTI_XCODEBUILD_TIMEOUT_RESULT status=124" >&2; \
+		return 124; \
+	fi; \
+	kill "$$watchdog" 2>/dev/null || true; \
+	wait "$$watchdog" 2>/dev/null || true; \
+	rm -f "$$timeout_state"; \
+	return "$$status"; \
+};
+endef
 ORLIX_TCTI_INVENTORY_AUDITOR := $(ORLIX_BUILD_ROOT)/AgentHarness/orlix-tcti/audit_inventory
 ORLIX_TCTI_INVENTORY_CONTRACT_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/inventory_contract_test
 ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/host_lane_boundary_test
@@ -79,7 +123,7 @@ include $(CURDIR)/make/runtime.mk
 include $(CURDIR)/make/tcti-proof-registry-provenance.mk
 .PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
-.PHONY: orlixos-xcframework
+.PHONY: orlixos-xcframework orlix-tcti-xcodebuild-watchdog-tests orlix-tcti-proof-source-linkage-tests
 .PHONY: orlix-tcti-native-proof-symbol-check-dependency-regression
 .PHONY: orlix-tcti-proof-registry-provenance-regression
 .PHONY: __orlix-tcti-proof-registry-provenance-write
@@ -385,6 +429,9 @@ orlix-tcti-proof-registry-provenance-regression:
 	decode="$$regression_root/decode.c"; partition="$$regression_root/partition.h"; build="$$regression_root/Makefile"; header="$$regression_root/target_proof_registry_provenance.h"; \
 	printf '%s\n' 'initial decode source' > "$$decode"; printf '%s\n' 'initial partition source' > "$$partition"; printf '%s\n' 'initial KUnit build source' > "$$build"; \
 	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
+	initial_mtime="$$(stat -f %m "$$header")"; sleep 1; \
+	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
+	[ "$$initial_mtime" = "$$(stat -f %m "$$header")" ] || { echo 'unchanged provenance header refreshed and invalidated archive caches' >&2; exit 1; }; \
 	cp "$$header" "$$regression_root/initial.h"; \
 	printf '%s\n' 'mutated decode source' >> "$$decode"; printf '%s\n' 'stale output' > "$$header"; \
 	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
@@ -538,6 +585,9 @@ orlix-tcti-native-proof-symbol-check:
 orlix-tcti-native-proof-symbol-check-dependency-regression:
 	@$(KERNEL_MAKE) orlix-tcti-native-proof-symbol-check-dependency-regression
 
+orlix-tcti-proof-source-linkage-tests:
+	@$(KERNEL_MAKE) orlix-tcti-proof-source-linkage-tests
+
 orlix-tcti-isa-audit: orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
@@ -559,27 +609,74 @@ orlix-tcti-isa-audit: orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-t
 # one immutable authoritative C generation below arch/orlix.
 orlix-tcti-kernel-tests:
 orlix-tcti-kernel-tests: xcodeproj
-	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
-		-project Orlix.xcodeproj \
-		-scheme "OrlixKernel Conformance" \
-		-configuration Debug \
-		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
-		$(if $(filter YES,$(ORLIX_ALLOW_PROVISIONING_UPDATES)),-allowProvisioningUpdates,) \
-		ORLIX_PROFILE=development \
-		ORLIX_KERNEL_KUNIT=1 \
-		ORLIX_BUILD_ROOT='$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)' \
-		ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
-		DEVELOPMENT_TEAM='$(ORLIX_DEVELOPMENT_TEAM)' \
-		build-for-testing
-	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \
-		-project Orlix.xcodeproj \
-		-scheme "OrlixKernel Conformance" \
-		-configuration Debug \
-		-destination '$(ORLIX_TCTI_TEST_DESTINATION)' \
-		$(if $(filter YES,$(ORLIX_ALLOW_PROVISIONING_UPDATES)),-allowProvisioningUpdates,) \
-		-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession \
-		DEVELOPMENT_TEAM='$(ORLIX_DEVELOPMENT_TEAM)' \
-		test-without-building
+	@/bin/bash -c 'set -e; \
+		PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"; \
+		timeout_marker="$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)/.orlix-tcti-xcodebuild-timeout"; \
+		$(ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS) \
+		provisioning=(); \
+		if [ "$(ORLIX_ALLOW_PROVISIONING_UPDATES)" = YES ]; then provisioning=(-allowProvisioningUpdates); fi; \
+		ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS="$(ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS)" run_xcodebuild "$$timeout_marker" "$(ORLIX_TCTI_XCODEBUILD)" \
+			-project Orlix.xcodeproj \
+			-scheme "OrlixKernel Conformance" \
+			-configuration Debug \
+			-destination "$(ORLIX_TCTI_TEST_DESTINATION)" \
+			-derivedDataPath "$(ORLIX_TCTI_DERIVED_DATA_PATH)" \
+			"$${provisioning[@]}" \
+			ORLIX_PROFILE=development \
+			ORLIX_KERNEL_KUNIT=1 \
+			ORLIX_BUILD_ROOT="$(ORLIX_KUNIT_PRODUCT_BUILD_ROOT)" \
+			ORLIX_OS_SKIP_ENVIRONMENT_RUNTIME_FIXTURES=YES \
+			DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" \
+			build-for-testing; \
+		ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS="$(ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS)" run_xcodebuild "$$timeout_marker" "$(ORLIX_TCTI_XCODEBUILD)" \
+			-project Orlix.xcodeproj \
+			-scheme "OrlixKernel Conformance" \
+			-configuration Debug \
+			-destination "$(ORLIX_TCTI_TEST_DESTINATION)" \
+			-derivedDataPath "$(ORLIX_TCTI_DERIVED_DATA_PATH)" \
+			"$${provisioning[@]}" \
+			-test-timeouts-enabled YES \
+			-default-test-execution-time-allowance $(ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS) \
+			-maximum-test-execution-time-allowance $(ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS) \
+			-only-testing:$(ORLIX_TCTI_TEST_ONLY_TESTING) \
+			DEVELOPMENT_TEAM="$(ORLIX_DEVELOPMENT_TEAM)" \
+			test-without-building'
+
+orlix-tcti-xcodebuild-watchdog-tests:
+	@/bin/bash -c 'set -e; \
+		PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"; \
+		scratch=$$(mktemp -d /private/tmp/orlix-tcti-xcodebuild-watchdog.XXXXXX); export scratch; \
+		trap "rm -rf \"$$scratch\"" EXIT; \
+		$(ORLIX_TCTI_XCODEBUILD_WATCHDOG_FUNCTIONS) \
+		if run_xcodebuild "$$scratch/normal" /bin/sh -c "exit 17"; then normal_status=0; else normal_status=$$?; fi; \
+		if [ "$$normal_status" -ne 17 ]; then echo "normal status propagation failed: $$normal_status" >&2; exit 1; fi; \
+		if ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=1 run_xcodebuild "$$scratch/timeout" /bin/sh -c "trap '\''sleep 30 & descendant=\$$!; echo \$$descendant > \"\$$scratch/descendant\"; exit 0'\'' TERM; sleep 30 & child=\$$!; echo \$$child > \"\$$scratch/child\"; wait \$$child"; then timeout_status=0; else timeout_status=$$?; fi; \
+		if [ "$$timeout_status" -ne 124 ]; then echo "timeout status propagation failed: $$timeout_status" >&2; exit 1; fi; \
+	child=$$(<"$$scratch/child"); descendant=$$(<"$$scratch/descendant"); \
+	if kill -0 "$$child" 2>/dev/null; then echo "owned child survived timeout: $$child" >&2; exit 1; fi; \
+	if kill -0 "$$descendant" 2>/dev/null; then echo "reparented descendant survived timeout: $$descendant" >&2; exit 1; fi; \
+	: > "$$scratch/marker-parent-is-file"; \
+	if ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=1 run_xcodebuild "$$scratch/marker-parent-is-file/timeout" /bin/sh -c "trap '\''sleep 30 & descendant=\$$!; echo \$$descendant > \"\$$scratch/blocked-descendant\"; exit 0'\'' TERM; sleep 30 & child=\$$!; echo \$$child > \"\$$scratch/blocked-child\"; wait \$$child"; then blocked_timeout_status=0; else blocked_timeout_status=$$?; fi; \
+	if [ "$$blocked_timeout_status" -ne 124 ]; then echo "blocked marker timeout status propagation failed: $$blocked_timeout_status" >&2; exit 1; fi; \
+	blocked_child=$$(<"$$scratch/blocked-child"); blocked_descendant=$$(<"$$scratch/blocked-descendant"); \
+	if kill -0 "$$blocked_child" 2>/dev/null; then echo "owned child survived blocked marker timeout: $$blocked_child" >&2; exit 1; fi; \
+	if kill -0 "$$blocked_descendant" 2>/dev/null; then echo "reparented descendant survived blocked marker timeout: $$blocked_descendant" >&2; exit 1; fi; \
+		arguments="$$( ORLIX_GMAKE_CONTRACT_REEXEC=1 ORLIX_ROOT_GMAKE_REEXEC=1 "$${ORLIX_GMAKE:-/opt/homebrew/bin/gmake}" -f Makefile -n -o xcodeproj ORLIX_TCTI_BUILD_FOR_TESTING_WALL_TIMEOUT_SECONDS=101 ORLIX_TCTI_TEST_WITHOUT_BUILDING_WALL_TIMEOUT_SECONDS=202 ORLIX_TCTI_XCTEST_TIMEOUT_SECONDS=303 ORLIX_TCTI_DERIVED_DATA_PATH="$$scratch/DerivedData" ORLIX_TCTI_TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17 Pro" orlix-tcti-kernel-tests )"; \
+		count_occurrences() { local remaining="$$1" needle="$$2" count=0; while [[ "$$remaining" == *"$$needle"* ]]; do remaining=$${remaining#*"$$needle"}; count=$$((count + 1)); done; printf "%s" "$$count"; }; \
+		assert_count() { local needle="$$1" expected="$$2" actual; actual=$$(count_occurrences "$$arguments" "$$needle"); if [ "$$actual" -ne "$$expected" ]; then echo "argument count failed needle=$$needle expected=$$expected actual=$$actual" >&2; exit 1; fi; }; \
+		assert_count "run_xcodebuild \"\$$timeout_marker\" \"/usr/bin/xcodebuild\"" 2; \
+		assert_count "ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=\"101\"" 1; \
+		assert_count "ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=\"202\"" 1; \
+		assert_count "-destination \"platform=iOS Simulator,name=iPhone 17 Pro\"" 2; \
+		assert_count "-derivedDataPath \"$$scratch/DerivedData\"" 2; \
+		assert_count "-test-timeouts-enabled YES" 1; \
+		assert_count "-default-test-execution-time-allowance 303" 1; \
+		assert_count "-maximum-test-execution-time-allowance 303" 1; \
+		assert_count "-only-testing:OrlixKernelConformanceTests/OrlixKernelConformanceTests/testKselftestRootfsCompletesThroughOrlixOSTerminalSession" 1; \
+		if [[ "$$arguments" == *"ADE0D3EB-6E89-41DD-9AB9-CA20F10609F3"* ]]; then echo "destination override regressed to the stale default simulator" >&2; exit 1; fi; \
+		build_arguments=$${arguments%%ORLIX_TCTI_XCODEBUILD_WALL_TIMEOUT_SECONDS=\"202\"*}; \
+		if [[ "$$build_arguments" == *"-test-timeouts-enabled"* || "$$build_arguments" == *"-only-testing:"* ]]; then echo "build-for-testing received XCTest-only arguments" >&2; exit 1; fi; \
+	echo "ORLIX_TCTI_XCODEBUILD_WATCHDOG_TEST normal_status=$$normal_status timeout_status=$$timeout_status blocked_timeout_status=$$blocked_timeout_status child_gone=$$child descendant_gone=$$descendant blocked_child_gone=$$blocked_child blocked_descendant_gone=$$blocked_descendant invocations=2"'
 
 mlibc-tests: xcodeproj
 	@PATH="$$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild \

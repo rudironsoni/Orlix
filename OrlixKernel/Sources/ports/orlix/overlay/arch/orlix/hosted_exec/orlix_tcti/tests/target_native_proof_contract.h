@@ -296,9 +296,13 @@ orlix_tcti_native_proof_registry_lookup(
 int orlix_tcti_native_proof_registry_resolve_production(
 	const void *capture_token,
 	orlix_tcti_proof_u32 source_ordinal,
+	orlix_tcti_proof_u64 semantic_variant_identity,
 	orlix_tcti_proof_u32 obligation,
 	const struct orlix_tcti_native_proof_registry_entry **entry,
 	enum orlix_tcti_native_contract_error *error);
+int orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
+	const void *capture_token,
+	orlix_tcti_proof_u64 *semantic_variant_identity);
 orlix_tcti_proof_u64 orlix_tcti_native_proof_registry_entry_identity(
 	const struct orlix_tcti_native_proof_registry_entry *entry);
 orlix_tcti_proof_u64 orlix_tcti_native_capture_declaration_identity(

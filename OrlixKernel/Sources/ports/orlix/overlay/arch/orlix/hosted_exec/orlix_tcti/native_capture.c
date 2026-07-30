@@ -1235,13 +1235,18 @@ int orlix_tcti_native_capture_begin(const void *case_token, u32 source_ordinal,
 {
 	struct orlix_tcti_native_capture_session *session;
 	const struct orlix_tcti_native_proof_registry_entry *entry;
+	u64 semantic_variant_identity;
 	int ret;
 
 	if (!out)
 		return -EINVAL;
 	*out = NULL;
+	ret = orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
+		case_token, &semantic_variant_identity);
+	if (ret)
+		return -EPERM;
 	ret = orlix_tcti_native_proof_registry_resolve_production(case_token,
-		source_ordinal, obligation, &entry, NULL);
+		source_ordinal, semantic_variant_identity, obligation, &entry, NULL);
 	if (ret || !entry || !entry->capture_declaration)
 		return -EPERM;
 	session = kzalloc(sizeof(*session), GFP_KERNEL);

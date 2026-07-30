@@ -74,7 +74,8 @@ __archive-cache-tests:
 	grep -Fq '"$$$$obj" -nt "$$$$orlix_tcti_kbuild"' "$$kernel_rules" || fail "product archive does not rebuild stale objects after a OrlixTCTI Kbuild change"; \
 	grep -Fq '"$$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)"' "$$kernel_rules" || fail "product archive does not bind proof-provenance.mk to archive and object freshness"; \
 	grep -Fq '[ "$$$$obj" -nt "$$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" ]' "$$kernel_rules" || fail "product archive does not rebuild stale objects after a proof-provenance helper change"; \
-	grep -Fq '"$$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)");' "$$kernel_rules" || fail "product proof identity omits proof-provenance.mk"; \
+	grep -Fq '"$$(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)" "$$$$target_proof_registry_provenance_header"' "$$kernel_rules" || fail "product proof identity omits provenance header"; \
+	grep -Fq '"$$$$target_proof_registry_provenance_header"' "$$kernel_rules" || fail "product archive does not bind provenance header into freshness"; \
 	[ "$$(grep -Fc '"$$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)"' "$$kernel_rules")" -eq 3 ] || fail "product archive does not bind every freshness path to the publisher declaration"; \
 	make_call='$$(MAKE) -f OrlixKernel/Makefile'; archive_target='__kernel-archive'; profile_ref='$$''(PROFILE)'; type_ref='$$''(type)'; libc_ref='$$''(libc)'; \
 	archive_invocations="$$(rg -n --glob Makefile --glob '*.mk' -F "$$make_call $$archive_target" "$$repository_root")"; \

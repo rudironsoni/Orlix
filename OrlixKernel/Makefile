@@ -7,7 +7,23 @@ include OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk
 include $(CURDIR)/make/runtime.mk
 
 .PHONY: orlix-tcti-native-proof-symbol-check \
-	orlix-tcti-native-proof-symbol-check-dependency-regression
+	orlix-tcti-native-proof-symbol-check-dependency-regression \
+	orlix-tcti-proof-source-linkage-tests
+
+orlix-tcti-proof-source-linkage-tests:
+	@set -euo pipefail; \
+	tmp="$$(mktemp -d "$${TMPDIR:-/private/tmp}/orlix-tcti-proof-source-linkage.XXXXXX")"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	assert_count() { local mode source expected output actual; mode="$$1"; source="$$2"; expected="$$3"; output="$$tmp/$$mode"; ORLIX_GMAKE_CONTRACT_REEXEC=1 ORLIX_ROOT_GMAKE_REEXEC=1 "$${ORLIX_GMAKE:-/opt/homebrew/bin/gmake}" -f OrlixKernel/Makefile -pnrR ORLIX_KERNEL_KUNIT="$$mode" help > "$$output"; actual="$$(grep '^ORLIX_KERNEL_LINUX_SOURCES :=' "$$output" | grep -o -F "$$source" | wc -l | tr -d ' ')"; [ "$$actual" -eq "$$expected" ] || { echo "OrlixTCTI proof source linkage failed mode=$$mode source=$$source expected=$$expected actual=$$actual" >&2; exit 1; }; }; \
+	kernel_rules="$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"; \
+	grep -Fq 'target_proof_registry_provenance_header="$$$$inventory_dir/target_proof_registry_provenance.h";' "$$kernel_rules" || { echo 'product archive does not name its provenance output' >&2; exit 1; }; \
+	grep -Fq '$$(call orlix_tcti_write_proof_registry_provenance,$$$$target_proof_registry_provenance_header' "$$kernel_rules" || { echo 'product archive does not generate its provenance header' >&2; exit 1; }; \
+	grep -Fq -- '-I"$$$$inventory_dir"' "$$kernel_rules" || { echo 'product archive does not include its generated provenance directory' >&2; exit 1; }; \
+	for source in arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c; do \
+		assert_count 0 "$$source" 1; \
+		assert_count 1 "$$source" 1; \
+	done; \
+	echo 'OrlixTCTI proof source linkage: product-config-n=1 kunit-config-y=1'
 
 orlix-tcti-native-proof-symbol-check: kunit
 	@set -euo pipefail; \

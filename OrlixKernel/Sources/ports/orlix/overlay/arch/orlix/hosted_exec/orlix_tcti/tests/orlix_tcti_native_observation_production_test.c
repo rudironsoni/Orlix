@@ -14,6 +14,7 @@
 #include "orlix_tcti_branch_control_production_capture.h"
 #include "orlix_tcti_native_observation.h"
 #include "target_native_proof_contract_private.h"
+#include "target_native_proof_registry_private.h"
 #include "target_proof_ingestion_private.h"
 
 #define NATIVE_CAPTURE_SVC 0xd4024681U
@@ -55,6 +56,64 @@ static void capture_binds_only_its_registered_row(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, -EPERM, orlix_tcti_native_capture_begin(token, 2230U,
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
 	orlix_tcti_native_capture_destroy(session);
+}
+
+static void production_capture_variant_authority_is_exact(struct kunit *test)
+{
+	static const struct orlix_tcti_native_proof_registry_entry variants[] = {
+		{ .source = { .source_ordinal = 77U,
+			.semantic_variant_identity = 0x1111111111111111ULL },
+		  .obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		  .production_capture = 1U },
+		{ .source = { .source_ordinal = 77U,
+			.semantic_variant_identity = 0x2222222222222222ULL },
+		  .obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		  .production_capture = 1U },
+		{ .source = { .source_ordinal = 78U,
+			.semantic_variant_identity = 0U },
+		  .obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+		  .production_capture = 1U },
+	};
+	struct orlix_tcti_native_proof_registry_entry copied = variants[0];
+	const struct orlix_tcti_native_proof_registry_entry *entry = NULL;
+	enum orlix_tcti_native_contract_error error;
+
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &variants[0], 77U,
+			0x1111111111111111ULL,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, &error));
+	KUNIT_EXPECT_PTR_EQ(test, &variants[0], entry);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_CONTRACT_OK, error);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &variants[1], 77U,
+			0x2222222222222222ULL,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, &error));
+	KUNIT_EXPECT_PTR_EQ(test, &variants[1], entry);
+
+	KUNIT_EXPECT_LT(test,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &variants[0], 77U,
+			0x2222222222222222ULL,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, &error), 0);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_CONTRACT_UNKNOWN, error);
+	KUNIT_EXPECT_LT(test,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &variants[0], 77U, 0U,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, &error), 0);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_CONTRACT_UNKNOWN, error);
+	KUNIT_EXPECT_LT(test,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &copied, 77U,
+			0x1111111111111111ULL,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, &error), 0);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_NATIVE_CONTRACT_UNKNOWN, error);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_proof_registry_resolve_production_entries(variants,
+			ARRAY_SIZE(variants), &variants[2], 78U, 0U,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &entry, &error));
+	KUNIT_EXPECT_PTR_EQ(test, &variants[2], entry);
 }
 
 static void generic_capture_events_cannot_credit_a_claimed_session(
@@ -183,6 +242,7 @@ static void pending_capacity_exhaustion_preserves_live_wires(
 
 static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(capture_binds_only_its_registered_row),
+	KUNIT_CASE(production_capture_variant_authority_is_exact),
 	KUNIT_CASE(generic_capture_events_cannot_credit_a_claimed_session),
 	KUNIT_CASE(pending_capacity_exhaustion_preserves_live_wires),
 	{}

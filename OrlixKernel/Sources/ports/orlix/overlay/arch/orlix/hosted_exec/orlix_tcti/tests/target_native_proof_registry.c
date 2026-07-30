@@ -1255,12 +1255,32 @@ orlix_tcti_proof_u64 orlix_tcti_native_proof_registry_entry_identity(
 const void *orlix_tcti_native_proof_registry_capture_token_internal(size_t index)
 {
 	const struct orlix_tcti_target_production_capture_binding *bindings;
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	const struct orlix_tcti_native_proof_registry_entry *match = NULL;
 	size_t count;
+	size_t binding_count;
+	size_t entry_index;
 
-	bindings = orlix_tcti_target_production_capture_bindings(&count);
-	if (!bindings || index >= count)
+	bindings = orlix_tcti_target_production_capture_bindings(&binding_count);
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	if (!bindings || index >= binding_count || !entries)
 		return NULL;
-	return &bindings[index];
+	for (entry_index = 0; entry_index < count; entry_index++) {
+		const struct orlix_tcti_native_proof_registry_entry *candidate =
+			&entries[entry_index];
+
+		if (!candidate->production_capture ||
+		    candidate->source.source_ordinal != bindings[index].source_ordinal ||
+		    candidate->obligation != bindings[index].obligation ||
+		    strcmp(candidate->kunit_source, bindings[index].kunit_source) ||
+		    strcmp(candidate->kunit_suite, bindings[index].kunit_suite) ||
+		    strcmp(candidate->kunit_case, bindings[index].kunit_case))
+			continue;
+		if (match)
+			return NULL;
+		match = candidate;
+	}
+	return match;
 }
 
 const void *orlix_tcti_native_proof_registry_capture_token_for_entry(
@@ -1273,59 +1293,58 @@ const void *orlix_tcti_native_proof_registry_capture_token_for_entry(
 	entries = orlix_tcti_native_proof_registry_entries(&count);
 	for (index = 0; entries && index < count; index++)
 		if (&entries[index] == entry)
-			return orlix_tcti_native_proof_registry_capture_token_internal(index);
+			return entry;
 	return NULL;
 }
 
-int orlix_tcti_native_proof_registry_resolve_production(
+int orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
+	const void *capture_token, orlix_tcti_proof_u64 *semantic_variant_identity)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	if (!capture_token || !semantic_variant_identity)
+		return -1;
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	for (index = 0; entries && index < count; index++)
+		if (&entries[index] == capture_token) {
+			*semantic_variant_identity =
+				entries[index].source.semantic_variant_identity;
+			return 0;
+		}
+	return -1;
+}
+
+int orlix_tcti_native_proof_registry_resolve_production_entries(
+	const struct orlix_tcti_native_proof_registry_entry *entries, size_t count,
 	const void *capture_token,
-	orlix_tcti_proof_u32 source_ordinal, orlix_tcti_proof_u32 obligation,
+	orlix_tcti_proof_u32 source_ordinal,
+	orlix_tcti_proof_u64 semantic_variant_identity,
+	orlix_tcti_proof_u32 obligation,
 	const struct orlix_tcti_native_proof_registry_entry **entry,
 	enum orlix_tcti_native_contract_error *error)
 {
-	const struct orlix_tcti_native_proof_registry_entry *entries;
 	const struct orlix_tcti_native_proof_registry_entry *match = NULL;
-	const struct orlix_tcti_target_production_capture_binding *bindings;
-	const struct orlix_tcti_target_production_capture_binding *binding = NULL;
-	size_t count;
-	size_t binding_count;
 	size_t index;
 
 	if (entry)
 		*entry = NULL;
-	if (!capture_token || !entry) {
+	if (!entries || !count || !capture_token || !entry) {
 		if (error)
 			*error = ORLIX_TCTI_NATIVE_CONTRACT_INVALID;
 		return -1;
 	}
-	bindings = orlix_tcti_target_production_capture_bindings(&binding_count);
-	for (index = 0; bindings && index < binding_count; index++)
-		if ((const void *)&bindings[index] == capture_token) {
-			binding = &bindings[index];
-			break;
-		}
-	if (!binding) {
-		if (error)
-			*error = ORLIX_TCTI_NATIVE_CONTRACT_UNKNOWN;
-		return -1;
-	}
-	if (binding->source_ordinal != source_ordinal ||
-	    binding->obligation != obligation) {
-		if (error)
-			*error = ORLIX_TCTI_NATIVE_CONTRACT_UNKNOWN;
-		return -1;
-	}
-	entries = orlix_tcti_native_proof_registry_entries(&count);
-	for (index = 0; entries && index < count; index++) {
+	for (index = 0; index < count; index++) {
 		const struct orlix_tcti_native_proof_registry_entry *candidate =
 			&entries[index];
 
-		if (!candidate->production_capture ||
-		    strcmp(candidate->kunit_source, binding->kunit_source) ||
-		    strcmp(candidate->kunit_suite, binding->kunit_suite) ||
-		    strcmp(candidate->kunit_case, binding->kunit_case) ||
-		    candidate->source.source_ordinal != binding->source_ordinal ||
-		    candidate->obligation != binding->obligation)
+		if ((const void *)candidate != capture_token ||
+		    !candidate->production_capture ||
+		    candidate->source.source_ordinal != source_ordinal ||
+		    candidate->source.semantic_variant_identity !=
+			semantic_variant_identity ||
+		    candidate->obligation != obligation)
 			continue;
 		if (match) {
 			if (error)
@@ -1343,4 +1362,21 @@ int orlix_tcti_native_proof_registry_resolve_production(
 	if (error)
 		*error = ORLIX_TCTI_NATIVE_CONTRACT_OK;
 	return 0;
+}
+
+int orlix_tcti_native_proof_registry_resolve_production(
+	const void *capture_token,
+	orlix_tcti_proof_u32 source_ordinal,
+	orlix_tcti_proof_u64 semantic_variant_identity,
+	orlix_tcti_proof_u32 obligation,
+	const struct orlix_tcti_native_proof_registry_entry **entry,
+	enum orlix_tcti_native_contract_error *error)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	size_t count;
+
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	return orlix_tcti_native_proof_registry_resolve_production_entries(entries,
+		count, capture_token, source_ordinal, semantic_variant_identity,
+		obligation, entry, error);
 }
