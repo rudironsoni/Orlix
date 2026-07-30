@@ -100,6 +100,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
+	orlix_tcti_sme_state_release(&current->thread.user_sme);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -127,6 +128,7 @@ void flush_thread(void)
 	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
+	orlix_tcti_sme_state_release(&current->thread.user_sme);
 	current->thread.user_exclusive_address = 0;
 	current->thread.user_exclusive_value = 0;
 	current->thread.user_exclusive_value2 = 0;
@@ -157,6 +159,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_simd_valid = 0;
 	orlix_tcti_sve_state_reset(&p->thread.user_sve, p->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
+	/* task_struct duplication may have copied parent-owned SME pointers. */
+	memset(&p->thread.user_sme, 0, sizeof(p->thread.user_sme));
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
@@ -196,6 +200,10 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 					  current->thread.user_simd);
 		if (ret)
 			return ret;
+		ret = orlix_tcti_sme_state_copy(&p->thread.user_sme,
+						&current->thread.user_sme);
+		if (ret)
+			return ret;
 	p->thread.user_exclusive_address = 0;
 	p->thread.user_exclusive_value = 0;
 	p->thread.user_exclusive_value2 = 0;
@@ -224,6 +232,7 @@ void exit_thread(struct task_struct *task)
 {
 #if defined(ORLIX_APP_HOSTED_BOOT) && IS_ENABLED(CONFIG_ORLIX_TCTI_HOSTED_EXEC)
 	orlix_tcti_release_task_state(task);
+	orlix_tcti_sme_state_release(&task->thread.user_sme);
 #else
 	(void)task;
 #endif

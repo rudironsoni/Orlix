@@ -51,7 +51,7 @@
 #define ORLIX_TCTI_TARGET_REFRESH_FEATURES_BYTE_LENGTH 1243621U
 #define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_BYTE_LENGTH 96016602U
 #define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v3"
-#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh"
+#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh-system-accessor-v2"
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES 605U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS 362U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_MAPPED 605U
@@ -1316,7 +1316,12 @@ int orlix_tcti_target_refresh_with_fault(
 	struct artifact_bytes feature_field_domains = { 0 };
 	struct artifact_bytes runtime_capability_cohort = { 0 };
 	struct artifact_bytes system_accessors = { 0 };
-	struct orlix_tcti_target_artifact artifacts[9];
+	struct orlix_tcti_target_artifact artifacts[] = {
+#define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
+		{ .name = #artifact_name, .data = bytes.data, .length = bytes.length },
+#include "target_refresh_artifacts.def"
+#undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
+	};
 	struct orlix_tcti_target_artifact_provenance provenance = {
 		.schema = ORLIX_TCTI_TARGET_REFRESH_SCHEMA,
 		.generator = ORLIX_TCTI_TARGET_REFRESH_GENERATOR,
@@ -1334,6 +1339,7 @@ int orlix_tcti_target_refresh_with_fault(
 	char register_digest[65];
 	char reconciliation_identity[65];
 	enum orlix_tcti_target_refresh_error error = ORLIX_TCTI_TARGET_REFRESH_OK;
+	size_t artifact_index;
 
 	if (result)
 		*result = (struct orlix_tcti_target_refresh_result) { 0 };
@@ -1432,52 +1438,15 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS;
 		goto out;
 	}
+	artifact_index = 0;
+#define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
+	do { \
+		artifacts[artifact_index].data = bytes.data; \
+		artifacts[artifact_index++].length = bytes.length; \
+	} while (0);
+#include "target_refresh_artifacts.def"
+#undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
 
-	artifacts[0] = (struct orlix_tcti_target_artifact) {
-		.name = "source_manifest.def",
-		.data = manifest.data,
-		.length = manifest.length,
-	};
-	artifacts[1] = (struct orlix_tcti_target_artifact) {
-		.name = "target_asl_availability.def",
-		.data = asl_availability.data,
-		.length = asl_availability.length,
-	};
-	artifacts[2] = (struct orlix_tcti_target_artifact) {
-		.name = "target_feature_applicability.def",
-		.data = feature_applicability.data,
-		.length = feature_applicability.length,
-	};
-	artifacts[3] = (struct orlix_tcti_target_artifact) {
-		.name = "target_feature_artifact.def",
-		.data = feature_artifact.data,
-		.length = feature_artifact.length,
-	};
-	artifacts[4] = (struct orlix_tcti_target_artifact) {
-		.name = "target_feature_field_domain_binding.def",
-		.data = feature_field_domains.data,
-		.length = feature_field_domains.length,
-	};
-	artifacts[5] = (struct orlix_tcti_target_artifact) {
-		.name = "target_instruction_artifact_generated.h",
-		.data = instruction_artifact.data,
-		.length = instruction_artifact.length,
-	};
-	artifacts[6] = (struct orlix_tcti_target_artifact) {
-		.name = "target_register_artifact.def",
-		.data = register_artifact.data,
-		.length = register_artifact.length,
-	};
-	artifacts[7] = (struct orlix_tcti_target_artifact) {
-		.name = "target_runtime_capability_cohort_artifact.def",
-		.data = runtime_capability_cohort.data,
-		.length = runtime_capability_cohort.length,
-	};
-	artifacts[8] = (struct orlix_tcti_target_artifact) {
-		.name = "target_system_accessor_reconciliation.def",
-		.data = system_accessors.data,
-		.length = system_accessors.length,
-	};
 	if (fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION) {
 		char *corruption;
 

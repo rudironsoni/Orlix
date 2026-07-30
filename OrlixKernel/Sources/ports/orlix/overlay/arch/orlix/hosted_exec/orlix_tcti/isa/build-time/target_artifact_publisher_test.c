@@ -972,6 +972,10 @@ static int every_three_source_field_is_verified(void)
 	EXPECT(verify_result.error == ORLIX_TCTI_TARGET_ARTIFACT_VERIFY_PROVENANCE); \
 } while (0)
 	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.schema = "orlix-tcti-aarchmrs-source-v4");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.generator = "orlix-tcti-target-refresh-system-accessor-v2");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
 		mutated.source_architecture = "vFATAp1-B");
 	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.source_build = "819");
 	EXPECT_PROVENANCE_MUTATION_REJECTED(

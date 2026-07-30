@@ -35,6 +35,8 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_arm_xml_package.c target_asl_availability.c \
 	target_system_accessor_reconciliation.c
 
+include $(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/instruction-artifact-contributors.mk
+
 .PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
 
 __tcti-instruction-source-check:

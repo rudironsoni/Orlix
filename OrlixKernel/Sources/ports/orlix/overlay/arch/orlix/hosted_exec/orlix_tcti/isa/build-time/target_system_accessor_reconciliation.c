@@ -311,23 +311,20 @@ static uint32_t concrete_selector_for_entry(
 		(crm << 3U) | op2;
 }
 
-static int implemented_variant(const char *name,
-			       enum orlix_tcti_system_accessor_direction direction)
+static enum orlix_tcti_system_accessor_operation execution_operation_for_entry(
+	const char *name, enum orlix_tcti_system_accessor_direction direction)
 {
-	static const char *const read_write[] = { "TPIDR_EL0", "NZCV", "FPCR", "FPSR" };
-	static const char *const read_only[] = {
-		"TPIDRRO_EL0", "CTR_EL0", "DCZID_EL0", "CNTFRQ_EL0", "CNTVCT_EL0",
-	};
-	size_t index;
-
-	for (index = 0; index < sizeof(read_write) / sizeof(read_write[0]); index++)
-		if (!strcmp(name, read_write[index]))
-			return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ ||
-				direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE;
-	for (index = 0; index < sizeof(read_only) / sizeof(read_only[0]); index++)
-		if (!strcmp(name, read_only[index]))
-			return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ;
-	return 0;
+	if (!strcmp(name, "TPIDR_EL0")) return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_READ : direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_WRITE : ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
+	if (!strcmp(name, "NZCV")) return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_READ : direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_WRITE : ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
+	if (!strcmp(name, "FPCR")) return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_READ : direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_WRITE : ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
+	if (!strcmp(name, "FPSR")) return direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_READ : direction == ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE ? ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_WRITE : ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
+	if (direction != ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
+	if (!strcmp(name, "TPIDRRO_EL0")) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDRRO_EL0_READ;
+	if (!strcmp(name, "CTR_EL0")) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CTR_EL0_READ;
+	if (!strcmp(name, "DCZID_EL0")) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_DCZID_EL0_READ;
+	if (!strcmp(name, "CNTFRQ_EL0")) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTFRQ_EL0_READ;
+	if (!strcmp(name, "CNTVCT_EL0")) return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTVCT_EL0_READ;
+	return ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE;
 }
 
 static int architectural_rejection_variant(
@@ -364,7 +361,9 @@ static void assign_semantic_ownership(
 		entry->semantics = ORLIX_TCTI_SYSTEM_ACCESSOR_SOURCE_ACCESS_SEMANTICS;
 		result->census.source_access_semantics++;
 	}
-	if (implemented_variant(entry->variant_name, entry->direction)) {
+	entry->execution_operation = execution_operation_for_entry(entry->variant_name,
+		entry->direction);
+	if (entry->execution_operation != ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE) {
 		entry->implementation = ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED;
 		entry->execution_owner = "orlix_tcti_execute_system_register";
 		result->census.implemented++;
@@ -380,6 +379,10 @@ static void assign_semantic_ownership(
 		entry->execution_owner = "orlix_tcti_resume_user";
 		result->census.unimplemented_rejection++;
 	}
+	entry->decode_key = identity_u64(identity_u64(identity_text(
+		UINT64_C(1469598103934665603),
+		orlix_tcti_system_accessor_generic_leaf_name(entry->generic_leaf)),
+		entry->direction), entry->concrete_selector);
 	if (entry->concrete_selector == UINT32_MAX)
 		result->census.symbolic_selectors++;
 	else
@@ -417,6 +420,8 @@ static uint64_t reconciliation_identity(
 		identity = identity_u64(identity, entry->applicability);
 		identity = identity_u64(identity, entry->semantics);
 		identity = identity_u64(identity, entry->implementation);
+		identity = identity_u64(identity, entry->execution_operation);
+		identity = identity_u64(identity, entry->decode_key);
 		identity = identity_u64(identity, entry->proof_state);
 		identity = identity_text(identity, entry->decoder_owner);
 		identity = identity_text(identity, entry->execution_owner);
@@ -643,7 +648,7 @@ orlix_tcti_system_accessor_reconciliation_validate(
 			   !entry->access_source_length) {
 			return ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID;
 		}
-		if (implemented_variant(entry->variant_name, entry->direction)) {
+		if (entry->execution_operation != ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE) {
 			implementation = ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED;
 			execution_owner = "orlix_tcti_execute_system_register";
 		} else if (architectural_rejection_variant(entry->variant_name,
@@ -656,7 +661,9 @@ orlix_tcti_system_accessor_reconciliation_validate(
 				ORLIX_TCTI_SYSTEM_ACCESSOR_UNIMPLEMENTED_REJECTION;
 			execution_owner = "orlix_tcti_resume_user";
 		}
-		if (entry->implementation != implementation ||
+		if ((entry->implementation == ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED) !=
+		    (entry->execution_operation != ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE) ||
+		    !entry->decode_key || entry->implementation != implementation ||
 		    !entry->execution_owner ||
 		    strcmp(entry->execution_owner, execution_owner))
 			return ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID;
@@ -745,8 +752,8 @@ orlix_tcti_system_accessor_reconciliation_emit(
 			 orlix_tcti_system_accessor_generic_leaf_name(entry->generic_leaf)) ||
 		    fprintf(output, ", %uU, %uU, %uU, %" PRIu32 "U, %" PRIu32 "U, "
 		    "%" PRIu32 "U, %uU, %uU, %uU, %uU, "
-		    "UINT64_C(0x%016" PRIx64 "), UINT64_C(0x%016" PRIx64 "), "
-		    "UINT64_C(0x%016" PRIx64 "), ",
+			"UINT64_C(0x%016" PRIx64 "), UINT64_C(0x%016" PRIx64 "), "
+			"UINT64_C(0x%016" PRIx64 "), UINT64_C(0x%016" PRIx64 "), %uU, ",
 		    (unsigned int)entry->direction,
 		    (unsigned int)entry->disposition, entry->selector_count,
 		    entry->condition_expression, entry->access_expression,
@@ -754,7 +761,8 @@ orlix_tcti_system_accessor_reconciliation_emit(
 		    (unsigned int)entry->semantics,
 		    (unsigned int)entry->implementation,
 		    (unsigned int)entry->proof_state, entry->selector_identity,
-		    entry->condition_identity, entry->access_identity) < 0 ||
+			entry->condition_identity, entry->access_identity, entry->decode_key,
+			(unsigned int)entry->execution_operation) < 0 ||
 		    emit_c_string(output, entry->decoder_owner) ||
 		    fprintf(output, ", ") < 0 ||
 		    emit_c_string(output, entry->execution_owner) ||

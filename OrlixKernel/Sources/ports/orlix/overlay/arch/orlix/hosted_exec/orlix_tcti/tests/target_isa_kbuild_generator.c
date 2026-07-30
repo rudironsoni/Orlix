@@ -136,6 +136,8 @@ uint64_t orlix_tcti_a64_kbuild_system_accessor_identity(
 		identity = accessor_identity_u64(identity, row->applicability);
 		identity = accessor_identity_u64(identity, row->semantics);
 		identity = accessor_identity_u64(identity, row->implementation);
+		identity = accessor_identity_u64(identity, row->execution_operation);
+		identity = accessor_identity_u64(identity, row->decode_key);
 		identity = accessor_identity_u64(identity, row->proof_state);
 		identity = accessor_identity_text(identity, row->decoder_owner);
 		identity = accessor_identity_text(identity, row->execution_owner);
@@ -931,14 +933,14 @@ builtin_accessor_metadata = {
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name_value, variant, \
 		generic, direction_value, disposition_value, selectors, condition, access, \
 		concrete, applicability, semantics, implementation, proof, \
-		selector_identity_value, condition_identity_value, access_identity, \
+		selector_identity_value, condition_identity_value, access_identity, decode_key, operation, \
 		decoder, executor, suite, test_case, accessor_offset, accessor_length, \
 		encoding_offset, encoding_length, condition_offset, condition_length, \
 		access_offset, access_length) \
 	{ accessor, encoding, name_value, variant, generic, direction_value, \
 	  disposition_value, selectors, condition, access, concrete, applicability, \
 	  semantics, implementation, proof, selector_identity_value, \
-	  condition_identity_value, access_identity, decoder, executor, suite, \
+	  condition_identity_value, access_identity, decode_key, operation, decoder, executor, suite, \
 	  test_case, accessor_offset, accessor_length, encoding_offset, encoding_length, \
 	  condition_offset, condition_length, access_offset, access_length },
 static const struct orlix_tcti_a64_kbuild_system_accessor_row builtin_accessors[] = {

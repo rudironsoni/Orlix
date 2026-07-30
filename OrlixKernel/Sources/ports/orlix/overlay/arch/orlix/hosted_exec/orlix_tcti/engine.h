@@ -5,6 +5,10 @@
 #include <linux/elf.h>
 #include <asm/orlix_tcti.h>
 
+struct task_struct;
+struct pt_regs;
+struct mm_struct;
+
 void orlix_tcti_prepare_syscall_handoff(struct pt_regs *regs);
 bool orlix_tcti_prepare_successful_execve_return(struct pt_regs *regs);
 bool orlix_tcti_static_pie_relocation_count_valid(size_t count);

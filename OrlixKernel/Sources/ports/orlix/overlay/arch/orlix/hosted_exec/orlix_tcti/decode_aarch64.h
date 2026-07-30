@@ -164,9 +164,21 @@ enum orlix_tcti_compare_branch_condition {
 	ORLIX_TCTI_COMPARE_BRANCH_LO,
 };
 
-struct orlix_tcti_system_accessor_semantic_key {
-	u64 condition_identity;
-	u64 access_identity;
+enum orlix_tcti_system_accessor_operation {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDRRO_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CTR_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_DCZID_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTFRQ_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTVCT_EL0_READ,
 };
 
 enum orlix_tcti_sme_pstate_operation {
@@ -584,8 +596,8 @@ struct orlix_tcti_decoded_instruction {
 	u64 system_accessor_selector_identity;
 	u64 system_accessor_condition_identity;
 	u64 system_accessor_access_identity;
-	/* Source-derived canonical identity for aliases sharing one encoding. */
-	struct orlix_tcti_system_accessor_semantic_key system_accessor_semantic_key;
+	u64 system_accessor_decode_key;
+	enum orlix_tcti_system_accessor_operation system_accessor_operation;
 	const char *system_accessor_decoder_owner;
 	const char *system_accessor_execution_owner;
 	u16 imm12;

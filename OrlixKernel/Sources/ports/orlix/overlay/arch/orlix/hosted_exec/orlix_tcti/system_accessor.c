@@ -11,6 +11,10 @@
 #include "decode_aarch64.h"
 #include "system_accessor.h"
 
+#ifndef UINT64_C
+#define UINT64_C(value) value ## ULL
+#endif
+
 #define ORLIX_TCTI_ACCESSOR_READ 1U
 #define ORLIX_TCTI_ACCESSOR_WRITE 2U
 #define ORLIX_TCTI_ACCESSOR_IMPLEMENTED 1U
@@ -20,23 +24,6 @@
 	(3ULL << 14) | 4ULL)
 #define ORLIX_TCTI_DCZID_EL0_VALUE BIT_ULL(4)
 #define ORLIX_TCTI_CNTFRQ_EL0_VALUE 1000000000ULL
-
-enum orlix_tcti_system_accessor_operation {
-	ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_CNTFRQ_EL0_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_CNTVCT_EL0_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_CTR_EL0_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_DCZID_EL0_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_WRITE,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_WRITE,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_WRITE,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_READ,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_WRITE,
-	ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDRRO_EL0_READ,
-};
 
 struct orlix_tcti_system_accessor_row {
 	u32 accessor;
@@ -51,6 +38,8 @@ struct orlix_tcti_system_accessor_row {
 	u64 selector_identity;
 	u64 condition_identity;
 	u64 access_identity;
+	u64 decode_key;
+	enum orlix_tcti_system_accessor_operation operation;
 	const char *decoder_owner;
 	const char *execution_owner;
 };
@@ -60,12 +49,24 @@ struct orlix_tcti_system_accessor_row {
 	enum { ORLIX_TCTI_SYSTEM_ACCESSOR_ROW_COUNT = accessor_count };
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(...)
+#include "isa/target_system_accessor_reconciliation.def"
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
+#undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
+
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SEMANTIC_COUNTS(...)
+#define ORLIX_TCTI_A64_SYSTEM_ACCESSOR_IDENTITY(...)
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
 	direction, disposition, selectors, condition, access, concrete, applicability, \
-	semantics, implementation, selector_identity, condition_identity, access_identity, \
-	decoder_owner, execution_owner, ...) \
+	semantics, implementation, proof, selector_identity, condition_identity, access_identity, \
+	decode_key, operation, decoder_owner, execution_owner, ...) \
 	{ accessor, concrete, generic, variant, direction, disposition, implementation, condition, access, \
-	  selector_identity, condition_identity, access_identity, decoder_owner, \
+	  selector_identity, condition_identity, access_identity, decode_key, operation, decoder_owner, \
 	  execution_owner },
 static const struct orlix_tcti_system_accessor_row orlix_tcti_system_accessors[] = {
 #include "isa/target_system_accessor_reconciliation.def"
@@ -87,33 +88,18 @@ static bool orlix_tcti_system_accessor_is_mrs_msr(
 }
 
 /*
- * An instruction supplies only selector and direction.  Source rows sharing
- * that encoding are aliases, so decode deterministically selects the lowest
- * generated semantic key, never a source ordinal or a selector allowlist.
+ * A system-register instruction carries selector and direction only. Multiple
+ * generated rows may therefore represent one encoding. Select the unsigned
+ * canonical semantic identity, never source order, and reject ambiguity.
  */
-static struct orlix_tcti_system_accessor_semantic_key
-orlix_tcti_system_accessor_semantic_key(
-	const struct orlix_tcti_system_accessor_row *row)
-{
-	return (struct orlix_tcti_system_accessor_semantic_key) {
-		.condition_identity = row->condition_identity,
-		.access_identity = row->access_identity,
-	};
-}
-
 static int orlix_tcti_system_accessor_semantic_key_compare(
 	const struct orlix_tcti_system_accessor_row *left,
 	const struct orlix_tcti_system_accessor_row *right)
 {
-	struct orlix_tcti_system_accessor_semantic_key left_key =
-		orlix_tcti_system_accessor_semantic_key(left);
-	struct orlix_tcti_system_accessor_semantic_key right_key =
-		orlix_tcti_system_accessor_semantic_key(right);
-
-	if (left_key.condition_identity != right_key.condition_identity)
-		return left_key.condition_identity < right_key.condition_identity ? -1 : 1;
-	if (left_key.access_identity != right_key.access_identity)
-		return left_key.access_identity < right_key.access_identity ? -1 : 1;
+	if (left->condition_identity != right->condition_identity)
+		return left->condition_identity < right->condition_identity ? -1 : 1;
+	if (left->access_identity != right->access_identity)
+		return left->access_identity < right->access_identity ? -1 : 1;
 	return 0;
 }
 
@@ -132,59 +118,13 @@ orlix_tcti_find_system_accessor(u16 selector, bool write)
 		    row->direction != (write ? ORLIX_TCTI_ACCESSOR_WRITE :
 						ORLIX_TCTI_ACCESSOR_READ))
 			continue;
-		if (!found || orlix_tcti_system_accessor_semantic_key_compare(row, found) < 0)
+		if (!found ||
+		    orlix_tcti_system_accessor_semantic_key_compare(row, found) < 0)
 			found = row;
 		else if (!orlix_tcti_system_accessor_semantic_key_compare(row, found))
 			return NULL;
 	}
 	return found;
-}
-
-/*
- * Variant and direction are generated ledger identity.  Do not bind execution
- * semantics to generated row ordinals: source refreshes may renumber them.
- */
-static enum orlix_tcti_system_accessor_operation
-orlix_tcti_system_accessor_operation(
-	const struct orlix_tcti_system_accessor_row *row)
-{
-	if (!strcmp(row->variant, "CNTFRQ_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_CNTFRQ_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
-	if (!strcmp(row->variant, "CNTVCT_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_CNTVCT_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
-	if (!strcmp(row->variant, "CTR_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_CTR_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
-	if (!strcmp(row->variant, "DCZID_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_DCZID_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
-	if (!strcmp(row->variant, "FPCR"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_WRITE;
-	if (!strcmp(row->variant, "FPSR"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_WRITE;
-	if (!strcmp(row->variant, "NZCV"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_WRITE;
-	if (!strcmp(row->variant, "TPIDR_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_WRITE;
-	if (!strcmp(row->variant, "TPIDRRO_EL0"))
-		return row->direction == ORLIX_TCTI_ACCESSOR_READ ?
-			ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDRRO_EL0_READ :
-			ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
-	return ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN;
 }
 
 bool orlix_tcti_system_accessor_decode(
@@ -207,8 +147,8 @@ bool orlix_tcti_system_accessor_decode(
 	decoded->system_accessor_selector_identity = row->selector_identity;
 	decoded->system_accessor_condition_identity = row->condition_identity;
 	decoded->system_accessor_access_identity = row->access_identity;
-	decoded->system_accessor_semantic_key =
-		orlix_tcti_system_accessor_semantic_key(row);
+	decoded->system_accessor_decode_key = row->decode_key;
+	decoded->system_accessor_operation = row->operation;
 	decoded->system_accessor_decoder_owner = row->decoder_owner;
 	decoded->system_accessor_execution_owner = row->execution_owner;
 	decoded->system_register_write = write;
@@ -234,70 +174,69 @@ int orlix_tcti_execute_system_register(
 	    decoded->system_accessor_selector_identity != row->selector_identity ||
 	    decoded->system_accessor_condition_identity != row->condition_identity ||
 	    decoded->system_accessor_access_identity != row->access_identity ||
-	    decoded->system_accessor_semantic_key.condition_identity !=
-		row->condition_identity ||
-	    decoded->system_accessor_semantic_key.access_identity != row->access_identity ||
+	    decoded->system_accessor_decode_key != row->decode_key ||
+	    decoded->system_accessor_operation != row->operation ||
 	    decoded->system_accessor_decoder_owner != row->decoder_owner ||
 	    decoded->system_accessor_execution_owner != row->execution_owner ||
 	    row->implementation != ORLIX_TCTI_ACCESSOR_IMPLEMENTED)
 		return -EOPNOTSUPP;
-	operation = orlix_tcti_system_accessor_operation(row);
-	if (operation == ORLIX_TCTI_SYSTEM_ACCESSOR_UNKNOWN)
+	operation = row->operation;
+	if (operation == ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE)
 		return -EOPNOTSUPP;
 	value = decoded->rt == 31 ? 0 : regs->regs[decoded->rt];
 
 	switch (operation) {
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_WRITE:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_WRITE:
 #if defined(ORLIX_APP_HOSTED_BOOT)
 		orlix_hosted_set_current_user_tls(value);
 #else
 		current->thread.user_tls = value;
 #endif
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDR_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_tls;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_WRITE:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_WRITE:
 		regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
 		regs->pstate |= value & (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_NZCV_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = regs->pstate &
 				(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_WRITE:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_WRITE:
 		current->thread.user_fpcr = value & ORLIX_TCTI_FPCR_WRITABLE_MASK;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_FPCR_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_fpcr;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_WRITE:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_WRITE:
 		current->thread.user_fpsr = value & ORLIX_TCTI_FPSR_WRITABLE_MASK;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_FPSR_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_fpsr;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_TPIDRRO_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDRRO_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = 0;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_CTR_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CTR_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = ORLIX_TCTI_CTR_EL0_VALUE;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_DCZID_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_DCZID_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = ORLIX_TCTI_DCZID_EL0_VALUE;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_CNTFRQ_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTFRQ_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = ORLIX_TCTI_CNTFRQ_EL0_VALUE;
 		break;
-	case ORLIX_TCTI_SYSTEM_ACCESSOR_CNTVCT_EL0_READ:
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTVCT_EL0_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = orlix_host_time_monotonic_ns();
 		break;

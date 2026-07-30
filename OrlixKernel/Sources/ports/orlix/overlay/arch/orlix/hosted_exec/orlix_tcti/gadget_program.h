@@ -7,6 +7,7 @@
 
 struct mm_struct;
 struct pt_regs;
+struct orlix_tcti_native_capture;
 
 #include "decode_aarch64.h"
 
@@ -24,7 +25,8 @@ struct orlix_tcti_gadget_word {
 
 typedef int (*orlix_tcti_gadget_fn)(struct mm_struct *mm, struct pt_regs *regs,
 			      const struct orlix_tcti_gadget_word **cursor,
-			      unsigned long *fault_address);
+			      unsigned long *fault_address,
+			      struct orlix_tcti_native_capture *capture);
 
 int orlix_tcti_lower_decoded_instruction(
 	const struct orlix_tcti_decoded_instruction *decoded,
@@ -49,6 +51,12 @@ int orlix_tcti_execute_gadget_program_authorized_observed(
 	const struct orlix_tcti_gadget_word *program, size_t word_count,
 	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
 	unsigned long *entry_pc, u32 *entry_instruction);
+int orlix_tcti_execute_gadget_program_authorized_captured(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word *program, size_t word_count,
+	unsigned long *fault_address, u64 code_generation, bool *entry_valid,
+	unsigned long *entry_pc, u32 *entry_instruction,
+	struct orlix_tcti_native_capture *capture);
 #ifdef CONFIG_ORLIX_TCTI_KUNIT_TEST
 void orlix_tcti_gadget_program_set_pre_authorized_test_hook(
 	void (*hook)(void *), void *data);

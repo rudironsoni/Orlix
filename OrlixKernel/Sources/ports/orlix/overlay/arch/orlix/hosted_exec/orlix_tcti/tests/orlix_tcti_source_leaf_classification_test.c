@@ -111,9 +111,9 @@ static void orlix_tcti_system_leaf_catalog_tracks_authoritative_fanout(
 			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PROVED,
 				leaf->proof_status, "source ordinal %u", leaf->ordinal);
 		} else {
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PENDING,
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_REJECTION_IMPLEMENTED,
 				leaf->implementation_status, "source ordinal %u", leaf->ordinal);
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_UNPROVED,
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_SYSTEM_LEAF_PROVED,
 				leaf->proof_status, "source ordinal %u", leaf->ordinal);
 		}
 	}

@@ -50,12 +50,31 @@ struct orlix_tcti_sve_state {
 	bool valid;
 };
 
+/* SME allocation is task-owned and sized from SVL. It has no wire maximum. */
+struct orlix_tcti_sme_state {
+	u16 svl_bytes;
+	u8 *za;
+	u8 *zt0;
+	size_t za_bytes;
+	size_t zt0_bytes;
+	bool streaming_mode;
+	bool za_enabled;
+	bool zt0_valid;
+	bool valid;
+};
+
 int orlix_tcti_sve_state_reset(struct orlix_tcti_sve_state *state,
 			 unsigned long *user_simd, u16 vl_bytes);
 int orlix_tcti_sve_state_copy(struct orlix_tcti_sve_state *destination,
 			unsigned long *destination_simd,
 			const struct orlix_tcti_sve_state *source,
 			const unsigned long *source_simd);
+int orlix_tcti_sme_state_reset(struct orlix_tcti_sme_state *state,
+				u16 svl_bytes, bool streaming_mode, bool za_enabled,
+				bool zt0_valid);
+int orlix_tcti_sme_state_copy(struct orlix_tcti_sme_state *destination,
+			       const struct orlix_tcti_sme_state *source);
+void orlix_tcti_sme_state_release(struct orlix_tcti_sme_state *state);
 
 /*
  * These are the acquire/release variants encoded by AArch64 atomics.  There

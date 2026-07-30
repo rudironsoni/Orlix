@@ -33,7 +33,7 @@
 
 static struct orlix_tcti_target_artifact_provenance pinned_provenance = {
 	.schema = "orlix-tcti-aarchmrs-source-v3",
-	.generator = "orlix-tcti-target-refresh",
+	.generator = "orlix-tcti-target-refresh-system-accessor-v2",
 	.source_architecture = "vFATAp1-A",
 	.source_build = "818",
 	.source_release = "2026-06_rel",
@@ -378,11 +378,11 @@ static int malformed_feature_domain_artifact_does_not_publish(
 	const char *instructions, const char *features, const char *registers,
 	const char *arm_xml_archive, const char *arm_xml_release)
 {
-	/* Artifact 3 is the feature field-domain binding artifact. Its fault
+	/* Artifact 4 is the feature field-domain binding artifact. Its fault
 	 * fixture truncates the emitted V3 occurrence table after generation. */
 	return injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION,
-		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 3U, instructions, features,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 4U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release);
 }
 
@@ -434,7 +434,7 @@ int main(int argc, char **argv)
 	    all_injected_failures_are_atomic(argv[1], argv[2], argv[3],
 					     argv[4], argv[5]) ||
 	    wrong_source_identity_does_not_publish(argv[2], argv[3], argv[4],
-						   argv[5]))
+					   argv[5]))
 		return 1;
 	puts("PASS target refresh authoritative transaction");
 	return 0;

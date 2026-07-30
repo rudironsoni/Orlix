@@ -1215,6 +1215,8 @@ int orlix_tcti_target_artifact_reconciliation_identity(
 	int result = -1;
 
 	if (!provenance || !digest ||
+	    !valid_source_text(provenance->schema) ||
+	    !valid_source_text(provenance->generator) ||
 	    !valid_source_text(provenance->source_architecture) ||
 	    !valid_source_text(provenance->source_build) ||
 	    !valid_source_text(provenance->source_release) ||
@@ -1230,10 +1232,12 @@ int orlix_tcti_target_artifact_reconciliation_identity(
 		return -1;
 	}
 	if (appendf(&buffer, &length, &capacity,
-		    "ORLIX_TCTI_AARCHMRS_THREE_SOURCE_V1\n"
+		    "ORLIX_TCTI_AARCHMRS_THREE_SOURCE_V2\n"
+		    "artifact_schema=%s\ngenerator=%s\n"
 		    "architecture=%s\nbuild=%s\nrelease=%s\nschema=%s\n"
 		    "timestamp=%s\n"
 		    "instructions=%zu:%s\nfeatures=%zu:%s\nregisters=%zu:%s\n",
+		    provenance->schema, provenance->generator,
 		    provenance->source_architecture, provenance->source_build,
 		    provenance->source_release, provenance->source_schema,
 		    provenance->source_timestamp,

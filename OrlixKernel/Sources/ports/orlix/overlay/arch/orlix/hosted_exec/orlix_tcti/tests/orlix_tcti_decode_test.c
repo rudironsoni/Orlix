@@ -10224,6 +10224,15 @@ static u32 orlix_tcti_test_encode_move_register(u8 rd, u8 rn)
 	return 0xaa1f0000U | ((u32)rn << 5) | rd;
 }
 
+static u32 orlix_tcti_test_encode_system_register(bool write, u16 selector,
+					   u8 rt)
+{
+	if (rt > 31U)
+		return 0;
+	return (write ? 0xd5100000U : 0xd5300000U) |
+		((u32)selector << 5) | rt;
+}
+
 static u32 orlix_tcti_test_encode_adr(s32 immediate, u8 rd)
 {
 	u32 imm21 = (u32)immediate & (BIT(21) - 1);
