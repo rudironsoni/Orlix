@@ -5,6 +5,7 @@
 #include <linux/errno.h>
 
 #include "decode_aarch64.h"
+#include "system_accessor.h"
 
 #define AARCH64_SVC_MASK 0xffe0001fU
 #define AARCH64_SVC_PATTERN 0xd4000001U
@@ -499,16 +500,6 @@
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
-#define AARCH64_SYSREG_TPIDR_EL0 0xde82U
-#define AARCH64_SYSREG_NZCV 0xda10U
-#define AARCH64_SYSREG_FPCR 0xda20U
-#define AARCH64_SYSREG_FPSR 0xda21U
-#define AARCH64_SYSREG_TPIDRRO_EL0 0xde83U
-#define AARCH64_SYSREG_CTR_EL0 0xd801U
-#define AARCH64_SYSREG_DCZID_EL0 0xd807U
-#define AARCH64_SYSREG_CNTFRQ_EL0 0xdf00U
-#define AARCH64_SYSREG_CNTVCT_EL0 0xdf02U
-
 static u32 orlix_tcti_bits(u32 value, u8 shift, u8 width)
 {
 	return (value >> shift) & ((1U << width) - 1U);
@@ -4997,57 +4988,11 @@ fp_int_gpr_unclaimed:
 	    (instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN) {
 		u16 sysreg = (instruction >> 5) & 0xffffU;
 
-		if (sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
-		    sysreg != AARCH64_SYSREG_NZCV &&
-		    sysreg != AARCH64_SYSREG_FPCR &&
-		    sysreg != AARCH64_SYSREG_FPSR &&
-		    sysreg != AARCH64_SYSREG_TPIDRRO_EL0 &&
-		    sysreg != AARCH64_SYSREG_CTR_EL0 &&
-		    sysreg != AARCH64_SYSREG_DCZID_EL0 &&
-		    sysreg != AARCH64_SYSREG_CNTFRQ_EL0 &&
-		    sysreg != AARCH64_SYSREG_CNTVCT_EL0)
+		if (!orlix_tcti_system_accessor_decode(sysreg,
+			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN,
+			&decoded))
 			return decoded;
-		decoded.system_register_write =
-			(instruction & AARCH64_SYSTEM_REGISTER_MASK) ==
-			AARCH64_MSR_PATTERN;
-		if (decoded.system_register_write &&
-		    sysreg != AARCH64_SYSREG_TPIDR_EL0 &&
-		    sysreg != AARCH64_SYSREG_NZCV &&
-		    sysreg != AARCH64_SYSREG_FPCR &&
-		    sysreg != AARCH64_SYSREG_FPSR)
-			return decoded;
-
-		decoded.decode_class = ORLIX_TCTI_DECODE_SYSTEM_REGISTER;
 		decoded.rt = instruction & 0x1fU;
-		switch (sysreg) {
-		case AARCH64_SYSREG_TPIDR_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0;
-			break;
-		case AARCH64_SYSREG_NZCV:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_NZCV;
-			break;
-		case AARCH64_SYSREG_FPCR:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_FPCR;
-			break;
-		case AARCH64_SYSREG_FPSR:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_FPSR;
-			break;
-		case AARCH64_SYSREG_TPIDRRO_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_TPIDRRO_EL0;
-			break;
-		case AARCH64_SYSREG_CTR_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CTR_EL0;
-			break;
-		case AARCH64_SYSREG_DCZID_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_DCZID_EL0;
-			break;
-		case AARCH64_SYSREG_CNTFRQ_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CNTFRQ_EL0;
-			break;
-		case AARCH64_SYSREG_CNTVCT_EL0:
-			decoded.system_register = ORLIX_TCTI_SYSTEM_REGISTER_CNTVCT_EL0;
-			break;
-		}
 		return decoded;
 	}
 

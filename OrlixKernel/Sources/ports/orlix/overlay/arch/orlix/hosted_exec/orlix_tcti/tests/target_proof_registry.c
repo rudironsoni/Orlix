@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
+#include "target_proof_registry_provenance.h"
 #include "target_proof_ingestion.h"
 #include "target_instruction_artifact.h"
 
@@ -397,7 +398,7 @@ struct system_accessor_binding {
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
 		direction, disposition, selectors, condition, access, concrete, \
 		applicability, semantics, implementation, proof, selector_identity, \
-		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		condition_identity, access_identity, decode_key, operation, decoder, executor, suite, test_case, \
 		accessor_offset, accessor_length, encoding_offset, encoding_length, \
 		condition_offset, condition_length, access_offset, access_length) \
 	{ accessor, encoding, name, variant, generic, direction, disposition, selectors, \
@@ -542,7 +543,7 @@ static const struct source_bound_proof source_bound_proofs[] = {
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
-	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256
 #define SYSTEM_ACCESSOR_PARTITION_INCLUDE \
 	"#include \"orlix_tcti_system_accessor_partition_test.h\""
 static const struct orlix_tcti_target_production_capture_binding
@@ -627,7 +628,7 @@ production_capture_family = { \
 #define KUNIT_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile"
 #define KUNIT_BUILD_SOURCE_SHA256 \
-	"0f585346401bbcb0598f9c81af9afce4c0e50b09c9d151bfc17ecf4ae38d2e33"
+	ORLIX_TCTI_KUNIT_BUILD_SOURCE_SHA256
 #define KSELFTEST_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c"
 #define KSELFTEST_SOURCE_SHA256 \
@@ -713,7 +714,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 	{ DECODE_SOURCE,
-	  "eb61ae37125fb30d8a04f2d2676a9dbd10ca6a04f476e533b0f235ecdff06a79",
+	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",

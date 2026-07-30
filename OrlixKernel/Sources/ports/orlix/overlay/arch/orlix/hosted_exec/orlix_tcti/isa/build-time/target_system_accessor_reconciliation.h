@@ -61,6 +61,24 @@ enum orlix_tcti_system_accessor_proof_state {
 	ORLIX_TCTI_SYSTEM_ACCESSOR_PROOF_NOT_OBSERVED = 1,
 };
 
+/* Producer-owned execution binding. NONE is required for every rejection. */
+enum orlix_tcti_system_accessor_operation {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NONE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDR_EL0_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_NZCV_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPCR_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_WRITE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDRRO_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CTR_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_DCZID_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTFRQ_EL0_READ,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_CNTVCT_EL0_READ,
+};
+
 enum orlix_tcti_system_accessor_reconciliation_error {
 	ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_OK,
 	ORLIX_TCTI_SYSTEM_ACCESSOR_RECONCILIATION_INVALID_ARGUMENT,
@@ -87,10 +105,12 @@ struct orlix_tcti_system_accessor_reconciliation_entry {
 	enum orlix_tcti_system_accessor_semantics semantics;
 	enum orlix_tcti_system_accessor_implementation implementation;
 	enum orlix_tcti_system_accessor_proof_state proof_state;
+	enum orlix_tcti_system_accessor_operation execution_operation;
 	/* Exact source identities, not merely a count or parser-local index. */
 	uint64_t selector_identity;
 	uint64_t condition_identity;
 	uint64_t access_identity;
+	uint64_t decode_key;
 	const char *accessor_name;
 	const char *variant_name;
 	const char *decoder_owner;

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
+include $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE)
+
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_instruction_artifact.o \
@@ -80,6 +82,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_mops_provenance_test.o
 
 hostprogs := gen_inventory target_isa_kbuild_generator
+always-y += inventory.h target_inventory.h target_proof_registry_provenance.h
 
 quiet_cmd_orlix_tcti_inventory = GEN     $@
       cmd_orlix_tcti_inventory = $(obj)/gen_inventory $@
@@ -105,6 +108,8 @@ $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
 
 $(obj)/orlix_tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
 $(obj)/orlix_tcti_source_leaf_classification_test.o: $(obj)/target_inventory.h
+$(obj)/orlix_tcti_test.o: $(obj)/inventory.h $(obj)/target_inventory.h \
+	$(obj)/target_proof_registry_provenance.h
 $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
 	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
 $(obj)/target_runtime_capability_cohort_artifact.o: \
@@ -118,6 +123,9 @@ $(obj)/target_feature_field_domain_binding_artifact.o: \
 	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
 	$(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/current/target_feature_applicability.def
-$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def
+$(obj)/target_proof_registry_provenance.h: $(src)/orlix_tcti_decode_test.c $(src)/orlix_tcti_system_accessor_partition_test.h $(src)/Makefile FORCE
+	@$(call orlix_tcti_write_proof_registry_provenance,$@,$(src)/orlix_tcti_decode_test.c,$(src)/orlix_tcti_system_accessor_partition_test.h,$(src)/Makefile)
+
+$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def $(obj)/target_proof_registry_provenance.h
 
 ccflags-y += -I$(obj)

@@ -1185,7 +1185,8 @@ static void native_capture_finalize(struct orlix_tcti_native_capture *capture,
 	native_capture_put32(ordering_bytes, 4U, session->decoded.barrier_option);
 	native_capture_put32(ordering_bytes, 8U, session->decoded.acquire);
 	native_capture_put32(ordering_bytes, 12U, session->decoded.release);
-	native_capture_put32(system_bytes, 0U, session->decoded.system_register);
+	native_capture_put32(system_bytes, 0U,
+		session->decoded.system_accessor_selector);
 	native_capture_put32(system_bytes, 4U, session->decoded.system_register_write);
 	native_capture_put32(system_bytes, 8U, session->decoded.sme_pstate_operation);
 	native_capture_put32(system_bytes, 12U, session->decoded.sme_streaming_mode);

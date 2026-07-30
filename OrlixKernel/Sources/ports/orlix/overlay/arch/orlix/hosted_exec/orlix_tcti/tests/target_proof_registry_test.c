@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "target_proof_registry.h"
+#include "target_proof_registry_provenance.h"
 #include "target_instruction_artifact.h"
 
 #include <stdbool.h>
@@ -130,7 +131,7 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
-	"ec438f79f7bb73739d32ba4eb4968da21cbc8f2311d1e355ff759e6ca1966d4d"
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256
 #define CSSC_CONDITION \
 	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
 #define BASELINE \

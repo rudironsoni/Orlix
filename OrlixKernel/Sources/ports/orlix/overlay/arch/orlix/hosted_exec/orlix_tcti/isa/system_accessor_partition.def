@@ -15,13 +15,13 @@
 #define ORLIX_TCTI_A64_SYSTEM_ACCESSOR(accessor, encoding, name, variant, generic, \
 		direction, disposition, selectors, condition, access, concrete, \
 		applicability, semantics, implementation, proof, selector_identity, \
-		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		condition_identity, access_identity, decode_key, operation, decoder, executor, suite, test_case, \
 		accessor_offset, accessor_length, encoding_offset, encoding_length, \
 		condition_offset, condition_length, access_offset, access_length) \
 	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(accessor, encoding, name, variant, generic, \
 		direction, disposition, selectors, condition, access, concrete, \
 		applicability, semantics, implementation, proof, selector_identity, \
-		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		condition_identity, access_identity, decode_key, operation, decoder, executor, suite, test_case, \
 		accessor_offset, accessor_length, encoding_offset, encoding_length, \
 		condition_offset, condition_length, access_offset, access_length)
 #include "target_system_accessor_reconciliation.def"

@@ -282,6 +282,8 @@ struct orlix_tcti_target_completion_system_accessor_row {
 	orlix_tcti_completion_u64 selector_identity;
 	orlix_tcti_completion_u64 condition_identity;
 	orlix_tcti_completion_u64 access_identity;
+	orlix_tcti_completion_u64 decode_key;
+	orlix_tcti_completion_u32 execution_operation;
 	const char *decoder_owner;
 	const char *execution_owner;
 	const char *kunit_suite;

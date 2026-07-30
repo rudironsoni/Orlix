@@ -51,7 +51,7 @@
 #define ORLIX_TCTI_TARGET_REFRESH_FEATURES_BYTE_LENGTH 1243621U
 #define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_BYTE_LENGTH 96016602U
 #define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v3"
-#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh"
+#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh-system-accessor-v2"
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES 605U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS 362U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_MAPPED 605U
@@ -1339,6 +1339,7 @@ int orlix_tcti_target_refresh_with_fault(
 	char register_digest[65];
 	char reconciliation_identity[65];
 	enum orlix_tcti_target_refresh_error error = ORLIX_TCTI_TARGET_REFRESH_OK;
+	size_t artifact_index;
 
 	if (result)
 		*result = (struct orlix_tcti_target_refresh_result) { 0 };
@@ -1437,6 +1438,14 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS;
 		goto out;
 	}
+	artifact_index = 0;
+#define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
+	do { \
+		artifacts[artifact_index].data = bytes.data; \
+		artifacts[artifact_index++].length = bytes.length; \
+	} while (0);
+#include "target_refresh_artifacts.def"
+#undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
 
 	if (fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION) {
 		char *corruption;

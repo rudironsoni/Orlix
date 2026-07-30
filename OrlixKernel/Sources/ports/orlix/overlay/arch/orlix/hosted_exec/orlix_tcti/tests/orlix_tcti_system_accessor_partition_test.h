@@ -22,6 +22,8 @@ struct orlix_tcti_system_accessor_partition_row {
 	u64 selector_identity;
 	u64 condition_identity;
 	u64 access_identity;
+	u64 decode_key;
+	u32 execution_operation;
 	const char *decoder_owner;
 	const char *execution_owner;
 	const char *kunit_suite;
@@ -36,15 +38,26 @@ struct orlix_tcti_system_accessor_partition_row {
 	u32 access_source_length;
 };
 
+enum orlix_tcti_system_accessor_partition_decode_route {
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MSR_PSTATE_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYS_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYSL_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYSP_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MSRR_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRRS_ROUTE,
+	ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_INVALID_ROUTE,
+};
+
 #define ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION(accessor, encoding, name, variant, \
 		generic, direction, disposition, selectors, condition, access, concrete, \
 		applicability, semantics, implementation, proof, selector_identity, \
-		condition_identity, access_identity, decoder, executor, suite, test_case, \
+		condition_identity, access_identity, decode_key, operation, decoder, executor, suite, test_case, \
 		accessor_offset, accessor_length, encoding_offset, encoding_length, \
 		condition_offset, condition_length, access_offset, access_length) \
 	{ accessor, encoding, name, variant, generic, direction, disposition, selectors, \
 	  condition, access, concrete, applicability, semantics, implementation, proof, \
-	  selector_identity, condition_identity, access_identity, decoder, executor, \
+	  selector_identity, condition_identity, access_identity, decode_key, operation, decoder, executor, \
 	  suite, test_case, accessor_offset, accessor_length, encoding_offset, \
 	  encoding_length, condition_offset, condition_length, access_offset, \
 	  access_length },
@@ -54,9 +67,91 @@ static const struct orlix_tcti_system_accessor_partition_row
 };
 #undef ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION
 
-static u32 orlix_tcti_system_accessor_partition_encode(bool write, u16 selector)
+static u32 orlix_tcti_system_accessor_partition_encode(bool write, u16 selector,
+							u8 rt)
 {
-	return (write ? 0xd5100000U : 0xd5300000U) | ((u32)selector << 5);
+	return (write ? 0xd5100000U : 0xd5300000U) | ((u32)selector << 5) | rt;
+}
+
+static enum orlix_tcti_system_accessor_partition_decode_route
+orlix_tcti_system_accessor_partition_decode_route(
+	const struct orlix_tcti_system_accessor_partition_row *row)
+{
+	if (!strcmp(row->generic_operation, "MRS_RS_systemmove") ||
+	    !strcmp(row->generic_operation, "MSR_SR_systemmove"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE;
+	if (!strcmp(row->generic_operation, "MSR_SI_pstate"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MSR_PSTATE_ROUTE;
+	if (!strcmp(row->generic_operation, "SYS_CR_systeminstrs"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYS_ROUTE;
+	if (!strcmp(row->generic_operation, "SYSL_RC_systeminstrs"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYSL_ROUTE;
+	if (!strcmp(row->generic_operation, "SYSP_CR_syspairinstrs"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_SYSP_ROUTE;
+	if (!strcmp(row->generic_operation, "MSRR_SR_systemmovepr"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MSRR_ROUTE;
+	if (!strcmp(row->generic_operation, "MRRS_RS_systemmovepr"))
+		return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRRS_ROUTE;
+	return ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_INVALID_ROUTE;
+}
+
+static int orlix_tcti_system_accessor_partition_semantic_key_compare(
+	const struct orlix_tcti_system_accessor_partition_row *left,
+	const struct orlix_tcti_system_accessor_partition_row *right)
+{
+	if (left->condition_identity != right->condition_identity)
+		return left->condition_identity < right->condition_identity ? -1 : 1;
+	if (left->access_identity != right->access_identity)
+		return left->access_identity < right->access_identity ? -1 : 1;
+	return 0;
+}
+
+static void orlix_tcti_system_accessor_partition_noncanonical_first_row_is_never_decoded(
+	struct kunit *test)
+{
+	const struct orlix_tcti_system_accessor_partition_row *first = NULL;
+	const struct orlix_tcti_system_accessor_partition_row *canonical = NULL;
+	struct orlix_tcti_decoded_instruction decoded;
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessor_partition); index++) {
+		const struct orlix_tcti_system_accessor_partition_row *row =
+			&orlix_tcti_system_accessor_partition[index];
+
+		if (row->concrete_selector != 24344U || row->direction != 1U ||
+		    orlix_tcti_system_accessor_partition_decode_route(row) !=
+			ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE)
+			continue;
+		if (!first)
+			first = row;
+		if (!canonical ||
+		    orlix_tcti_system_accessor_partition_semantic_key_compare(row,
+				canonical) < 0)
+			canonical = row;
+	}
+
+	KUNIT_ASSERT_NOT_NULL(test, first);
+	KUNIT_ASSERT_NOT_NULL(test, canonical);
+	KUNIT_EXPECT_EQ(test, 660U, first->accessor_index);
+	KUNIT_EXPECT_EQ(test, 704U, canonical->accessor_index);
+	KUNIT_EXPECT_LT(test, 0,
+		orlix_tcti_system_accessor_partition_semantic_key_compare(first,
+			canonical));
+	decoded = orlix_tcti_decode_aarch64(
+		orlix_tcti_system_accessor_partition_encode(false, 24344U, 9U));
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
+		decoded.decode_class);
+	KUNIT_EXPECT_EQ(test, 9U, decoded.rt);
+	KUNIT_EXPECT_EQ(test, canonical->accessor_index,
+		decoded.system_accessor_id);
+	KUNIT_EXPECT_EQ(test, canonical->condition_identity,
+		decoded.system_accessor_condition_identity);
+	KUNIT_EXPECT_EQ(test, canonical->access_identity,
+		decoded.system_accessor_access_identity);
+	KUNIT_EXPECT_EQ(test, canonical->decode_key,
+		decoded.system_accessor_decode_key);
+	KUNIT_EXPECT_EQ(test, canonical->execution_operation,
+		decoded.system_accessor_operation);
 }
 
 static const char *orlix_tcti_generated_accessor_string(u32 offset)
@@ -396,60 +491,204 @@ static void orlix_tcti_system_accessor_partition_binds_source_metadata(
 static void orlix_tcti_system_accessor_partition_matches_decoder_contract(
 	struct kunit *test)
 {
+	static const u8 rt_values[] = { 0U, 31U };
 	size_t index;
+	u32 concrete = 0;
+	u32 canonical = 0, aliases = 0, duplicate_keys = 0;
+
+	orlix_tcti_system_accessor_partition_noncanonical_first_row_is_never_decoded(test);
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessor_partition); index++) {
 		const struct orlix_tcti_system_accessor_partition_row *row =
 			&orlix_tcti_system_accessor_partition[index];
 		bool write;
-		struct orlix_tcti_decoded_instruction decoded;
+		size_t rt_index;
+
+		const struct orlix_tcti_system_accessor_partition_row *canonical_row = row;
+		size_t candidate;
 
 		if (row->concrete_selector == UINT_MAX ||
-		    (strcmp(row->generic_operation, "MRS_RS_systemmove") &&
-		     strcmp(row->generic_operation, "MSR_SR_systemmove")))
+		    orlix_tcti_system_accessor_partition_decode_route(row) !=
+			ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE)
 			continue;
+		for (candidate = 0;
+		     candidate < ARRAY_SIZE(orlix_tcti_system_accessor_partition);
+		     candidate++) {
+			const struct orlix_tcti_system_accessor_partition_row *other =
+				&orlix_tcti_system_accessor_partition[candidate];
+
+			if (other->concrete_selector != row->concrete_selector ||
+			    other->direction != row->direction ||
+			    orlix_tcti_system_accessor_partition_decode_route(other) !=
+				ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE)
+				continue;
+			if (orlix_tcti_system_accessor_partition_semantic_key_compare(other,
+				canonical_row) < 0)
+				canonical_row = other;
+			else if (other != canonical_row &&
+				 !orlix_tcti_system_accessor_partition_semantic_key_compare(other,
+					canonical_row))
+				KUNIT_FAIL(test, "duplicate generated semantic key");
+		}
 		write = row->direction == 2U;
-		decoded = orlix_tcti_decode_aarch64(
-			orlix_tcti_system_accessor_partition_encode(write,
-				(u16)row->concrete_selector));
-		KUNIT_EXPECT_EQ_MSG(test, row->implementation == 1U ?
-			ORLIX_TCTI_DECODE_SYSTEM_REGISTER : ORLIX_TCTI_DECODE_UNSUPPORTED,
-			decoded.decode_class, "%s %s", row->source_name, row->variant_name);
+		concrete++;
+		if (canonical_row == row)
+			canonical++;
+		else
+			aliases++;
+		for (rt_index = 0; rt_index < ARRAY_SIZE(rt_values); rt_index++) {
+			struct orlix_tcti_decoded_instruction decoded =
+				orlix_tcti_decode_aarch64(
+					orlix_tcti_system_accessor_partition_encode(write,
+						(u16)row->concrete_selector,
+						rt_values[rt_index]));
+
+			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
+				decoded.decode_class, "%s %s", row->source_name,
+				row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, rt_values[rt_index], decoded.rt,
+				"%s %s", row->source_name, row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, write, decoded.system_register_write,
+				"%s %s", row->source_name, row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, row->concrete_selector,
+				decoded.system_accessor_selector, "%s %s", row->source_name,
+				row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, canonical_row->accessor_index,
+				decoded.system_accessor_id, "%s %s", row->source_name,
+				row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, canonical_row->implementation,
+				decoded.system_accessor_implementation, "%s %s",
+				row->source_name, row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, canonical_row->selector_identity,
+				decoded.system_accessor_selector_identity, "%s %s",
+				row->source_name, row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, canonical_row->condition_identity,
+				decoded.system_accessor_condition_identity, "%s %s",
+				row->source_name, row->variant_name);
+			KUNIT_EXPECT_EQ_MSG(test, canonical_row->access_identity,
+				decoded.system_accessor_access_identity, "%s %s",
+				row->source_name, row->variant_name);
+		}
 	}
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessor_partition); index++) {
+		const struct orlix_tcti_system_accessor_partition_row *row =
+			&orlix_tcti_system_accessor_partition[index];
+		size_t prior;
+		bool has_prior = false;
+
+		if (row->concrete_selector == UINT_MAX ||
+		    orlix_tcti_system_accessor_partition_decode_route(row) !=
+			ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE)
+			continue;
+		for (prior = 0; prior < index; prior++) {
+			const struct orlix_tcti_system_accessor_partition_row *other =
+				&orlix_tcti_system_accessor_partition[prior];
+
+			if (other->concrete_selector == row->concrete_selector &&
+			    other->direction == row->direction &&
+			    orlix_tcti_system_accessor_partition_decode_route(other) ==
+				ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE) {
+				KUNIT_EXPECT_NE_MSG(test,
+					0, orlix_tcti_system_accessor_partition_semantic_key_compare(other,
+						row),
+					"duplicate generated semantic key %s %s", row->source_name,
+					row->variant_name);
+				has_prior = true;
+				break;
+			}
+		}
+		if (!has_prior)
+			for (prior = index + 1U;
+			     prior < ARRAY_SIZE(orlix_tcti_system_accessor_partition); prior++) {
+				const struct orlix_tcti_system_accessor_partition_row *other =
+					&orlix_tcti_system_accessor_partition[prior];
+
+				if (other->concrete_selector == row->concrete_selector &&
+				    other->direction == row->direction &&
+				    orlix_tcti_system_accessor_partition_decode_route(other) ==
+					ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE) {
+					duplicate_keys++;
+					break;
+				}
+			}
+	}
+	KUNIT_EXPECT_EQ(test, 1368U, concrete);
+	KUNIT_EXPECT_EQ(test, 1186U, canonical);
+	KUNIT_EXPECT_EQ(test, 182U, aliases);
+	KUNIT_EXPECT_EQ(test, 168U, duplicate_keys);
 }
 
 static void orlix_tcti_system_accessor_partition_rejections_are_structured_el0_exits(
 	struct kunit *test)
 {
-	static const u16 rejected_selectors[] = { 0xde83U, 0xd801U, 0xd807U,
-		0xdf00U, 0xdf02U, 0xdce8U };
 	size_t index;
+	u32 rejected = 0, concrete = 0, symbolic = 0, non_mrs_msr = 0;
+	u32 architectural = 0, unimplemented = 0;
 
-	for (index = 0; index < ARRAY_SIZE(rejected_selectors); index++) {
-		u32 instruction = orlix_tcti_system_accessor_partition_encode(true,
-			rejected_selectors[index]);
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessor_partition); index++) {
+		const struct orlix_tcti_system_accessor_partition_row *row =
+			&orlix_tcti_system_accessor_partition[index];
+		bool write;
+		u32 instruction;
 		struct pt_regs regs = { };
 		struct pt_regs before;
 		struct orlix_tcti_result result;
-		unsigned long mapped = source_leaf_map(test, instruction);
+		unsigned long mapped;
+		size_t register_index;
+
+		if (row->implementation == 1U)
+			continue;
+		rejected++;
+		if (row->implementation == 2U)
+			architectural++;
+		else
+			unimplemented++;
+		if (row->concrete_selector == UINT_MAX) {
+			symbolic++;
+			continue;
+		}
+		if (orlix_tcti_system_accessor_partition_decode_route(row) !=
+		    ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_MRS_MSR_ROUTE) {
+			KUNIT_EXPECT_NE_MSG(test,
+				ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_INVALID_ROUTE,
+				orlix_tcti_system_accessor_partition_decode_route(row),
+				"unbound generated generic family %s", row->generic_operation);
+			/* These rows belong to generated non-MRS/MSR decoder families. */
+			non_mrs_msr++;
+			continue;
+		}
+		concrete++;
+		write = row->direction == 2U;
+		instruction = orlix_tcti_system_accessor_partition_encode(write,
+			(u16)row->concrete_selector, 31U);
+		mapped = source_leaf_map(test, instruction);
 
 		regs.pc = mapped;
 		regs.sp = STACK_TOP - 16;
-		regs.pstate = PSR_MODE_EL0t;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT | PSR_C_BIT;
 		regs.syscallno = NO_SYSCALL;
-		regs.regs[0] = 0x123456789abcdef0ULL;
+		for (register_index = 0; register_index < ARRAY_SIZE(regs.regs);
+		     register_index++)
+			regs.regs[register_index] = 0x123456789abcdef0ULL + register_index;
 		before = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
-			result.reason, "selector=%04x", rejected_selectors[index]);
+			result.reason, "%s %s", row->source_name, row->variant_name);
 		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
-			"selector=%04x", rejected_selectors[index]);
+			"%s %s", row->source_name, row->variant_name);
 		KUNIT_EXPECT_EQ_MSG(test, instruction, result.instruction,
-			"selector=%04x", rejected_selectors[index]);
-		KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
-		KUNIT_EXPECT_EQ(test, before.pc, regs.pc);
+			"%s %s", row->source_name, row->variant_name);
+		KUNIT_EXPECT_EQ_MSG(test, before.pc, result.pc, "%s %s",
+			row->source_name, row->variant_name);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
+	KUNIT_EXPECT_EQ(test, 2001U, rejected);
+	KUNIT_EXPECT_EQ(test, 2U, architectural);
+	KUNIT_EXPECT_EQ(test, 1999U, unimplemented);
+	KUNIT_EXPECT_EQ(test, 1355U, concrete);
+	KUNIT_EXPECT_EQ(test, 178U, symbolic);
+	KUNIT_EXPECT_EQ(test, 468U, non_mrs_msr);
 }
 
 #endif /* ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_TEST_H */

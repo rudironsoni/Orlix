@@ -76,10 +76,13 @@ ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/
 ORLIX_APP_BUNDLE_ID ?= com.rudironsoni.orlix
 include $(CURDIR)/make/release.mk
 include $(CURDIR)/make/runtime.mk
+include $(CURDIR)/make/tcti-proof-registry-provenance.mk
 .PHONY: all help setup-env check-build-tools product-build-prepare product-build-version-check app-capability-gate app-capability-test app-release-inputs-check app-release-inputs-test app-exported-product-check console-policy-tests terminal-mux-tests orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-operational-note-pipeline-test orlix-tcti-isa-maintainer-source-check orlix-tcti-native-proof-symbol-check orlix-tcti-isa-audit orlix-tcti-kernel-tests mlibc-tests coreutils-tests hostadapter-tests orlixos-tests app-tests runtime-tests beta-prerequisites beta-signing-diagnostics beta-bump-build-number beta-install-simulator beta-simulator-gate docs-index docs-check agent-rules-generate agent-rules-check agent-hooks-generate agent-hooks-check agent-skills-check agent-subagents-check agent-mcp-check agent-status agent-next agent-task-envelope-check beta-archive beta-validate-archive beta-export-archive beta-upload build rebuild prepare scripts dtbs headers_install kunit kselftest kselftest-install test xcodeproj run clean mrproper __build-product __build-vendor __prepare-product __prepare-tcti-isa
 
 .PHONY: orlixos-xcframework
 .PHONY: orlix-tcti-native-proof-symbol-check-dependency-regression
+.PHONY: orlix-tcti-proof-registry-provenance-regression
+.PHONY: __orlix-tcti-proof-registry-provenance-write
 .PHONY: __orlix-root-gnu-make-contract-source-check
 
 all: build
@@ -335,8 +338,10 @@ beta-simulator-gate: beta-prerequisites
 
 orlix-tcti-semantic-provenance-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_SEMANTIC_PROVENANCE_TEST))'
+	@$(call orlix_tcti_write_proof_registry_provenance,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER),$(word 1,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS)),$(word 2,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS)),$(word 3,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS)))
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-I'$(dir $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER))' \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \
@@ -363,7 +368,33 @@ orlix-tcti-isa-maintainer-source-check:
 	}
 	@$(KERNEL_MAKE) __tcti-instruction-source-check
 
-orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests __orlix-tcti-instruction-artifact-inputs-source-check
+orlix-tcti-isa-host-tests: orlix-tcti-proof-registry-provenance-regression orlix-tcti-semantic-provenance-tests __orlix-tcti-instruction-artifact-inputs-source-check
+
+ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_registry_provenance.h
+ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS := \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile
+
+__orlix-tcti-proof-registry-provenance-write:
+	@$(call orlix_tcti_write_proof_registry_provenance,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT))
+
+orlix-tcti-proof-registry-provenance-regression:
+	@set -eu; regression_root="$$(mktemp -d "$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}/orlix-tcti-proof-registry-provenance.XXXXXX")"; \
+	trap 'rm -rf "$$regression_root"' EXIT; \
+	decode="$$regression_root/decode.c"; partition="$$regression_root/partition.h"; build="$$regression_root/Makefile"; header="$$regression_root/target_proof_registry_provenance.h"; \
+	printf '%s\n' 'initial decode source' > "$$decode"; printf '%s\n' 'initial partition source' > "$$partition"; printf '%s\n' 'initial KUnit build source' > "$$build"; \
+	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
+	cp "$$header" "$$regression_root/initial.h"; \
+	printf '%s\n' 'mutated decode source' >> "$$decode"; printf '%s\n' 'stale output' > "$$header"; \
+	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
+	cmp -s "$$regression_root/initial.h" "$$header" && { echo 'provenance header did not refresh after input mutation' >&2; exit 1; }; \
+	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$regression_root/missing.c" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'missing provenance input unexpectedly succeeded' >&2; exit 1; fi; \
+	printf '%s\n' '#!/bin/sh' 'printf "%s\\n" "not-a-sha256  -"' > "$$regression_root/malformed-shasum"; chmod +x "$$regression_root/malformed-shasum"; \
+	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_SHASUM="$$regression_root/malformed-shasum" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'malformed provenance hash unexpectedly succeeded' >&2; exit 1; fi; \
+	if find "$$regression_root" -name 'target_proof_registry_provenance.h.tmp.*' -exec false \;; then :; else echo 'provenance temporary files were retained' >&2; exit 1; fi
+
+orlix-tcti-isa-host-tests:
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
 	@$(CC) -std=c17 -Wall -Wextra -Werror \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/inventory_contract.c \
@@ -375,6 +406,7 @@ orlix-tcti-isa-host-tests: orlix-tcti-semantic-provenance-tests __orlix-tcti-ins
 		-o '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)'
 	@env -i PATH="$(PATH)" '$(ORLIX_TCTI_HOST_LANE_BOUNDARY_TEST)' .
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pthread \
+		-I'$(dir $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER))' \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_proof_registry_test.c \
 		-o '$(ORLIX_TCTI_TARGET_PROOF_REGISTRY_TEST)'
@@ -506,10 +538,11 @@ orlix-tcti-native-proof-symbol-check:
 orlix-tcti-native-proof-symbol-check-dependency-regression:
 	@$(KERNEL_MAKE) orlix-tcti-native-proof-symbol-check-dependency-regression
 
-orlix-tcti-isa-audit: orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
+orlix-tcti-isa-audit: orlix-tcti-semantic-provenance-tests orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_AUDITOR))'
 	@$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-IOrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests \
+		-I'$(dir $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER))' \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_applicability_artifact.c \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/target_feature_domain.c \

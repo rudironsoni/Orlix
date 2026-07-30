@@ -3441,132 +3441,6 @@ static void orlix_tcti_decode_recognizes_move_wide_immediate_class(struct kunit 
 	KUNIT_EXPECT_EQ(test, 0U, decoded.halfword_shift);
 }
 
-static void orlix_tcti_decode_recognizes_system_register_class(struct kunit *test)
-{
-	struct orlix_tcti_decoded_instruction decoded;
-
-	decoded = orlix_tcti_decode_aarch64(0xd53bd05aU);
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-			decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0,
-			decoded.system_register);
-	KUNIT_EXPECT_FALSE(test, decoded.system_register_write);
-	KUNIT_EXPECT_EQ(test, 26U, decoded.rt);
-
-	decoded = orlix_tcti_decode_aarch64(0xd51bd040U);
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-			decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SYSTEM_REGISTER_TPIDR_EL0,
-			decoded.system_register);
-	KUNIT_EXPECT_TRUE(test, decoded.system_register_write);
-	KUNIT_EXPECT_EQ(test, 0U, decoded.rt);
-
-	decoded = orlix_tcti_decode_aarch64(0xd53b4203U);
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-			decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SYSTEM_REGISTER_NZCV,
-			decoded.system_register);
-	KUNIT_EXPECT_FALSE(test, decoded.system_register_write);
-	KUNIT_EXPECT_EQ(test, 3U, decoded.rt);
-
-	decoded = orlix_tcti_decode_aarch64(0xd53b4401U);
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-			decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SYSTEM_REGISTER_FPCR,
-			decoded.system_register);
-	KUNIT_EXPECT_FALSE(test, decoded.system_register_write);
-	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
-
-	decoded = orlix_tcti_decode_aarch64(0xd51b4421U);
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-			decoded.decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_SYSTEM_REGISTER_FPSR,
-			decoded.system_register);
-	KUNIT_EXPECT_TRUE(test, decoded.system_register_write);
-	KUNIT_EXPECT_EQ(test, 1U, decoded.rt);
-}
-
-static u32 orlix_tcti_test_encode_system_register(bool write, u16 sysreg, u8 rt)
-{
-	return (write ? 0xd5100000U : 0xd5300000U) |
-		((u32)sysreg << 5) | rt;
-}
-
-static int orlix_tcti_test_system_register_index(u16 sysreg)
-{
-	static const u16 system_registers[] = {
-		0xde82U, 0xda10U, 0xda20U, 0xda21U, 0xde83U,
-		0xd801U, 0xd807U, 0xdf00U, 0xdf02U,
-	};
-	u8 index;
-
-	for (index = 0; index < ARRAY_SIZE(system_registers); index++) {
-		if (system_registers[index] == sysreg)
-			return index;
-	}
-	return -1;
-}
-
-static void orlix_tcti_decode_exhaustive_system_register_family(struct kunit *test)
-{
-	static const bool writable[] = {
-		true, true, true, true, false, false, false, false, false,
-	};
-	u32 sysreg;
-
-	for (sysreg = 0xc000U; sysreg <= 0xffffU; sysreg++) {
-		u8 direction;
-
-		for (direction = 0; direction < 2; direction++) {
-			bool write = direction;
-			int index = orlix_tcti_test_system_register_index(sysreg);
-			bool legal = index >= 0 && (!write || writable[index]);
-			u32 instruction = orlix_tcti_test_encode_system_register(
-				write, sysreg, 9);
-			struct orlix_tcti_decoded_instruction decoded =
-				orlix_tcti_decode_aarch64(instruction);
-
-			KUNIT_EXPECT_EQ_MSG(test,
-				legal ? ORLIX_TCTI_DECODE_SYSTEM_REGISTER :
-					ORLIX_TCTI_DECODE_UNSUPPORTED,
-				decoded.decode_class, "instruction=%08x", instruction);
-			if (legal) {
-				KUNIT_EXPECT_EQ(test, write,
-					decoded.system_register_write);
-				KUNIT_EXPECT_EQ(test, 9U, decoded.rt);
-			}
-		}
-	}
-}
-
-static void orlix_tcti_decode_system_register_all_rt_fields(struct kunit *test)
-{
-	static const u16 system_registers[] = {
-		0xde82U, 0xda10U, 0xda20U, 0xda21U, 0xde83U,
-		0xd801U, 0xd807U, 0xdf00U, 0xdf02U,
-	};
-	u8 index;
-
-	for (index = 0; index < ARRAY_SIZE(system_registers); index++) {
-		u8 rt;
-
-		for (rt = 0; rt < 32; rt++) {
-			struct orlix_tcti_decoded_instruction decoded =
-				orlix_tcti_decode_aarch64(orlix_tcti_test_encode_system_register(
-					false, system_registers[index], rt));
-
-			KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
-				decoded.decode_class);
-			KUNIT_EXPECT_EQ(test, rt, decoded.rt);
-		}
-	}
-}
-
 static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit *test)
 {
 	static const struct {
@@ -10343,6 +10217,15 @@ static u32 orlix_tcti_test_encode_move_register(u8 rd, u8 rn)
 {
 	/* ORR Xd, Xn, XZR, the architectural MOV register alias. */
 	return 0xaa1f0000U | ((u32)rn << 5) | rd;
+}
+
+static u32 orlix_tcti_test_encode_system_register(bool write, u16 selector,
+					   u8 rt)
+{
+	if (rt > 31U)
+		return 0;
+	return (write ? 0xd5100000U : 0xd5300000U) |
+		((u32)selector << 5) | rt;
 }
 
 static u32 orlix_tcti_test_encode_adr(s32 immediate, u8 rd)
@@ -31809,9 +31692,6 @@ static struct kunit_case orlix_tcti_decode_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_decode_recognizes_complete_crc32_family),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_multiply_add_sub_class),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_move_wide_immediate_class),
-	KUNIT_CASE(orlix_tcti_decode_recognizes_system_register_class),
-	KUNIT_CASE(orlix_tcti_decode_exhaustive_system_register_family),
-	KUNIT_CASE(orlix_tcti_decode_system_register_all_rt_fields),
 	KUNIT_CASE(orlix_tcti_decode_exhaustive_hint_barrier_cache_family),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_exclusive_monitor_clear),
 	KUNIT_CASE(orlix_tcti_decode_recognizes_load_store_exclusive_class),

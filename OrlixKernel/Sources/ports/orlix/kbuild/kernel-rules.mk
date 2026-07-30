@@ -29,6 +29,8 @@ LINUX_UPSTREAM_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/upstream/linux-$(LINUX_VER
 
 ORLIX_LINUX_OVERLAY ?= OrlixKernel/Sources/ports/orlix/overlay
 ORLIX_LINUX_PATCH_DIR ?= OrlixKernel/Sources/ports/orlix/patches
+ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE ?= $(CURDIR)/make/tcti-proof-registry-provenance.mk
+export ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE
 override ORLIX_PROFILE_CONFIG := OrlixKernel/Sources/ports/orlix/configs/$(PROFILE)_defconfig
 
 ORLIX_KERNEL_PORT_DIR ?= $(ORLIX_BUILD_ROOT)/OrlixKernel/src/linux-$(LINUX_VERSION)-port
@@ -124,6 +126,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_ingestion.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/report.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/switch_debug.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/system_accessor.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fixed_fp.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sme_state.c \
@@ -2141,7 +2144,7 @@ __kernel-archive: __prepare-kbuild
 		strings_tmp="$$output_dir/.strings.txt.tmp.$$$$"; \
 		orlix_tcti_kbuild="$(ORLIX_KERNEL_PORT_ABS)/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/Makefile"; \
 		mkdir -p "$$obj_dir"; \
-		$(orlix_archive_cache_predicate) \
+		$(strip $(orlix_archive_cache_predicate)) \
 		object_dependencies_current() { \
 			object="$$1"; depfile="$$2"; dependency_list=""; status=0; \
 			[ -s "$$depfile" ] || return 1; \
@@ -2156,7 +2159,7 @@ __kernel-archive: __prepare-kbuild
 		}; \
 		if [ -s "$$archive" ] && [ -s "$$output_dir/symbols.txt" ]; then \
 			symbols="$$output_dir/symbols.txt"; \
-			required_symbols=(_arch_boot_entry _arch_boot_params); \
+			required_symbols=(_arch_boot_entry _arch_boot_params _orlix_tcti_system_accessor_decode _orlix_tcti_execute_system_register); \
 			cache_deps=(); sources=(); objects=(); depfiles=(); \
 			for cache_dep in \
 				OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk \
@@ -2300,8 +2303,9 @@ __kernel-archive: __prepare-kbuild
 		orlix_product_adapter_finalize_archive "$$platform" "$$target" "$$archive_tmp" "$${objs[@]}"; \
 		[ -s "$$archive_tmp" ] || { echo "missing staged OrlixKernel archive: $$archive_tmp" >&2; exit 1; }; \
 		"$$nm_cmd" -gU "$$archive_tmp" > "$$symbols_tmp"; \
-		grep -q '_arch_boot_entry' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_entry: $$archive_tmp" >&2; exit 1; }; \
-		grep -q '_arch_boot_params' "$$symbols_tmp" || { echo "OrlixKernel archive missing _arch_boot_params: $$archive_tmp" >&2; exit 1; }; \
+		for required_symbol in _arch_boot_entry _arch_boot_params _orlix_tcti_system_accessor_decode _orlix_tcti_execute_system_register; do \
+			orlix_archive_symbol_manifest_has_exact_external_definition "$$symbols_tmp" "$$required_symbol" || { echo "OrlixKernel archive missing exact external definition $$required_symbol: $$archive_tmp" >&2; exit 1; }; \
+		done; \
 		if [ "$(ORLIX_KERNEL_KUNIT)" = 1 ]; then \
 			"$$strings_cmd" "$$archive_tmp" > "$$strings_tmp"; \
 			grep -Fxq 'kunit.filter_glob' "$$strings_tmp" || { echo "Orlix KUnit archive missing canonical kunit.filter_glob parameter: $$archive_tmp" >&2; exit 1; }; \

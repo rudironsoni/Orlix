@@ -129,6 +129,8 @@ struct orlix_tcti_a64_kbuild_system_accessor_row {
 	uint64_t selector_identity;
 	uint64_t condition_identity;
 	uint64_t access_identity;
+	uint64_t decode_key;
+	uint32_t execution_operation;
 	const char *decoder_owner;
 	const char *execution_owner;
 	const char *kunit_suite;
