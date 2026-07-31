@@ -1444,6 +1444,11 @@ void __noreturn orlix_tcti_enter_user(struct pt_regs *regs)
 			orlix_mte_signal_sync_fault(regs, result.fault_address);
 			orlix_exit_to_user_mode_work(regs);
 			break;
+		case ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION:
+			force_sig_fault(SIGILL, ILL_ILLOPC,
+					(void __user *)result.pc);
+			orlix_exit_to_user_mode_work(regs);
+			break;
 		case ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION:
 			orlix_tcti_report_unsupported(current, regs, &result);
 			do_group_exit(SIGILL);
