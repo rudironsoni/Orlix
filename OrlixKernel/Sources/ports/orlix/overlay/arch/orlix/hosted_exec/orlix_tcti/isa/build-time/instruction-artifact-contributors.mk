@@ -23,7 +23,8 @@ ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS := \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/inventory.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_classification.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_execution_slice_map.def \
-	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/source_bound_proof.def
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/source_bound_proof.def \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/proof_registry_projection.def
 
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_PUBLISHER_DECLARATION ?= $(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS_DECLARATION)
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_CONTRACT_KBUILD_DECLARATION ?= OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile

@@ -342,11 +342,6 @@ struct source_manifest_binding {
 	orlix_tcti_proof_u64 source_length;
 };
 
-struct source_bound_proof {
-	orlix_tcti_proof_u32 ordinal;
-	const char *proof_id;
-};
-
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...) \
 	/* The source provenance header is consumed by the owning audit. */
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(ordinal, leaf, mnemonic, operation, \
@@ -431,10 +426,21 @@ _Static_assert(ARRAY_COUNT(system_accessor_bindings) ==
 
 #define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
 	{ ordinal, proof_id },
-static const struct source_bound_proof source_bound_proofs[] = {
+static const struct orlix_tcti_target_proof_registry_projection_binding
+source_bound_proofs[] = {
 #include "../isa/source_bound_proof.def"
 };
 #undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
+
+/* Canonical typed X-macro input for registry and publisher consumers. */
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id) \
+	{ ordinal, proof_id },
+static const struct orlix_tcti_target_proof_registry_projection_binding
+proof_registry_projection[] = {
+#include "../isa/proof_registry_projection.def"
+};
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING
+
 
 #define LSE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_lse_decode_test.c"
@@ -3104,7 +3110,8 @@ static bool build_ordinary_load_store_registry(void)
 
 		if (!operation)
 			continue;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
 		if (!source || strcmp(source->operation_id, operation->operation_id) ||
 		    !ordinary_load_store_case_mask(source))
 			return false;
@@ -3132,7 +3139,8 @@ static bool build_ordinary_load_store_registry(void)
 
 		if (!operation)
 			continue;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
 		binding = &ordinary_load_store_registry_bindings[
 			operation->binding_offset + operation->binding_count++];
 		*binding = (struct orlix_tcti_target_proof_binding) {
@@ -3194,23 +3202,24 @@ static bool proof_binding_matches_source_manifest(
 }
 
 static size_t source_bound_proof_matches_binding(
+	const struct orlix_tcti_target_proof_registry_projection_binding *projection,
+	size_t projection_count,
 	const struct orlix_tcti_target_proof_registry_entry *entry,
 	const struct orlix_tcti_target_proof_binding *binding)
 {
 	size_t index;
 	size_t matches = 0;
 
-	for (index = 0; index < sizeof(source_bound_proofs) /
-				      sizeof(source_bound_proofs[0]); index++)
-		if (source_bound_proofs[index].ordinal == binding->source_ordinal &&
-		    !strcmp(source_bound_proofs[index].proof_id, entry->id))
+	for (index = 0; index < projection_count; index++)
+		if (projection[index].source_ordinal == binding->source_ordinal &&
+		    !strcmp(projection[index].proof_id, entry->id))
 			matches++;
 	return matches;
 }
 
 static size_t source_bound_proof_matches_registry(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
-	const struct source_bound_proof *source_bound)
+	const struct orlix_tcti_target_proof_registry_projection_binding *source_bound)
 {
 	size_t entry_index;
 	size_t matches = 0;
@@ -3223,7 +3232,7 @@ static size_t source_bound_proof_matches_registry(
 		for (binding_index = 0; binding_index < entry->binding_count;
 		     binding_index++)
 			if (entries[entry_index].bindings[binding_index].source_ordinal ==
-					source_bound->ordinal &&
+					source_bound->source_ordinal &&
 			    !strcmp(entry->id, source_bound->proof_id))
 				matches++;
 	}
@@ -3339,7 +3348,8 @@ static bool build_source_leaf_rejection_registry(void)
 
 		if (!operation)
 			continue;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
 		if (!source)
 			return false;
 		binding = &source_leaf_rejection_registry_bindings[
@@ -3481,7 +3491,8 @@ static bool build_production_capture_family_registry(void)
 
 		if (!operation)
 			continue;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(
+			source_bound_proofs[index].source_ordinal);
 		if (!source || strcmp(operation->operation_id, source->operation_id))
 			return false;
 		binding = &production_capture_family_registry_bindings[
@@ -4416,10 +4427,21 @@ int orlix_tcti_target_proof_registry_source_bound_projection_validate(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
 	enum orlix_tcti_target_proof_registry_error *error)
 {
+	return orlix_tcti_target_proof_registry_projection_validate(entries, count,
+		source_bound_proofs, ARRAY_COUNT(source_bound_proofs), error);
+}
+
+int orlix_tcti_target_proof_registry_projection_validate(
+	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
+	const struct orlix_tcti_target_proof_registry_projection_binding *projection,
+	size_t projection_count,
+	enum orlix_tcti_target_proof_registry_error *error)
+{
 	size_t entry_index;
 	size_t index;
 
-	if (orlix_tcti_target_proof_registry_validate(entries, count, error))
+	if ((projection_count && !projection) ||
+	    orlix_tcti_target_proof_registry_validate(entries, count, error))
 		return -1;
 	for (entry_index = 0; entry_index < count; entry_index++) {
 		const struct orlix_tcti_target_proof_registry_entry *entry =
@@ -4429,22 +4451,30 @@ int orlix_tcti_target_proof_registry_source_bound_projection_validate(
 		for (binding_index = 0; binding_index < entry->binding_count;
 		     binding_index++)
 			if (source_bound_proof_matches_binding(
-				    entry, &entry->bindings[binding_index]) != 1) {
+				    projection, projection_count, entry,
+				    &entry->bindings[binding_index]) != 1) {
 				if (error)
 					*error =
 						ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
 				return -1;
 			}
 	}
-	for (index = 0; index < sizeof(source_bound_proofs) /
-			     sizeof(source_bound_proofs[0]); index++)
+	for (index = 0; index < projection_count; index++)
 		if (source_bound_proof_matches_registry(entries, count,
-						 &source_bound_proofs[index]) != 1) {
+						 &projection[index]) != 1) {
 			if (error)
 				*error = ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH;
 			return -1;
 		}
 	return 0;
+}
+
+const struct orlix_tcti_target_proof_registry_projection_binding *
+orlix_tcti_target_proof_registry_projection_bindings(size_t *count)
+{
+	if (count)
+		*count = ARRAY_COUNT(proof_registry_projection);
+	return proof_registry_projection;
 }
 
 enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_lookup(
@@ -4502,7 +4532,12 @@ static void proof_registry_initialize(void)
 				production_capture_bindings,
 				ARRAY_COUNT(production_capture_bindings),
 				proof_registry_entries,
-				ARRAY_COUNT(proof_registry_entries), NULL);
+				ARRAY_COUNT(proof_registry_entries), NULL) &&
+			  !orlix_tcti_target_proof_registry_projection_validate(
+				proof_registry_entries,
+				ARRAY_COUNT(proof_registry_entries),
+				proof_registry_projection,
+				ARRAY_COUNT(proof_registry_projection), NULL);
 }
 
 const struct orlix_tcti_target_proof_registry_entry *

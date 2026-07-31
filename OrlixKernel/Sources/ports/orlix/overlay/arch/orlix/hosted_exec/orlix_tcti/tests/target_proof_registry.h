@@ -69,6 +69,11 @@ struct orlix_tcti_target_proof_binding {
 	orlix_tcti_proof_u32 source_ordinal;
 };
 
+struct orlix_tcti_target_proof_registry_projection_binding {
+	orlix_tcti_proof_u32 source_ordinal;
+	const char *proof_id;
+};
+
 struct orlix_tcti_target_proof_case {
 	const char *name;
 	orlix_tcti_proof_u32 obligations;
@@ -323,6 +328,11 @@ int orlix_tcti_target_proof_registry_validate(
 int orlix_tcti_target_proof_registry_source_bound_projection_validate(
 	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
 	enum orlix_tcti_target_proof_registry_error *error);
+int orlix_tcti_target_proof_registry_projection_validate(
+	const struct orlix_tcti_target_proof_registry_entry *entries, size_t count,
+	const struct orlix_tcti_target_proof_registry_projection_binding *projection,
+	size_t projection_count,
+	enum orlix_tcti_target_proof_registry_error *error);
 int orlix_tcti_target_kunit_dependency_validate_for_test(
 	const char *source, const char *dependency, const char *dependency_sha256);
 int orlix_tcti_target_kselftest_provenance_validate(
@@ -338,6 +348,8 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	const struct orlix_tcti_target_proof_reference *reference);
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count);
+const struct orlix_tcti_target_proof_registry_projection_binding *
+orlix_tcti_target_proof_registry_projection_bindings(size_t *count);
 int orlix_tcti_target_kunit_provenance_identity(
 	const struct orlix_tcti_target_proof_registry_entry *entry,
 	const char *case_name,

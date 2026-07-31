@@ -619,6 +619,7 @@ static void check_generated_artifacts(const char *orlix_tcti_root)
 {
 	static const char *const artifacts[] = {
 		"isa/inventory.def", "isa/source_manifest.def",
+		"isa/proof_registry_projection.def",
 		"isa/target_classification.def",
 		"isa/target_instruction_artifact_generated.h",
 		"isa/target_feature_artifact.def",

@@ -126,6 +126,8 @@ $(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/curren
 $(obj)/target_proof_registry_provenance.h: $(src)/orlix_tcti_decode_test.c $(src)/orlix_tcti_system_accessor_partition_test.h $(src)/Makefile FORCE
 	@$(call orlix_tcti_write_proof_registry_provenance,$@,$(src)/orlix_tcti_decode_test.c,$(src)/orlix_tcti_system_accessor_partition_test.h,$(src)/Makefile)
 
-$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def $(obj)/target_proof_registry_provenance.h
+$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def \
+	$(src)/../isa/proof_registry_projection.def \
+	$(obj)/target_proof_registry_provenance.h
 
 ccflags-y += -I$(obj)

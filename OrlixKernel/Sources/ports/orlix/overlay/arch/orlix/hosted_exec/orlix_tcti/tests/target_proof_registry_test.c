@@ -17,6 +17,9 @@
 } while (0)
 
 #define CONCURRENT_FIRST_USE_THREADS 16U
+#define PROOF_REGISTRY_PROJECTION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/" \
+	"orlix_tcti/isa/proof_registry_projection.def"
 
 struct concurrent_first_use_result {
 	const struct orlix_tcti_target_proof_registry_entry *entries;
@@ -1559,12 +1562,106 @@ static int production_capture_bindings_are_generic_and_fail_closed(void)
 	return 0;
 }
 
+static int registry_projection_is_lossless_and_fail_closed(void)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_projection_binding *projection;
+	struct orlix_tcti_target_proof_registry_projection_binding copied[1024];
+	enum orlix_tcti_target_proof_registry_error error;
+	size_t entry_count;
+	size_t projection_count;
+
+	entries = orlix_tcti_target_proof_registry_entries(&entry_count);
+	projection = orlix_tcti_target_proof_registry_projection_bindings(
+		&projection_count);
+	EXPECT(entries != NULL);
+	EXPECT(projection != NULL);
+	EXPECT(projection_count > 1U);
+	EXPECT(projection_count <= sizeof(copied) / sizeof(copied[0]));
+	EXPECT(orlix_tcti_target_proof_registry_projection_validate(entries,
+		entry_count, projection, projection_count, &error) == 0);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK);
+
+	memcpy(copied, projection, projection_count * sizeof(copied[0]));
+	EXPECT(orlix_tcti_target_proof_registry_projection_validate(entries,
+		entry_count, copied, projection_count - 1U, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+
+	memcpy(copied, projection, projection_count * sizeof(copied[0]));
+	copied[1] = copied[0];
+	EXPECT(orlix_tcti_target_proof_registry_projection_validate(entries,
+		entry_count, copied, projection_count, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+
+	memcpy(copied, projection, projection_count * sizeof(copied[0]));
+	copied[0].proof_id = "kunit:arbitrary-proof";
+	EXPECT(orlix_tcti_target_proof_registry_projection_validate(entries,
+		entry_count, copied, projection_count, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+
+	memcpy(copied, projection, projection_count * sizeof(copied[0]));
+	copied[0].proof_id = copied[1].proof_id;
+	EXPECT(orlix_tcti_target_proof_registry_projection_validate(entries,
+		entry_count, copied, projection_count, &error) == -1);
+	EXPECT(error == ORLIX_TCTI_TARGET_PROOF_REGISTRY_BINDING_MISMATCH);
+	return 0;
+}
+
+static int registry_projection_artifact_is_exact_and_required(void)
+{
+	const struct orlix_tcti_target_proof_registry_projection_binding *projection;
+	bool seen[1024] = { 0 };
+	char line[256];
+	FILE *file;
+	size_t projection_count;
+	size_t artifact_count = 0;
+
+	projection = orlix_tcti_target_proof_registry_projection_bindings(
+		&projection_count);
+	EXPECT(projection != NULL);
+	EXPECT(projection_count <= sizeof(seen) / sizeof(seen[0]));
+	file = fopen(PROOF_REGISTRY_PROJECTION_SOURCE, "rb");
+	EXPECT(file != NULL);
+	while (fgets(line, sizeof(line), file)) {
+		unsigned int ordinal;
+		char proof_id[128];
+		int consumed;
+		size_t index;
+
+		if (!line[0] || line[0] == '\n' || !strncmp(line, "/*", 2) ||
+		    !strncmp(line, " *", 2) || !strncmp(line, " */", 3))
+			continue;
+		EXPECT(sscanf(line,
+			"ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(%uU, \"%127[^\"]\")%n",
+			&ordinal, proof_id, &consumed) == 2);
+		EXPECT(line[consumed] == '\n' || line[consumed] == '\0');
+		for (index = 0; index < projection_count; index++)
+			if (projection[index].source_ordinal == ordinal &&
+			    !strcmp(projection[index].proof_id, proof_id))
+				break;
+		EXPECT(index < projection_count);
+		EXPECT(!seen[index]);
+		seen[index] = true;
+		artifact_count++;
+	}
+	EXPECT(!ferror(file));
+	EXPECT(!fclose(file));
+	EXPECT(artifact_count == projection_count);
+	for (size_t index = 0; index < projection_count; index++)
+		EXPECT(seen[index]);
+	return 0;
+}
+
 int main(void)
 {
 	static const struct {
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
+		{ "registry_projection_artifact_is_exact_and_required",
+		  registry_projection_artifact_is_exact_and_required },
+		{ "registry_projection_is_lossless_and_fail_closed",
+		  registry_projection_is_lossless_and_fail_closed },
 		{ "production_capture_bindings_are_generic_and_fail_closed",
 		  production_capture_bindings_are_generic_and_fail_closed },
 		{ "operational_note_mapping_is_exact_and_fail_closed",
