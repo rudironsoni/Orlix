@@ -2,6 +2,7 @@
 #include "target_instruction_artifact.h"
 #include "target_native_proof_contract.h"
 #include "target_native_proof_registry_private.h"
+#include "target_proof_registry_provenance.h"
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
@@ -966,6 +967,50 @@ static bool native_static_matrix_row_build(
 	return true;
 }
 
+/* SystemAccessor is a supplemental semantic-variant domain.  The generated
+ * reconciliation row, rather than its shared MRS/MSR source leaf, is the
+ * capture authority.  Keep the static row as the impossible/unexecuted
+ * witness and add a separate, sealed production row only for implemented
+ * concrete variants. */
+static bool native_system_accessor_capture_row_build(
+	struct orlix_tcti_native_proof_registry_entry *native,
+	const struct orlix_tcti_target_linux_proof_disposition_row *matrix,
+	const struct orlix_tcti_target_instruction_artifact *artifact)
+{
+	if (!native || !matrix ||
+	    matrix->subject_kind !=
+		ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT ||
+	    matrix->source.implementation !=
+		ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_IMPLEMENTED ||
+	    matrix->source.concrete_selector == UINT_MAX ||
+	    !matrix->source.identity ||
+	    !native_static_matrix_row_build(native, matrix, artifact))
+		return false;
+	native->static_obligation = 0U;
+	native->production_capture = 1U;
+	native->observation_kind = ORLIX_TCTI_NATIVE_OBSERVATION_GPR;
+	native->obligation = ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
+	if (!native_registry_copy(native->proof_id, sizeof(native->proof_id),
+			"kunit:system-accessor-production") ||
+	    !native_registry_copy(native->kunit_source, sizeof(native->kunit_source),
+			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_source_leaf_classification_test.c") ||
+	    !native_registry_copy(native->kunit_source_sha256,
+			sizeof(native->kunit_source_sha256),
+			"2cfebb266253ef9be5aa73dbd3959be285a754e3ece63812497ecdfc5a90dfea") ||
+	    !native_registry_copy(native->kunit_build_source,
+			sizeof(native->kunit_build_source),
+			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/Makefile") ||
+	    !native_registry_copy(native->kunit_build_source_sha256,
+			sizeof(native->kunit_build_source_sha256),
+			ORLIX_TCTI_KUNIT_BUILD_SOURCE_SHA256) ||
+	    !native_registry_copy(native->kunit_suite, sizeof(native->kunit_suite),
+			"orlix-tcti-source-leaf-classification") ||
+	    !native_registry_copy(native->kunit_case, sizeof(native->kunit_case),
+			"orlix_tcti_system_accessor_partition_implemented_production_observations"))
+		return false;
+	return true;
+}
+
 static bool native_registry_build(void)
 {
 	const struct orlix_tcti_target_instruction_artifact *artifact;
@@ -1024,6 +1069,14 @@ static bool native_registry_build(void)
 			}
 		}
 	}
+	for (proof_index = 0; proof_index < matrix_count; proof_index++)
+		if (matrix[proof_index].subject_kind ==
+			    ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT &&
+		    matrix[proof_index].source.implementation ==
+			    ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_IMPLEMENTED &&
+		    matrix[proof_index].source.concrete_selector != UINT_MAX &&
+		    !native_size_add(&count, 1U))
+			return false;
 	if (!native_size_add(&count, matrix_count))
 		return false;
 	if (!count || count > SIZE_MAX / sizeof(*rows))
@@ -1091,6 +1144,19 @@ static bool native_registry_build(void)
 					}
 				}
 			}
+		}
+	}
+	for (proof_index = 0; proof_index < matrix_count; proof_index++) {
+		if (matrix[proof_index].subject_kind ==
+			    ORLIX_TCTI_TARGET_LINUX_PROOF_SYSTEM_ACCESSOR_VARIANT &&
+		    matrix[proof_index].source.implementation ==
+			    ORLIX_TCTI_TARGET_SYSTEM_ACCESSOR_IMPLEMENTED &&
+		    matrix[proof_index].source.concrete_selector != UINT_MAX) {
+			if (row_index >= count ||
+			    !native_system_accessor_capture_row_build(&rows[row_index],
+				&matrix[proof_index], artifact))
+				goto fail;
+			row_index++;
 		}
 	}
 	for (proof_index = 0; proof_index < matrix_count; proof_index++) {

@@ -500,6 +500,11 @@
 #define AARCH64_SYSTEM_REGISTER_MASK 0xfff00000U
 #define AARCH64_MRS_PATTERN 0xd5300000U
 #define AARCH64_MSR_PATTERN 0xd5100000U
+#define AARCH64_SYSTEM_INSTRUCTION_MASK 0xfff80000U
+#define AARCH64_SYS_PATTERN 0xd5080000U
+#define AARCH64_SYSL_PATTERN 0xd5280000U
+#define AARCH64_MSRR_PATTERN 0xd5500000U
+#define AARCH64_MRRS_PATTERN 0xd5700000U
 static u32 orlix_tcti_bits(u32 value, u8 shift, u8 width)
 {
 	return (value >> shift) & ((1U << width) - 1U);
@@ -4991,6 +4996,37 @@ fp_int_gpr_unclaimed:
 		if (!orlix_tcti_system_accessor_decode(sysreg,
 			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN,
 			&decoded))
+			return decoded;
+		decoded.rt = instruction & 0x1fU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) == AARCH64_SYS_PATTERN ||
+	    (instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) == AARCH64_SYSL_PATTERN) {
+		u16 selector = (((instruction >> 16) & 7U) << 11) |
+			(((instruction >> 12) & 15U) << 7) |
+			(((instruction >> 8) & 15U) << 3) |
+			((instruction >> 5) & 7U);
+		enum orlix_tcti_system_accessor_route route =
+			(instruction & AARCH64_SYSTEM_INSTRUCTION_MASK) == AARCH64_SYS_PATTERN ?
+			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_SYS :
+			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_SYSL;
+
+		if (!orlix_tcti_system_accessor_decode_route(selector, route, &decoded))
+			return decoded;
+		decoded.rt = instruction & 0x1fU;
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSRR_PATTERN ||
+	    (instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MRRS_PATTERN) {
+		u16 selector = (instruction >> 5) & 0xffffU;
+		enum orlix_tcti_system_accessor_route route =
+			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSRR_PATTERN ?
+			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MSRR :
+			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MRRS;
+
+		if (!orlix_tcti_system_accessor_decode_route(selector, route, &decoded))
 			return decoded;
 		decoded.rt = instruction & 0x1fU;
 		return decoded;

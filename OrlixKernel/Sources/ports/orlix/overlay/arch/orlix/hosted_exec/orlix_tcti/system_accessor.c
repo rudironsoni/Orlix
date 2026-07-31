@@ -80,11 +80,31 @@ _Static_assert(ARRAY_SIZE(orlix_tcti_system_accessors) ==
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_COUNTS
 #undef ORLIX_TCTI_A64_SYSTEM_ACCESSOR_SOURCE
 
-static bool orlix_tcti_system_accessor_is_mrs_msr(
-	const struct orlix_tcti_system_accessor_row *row)
+static const char *orlix_tcti_system_accessor_route_generic(
+	enum orlix_tcti_system_accessor_route route, u8 *direction)
 {
-	return !strcmp(row->generic, "MRS_RS_systemmove") ||
-		!strcmp(row->generic, "MSR_SR_systemmove");
+	switch (route) {
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MRS:
+		*direction = ORLIX_TCTI_ACCESSOR_READ;
+		return "MRS_RS_systemmove";
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MSR:
+		*direction = ORLIX_TCTI_ACCESSOR_WRITE;
+		return "MSR_SR_systemmove";
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_SYS:
+		*direction = 3U;
+		return "SYS_CR_systeminstrs";
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_SYSL:
+		*direction = ORLIX_TCTI_ACCESSOR_READ;
+		return "SYSL_RC_systeminstrs";
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MSRR:
+		*direction = ORLIX_TCTI_ACCESSOR_WRITE;
+		return "MSRR_SR_systemmovepr";
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MRRS:
+		*direction = ORLIX_TCTI_ACCESSOR_READ;
+		return "MRRS_RS_systemmovepr";
+	default:
+		return NULL;
+	}
 }
 
 /*
@@ -104,19 +124,24 @@ static int orlix_tcti_system_accessor_semantic_key_compare(
 }
 
 static const struct orlix_tcti_system_accessor_row *
-orlix_tcti_find_system_accessor(u16 selector, bool write)
+orlix_tcti_find_system_accessor(u16 selector,
+	enum orlix_tcti_system_accessor_route route)
 {
 	const struct orlix_tcti_system_accessor_row *found = NULL;
+	const char *generic;
+	u8 direction;
 	size_t index;
+
+	generic = orlix_tcti_system_accessor_route_generic(route, &direction);
+	if (!generic)
+		return NULL;
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessors); index++) {
 		const struct orlix_tcti_system_accessor_row *row =
 			&orlix_tcti_system_accessors[index];
 
-		if (!orlix_tcti_system_accessor_is_mrs_msr(row) ||
-		    row->selector != selector ||
-		    row->direction != (write ? ORLIX_TCTI_ACCESSOR_WRITE :
-						ORLIX_TCTI_ACCESSOR_READ))
+		if (row->selector != selector || row->direction != direction ||
+		    strcmp(row->generic, generic))
 			continue;
 		if (!found ||
 		    orlix_tcti_system_accessor_semantic_key_compare(row, found) < 0)
@@ -127,18 +152,31 @@ orlix_tcti_find_system_accessor(u16 selector, bool write)
 	return found;
 }
 
-bool orlix_tcti_system_accessor_decode(
-	u16 selector, bool write, struct orlix_tcti_decoded_instruction *decoded)
+static const struct orlix_tcti_system_accessor_row *
+orlix_tcti_find_system_accessor_id(u32 accessor)
 {
-	const struct orlix_tcti_system_accessor_row *row;
+	const struct orlix_tcti_system_accessor_row *found = NULL;
+	size_t index;
 
-	if (!decoded)
-		return false;
-	row = orlix_tcti_find_system_accessor(selector, write);
-	if (!row)
-		return false;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessors); index++) {
+		const struct orlix_tcti_system_accessor_row *row =
+			&orlix_tcti_system_accessors[index];
+
+		if (row->accessor != accessor)
+			continue;
+		if (found)
+			return NULL;
+		found = row;
+	}
+	return found;
+}
+
+static void orlix_tcti_system_accessor_bind_decoded(
+	const struct orlix_tcti_system_accessor_row *row,
+	struct orlix_tcti_decoded_instruction *decoded)
+{
 	decoded->decode_class = ORLIX_TCTI_DECODE_SYSTEM_REGISTER;
-	decoded->system_accessor_selector = selector;
+	decoded->system_accessor_selector = row->selector;
 	decoded->system_accessor_id = row->accessor;
 	decoded->system_accessor_condition = row->condition;
 	decoded->system_accessor_access = row->access;
@@ -151,7 +189,37 @@ bool orlix_tcti_system_accessor_decode(
 	decoded->system_accessor_operation = row->operation;
 	decoded->system_accessor_decoder_owner = row->decoder_owner;
 	decoded->system_accessor_execution_owner = row->execution_owner;
-	decoded->system_register_write = write;
+	decoded->system_register_write = row->direction == ORLIX_TCTI_ACCESSOR_WRITE;
+}
+
+bool orlix_tcti_system_accessor_decode(
+	u16 selector, bool write, struct orlix_tcti_decoded_instruction *decoded)
+{
+	const struct orlix_tcti_system_accessor_row *row;
+
+	if (!decoded)
+		return false;
+	row = orlix_tcti_find_system_accessor(selector,
+		write ? ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MSR :
+			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MRS);
+	if (!row)
+		return false;
+	orlix_tcti_system_accessor_bind_decoded(row, decoded);
+	return true;
+}
+
+bool orlix_tcti_system_accessor_decode_route(
+	u16 selector, enum orlix_tcti_system_accessor_route route,
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	const struct orlix_tcti_system_accessor_row *row;
+
+	if (!decoded)
+		return false;
+	row = orlix_tcti_find_system_accessor(selector, route);
+	if (!row)
+		return false;
+	orlix_tcti_system_accessor_bind_decoded(row, decoded);
 	return true;
 }
 
@@ -164,8 +232,7 @@ int orlix_tcti_execute_system_register(
 
 	if (!regs || !decoded)
 		return -EINVAL;
-	row = orlix_tcti_find_system_accessor(decoded->system_accessor_selector,
-			decoded->system_register_write);
+	row = orlix_tcti_find_system_accessor_id(decoded->system_accessor_id);
 	if (!row || decoded->system_accessor_id != row->accessor ||
 	    decoded->system_accessor_condition != row->condition ||
 	    decoded->system_accessor_access != row->access ||

@@ -14,7 +14,10 @@
 
 #include "../decode_aarch64.h"
 #include "orlix_tcti_test_suites.h"
+#include "orlix_tcti_native_observation.h"
+#include "target_native_proof_contract_private.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
+#include "target_native_proof_registry_private.h"
 
 #define SOURCE_LEAF_SVC 0xd4000001U
 
@@ -118,13 +121,23 @@ static unsigned long source_leaf_map(struct kunit *test, u32 instruction)
 
 	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
 				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	KUNIT_EXPECT_FALSE(test, IS_ERR_VALUE(mapped));
+	if (IS_ERR_VALUE(mapped))
+		return 0;
 	ret = orlix_tcti_write_user_data(current->mm, mapped, program,
 				   sizeof(program));
-	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	if (ret)
+		goto unmap;
 	ret = sys_mprotect(mapped, PAGE_SIZE, PROT_READ | PROT_EXEC);
-	KUNIT_ASSERT_EQ(test, 0, ret);
+	KUNIT_EXPECT_EQ(test, 0, ret);
+	if (ret)
+		goto unmap;
 	return mapped;
+
+unmap:
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	return 0;
 }
 
 #include "orlix_tcti_system_accessor_partition_test.h"
@@ -224,6 +237,7 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_binds_source_metadata),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_matches_decoder_contract),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_rejections_are_structured_el0_exits),
+	KUNIT_CASE(orlix_tcti_system_accessor_partition_implemented_production_observations),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_match_pinned_tuples),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_are_structured_el0_exits),
 	{}
