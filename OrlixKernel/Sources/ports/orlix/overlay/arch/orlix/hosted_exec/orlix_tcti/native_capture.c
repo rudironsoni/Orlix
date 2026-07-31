@@ -780,6 +780,7 @@ static int native_capture_append(struct orlix_tcti_native_capture_session *sessi
 #define NATIVE_CAPTURE_FP_SIMD_HEADER_BYTES 24U
 #define NATIVE_CAPTURE_SVE_HEADER_BYTES 24U
 #define NATIVE_CAPTURE_SME_HEADER_BYTES 24U
+#define NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES 32U
 
 static void native_capture_put32(u8 *bytes, size_t offset, u32 value)
 {
@@ -1123,7 +1124,7 @@ static void native_capture_finalize(struct orlix_tcti_native_capture *capture,
 	u8 arithmetic_bytes[32] = {};
 	u8 atomicity_bytes[24] = {};
 	u8 ordering_bytes[16] = {};
-	u8 system_bytes[24] = {};
+	u8 system_bytes[NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES] = {};
 	u8 linux_bytes[24] = {};
 	u8 *memory_bytes;
 	size_t memory_payload_bytes;
@@ -1190,7 +1191,10 @@ static void native_capture_finalize(struct orlix_tcti_native_capture *capture,
 	native_capture_put32(system_bytes, 4U, session->decoded.system_register_write);
 	native_capture_put32(system_bytes, 8U, session->decoded.sme_pstate_operation);
 	native_capture_put32(system_bytes, 12U, session->decoded.sme_streaming_mode);
+	/* Preserve PSTATE's established offset and append architected TLS after
+	 * state, so a TPIDR_EL0 write is self-contained on the sealed wire. */
 	native_capture_put64(system_bytes, 16U, regs->pstate);
+	native_capture_put64(system_bytes, 24U, session->task->thread.user_tls);
 	native_capture_put32(linux_bytes, 0U, session->linux_reason);
 	native_capture_put32(linux_bytes, 4U, (u32)session->linux_status);
 	native_capture_put64(linux_bytes, 8U, session->linux_pc);

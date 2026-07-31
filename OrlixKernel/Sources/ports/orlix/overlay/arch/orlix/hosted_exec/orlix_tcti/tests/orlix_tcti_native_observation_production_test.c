@@ -20,6 +20,48 @@
 #define NATIVE_CAPTURE_SVC 0xd4024681U
 #define NATIVE_CAPTURE_PENDING_CAPACITY 128U
 
+static u32 native_capture_wire_get32(const u8 *bytes)
+{
+	return (u32)bytes[0] | ((u32)bytes[1] << 8) |
+		((u32)bytes[2] << 16) | ((u32)bytes[3] << 24);
+}
+
+static u64 native_capture_wire_get64(const u8 *bytes)
+{
+	u64 value = 0;
+	size_t index;
+
+	for (index = 0; index < sizeof(value); index++)
+		value |= (u64)bytes[index] << (index * 8U);
+	return value;
+}
+
+static bool native_capture_copy_text(char *destination, size_t capacity,
+	const char *source)
+{
+	if (!destination || !capacity || !source || !source[0])
+		return false;
+	return strscpy(destination, source, capacity) >= 0;
+}
+
+static void native_capture_expect_ledger_state(struct kunit *test,
+	const struct orlix_tcti_target_proof_ingestion_ledger *ledger,
+	const struct orlix_tcti_target_proof_ingestion_summary *expected,
+	const struct orlix_tcti_target_proof_ingestion_slot *expected_slot)
+{
+	struct orlix_tcti_target_proof_ingestion_summary observed;
+
+	KUNIT_EXPECT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &observed));
+	KUNIT_EXPECT_EQ(test, expected->accepted_records, observed.accepted_records);
+	KUNIT_EXPECT_EQ(test, expected->native_passed, observed.native_passed);
+	KUNIT_EXPECT_EQ(test, expected->kselftest_passed, observed.kselftest_passed);
+	KUNIT_EXPECT_EQ(test, expected->rejected, observed.rejected);
+	KUNIT_EXPECT_EQ(test, expected->accepted_records, ledger->count);
+	KUNIT_EXPECT_EQ(test, expected->native_passed, ledger->native_passed);
+	KUNIT_EXPECT_MEMEQ(test, expected_slot, ledger->slots, sizeof(*expected_slot));
+}
+
 static unsigned long native_capture_map_svc(struct kunit *test)
 {
 	unsigned long address;
@@ -240,11 +282,142 @@ static void pending_capacity_exhaustion_preserves_live_wires(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 }
 
+static void production_capture_seals_explicit_tls_after_state(struct kunit *test)
+{
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger = NULL;
+	const struct orlix_tcti_native_proof_registry_entry *entry = NULL;
+	const void *capture_token =
+		orlix_tcti_branch_control_production_capture_token(2227U);
+	struct orlix_tcti_target_proof_ingestion_summary empty_summary = {};
+	struct orlix_tcti_target_proof_ingestion_summary accepted_summary = {
+		.accepted_records = 1U,
+		.native_passed = 1U,
+	};
+	struct orlix_tcti_target_proof_ingestion_slot empty_slot;
+	struct orlix_tcti_target_proof_ingestion_slot accepted_slot;
+	struct pt_regs regs;
+	struct orlix_tcti_result result;
+	u8 *bytes;
+	const u8 *payload;
+	u64 saved_tls = current->thread.user_tls;
+	u64 semantic_variant_identity;
+	const u64 tls_after = 0x123456789abcdef0ULL;
+	unsigned long address;
+	size_t cursor = 72U;
+	size_t index;
+	bool found = false;
+
+	address = native_capture_map_svc(test);
+	native_capture_seed_regs(&regs, address);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(
+		capture_token, 2227U,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
+	current->thread.user_tls = tls_after;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	if (orlix_tcti_native_capture_take_wire(session, &wire))
+		goto out;
+	if (orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
+		capture_token, &semantic_variant_identity) ||
+	    orlix_tcti_native_proof_registry_resolve_production(capture_token, 2227U,
+		semantic_variant_identity, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+		&entry, NULL) || !entry) {
+		KUNIT_FAIL(test, "could not resolve canonical production capture row");
+		goto out;
+	}
+	memset(&accepted_slot, 0, sizeof(accepted_slot));
+	accepted_slot.identity = wire.identity;
+	accepted_slot.registry_identity =
+		orlix_tcti_native_proof_registry_entry_identity(entry);
+	accepted_slot.source_ordinal = entry->source.source_ordinal;
+	accepted_slot.semantic_variant_identity =
+		entry->source.semantic_variant_identity;
+	accepted_slot.obligation = entry->obligation;
+	accepted_slot.native = true;
+	if (!native_capture_copy_text(accepted_slot.proof_id,
+		sizeof(accepted_slot.proof_id), entry->proof_id) ||
+	    !native_capture_copy_text(accepted_slot.kunit_suite,
+		sizeof(accepted_slot.kunit_suite), entry->kunit_suite) ||
+	    !native_capture_copy_text(accepted_slot.kunit_case,
+		sizeof(accepted_slot.kunit_case), entry->kunit_case)) {
+		KUNIT_FAIL(test, "could not build expected accepted ledger slot");
+		goto out;
+	}
+	bytes = (u8 *)wire.bytes;
+	for (index = 0; index < native_capture_wire_get32(bytes + 52U); index++) {
+		u32 kind = native_capture_wire_get32(bytes + cursor);
+		u32 length = native_capture_wire_get32(bytes + cursor + 12U);
+
+		if (kind == ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SYSTEM_CONTROL) {
+			found = true;
+			payload = bytes + cursor + 16U;
+			KUNIT_EXPECT_EQ(test, 32U, length);
+			KUNIT_EXPECT_EQ(test, 0U, native_capture_wire_get32(bytes + cursor + 16U));
+			KUNIT_EXPECT_EQ(test, 0U, native_capture_wire_get32(bytes + cursor + 20U));
+			KUNIT_EXPECT_EQ(test, regs.pstate,
+				native_capture_wire_get64(payload + 16U));
+			KUNIT_EXPECT_EQ(test, tls_after,
+				native_capture_wire_get64(payload + 24U));
+			/* Size, record identity, and TLS bytes must all fail closed. */
+			bytes[cursor + 12U] = 24U;
+			ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+			if (!ledger)
+				break;
+			memcpy(&empty_slot, ledger->slots, sizeof(empty_slot));
+			KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+				&wire, NULL), 0);
+			KUNIT_EXPECT_FALSE(test, wire.consumed);
+			native_capture_expect_ledger_state(test, ledger, &empty_summary,
+				&empty_slot);
+			bytes[cursor + 12U] = 32U;
+			wire.identity ^= 1U;
+			KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+				&wire, NULL), 0);
+			KUNIT_EXPECT_FALSE(test, wire.consumed);
+			native_capture_expect_ledger_state(test, ledger, &empty_summary,
+				&empty_slot);
+			wire.identity ^= 1U;
+			bytes[cursor + 40U] ^= 0x80U;
+			KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+				&wire, NULL), 0);
+			KUNIT_EXPECT_FALSE(test, wire.consumed);
+			native_capture_expect_ledger_state(test, ledger, &empty_summary,
+				&empty_slot);
+			bytes[cursor + 40U] ^= 0x80U;
+			KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(ledger,
+				&wire, NULL));
+			KUNIT_EXPECT_TRUE(test, wire.consumed);
+			native_capture_expect_ledger_state(test, ledger, &accepted_summary,
+				&accepted_slot);
+			KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+				&wire, NULL), 0);
+			KUNIT_EXPECT_TRUE(test, wire.consumed);
+			native_capture_expect_ledger_state(test, ledger, &accepted_summary,
+				&accepted_slot);
+			orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+			ledger = NULL;
+			break;
+		}
+		cursor += 16U + length;
+	}
+	KUNIT_EXPECT_TRUE(test, found);
+out:
+	if (ledger)
+		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	current->thread.user_tls = saved_tls;
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
 static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(capture_binds_only_its_registered_row),
 	KUNIT_CASE(production_capture_variant_authority_is_exact),
 	KUNIT_CASE(generic_capture_events_cannot_credit_a_claimed_session),
 	KUNIT_CASE(pending_capacity_exhaustion_preserves_live_wires),
+	KUNIT_CASE(production_capture_seals_explicit_tls_after_state),
 	{}
 };
 static struct kunit_suite native_capture_production_test_suite = {
