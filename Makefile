@@ -426,9 +426,12 @@ __orlix-tcti-proof-registry-provenance-write:
 	@$(call orlix_tcti_write_proof_registry_provenance,$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT),$(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT))
 
 orlix-tcti-proof-registry-provenance-regression:
-	@set -eu; regression_root="$$(mktemp -d "$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}/orlix-tcti-proof-registry-provenance.XXXXXX")"; \
-	trap 'rm -rf "$$regression_root"' EXIT; \
-	decode="$$regression_root/decode.c"; partition="$$regression_root/partition.h"; build="$$regression_root/Makefile"; header="$$regression_root/target_proof_registry_provenance.h"; \
+	@set -eu; regression_parent="$$(mktemp -d "$${TMPDIR:-$(ORLIX_BUILD_ROOT)/tmp}/orlix-tcti-proof-registry-provenance.XXXXXX")"; \
+	trap 'rm -rf "$$regression_parent"' EXIT; \
+	cleanup_marker="$$regression_parent/cleanup-marker"; \
+	( set -eu; regression_root="$$regression_parent/fixture"; mkdir "$$regression_root"; \
+	trap 'rm -rf "$$regression_root"; : > "$$cleanup_marker"' EXIT; \
+	decode="$$regression_root/decode.c"; partition="$$regression_root/partition.h"; build="$$regression_root/Makefile"; header="$$regression_root/target_proof_registry_provenance.h"; missing="$$regression_root/missing.c"; missing_log="$$regression_root/missing.log"; malformed_log="$$regression_root/malformed.log"; \
 	printf '%s\n' 'initial decode source' > "$$decode"; printf '%s\n' 'initial partition source' > "$$partition"; printf '%s\n' 'initial KUnit build source' > "$$build"; \
 	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
 	initial_mtime="$$(stat -f %m "$$header")"; sleep 1; \
@@ -439,12 +442,18 @@ orlix-tcti-proof-registry-provenance-regression:
 	$(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; \
 	cmp -s "$$regression_root/initial.h" "$$header" && { echo 'provenance header did not refresh after input mutation' >&2; exit 1; }; \
 	cp "$$header" "$$regression_root/valid.h"; \
-	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$regression_root/missing.c" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'missing provenance input unexpectedly succeeded' >&2; exit 1; fi; \
+	test -d "$$regression_root" && test ! -e "$$missing" || { echo 'missing provenance fixture was not absent in a live temporary directory' >&2; exit 1; }; \
+	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$missing" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build" > "$$missing_log" 2>&1; then echo 'missing provenance input unexpectedly succeeded' >&2; exit 1; fi; \
+	test -d "$$regression_root" && test ! -e "$$missing" || { echo 'missing provenance fixture directory was removed before failure handling' >&2; exit 1; }; \
+	grep -F -- "$$missing" "$$missing_log" >/dev/null && grep -F 'No such file or directory' "$$missing_log" >/dev/null || { echo 'missing provenance input did not fail for the absent fixture' >&2; exit 1; }; \
 	cmp -s "$$regression_root/valid.h" "$$header" || { echo 'missing provenance input corrupted the valid header' >&2; exit 1; }; \
 	printf '%s\n' '#!/bin/sh' 'printf "%s\\n" "not-a-sha256  -"' > "$$regression_root/malformed-shasum"; chmod +x "$$regression_root/malformed-shasum"; \
-	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_SHASUM="$$regression_root/malformed-shasum" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build"; then echo 'malformed provenance hash unexpectedly succeeded' >&2; exit 1; fi; \
+	if $(MAKE) --no-print-directory __orlix-tcti-proof-registry-provenance-write ORLIX_TCTI_SHASUM="$$regression_root/malformed-shasum" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_OUTPUT="$$header" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_DECODE_INPUT="$$decode" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_PARTITION_INPUT="$$partition" ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_BUILD_INPUT="$$build" > "$$malformed_log" 2>&1; then echo 'malformed provenance hash unexpectedly succeeded' >&2; exit 1; fi; \
+	grep -F '__orlix-tcti-proof-registry-provenance-write' "$$malformed_log" >/dev/null && grep -F 'Error 1' "$$malformed_log" >/dev/null || { echo 'malformed provenance hash did not fail in the provenance writer' >&2; exit 1; }; \
 	cmp -s "$$regression_root/valid.h" "$$header" || { echo 'malformed provenance hash corrupted the valid header' >&2; exit 1; }; \
-	if find "$$regression_root" -name 'target_proof_registry_provenance.h.tmp.*' -exec false \;; then :; else echo 'provenance temporary files were retained' >&2; exit 1; fi
+	if find "$$regression_root" -name 'target_proof_registry_provenance.h.tmp.*' -exec false \;; then :; else echo 'provenance temporary files were retained' >&2; exit 1; fi ); \
+	test -f "$$cleanup_marker" && test ! -e "$$regression_parent/fixture" || { echo 'provenance fixture cleanup did not run after assertions' >&2; exit 1; }; \
+	printf '%s\n' 'OrlixTCTI proof registry provenance regression: passed'
 
 __orlix-tcti-isa-host-provenance-ready: orlix-tcti-proof-registry-provenance-regression
 	@$(MAKE) --no-print-directory orlix-tcti-semantic-provenance-tests
