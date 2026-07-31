@@ -172,6 +172,25 @@ static const struct source_leaf_official_semantics_not_specified
 #undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
 #undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
 
+struct source_leaf_target_classification {
+	const char *leaf;
+	const char *classification;
+	const char *relation;
+	const char *canonical;
+	const char *evidence;
+	const char *proof;
+};
+
+#define ORLIX_TCTI_A64_TARGET_CLASSIFICATION(leaf, classification, relation, \
+					      canonical, evidence, proof) \
+	{ #leaf, #classification, #relation, canonical, \
+	  evidence, proof },
+static const struct source_leaf_target_classification
+	source_leaf_target_classifications[] = {
+#include "../isa/target_classification.def"
+};
+#undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
+
 static void orlix_tcti_source_leaf_tenter_has_official_unspecified_semantics_provenance(
 	struct kunit *test)
 {
@@ -196,6 +215,29 @@ static void orlix_tcti_source_leaf_tenter_has_official_unspecified_semantics_pro
 	KUNIT_EXPECT_EQ(test, 115113790ULL, row->source_offset);
 	KUNIT_EXPECT_EQ(test, 16ULL, row->source_length);
 	KUNIT_EXPECT_STREQ(test, expected_digest, row->sha256);
+}
+
+static void orlix_tcti_source_leaf_tenter_remains_unclassified(
+	struct kunit *test)
+{
+	const struct source_leaf_target_classification *row = NULL;
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(source_leaf_target_classifications);
+	     index++)
+		if (!strcmp(source_leaf_target_classifications[index].leaf,
+			    "TENTER_te_exception")) {
+			row = &source_leaf_target_classifications[index];
+			break;
+		}
+
+	KUNIT_ASSERT_NOT_NULL(test, row);
+	KUNIT_EXPECT_STREQ(test, "UNCLASSIFIED", row->classification);
+	KUNIT_EXPECT_STREQ(test, "ORLIX_TCTI_A64_TARGET_RELATION_NONE",
+			   row->relation);
+	KUNIT_EXPECT_STREQ(test, "", row->canonical);
+	KUNIT_EXPECT_STREQ(test, "", row->evidence);
+	KUNIT_EXPECT_STREQ(test, "", row->proof);
 }
 
 static void orlix_tcti_source_leaf_base_exceptions_have_exact_semantics(
@@ -383,6 +425,7 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_implemented_production_observations),
 	KUNIT_CASE(orlix_tcti_source_leaf_base_exceptions_have_exact_semantics),
 	KUNIT_CASE(orlix_tcti_source_leaf_tenter_has_official_unspecified_semantics_provenance),
+	KUNIT_CASE(orlix_tcti_source_leaf_tenter_remains_unclassified),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_match_pinned_tuples),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_are_structured_el0_exits),
 	{}
