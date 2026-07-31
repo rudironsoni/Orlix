@@ -27,7 +27,7 @@ if doing_work_pages(root) and not plan_context_loaded(root, state) and tool_requ
     block(f"Doing epic, story, and task context must be read before mutation: {required}.")
 
 if is_git_commit_or_push(payload):
-    if not knowledge_updates_current(state):
+    if not knowledge_updates_current(root, state):
         block("Knowledge changes require docs/log.md and regenerated docs/index.md before git commit or push.")
     for message in oversized_goal_messages(root):
         block(message)

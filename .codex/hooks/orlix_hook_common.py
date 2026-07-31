@@ -28,6 +28,15 @@ OCI_RUNTIME_CLAIM_RE = re.compile(r"\bOCI(?: Runtime Spec)? (?:support|compatibl
 OCI_LIFECYCLE_RE = re.compile(r"\bcreate\b.*\bstart\b.*\bstate\b.*\bkill\b.*\bdelete\b", re.IGNORECASE | re.DOTALL)
 IMAGE_ONLY_OCI_RE = re.compile(r"\b(?:image|layout|rootfs) import\b", re.IGNORECASE)
 CLAIM_RE = re.compile(r"\b(?:complete|completed|done|fixed|green|passes|passing|runtime-ready|package-ready)\b", re.IGNORECASE)
+KNOWLEDGE_PATHS = (
+    "AGENTS.md",
+    "docs/objects",
+    "docs/concepts",
+    "docs/sources",
+    "docs/ontology.md",
+    "docs/README.md",
+    "docs/AGENTS.md",
+)
 
 
 def read_stdin_text() -> str:
@@ -178,9 +187,30 @@ def plan_context_post_update(payload) -> None:
     _save_state(root, state)
 
 
-def knowledge_updates_current(state: dict) -> bool:
+def knowledge_paths_dirty(root: Path) -> bool | None:
+    result = subprocess.run(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", *KNOWLEDGE_PATHS],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return bool(result.stdout)
+
+
+def knowledge_updates_current(root: Path, state: dict) -> bool:
+    dirty = knowledge_paths_dirty(root)
+    if dirty is None:
+        return False
+    if not dirty:
+        return True
     mutation = float(state.get("knowledge_mutation_time", 0.0) or 0.0)
-    return not mutation or (float(state.get("log_update_time", 0.0) or 0.0) >= mutation and float(state.get("index_update_time", 0.0) or 0.0) >= mutation)
+    return bool(mutation) and (
+        float(state.get("log_update_time", 0.0) or 0.0) >= mutation
+        and float(state.get("index_update_time", 0.0) or 0.0) >= mutation
+    )
 
 
 def macos_runtime_wording(text: str) -> bool:
