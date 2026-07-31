@@ -636,7 +636,7 @@ production_capture_family = { \
 #define KSELFTEST_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile"
 #define KSELFTEST_BUILD_SOURCE_SHA256 \
-	"4383acf5e999267d59c0bf3035eb024e0e43180da9597ea8c15ee14d45a802fd"
+	"fc07605b3988ee31d01a2c01ff8d1324266d3b7ece8a3c44055eccf7c0c5ce72"
 #define KSELFTEST_PROCESS_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/process_lifecycle_probe.c"
 #define KSELFTEST_PROCESS_SOURCE_SHA256 \
@@ -665,6 +665,18 @@ production_capture_family = { \
 	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_system_probe.c"
 #define KSELFTEST_SYSTEM_SOURCE_SHA256 \
 	"9bd80e30688b50056fd9400270ba068733f97115efb589c47c8f6671fa9a9693"
+#define KSELFTEST_EXCEPTION_INTERFACE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_exception_interface_probe.c"
+#define KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256 \
+	"a40d475d27be1bef1cdd0f2aea646a692780ef071e54390034de65467fe343b9"
+
+static const struct orlix_tcti_target_kselftest_provenance
+	exception_interface_kselftest = {
+		KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+		KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+		KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		"orlix_tcti_exception_interface_probe", "main",
+	};
 
 /* Reviewed Kbuild inputs. The digest makes source/index drift fail closed. */
 static const struct kunit_source_provenance kunit_sources[] = {
@@ -702,7 +714,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "abd3a2d9c299a318d6de8fd3b62797998685625ece8e785dc2bf7a9b5ba5e24a",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
-	  "2cfebb266253ef9be5aa73dbd3959be285a754e3ece63812497ecdfc5a90dfea",
+	  "53ed7d7447f480c2e425477ae0b8ea3297b22cb488be88727d600263f55ca136",
 	  "orlix_tcti_source_leaf_classification_test.o",
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
@@ -3368,8 +3380,7 @@ static bool build_source_leaf_rejection_registry(void)
 				.kunit_source = SOURCE_LEAF_CLASSIFICATION_SOURCE,
 				.kunit_suite = SOURCE_LEAF_CLASSIFICATION_SUITE,
 			.kunit_cases = operation->classification == 2 ?
-				source_leaf_rejection_cases :
-				source_leaf_undefined_cases,
+				source_leaf_rejection_cases : source_leaf_undefined_cases,
 			.kunit_case_count = operation->classification == 2 ?
 				ARRAY_COUNT(source_leaf_rejection_cases) :
 				ARRAY_COUNT(source_leaf_undefined_cases),
@@ -3493,6 +3504,14 @@ static bool build_production_capture_family_registry(void)
 	     index++) {
 		const struct production_capture_family_registry_operation *operation =
 			&production_capture_family_registry_operations[index];
+		bool exception_linux_interface =
+			!strcmp(operation->operation_id, "SVC") ||
+			!strcmp(operation->operation_id, "BRK") ||
+			!strcmp(operation->operation_id, "HLT");
+		orlix_tcti_proof_u32 obligations =
+			PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS |
+			(exception_linux_interface ?
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE : 0U);
 
 		if (!operation->binding_count)
 			return false;
@@ -3502,9 +3521,9 @@ static bool build_production_capture_family_registry(void)
 				.operation_id = operation->operation_id,
 				.classification_mask =
 					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
-					.obligations =
-						PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS,
-				.linux_interface =
+				.obligations = obligations,
+				.linux_interface = exception_linux_interface ?
+					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 					.kunit_source = production_capture_family.source,
 					.kunit_suite = production_capture_family.suite,
@@ -3514,9 +3533,9 @@ static bool build_production_capture_family_registry(void)
 					.bindings = &production_capture_family_registry_bindings[
 					operation->binding_offset],
 				.binding_count = operation->binding_count,
-				.kselftest = NULL,
-					.unproved_obligations =
-						PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS,
+				.kselftest = exception_linux_interface ?
+					&exception_interface_kselftest : NULL,
+				.unproved_obligations = obligations,
 			};
 	}
 	production_capture_family_registry_ready = true;
@@ -4148,6 +4167,10 @@ int orlix_tcti_target_kselftest_provenance_validate(
 		{ KSELFTEST_SYSTEM_SOURCE, KSELFTEST_SYSTEM_SOURCE_SHA256,
 		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
 		  "orlix_tcti_system_probe", "main" },
+		{ KSELFTEST_EXCEPTION_INTERFACE_SOURCE,
+		  KSELFTEST_EXCEPTION_INTERFACE_SOURCE_SHA256,
+		  KSELFTEST_BUILD_SOURCE, KSELFTEST_BUILD_SOURCE_SHA256,
+		  "orlix_tcti_exception_interface_probe", "main" },
 	};
 #ifndef __KERNEL__
 	static bool checked[ARRAY_COUNT(allowed)];

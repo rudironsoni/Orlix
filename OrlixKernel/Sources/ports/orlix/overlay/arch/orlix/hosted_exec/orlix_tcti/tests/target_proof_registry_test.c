@@ -404,7 +404,7 @@ static int typed_kselftest_provenance_is_source_and_build_bound(void)
 		"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/orlix_tcti_lse_atomic_probe.c",
 		"dfe85ec0e2761dca4e15a57a0900e89ae82232351bf2f9e5deef1573f8f9bb3f",
 		"OrlixKernel/Sources/ports/orlix/overlay/tools/testing/selftests/orlix/Makefile",
-		"4383acf5e999267d59c0bf3035eb024e0e43180da9597ea8c15ee14d45a802fd",
+		"fc07605b3988ee31d01a2c01ff8d1324266d3b7ece8a3c44055eccf7c0c5ce72",
 		"orlix_tcti_lse_atomic_probe", "main",
 	};
 
@@ -851,10 +851,18 @@ static int branch_control_registry_binds_exact_source_rows(void)
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC));
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+			(!strcmp(entry->id, "kunit:branch-control-svc") ||
+			 !strcmp(entry->id, "kunit:branch-control-brk") ||
+			 !strcmp(entry->id, "kunit:branch-control-hlt") ?
+			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE : 0U)));
 		EXPECT(entry->unproved_obligations == entry->obligations);
 		EXPECT(entry->linux_interface ==
-		       ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE);
+		       (!strcmp(entry->id, "kunit:branch-control-svc") ||
+			!strcmp(entry->id, "kunit:branch-control-brk") ||
+			!strcmp(entry->id, "kunit:branch-control-hlt") ?
+			ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
+			ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE));
 		entry_count++;
 		binding_count += entry->binding_count;
 		for (binding = 0; binding < entry->binding_count; binding++) {

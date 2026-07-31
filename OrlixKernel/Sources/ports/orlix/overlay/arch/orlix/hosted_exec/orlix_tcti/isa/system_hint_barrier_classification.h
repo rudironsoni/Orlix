@@ -48,10 +48,9 @@ struct orlix_tcti_system_hint_barrier_classification_record {
  * except the explicit target classification and the owning proof obligations.
  */
 #define ORLIX_TCTI_SYSTEM_HINT_BARRIER_UNCLASSIFIED_RECORDS(_record) \
-	_record(2235U, "TENTER_te_exception", "TENTER", "FEAT_TME", \
-		ORLIX_TCTI_SYSTEM_HINT_BARRIER_FEATURE_CONDITIONED_EL0, \
-		ORLIX_TCTI_SYSTEM_HINT_BARRIER_RELATION_NONE, "", "TENTER", \
-		"orlix-tcti-transactional-memory", "kunit:orlix-tcti-tme-source-bound") \
+	/* TENTER is excluded: the pinned source identifies FEAT_TEV but supplies */ \
+	/* no executable semantics or EL contract.  target_classification.def */ \
+	/* retains ordinal 2235 as official-semantics-not-specified. */ \
 	_record(2236U, "WFET_only_systeminstrswithreg", "WFET", "FEAT_WFxT", \
 		ORLIX_TCTI_SYSTEM_HINT_BARRIER_FEATURE_CONDITIONED_EL0, \
 		ORLIX_TCTI_SYSTEM_HINT_BARRIER_RELATION_NONE, "", "WFET", \

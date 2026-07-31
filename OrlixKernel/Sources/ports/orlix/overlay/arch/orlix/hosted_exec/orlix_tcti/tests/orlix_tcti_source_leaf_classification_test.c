@@ -18,6 +18,7 @@
 #include "target_native_proof_contract_private.h"
 #include "orlix_tcti_source_leaf_rejection_catalog.h"
 #include "target_native_proof_registry_private.h"
+#include "target_completion_audit.h"
 
 #define SOURCE_LEAF_SVC 0xd4000001U
 
@@ -142,6 +143,138 @@ unmap:
 
 #include "orlix_tcti_system_accessor_partition_test.h"
 
+static bool orlix_tcti_source_leaf_is_base_exception(
+	const struct orlix_tcti_source_leaf_rejection *leaf)
+{
+	return leaf->ordinal == 2166U ||
+	       (leaf->ordinal >= 2228U && leaf->ordinal <= 2234U);
+}
+
+struct source_leaf_official_semantics_not_specified {
+	u32 ordinal;
+	const char *leaf;
+	const char *locator;
+	u64 source_offset;
+	u64 source_length;
+	const char *sha256;
+};
+
+#define ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(...)
+#define ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW(...)
+#define ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW(ordinal, leaf, \
+		locator, offset, length, digest) \
+	{ ordinal, leaf, locator, offset, length, digest },
+static const struct source_leaf_official_semantics_not_specified
+	source_leaf_official_semantics_not_specified_rows[] = {
+#include "../isa/target_asl_availability.def"
+};
+#undef ORLIX_TCTI_A64_OFFICIAL_SEMANTICS_NOT_SPECIFIED_ROW
+#undef ORLIX_TCTI_A64_DDI0602_PROVENANCE_ROW
+#undef ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE
+
+static void orlix_tcti_source_leaf_tenter_has_official_unspecified_semantics_provenance(
+	struct kunit *test)
+{
+	static const char expected_digest[] =
+		"28fb16d9885379aa6e05267c659d8b7dab31e819051d85e1dbde8347bc2fdce8";
+	const struct source_leaf_official_semantics_not_specified *row = NULL;
+	size_t index;
+
+	for (index = 0;
+	     index < ARRAY_SIZE(source_leaf_official_semantics_not_specified_rows);
+	     index++)
+		if (source_leaf_official_semantics_not_specified_rows[index].ordinal ==
+		    2235U) {
+			row = &source_leaf_official_semantics_not_specified_rows[index];
+			break;
+		}
+
+	KUNIT_ASSERT_NOT_NULL(test, row);
+	KUNIT_EXPECT_STREQ(test, "TENTER_te_exception", row->leaf);
+	KUNIT_EXPECT_STREQ(test, "Instructions.json#operations/TENTER/operation",
+			   row->locator);
+	KUNIT_EXPECT_EQ(test, 115113790ULL, row->source_offset);
+	KUNIT_EXPECT_EQ(test, 16ULL, row->source_length);
+	KUNIT_EXPECT_STREQ(test, expected_digest, row->sha256);
+}
+
+static void orlix_tcti_source_leaf_base_exceptions_have_exact_semantics(
+	struct kunit *test)
+{
+	static const struct {
+		u32 ordinal;
+		const char *name;
+		const char *operation;
+		u32 mask;
+		u32 pattern;
+		enum orlix_tcti_decode_class decode_class;
+		enum orlix_tcti_exit_reason exit_reason;
+		long status;
+	} leaves[] = {
+		{ 2166U, "UDF_only_perm_undef", "UDF", 0xffff0000U, 0x00000000U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2227U, "SVC_EX_exception", "SVC", 0xffe0001fU, 0xd4000001U,
+		  ORLIX_TCTI_DECODE_SVC, ORLIX_TCTI_EXIT_SYSCALL, 0L },
+		{ 2228U, "HVC_EX_exception", "HVC", 0xffe0001fU, 0xd4000002U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2229U, "SMC_EX_exception", "SMC", 0xffe0001fU, 0xd4000003U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2230U, "BRK_EX_exception", "BRK", 0xffe0001fU, 0xd4200000U,
+		  ORLIX_TCTI_DECODE_BRK, ORLIX_TCTI_EXIT_BREAKPOINT, 0L },
+		{ 2231U, "HLT_EX_exception", "HLT", 0xffe0001fU, 0xd4400000U,
+		  ORLIX_TCTI_DECODE_HLT,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2232U, "DCPS1_DC_exception", "DCPS1", 0xffe0001fU, 0xd4a00001U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2233U, "DCPS2_DC_exception", "DCPS2", 0xffe0001fU, 0xd4a00002U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+		{ 2234U, "DCPS3_DC_exception", "DCPS3", 0xffe0001fU, 0xd4a00003U,
+		  ORLIX_TCTI_DECODE_UNDEFINED,
+		  ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION, 0L },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(leaves); index++) {
+		const struct orlix_tcti_source_leaf_manifest_row *source =
+			orlix_tcti_source_leaf_manifest_row(leaves[index].ordinal);
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs regs = { };
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+		unsigned long mapped;
+
+		KUNIT_ASSERT_NOT_NULL(test, source);
+		KUNIT_EXPECT_STREQ(test, leaves[index].name, source->name);
+		KUNIT_EXPECT_STREQ(test, leaves[index].operation, source->operation);
+		KUNIT_EXPECT_EQ(test, leaves[index].mask, source->mask);
+		KUNIT_EXPECT_EQ(test, leaves[index].pattern, source->pattern);
+		decoded = orlix_tcti_decode_aarch64(source->pattern);
+		KUNIT_EXPECT_EQ(test, leaves[index].decode_class,
+				decoded.decode_class);
+		mapped = source_leaf_map(test, source->pattern);
+		if (!mapped)
+			return;
+		regs.pc = mapped;
+		regs.sp = STACK_TOP - 16;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x123456789abcdef0ULL;
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, leaves[index].exit_reason, result.reason);
+		KUNIT_EXPECT_EQ(test, leaves[index].status, result.status);
+		KUNIT_EXPECT_EQ(test, source->pattern, result.instruction);
+		KUNIT_EXPECT_EQ(test, before.pc, result.pc);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
+	}
+}
+
 static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *test)
 {
 	size_t index;
@@ -176,8 +309,11 @@ static void orlix_tcti_source_leaf_rejections_match_pinned_tuples(struct kunit *
 					    "%s source ordinal %u variable fields %#x",
 					    leaf->name, leaf->ordinal,
 					    variable_fields);
-			KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-					    decoded.decode_class,
+			KUNIT_ASSERT_EQ_MSG(test,
+					orlix_tcti_source_leaf_is_base_exception(leaf) ?
+						ORLIX_TCTI_DECODE_UNDEFINED :
+						ORLIX_TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class,
 					    "%s (%s) source ordinal %u accepted encoding %#x",
 					    leaf->name, leaf->operation,
 					    leaf->ordinal, instruction);
@@ -207,6 +343,8 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 
 		KUNIT_ASSERT_NOT_NULL(test, leaf);
 		mapped = source_leaf_map(test, leaf->pattern);
+		if (!mapped)
+			return;
 		regs.pc = mapped;
 		regs.sp = STACK_TOP - 16;
 		regs.pstate = PSR_MODE_EL0t;
@@ -215,10 +353,15 @@ static void orlix_tcti_source_leaf_rejections_are_structured_el0_exits(
 		before = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
-				    result.reason, "%s source ordinal %u",
-				    leaf->name, leaf->ordinal);
-		KUNIT_EXPECT_EQ_MSG(test, -EOPNOTSUPP, result.status,
+		KUNIT_EXPECT_EQ_MSG(test,
+					orlix_tcti_source_leaf_is_base_exception(leaf) ?
+						ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION :
+						ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+					result.reason, "%s source ordinal %u",
+					leaf->name, leaf->ordinal);
+		KUNIT_EXPECT_EQ_MSG(test,
+					orlix_tcti_source_leaf_is_base_exception(leaf) ? 0L :
+						-EOPNOTSUPP, result.status,
 				    "%s source ordinal %u", leaf->name,
 				    leaf->ordinal);
 		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, result.instruction,
@@ -238,6 +381,8 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_matches_decoder_contract),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_rejections_are_structured_el0_exits),
 	KUNIT_CASE(orlix_tcti_system_accessor_partition_implemented_production_observations),
+	KUNIT_CASE(orlix_tcti_source_leaf_base_exceptions_have_exact_semantics),
+	KUNIT_CASE(orlix_tcti_source_leaf_tenter_has_official_unspecified_semantics_provenance),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_match_pinned_tuples),
 	KUNIT_CASE(orlix_tcti_source_leaf_rejections_are_structured_el0_exits),
 	{}
