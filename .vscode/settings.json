@@ -24,6 +24,7 @@
     "sweetpad.buildServer.provider": "sweetpad",
     "chat.tools.terminal.autoApprove": {
         "xcodebuild": true,
-        "xcode-build-server": true
+        "xcode-build-server": true,
+        "xcode-select": true
     }
 }
