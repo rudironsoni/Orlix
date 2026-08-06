@@ -23,6 +23,7 @@
     "sweetpad.build.xcodeWorkspacePath": "Orlix.xcodeproj/project.xcworkspace",
     "sweetpad.buildServer.provider": "sweetpad",
     "chat.tools.terminal.autoApprove": {
-        "xcodebuild": true
+        "xcodebuild": true,
+        "xcode-build-server": true
     }
 }
