@@ -21,10 +21,11 @@
         "editor.formatOnSave": true
     },
     "sweetpad.build.xcodeWorkspacePath": "Orlix.xcodeproj/project.xcworkspace",
-    "sweetpad.buildServer.provider": "sweetpad",
+    "sweetpad.buildServer.provider": "xcode-build-server",
     "chat.tools.terminal.autoApprove": {
         "xcodebuild": true,
         "xcode-build-server": true,
-        "xcode-select": true
+        "xcode-select": true,
+        "xcrun": true
     }
 }
