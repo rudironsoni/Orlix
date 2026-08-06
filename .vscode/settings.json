@@ -19,5 +19,6 @@
     "[swift]": {
         "editor.defaultFormatter": "sweetpad.sweetpad",
         "editor.formatOnSave": true
-    }
+    },
+    "sweetpad.build.xcodeWorkspacePath": "Orlix.xcodeproj/project.xcworkspace"
 }
