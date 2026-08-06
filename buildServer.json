@@ -1,0 +1,17 @@
+{
+  "name": "sweetpad",
+  "version": "0.2.9",
+  "bspVersion": "2.2.0",
+  "languages": [
+    "swift",
+    "objective-c",
+    "objective-cpp",
+    "c",
+    "cpp"
+  ],
+  "argv": [
+    "/Users/rudimar.ronsoni@feverup.com/.vscode/extensions/sweetpad.sweetpad-0.2.9/out/bsp-server.js",
+    "--config",
+    "/Users/rudimar.ronsoni@feverup.com/.local/state/sweetpad/projects/420ca6d354af/bsp.json"
+  ]
+}
