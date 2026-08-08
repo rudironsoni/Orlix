@@ -17,9 +17,56 @@
 } while (0)
 
 #define CONCURRENT_FIRST_USE_THREADS 16U
-#define PROOF_REGISTRY_PROJECTION_SOURCE \
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/" \
-	"orlix_tcti/isa/proof_registry_projection.def"
+
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id) \
+	{ ordinal, proof_id },
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE \
+	"../tests/proof_registry_projection_synthetic_source_bound.def"
+static const struct orlix_tcti_target_proof_registry_projection_binding
+synthetic_source_bound_projection[] = {
+#include "../isa/proof_registry_projection.def"
+};
+#ifdef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
+#error "projection adapter must preserve an initially undefined source-bound macro"
+#endif
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING
+
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id) \
+	{ ordinal, proof_id },
+#define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
+	{ (ordinal) + 1000U, "outer-different:" proof_id },
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE \
+	"../tests/proof_registry_projection_synthetic_source_bound.def"
+static const struct orlix_tcti_target_proof_registry_projection_binding
+different_enclosing_source_bound_projection[] = {
+#include "../isa/proof_registry_projection.def"
+};
+static const struct orlix_tcti_target_proof_registry_projection_binding
+different_enclosing_source_bound_macro_after_projection[] = {
+	ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(17U, "kunit:outer-different")
+};
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE
+#undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING
+
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id) \
+	{ ordinal, proof_id },
+#define ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(ordinal, proof_id) \
+	ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id)
+#define ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE \
+	"../tests/proof_registry_projection_synthetic_source_bound.def"
+static const struct orlix_tcti_target_proof_registry_projection_binding
+identical_enclosing_source_bound_projection[] = {
+#include "../isa/proof_registry_projection.def"
+};
+static const struct orlix_tcti_target_proof_registry_projection_binding
+identical_enclosing_source_bound_macro_after_projection[] = {
+	ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(19U, "kunit:outer-identical")
+};
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_PROJECTION_SOURCE
+#undef ORLIX_TCTI_A64_SOURCE_BOUND_PROOF
+#undef ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING
 
 struct concurrent_first_use_result {
 	const struct orlix_tcti_target_proof_registry_entry *entries;
@@ -1562,6 +1609,24 @@ static int production_capture_bindings_are_generic_and_fail_closed(void)
 	return 0;
 }
 
+static int production_capture_family_builder_is_typed_and_fail_closed(void)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < count; index++)
+		if (entries[index].kunit_suite && !strcmp(entries[index].kunit_suite,
+			    "orlix-tcti-branch-control-source-bound")) {
+			EXPECT(!strncmp(entries[index].id,
+					"kunit:branch-control-", 21));
+			EXPECT(strcmp(entries[index].operation_id, "AND_log_shift"));
+		}
+	return 0;
+}
+
 static int registry_projection_is_lossless_and_fail_closed(void)
 {
 	const struct orlix_tcti_target_proof_registry_entry *entries;
@@ -1574,7 +1639,14 @@ static int registry_projection_is_lossless_and_fail_closed(void)
 	entries = orlix_tcti_target_proof_registry_entries(&entry_count);
 	projection = orlix_tcti_target_proof_registry_projection_bindings(
 		&projection_count);
-	EXPECT(entries != NULL);
+	if (!entries) {
+		fprintf(stderr, "%s:%d: registry initialization error: %u\n",
+			__FILE__, __LINE__, (unsigned int)
+			orlix_tcti_target_proof_registry_initialization_error());
+		return -1;
+	}
+	EXPECT(orlix_tcti_target_proof_registry_initialization_error() ==
+	       ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK);
 	EXPECT(projection != NULL);
 	EXPECT(projection_count > 1U);
 	EXPECT(projection_count <= sizeof(copied) / sizeof(copied[0]));
@@ -1607,48 +1679,45 @@ static int registry_projection_is_lossless_and_fail_closed(void)
 	return 0;
 }
 
-static int registry_projection_artifact_is_exact_and_required(void)
+static int registry_projection_structurally_includes_source_bound_rows(void)
 {
-	const struct orlix_tcti_target_proof_registry_projection_binding *projection;
-	bool seen[1024] = { 0 };
-	char line[256];
-	FILE *file;
-	size_t projection_count;
-	size_t artifact_count = 0;
-
-	projection = orlix_tcti_target_proof_registry_projection_bindings(
-		&projection_count);
-	EXPECT(projection != NULL);
-	EXPECT(projection_count <= sizeof(seen) / sizeof(seen[0]));
-	file = fopen(PROOF_REGISTRY_PROJECTION_SOURCE, "rb");
-	EXPECT(file != NULL);
-	while (fgets(line, sizeof(line), file)) {
-		unsigned int ordinal;
-		char proof_id[128];
-		int consumed;
-		size_t index;
-
-		if (!line[0] || line[0] == '\n' || !strncmp(line, "/*", 2) ||
-		    !strncmp(line, " *", 2) || !strncmp(line, " */", 3))
-			continue;
-		EXPECT(sscanf(line,
-			"ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(%uU, \"%127[^\"]\")%n",
-			&ordinal, proof_id, &consumed) == 2);
-		EXPECT(line[consumed] == '\n' || line[consumed] == '\0');
-		for (index = 0; index < projection_count; index++)
-			if (projection[index].source_ordinal == ordinal &&
-			    !strcmp(projection[index].proof_id, proof_id))
-				break;
-		EXPECT(index < projection_count);
-		EXPECT(!seen[index]);
-		seen[index] = true;
-		artifact_count++;
-	}
-	EXPECT(!ferror(file));
-	EXPECT(!fclose(file));
-	EXPECT(artifact_count == projection_count);
-	for (size_t index = 0; index < projection_count; index++)
-		EXPECT(seen[index]);
+	EXPECT(sizeof(synthetic_source_bound_projection) /
+	       sizeof(synthetic_source_bound_projection[0]) == 3U);
+	EXPECT(synthetic_source_bound_projection[0].source_ordinal == 7U);
+	EXPECT(!strcmp(synthetic_source_bound_projection[0].proof_id,
+		"kunit:synthetic-first"));
+	EXPECT(synthetic_source_bound_projection[1].source_ordinal == 11U);
+	EXPECT(!strcmp(synthetic_source_bound_projection[1].proof_id,
+		"kunit:synthetic-second"));
+	EXPECT(synthetic_source_bound_projection[2].source_ordinal == 13U);
+	EXPECT(!strcmp(synthetic_source_bound_projection[2].proof_id,
+		"kunit:synthetic-third"));
+	EXPECT(sizeof(different_enclosing_source_bound_projection) /
+	       sizeof(different_enclosing_source_bound_projection[0]) == 3U);
+	EXPECT(different_enclosing_source_bound_projection[0].source_ordinal ==
+		7U);
+	EXPECT(!strcmp(different_enclosing_source_bound_projection[0].proof_id,
+		"kunit:synthetic-first"));
+	EXPECT(sizeof(different_enclosing_source_bound_macro_after_projection) /
+	       sizeof(different_enclosing_source_bound_macro_after_projection[0]) ==
+		1U);
+	EXPECT(different_enclosing_source_bound_macro_after_projection[0]
+		.source_ordinal == 1017U);
+	EXPECT(!strcmp(different_enclosing_source_bound_macro_after_projection[0]
+		.proof_id, "outer-different:kunit:outer-different"));
+	EXPECT(sizeof(identical_enclosing_source_bound_projection) /
+	       sizeof(identical_enclosing_source_bound_projection[0]) == 3U);
+	EXPECT(identical_enclosing_source_bound_projection[2].source_ordinal ==
+		13U);
+	EXPECT(!strcmp(identical_enclosing_source_bound_projection[2].proof_id,
+		"kunit:synthetic-third"));
+	EXPECT(sizeof(identical_enclosing_source_bound_macro_after_projection) /
+	       sizeof(identical_enclosing_source_bound_macro_after_projection[0]) ==
+		1U);
+	EXPECT(identical_enclosing_source_bound_macro_after_projection[0]
+		.source_ordinal == 19U);
+	EXPECT(!strcmp(identical_enclosing_source_bound_macro_after_projection[0]
+		.proof_id, "kunit:outer-identical"));
 	return 0;
 }
 
@@ -1658,12 +1727,14 @@ int main(void)
 		const char *name;
 		int (*run)(void);
 	} tests[] = {
-		{ "registry_projection_artifact_is_exact_and_required",
-		  registry_projection_artifact_is_exact_and_required },
+		{ "registry_projection_structurally_includes_source_bound_rows",
+		  registry_projection_structurally_includes_source_bound_rows },
 		{ "registry_projection_is_lossless_and_fail_closed",
 		  registry_projection_is_lossless_and_fail_closed },
 		{ "production_capture_bindings_are_generic_and_fail_closed",
 		  production_capture_bindings_are_generic_and_fail_closed },
+		{ "production_capture_family_builder_is_typed_and_fail_closed",
+		  production_capture_family_builder_is_typed_and_fail_closed },
 		{ "operational_note_mapping_is_exact_and_fail_closed",
 		 operational_note_mapping_is_exact_and_fail_closed },
 		{ "canonical_first_use_is_concurrent_and_immutable",

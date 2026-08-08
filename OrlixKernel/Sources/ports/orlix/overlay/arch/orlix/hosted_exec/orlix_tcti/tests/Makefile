@@ -129,5 +129,7 @@ $(obj)/target_proof_registry_provenance.h: $(src)/orlix_tcti_decode_test.c $(src
 $(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def \
 	$(src)/../isa/proof_registry_projection.def \
 	$(obj)/target_proof_registry_provenance.h
+$(obj)/target_proof_registry_test.o: \
+	$(src)/proof_registry_projection_synthetic_source_bound.def
 
 ccflags-y += -I$(obj)

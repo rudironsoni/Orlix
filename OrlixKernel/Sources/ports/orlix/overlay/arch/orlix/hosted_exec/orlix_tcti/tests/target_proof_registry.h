@@ -348,6 +348,8 @@ enum orlix_tcti_target_proof_registry_error orlix_tcti_target_proof_registry_loo
 	const struct orlix_tcti_target_proof_reference *reference);
 const struct orlix_tcti_target_proof_registry_entry *
 orlix_tcti_target_proof_registry_entries(size_t *count);
+enum orlix_tcti_target_proof_registry_error
+orlix_tcti_target_proof_registry_initialization_error(void);
 const struct orlix_tcti_target_proof_registry_projection_binding *
 orlix_tcti_target_proof_registry_projection_bindings(size_t *count);
 int orlix_tcti_target_kunit_provenance_identity(
