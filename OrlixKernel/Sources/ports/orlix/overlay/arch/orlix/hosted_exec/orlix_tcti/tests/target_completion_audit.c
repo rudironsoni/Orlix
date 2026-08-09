@@ -1043,7 +1043,8 @@ int orlix_tcti_target_completion_validate_system_accessors(
 		implemented = (!strcmp(row->variant_name, "TPIDR_EL0") ||
 			!strcmp(row->variant_name, "NZCV") ||
 			!strcmp(row->variant_name, "FPCR") ||
-			!strcmp(row->variant_name, "FPSR")) &&
+			!strcmp(row->variant_name, "FPSR") ||
+			!strcmp(row->variant_name, "FPMR")) &&
 			(row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_READ ||
 			 row->direction == ORLIX_TCTI_TARGET_COMPLETION_ACCESSOR_DIRECTION_WRITE);
 		implemented = implemented ||

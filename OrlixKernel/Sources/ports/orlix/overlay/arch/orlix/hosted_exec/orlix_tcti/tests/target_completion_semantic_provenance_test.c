@@ -77,8 +77,8 @@ static int validate_system_accessor_mutations(
 	memset(&result, 0, sizeof(result));
 	EXPECT(!orlix_tcti_target_completion_validate_system_accessors(source,
 		source_count, provenance, rows, row_count, &result));
-	EXPECT(result.implemented_system_accessor_rows == 13U);
-	EXPECT(result.rejected_system_accessor_rows == 2001U);
+	EXPECT(result.implemented_system_accessor_rows == 15U);
+	EXPECT(result.rejected_system_accessor_rows == 1999U);
 	EXPECT(result.unobserved_system_accessor_proof_rows == 2014U);
 	mutated = malloc(row_count * sizeof(*mutated));
 	EXPECT(mutated);

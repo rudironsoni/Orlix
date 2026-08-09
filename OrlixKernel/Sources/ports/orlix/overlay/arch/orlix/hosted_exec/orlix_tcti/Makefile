@@ -7,6 +7,7 @@ obj-y += native_capture.o
 obj-y += report.o
 obj-y += switch_debug.o
 obj-y += system_accessor.o
+obj-y += fpmr_state.o
 obj-y += fixed_fp.o
 obj-y += sve_state.o
 obj-y += sve_decode.o

@@ -260,9 +260,9 @@ static void orlix_tcti_system_accessor_partition_binds_source_metadata(
 	KUNIT_EXPECT_EQ(test, 2014U, metadata->semantic_count);
 	KUNIT_EXPECT_EQ(test, 2001U, metadata->source_access_semantics_count);
 	KUNIT_EXPECT_EQ(test, 13U, metadata->generic_leaf_semantics_count);
-	KUNIT_EXPECT_EQ(test, 13U, metadata->implemented_count);
+	KUNIT_EXPECT_EQ(test, 15U, metadata->implemented_count);
 	KUNIT_EXPECT_EQ(test, 2U, metadata->architectural_rejection_count);
-	KUNIT_EXPECT_EQ(test, 1999U, metadata->unimplemented_rejection_count);
+	KUNIT_EXPECT_EQ(test, 1997U, metadata->unimplemented_rejection_count);
 	KUNIT_EXPECT_EQ(test, 1836U, metadata->concrete_selector_count);
 	KUNIT_EXPECT_EQ(test, 178U, metadata->symbolic_selector_count);
 	KUNIT_EXPECT_EQ(test, 2014U, metadata->proof_not_observed_count);
@@ -476,9 +476,9 @@ static void orlix_tcti_system_accessor_partition_binds_source_metadata(
 			rndrrs++;
 		}
 	}
-	KUNIT_EXPECT_EQ(test, 13U, implemented);
+	KUNIT_EXPECT_EQ(test, 15U, implemented);
 	KUNIT_EXPECT_EQ(test, 2U, architectural);
-	KUNIT_EXPECT_EQ(test, 1999U, unimplemented);
+	KUNIT_EXPECT_EQ(test, 1997U, unimplemented);
 	KUNIT_EXPECT_EQ(test, metadata->source_access_semantics_count,
 			source_semantics);
 	KUNIT_EXPECT_EQ(test, metadata->generic_leaf_semantics_count,
@@ -690,10 +690,10 @@ static void orlix_tcti_system_accessor_partition_rejections_are_structured_el0_e
 		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
-	KUNIT_EXPECT_EQ(test, 2001U, rejected);
+	KUNIT_EXPECT_EQ(test, 1999U, rejected);
 	KUNIT_EXPECT_EQ(test, 2U, architectural);
-	KUNIT_EXPECT_EQ(test, 1999U, unimplemented);
-	KUNIT_EXPECT_EQ(test, 1823U, concrete);
+	KUNIT_EXPECT_EQ(test, 1997U, unimplemented);
+	KUNIT_EXPECT_EQ(test, 1821U, concrete);
 	KUNIT_EXPECT_EQ(test, 178U, symbolic);
 	KUNIT_EXPECT_EQ(test, 468U, non_mrs_msr);
 }
@@ -736,9 +736,9 @@ static u64 orlix_tcti_system_accessor_partition_wire_u64(const u8 *bytes)
 	return value;
 }
 
-static bool orlix_tcti_system_accessor_partition_assert_tls_wire(
+static bool orlix_tcti_system_accessor_partition_assert_control_wire(
 	struct kunit *test, const struct orlix_tcti_native_wire_record *wire,
-	u64 expected_tls)
+	u64 expected_tls, u64 expected_fpmr)
 {
 	const u8 *bytes = wire->bytes;
 	size_t cursor = 72U;
@@ -754,13 +754,18 @@ static bool orlix_tcti_system_accessor_partition_assert_tls_wire(
 			bytes + cursor + 12U);
 
 		if (kind == ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SYSTEM_CONTROL) {
-			KUNIT_EXPECT_EQ(test, 32U, length);
+			KUNIT_EXPECT_EQ(test, 40U, length);
 			KUNIT_EXPECT_EQ(test, expected_tls,
 				orlix_tcti_system_accessor_partition_wire_u64(
 					bytes + cursor + 40U));
-			return length == 32U && expected_tls ==
+			KUNIT_EXPECT_EQ(test, expected_fpmr,
 				orlix_tcti_system_accessor_partition_wire_u64(
-					bytes + cursor + 40U);
+					bytes + cursor + 48U));
+			return length == 40U && expected_tls ==
+				orlix_tcti_system_accessor_partition_wire_u64(
+					bytes + cursor + 40U) && expected_fpmr ==
+				orlix_tcti_system_accessor_partition_wire_u64(
+					bytes + cursor + 48U);
 		}
 		cursor += 16U + length;
 	}
@@ -819,6 +824,13 @@ static bool orlix_tcti_system_accessor_partition_assert_architectural_effect(
 			KUNIT_EXPECT_EQ(test, 0x0800009fULL, regs->regs[0]);
 		return row->direction == 2U ? current->thread.user_fpsr ==
 			(input & 0x0800009fULL) : regs->regs[0] == 0x0800009fULL;
+	} else if (!strcmp(row->variant_name, "FPMR")) {
+		if (row->direction == 2U)
+			KUNIT_EXPECT_EQ(test, input, current->thread.user_fpmr);
+		else
+			KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL, regs->regs[0]);
+		return row->direction == 2U ? current->thread.user_fpmr == input :
+			regs->regs[0] == 0x0123456789abcdefULL;
 	} else
 		KUNIT_FAIL(test, "unexpected implemented SystemAccessor variant %s",
 			row->variant_name);
@@ -852,7 +864,7 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 			symbolic_production++;
 	}
 	KUNIT_EXPECT_EQ(test, 2014U, static_variants);
-	KUNIT_EXPECT_EQ(test, 13U, production_variants);
+	KUNIT_EXPECT_EQ(test, 15U, production_variants);
 	KUNIT_EXPECT_EQ(test, 0U, symbolic_production);
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_system_accessor_partition); index++) {
@@ -867,6 +879,7 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 		unsigned long old_tls;
 		unsigned long old_fpcr;
 		unsigned long old_fpsr;
+		unsigned long old_fpmr;
 		unsigned long mapped = 0;
 		u32 instruction;
 		int capture_status;
@@ -888,6 +901,7 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 		old_tls = current->thread.user_tls;
 		old_fpcr = current->thread.user_fpcr;
 		old_fpsr = current->thread.user_fpsr;
+		old_fpmr = current->thread.user_fpmr;
 		saved_thread_state = true;
 		regs.pc = mapped;
 		regs.sp = STACK_TOP - 16;
@@ -897,6 +911,7 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 		current->thread.user_tls = 0x0123456789abcdefULL;
 		current->thread.user_fpcr = 0x07c09f00ULL;
 		current->thread.user_fpsr = 0x0800009fULL;
+		current->thread.user_fpmr = 0x0123456789abcdefULL;
 		entry = orlix_tcti_system_accessor_partition_capture_entry(row);
 		KUNIT_EXPECT_NOT_NULL_MSG(test, entry, "%s %s", row->source_name,
 			row->variant_name);
@@ -942,10 +957,14 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 				entry->capture_declaration,
 				orlix_tcti_native_proof_registry_entry_identity(entry)))
 			goto cleanup;
-		if (!strcmp(row->variant_name, "TPIDR_EL0"))
-			tls_ok = orlix_tcti_system_accessor_partition_assert_tls_wire(test, &wire,
+		if (!strcmp(row->variant_name, "TPIDR_EL0") ||
+		    !strcmp(row->variant_name, "FPMR"))
+			tls_ok = orlix_tcti_system_accessor_partition_assert_control_wire(test,
+				&wire, !strcmp(row->variant_name, "TPIDR_EL0") &&
 				row->direction == 2U ? 0xf123456789abcdefULL :
-				0x0123456789abcdefULL);
+				0x0123456789abcdefULL,
+				!strcmp(row->variant_name, "FPMR") && row->direction == 2U ?
+				0xf123456789abcdefULL : 0x0123456789abcdefULL);
 		if (!tls_ok)
 			goto cleanup;
 		observed++;
@@ -956,11 +975,12 @@ static void orlix_tcti_system_accessor_partition_implemented_production_observat
 			current->thread.user_tls = old_tls;
 			current->thread.user_fpcr = old_fpcr;
 			current->thread.user_fpsr = old_fpsr;
+			current->thread.user_fpmr = old_fpmr;
 		}
 		if (mapped)
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
-	KUNIT_EXPECT_EQ(test, 13U, observed);
+	KUNIT_EXPECT_EQ(test, 15U, observed);
 }
 
 #endif /* ORLIX_TCTI_SYSTEM_ACCESSOR_PARTITION_TEST_H */

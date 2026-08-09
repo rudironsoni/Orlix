@@ -65,6 +65,8 @@ struct thread_struct {
 		unsigned long user_simd[64];
 		unsigned long user_fpsr;
 	unsigned long user_fpcr;
+	/* FPMR is architectural EL0 state consumed by FP8 instructions. */
+	unsigned long user_fpmr;
 	unsigned long user_simd_valid;
 	struct orlix_tcti_sve_state user_sve;
 	struct orlix_tcti_sme_state user_sme;

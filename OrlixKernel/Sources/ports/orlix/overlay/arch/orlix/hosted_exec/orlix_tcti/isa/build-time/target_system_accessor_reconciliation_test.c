@@ -179,9 +179,9 @@ static int pinned_aarch64_census(const char *path)
 	CHECK(result.census.invalid == 0U);
 	CHECK(result.census.source_access_semantics == 2001U);
 	CHECK(result.census.generic_leaf_semantics == 13U);
-	CHECK(result.census.implemented == 13U);
+	CHECK(result.census.implemented == 15U);
 	CHECK(result.census.architectural_rejection == 2U);
-	CHECK(result.census.unimplemented_rejection == 1999U);
+	CHECK(result.census.unimplemented_rejection == 1997U);
 	CHECK(result.census.concrete_selectors == 1836U);
 	CHECK(result.census.symbolic_selectors == 178U);
 	CHECK(result.census.proof_not_observed == 2014U);
@@ -194,6 +194,8 @@ static int pinned_aarch64_census(const char *path)
 		size_t sysp = 0;
 		size_t rndr = 0;
 		size_t rndrrs = 0;
+		size_t fpmr_read = 0;
+		size_t fpmr_write = 0;
 
 		for (index = 0; index < result.entry_count; index++) {
 			const struct orlix_tcti_system_accessor_reconciliation_entry *entry =
@@ -228,6 +230,22 @@ static int pinned_aarch64_census(const char *path)
 				      ORLIX_TCTI_SYSTEM_ACCESSOR_LEAF_MRS_RS_SYSTEMMOVE);
 				CHECK(entry->concrete_selector == 0x5921U);
 				rndrrs++;
+			} else if (!strcmp(entry->variant_name, "FPMR")) {
+				CHECK(entry->concrete_selector == 0x5a22U);
+				CHECK(entry->implementation ==
+				      ORLIX_TCTI_SYSTEM_ACCESSOR_IMPLEMENTED);
+				if (entry->direction ==
+				    ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_READ) {
+					CHECK(entry->execution_operation ==
+					      ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPMR_READ);
+					fpmr_read++;
+				} else {
+					CHECK(entry->direction ==
+					      ORLIX_TCTI_SYSTEM_ACCESSOR_DIRECTION_WRITE);
+					CHECK(entry->execution_operation ==
+					      ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPMR_WRITE);
+					fpmr_write++;
+				}
 			}
 		}
 		CHECK(mrrs == 13U);
@@ -235,6 +253,8 @@ static int pinned_aarch64_census(const char *path)
 		CHECK(sysp == 1U);
 		CHECK(rndr == 1U);
 		CHECK(rndrrs == 1U);
+		CHECK(fpmr_read == 1U);
+		CHECK(fpmr_write == 1U);
 	}
 	orlix_tcti_system_accessor_reconciliation_destroy(&result);
 	orlix_tcti_register_model_destroy(&model);

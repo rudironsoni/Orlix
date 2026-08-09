@@ -96,6 +96,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
+	current->thread.user_fpmr = 0;
 	current->thread.user_simd_valid = 1;
 	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
@@ -122,6 +123,7 @@ void flush_thread(void)
 	memset(current->thread.user_simd, 0, sizeof(current->thread.user_simd));
 	current->thread.user_fpsr = 0;
 	current->thread.user_fpcr = 0;
+	current->thread.user_fpmr = 0;
 	current->thread.user_simd_valid = 1;
 	orlix_tcti_sve_state_reset(&current->thread.user_sve,
 			     current->thread.user_simd,
@@ -152,6 +154,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	memset(p->thread.user_simd, 0, sizeof(p->thread.user_simd));
 	p->thread.user_fpsr = 0;
 	p->thread.user_fpcr = 0;
+	p->thread.user_fpmr = 0;
 	p->thread.user_simd_valid = 0;
 	orlix_tcti_sve_state_reset(&p->thread.user_sve, p->thread.user_simd,
 			     ORLIX_TCTI_SVE_DEFAULT_VL_BYTES);
@@ -187,6 +190,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 			p->thread.user_tls = args->tls;
 		p->thread.user_fpsr = current->thread.user_fpsr;
 		p->thread.user_fpcr = current->thread.user_fpcr;
+		p->thread.user_fpmr = current->thread.user_fpmr;
 		p->thread.user_simd_valid = current->thread.user_simd_valid;
 		ret = orlix_tcti_sve_state_copy(&p->thread.user_sve,
 					  p->thread.user_simd,

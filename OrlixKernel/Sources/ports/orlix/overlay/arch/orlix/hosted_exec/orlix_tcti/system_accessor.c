@@ -9,6 +9,7 @@
 #include <linux/string.h>
 
 #include "decode_aarch64.h"
+#include "fpmr_state.h"
 #include "system_accessor.h"
 
 #ifndef UINT64_C
@@ -286,6 +287,13 @@ int orlix_tcti_execute_system_register(
 	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPSR_READ:
 		if (decoded->rt != 31)
 			regs->regs[decoded->rt] = current->thread.user_fpsr;
+		break;
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPMR_WRITE:
+		orlix_tcti_fpmr_write_current(value);
+		break;
+	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_FPMR_READ:
+		if (decoded->rt != 31)
+			regs->regs[decoded->rt] = orlix_tcti_fpmr_current();
 		break;
 	case ORLIX_TCTI_SYSTEM_ACCESSOR_OPERATION_TPIDRRO_EL0_READ:
 		if (decoded->rt != 31)
