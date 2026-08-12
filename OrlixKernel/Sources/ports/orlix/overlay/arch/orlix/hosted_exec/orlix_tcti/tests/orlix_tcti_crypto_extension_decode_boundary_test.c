@@ -225,10 +225,10 @@ static void crypto_sve_sme_target_contract_is_source_bound(struct kunit *test)
 			ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_EXTERNAL_DDI0602,
 			provenance->disposition, "source ordinal=%u",
 			row->source_ordinal);
-		if (row->family == ORLIX_TCTI_CRYPTO_TARGET_ADVSIMD)
+		if (row->status == ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING)
 			KUNIT_EXPECT_EQ_MSG(test,
 				ORLIX_TCTI_CRYPTO_TARGET_IMPLEMENTED_PROOF_PENDING, row->status,
-				"classic leaf %s must remain proof-pending", row->source_id);
+				"implemented leaf %s must remain proof-pending", row->source_id);
 		else
 			KUNIT_EXPECT_EQ_MSG(test,
 				ORLIX_TCTI_CRYPTO_TARGET_REQUIRED_UNIMPLEMENTED, row->status,

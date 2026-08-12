@@ -11,6 +11,7 @@ obj-y += fpmr_state.o
 obj-y += fixed_fp.o
 obj-y += sve_state.o
 obj-y += sve_decode.o
+obj-y += sve_crypto.o
 obj-y += decode_aarch64.o
 obj-y += crc32.o
 obj-y += tls_repair.o

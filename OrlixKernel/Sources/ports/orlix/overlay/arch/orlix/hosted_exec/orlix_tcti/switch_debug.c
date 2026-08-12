@@ -56,6 +56,25 @@ static int orlix_tcti_execute_sve_predicated_integer_binary(
 		decoded->sve_element_bytes);
 }
 
+static int orlix_tcti_dispatch_sve_crypto(
+	struct pt_regs *regs, const struct orlix_tcti_decoded_instruction *decoded)
+{
+	const struct orlix_tcti_sve_crypto_instruction instruction = {
+		.op = decoded->sve_crypto_op,
+		.condition = decoded->sve_crypto_condition,
+		.zd = decoded->rd,
+		.zn = decoded->rn,
+		.zm = decoded->rm,
+		.zk = decoded->sve_crypto_zk,
+		.index = decoded->sve_crypto_index,
+		.nregs = decoded->sve_crypto_nregs,
+		.element_bytes = decoded->sve_element_bytes,
+	};
+
+	return orlix_tcti_execute_sve_crypto(&current->thread.user_sve, regs,
+		current->thread.user_simd, &instruction);
+}
+
 static enum orlix_tcti_access
 orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -7588,6 +7607,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return orlix_tcti_execute_sve_predicated_integer_binary(regs, decoded);
 	case ORLIX_TCTI_DECODE_MOPS_COPY:
 		return orlix_tcti_execute_mops_copy(mm, regs, decoded, fault_address);
+	case ORLIX_TCTI_DECODE_SVE_CRYPTO:
+		return orlix_tcti_dispatch_sve_crypto(regs, decoded);
 	case ORLIX_TCTI_DECODE_HINT:
 		regs->pc += sizeof(u32);
 		return decoded->hint_imm >= 1 && decoded->hint_imm <= 3 ?

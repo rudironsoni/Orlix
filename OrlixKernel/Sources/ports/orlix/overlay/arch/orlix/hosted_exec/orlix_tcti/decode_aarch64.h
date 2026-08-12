@@ -5,6 +5,7 @@
 #include <linux/types.h>
 
 #include "sve_decode.h"
+#include "sve_crypto.h"
 
 enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_UNSUPPORTED = 0,
@@ -46,6 +47,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
 	ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE,
 	ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY,
+	ORLIX_TCTI_DECODE_SVE_CRYPTO,
 	ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
 	ORLIX_TCTI_DECODE_LSE_ATOMIC,
@@ -626,6 +628,8 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_branch_register_op branch_register_op;
 	enum orlix_tcti_sme_pstate_operation sme_pstate_operation;
 	enum orlix_tcti_sve_integer_binary_op sve_integer_binary_op;
+	enum orlix_tcti_sve_crypto_op sve_crypto_op;
+	enum orlix_tcti_sve_crypto_condition sve_crypto_condition;
 	enum orlix_tcti_sve_predication sve_predication;
 	enum orlix_tcti_barrier_op barrier_op;
 	enum orlix_tcti_cache_maintenance_op cache_maintenance_op;
@@ -651,6 +655,9 @@ struct orlix_tcti_decoded_instruction {
 	bool sme_za;
 	u8 sve_pg;
 	u8 sve_element_bytes;
+	u8 sve_crypto_index;
+	u8 sve_crypto_nregs;
+	u8 sve_crypto_zk;
 	u8 bitfield_immr;
 	u8 bitfield_imms;
 	u8 rs;
