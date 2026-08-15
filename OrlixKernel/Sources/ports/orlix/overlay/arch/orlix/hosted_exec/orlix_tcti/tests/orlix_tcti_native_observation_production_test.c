@@ -248,6 +248,116 @@ static void capture_ignores_successful_nonmatching_instruction(
 	orlix_tcti_native_capture_destroy(session);
 }
 
+static void capture_ignores_nonmatching_fault_instruction(
+	struct kunit *test)
+{
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_capture *capture;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_decoded_instruction target = {
+		.instruction = NATIVE_CAPTURE_SVC,
+		.decode_class = ORLIX_TCTI_DECODE_SVC,
+	};
+	struct orlix_tcti_decoded_instruction ordinary = {
+		.instruction = 0x8b000000U,
+		.decode_class = ORLIX_TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
+	};
+	struct pt_regs regs;
+	struct orlix_tcti_result result = {
+		.reason = ORLIX_TCTI_EXIT_USER_FAULT,
+		.status = -EFAULT,
+		.instruction = NATIVE_CAPTURE_SVC,
+	};
+
+	native_capture_seed_regs(&regs, 0x1000U);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(
+		orlix_tcti_branch_control_production_capture_token(2227U), 2227U,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
+	capture = orlix_tcti_native_capture_claim_resume(current);
+	KUNIT_ASSERT_NOT_NULL(test, capture);
+	/* A later non-target fault in the same gadget is not target evidence. */
+	orlix_tcti_native_capture_before_decoded(capture, current->mm, &regs,
+		&target);
+	orlix_tcti_native_capture_after_decoded(capture, current->mm, &regs,
+		&target);
+	orlix_tcti_native_capture_fault(capture, &ordinary, 0x2000U, -EFAULT);
+	orlix_tcti_native_capture_exit(capture, &result, &regs);
+	orlix_tcti_native_capture_finalize(capture, &result, &regs);
+	KUNIT_EXPECT_EQ(test, 0,
+		orlix_tcti_native_capture_take_wire(session, &wire));
+	KUNIT_EXPECT_TRUE(test, wire.sealed);
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+}
+
+static void capture_rejects_mismatched_system_accessor_variant(
+	struct kunit *test)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	const struct orlix_tcti_native_proof_registry_entry *target = NULL;
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_capture *capture;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary = {};
+	struct orlix_tcti_target_proof_ingestion_slot slot = {};
+	struct orlix_tcti_decoded_instruction wrong;
+	struct orlix_tcti_result result = {
+		.reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+		.status = -EOPNOTSUPP,
+		.instruction = 0xd53bd040U,
+	};
+	struct pt_regs regs;
+	const void *capture_token;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	KUNIT_ASSERT_NOT_NULL(test, entries);
+	for (index = 0; index < count; index++) {
+		if (entries[index].production_capture &&
+		    entries[index].source.subject_kind ==
+			ORLIX_TCTI_NATIVE_SUBJECT_SEMANTIC_VARIANT &&
+		    !strcmp(entries[index].source.semantic_variant, "FPMR")) {
+			target = &entries[index];
+			break;
+		}
+	}
+	KUNIT_ASSERT_NOT_NULL(test, target);
+	capture_token =
+		orlix_tcti_native_proof_registry_capture_token_for_entry(target);
+	KUNIT_ASSERT_NOT_NULL(test, capture_token);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(capture_token,
+		target->source.source_ordinal, target->obligation, &session));
+	capture = orlix_tcti_native_capture_claim_resume(current);
+	KUNIT_ASSERT_NOT_NULL(test, capture);
+
+	/* TPIDR_EL0 uses the same generic MRS mask as FPMR.  Decode its
+	 * generated selector and prove that the producer cannot credit FPMR. */
+	wrong = orlix_tcti_decode_aarch64(0xd53bd040U);
+	native_capture_seed_regs(&regs, 0x1000U);
+	orlix_tcti_native_capture_before_decoded(capture, current->mm, &regs,
+		&wrong);
+	orlix_tcti_native_capture_after_decoded(capture, current->mm, &regs,
+		&wrong);
+	orlix_tcti_native_capture_exit(capture, &result, &regs);
+	orlix_tcti_native_capture_finalize(capture, &result, &regs);
+	KUNIT_EXPECT_LT(test,
+		orlix_tcti_native_capture_take_wire(session, &wire), 0);
+	KUNIT_EXPECT_FALSE(test, wire.sealed);
+
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_EXPECT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_MEMEQ(test, &slot, ledger->slots, sizeof(slot));
+	KUNIT_EXPECT_EQ(test, 0U, ledger->count);
+	KUNIT_EXPECT_EQ(test, 0U, ledger->native_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+}
+
 static void pending_capacity_exhaustion_preserves_live_wires(
 	struct kunit *test)
 {
@@ -476,6 +586,8 @@ static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(production_capture_variant_authority_is_exact),
 	KUNIT_CASE(generic_capture_events_cannot_credit_a_claimed_session),
 	KUNIT_CASE(capture_ignores_successful_nonmatching_instruction),
+	KUNIT_CASE(capture_ignores_nonmatching_fault_instruction),
+	KUNIT_CASE(capture_rejects_mismatched_system_accessor_variant),
 	KUNIT_CASE(pending_capacity_exhaustion_preserves_live_wires),
 	KUNIT_CASE(production_capture_seals_explicit_tls_after_state),
 	{}

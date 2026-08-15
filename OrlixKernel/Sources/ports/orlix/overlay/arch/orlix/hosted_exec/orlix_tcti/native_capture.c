@@ -986,8 +986,35 @@ static bool native_capture_matches_entry(
 	if (!session || !decoded || !(entry = session->entry) ||
 	    !entry->source.encoding_mask)
 		return false;
-	return (decoded->instruction & entry->source.encoding_mask) ==
-		entry->source.encoding_pattern;
+	if ((decoded->instruction & entry->source.encoding_mask) !=
+	    entry->source.encoding_pattern)
+		return false;
+	/* Generic MRS/MSR encodings are shared by many SystemAccessor rows.
+	 * Raw mask/pattern equality is therefore not source identity.  Require
+	 * the complete generated semantic binding before a callback can credit a
+	 * variant capture. */
+	if (entry->source.subject_kind == ORLIX_TCTI_NATIVE_SUBJECT_SEMANTIC_VARIANT) {
+		if (decoded->decode_class != ORLIX_TCTI_DECODE_SYSTEM_REGISTER ||
+		    decoded->system_accessor_id != entry->source.secondary_index ||
+		    decoded->system_accessor_selector != entry->source.concrete_selector ||
+		    decoded->system_accessor_condition !=
+			entry->source.condition_expression ||
+		    decoded->system_accessor_access != entry->source.access_expression ||
+		    decoded->system_accessor_disposition !=
+			entry->source.variant_disposition ||
+		    decoded->system_accessor_implementation !=
+			entry->source.accessor_implementation ||
+		    decoded->system_accessor_selector_identity !=
+			entry->source.semantic_variant_identity ||
+		    decoded->system_accessor_condition_identity !=
+			entry->source.condition_identity ||
+		    decoded->system_accessor_access_identity !=
+			entry->source.access_identity ||
+		    decoded->system_register_write !=
+			(entry->source.variant_direction == 2U))
+			return false;
+	}
+	return true;
 }
 
 static void native_capture_before_decoded(struct orlix_tcti_native_capture *capture,
@@ -1071,10 +1098,18 @@ static void native_capture_fault(struct orlix_tcti_native_capture *capture,
 	struct orlix_tcti_native_capture_session *session =
 		container_of(capture, struct orlix_tcti_native_capture_session, capture);
 
-	if (!session || !decoded || !session->decoded_seen ||
-	    decoded->instruction != session->decoded.instruction) {
+	if (!session || !decoded) {
 		if (session)
 			session->failed = true;
+		return;
+	}
+	/* A fault from another instruction in the same gadget is not evidence for
+	 * this session's canonical target. */
+	if (!native_capture_matches_entry(session, decoded))
+		return;
+	if (!session->decoded_seen ||
+	    decoded->instruction != session->decoded.instruction) {
+		session->failed = true;
 		return;
 	}
 	session->fault_seen = true;
