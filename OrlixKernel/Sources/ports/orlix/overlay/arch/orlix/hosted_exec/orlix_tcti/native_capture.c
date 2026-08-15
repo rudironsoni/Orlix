@@ -1045,10 +1045,19 @@ static void native_capture_after_decoded(struct orlix_tcti_native_capture *captu
 		container_of(capture, struct orlix_tcti_native_capture_session, capture);
 
 	(void)mm;
-	if (!session || !regs || !decoded || !session->decoded_seen ||
-	    decoded->instruction != session->decoded.instruction) {
+	if (!session || !regs || !decoded) {
 		if (session)
 			session->failed = true;
+		return;
+	}
+	/* A capture session observes one canonical target inside a normal
+	 * multi-instruction block. Successful non-target instructions are not
+	 * evidence for that target and must not invalidate the session. */
+	if (!native_capture_matches_entry(session, decoded))
+		return;
+	if (!session->decoded_seen ||
+	    decoded->instruction != session->decoded.instruction) {
+		session->failed = true;
 		return;
 	}
 	session->after_pc = regs->pc;

@@ -202,6 +202,52 @@ static void generic_capture_events_cannot_credit_a_claimed_session(
 	orlix_tcti_native_capture_destroy(session);
 }
 
+static void capture_ignores_successful_nonmatching_instruction(
+	struct kunit *test)
+{
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_capture *capture;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_decoded_instruction target = {
+		.instruction = NATIVE_CAPTURE_SVC,
+		.decode_class = ORLIX_TCTI_DECODE_SVC,
+	};
+	struct orlix_tcti_decoded_instruction ordinary = {
+		.instruction = 0x8b000000U,
+		.decode_class = ORLIX_TCTI_DECODE_ADD_SUB_SHIFTED_REGISTER,
+	};
+	struct pt_regs regs;
+	struct orlix_tcti_result result = {
+		.reason = ORLIX_TCTI_EXIT_SYSCALL,
+		.status = 0,
+		.instruction = NATIVE_CAPTURE_SVC,
+	};
+
+	native_capture_seed_regs(&regs, 0x1000U);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(
+		orlix_tcti_branch_control_production_capture_token(2227U), 2227U,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
+	capture = orlix_tcti_native_capture_claim_resume(current);
+	KUNIT_ASSERT_NOT_NULL(test, capture);
+	/* The target is observed first, then an ordinary successful instruction
+	 * reaches the same after-callback in the enclosing gadget block. */
+	orlix_tcti_native_capture_before_decoded(capture, current->mm, &regs,
+		&target);
+	orlix_tcti_native_capture_after_decoded(capture, current->mm, &regs,
+		&target);
+	orlix_tcti_native_capture_before_decoded(capture, current->mm, &regs,
+		&ordinary);
+	orlix_tcti_native_capture_after_decoded(capture, current->mm, &regs,
+		&ordinary);
+	orlix_tcti_native_capture_exit(capture, &result, &regs);
+	orlix_tcti_native_capture_finalize(capture, &result, &regs);
+	KUNIT_EXPECT_EQ(test, 0,
+		orlix_tcti_native_capture_take_wire(session, &wire));
+	KUNIT_EXPECT_TRUE(test, wire.sealed);
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+}
+
 static void pending_capacity_exhaustion_preserves_live_wires(
 	struct kunit *test)
 {
@@ -429,6 +475,7 @@ static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(capture_binds_only_its_registered_row),
 	KUNIT_CASE(production_capture_variant_authority_is_exact),
 	KUNIT_CASE(generic_capture_events_cannot_credit_a_claimed_session),
+	KUNIT_CASE(capture_ignores_successful_nonmatching_instruction),
 	KUNIT_CASE(pending_capacity_exhaustion_preserves_live_wires),
 	KUNIT_CASE(production_capture_seals_explicit_tls_after_state),
 	{}
