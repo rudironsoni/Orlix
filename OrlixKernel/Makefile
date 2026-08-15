@@ -34,8 +34,8 @@ orlix-tcti-native-proof-symbol-check: kunit
 	object_root="$$kunit_root/arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti"; \
 	source_root="$$(cd '$(ORLIX_LINUX_OVERLAY)' && pwd -P)"; \
 	port_root="$$(cd '$(ORLIX_KERNEL_PORT_DIR)' && pwd -P)"; \
-	fault='$(ORLIX_TCTI_NATIVE_PROOF_GATE_FAULT)'; regression_input=''; records="$$(mktemp)"; \
-	trap 'test -z "$$regression_input" || rm -f "$$regression_input"; rm -f "$$records"' EXIT; \
+	fault='$(ORLIX_TCTI_NATIVE_PROOF_GATE_FAULT)'; regression_input=''; records="$$(mktemp)"; parser_fixture="$$(mktemp)"; \
+	trap 'test -z "$$regression_input" || rm -f "$$regression_input"; rm -f "$$records" "$$parser_fixture"' EXIT; \
 	cmd_record_paths() { \
 		awk '\
 			function emit(token) { if (token != "") printf "%s%c", token, 0; } \
@@ -52,7 +52,7 @@ orlix-tcti-native-proof-symbol-check: kunit
 				emit(token); \
 			} \
 			in_record { line = $$0; } \
-			$$0 ~ "^" record " :=" { \
+			index($$0, record " :=") == 1 { \
 				if (found++) { print "duplicate " record " record in " FILENAME > "/dev/stderr"; exit 1; } \
 				in_record = 1; line = substr($$0, length(record) + 4); \
 			} \
@@ -66,6 +66,13 @@ orlix-tcti-native-proof-symbol-check: kunit
 			} \
 			END { if (found != 1 || in_record) exit 1; }' record="$$1" "$$2"; \
 	}; \
+	parser_record="source_arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_capture.o"; parser_expected="arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_capture.c"; \
+	printf '%s\n' \
+		"source_arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_captureXo := arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/decoy.c" \
+		"$$parser_record := $$parser_expected" > "$$parser_fixture"; \
+	cmd_record_paths "$$parser_record" "$$parser_fixture" > "$$records"; \
+	parser_actual="$$(tr -d '\0' < "$$records")"; \
+	[ "$$parser_actual" = "$$parser_expected" ] || { echo "native-proof command-record parser accepted a decoy: $$parser_actual" >&2; exit 1; }; \
 	check_input() { \
 		input_kind="$$1"; materialized="$$2"; expected="$$3"; \
 		case "$$fault:$$input_kind" in \
