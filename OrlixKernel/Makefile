@@ -75,14 +75,15 @@ orlix-tcti-native-proof-symbol-check: kunit
 	[ "$$parser_actual" = "$$parser_expected" ] || { echo "native-proof command-record parser accepted a decoy: $$parser_actual" >&2; exit 1; }; \
 	check_input() { \
 		input_kind="$$1"; materialized="$$2"; expected="$$3"; \
+		freshness_reference="$$expected"; \
 		case "$$fault:$$input_kind" in \
 			missing-source:source|missing-header:header) materialized="$$materialized.missing" ;; \
 			changed-source:source|changed-header:header) regression_input="$$(mktemp)"; cp "$$materialized" "$$regression_input"; printf '\\n' >> "$$regression_input"; materialized="$$regression_input" ;; \
-			stale-source:source|stale-header:header) regression_input="$$(mktemp)"; cp "$$materialized" "$$regression_input"; touch "$$regression_input"; materialized="$$regression_input" ;; \
+			stale-source:source|stale-header:header) regression_input="$$(mktemp)"; cp "$$materialized" "$$regression_input"; touch "$$regression_input"; materialized="$$regression_input"; freshness_reference="$$materialized" ;; \
 		esac; \
 		[ -f "$$materialized" ] || { echo "missing native-proof materialized $$input_kind: $$materialized" >&2; exit 1; }; \
 		cmp -s "$$expected" "$$materialized" || { echo "KUnit $$input_kind is not this worktree's native-proof source: $$materialized" >&2; exit 1; }; \
-		[ "$$object" -nt "$$materialized" ] || { echo "stale native-proof KUnit object for $$input_kind: $$materialized" >&2; exit 1; }; \
+		[ "$$object" -nt "$$freshness_reference" ] || { echo "stale native-proof KUnit object for $$input_kind: $$materialized" >&2; exit 1; }; \
 	}; \
 	for source in tests/target_native_proof_contract.c native_capture.c tests/target_proof_ingestion.c; do \
 		object="$$object_root/$${source%.c}.o"; \
