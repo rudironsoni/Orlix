@@ -5,6 +5,8 @@
 
 #include "block_cache.h"
 #include "crc32.h"
+#include "barrier_gadgets.h"
+#include "base_system_139_gadgets.h"
 #include "decode_aarch64.h"
 #include "gadget_program.h"
 #include "native_capture.h"
@@ -180,7 +182,12 @@ int orlix_tcti_append_decoded_instruction(
 	if (capacity < words)
 		return -ENOSPC;
 
-	program[start].value = (unsigned long)orlix_tcti_gadget_for_decoded(decoded);
+	program[start].value = (unsigned long)(
+		orlix_tcti_is_native_barrier_gadget(decoded) ?
+		orlix_tcti_gadget_execute_native_barrier :
+		orlix_tcti_is_base_system_139_gadget(decoded) ?
+		orlix_tcti_gadget_execute_base_system_139 :
+		orlix_tcti_gadget_for_decoded(decoded));
 	memcpy(&program[start + 1], decoded, sizeof(*decoded));
 	program[start + 1 + ORLIX_TCTI_DECODED_INSTRUCTION_WORDS].value =
 		(unsigned long)orlix_tcti_gadget_halt;
@@ -220,7 +227,9 @@ static int orlix_tcti_execute_gadget_program_checked(
 		cursor++;
 		if (!gadget)
 			return -EINVAL;
-		if (orlix_tcti_gadget_has_decoded_payload(gadget) && entry_valid &&
+		if ((orlix_tcti_gadget_has_decoded_payload(gadget) ||
+		     gadget == orlix_tcti_gadget_execute_native_barrier ||
+		     gadget == orlix_tcti_gadget_execute_base_system_139) && entry_valid &&
 		    !*entry_valid) {
 			memcpy(&entry_decoded, cursor, sizeof(entry_decoded));
 			candidate = true;

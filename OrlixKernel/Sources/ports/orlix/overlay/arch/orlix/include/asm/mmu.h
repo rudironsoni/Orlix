@@ -5,6 +5,7 @@
 #ifndef __ASSEMBLY__
 #include <linux/atomic.h>
 #include <linux/rwlock.h>
+#include <linux/spinlock.h>
 
 typedef struct {
 	unsigned long end_brk;

@@ -3466,6 +3466,11 @@ static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit 
 		struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
 			0xd503201fU | ((u32)immediate << 5));
 
+		if (decoded.decode_class == ORLIX_TCTI_DECODE_FEATURE_UNAVAILABLE ||
+		    decoded.decode_class == ORLIX_TCTI_DECODE_FEATURE_HINT) {
+			KUNIT_EXPECT_NE(test, 0U, decoded.source_ordinal);
+			continue;
+		}
 		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_HINT, decoded.decode_class);
 		KUNIT_EXPECT_EQ(test, immediate, decoded.hint_imm);
 	}

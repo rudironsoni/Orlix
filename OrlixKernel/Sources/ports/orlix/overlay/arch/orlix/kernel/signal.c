@@ -149,6 +149,7 @@ void orlix_tcti_prepare_signal_delivery(void)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_tcti_event_reset_task(current);
 }
 
 static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)

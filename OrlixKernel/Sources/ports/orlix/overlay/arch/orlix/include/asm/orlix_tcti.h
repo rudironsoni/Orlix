@@ -18,9 +18,15 @@ enum orlix_tcti_exit_reason {
 	ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 	ORLIX_TCTI_EXIT_SIGNAL_POINT,
 	ORLIX_TCTI_EXIT_YIELD,
+	ORLIX_TCTI_EXIT_WAIT,
 	ORLIX_TCTI_EXIT_TASK_EXIT,
 	ORLIX_TCTI_EXIT_ALIGNMENT_FAULT,
 	ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
+};
+
+enum orlix_tcti_wait_kind {
+	ORLIX_TCTI_WAIT_WFE,
+	ORLIX_TCTI_WAIT_WFI,
 };
 
 enum orlix_tcti_access {
@@ -103,6 +109,8 @@ struct orlix_tcti_result {
 	enum orlix_tcti_access fault_access;
 	unsigned long pc;
 	u32 instruction;
+	enum orlix_tcti_wait_kind wait_kind;
+	u64 observed_event_generation;
 	bool entry_valid;
 	unsigned long entry_pc;
 	u32 entry_instruction;
@@ -123,6 +131,11 @@ struct orlix_tcti_result orlix_tcti_resume_user(struct task_struct *task,
 				    struct pt_regs *regs,
 				    struct mm_struct *mm);
 void __noreturn orlix_tcti_enter_user(struct pt_regs *regs);
+void orlix_tcti_event_sev(void);
+void orlix_tcti_event_sevl(void);
+bool orlix_tcti_event_wfe_consumed(u64 *observed_generation);
+void orlix_tcti_event_reset_task(struct task_struct *task);
+/* Private test/config selector. It never changes ELF HWCAP advertisement. */
 
 int orlix_tcti_pin_user_page(struct mm_struct *mm, unsigned long user_va,
 		       enum orlix_tcti_access access,

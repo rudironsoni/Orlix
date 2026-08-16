@@ -605,6 +605,13 @@ production_capture_bindings[] = {
 #define MOPS_COPY_CASE_ARRAY "orlix_tcti_mops_copy_cases"
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
+#define BASE_SYSTEM_139_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_system_139_source_bound_test.c"
+#define BASE_SYSTEM_139_SUITE "orlix-tcti-base-system-139-source-bound"
+#define BASE_SYSTEM_139_SUITE_SYMBOL \
+	"orlix_tcti_base_system_139_source_bound_suite"
+#define BASE_SYSTEM_139_CASE_ARRAY \
+	"orlix_tcti_base_system_139_source_bound_cases"
 #define DECODE_SUITE "orlix-tcti-decode"
 #define DECODE_SUITE_SYMBOL "orlix_tcti_decode_test_suite"
 #define DECODE_CASE_ARRAY "orlix_tcti_decode_test_cases"
@@ -762,6 +769,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ DECODE_SOURCE,
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
+	{ BASE_SYSTEM_139_SOURCE,
+	  "2556363cd61e7ac73ef0fe749d4a6435d76db5fb61fe10f75d8612f15c4d84d7",
+	  "orlix_tcti_base_system_139_source_bound_test.o", NULL, NULL, NULL },
 	{ SCALAR_FP_SOURCE,
 	  "bbc0b711ff5aa499d778b58c0d490521a8b7cb6de14b57e9767e4b6c81500867",
 	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
@@ -800,6 +810,57 @@ static const struct kunit_dependency_terminal_artifact
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_feature_hints_are_held_without_active_profile",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_feature_hints_are_rejected_when_unadvertised",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_events_use_typed_resume_exits",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_two_context_dmb_ordering_interaction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_barrier_partition_uses_resume_user",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_dmb_observation_rejects_disabled_path",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE,
+	  BASE_SYSTEM_139_SUITE_SYMBOL, BASE_SYSTEM_139_CASE_ARRAY,
+	  "orlix_tcti_base_system_139_selector_rejections_preserve_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1371,6 +1432,18 @@ static const struct operation_requirements operation_requirements[] = {
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "DSB", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "DMB", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) \
 	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 #include "target_production_capture_family.def"
@@ -2363,6 +2436,54 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
+#define BASE_SYSTEM_139_BARRIER_OBLIGATIONS \
+	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING)
+static const struct orlix_tcti_target_proof_case base_system_139_dsb_cases[] = {
+	{ "orlix_tcti_base_system_139_barrier_partition_uses_resume_user",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+};
+static const struct orlix_tcti_target_proof_case base_system_139_dmb_cases[] = {
+	{ "orlix_tcti_base_system_139_barrier_partition_uses_resume_user",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_system_139_two_context_dmb_ordering_interaction",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_system_139_dmb_observation_rejects_disabled_path",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+};
+static const struct orlix_tcti_target_proof_binding base_system_139_dsb_bindings[] = {
+	{ "DSB_BO_barriers", "DSB", 0xfffff0ffU, 0xd503309fU,
+	  "54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101",
+	  ORLIX_TCTI_PROOF_U64_C(0x1), 2272U },
+};
+static const struct orlix_tcti_target_proof_binding base_system_139_dmb_bindings[] = {
+	{ "DMB_BO_barriers", "DMB", 0xfffff0ffU, 0xd50330bfU,
+	  "54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101",
+	  ORLIX_TCTI_PROOF_U64_C(0x7), 2273U },
+};
+#define BASE_SYSTEM_139_BARRIER_ENTRY(proof_id, operation, cases, bindings) \
+	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
+	  BASE_SYSTEM_139_BARRIER_OBLIGATIONS, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
+	  BASE_SYSTEM_139_SOURCE, BASE_SYSTEM_139_SUITE, cases, ARRAY_COUNT(cases), \
+	  bindings, ARRAY_COUNT(bindings), NULL, BASE_SYSTEM_139_BARRIER_OBLIGATIONS }
 #define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
@@ -2560,6 +2681,10 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	ADVSIMD_MINMAX_REDUCTION_ENTRY(
 		"kunit:advsimd-minmax-reduction-uminv-source-leaf",
 		"UMINV_advsimd", advsimd_minmax_reduction_uminv_bindings),
+	BASE_SYSTEM_139_BARRIER_ENTRY("kunit:base-system-139-dsb", "DSB",
+		base_system_139_dsb_cases, base_system_139_dsb_bindings),
+	BASE_SYSTEM_139_BARRIER_ENTRY("kunit:base-system-139-dmb", "DMB",
+		base_system_139_dmb_cases, base_system_139_dmb_bindings),
 };
 
 #undef LOGICAL_ENTRY
@@ -2567,6 +2692,7 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 #undef CSSC_DATA_ENTRY
 #undef CSSC_ENTRY
 #undef ADD_SUB_IMMEDIATE_ENTRY
+#undef BASE_SYSTEM_139_BARRIER_ENTRY
 #undef ADVSIMD_MUL_ENTRY
 #undef CSSC_OBLIGATIONS
 #undef ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS

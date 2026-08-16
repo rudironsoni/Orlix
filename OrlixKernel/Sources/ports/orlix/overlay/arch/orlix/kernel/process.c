@@ -110,6 +110,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_tcti_event_reset_task(current);
 #endif
 }
 
@@ -137,6 +138,7 @@ void flush_thread(void)
 	current->thread.user_exclusive_mapping_generation = 0;
 	current->thread.user_exclusive_size = 0;
 	current->thread.user_exclusive_valid = 0;
+	orlix_tcti_event_reset_task(current);
 #endif
 }
 
@@ -168,6 +170,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_exclusive_mapping_generation = 0;
 	p->thread.user_exclusive_size = 0;
 	p->thread.user_exclusive_valid = 0;
+	orlix_tcti_event_reset_task(p);
 #endif
 
 	if (!args->fn) {
@@ -210,6 +213,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.user_exclusive_mapping_generation = 0;
 	p->thread.user_exclusive_size = 0;
 		p->thread.user_exclusive_valid = 0;
+		orlix_tcti_event_reset_task(p);
 #endif
 	} else {
 		memset(childregs, 0, sizeof(*childregs));
