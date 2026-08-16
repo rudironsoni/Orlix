@@ -785,7 +785,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
 	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
 	{ FLAG_MANIPULATION_SOURCE,
-	  "04428f7ef7f56106a02cc3127edbfbe0e516ebd60b19fea753b76670fa8b26b5",
+	  "c58ee600547be6fd79a87b9776d1c6e380d524dbefb4a2e9dbd4e3a351cb2099",
 	  "orlix_tcti_flag_manipulation_source_bound_test.o",
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE,
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256,
