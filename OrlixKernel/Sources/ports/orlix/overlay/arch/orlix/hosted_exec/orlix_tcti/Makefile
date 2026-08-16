@@ -9,6 +9,7 @@ obj-y += switch_debug.o
 obj-y += system_accessor.o
 obj-y += fpmr_state.o
 obj-y += fixed_fp.o
+obj-y += fixed_integer.o
 obj-y += sve_state.o
 obj-y += sve_decode.o
 obj-y += decode_aarch64.o

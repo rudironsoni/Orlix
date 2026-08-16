@@ -14,6 +14,7 @@
 
 #include "target_instruction_artifact.h"
 #include "../decode_aarch64.h"
+#include "../fixed_integer.h"
 #include "../switch_debug.h"
 
 struct source_row {
@@ -499,7 +500,7 @@ static void scalar_source_execution(struct kunit *test)
 		expected = scalar_dp1_expected(decoded.dp1_op,
 			before.regs[rn] & width_mask(decoded.is_64bit), width);
 		KUNIT_ASSERT_EQ_MSG(test, 0,
-			orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL),
+			orlix_tcti_fixed_integer_execute(&regs, &decoded),
 			"%s source ordinal %u", row->leaf, row->ordinal);
 		expect_state(test, &before, &regs, rd,
 			     expected & width_mask(decoded.is_64bit));
@@ -603,7 +604,7 @@ static void bitfield_alias_state(struct kunit *test)
 		source = alias->rn == 31 ? 0 : before.regs[alias->rn];
 		destination = alias->rd == 31 ? 0 : before.regs[alias->rd];
 		expected = bitfield_expected(&decoded, source, destination);
-		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+		ret = orlix_tcti_fixed_integer_execute(&regs, &decoded);
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s", alias->name);
 		expect_state(test, &before, &regs, alias->rd, expected);
 	}
@@ -634,8 +635,7 @@ static void extract_ror_alias_state(struct kunit *test)
 			expected = shift ?
 				((source >> shift) | (source << (width - shift))) &
 					width_mask(sf) : source;
-			ret = orlix_tcti_switch_debug_execute_decoded(
-				NULL, &regs, &decoded, NULL);
+			ret = orlix_tcti_fixed_integer_execute(&regs, &decoded);
 			KUNIT_ASSERT_EQ(test, 0, ret);
 			expect_state(test, &before, &regs, rd, expected);
 		}
@@ -666,7 +666,7 @@ static void extract_overlap_xzr_state(struct kunit *test)
 		high = rn == 31 ? 0 : before.regs[rn];
 		low = rm == 31 ? 0 : before.regs[rm];
 		expected = (low >> shift) | (high << (64 - shift));
-		ret = orlix_tcti_switch_debug_execute_decoded(NULL, &regs, &decoded, NULL);
+		ret = orlix_tcti_fixed_integer_execute(&regs, &decoded);
 		KUNIT_ASSERT_EQ(test, 0, ret);
 		expect_state(test, &before, &regs, rd, expected);
 	}
