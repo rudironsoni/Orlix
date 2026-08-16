@@ -197,14 +197,26 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_RESULT | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC)
 #define ADD_FLAGS_OBLIGATIONS \
 	(ADD_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ADD_SUB_POINTER_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_RESULT | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC)
+#define ADD_SUB_REGISTER_OBLIGATIONS ADD_SUB_POINTER_OBLIGATIONS
+#define ADD_SUB_IMMEDIATE_OBLIGATIONS ADD_SUB_POINTER_OBLIGATIONS
 #define INTEGER_CONDITIONAL_OBLIGATIONS \
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -242,10 +254,20 @@ static const struct orlix_tcti_target_proof_case add_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_RESULT |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC },
 	{ "orlix_tcti_add_sub_immediate_special_register_aliases",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_RESULT |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SVE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_SME_TASK_STATE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ARITHMETIC },
 	{ "orlix_tcti_add_sub_immediate_source_mask_boundaries",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
 };
@@ -880,6 +902,58 @@ static int add_sub_pointer_registry_binds_exact_source_rows(void)
 			expected[expected_index].operation, 1, &requirements) == 0);
 		EXPECT(requirements == ADD_SUB_POINTER_OBLIGATIONS);
 	}
+	return 0;
+}
+
+static int add_sub_registry_uses_typed_obligations(void)
+{
+	static const char *const operations[] = {
+		"ADD_addsub_imm", "ADDS_addsub_imm",
+		"SUB_addsub_imm", "SUBS_addsub_imm",
+		"ADD_addsub_shift", "ADDS_addsub_shift",
+		"SUB_addsub_shift", "SUBS_addsub_shift",
+		"ADD_addsub_ext", "ADDS_addsub_ext",
+		"SUB_addsub_ext", "SUBS_addsub_ext",
+		"ADC", "ADCS", "SBC", "SBCS",
+		"ADDPT", "SUBPT",
+	};
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	size_t count;
+	size_t operation_index;
+	size_t entry_index;
+	size_t matched = 0;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (operation_index = 0;
+	     operation_index < sizeof(operations) / sizeof(operations[0]);
+	     operation_index++) {
+		uint32_t requirements;
+		uint32_t expected = operation_index < 4U ?
+			ADD_SUB_IMMEDIATE_OBLIGATIONS : ADD_SUB_REGISTER_OBLIGATIONS;
+
+		EXPECT(orlix_tcti_target_proof_operation_requirements(
+			operations[operation_index], 1, &requirements) == 0);
+		EXPECT(requirements == expected);
+	}
+	for (entry_index = 0; entry_index < count; entry_index++) {
+		const struct orlix_tcti_target_proof_registry_entry *entry =
+			&entries[entry_index];
+
+		if (strncmp(entry->id, "kunit:add-sub-immediate-",
+			    strlen("kunit:add-sub-immediate-")) &&
+		    strncmp(entry->id, "kunit:add-sub-register-",
+			    strlen("kunit:add-sub-register-")))
+			continue;
+		if (!strncmp(entry->id, "kunit:add-sub-immediate-",
+			    strlen("kunit:add-sub-immediate-")))
+			EXPECT(entry->obligations == ADD_SUB_IMMEDIATE_OBLIGATIONS);
+		else
+			EXPECT(entry->obligations == ADD_SUB_REGISTER_OBLIGATIONS);
+		EXPECT(entry->unproved_obligations == entry->obligations);
+		matched++;
+	}
+	EXPECT(matched == sizeof(operations) / sizeof(operations[0]));
 	return 0;
 }
 
@@ -1912,6 +1986,8 @@ int main(void)
 		  scalar_source_bindings_are_complete_and_fail_closed },
 		{ "add_sub_pointer_registry_binds_exact_source_rows",
 		  add_sub_pointer_registry_binds_exact_source_rows },
+		{ "add_sub_registry_uses_typed_obligations",
+		  add_sub_registry_uses_typed_obligations },
 		{ "scalar_bitops_registry_binds_exact_source_rows",
 		  scalar_bitops_registry_binds_exact_source_rows },
 		{ "exclusive_registry_binds_exact_baseline_leaves",

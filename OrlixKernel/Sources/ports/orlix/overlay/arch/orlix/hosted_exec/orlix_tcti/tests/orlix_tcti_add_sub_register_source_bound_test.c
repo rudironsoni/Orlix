@@ -257,6 +257,8 @@ static unsigned long asr_nzcv(bool wide, bool sub, u64 left, u64 right,
 	return f;
 }
 
+static void asr_seed_extended_state(void);
+
 struct asr_ddi_vector {
 	const char *name;
 	u8 leaf_index;
@@ -466,7 +468,9 @@ static void asr_resume_semantics(struct kunit *test)
 		}
 		KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
 				    "%s", l->name);
+		KUNIT_EXPECT_EQ(test, 0L, result.status);
 		KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
+		KUNIT_EXPECT_EQ(test, m + sizeof(u32), result.pc);
 		KUNIT_EXPECT_EQ(test, m + sizeof(u32), r.pc);
 		KUNIT_EXPECT_EQ(test, (unsigned long)PSR_MODE_EL0t,
 				r.pstate & PSR_MODE_MASK);
@@ -703,8 +707,17 @@ static void asr_pointer_production_semantics(struct kunit *test)
 	struct orlix_tcti_cpa_control saved_control;
 	struct orlix_tcti_pointer_add_observation saved_observation =
 		current->thread.user_cpa_add_observation;
+	typeof(current->thread.user_sve) *sve_before =
+		kunit_kzalloc(test, sizeof(*sve_before), GFP_KERNEL);
+	typeof(current->thread.user_sme) sme_before;
+	u64 simd_before[ARRAY_SIZE(current->thread.user_simd)];
+	unsigned long fpcr_before;
+	unsigned long fpsr_before;
+	unsigned long fpmr_before;
+	unsigned long simd_valid_before;
 	size_t index;
 
+	KUNIT_ASSERT_NOT_NULL(test, sve_before);
 	orlix_tcti_cpu_cpa_control_get(&saved_control);
 	for (index = 0; index < ARRAY_SIZE(cases); index++) {
 		const struct asr_pointer_leaf *leaf = &pointer_leaves[cases[index].leaf];
@@ -712,6 +725,8 @@ static void asr_pointer_production_semantics(struct kunit *test)
 		struct pt_regs regs = {};
 		struct pt_regs before;
 		struct orlix_tcti_result result;
+		u8 memory_before[sizeof(u32) * 2];
+		u8 memory_after[sizeof(memory_before)];
 		u32 instruction = asr_pointer_instruction(leaf, cases[index].rm,
 			cases[index].shift, cases[index].rn, cases[index].rd);
 		unsigned long mapped = asr_map(test, instruction);
@@ -722,6 +737,14 @@ static void asr_pointer_production_semantics(struct kunit *test)
 		u64 expected = cases[index].expected;
 
 		orlix_tcti_cpu_cpa_control_set(&cases[index].control);
+		asr_seed_extended_state();
+		memcpy(simd_before, current->thread.user_simd, sizeof(simd_before));
+		memcpy(sve_before, &current->thread.user_sve, sizeof(*sve_before));
+		memcpy(&sme_before, &current->thread.user_sme, sizeof(sme_before));
+		fpcr_before = current->thread.user_fpcr;
+		fpsr_before = current->thread.user_fpsr;
+		fpmr_before = current->thread.user_fpmr;
+		simd_valid_before = current->thread.user_simd_valid;
 		memset(&current->thread.user_cpa_add_observation, 0xa5,
 		       sizeof(current->thread.user_cpa_add_observation));
 		if (cases[index].rn != 31)
@@ -733,11 +756,15 @@ static void asr_pointer_production_semantics(struct kunit *test)
 		regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
 		regs.syscallno = NO_SYSCALL;
 		before = regs;
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_before, sizeof(memory_before)));
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		observation = &current->thread.user_cpa_add_observation;
 		KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
 				    "%s", leaf->name);
+		KUNIT_EXPECT_EQ(test, 0L, result.status);
 		KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
+		KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
 		if (cases[index].rd == 31)
 			KUNIT_EXPECT_EQ(test, expected, regs.sp);
 		else {
@@ -760,6 +787,21 @@ static void asr_pointer_production_semantics(struct kunit *test)
 				observation->effective_cpta);
 		KUNIT_EXPECT_EQ(test, cases[index].poisoned,
 				observation->poisoned);
+		KUNIT_EXPECT_EQ(test, fpcr_before, current->thread.user_fpcr);
+		KUNIT_EXPECT_EQ(test, fpsr_before, current->thread.user_fpsr);
+		KUNIT_EXPECT_EQ(test, fpmr_before, current->thread.user_fpmr);
+		KUNIT_EXPECT_EQ(test, simd_valid_before,
+			current->thread.user_simd_valid);
+		KUNIT_EXPECT_MEMEQ_MSG(test, simd_before, current->thread.user_simd,
+			sizeof(simd_before), "%s FP/SIMD", leaf->name);
+		KUNIT_EXPECT_MEMEQ_MSG(test, sve_before, &current->thread.user_sve,
+			sizeof(*sve_before), "%s SVE", leaf->name);
+		KUNIT_EXPECT_MEMEQ_MSG(test, &sme_before, &current->thread.user_sme,
+			sizeof(sme_before), "%s SME", leaf->name);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_after, sizeof(memory_after)));
+		KUNIT_EXPECT_MEMEQ_MSG(test, memory_before, memory_after,
+			sizeof(memory_before), "%s memory", leaf->name);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 	orlix_tcti_cpu_cpa_control_set(&saved_control);
@@ -789,6 +831,8 @@ static void asr_pointer_all_cpa_controls(struct kunit *test)
 			struct pt_regs regs = {};
 			struct pt_regs before;
 			struct orlix_tcti_result result;
+			u8 memory_before[sizeof(u32) * 2];
+			u8 memory_after[sizeof(memory_before)];
 			u32 instruction = asr_pointer_instruction(
 				&pointer_leaves[leaf_index], 7, 0, 5, 3);
 			unsigned long mapped = asr_map(test, instruction);
@@ -809,22 +853,30 @@ static void asr_pointer_all_cpa_controls(struct kunit *test)
 			regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
 			regs.syscallno = NO_SYSCALL;
 			before = regs;
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+				mapped, memory_before, sizeof(memory_before)));
 			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ(test,
+				control.feat_cpa ? ORLIX_TCTI_EXIT_SYSCALL :
+				ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
 			if (!control.feat_cpa) {
-				KUNIT_EXPECT_EQ(test,
-					ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
-					result.reason);
 				KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
 				KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 				KUNIT_EXPECT_FALSE(test,
 					current->thread.user_cpa_add_observation.valid);
 			} else {
-				KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL,
-					result.reason);
+				KUNIT_EXPECT_EQ(test, 0L, result.status);
+				KUNIT_EXPECT_EQ(test, ASR_SVC, result.instruction);
+				KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
 				KUNIT_EXPECT_EQ(test, expected, regs.regs[3]);
 				KUNIT_EXPECT_EQ(test, effective,
 					current->thread.user_cpa_add_observation.poisoned);
 			}
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+				mapped, memory_after, sizeof(memory_after)));
+			KUNIT_EXPECT_MEMEQ_MSG(test, memory_before, memory_after,
+				sizeof(memory_before), "CPA control %u leaf %zu memory",
+				combination, leaf_index);
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 		}
 	}
@@ -873,6 +925,8 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		struct pt_regs regs = {};
 		struct pt_regs before;
 		struct orlix_tcti_result result;
+		u8 memory_before[sizeof(u32) * 2];
+		u8 memory_after[sizeof(memory_before)];
 		unsigned long mapped = asr_map(test, instructions[index]);
 
 		regs.pc = mapped;
@@ -880,6 +934,8 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
 		regs.syscallno = NO_SYSCALL;
 		before = regs;
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_before, sizeof(memory_before)));
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 				result.reason);
@@ -890,6 +946,10 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, before.sp, regs.sp);
 		KUNIT_EXPECT_EQ(test, before.pc, regs.pc);
 		KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_after, sizeof(memory_after)));
+		KUNIT_EXPECT_MEMEQ_MSG(test, memory_before, memory_after,
+			sizeof(memory_before), "reserved pointer memory");
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 
@@ -903,6 +963,8 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		struct pt_regs regs = {};
 		struct pt_regs before;
 		struct orlix_tcti_result result;
+		u8 memory_before[sizeof(u32) * 2];
+		u8 memory_after[sizeof(memory_before)];
 		u32 instruction = asr_pointer_instruction(&pointer_leaves[0],
 							 7, 0, 5, 3);
 		unsigned long mapped = asr_map(test, instruction);
@@ -914,6 +976,8 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		regs.pstate = PSR_MODE_EL0t | ASR_NZCV;
 		regs.syscallno = NO_SYSCALL;
 		before = regs;
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_before, sizeof(memory_before)));
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 				result.reason);
@@ -921,6 +985,10 @@ static void asr_pointer_rejections_are_structured(struct kunit *test)
 		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 		KUNIT_EXPECT_FALSE(test,
 			current->thread.user_cpa_add_observation.valid);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm,
+			mapped, memory_after, sizeof(memory_after)));
+		KUNIT_EXPECT_MEMEQ_MSG(test, memory_before, memory_after,
+			sizeof(memory_before), "disabled CPA pointer memory");
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	}
 	orlix_tcti_cpu_cpa_control_set(&saved_control);
