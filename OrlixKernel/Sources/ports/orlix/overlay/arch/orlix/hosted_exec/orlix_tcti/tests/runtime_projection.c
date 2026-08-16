@@ -33,6 +33,7 @@ orlix_tcti_runtime_source_bound_proofs[] = {
 #define stringify(value) stringify_1(value)
 #define AUXV_HWCAP ORLIX_TCTI_RUNTIME_CAPABILITY_HWCAP
 #define AUXV_HWCAP2 ORLIX_TCTI_RUNTIME_CAPABILITY_HWCAP2
+#define ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE(feature, state, identity)
 #define ORLIX_TCTI_A64_RUNTIME_CAPABILITY(word, bit, feature, extension) \
 	{ (word), (bit), stringify(feature) },
 static const struct orlix_tcti_runtime_projection_capability
@@ -40,6 +41,7 @@ orlix_tcti_runtime_capability_mappings[] = {
 #include "../isa/runtime_profile.def"
 };
 #undef ORLIX_TCTI_A64_RUNTIME_CAPABILITY
+#undef ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE
 #undef AUXV_HWCAP2
 #undef AUXV_HWCAP
 #undef stringify

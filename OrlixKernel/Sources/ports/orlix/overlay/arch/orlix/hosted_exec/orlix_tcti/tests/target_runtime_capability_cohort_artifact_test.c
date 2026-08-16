@@ -14,9 +14,11 @@
 } while (0)
 
 #define ORLIX_TCTI_A64_RUNTIME_CAPABILITY(word, bit, feature, extension) #feature,
+#define ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE(feature, state, identity)
 static const char *const runtime_features[] = {
 #include "../isa/runtime_profile.def"
 };
+#undef ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE
 #undef ORLIX_TCTI_A64_RUNTIME_CAPABILITY
 
 static int canonical_is_complete_and_unresolved(void)

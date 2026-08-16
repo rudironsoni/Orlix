@@ -76,6 +76,19 @@ enum orlix_tcti_mops_copy_stage {
 	ORLIX_TCTI_MOPS_COPY_EPILOGUE,
 };
 
+/* The decoder must carry the exact supported feature-family identity to the
+ * admission gate. Zero is intentionally untrusted, so a hand-built or
+ * incomplete decoded value cannot enter the guest as a baseline instruction.
+ * Family admission checks the complete active-profile row set. */
+enum orlix_tcti_decoded_feature_identity {
+	ORLIX_TCTI_DECODE_FEATURE_UNKNOWN = 0,
+	ORLIX_TCTI_DECODE_FEATURE_BASELINE,
+	ORLIX_TCTI_DECODE_FEATURE_CRC32,
+	ORLIX_TCTI_DECODE_FEATURE_LSE128,
+	ORLIX_TCTI_DECODE_FEATURE_SME,
+	ORLIX_TCTI_DECODE_FEATURE_SVE,
+};
+
 enum orlix_tcti_memory_index_mode {
 	ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET = 0,
 	ORLIX_TCTI_MEMORY_INDEX_PRE,
@@ -556,6 +569,7 @@ enum orlix_tcti_min_max_immediate_op {
 
 struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_decode_class decode_class;
+	enum orlix_tcti_decoded_feature_identity feature_identity;
 	u32 instruction;
 	u8 rd;
 	u8 rn;

@@ -21,9 +21,11 @@
 #define AUXV_HWCAP2 ORLIX_TCTI_HWCAP_CATALOG_HWCAP2
 #define ORLIX_TCTI_A64_RUNTIME_CAPABILITY(word, bit, feature, extension) \
 	{ word, bit, #bit, #feature },
+#define ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE(feature, state, identity)
 static const struct orlix_tcti_hwcap_catalog_mapping current_mappings[] = {
 #include "../isa/runtime_profile.def"
 };
+#undef ORLIX_TCTI_A64_ACTIVE_EXECUTION_FEATURE
 #undef ORLIX_TCTI_A64_RUNTIME_CAPABILITY
 #undef AUXV_HWCAP2
 #undef AUXV_HWCAP

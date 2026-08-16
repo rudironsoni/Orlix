@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Ordered publisher-owned OrlixTCTI target-refresh artifact declaration. */
 ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(source_manifest,source_manifest.def,manifest)
+ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(active_execution_profile,target_active_execution_profile_artifact.def,active_execution_profile)
 ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(asl_availability,target_asl_availability.def,asl_availability)
 ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(feature_applicability,target_feature_applicability.def,feature_applicability)
 ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(feature_artifact,target_feature_artifact.def,feature_artifact)

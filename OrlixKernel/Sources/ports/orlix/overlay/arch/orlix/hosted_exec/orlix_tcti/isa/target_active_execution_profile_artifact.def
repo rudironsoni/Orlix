@@ -1,0 +1,2 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include "generations/current/target_active_execution_profile_artifact.def"

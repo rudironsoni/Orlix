@@ -121,6 +121,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/engine.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/active_execution_profile.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_capture.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_contract.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c \
@@ -1059,6 +1060,7 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_active_execution_profile_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
@@ -1270,7 +1272,7 @@ ifneq ($(origin ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS),file)
 $(error instruction-artifact-contributors.mk must define ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS)
 endif
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __candidate-source-revision-tests __candidate-source-revision-artifact-override-rejection-probe __profile-lock-held-probe __target-refresh-syntax-source-check __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __candidate-source-revision-tests __candidate-source-revision-artifact-override-rejection-probe __profile-lock-held-probe __target-refresh-syntax-source-check __tcti-isa-refresh-materialization-source-check __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1294,6 +1296,26 @@ prepare: __tcti-isa-refresh
 else
 prepare: __prepare-kbuild
 endif
+
+# ISA refresh reads durable inputs from this worktree. Materialize the port
+# first so generated output cannot be derived from another checkout.
+__tcti-isa-refresh: __prepare-port
+
+__tcti-isa-refresh-materialization-source-check:
+	@set -euo pipefail; \
+	rules='$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk'; \
+	awk '\
+		/^__tcti-isa-refresh:[[:space:]]/ { \
+			if ($$0 !~ /(^|[[:space:]])__prepare-port([[:space:]]|$$)/) exit 1; \
+			found = 1; \
+		} \
+		END { exit found ? 0 : 1 }' "$$rules" || { \
+		echo 'TCTI ISA refresh must materialize the durable overlay before publishing' >&2; exit 1; \
+	}; \
+	grep -Fq 'cp -R "$$$$overlay_dir/." "$$$$port_tmp_dir"' "$$rules" || { \
+		echo 'Orlix kernel port preparation no longer copies the durable overlay' >&2; exit 1; \
+	}; \
+	printf '%s\n' 'TCTI ISA refresh materialization dependency: passed'
 
 scripts dtbs: __prepare-kbuild
 
@@ -1382,7 +1404,7 @@ __candidate-source-revision-tests:
 	publisher_copy="$$tmp/target_refresh_artifacts.def"; kbuild_copy="$$tmp/Kbuild"; \
 	direct_input_test_root="$(ORLIX_TCTI_ISA_TEST_ROOT)"; direct_input_probe_makefile="$$tmp/direct-input-override.mk"; \
 	printf '%s\n' "src=$$direct_input_test_root" "obj=$$tmp/direct-input-override-obj" "ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE=$(CURDIR)/make/tcti-proof-registry-provenance.mk" "include $$direct_input_test_root/Makefile" '.PHONY: __orlix-tcti-direct-input-override-probe' '__orlix-tcti-direct-input-override-probe:' > "$$direct_input_probe_makefile"; \
-	direct_input_variables=( ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS ); \
+	direct_input_variables=( ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_INPUTS ); \
 	for direct_input_variable in "$${direct_input_variables[@]}"; do direct_input_log="$$tmp/direct-input-override-$$direct_input_variable.log"; if $(MAKE) --no-print-directory -f "$$direct_input_probe_makefile" __orlix-tcti-direct-input-override-probe "$$direct_input_variable=/outside/generated/isa/override.def" > "$$direct_input_log" 2>&1; then fail "command-line override for $$direct_input_variable was accepted"; fi; grep -Fq "$$direct_input_variable cannot be overridden" "$$direct_input_log" || fail "command-line override for $$direct_input_variable did not fail at parse time"; done; \
 	for direct_input_variable in "$${direct_input_variables[@]}"; do direct_input_log="$$tmp/direct-input-environment-$$direct_input_variable.log"; if env "$$direct_input_variable=/outside/generated/isa/environment.def" $(MAKE) --no-print-directory -f "$$direct_input_probe_makefile" __orlix-tcti-direct-input-override-probe > "$$direct_input_log" 2>&1; then fail "environment override for $$direct_input_variable was accepted"; fi; grep -Fq "$$direct_input_variable cannot be overridden" "$$direct_input_log" || fail "environment override for $$direct_input_variable did not fail at parse time"; done; \
 	guard_list_log="$$tmp/direct-input-guard-list-override.log"; if $(MAKE) --no-print-directory -f "$$direct_input_probe_makefile" __orlix-tcti-direct-input-override-probe ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES= ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS=/outside/generated/isa/suppressed.def > "$$guard_list_log" 2>&1; then fail 'direct artifact guard-list override was accepted'; fi; grep -Fq 'ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS cannot be overridden' "$$guard_list_log" || fail 'direct artifact guard-list override did not preserve parse-time rejection'; \

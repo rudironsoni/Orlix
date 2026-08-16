@@ -829,6 +829,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 {
 	struct orlix_tcti_decoded_instruction decoded = {
 		.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED,
+		.feature_identity = ORLIX_TCTI_DECODE_FEATURE_BASELINE,
 		.instruction = instruction,
 	};
 	struct orlix_tcti_sve_predicated_integer_binary sve_predicated_binary;
@@ -888,6 +889,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	case AARCH64_SMSTART_ZA:
 	case AARCH64_SMSTART_SM_ZA:
 		decoded.decode_class = ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE;
+		decoded.feature_identity = ORLIX_TCTI_DECODE_FEATURE_SME;
 		decoded.sme_pstate_operation = ORLIX_TCTI_SME_PSTATE_SMSTART;
 		decoded.sme_streaming_mode =
 			instruction != AARCH64_SMSTART_ZA;
@@ -897,6 +899,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	case AARCH64_SMSTOP_ZA:
 	case AARCH64_SMSTOP_SM_ZA:
 		decoded.decode_class = ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE;
+		decoded.feature_identity = ORLIX_TCTI_DECODE_FEATURE_SME;
 		decoded.sme_pstate_operation = ORLIX_TCTI_SME_PSTATE_SMSTOP;
 		decoded.sme_streaming_mode =
 			instruction != AARCH64_SMSTOP_ZA;
@@ -910,6 +913,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 						      &sve_predicated_binary);
 	if (!sve_ret) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY;
+		decoded.feature_identity = ORLIX_TCTI_DECODE_FEATURE_SVE;
 		decoded.sve_integer_binary_op = sve_predicated_binary.op;
 		decoded.sve_predication = sve_predicated_binary.predication;
 		decoded.rd = sve_predicated_binary.zd;
@@ -1905,6 +1909,9 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		}
 
 		decoded.decode_class = ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE;
+		if (decoded.dp2_op == ORLIX_TCTI_DP2_CRC32 ||
+			decoded.dp2_op == ORLIX_TCTI_DP2_CRC32C)
+			decoded.feature_identity = ORLIX_TCTI_DECODE_FEATURE_CRC32;
 		decoded.rd = instruction & 0x1fU;
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
@@ -2049,6 +2056,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.release = instruction & BIT(22);
 		decoded.pair = true;
 		decoded.lse128 = true;
+		decoded.feature_identity = ORLIX_TCTI_DECODE_FEATURE_LSE128;
 		return decoded;
 	}
 

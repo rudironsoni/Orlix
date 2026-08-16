@@ -6,6 +6,7 @@
 #include "target_feature_field_domain_binding_artifact_generator.h"
 #include "target_feature_sat.h"
 #include "target_runtime_capability_cohort_artifact_generator.h"
+#include "target_active_execution_profile_artifact_generator.h"
 #include "target_instruction_artifact_generator.h"
 #include "target_manifest_generator.h"
 #include "target_refresh.h"
@@ -51,7 +52,7 @@
 #define ORLIX_TCTI_TARGET_REFRESH_FEATURES_BYTE_LENGTH 1243621U
 #define ORLIX_TCTI_TARGET_REFRESH_REGISTERS_BYTE_LENGTH 96016602U
 #define ORLIX_TCTI_TARGET_REFRESH_SCHEMA "orlix-tcti-aarchmrs-source-v3"
-#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh-system-accessor-v2"
+#define ORLIX_TCTI_TARGET_REFRESH_GENERATOR "orlix-tcti-target-refresh-active-execution-profile-v3"
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCES 605U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_GROUPS 362U
 #define ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_MAPPED 605U
@@ -69,6 +70,18 @@ struct artifact_bytes {
 	char *data;
 	size_t length;
 };
+
+static int emit_active_execution_profile(const struct source_bytes *features,
+	const struct artifact_bytes *feature_applicability,
+	const struct source_bytes *profile,
+	const struct source_bytes *promotion_manifest,
+	const struct source_bytes *generator_schema,
+	const struct source_bytes *proof,
+	const struct source_bytes *cohort,
+	const struct source_bytes *classification,
+	const struct source_bytes *registry,
+	const struct artifact_bytes *source_manifest,
+	struct artifact_bytes *artifact);
 
 #define ARRAY_SIZE(values) (sizeof(values) / sizeof((values)[0]))
 
@@ -871,12 +884,21 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 				    const struct artifact_bytes *instruction_artifact,
 				    const struct artifact_bytes *feature_artifact,
 				    const struct artifact_bytes *feature_applicability,
-				    const struct artifact_bytes *feature_field_domains,
+	const struct artifact_bytes *feature_field_domains,
 	const struct artifact_bytes *runtime_capability_cohort,
+	const struct artifact_bytes *active_execution_profile,
 	const struct artifact_bytes *register_artifact,
-	const struct artifact_bytes *system_accessors)
+	const struct artifact_bytes *system_accessors,
+	const struct source_bytes *features,
+	const struct source_bytes *profile,
+	const struct source_bytes *promotion_manifest,
+	const struct source_bytes *generator_schema,
+	const struct source_bytes *proof,
+	const struct source_bytes *generated_runtime_capability_cohort,
+	const struct source_bytes *classification,
+	const struct source_bytes *registry)
 {
-	size_t feature_counts[6], cohort_counts[4];
+	size_t feature_counts[6], cohort_counts[4], profile_counts[3];
 	size_t register_counts[24], accessor_counts[8], accessor_semantic_counts[9];
 	size_t index;
 	size_t accessor_outcomes = 0;
@@ -955,6 +977,38 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 		cohort_counts[1])
 		return -1;
 
+	/* The active profile is a closed, generated policy table. HWCAP is not an
+	 * input. Re-emit it here from the exact promotion, cohort, source-bound
+	 * proof, classification, and #120-projected registry inputs before the
+	 * bundle can publish. That admits a future ENABLED row only when every
+	 * binding verifies, while leaving unproven rows fail-closed. */
+	if (!has_token(active_execution_profile,
+		       "ORLIX_TCTI_A64_ACTIVE_EXECUTION_PROFILE_SOURCE(") ||
+	    parse_counts(active_execution_profile,
+		"ORLIX_TCTI_A64_ACTIVE_EXECUTION_PROFILE_COUNTS(",
+		profile_counts, ARRAY_SIZE(profile_counts)) ||
+	    profile_counts[0] != profile_counts[1] + profile_counts[2] ||
+	    count_token(active_execution_profile,
+		"ORLIX_TCTI_A64_ACTIVE_EXECUTION_PROFILE_ENTRY(") != profile_counts[0] ||
+	    count_token(active_execution_profile, ", ENABLED,") != profile_counts[1] ||
+	    count_token(active_execution_profile, ", DISABLED,") != profile_counts[2])
+		return -1;
+	{
+		struct artifact_bytes expected_profile = { 0 };
+		int invalid = emit_active_execution_profile(features,
+			feature_applicability, profile,
+			promotion_manifest, generator_schema, proof,
+			generated_runtime_capability_cohort,
+			classification, registry, manifest, &expected_profile) ||
+			expected_profile.length != active_execution_profile->length ||
+			memcmp(expected_profile.data, active_execution_profile->data,
+			       active_execution_profile->length);
+
+		free(expected_profile.data);
+		if (invalid)
+			return -1;
+	}
+
 	/* Both register-derived artifacts bind one register source and reconcile
 	 * every emitted system accessor into exactly one outcome bucket. */
 	if (!has_token(register_artifact, "TREG_SRC(") ||
@@ -1020,6 +1074,8 @@ const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_
 		return "feature applicability artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT:
 		return "runtime capability cohort artifact generation failed";
+	case ORLIX_TCTI_TARGET_REFRESH_ACTIVE_EXECUTION_PROFILE:
+		return "active execution profile artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_REGISTERS: return "register artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS: return "system accessor reconciliation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_PUBLISH: return "transactional publication failed";
@@ -1072,6 +1128,31 @@ static int read_source(const char *path, struct source_bytes *source,
 	return 0;
 }
 
+static int read_source_at(int root_fd, const char *path,
+	struct source_bytes *source, enum orlix_tcti_target_refresh_error *error)
+{
+	char fd_path[64];
+	int fd;
+
+	fd = openat(root_fd, path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0 || snprintf(fd_path, sizeof(fd_path), "/dev/fd/%d", fd) >=
+		(int)sizeof(fd_path)) {
+		if (fd >= 0)
+			close(fd);
+		*error = ORLIX_TCTI_TARGET_REFRESH_SOURCE_IO;
+		return -1;
+	}
+	if (read_source(fd_path, source, error)) {
+		close(fd);
+		return -1;
+	}
+	if (close(fd)) {
+		*error = ORLIX_TCTI_TARGET_REFRESH_SOURCE_IO;
+		return -1;
+	}
+	return 0;
+}
+
 static int capture(FILE *output, struct artifact_bytes *artifact)
 {
 	long length;
@@ -1110,7 +1191,7 @@ static int emit_manifest(const struct source_bytes *source,
 
 static int emit_semantic_provenance(const struct source_bytes *source,
 				    const struct orlix_tcti_arm_xml_package *package,
-				    struct artifact_bytes *artifact)
+		struct artifact_bytes *artifact)
 {
 	FILE *output = tmpfile();
 	int result;
@@ -1199,6 +1280,34 @@ static int emit_runtime_capability_cohort(const struct source_bytes *instruction
 		instructions->data, instructions->length, features->data,
 		features->length, output) ==
 		ORLIX_TCTI_RUNTIME_CAPABILITY_COHORT_ARTIFACT_GENERATOR_OK &&
+		!capture(output, artifact) ? 0 : -1;
+	fclose(output);
+	return result;
+}
+
+static int emit_active_execution_profile(const struct source_bytes *features,
+	const struct artifact_bytes *feature_applicability,
+	const struct source_bytes *profile, const struct source_bytes *promotion_manifest,
+	const struct source_bytes *generator_schema, const struct source_bytes *proof,
+	const struct source_bytes *cohort, const struct source_bytes *classification,
+	const struct source_bytes *registry, const struct artifact_bytes *source_manifest,
+	struct artifact_bytes *artifact)
+{
+	FILE *output = tmpfile();
+	int result;
+
+	if (!output)
+		return -1;
+	result = orlix_tcti_active_execution_profile_artifact_emit(
+		features->data, features->length, feature_applicability->data,
+		feature_applicability->length, profile->data, profile->length,
+		promotion_manifest->data, promotion_manifest->length,
+		generator_schema->data, generator_schema->length, proof->data, proof->length,
+		cohort->data, cohort->length,
+		classification->data, classification->length, registry->data, registry->length,
+		source_manifest->data, source_manifest->length,
+		output) ==
+		ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_GENERATOR_OK &&
 		!capture(output, artifact) ? 0 : -1;
 	fclose(output);
 	return result;
@@ -1302,19 +1411,24 @@ static int emit_system_accessors(const struct source_bytes *source,
 }
 
 int orlix_tcti_target_refresh_with_fault(
-	int canonical_root_fd, const char *instructions_path,
+	int publish_root_fd, int source_tcti_root_fd, const char *instructions_path,
 	const char *features_path, const char *registers_path,
 	const char *arm_xml_archive_path, const char *arm_xml_release_path,
 	const struct orlix_tcti_target_refresh_fault *fault,
 	struct orlix_tcti_target_refresh_result *result)
 {
 	struct source_bytes instructions = { 0 }, features = { 0 }, registers = { 0 };
+	struct source_bytes profile = { 0 }, promotion_manifest = { 0 };
+	struct source_bytes generator_schema = { 0 }, proof = { 0 };
+	struct source_bytes classification = { 0 }, registry = { 0 };
+	struct source_bytes generated_runtime_capability_cohort = { 0 };
 	struct artifact_bytes manifest = { 0 }, asl_availability = { 0 };
 	struct artifact_bytes instruction_artifact = { 0 };
 	struct artifact_bytes feature_artifact = { 0 }, register_artifact = { 0 };
 	struct artifact_bytes feature_applicability = { 0 };
 	struct artifact_bytes feature_field_domains = { 0 };
 	struct artifact_bytes runtime_capability_cohort = { 0 };
+	struct artifact_bytes active_execution_profile = { 0 };
 	struct artifact_bytes system_accessors = { 0 };
 	struct orlix_tcti_target_artifact artifacts[] = {
 #define ORLIX_TCTI_TARGET_REFRESH_ARTIFACT(identifier, artifact_name, bytes) \
@@ -1340,11 +1454,22 @@ int orlix_tcti_target_refresh_with_fault(
 	char reconciliation_identity[65];
 	enum orlix_tcti_target_refresh_error error = ORLIX_TCTI_TARGET_REFRESH_OK;
 	size_t artifact_index;
+	int source_isa_fd = -1;
 
 	if (result)
 		*result = (struct orlix_tcti_target_refresh_result) { 0 };
-	if (canonical_root_fd < 0 || !instructions_path || !features_path ||
+	if (publish_root_fd < 0 || source_tcti_root_fd < 0 || !instructions_path || !features_path ||
 	    !registers_path || !arm_xml_archive_path || !arm_xml_release_path) {
+		set_result(result, ORLIX_TCTI_TARGET_REFRESH_INVALID_ARGUMENT);
+		errno = EINVAL;
+		return -1;
+	}
+	/* Keep ISA and #120 proof-projection reads below one TCTI source descriptor.
+	 * The publish root may be a hermetic test destination, but it must never
+	 * select a second source tree or escape the ISA descriptor with "..". */
+	source_isa_fd = openat(source_tcti_root_fd, "isa",
+			       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (source_isa_fd < 0) {
 		set_result(result, ORLIX_TCTI_TARGET_REFRESH_INVALID_ARGUMENT);
 		errno = EINVAL;
 		return -1;
@@ -1352,6 +1477,13 @@ int orlix_tcti_target_refresh_with_fault(
 	if (read_source(instructions_path, &instructions, &error) ||
 	    read_source(features_path, &features, &error) ||
 	    read_source(registers_path, &registers, &error))
+		goto out;
+	if (read_source_at(source_isa_fd, "runtime_profile.def", &profile, &error) ||
+	    read_source_at(source_isa_fd, "active_execution_promotion_manifest.def", &promotion_manifest, &error) ||
+	    read_source_at(source_isa_fd, "build-time/target_active_execution_profile_artifact_generator.c", &generator_schema, &error) ||
+	    read_source_at(source_isa_fd, "source_bound_proof.def", &proof, &error) ||
+	    read_source_at(source_isa_fd, "target_classification.def", &classification, &error) ||
+	    read_source_at(source_isa_fd, "proof_registry_projection.def", &registry, &error))
 		goto out;
 	orlix_tcti_target_artifact_sha256(instructions.data, instructions.length,
 					 instruction_digest);
@@ -1430,6 +1562,17 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT;
 		goto out;
 	}
+	generated_runtime_capability_cohort.data = runtime_capability_cohort.data;
+	generated_runtime_capability_cohort.length = runtime_capability_cohort.length;
+	if (emit_active_execution_profile(&features, &feature_applicability, &profile,
+						  &promotion_manifest,
+					  &generator_schema, &proof,
+					  &generated_runtime_capability_cohort,
+					  &classification, &registry, &manifest,
+					  &active_execution_profile)) {
+		error = ORLIX_TCTI_TARGET_REFRESH_ACTIVE_EXECUTION_PROFILE;
+		goto out;
+	}
 	if (emit_registers(&registers, &register_artifact)) {
 		error = ORLIX_TCTI_TARGET_REFRESH_REGISTERS;
 		goto out;
@@ -1473,15 +1616,20 @@ int orlix_tcti_target_refresh_with_fault(
 	if (validate_artifact_bundle(&manifest, &asl_availability,
 				     &instruction_artifact, &feature_artifact,
 				     &feature_applicability,
-				     &feature_field_domains,
-				     &runtime_capability_cohort,
-				     &register_artifact, &system_accessors)) {
+			     &feature_field_domains,
+			     &runtime_capability_cohort,
+			     &active_execution_profile,
+			     &register_artifact, &system_accessors,
+			     &features, &profile, &promotion_manifest,
+			     &generator_schema, &proof,
+			     &generated_runtime_capability_cohort, &classification,
+			     &registry)) {
 		error = ORLIX_TCTI_TARGET_REFRESH_VALIDATION;
 		errno = EINVAL;
 		goto out;
 	}
 	if (orlix_tcti_target_artifact_publish(
-		    canonical_root_fd, ORLIX_TCTI_TARGET_REFRESH_PUBLISH_NAME,
+		    publish_root_fd, ORLIX_TCTI_TARGET_REFRESH_PUBLISH_NAME,
 		    ORLIX_TCTI_TARGET_REFRESH_GENERATION_PREFIX, artifacts,
 		    sizeof(artifacts) / sizeof(artifacts[0]), &provenance,
 		    fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_PUBLICATION ?
@@ -1498,9 +1646,13 @@ int orlix_tcti_target_refresh_with_fault(
 	 */
 out:
 	orlix_tcti_arm_xml_package_destroy(&arm_xml_package);
+	if (source_isa_fd >= 0)
+		close(source_isa_fd);
 	free(instructions.data);
 	free(features.data);
 	free(registers.data);
+	free(profile.data); free(promotion_manifest.data); free(generator_schema.data);
+	free(proof.data); free(classification.data); free(registry.data);
 	free(manifest.data);
 	free(asl_availability.data);
 	free(instruction_artifact.data);
@@ -1508,6 +1660,7 @@ out:
 	free(feature_applicability.data);
 	free(feature_field_domains.data);
 	free(runtime_capability_cohort.data);
+	free(active_execution_profile.data);
 	free(register_artifact.data);
 	free(system_accessors.data);
 	set_result(result, error);
@@ -1515,13 +1668,13 @@ out:
 }
 
 int orlix_tcti_target_refresh(
-	int canonical_root_fd, const char *instructions_path,
+	int publish_root_fd, int source_tcti_root_fd, const char *instructions_path,
 	const char *features_path, const char *registers_path,
 	const char *arm_xml_archive_path, const char *arm_xml_release_path,
 	struct orlix_tcti_target_refresh_result *result)
 {
 	return orlix_tcti_target_refresh_with_fault(
-		canonical_root_fd, instructions_path, features_path, registers_path,
+		publish_root_fd, source_tcti_root_fd, instructions_path, features_path, registers_path,
 		arm_xml_archive_path, arm_xml_release_path, NULL, result);
 }
 
@@ -1529,24 +1682,33 @@ int orlix_tcti_target_refresh(
 int main(int argc, char **argv)
 {
 	struct orlix_tcti_target_refresh_result result;
-	int canonical_fd;
+	int publish_fd;
+	int source_fd;
 	int status;
 
 	if (argc != 7) {
 		fprintf(stderr,
-			"usage: %s CANONICAL_DIR Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
+			"usage: %s TCTI_DIR Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
 			argv[0]);
 		return EXIT_FAILURE;
 	}
-	canonical_fd = open(argv[1],
+	source_fd = open(argv[1],
 			    O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-	if (canonical_fd < 0) {
+	if (source_fd < 0) {
 		fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
 		return EXIT_FAILURE;
 	}
-	status = orlix_tcti_target_refresh(canonical_fd, argv[2], argv[3],
-					   argv[4], argv[5], argv[6], &result);
-	close(canonical_fd);
+	publish_fd = openat(source_fd, "isa",
+			    O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (publish_fd < 0) {
+		fprintf(stderr, "%s/isa: %s\n", argv[1], strerror(errno));
+		close(source_fd);
+		return EXIT_FAILURE;
+	}
+	status = orlix_tcti_target_refresh(publish_fd, source_fd, argv[2], argv[3],
+				   argv[4], argv[5], argv[6], &result);
+	close(publish_fd);
+	close(source_fd);
 	if (status) {
 		fprintf(stderr, "OrlixTCTI ISA refresh: %s",
 			orlix_tcti_target_refresh_error_name(result.error));
