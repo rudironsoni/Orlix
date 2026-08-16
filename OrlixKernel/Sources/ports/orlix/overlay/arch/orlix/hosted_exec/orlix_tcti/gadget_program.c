@@ -98,12 +98,19 @@ static int orlix_tcti_gadget_execute_memory_tagging(
 	const struct orlix_tcti_gadget_word **cursor,
 	unsigned long *fault_address,
 	struct orlix_tcti_native_capture *capture);
+static int orlix_tcti_gadget_execute_setgo(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture);
 
 static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_MEMORY_TAGGING)
 		return orlix_tcti_gadget_execute_memory_tagging;
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_SET_GO)
+		return orlix_tcti_gadget_execute_setgo;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return orlix_tcti_gadget_execute_flag_manipulation;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
@@ -118,7 +125,8 @@ static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
 	return gadget == orlix_tcti_gadget_execute_decoded ||
 		gadget == orlix_tcti_gadget_execute_crc32 ||
 		gadget == orlix_tcti_gadget_execute_flag_manipulation ||
-		gadget == orlix_tcti_gadget_execute_memory_tagging;
+		gadget == orlix_tcti_gadget_execute_memory_tagging ||
+		gadget == orlix_tcti_gadget_execute_setgo;
 }
 
 enum orlix_tcti_gadget_program_kind orlix_tcti_gadget_program_first_kind(
@@ -159,6 +167,21 @@ static int orlix_tcti_gadget_execute_memory_tagging(
 		orlix_tcti_native_capture_after_decoded(capture, mm, regs,
 							&decoded);
 	return ret;
+}
+
+static int orlix_tcti_gadget_execute_setgo(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_gadget_word **cursor,
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture)
+{
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	/* SETGO has no compatible official execution contract in the pinned source. */
+	(void)mm;
+	(void)regs;
+	(void)fault_address;
+	(void)capture;
+	return -EOPNOTSUPP;
 }
 
 static int orlix_tcti_gadget_halt(struct mm_struct *mm, struct pt_regs *regs,

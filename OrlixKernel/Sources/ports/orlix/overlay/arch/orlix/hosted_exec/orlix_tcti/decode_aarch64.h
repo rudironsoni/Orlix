@@ -69,12 +69,33 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT,
 	ORLIX_TCTI_DECODE_FP_INT_CONVERT,
 	ORLIX_TCTI_DECODE_MOPS_COPY,
+	/*
+	 * The 2026-06 source contains the twelve FEAT_MOPS_GO encodings but
+	 * explicitly omits their execute semantics.  Keep them distinct from MTE:
+	 * a decoder match must never make them look like a supported tag store.
+	 */
+	ORLIX_TCTI_DECODE_SET_GO,
 };
 
 enum orlix_tcti_mops_copy_stage {
 	ORLIX_TCTI_MOPS_COPY_PROLOGUE = 0,
 	ORLIX_TCTI_MOPS_COPY_MAIN,
 	ORLIX_TCTI_MOPS_COPY_EPILOGUE,
+};
+
+enum orlix_tcti_setgo_op {
+	ORLIX_TCTI_SETGO_P = 0,
+	ORLIX_TCTI_SETGO_PT,
+	ORLIX_TCTI_SETGO_PN,
+	ORLIX_TCTI_SETGO_PTN,
+	ORLIX_TCTI_SETGO_M,
+	ORLIX_TCTI_SETGO_MT,
+	ORLIX_TCTI_SETGO_MN,
+	ORLIX_TCTI_SETGO_MTN,
+	ORLIX_TCTI_SETGO_E,
+	ORLIX_TCTI_SETGO_ET,
+	ORLIX_TCTI_SETGO_EN,
+	ORLIX_TCTI_SETGO_ETN,
 };
 
 enum orlix_tcti_memory_index_mode {
@@ -636,6 +657,7 @@ struct orlix_tcti_decoded_instruction {
 	u64 logical_immediate;
 	enum orlix_tcti_memory_index_mode memory_index_mode;
 	enum orlix_tcti_memory_tagging_op memory_tagging_op;
+	enum orlix_tcti_setgo_op setgo_op;
 	enum orlix_tcti_logical_op logical_op;
 	enum orlix_tcti_simd_modified_immediate_op simd_modified_immediate_op;
 	enum orlix_tcti_simd_vector_arithmetic_op simd_arithmetic_op;

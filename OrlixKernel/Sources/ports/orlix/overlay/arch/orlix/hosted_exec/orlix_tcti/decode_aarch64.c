@@ -68,6 +68,9 @@
 #define AARCH64_MTE_DP2_MASK 0xffe0fc00U
 #define AARCH64_IRG_PATTERN 0x9ac01000U
 #define AARCH64_GMI_PATTERN 0x9ac01400U
+/* Exact AARCHMRS 2026-06 source ordinals 2675-2686, FEAT_MOPS_GO + FEAT_MTE. */
+#define AARCH64_SETGO_MASK 0x3ffffc00U
+#define AARCH64_SETGOP_PATTERN 0x1ddf0000U
 #define AARCH64_MIN_MAX_IMM_MASK 0x7ff00000U
 #define AARCH64_MIN_MAX_IMM_PATTERN 0x11c00000U
 #define AARCH64_ADD_SUB_SHIFTED_REG_MASK 0x1f200000U
@@ -1138,6 +1141,25 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.tag_offset = (instruction >> 10) & 0xfU;
 		decoded.imm6 = (instruction >> 16) & 0x3fU;
+		return decoded;
+	}
+
+	/*
+	 * SETGO* is not interchangeable with the specified SETG* family below.
+	 * Match the pinned twelve-leaf matrix before generic load/store decoding;
+	 * its fixed production disposition is selected by gadget_program.c.
+	 */
+	if ((instruction & AARCH64_SETGO_MASK) >= AARCH64_SETGOP_PATTERN &&
+	    (instruction & AARCH64_SETGO_MASK) <=
+		AARCH64_SETGOP_PATTERN + 0xb000U) {
+		u32 setgo_index = ((instruction & AARCH64_SETGO_MASK) -
+			AARCH64_SETGOP_PATTERN) >> 12;
+
+		decoded.decode_class = ORLIX_TCTI_DECODE_SET_GO;
+		decoded.setgo_op = (enum orlix_tcti_setgo_op)setgo_index;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rs = (instruction >> 16) & 0x1fU;
 		return decoded;
 	}
 

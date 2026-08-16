@@ -39,9 +39,10 @@ static const char *orlix_tcti_mops_ddi0602_locator(u32 ordinal)
  * pinned AARCHMRS 2026-06 artifact.  `operation` is selected from the source
  * operation sequence, so a caller cannot accidentally treat every phase as
  * the same instruction. `asl_operation` identifies the external architecture
- * semantic locator. The 12 FEAT_MOPS_GO leaves are explicitly "Not specified"
- * by their official operation source; the remaining 120 leaves have external
- * DDI0602 provenance. Neither disposition grants implementation or proof.
+ * locator. The 12 FEAT_MOPS_GO leaves are explicitly "Not specified" by their
+ * direct official operation source. They remain unimplemented and receive no
+ * execution or proof credit. The remaining 120 leaves use their external
+ * DDI0602 provenance and remain unimplemented here.
  */
 struct orlix_tcti_mops_leaf_group {
 	u32 first_ordinal;

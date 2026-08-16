@@ -550,6 +550,8 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 		return decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDG ||
 		       decoded->memory_tagging_op == ORLIX_TCTI_MTE_LDGM ?
 			ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
+	case ORLIX_TCTI_DECODE_SET_GO:
+		return ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
 	}
