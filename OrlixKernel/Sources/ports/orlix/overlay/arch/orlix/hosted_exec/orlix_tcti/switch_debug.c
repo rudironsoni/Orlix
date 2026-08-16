@@ -15,6 +15,7 @@
 #include <internal/asm/host_time.h>
 
 #include "decode_aarch64.h"
+#include "conditional_control.h"
 #include "fixed_fp.h"
 #include "semantics.h"
 #include "system_accessor.h"
@@ -7580,6 +7581,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 
 	if (!regs || !decoded)
 		return -EINVAL;
+	if (orlix_tcti_conditional_control_decoded(decoded))
+		return orlix_tcti_execute_conditional_control_semantics(regs, decoded);
 
 	switch (decoded->decode_class) {
 	case ORLIX_TCTI_DECODE_FLAG_MANIPULATION:
