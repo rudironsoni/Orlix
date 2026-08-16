@@ -800,7 +800,8 @@ targets:
       base:
         CLANG_ENABLE_MODULE_VERIFIER: YES
         DEFINES_MODULE: YES
-        GENERATE_INFOPLIST_FILE: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: OrlixOSTestApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.rudironsoni.orlix.os.test-app
         PRODUCT_NAME: OrlixOSTestApp
   OrlixKernelHostedTests:

@@ -16,6 +16,8 @@ final class OrlixOSTestApp: UIResponder, UIApplicationDelegate {
     }
 }
 
+final class OrlixOSTestAppSceneDelegate: UIResponder, UIWindowSceneDelegate {}
+
 private enum OrlixOSTestAppLaunchUpstreamRunner {
     private static let environmentKey = "ORLIX_UPSTREAM_TEST_SPEC"
 
