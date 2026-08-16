@@ -66,7 +66,7 @@ struct classification_row {
 	{ ORLIX_TCTI_SCALAR_STRINGIFY(leaf), \
 	  ORLIX_TCTI_SCALAR_CLASS_##classification },
 static const struct classification_row classification_rows[] = {
-#include "../isa/target_classification.def"
+#include "../isa/generations/current/target_classification.def"
 };
 #undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 #undef ORLIX_TCTI_SCALAR_STRINGIFY

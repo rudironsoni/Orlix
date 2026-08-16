@@ -873,7 +873,7 @@ static const struct orlix_tcti_a64_kbuild_source_row builtin_source[] = {
 	  ORLIX_TCTI_A64_KBUILD_REL(relation), canonical, evidence, proof },
 static const struct orlix_tcti_a64_kbuild_classification_row
 builtin_classification[] = {
-#include "../isa/target_classification.def"
+#include "../isa/generations/current/target_classification.def"
 };
 #undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 

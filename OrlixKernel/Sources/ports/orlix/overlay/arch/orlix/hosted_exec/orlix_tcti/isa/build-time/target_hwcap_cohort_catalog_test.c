@@ -108,7 +108,7 @@ static size_t apply_production_registry_proofs(
 	  NULL, NULL, NULL },
 static const struct orlix_tcti_target_ledger_classification_row
 current_classifications[] = {
-#include "../isa/target_classification.def"
+#include "../isa/generations/current/target_classification.def"
 };
 #undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 #undef ALIAS_OR_DUPLICATE

@@ -4,6 +4,7 @@
 
 #include "target_artifact_publisher.h"
 #include "target_arm_xml_package.h"
+#include "target_classification_generator.h"
 
 enum orlix_tcti_target_refresh_error {
 	ORLIX_TCTI_TARGET_REFRESH_OK = 0,
@@ -15,6 +16,7 @@ enum orlix_tcti_target_refresh_error {
 	ORLIX_TCTI_TARGET_REFRESH_PARSE,
 	ORLIX_TCTI_TARGET_REFRESH_VALIDATION,
 	ORLIX_TCTI_TARGET_REFRESH_MANIFEST,
+	ORLIX_TCTI_TARGET_REFRESH_CLASSIFICATION,
 	ORLIX_TCTI_TARGET_REFRESH_SEMANTIC_PROVENANCE,
 	ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS,
 	ORLIX_TCTI_TARGET_REFRESH_FEATURES,
@@ -29,6 +31,7 @@ enum orlix_tcti_target_refresh_error {
 struct orlix_tcti_target_refresh_result {
 	enum orlix_tcti_target_refresh_error error;
 	enum orlix_tcti_arm_xml_package_error arm_xml_error;
+	enum orlix_tcti_target_classification_error classification_error;
 	struct orlix_tcti_target_artifact_publish_result publish;
 };
 

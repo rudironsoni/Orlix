@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #define _POSIX_C_SOURCE 200809L
 #include "target_asl_availability.h"
+#include "target_classification_generator.h"
 #include "target_feature_artifact_generator.h"
 #include "target_feature_applicability_generator.h"
 #include "target_feature_field_domain_binding_artifact_generator.h"
@@ -867,6 +868,7 @@ static int validate_feature_applicability_artifact_packed(
 }
 
 static int validate_artifact_bundle(const struct artifact_bytes *manifest,
+				    const struct artifact_bytes *classification,
 				    const struct artifact_bytes *asl_availability,
 				    const struct artifact_bytes *instruction_artifact,
 				    const struct artifact_bytes *feature_artifact,
@@ -885,6 +887,8 @@ static int validate_artifact_bundle(const struct artifact_bytes *manifest,
 	if (!has_token(manifest, "ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(") ||
 	    !has_token(manifest, ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS_SHA256) ||
 	    count_token(manifest, "ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(") != 4350U ||
+	    count_token(classification,
+			"ORLIX_TCTI_A64_TARGET_CLASSIFICATION(") != 4350U ||
 	    count_token(asl_availability,
 			"ORLIX_TCTI_A64_SEMANTIC_PROVENANCE_SOURCE(") != 1U ||
 	    !has_token(asl_availability,
@@ -1011,6 +1015,8 @@ const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_
 	case ORLIX_TCTI_TARGET_REFRESH_PARSE: return "injected parse failure";
 	case ORLIX_TCTI_TARGET_REFRESH_VALIDATION: return "injected cross-artifact validation failure";
 	case ORLIX_TCTI_TARGET_REFRESH_MANIFEST: return "manifest generation failed";
+	case ORLIX_TCTI_TARGET_REFRESH_CLASSIFICATION:
+		return "target classification generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_SEMANTIC_PROVENANCE: return "external semantic provenance generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_INSTRUCTIONS: return "instruction artifact generation failed";
 	case ORLIX_TCTI_TARGET_REFRESH_FEATURES: return "feature artifact generation failed";
@@ -1310,6 +1316,7 @@ int orlix_tcti_target_refresh_with_fault(
 {
 	struct source_bytes instructions = { 0 }, features = { 0 }, registers = { 0 };
 	struct artifact_bytes manifest = { 0 }, asl_availability = { 0 };
+	struct orlix_tcti_target_classification_output classification = { 0 };
 	struct artifact_bytes instruction_artifact = { 0 };
 	struct artifact_bytes feature_artifact = { 0 }, register_artifact = { 0 };
 	struct artifact_bytes feature_applicability = { 0 };
@@ -1402,6 +1409,13 @@ int orlix_tcti_target_refresh_with_fault(
 		error = ORLIX_TCTI_TARGET_REFRESH_MANIFEST;
 		goto out;
 	}
+	if (orlix_tcti_target_classification_generate(canonical_root_fd,
+						       &classification)) {
+		if (result)
+			result->classification_error = classification.error;
+		error = ORLIX_TCTI_TARGET_REFRESH_CLASSIFICATION;
+		goto out;
+	}
 	if (emit_semantic_provenance(&instructions, &arm_xml_package,
 				  &asl_availability)) {
 		error = ORLIX_TCTI_TARGET_REFRESH_SEMANTIC_PROVENANCE;
@@ -1446,7 +1460,6 @@ int orlix_tcti_target_refresh_with_fault(
 	} while (0);
 #include "target_refresh_artifacts.def"
 #undef ORLIX_TCTI_TARGET_REFRESH_ARTIFACT
-
 	if (fault && fault->stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION) {
 		char *corruption;
 
@@ -1460,7 +1473,7 @@ int orlix_tcti_target_refresh_with_fault(
 		 * the real validator rather than bypassing it synthetically. The
 		 * field-domain fixture preserves its V3 header and removes the rows. */
 		corruption = (char *)artifacts[fault->validation_artifact].data;
-		if (fault->validation_artifact == 4U) {
+		if (fault->validation_artifact == 5U) {
 			char *occurrence = strstr(
 				corruption,
 				ORLIX_TCTI_TARGET_REFRESH_FIELD_DOMAIN_OCCURRENCE_V3);
@@ -1470,7 +1483,10 @@ int orlix_tcti_target_refresh_with_fault(
 		}
 		*corruption = '\0';
 	}
-	if (validate_artifact_bundle(&manifest, &asl_availability,
+	if (validate_artifact_bundle(&manifest,
+				     &(const struct artifact_bytes) {
+					.data = classification.data, .length = classification.length },
+				     &asl_availability,
 				     &instruction_artifact, &feature_artifact,
 				     &feature_applicability,
 				     &feature_field_domains,
@@ -1502,6 +1518,7 @@ out:
 	free(features.data);
 	free(registers.data);
 	free(manifest.data);
+	orlix_tcti_target_classification_destroy(&classification);
 	free(asl_availability.data);
 	free(instruction_artifact.data);
 	free(feature_artifact.data);

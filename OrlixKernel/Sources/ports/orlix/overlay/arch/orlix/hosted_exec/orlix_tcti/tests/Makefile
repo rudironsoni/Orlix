@@ -20,10 +20,10 @@ $(foreach variable,$(ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES),$(if $(filter u
 override ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS = \
 	$(src)/../isa/inventory.def \
 	$(src)/../isa/generations/current/source_manifest.def \
-	$(src)/../isa/target_classification.def
+	$(src)/../isa/generations/current/target_classification.def
 override ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS = \
 	$(src)/../isa/generations/current/source_manifest.def \
-	$(src)/../isa/target_classification.def \
+	$(src)/../isa/generations/current/target_classification.def \
 	$(src)/../isa/generations/current/target_system_accessor_reconciliation.def
 override ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS = \
 	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def

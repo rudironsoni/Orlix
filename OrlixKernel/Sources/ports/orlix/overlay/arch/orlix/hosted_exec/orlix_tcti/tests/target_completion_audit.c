@@ -150,7 +150,7 @@ system_accessor_rows[] = {
 	{ stringify(name), classification, relation, canonical, evidence, proof },
 static const struct orlix_tcti_target_completion_classification_row
 classification_rows[] = {
-#include "../isa/target_classification.def"
+#include "../isa/generations/current/target_classification.def"
 };
 #undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 

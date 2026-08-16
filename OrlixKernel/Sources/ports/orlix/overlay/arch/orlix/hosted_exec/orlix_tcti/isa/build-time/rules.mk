@@ -18,7 +18,8 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES := \
 	-DTARGET_FEATURE_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_RUNTIME_CAPABILITY_COHORT_ARTIFACT_GENERATOR_NO_MAIN \
-	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN
+	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_CLASSIFICATION_GENERATOR_NO_MAIN
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_TEST_DEFINES := \
 	$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES) \
 	-DORLIX_TCTI_TARGET_REFRESH_NO_MAIN \
@@ -33,11 +34,13 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_runtime_capability_cohort_artifact_generator.c \
 	target_register_model.c target_register_artifact_generator.c \
 	target_arm_xml_package.c target_asl_availability.c \
-	target_system_accessor_reconciliation.c
+	target_system_accessor_reconciliation.c target_classification_generator.c \
+	$(ORLIX_TCTI_ISA_TEST_ROOT)/target_instruction_artifact.c \
+	$(ORLIX_TCTI_ISA_TEST_ROOT)/target_proof_registry.c
 
 include $(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/instruction-artifact-contributors.mk
 
-.PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
+.PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-isa-generated-current-check __tcti-instruction-source-check __tcti-operational-note-pipeline-test
 
 __tcti-instruction-source-check:
 	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'
@@ -106,12 +109,6 @@ __tcti-isa-check:
 		target_inventory_import.c target_inventory_import_test.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_inventory_import_test' '$(ORLIX_AARCHMRS_INSTRUCTIONS)'
-	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
-		target_inventory_import.c target_classification_generator.c \
-		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator'
-	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator' \
-		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
-		> '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification.generated.def'
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		target_inventory_import.c target_artifact_publisher.c target_arm_xml_package.c \
 		target_asl_availability.c target_asl_availability_test.c \
@@ -197,3 +194,32 @@ __tcti-isa-refresh: __tcti-isa-check
 		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
 		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)' \
 		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		-DTARGET_CLASSIFICATION_GENERATOR_NO_MAIN \
+		target_classification_generator.c \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_instruction_artifact.c' \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_proof_registry.c' \
+		target_classification_generator_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator_test' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)/generations/current/target_classification.def' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)/target_classification_input.def'
+
+__tcti-isa-generated-current-check:
+	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		$(ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS) \
+		-DTARGET_CLASSIFICATION_GENERATOR_NO_MAIN \
+		target_classification_generator.c \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_instruction_artifact.c' \
+		'$(ORLIX_TCTI_ISA_TEST_ROOT)/target_proof_registry.c' \
+		target_classification_generator_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_classification_generator_test' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)/generations/current/target_classification.def' \
+		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)/target_classification_input.def'

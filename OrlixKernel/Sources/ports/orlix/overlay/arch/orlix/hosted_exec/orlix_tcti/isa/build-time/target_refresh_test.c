@@ -232,8 +232,9 @@ static int full_refresh_is_authoritative_and_idempotent(
 	refresh_status = orlix_tcti_target_refresh(fd, instructions, features,
 		registers, arm_xml_archive, arm_xml_release, &result);
 	if (refresh_status)
-		fprintf(stderr, "refresh failed: %s / %s / %s\n",
+		fprintf(stderr, "refresh failed: %s / %s / %s / %s\n",
 			orlix_tcti_target_refresh_error_name(result.error),
+			orlix_tcti_target_classification_error_name(result.classification_error),
 			orlix_tcti_arm_xml_package_error_name(result.arm_xml_error),
 			orlix_tcti_target_artifact_publish_error_name(
 				result.publish.error));
@@ -339,7 +340,7 @@ static int all_injected_failures_are_atomic(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 0U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release));
-	for (artifact = 0; artifact < 9U; artifact++) {
+	for (artifact = 0; artifact < 10U; artifact++) {
 		char *root = make_root();
 		char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 		char after[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -378,11 +379,11 @@ static int malformed_feature_domain_artifact_does_not_publish(
 	const char *instructions, const char *features, const char *registers,
 	const char *arm_xml_archive, const char *arm_xml_release)
 {
-	/* Artifact 4 is the feature field-domain binding artifact. Its fault
+	/* Artifact 5 is the feature field-domain binding artifact. Its fault
 	 * fixture truncates the emitted V3 occurrence table after generation. */
 	return injected_failure_preserves_prior(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_VALIDATION,
-		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 4U, instructions, features,
+		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 5U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release);
 }
 

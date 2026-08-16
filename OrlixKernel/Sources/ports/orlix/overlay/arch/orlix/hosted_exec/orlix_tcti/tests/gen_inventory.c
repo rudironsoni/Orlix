@@ -157,7 +157,7 @@ static const struct source_manifest_entry source_manifest[] = {
 				       canonical, evidence, proof) \
 	{ stringify(name), (classification) },
 static const struct classification_entry target_classification[] = {
-#include "../isa/target_classification.def"
+#include "../isa/generations/current/target_classification.def"
 };
 #undef ORLIX_TCTI_A64_TARGET_CLASSIFICATION
 #undef ORLIX_TCTI_A64_TARGET_RELATION_DUPLICATE

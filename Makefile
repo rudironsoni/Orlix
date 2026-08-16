@@ -130,6 +130,7 @@ include $(CURDIR)/make/tcti-proof-registry-provenance.mk
 .PHONY: __orlix-tcti-proof-registry-provenance-write
 .PHONY: __orlix-tcti-isa-host-provenance-ready
 .PHONY: __orlix-root-gnu-make-contract-source-check
+.PHONY: orlix-tcti-isa-generated-current-check
 
 all: build
 
@@ -414,7 +415,8 @@ orlix-tcti-isa-maintainer-source-check:
 	}
 	@$(KERNEL_MAKE) __tcti-instruction-source-check
 
-orlix-tcti-isa-host-tests: __orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check
+orlix-tcti-isa-generated-current-check:
+	@$(KERNEL_MAKE) __tcti-isa-generated-current-check
 
 ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_HEADER := $(ORLIX_BUILD_ROOT)/Tests/orlix-tcti-isa/target_proof_registry_provenance.h
 ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_INPUTS := \
@@ -463,7 +465,7 @@ orlix-tcti-isa-host-provenance-dependency-regression:
 	makefile="$(CURDIR)/Makefile"; \
 	fail() { printf 'OrlixTCTI provenance dependency regression failed: %s\n' "$$*" >&2; exit 1; }; \
 	host_prerequisites="$$(awk '/^orlix-tcti-isa-host-tests:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
-	[ "$$host_prerequisites" = '__orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check' ] || fail 'host target bypasses the provenance readiness chain'; \
+	[ "$$host_prerequisites" = '__orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check orlix-tcti-isa-generated-current-check' ] || fail 'host target bypasses the provenance readiness chain'; \
 	audit_prerequisites="$$(awk '/^orlix-tcti-isa-audit:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
 	[ "$$audit_prerequisites" = 'orlix-tcti-isa-host-tests orlix-tcti-native-proof-symbol-check' ] || fail 'aggregate target retains a direct semantic provenance prerequisite'; \
 	readiness_prerequisites="$$(awk '/^__orlix-tcti-isa-host-provenance-ready:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$$makefile")"; \
@@ -472,7 +474,7 @@ orlix-tcti-isa-host-provenance-dependency-regression:
 	[ "$$semantic_invocations" = 1 ] || fail "expected one semantic provenance generation invocation, got $$semantic_invocations"; \
 	printf '%s\n' 'OrlixTCTI provenance dependency regression: passed'
 
-orlix-tcti-isa-host-tests:
+orlix-tcti-isa-host-tests: __orlix-tcti-isa-host-provenance-ready __orlix-tcti-instruction-artifact-inputs-source-check orlix-tcti-isa-generated-current-check
 	@mkdir -p '$(dir $(ORLIX_TCTI_INVENTORY_CONTRACT_TEST))'
 	@$(CC) -std=c17 -Wall -Wextra -Werror \
 		OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/inventory_contract.c \
