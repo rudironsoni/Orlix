@@ -128,6 +128,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/report.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/switch_debug.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/system_accessor.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fpmr_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/fixed_fp.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sve_state.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/sme_state.c \
