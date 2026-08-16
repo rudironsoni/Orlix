@@ -68,12 +68,31 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT,
 	ORLIX_TCTI_DECODE_FP_INT_CONVERT,
 	ORLIX_TCTI_DECODE_MOPS_COPY,
+	ORLIX_TCTI_DECODE_POINTER_AUTHENTICATION,
 };
 
 enum orlix_tcti_mops_copy_stage {
 	ORLIX_TCTI_MOPS_COPY_PROLOGUE = 0,
 	ORLIX_TCTI_MOPS_COPY_MAIN,
 	ORLIX_TCTI_MOPS_COPY_EPILOGUE,
+};
+
+enum orlix_tcti_pauth_op {
+	ORLIX_TCTI_PAUTH_ADD = 0,
+	ORLIX_TCTI_PAUTH_AUTHENTICATE,
+	ORLIX_TCTI_PAUTH_STRIP,
+	ORLIX_TCTI_PAUTH_GENERIC,
+	ORLIX_TCTI_PAUTH_BRANCH,
+	ORLIX_TCTI_PAUTH_LOAD,
+	ORLIX_TCTI_PAUTH_SET_PACM,
+};
+
+enum orlix_tcti_pauth_key_select {
+	ORLIX_TCTI_PAUTH_KEY_APIA = 0,
+	ORLIX_TCTI_PAUTH_KEY_APIB,
+	ORLIX_TCTI_PAUTH_KEY_APDA,
+	ORLIX_TCTI_PAUTH_KEY_APDB,
+	ORLIX_TCTI_PAUTH_KEY_APGA,
 };
 
 enum orlix_tcti_memory_index_mode {
@@ -642,6 +661,8 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_fp_int_convert_op fp_int_op;
 	enum orlix_tcti_multiply_add_sub_op mul_op;
 	enum orlix_tcti_min_max_immediate_op min_max_immediate_op;
+	enum orlix_tcti_pauth_op pauth_op;
+	enum orlix_tcti_pauth_key_select pauth_key;
 	enum orlix_tcti_simd_reduction_op simd_reduction_op;
 	enum orlix_tcti_simd_element_move_op simd_element_move_op;
 	enum orlix_tcti_simd_table_lookup_op simd_table_lookup_op;
@@ -669,6 +690,14 @@ struct orlix_tcti_decoded_instruction {
 	bool mops_forward_only;
 	u8 mops_options;
 	u32 mops_source_ordinal;
+	bool pauth_modifier_zero;
+	bool pauth_modifier_is_sp;
+	bool pauth_modifier_reg_is_rm;
+	bool pauth_use_modifier2;
+	bool pauth_pacm_modifier2;
+	bool pauth_modifier2_is_pc;
+	bool pauth_modifier2_pc_relative;
+	bool pauth_return;
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);
