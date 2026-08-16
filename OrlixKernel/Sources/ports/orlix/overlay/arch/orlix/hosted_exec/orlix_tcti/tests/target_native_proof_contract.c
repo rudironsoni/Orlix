@@ -207,20 +207,24 @@ static int source_complete(const struct orlix_tcti_native_source_identity *sourc
 }
 
 static int semantics_complete(
-	const struct orlix_tcti_native_semantic_provenance *semantics)
+	const struct orlix_tcti_native_semantic_provenance *semantics,
+	const struct orlix_tcti_native_source_identity *source)
 {
 	const orlix_tcti_proof_u32 classifications =
 		ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0 |
 		ORLIX_TCTI_TARGET_PROOF_CLASS_NON_EL0 |
 		ORLIX_TCTI_TARGET_PROOF_CLASS_ARCH_UNDEFINED_OR_UNALLOCATED |
 		ORLIX_TCTI_TARGET_PROOF_CLASS_ALIAS_OR_DUPLICATE;
+	const int unclassified = source && source->classification_present &&
+		source->classification == ORLIX_TCTI_NATIVE_SOURCE_CLASS_UNCLASSIFIED;
 
 	return semantics &&
 	       text_complete(semantics->ddi0602_locator,
 			     sizeof(semantics->ddi0602_locator)) &&
 	       sha256_hex_complete(semantics->ddi0602_sha256) &&
-	       semantics->classification_mask &&
-	       !(semantics->classification_mask & ~classifications) &&
+	       ((semantics->classification_mask &&
+		 !(semantics->classification_mask & ~classifications)) ||
+		(unclassified && !semantics->classification_mask)) &&
 	       text_complete(semantics->implementation_owner,
 			     sizeof(semantics->implementation_owner)) &&
 	       text_complete(semantics->decoder_owner,
@@ -326,7 +330,7 @@ static int registry_entry_complete(
 			       sizeof(entry->semantics.ddi0602_locator)) ||
 		 !sha256_hex_complete(entry->semantics.ddi0602_sha256) ||
 		 !entry->source.classification_present) :
-		!semantics_complete(&entry->semantics)) ||
+		!semantics_complete(&entry->semantics, &entry->source)) ||
 	    !sha256_hex_complete(entry->kernel_archive_input_sha256) ||
 	    !sha256_hex_complete(entry->kernel_config_sha256) ||
 	    !sha256_hex_complete(entry->build_profile_sha256) ||
@@ -606,7 +610,8 @@ orlix_tcti_proof_u64 orlix_tcti_native_capture_declaration_identity(
 	const struct orlix_tcti_native_capture_declaration *declaration)
 {
 	orlix_tcti_proof_u8 *bytes;
-	size_t length = 64U;
+	size_t length = 7U * sizeof(orlix_tcti_proof_u32) +
+		2U * sizeof(orlix_tcti_proof_u64);
 	size_t cursor = 0;
 	orlix_tcti_proof_u64 identity;
 	size_t index;

@@ -8,6 +8,7 @@
 
 #include <asm/ptrace.h>
 #include <asm/processor.h>
+#include <asm/orlix_tcti.h>
 
 #include "../decode_aarch64.h"
 #include "../native_capture.h"
@@ -19,6 +20,42 @@
 
 #define NATIVE_CAPTURE_SVC 0xd4024681U
 #define NATIVE_CAPTURE_PENDING_CAPACITY 128U
+
+struct native_capture_test_context {
+	struct orlix_tcti_sve_state sve;
+	unsigned long simd[ARRAY_SIZE(current->thread.user_simd)];
+};
+
+static int native_capture_production_test_init(struct kunit *test)
+{
+	struct native_capture_test_context *context;
+
+	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
+	if (!context)
+		return -ENOMEM;
+	memcpy(&context->sve, &current->thread.user_sve,
+	       sizeof(context->sve));
+	memcpy(context->simd, current->thread.user_simd,
+	       sizeof(context->simd));
+	if (orlix_tcti_sve_state_reset(&current->thread.user_sve,
+				       current->thread.user_simd,
+				       ORLIX_TCTI_SVE_DEFAULT_VL_BYTES))
+		return -EINVAL;
+	test->priv = context;
+	return 0;
+}
+
+static void native_capture_production_test_exit(struct kunit *test)
+{
+	struct native_capture_test_context *context = test->priv;
+
+	if (!context)
+		return;
+	memcpy(&current->thread.user_sve, &context->sve,
+	       sizeof(context->sve));
+	memcpy(current->thread.user_simd, context->simd,
+	       sizeof(context->simd));
+}
 
 static u32 native_capture_wire_get32(const u8 *bytes)
 {
@@ -88,6 +125,19 @@ static void native_capture_seed_regs(struct pt_regs *regs, unsigned long address
 static void capture_binds_only_its_registered_row(struct kunit *test)
 {
 	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_capture_session *rejected_session = NULL;
+	size_t registry_count = 0;
+	size_t native_registry_count = 0;
+	const struct orlix_tcti_target_proof_registry_entry *registry =
+		orlix_tcti_target_proof_registry_entries(&registry_count);
+	const struct orlix_tcti_native_proof_registry_entry *native_registry =
+		orlix_tcti_native_proof_registry_entries(&native_registry_count);
+	KUNIT_ASSERT_NOT_NULL(test, registry);
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_TARGET_PROOF_REGISTRY_OK,
+		orlix_tcti_target_proof_registry_initialization_error());
+	KUNIT_ASSERT_GT(test, registry_count, 0);
+	KUNIT_ASSERT_NOT_NULL(test, native_registry);
+	KUNIT_ASSERT_GT(test, native_registry_count, 0);
 	const void *token =
 		orlix_tcti_branch_control_production_capture_token(2227U);
 
@@ -96,7 +146,8 @@ static void capture_binds_only_its_registered_row(struct kunit *test)
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
 	KUNIT_ASSERT_NOT_NULL(test, session);
 	KUNIT_EXPECT_EQ(test, -EPERM, orlix_tcti_native_capture_begin(token, 2230U,
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &rejected_session));
+	orlix_tcti_native_capture_destroy(rejected_session);
 	orlix_tcti_native_capture_destroy(session);
 }
 
@@ -594,6 +645,8 @@ static struct kunit_case native_capture_production_test_cases[] = {
 };
 static struct kunit_suite native_capture_production_test_suite = {
 	.name = "orlix-tcti-native-capture-production",
+	.init = native_capture_production_test_init,
+	.exit = native_capture_production_test_exit,
 	.test_cases = native_capture_production_test_cases,
 };
 kunit_test_suite(native_capture_production_test_suite);

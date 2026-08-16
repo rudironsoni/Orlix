@@ -128,9 +128,9 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         completionMarker: "ORLIX-KSELFTEST-END",
         timeout: 300,
         kernelCommandLineSuffix:
-            "kunit.filter_glob=orlix-tcti-native-observation-production " +
+            "kunit.filter_glob=orlix-tcti-native-capture-production " +
             "orlix.kselftest=boot_profile_contract",
-        expectedKUnitSuite: "orlix-tcti-native-observation-production",
+        expectedKUnitSuite: "orlix-tcti-native-capture-production",
         hostDirectoryFixture: true
     )
 

@@ -1134,12 +1134,16 @@ static bool native_registry_build(void)
 								case_index, binding->source_ordinal,
 								obligation))
 							continue;
-						if (row_index >= count ||
-						    !native_registry_row_build(&rows[row_index], proof,
+		if (row_index >= count ||
+		    !native_registry_row_build(&rows[row_index], proof,
 							binding, proof_case, case_index,
 							&matrix[matrix_index],
-							obligation, artifact))
+							obligation, artifact)) {
+							pr_err("orlix native registry row build failed proof=%s ordinal=%u obligation=%u case=%zu matrix=%zu\\n",
+								proof->id, binding->source_ordinal, obligation,
+								case_index, matrix_index);
 							goto fail;
+						}
 						row_index++;
 					}
 				}
@@ -1154,26 +1158,39 @@ static bool native_registry_build(void)
 		    matrix[proof_index].source.concrete_selector != UINT_MAX) {
 			if (row_index >= count ||
 			    !native_system_accessor_capture_row_build(&rows[row_index],
-				&matrix[proof_index], artifact))
+				&matrix[proof_index], artifact)) {
+				pr_err("orlix native registry system accessor row build failed matrix=%zu ordinal=%u\\n",
+					proof_index, matrix[proof_index].source.tertiary_index);
 				goto fail;
+			}
 			row_index++;
 		}
 	}
 	for (proof_index = 0; proof_index < matrix_count; proof_index++) {
 		if (row_index >= count ||
 		    !native_static_matrix_row_build(&rows[row_index],
-			    &matrix[proof_index], artifact))
+			    &matrix[proof_index], artifact)) {
+			pr_err("orlix native registry static row build failed matrix=%zu ordinal=%u\\n",
+				proof_index, matrix[proof_index].source.source_index);
 			goto fail;
+		}
 		row_index++;
 	}
 	for (proof_index = 0; proof_index < row_index; proof_index++)
 		if (rows[proof_index].production_capture &&
 		    !native_capture_declaration_build(
-			&native_capture_declarations[proof_index], &rows[proof_index]))
+			    &native_capture_declarations[proof_index], &rows[proof_index])) {
+			pr_err("orlix native registry declaration build failed row=%zu ordinal=%u obligation=%u\\n",
+				proof_index, rows[proof_index].source.source_ordinal,
+				rows[proof_index].obligation);
 			goto fail;
+		}
 	if (row_index != count || orlix_tcti_native_proof_registry_validate(
-			rows, count, NULL))
+			rows, count, NULL)) {
+			pr_err("orlix native registry validation failed rows=%zu expected=%zu\\n",
+			row_index, count);
 		goto fail;
+	}
 	native_registry_entries = rows;
 	native_registry_entry_count = count;
 	native_registry_initialized = true;
