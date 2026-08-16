@@ -560,7 +560,7 @@ proof_registry_projection[] = {
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256 \
-	"3ac25a4747de516f7a787b37b3661f3a08fbf1bf5cc43f800f8ee7791ab5c6ef"
+	"1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab"
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_INCLUDE \
 	"#include \"../isa/generations/current/target_asl_availability.def\""
 #define FLAG_MANIPULATION_SEMANTIC_PROVENANCE_ARTIFACT_NAME \
@@ -785,7 +785,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "9be751a8bea957a6dd025ac4bf0019e0467cef8693d94630f5dbc8cf64f8cd7c",
 	  "orlix_tcti_mops_copy_test.o", NULL, NULL, NULL },
 	{ FLAG_MANIPULATION_SOURCE,
-	  "cd6657db509ba00659e9434d742e92d2e443e860988c41e27aa9404cadac47e2",
+	  "04428f7ef7f56106a02cc3127edbfbe0e516ebd60b19fea753b76670fa8b26b5",
 	  "orlix_tcti_flag_manipulation_source_bound_test.o",
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE,
 	  FLAG_MANIPULATION_SEMANTIC_PROVENANCE_SOURCE_SHA256,

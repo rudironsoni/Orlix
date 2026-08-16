@@ -17,7 +17,7 @@
 #define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest"
 #define ORLIX_TCTI_FLAG_SEMANTIC_PROVENANCE_MANIFEST_SHA256 \
-	"3ac25a4747de516f7a787b37b3661f3a08fbf1bf5cc43f800f8ee7791ab5c6ef"
+	"1927584b4abe0870fea34e3885e9b026e8e9c3863b62af309f5a2d35d86874ab"
 
 enum orlix_tcti_flag_linux_visibility {
 	ORLIX_TCTI_FLAG_LINUX_VISIBILITY_TYPED_NA_ARCHITECTURAL_PSTATE = 0,
