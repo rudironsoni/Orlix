@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <asm/ptrace.h>
 #include <linux/errno.h>
 
 #include "branch_control.h"
