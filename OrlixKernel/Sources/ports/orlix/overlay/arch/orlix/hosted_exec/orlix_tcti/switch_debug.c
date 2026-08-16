@@ -3,6 +3,7 @@
 #include <linux/errno.h>
 #include <linux/limits.h>
 #include <linux/log2.h>
+#include <linux/mutex.h>
 #include <linux/preempt.h>
 #include <linux/random.h>
 #include <linux/string.h>
@@ -40,6 +41,9 @@
 #define AARCH64_MTE_TAG_MASK (0xfULL << AARCH64_MTE_TAG_SHIFT)
 #define AARCH64_MTE_ADDRESS_MASK GENMASK_ULL(55, 0)
 #define AARCH64_MTE_GRANULE_SIZE 16U
+
+/* STGP publishes one data pair and its allocation tag as one TCTI tuple. */
+static DEFINE_MUTEX(orlix_tcti_stgp_transaction_lock);
 
 extern u64 orlix_tcti_native_fcvtzs_w_s(u64 value, u64 fractional_bits);
 extern u64 orlix_tcti_native_fcvtzs_w_d(u64 value, u64 fractional_bits);
@@ -2136,6 +2140,67 @@ static int orlix_tcti_execute_load_literal(struct mm_struct *mm,
 	return 0;
 }
 
+static int orlix_tcti_store_stgp_tuple(struct mm_struct *mm,
+				unsigned long tagged_address,
+				const void *buffer, size_t size)
+{
+	unsigned long address = orlix_mte_untagged_address(tagged_address);
+	struct orlix_tcti_user_page pinned = {};
+	u8 old_data[2 * sizeof(u64)];
+	u8 current_tag;
+	u8 tag = orlix_tcti_mte_logical_tag(tagged_address);
+	int ret;
+
+	if (!mm || !buffer || size != 2 * sizeof(u64) ||
+	    !IS_ALIGNED(address, 2 * sizeof(u64)))
+		return -EINVAL;
+
+	mutex_lock(&orlix_tcti_stgp_transaction_lock);
+	ret = orlix_tcti_pin_user_page_faulting(mm, address,
+						ORLIX_TCTI_ACCESS_WRITE, &pinned);
+	if (ret)
+		goto out_unlock;
+	orlix_tcti_unpin_user_page(&pinned);
+	ret = orlix_mte_load_allocation_tag(mm, address, &current_tag);
+	if (ret)
+		goto out_unlock;
+
+	ret = orlix_tcti_read_user_data(mm, address, old_data, sizeof(old_data));
+	if (ret)
+		goto out_unlock;
+	ret = orlix_tcti_write_user_data(mm, address, buffer, size);
+	if (ret)
+		goto out_unlock;
+	/* The #135 API publishes the page tag after the pair data. */
+	ret = orlix_mte_store_allocation_tag(mm, address, tag);
+	if (ret)
+		(void)orlix_tcti_write_user_data(mm, address, old_data,
+						 sizeof(old_data));
+
+out_unlock:
+	mutex_unlock(&orlix_tcti_stgp_transaction_lock);
+	return ret;
+}
+
+int orlix_tcti_stgp_read_tuple(struct mm_struct *mm,
+			       unsigned long tagged_address,
+			       void *buffer, size_t size, u8 *tag)
+{
+	unsigned long address = orlix_mte_untagged_address(tagged_address);
+	int ret;
+
+	if (!mm || !buffer || !tag || size != 2 * sizeof(u64) ||
+	    !IS_ALIGNED(address, 2 * sizeof(u64)))
+		return -EINVAL;
+
+	mutex_lock(&orlix_tcti_stgp_transaction_lock);
+	ret = orlix_tcti_read_user_data(mm, address, buffer, size);
+	if (!ret)
+		ret = orlix_mte_load_allocation_tag(mm, address, tag);
+	mutex_unlock(&orlix_tcti_stgp_transaction_lock);
+	return ret;
+}
+
 static int orlix_tcti_execute_load_store_pair(struct mm_struct *mm,
 					struct pt_regs *regs,
 					const struct orlix_tcti_decoded_instruction *decoded,
@@ -2165,7 +2230,7 @@ static int orlix_tcti_execute_load_store_pair(struct mm_struct *mm,
 			regs, decoded->rt, sizeof(u64)), pair);
 		put_unaligned_le64(orlix_tcti_read_gpr_or_zero(
 			regs, decoded->rt2, sizeof(u64)), pair + sizeof(u64));
-		ret = orlix_tcti_store_tagged_pair(mm, address, pair,
+		ret = orlix_tcti_store_stgp_tuple(mm, address, pair,
 						 sizeof(pair));
 		if (ret)
 			return ret;

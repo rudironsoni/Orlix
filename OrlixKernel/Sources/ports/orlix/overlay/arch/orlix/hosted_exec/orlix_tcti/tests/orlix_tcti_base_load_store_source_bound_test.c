@@ -6,16 +6,22 @@
  */
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
+#include <asm/mte.h>
 #include <linux/unaligned.h>
+#include <linux/atomic.h>
+#include <linux/completion.h>
 #include <kunit/test.h>
 #include <linux/err.h>
+#include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/sched/mm.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
+#include "../switch_debug.h"
 #include "target_execution_slice_map.h"
 #include "target_instruction_artifact.h"
 
@@ -500,10 +506,36 @@ static void bls_reserved_and_invalid_encodings_fail_closed(struct kunit *test)
 	};
 	size_t index;
 
-	for (index = 0; index < ARRAY_SIZE(invalid); index++)
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			orlix_tcti_decode_aarch64(invalid[index]).decode_class,
-			"reserved encoding 0x%08x", invalid[index]);
+	for (index = 0; index < ARRAY_SIZE(invalid); index++) {
+		unsigned long text = bls_map_program(test, invalid[index]);
+		struct pt_regs regs = { };
+		struct pt_regs before;
+		struct orlix_tcti_result result;
+
+		regs.pc = text;
+		regs.pstate = PSR_MODE_EL0t | PSR_N_BIT;
+		regs.syscallno = NO_SYSCALL;
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			result.reason, "reserved encoding 0x%08x", invalid[index]);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+		KUNIT_EXPECT_EQ(test, text, result.pc);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
+	}
+}
+
+static void bls_stgp_reserved_encoding_fails_closed(struct kunit *test)
+{
+	const u32 reserved = 0x68000820U;
+	struct orlix_tcti_decoded_instruction decoded =
+		orlix_tcti_decode_aarch64(reserved);
+
+	/* STGP opc=01 with addressing mode 00 is reserved by the pair encoding. */
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+		decoded.decode_class);
+	KUNIT_EXPECT_FALSE(test, decoded.memory_tag_store_pair);
 }
 
 static void bls_gcs_permissions_and_stgp_tag_are_architectural_state(
@@ -561,6 +593,222 @@ static void bls_gcs_permissions_and_stgp_tag_are_architectural_state(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0,
 		orlix_tcti_set_gcs_memory(current->mm, data, 16, false));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
+struct bls_stgp_tuple {
+	u64 data[2];
+	u8 tag;
+};
+
+struct bls_stgp_contention_state {
+	struct mm_struct *mm;
+	unsigned long data;
+	unsigned long text;
+	struct completion ready[2];
+	struct completion start;
+	atomic_t completed;
+	atomic_t failed;
+	atomic_t observations;
+	atomic_t torn;
+};
+
+struct bls_stgp_writer {
+	struct bls_stgp_contention_state *state;
+	const struct bls_stgp_tuple *tuple;
+	unsigned int index;
+};
+
+static bool bls_stgp_tuple_matches(const struct bls_stgp_tuple *observed,
+				   const struct bls_stgp_tuple *expected)
+{
+	return observed->tag == expected->tag &&
+		!memcmp(observed->data, expected->data, sizeof(observed->data));
+}
+
+static int bls_stgp_observe_tuple(struct bls_stgp_contention_state *state,
+					struct bls_stgp_tuple *observed,
+					const struct bls_stgp_tuple *tuples,
+					size_t tuple_count)
+{
+	int ret;
+	size_t index;
+
+	ret = orlix_tcti_stgp_read_tuple(state->mm, state->data,
+					observed->data, sizeof(observed->data),
+					&observed->tag);
+	if (ret)
+		return ret;
+	atomic_inc(&state->observations);
+	for (index = 0; index < tuple_count; index++)
+		if (bls_stgp_tuple_matches(observed, &tuples[index]))
+			return 0;
+	atomic_set(&state->torn, 1);
+	return 0;
+}
+
+static int bls_stgp_writer(void *data)
+{
+	struct bls_stgp_writer *writer = data;
+	struct bls_stgp_contention_state *state = writer->state;
+	unsigned int iteration;
+
+	kthread_use_mm(state->mm);
+	complete(&state->ready[writer->index]);
+	wait_for_completion(&state->start);
+	for (iteration = 0; iteration < 128; iteration++) {
+		struct pt_regs regs = {};
+		struct orlix_tcti_result result;
+
+		regs.pc = state->text;
+		regs.pstate = PSR_MODE_EL0t | PSR_C_BIT;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = writer->tuple->data[0];
+		regs.regs[1] = state->data |
+			((u64)writer->tuple->tag << ORLIX_MTE_TAG_SHIFT);
+		regs.regs[2] = writer->tuple->data[1];
+		result = orlix_tcti_resume_user(current, &regs, state->mm);
+		if (result.reason != ORLIX_TCTI_EXIT_SYSCALL || result.status ||
+		    regs.pc != state->text + 2 * sizeof(u32)) {
+			atomic_set(&state->failed, 1);
+			break;
+		}
+		cond_resched();
+	}
+	atomic_inc(&state->completed);
+	kthread_unuse_mm(state->mm);
+	return 0;
+}
+
+static void bls_stgp_contention_and_failure_are_transactional(
+	struct kunit *test)
+{
+	static const struct bls_stgp_tuple tuples[] = {
+		{ .data = { 0x0123456789abcdefULL, 0xfedcba9876543210ULL },
+		  .tag = 3 },
+		{ .data = { 0x8877665544332211ULL, 0x1020304050607080ULL },
+		  .tag = 12 },
+	};
+	struct bls_stgp_contention_state state = {};
+	struct bls_stgp_writer writers[] = {
+		{ .state = &state, .tuple = &tuples[0], .index = 0 },
+		{ .state = &state, .tuple = &tuples[1], .index = 1 },
+	};
+	struct task_struct *tasks[ARRAY_SIZE(writers)] = {};
+	struct bls_stgp_tuple observed, before, after;
+	struct pt_regs regs = {};
+	struct orlix_tcti_result result;
+	unsigned long data, text, denied = 0;
+	unsigned int index;
+	bool start_failed = false;
+	int ret;
+
+	data = bls_map(test, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_MTE);
+	text = bls_map_program(test, 0x69000820U); /* STGP x0, x2, [x1] */
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_write_user_data(current->mm, data, tuples[0].data,
+					 sizeof(tuples[0].data)));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_mte_store_allocation_tag(current->mm, data, tuples[0].tag));
+	state.mm = current->mm;
+	state.data = data;
+	state.text = text;
+	atomic_set(&state.completed, 0);
+	atomic_set(&state.failed, 0);
+	atomic_set(&state.observations, 0);
+	atomic_set(&state.torn, 0);
+	mmget(state.mm);
+	init_completion(&state.start);
+	for (index = 0; index < ARRAY_SIZE(writers); index++) {
+		init_completion(&state.ready[index]);
+		tasks[index] = kthread_run(bls_stgp_writer, &writers[index],
+			"orlix-stgp-%u", index);
+		if (IS_ERR(tasks[index])) {
+			KUNIT_FAIL(test, "cannot start STGP writer %u", index);
+			tasks[index] = NULL;
+			start_failed = true;
+			complete_all(&state.start);
+			break;
+		}
+	}
+	if (!start_failed) {
+		for (index = 0; index < ARRAY_SIZE(tasks); index++) {
+			if (!wait_for_completion_timeout(&state.ready[index],
+				msecs_to_jiffies(5000))) {
+				KUNIT_FAIL(test, "STGP writer %u did not become ready", index);
+				start_failed = true;
+				break;
+			}
+		}
+		complete_all(&state.start);
+		if (!start_failed) {
+			do {
+				ret = bls_stgp_observe_tuple(&state, &observed, tuples,
+							     ARRAY_SIZE(tuples));
+				if (ret) {
+					atomic_set(&state.failed, 1);
+					break;
+				}
+				if (atomic_read(&state.torn))
+					break;
+				cond_resched();
+			} while (atomic_read(&state.completed) != ARRAY_SIZE(writers));
+		}
+	}
+	for (index = 0; index < ARRAY_SIZE(tasks); index++) {
+		if (tasks[index])
+			KUNIT_EXPECT_EQ(test, 0, kthread_stop(tasks[index]));
+	}
+	KUNIT_EXPECT_EQ(test, ARRAY_SIZE(writers),
+		atomic_read(&state.completed));
+	KUNIT_EXPECT_EQ(test, 0, atomic_read(&state.failed));
+	KUNIT_EXPECT_GT(test, atomic_read(&state.observations), 0);
+	KUNIT_EXPECT_EQ(test, 0, atomic_read(&state.torn));
+	if (start_failed)
+		goto out;
+
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_stgp_read_tuple(current->mm, data, observed.data,
+					 sizeof(observed.data), &observed.tag));
+	KUNIT_EXPECT_TRUE(test, bls_stgp_tuple_matches(&observed, &tuples[0]) ||
+		bls_stgp_tuple_matches(&observed, &tuples[1]));
+
+	denied = bls_map(test, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_MTE);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_write_user_data(current->mm, denied, tuples[0].data,
+					 sizeof(tuples[0].data)));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_mte_store_allocation_tag(current->mm, denied, tuples[0].tag));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_stgp_read_tuple(current->mm, denied, before.data,
+					 sizeof(before.data), &before.tag));
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(denied, PAGE_SIZE,
+		PROT_READ | PROT_MTE));
+	regs.pc = text;
+	regs.pstate = PSR_MODE_EL0t | PSR_C_BIT;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = tuples[1].data[0];
+	regs.regs[1] = denied | (tuples[1].tag << ORLIX_MTE_TAG_SHIFT);
+	regs.regs[2] = tuples[1].data[1];
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
+	KUNIT_EXPECT_EQ(test, -EACCES, result.status);
+	KUNIT_EXPECT_EQ(test, denied, result.fault_address);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_WRITE, result.fault_access);
+	KUNIT_EXPECT_EQ(test, text, regs.pc);
+	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(denied, PAGE_SIZE,
+		PROT_READ | PROT_WRITE | PROT_MTE));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_stgp_read_tuple(current->mm, denied, after.data,
+					 sizeof(after.data), &after.tag));
+	KUNIT_EXPECT_MEMEQ(test, before.data, after.data, sizeof(after.data));
+	KUNIT_EXPECT_EQ(test, before.tag, after.tag);
+
+out:
+	mmput(state.mm);
+	if (denied)
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(denied, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(text, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 }
 
@@ -873,7 +1121,9 @@ static struct kunit_case bls_cases[] = {
 	KUNIT_CASE(bls_every_source_leaf_reaches_its_production_decoder),
 	KUNIT_CASE(bls_every_source_leaf_executes_through_resume),
 	KUNIT_CASE(bls_reserved_and_invalid_encodings_fail_closed),
+	KUNIT_CASE(bls_stgp_reserved_encoding_fails_closed),
 	KUNIT_CASE(bls_gcs_permissions_and_stgp_tag_are_architectural_state),
+	KUNIT_CASE(bls_stgp_contention_and_failure_are_transactional),
 	KUNIT_CASE(bls_prefetch_never_reads_the_target),
 	KUNIT_CASE(bls_metadata_does_not_survive_virtual_address_reuse),
 	KUNIT_CASE(bls_tcti_metadata_does_not_survive_virtual_address_reuse),

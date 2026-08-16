@@ -294,6 +294,13 @@ int orlix_tcti_target_operational_note_proof_mappings_validate(
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define MTE_OBLIGATIONS \
 	(MTE_KUNIT_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE)
+#define STGP_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE)
 #define NON_EL0_REJECTION_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
@@ -490,6 +497,11 @@ proof_registry_projection[] = {
 #define MTE_SUITE "orlix-tcti-memory-tagging-source-bound"
 #define MTE_SUITE_SYMBOL "orlix_tcti_memory_tagging_source_bound_test_suite"
 #define MTE_CASE_ARRAY "orlix_tcti_memory_tagging_source_bound_test_cases"
+#define BLS_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_load_store_source_bound_test.c"
+#define BLS_SUITE "orlix-tcti-base-load-store-source-bound"
+#define BLS_SUITE_SYMBOL "bls_suite"
+#define BLS_CASE_ARRAY "bls_cases"
 #define ADD_SUB_IMMEDIATE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_add_sub_immediate_test.c"
 #define ADD_SUB_IMMEDIATE_SUITE "orlix-tcti-add-sub-immediate"
@@ -762,6 +774,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ MTE_SOURCE,
 	  "bf81e0338e0c9249a84fb8aaf0829d407280580c772cf64f335c25456e475693",
 	  "orlix_tcti_memory_tagging_source_bound_test.o", NULL, NULL, NULL },
+	{ BLS_SOURCE,
+	  "9838f96e0c03c841f04f294e98cfc72a85e633f7d206a2bc844867cc4805f2ef",
+	  "orlix_tcti_base_load_store_source_bound_test.o", NULL, NULL, NULL },
 	{ ADD_SUB_IMMEDIATE_SOURCE,
 	  "a600daac3c101c22b168a19e868608f5e7cd458a4939362320ba5f29f4de4f95",
 	  "orlix_tcti_add_sub_immediate_test.o", NULL, NULL, NULL },
@@ -1032,6 +1047,29 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	{ MTE_SOURCE, MTE_SUITE, MTE_SUITE_SYMBOL, MTE_CASE_ARRAY,
 	  "mte_production_resume_non_el0_is_undefined",
 	  NON_EL0_REJECTION_OBLIGATIONS },
+	{ BLS_SOURCE, BLS_SUITE, BLS_SUITE_SYMBOL, BLS_CASE_ARRAY,
+	  "bls_inventory_is_exact_and_source_bound",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BLS_SOURCE, BLS_SUITE, BLS_SUITE_SYMBOL, BLS_CASE_ARRAY,
+	  "bls_stgp_reserved_encoding_fails_closed",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BLS_SOURCE, BLS_SUITE, BLS_SUITE_SYMBOL, BLS_CASE_ARRAY,
+	  "bls_every_source_leaf_executes_through_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BLS_SOURCE, BLS_SUITE, BLS_SUITE_SYMBOL, BLS_CASE_ARRAY,
+	  "bls_gcs_permissions_and_stgp_tag_are_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BLS_SOURCE, BLS_SUITE, BLS_SUITE_SYMBOL, BLS_CASE_ARRAY,
+	  "bls_stgp_contention_and_failure_are_transactional",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 	{ CSSC_SOURCE, CSSC_SUITE, CSSC_SUITE_SYMBOL, CSSC_CASE_ARRAY,
 	  "orlix_tcti_cssc_min_max_immediate_all_legal_fields",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1484,6 +1522,7 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "STZ2G", MTE_OBLIGATIONS },
 	{ "IRG", MTE_OBLIGATIONS },
 	{ "GMI", MTE_OBLIGATIONS },
+	{ "STGP", STGP_OBLIGATIONS },
 	{ "ADD_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
 		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -2137,6 +2176,36 @@ static const struct orlix_tcti_target_proof_case mte_non_el0_cases[] = {
 		NON_EL0_REJECTION_OBLIGATIONS },
 };
 
+static const struct orlix_tcti_target_proof_case stgp_cases[] = {
+	{ "bls_inventory_is_exact_and_source_bound",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "bls_stgp_reserved_encoding_fails_closed",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "bls_every_source_leaf_executes_through_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "bls_gcs_permissions_and_stgp_tag_are_architectural_state",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "bls_stgp_contention_and_failure_are_transactional",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+};
+
+static const struct orlix_tcti_target_proof_binding stgp_bindings[] = {
+	{ "STGP_64_ldstpair_post", "STGP", 0xffc00000U, 0x68800000U,
+	  MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0xf), 2874U },
+	{ "STGP_64_ldstpair_off", "STGP", 0xffc00000U, 0x69000000U,
+	  MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0xf), 2890U },
+	{ "STGP_64_ldstpair_pre", "STGP", 0xffc00000U, 0x69800000U,
+	  MTE_CONDITION, ORLIX_TCTI_PROOF_U64_C(0xf), 2906U },
+};
+
 static const struct orlix_tcti_target_proof_case cssc_data_processing_cases[] = {
 	{ "orlix_tcti_integer_minmax_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2552,6 +2621,14 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  bindings, count, &mte_kselftest, \
 	  (obligations) | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE }
 
+#define STGP_ENTRY \
+	{ "kunit:base-load-store-stgp", "STGP", \
+	  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, STGP_OBLIGATIONS, \
+	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED, \
+	  BLS_SOURCE, BLS_SUITE, stgp_cases, ARRAY_COUNT(stgp_cases), \
+	  stgp_bindings, ARRAY_COUNT(stgp_bindings), &mte_kselftest, \
+	  STGP_OBLIGATIONS }
+
 #define CSSC_DATA_ENTRY(proof_id, operation, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
 	  CSSC_OBLIGATIONS, ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
@@ -2609,7 +2686,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 76U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 77U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
@@ -2730,6 +2807,7 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	MTE_ENTRY("kunit:memory-tagging-gmi", "GMI",
 		  ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, MTE_OBLIGATIONS, mte_cases,
 		  &mte_bindings[16], 1U),
+	STGP_ENTRY,
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
 		integer_udiv_bindings),
@@ -5786,7 +5864,7 @@ static bool source_is_mte_operation(const struct source_manifest_binding *source
 {
 	static const char *const mnemonics[] = {
 		"ADDG", "SUBG", "STG", "STZGM", "LDG", "STZG", "ST2G",
-		"STGM", "STZ2G", "LDGM", "IRG", "GMI",
+		"STGM", "STZ2G", "LDGM", "IRG", "GMI", "STGP",
 	};
 	size_t index;
 
