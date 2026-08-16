@@ -65,6 +65,81 @@ def repo_root() -> Path:
         return Path.cwd()
 
 
+def _git_output(cwd: Path, *args: str) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(cwd), *args], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        return ""
+
+
+def _git_repo_root(cwd: Path) -> Path | None:
+    value = _git_output(cwd, "rev-parse", "--show-toplevel")
+    return Path(value).resolve() if value else None
+
+
+def _git_common_dir(root: Path) -> Path | None:
+    value = _git_output(root, "rev-parse", "--git-common-dir")
+    if not value:
+        return None
+    path = Path(value)
+    return (path if path.is_absolute() else root / path).resolve()
+
+
+def _payload_workdirs(payload) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+
+    keys = ("workdir", "cwd", "working_directory", "workingDirectory")
+    candidates: list[str] = []
+
+    def collect(value) -> None:
+        if isinstance(value, dict):
+            for key in keys:
+                candidate = value.get(key)
+                if isinstance(candidate, str):
+                    candidates.append(candidate)
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    # The command and its cwd normally share tool_input. Prefer that before
+    # broader event metadata when both are present.
+    for key in ("tool_input", "input", "parameters", "args", "arguments"):
+        collect(payload.get(key))
+    collect(payload)
+    return candidates
+
+
+def command_repo_root(payload, fallback_root: Path | None = None) -> Path:
+    """Return the command's linked-worktree root when it belongs to this repo.
+
+    Hooks run in the controller checkout, while Bash payloads may name a linked
+    worktree. Only accept a payload cwd that resolves to the same Git common
+    directory as the hook checkout; foreign or malformed values fail closed to
+    the hook checkout rather than selecting arbitrary state files.
+    """
+
+    fallback = (fallback_root or repo_root()).resolve()
+    fallback_common = _git_common_dir(fallback)
+    if fallback_common is None:
+        return fallback
+
+    for raw_cwd in _payload_workdirs(payload):
+        candidate = Path(raw_cwd).expanduser()
+        if not candidate.is_absolute():
+            candidate = fallback / candidate
+        if not candidate.is_dir():
+            continue
+        candidate_root = _git_repo_root(candidate)
+        if candidate_root is not None and _git_common_dir(candidate_root) == fallback_common:
+            return candidate_root
+    return fallback
+
+
 def warn(message: str) -> None:
     print(f"ORLIX-HARNESS-WARN: {message}", file=sys.stderr)
 
@@ -167,7 +242,7 @@ def oversized_goal_messages(root: Path) -> list[str]:
 
 
 def plan_context_post_update(payload) -> None:
-    root = repo_root()
+    root = command_repo_root(payload, repo_root())
     state = load_plan_context_state(root)
     text = flattened_text(payload).replace("\\n", "\n")
     read_paths = set(state.get("read_paths", []))

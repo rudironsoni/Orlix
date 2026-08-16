@@ -3,6 +3,7 @@
 from orlix_hook_common import (
     doing_work_pages,
     block,
+    command_repo_root,
     is_git_commit_or_push,
     knowledge_updates_current,
     load_plan_context_state,
@@ -27,9 +28,11 @@ if doing_work_pages(root) and not plan_context_loaded(root, state) and tool_requ
     block(f"Doing epic, story, and task context must be read before mutation: {required}.")
 
 if is_git_commit_or_push(payload):
-    if not knowledge_updates_current(root, state):
+    command_root = command_repo_root(payload, root)
+    state = load_plan_context_state(command_root)
+    if not knowledge_updates_current(command_root, state):
         block("Knowledge changes require docs/log.md and regenerated docs/index.md before git commit or push.")
-    for message in oversized_goal_messages(root):
+    for message in oversized_goal_messages(command_root):
         block(message)
 
 for variable in ("RUN_" + "VERY_EXPENSIVE_TESTS", "RUN_" + "EXPENSIVE_TESTS"):
