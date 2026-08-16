@@ -1522,6 +1522,60 @@ static int operational_note_mapping_is_exact_and_fail_closed(void)
 	return 0;
 }
 
+static int native_system_accessor_source_digest_is_canonical(void)
+{
+	const struct orlix_tcti_target_proof_registry_entry *entries;
+	const struct orlix_tcti_target_proof_registry_entry *source_entry = NULL;
+	struct orlix_tcti_target_kunit_provenance_identity provenance;
+	const char *native_registry_source =
+		"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/"
+		"orlix_tcti/tests/target_native_proof_registry.c";
+	FILE *file;
+	char *source;
+	char marker[67];
+	long file_size;
+	int marker_length;
+	size_t count;
+	size_t index;
+	size_t length;
+
+	entries = orlix_tcti_target_proof_registry_entries(&count);
+	EXPECT(entries != NULL);
+	for (index = 0; index < count; index++)
+		if (!strcmp(entries[index].kunit_source,
+			SOURCE_LEAF_CLASSIFICATION_SOURCE) &&
+		    !strcmp(entries[index].kunit_suite,
+			"orlix-tcti-source-leaf-classification")) {
+			source_entry = &entries[index];
+			break;
+		}
+	EXPECT(source_entry != NULL);
+	EXPECT(!orlix_tcti_target_kunit_provenance_identity(source_entry,
+			"orlix_tcti_source_leaf_rejections_match_pinned_tuples",
+			&provenance));
+	EXPECT(provenance.source_sha256 != NULL);
+	marker_length = snprintf(marker, sizeof(marker), "\"%s\"",
+		provenance.source_sha256);
+	EXPECT(marker_length > 0 && (size_t)marker_length < sizeof(marker));
+
+	file = fopen(native_registry_source, "rb");
+	EXPECT(file);
+	EXPECT(!fseek(file, 0L, SEEK_END));
+	file_size = ftell(file);
+	EXPECT(file_size >= 0L);
+	EXPECT(!fseek(file, 0L, SEEK_SET));
+	source = malloc((size_t)file_size + 1U);
+	EXPECT(source);
+	length = fread(source, 1U, (size_t)file_size + 1U, file);
+	EXPECT(!ferror(file));
+	EXPECT(feof(file));
+	EXPECT(!fclose(file));
+	source[length] = '\0';
+	EXPECT(strstr(source, marker));
+	free(source);
+	return 0;
+}
+
 static int production_capture_bindings_are_generic_and_fail_closed(void)
 {
 	static const struct orlix_tcti_target_proof_case first_cases[] = {
@@ -1733,6 +1787,8 @@ int main(void)
 		  registry_projection_is_lossless_and_fail_closed },
 		{ "production_capture_bindings_are_generic_and_fail_closed",
 		  production_capture_bindings_are_generic_and_fail_closed },
+		{ "native_system_accessor_source_digest_is_canonical",
+		  native_system_accessor_source_digest_is_canonical },
 		{ "production_capture_family_builder_is_typed_and_fail_closed",
 		  production_capture_family_builder_is_typed_and_fail_closed },
 		{ "operational_note_mapping_is_exact_and_fail_closed",
