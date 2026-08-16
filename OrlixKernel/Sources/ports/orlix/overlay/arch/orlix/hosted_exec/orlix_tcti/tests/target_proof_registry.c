@@ -749,7 +749,7 @@ static const struct orlix_tcti_target_kselftest_provenance
 #define KSELFTEST_MTE_BUILD_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk"
 #define KSELFTEST_MTE_BUILD_SOURCE_SHA256 \
-	"b807022f42861f1ce2ef82e767fe0a9417b7d6f910c330bd5781f1d6f71c808a"
+	"2d717e75a5f53fea747ef07c61d5e0edc24338f7a881ba078ad4654de3163629"
 
 static const struct orlix_tcti_target_kselftest_provenance mte_kselftest = {
 	KSELFTEST_MTE_SOURCE, KSELFTEST_MTE_SOURCE_SHA256,
