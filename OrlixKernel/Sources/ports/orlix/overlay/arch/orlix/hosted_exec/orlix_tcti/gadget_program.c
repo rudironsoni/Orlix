@@ -64,12 +64,14 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
 				     struct pt_regs *regs,
 				     const struct orlix_tcti_gadget_word **cursor,
-				     unsigned long *fault_address)
+				     unsigned long *fault_address,
+				     struct orlix_tcti_native_capture *capture)
 {
 	struct orlix_tcti_decoded_instruction decoded;
 
 	(void)mm;
 	(void)fault_address;
+	(void)capture;
 	memcpy(&decoded, *cursor, sizeof(decoded));
 	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
 	return orlix_tcti_execute_crc32(regs, &decoded);
@@ -78,12 +80,14 @@ static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
 static int orlix_tcti_gadget_execute_flag_manipulation(
 	struct mm_struct *mm, struct pt_regs *regs,
 	const struct orlix_tcti_gadget_word **cursor,
-	unsigned long *fault_address)
+	unsigned long *fault_address,
+	struct orlix_tcti_native_capture *capture)
 {
 	struct orlix_tcti_decoded_instruction decoded;
 
 	(void)mm;
 	(void)fault_address;
+	(void)capture;
 	memcpy(&decoded, *cursor, sizeof(decoded));
 	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
 	return orlix_tcti_execute_flag_manipulation_semantics(regs, &decoded);

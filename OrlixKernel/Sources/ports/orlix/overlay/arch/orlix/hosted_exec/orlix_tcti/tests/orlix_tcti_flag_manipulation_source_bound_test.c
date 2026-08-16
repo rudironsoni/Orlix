@@ -237,8 +237,11 @@ static void orlix_tcti_flag_reserved_fixed_bit_matrix(struct kunit *test)
 	     leaf_index++) {
 		const struct orlix_tcti_flag_leaf *leaf =
 			&orlix_tcti_flag_leaves[leaf_index];
+		const struct orlix_tcti_flag_semantic_provenance_row *semantic_row =
+			orlix_tcti_flag_semantic_provenance_row(leaf->ordinal);
 		u8 bit;
 
+		KUNIT_ASSERT_NOT_NULL(test, semantic_row);
 		for (bit = 0; bit < 32; bit++) {
 			u32 instruction;
 
@@ -249,7 +252,7 @@ static void orlix_tcti_flag_reserved_fixed_bit_matrix(struct kunit *test)
 				continue;
 			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 				orlix_tcti_decode_aarch64(instruction).decode_class,
-				"%s fixed bit %u", leaf->name, bit);
+				"%s fixed bit %u", semantic_row->name, bit);
 			rejected++;
 		}
 	}
