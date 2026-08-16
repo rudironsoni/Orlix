@@ -37,8 +37,16 @@ enum orlix_tcti_access {
 #define ORLIX_TCTI_SVE_PREG_COUNT	16U
 #define ORLIX_TCTI_SVE_PREG_MAX_BYTES	(ORLIX_TCTI_SVE_MAX_VL_BYTES / 8U)
 
+enum orlix_tcti_sve_crypto_feature_state {
+	ORLIX_TCTI_SVE_CRYPTO_FEATURES_UNAVAILABLE,
+	ORLIX_TCTI_SVE_CRYPTO_FEATURES_ACTIVE_PROFILE,
+};
+
 struct orlix_tcti_sve_state {
 	u16 vl_bytes;
+	/* #155 derives this from the immutable active execution profile. */
+	enum orlix_tcti_sve_crypto_feature_state crypto_feature_state;
+	u32 crypto_features;
 	u8 z[ORLIX_TCTI_SVE_ZREG_COUNT][ORLIX_TCTI_SVE_MAX_VL_BYTES];
 	u8 p[ORLIX_TCTI_SVE_PREG_COUNT][ORLIX_TCTI_SVE_PREG_MAX_BYTES];
 	u8 ffr[ORLIX_TCTI_SVE_PREG_MAX_BYTES];

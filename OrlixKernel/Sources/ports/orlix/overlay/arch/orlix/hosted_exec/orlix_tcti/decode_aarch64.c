@@ -832,6 +832,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		.instruction = instruction,
 	};
 	struct orlix_tcti_sve_predicated_integer_binary sve_predicated_binary;
+	struct orlix_tcti_sve_crypto_instruction sve_crypto;
 	int sve_ret;
 
 	if ((instruction & AARCH64_SVC_MASK) == AARCH64_SVC_PATTERN) {
@@ -917,6 +918,22 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.rm = sve_predicated_binary.zm;
 		decoded.sve_pg = sve_predicated_binary.pg;
 		decoded.sve_element_bytes = sve_predicated_binary.element_bytes;
+		return decoded;
+	}
+	if (sve_ret == -EINVAL)
+		return decoded;
+	sve_ret = orlix_tcti_decode_sve_crypto(instruction, &sve_crypto);
+	if (!sve_ret) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_SVE_CRYPTO;
+		decoded.sve_crypto_op = sve_crypto.op;
+		decoded.sve_crypto_condition = sve_crypto.condition;
+		decoded.rd = sve_crypto.zd;
+		decoded.rn = sve_crypto.zn;
+		decoded.rm = sve_crypto.zm;
+		decoded.sve_crypto_zk = sve_crypto.zk;
+		decoded.sve_crypto_index = sve_crypto.index;
+		decoded.sve_crypto_nregs = sve_crypto.nregs;
+		decoded.sve_element_bytes = sve_crypto.element_bytes;
 		return decoded;
 	}
 	if (sve_ret == -EINVAL)

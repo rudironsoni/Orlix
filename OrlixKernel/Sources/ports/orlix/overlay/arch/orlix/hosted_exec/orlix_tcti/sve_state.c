@@ -188,6 +188,8 @@ int orlix_tcti_sve_state_reset(struct orlix_tcti_sve_state *state,
 	memset(state, 0, sizeof(*state));
 	memset(user_simd, 0, ORLIX_TCTI_SVE_ZREG_COUNT * 2 * sizeof(*user_simd));
 	state->vl_bytes = vl_bytes;
+	state->crypto_feature_state = ORLIX_TCTI_SVE_CRYPTO_FEATURES_UNAVAILABLE;
+	state->crypto_features = 0;
 	state->valid = true;
 	return 0;
 }
@@ -202,6 +204,8 @@ int orlix_tcti_sve_state_copy(struct orlix_tcti_sve_state *destination,
 		return -EINVAL;
 
 	memcpy(destination, source, sizeof(*destination));
+	destination->crypto_feature_state = source->crypto_feature_state;
+	destination->crypto_features = source->crypto_features;
 	memcpy(destination_simd, source_simd,
 	       ORLIX_TCTI_SVE_ZREG_COUNT * 2 * sizeof(*destination_simd));
 	return 0;

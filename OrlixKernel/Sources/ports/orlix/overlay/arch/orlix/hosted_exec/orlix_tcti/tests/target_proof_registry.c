@@ -582,6 +582,11 @@ proof_registry_projection[] = {
 #define TRANSLATION_CHANGE_SUITE "orlix-tcti-translation-change-source-bound"
 #define TRANSLATION_CHANGE_SUITE_SYMBOL "tchange_suite"
 #define TRANSLATION_CHANGE_CASE_ARRAY "tchange_cases"
+#define SVE_CRYPTO_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_sve_crypto_test.c"
+#define SVE_CRYPTO_SUITE "orlix-tcti-sve-crypto"
+#define SVE_CRYPTO_SUITE_SYMBOL "sve_crypto_test_suite"
+#define SVE_CRYPTO_CASE_ARRAY "sve_crypto_test_cases"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_system_accessor_partition_test.h"
 #define SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256 \
@@ -750,6 +755,9 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE,
 	  SYSTEM_ACCESSOR_PARTITION_SOURCE_SHA256,
 	  SYSTEM_ACCESSOR_PARTITION_INCLUDE },
+	{ SVE_CRYPTO_SOURCE,
+	"01211c60a69fed1fd6822f4fa100b51217ba7209fb59bea0f76a0069bc2fd702",
+	  "orlix_tcti_sve_crypto_test.o", NULL, NULL, NULL },
 #define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
 		object_value, suite_value, suite_symbol_value, case_array_value, \
 		decode_case_value, production_case_value) \
@@ -800,6 +808,40 @@ static const struct kunit_dependency_terminal_artifact
 
 /* Per-case upper bounds prevent a registered case from self-proving new duties. */
 static const struct kunit_case_provenance kunit_case_provenance[] = {
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_exact_leaf_decodes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY,
+	  "sve_crypto_rejects_misaligned_multivector_destination",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_logical_and_rotate_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_aes_and_multivector_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_aes_overlap_and_scalable_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_sm4_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY, "sve_crypto_rax1_updates_state_and_pc",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ SVE_CRYPTO_SOURCE, SVE_CRYPTO_SUITE, SVE_CRYPTO_SUITE_SYMBOL,
+	  SVE_CRYPTO_CASE_ARRAY,
+	  "sve_crypto_resume_user_executes_and_rejects_all_leaves",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1375,6 +1417,20 @@ static const struct operation_requirements operation_requirements[] = {
 	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
+	{ "xar_z_zzi", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "eor3_z_zzz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "bcax_z_zzz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesmc_z_z", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesimc_z_z", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aese_z_zz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesd_z_zz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "sm4e_z_zz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aese_mz_zzi", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesd_mz_zzi", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesemc_mz_zzi", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "aesdimc_mz_zzi", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "sm4ekey_z_zz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "rax1_z_zz", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -2374,6 +2430,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 13U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 14U
+#define SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT 14U
+#define SVE_CRYPTO_PROOF_REGISTRY_BINDING_COUNT 18U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
@@ -2401,7 +2459,8 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT +
 	SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT +
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT +
-	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT] = {
+	MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT +
+	SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT] = {
 	LOGICAL_ENTRY("kunit:logical-shifted-register-and", "AND_log_shift",
 		      LOGICAL_BASE_OBLIGATIONS, logical_base_cases,
 		      logical_and_bindings),
@@ -3348,7 +3407,8 @@ static bool build_ordinary_load_store_registry(void)
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (ordinary_load_store_registry_ready)
 		return true;
@@ -3609,7 +3669,8 @@ static bool build_source_leaf_rejection_registry(void)
 		ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (source_leaf_rejection_registry_ready)
@@ -3787,7 +3848,8 @@ static bool build_production_capture_family_registry(void)
 {
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (production_capture_family_registry_ready)
 		return true;
@@ -3908,7 +3970,8 @@ static bool build_mops_copy_registry(void)
 {
 	size_t binding_offset = 0;
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT;
 	size_t index;
 
 	if (mops_copy_registry_ready)
@@ -3986,6 +4049,170 @@ static bool build_mops_copy_registry(void)
 			};
 	}
 	mops_copy_registry_ready = true;
+	return true;
+}
+
+struct sve_crypto_registry_operation {
+	const char *proof_id;
+	const char *operation_id;
+	size_t binding_offset;
+	size_t binding_count;
+};
+
+static struct sve_crypto_registry_operation sve_crypto_registry_operations[] = {
+	{ .proof_id = "kunit:sve-crypto-xar", .operation_id = "xar_z_zzi" },
+	{ .proof_id = "kunit:sve-crypto-eor3", .operation_id = "eor3_z_zzz" },
+	{ .proof_id = "kunit:sve-crypto-bcax", .operation_id = "bcax_z_zzz" },
+	{ .proof_id = "kunit:sve-crypto-aesmc", .operation_id = "aesmc_z_z" },
+	{ .proof_id = "kunit:sve-crypto-aesimc", .operation_id = "aesimc_z_z" },
+	{ .proof_id = "kunit:sve-crypto-aese", .operation_id = "aese_z_zz" },
+	{ .proof_id = "kunit:sve-crypto-aesd", .operation_id = "aesd_z_zz" },
+	{ .proof_id = "kunit:sve-crypto-sm4e", .operation_id = "sm4e_z_zz" },
+	{ .proof_id = "kunit:sve-crypto-aese-multi", .operation_id = "aese_mz_zzi" },
+	{ .proof_id = "kunit:sve-crypto-aesd-multi", .operation_id = "aesd_mz_zzi" },
+	{ .proof_id = "kunit:sve-crypto-aesemc-multi", .operation_id = "aesemc_mz_zzi" },
+	{ .proof_id = "kunit:sve-crypto-aesdimc-multi", .operation_id = "aesdimc_mz_zzi" },
+	{ .proof_id = "kunit:sve-crypto-sm4ekey", .operation_id = "sm4ekey_z_zz" },
+	{ .proof_id = "kunit:sve-crypto-rax1", .operation_id = "rax1_z_zz" },
+};
+static struct orlix_tcti_target_proof_binding
+	sve_crypto_registry_bindings[SVE_CRYPTO_PROOF_REGISTRY_BINDING_COUNT];
+static const struct orlix_tcti_target_proof_case sve_crypto_registry_cases[] = {
+	{ "sve_crypto_exact_leaf_decodes",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "sve_crypto_rejects_misaligned_multivector_destination",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "sve_crypto_logical_and_rotate_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "sve_crypto_aes_and_multivector_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "sve_crypto_aes_overlap_and_scalable_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "sve_crypto_sm4_vectors",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "sve_crypto_rax1_updates_state_and_pc",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "sve_crypto_resume_user_executes_and_rejects_all_leaves",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+static bool sve_crypto_registry_ready;
+
+static struct sve_crypto_registry_operation *
+sve_crypto_registry_operation_for(const char *proof_id)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_COUNT(sve_crypto_registry_operations); index++)
+		if (!strcmp(proof_id, sve_crypto_registry_operations[index].proof_id))
+			return &sve_crypto_registry_operations[index];
+	return NULL;
+}
+
+static orlix_tcti_proof_u64 sve_crypto_case_mask(const char *operation_id)
+{
+	if (!strcmp(operation_id, "xar_z_zzi") ||
+	    !strcmp(operation_id, "eor3_z_zzz") ||
+	    !strcmp(operation_id, "bcax_z_zzz"))
+		return ORLIX_TCTI_PROOF_U64_C(0x87);
+	if (!strcmp(operation_id, "sm4e_z_zz") ||
+	    !strcmp(operation_id, "sm4ekey_z_zz"))
+		return ORLIX_TCTI_PROOF_U64_C(0x93);
+	if (!strcmp(operation_id, "rax1_z_zz"))
+		return ORLIX_TCTI_PROOF_U64_C(0xa3);
+	return ORLIX_TCTI_PROOF_U64_C(0x8b);
+}
+
+static bool build_sve_crypto_registry(void)
+{
+	size_t binding_offset = 0;
+	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
+		SVE_CRYPTO_PROOF_REGISTRY_ENTRY_COUNT;
+	size_t index;
+
+	if (sve_crypto_registry_ready)
+		return true;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct sve_crypto_registry_operation *operation =
+			sve_crypto_registry_operation_for(source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		if (!source || strcmp(operation->operation_id, source->operation_id))
+			return false;
+		operation->binding_count++;
+	}
+	for (index = 0; index < ARRAY_COUNT(sve_crypto_registry_operations); index++) {
+		struct sve_crypto_registry_operation *operation =
+			&sve_crypto_registry_operations[index];
+
+		if (!operation->binding_count ||
+		    binding_offset + operation->binding_count >
+			    ARRAY_COUNT(sve_crypto_registry_bindings))
+			return false;
+		operation->binding_offset = binding_offset;
+		binding_offset += operation->binding_count;
+		operation->binding_count = 0;
+	}
+	if (binding_offset != ARRAY_COUNT(sve_crypto_registry_bindings))
+		return false;
+	for (index = 0; index < ARRAY_COUNT(source_bound_proofs); index++) {
+		struct sve_crypto_registry_operation *operation =
+			sve_crypto_registry_operation_for(source_bound_proofs[index].proof_id);
+		const struct source_manifest_binding *source;
+		struct orlix_tcti_target_proof_binding *binding;
+
+		if (!operation)
+			continue;
+		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		binding = &sve_crypto_registry_bindings[operation->binding_offset +
+			operation->binding_count++];
+		*binding = (struct orlix_tcti_target_proof_binding) {
+			.leaf_name = source->leaf_name,
+			.mnemonic = source->mnemonic,
+			.encoding_mask = source->encoding_mask,
+			.encoding_pattern = source->encoding_pattern,
+			.condition_tcnd_hex = source->condition_tcnd_hex,
+			.kunit_case_mask = sve_crypto_case_mask(source->operation_id),
+			.source_ordinal = source->ordinal,
+		};
+	}
+	for (index = 0; index < ARRAY_COUNT(sve_crypto_registry_operations); index++) {
+		const struct sve_crypto_registry_operation *operation =
+			&sve_crypto_registry_operations[index];
+
+		if (!operation->binding_count)
+			return false;
+		proof_registry_entries[entry_base + index] =
+			(struct orlix_tcti_target_proof_registry_entry) {
+				.id = operation->proof_id,
+				.operation_id = operation->operation_id,
+				.classification_mask =
+					ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
+				.obligations = PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS,
+				.linux_interface =
+					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
+				.kunit_source = SVE_CRYPTO_SOURCE,
+				.kunit_suite = SVE_CRYPTO_SUITE,
+				.kunit_cases = sve_crypto_registry_cases,
+				.kunit_case_count = ARRAY_COUNT(sve_crypto_registry_cases),
+				.bindings = &sve_crypto_registry_bindings[
+					operation->binding_offset],
+				.binding_count = operation->binding_count,
+				.kselftest = NULL,
+				.unproved_obligations = PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS,
+			};
+	}
+	sve_crypto_registry_ready = true;
 	return true;
 }
 
@@ -5238,7 +5465,7 @@ static void proof_registry_initialize(void)
 	    !build_exclusive_registry() || !build_ordinary_load_store_registry() ||
 	    !build_source_leaf_rejection_registry() ||
 	    !build_production_capture_family_registry() ||
-	    !build_mops_copy_registry())
+	    !build_mops_copy_registry() || !build_sve_crypto_registry())
 		return;
 	if (orlix_tcti_target_production_capture_bindings_validate(
 			production_capture_bindings,
