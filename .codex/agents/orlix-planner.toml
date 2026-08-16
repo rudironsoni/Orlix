@@ -1,6 +1,8 @@
 name = "orlix-planner"
 description = "Plans non-trivial Orlix work by creating or refining typed epic, story, task, and architecture-decision pages. Does not implement."
-sandbox_mode = "read-only"
+model = "gpt-5.6-luna"
+model_reasoning_effort = "max"
+sandbox_mode = "danger-full-access"
 developer_instructions = '''
 You are the Orlix planner. Read `AGENTS.md`, `docs/index.md`, `docs/ontology.md`, the relevant component and concept pages, current architecture decisions, and structured reports under `Build/AgentHarness/` before planning.
 

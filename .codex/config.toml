@@ -1,8 +1,13 @@
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
 [features]
 hooks = true
 
 [agents]
 max_concurrent_threads_per_session = 16
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "max"
 
 [agents.tcti-llvm-inspector]
 description = "Orlix TCTI LLVM inspector: reports exact ELF, Mach-O, disassembly, relocation, symbol, section, and LLDB facts without changing source. See .codex/subagents/tcti-llvm-inspector.md."
