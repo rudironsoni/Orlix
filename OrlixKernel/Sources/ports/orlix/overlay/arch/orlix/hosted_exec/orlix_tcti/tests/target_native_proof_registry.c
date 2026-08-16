@@ -344,7 +344,7 @@ native_register_capture_selectors[] = {
 	{
 		.kind = ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SYSTEM_CONTROL,
 		.selector_id = 11U,
-		.source = 32U,
+		.source = 40U,
 		.size_rule = ORLIX_TCTI_NATIVE_CAPTURE_SIZE_EXACT,
 		.flags = ORLIX_TCTI_NATIVE_CAPTURE_REQUIRED |
 			ORLIX_TCTI_NATIVE_CAPTURE_APPLICABLE,

@@ -33,7 +33,8 @@
 
 static struct orlix_tcti_target_artifact_provenance pinned_provenance = {
 	.schema = "orlix-tcti-aarchmrs-source-v3",
-	.generator = "orlix-tcti-target-refresh-system-accessor-v2",
+	.generator = "orlix-tcti-target-refresh-system-accessor-v3",
+	.producer_sha256 = ORLIX_TCTI_TARGET_REFRESH_PRODUCER_SHA256,
 	.source_architecture = "vFATAp1-A",
 	.source_build = "818",
 	.source_release = "2026-06_rel",
@@ -186,6 +187,7 @@ static int seed_prior(int canonical_fd,
 	struct orlix_tcti_target_artifact_provenance provenance = {
 		.schema = "orlix-tcti-aarchmrs-source-v3",
 		.generator = "orlix-tcti-target-refresh",
+		.producer_sha256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		.source_architecture = "vFATAp1-A",
 		.source_build = "818",
 		.source_release = "2026-06_rel",

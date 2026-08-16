@@ -1,5 +1,0 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/* Synthetic source-bound rows used to verify the typed projection adapter. */
-ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(7U, "kunit:synthetic-first")
-ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(11U, "kunit:synthetic-second")
-ORLIX_TCTI_A64_SOURCE_BOUND_PROOF(13U, "kunit:synthetic-third")

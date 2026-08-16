@@ -12,7 +12,36 @@ ORLIX_TCTI_ISA_MAINTAINER_CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
 ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS := -I$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)
 ORLIX_TCTI_ISA_MAINTAINER_CONDITION_CPPFLAGS := -I$(ORLIX_TCTI_ISA_TEST_ROOT)
 ORLIX_TCTI_ISA_MAINTAINER_COMPILE = cd '$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)' && $(ORLIX_KERNEL_HOSTCC) $(ORLIX_TCTI_ISA_MAINTAINER_CFLAGS)
+ORLIX_TCTI_ISA_MAINTAINER_REFRESH_IDENTITY_INPUTS := \
+	target_refresh.c target_refresh.h target_artifact_publisher.c \
+	target_artifact_publisher.h target_refresh_artifacts.def \
+	target_manifest_generator.c target_manifest_generator.h \
+	target_inventory_import.c target_inventory_import.h \
+	target_condition_serialization.c target_condition_serialization.h \
+	target_instruction_artifact_generator.c target_instruction_artifact_generator.h \
+	target_feature_model.c target_feature_model.h \
+	target_feature_artifact_generator.c target_feature_artifact_generator.h \
+	target_feature_field_domain_binding.c target_feature_field_domain_binding.h \
+	target_feature_sat.c target_feature_sat.h \
+	target_feature_applicability_generator.c target_feature_applicability_generator.h \
+	target_feature_field_domain_binding_artifact_generator.c \
+	target_feature_field_domain_binding_artifact_generator.h \
+	target_runtime_capability_cohort_artifact_generator.c \
+	target_runtime_capability_cohort_artifact_generator.h \
+	target_register_model.c target_register_model.h \
+	target_register_artifact_generator.c target_register_artifact_generator.h \
+	target_arm_xml_package.c target_arm_xml_package.h \
+	target_asl_availability.c target_asl_availability.h \
+	target_system_accessor_reconciliation.c target_system_accessor_reconciliation.h
+ORLIX_TCTI_ISA_MAINTAINER_REFRESH_PRODUCER_SHA256 := $(shell cd '$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)' && set -euo pipefail; { for input in $(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_IDENTITY_INPUTS); do test -f "$$input"; digest_output="$$(shasum -a 256 < "$$input" && printf x)"; test "$${digest_output: -1}" = x; digest_output="$${digest_output%x}"; test "$${#digest_output}" -eq 68; digest="$${digest_output:0:64}"; [[ "$$digest" =~ ^[[:xdigit:]]{64}$$ ]]; test "$${digest_output:64}" = '  -'$$'\n'; printf '%s:%s\n' "$$input" "$$digest"; done; } | shasum -a 256 | awk 'NF == 2 && $$2 == "-" && length($$1) == 64 && $$1 !~ /[^[:xdigit:]]/ { print tolower($$1); count++ } END { if (count != 1) exit 1 }')
+ifneq ($(.SHELLSTATUS),0)
+$(error failed to compute the TCTI refresh producer identity)
+endif
+ifneq ($(words $(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_PRODUCER_SHA256)),1)
+$(error TCTI refresh producer identity must be one digest)
+endif
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES := \
+	-DORLIX_TCTI_TARGET_REFRESH_PRODUCER_SHA256=\"$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_PRODUCER_SHA256)\" \
 	-DTARGET_MANIFEST_GENERATOR_NO_MAIN \
 	-DTARGET_INSTRUCTION_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_FEATURE_ARTIFACT_GENERATOR_NO_MAIN \
@@ -37,7 +66,27 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 
 include $(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/instruction-artifact-contributors.mk
 
-.PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
+.PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-isa-producer-identity-check __tcti-isa-system-accessor-reconciliation-check __tcti-instruction-source-check __tcti-operational-note-pipeline-test
+
+__tcti-isa-producer-identity-check:
+	@set -eu; \
+	cd '$(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)'; \
+	digest="$$( set -euo pipefail; { for input in $(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_IDENTITY_INPUTS); do test -f "$$input"; digest_output="$$(shasum -a 256 < "$$input" && printf x)"; test "$${digest_output: -1}" = x; digest_output="$${digest_output%x}"; test "$${#digest_output}" -eq 68; digest="$${digest_output:0:64}"; [[ "$$digest" =~ ^[[:xdigit:]]{64}$$ ]]; test "$${digest_output:64}" = '  -'$$'\n'; printf '%s:%s\n' "$$input" "$$digest"; done; } | shasum -a 256 | awk 'NF == 2 && $$2 == "-" && length($$1) == 64 && $$1 !~ /[^[:xdigit:]]/ { print tolower($$1); count++ } END { if (count != 1) exit 1 }' )"; \
+	test "$$digest" = '$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_PRODUCER_SHA256)'; \
+	test "$${#digest}" -eq 64; \
+	case "$$digest" in *[!0-9a-f]*) exit 1;; esac; \
+	echo "PASS TCTI refresh producer identity $$digest"
+
+__tcti-isa-system-accessor-reconciliation-check:
+	@test -n '$(ORLIX_AARCHMRS_REGISTERS)' || { echo 'ORLIX_AARCHMRS_REGISTERS must point to the pinned AARCHMRS Registers.json' >&2; exit 2; }
+	@test -f '$(ORLIX_AARCHMRS_REGISTERS)' || { echo 'missing pinned AARCHMRS input: $(ORLIX_AARCHMRS_REGISTERS)' >&2; exit 2; }
+	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		target_register_model.c target_system_accessor_reconciliation.c \
+		target_system_accessor_reconciliation_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_system_accessor_reconciliation_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_system_accessor_reconciliation_test' \
+		'$(ORLIX_AARCHMRS_REGISTERS)'
 
 __tcti-instruction-source-check:
 	@mkdir -p '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)'

@@ -20,13 +20,14 @@ struct orlix_tcti_target_artifact {
 };
 
 /*
- * Every published generation identifies the C generator schema and the three
- * Arm inputs from which it was produced.  Values are copied into an immutable
- * manifest and included in the deterministic bundle digest.
+ * Every published generation identifies the complete Make-owned producer and
+ * the three Arm inputs from which it was produced. Values are copied into an
+ * immutable manifest and included in the deterministic bundle digest.
  */
 struct orlix_tcti_target_artifact_provenance {
 	const char *schema;
 	const char *generator;
+	const char *producer_sha256;
 	const char *source_architecture;
 	const char *source_build;
 	const char *source_release;

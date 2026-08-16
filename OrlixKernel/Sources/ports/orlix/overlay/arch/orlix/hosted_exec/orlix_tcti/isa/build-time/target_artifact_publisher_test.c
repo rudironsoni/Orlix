@@ -29,6 +29,7 @@ static const struct orlix_tcti_target_artifact artifacts[] = {
 static struct orlix_tcti_target_artifact_provenance provenance = {
 	.schema = "orlix-tcti-target-artifact-v3",
 	.generator = "target-artifact-generator",
+	.producer_sha256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 	.source_architecture = "vFATAp1-A",
 	.source_build = "818",
 	.source_release = "2026-06_rel",
@@ -975,6 +976,9 @@ static int every_three_source_field_is_verified(void)
 		mutated.schema = "orlix-tcti-aarchmrs-source-v4");
 	EXPECT_PROVENANCE_MUTATION_REJECTED(
 		mutated.generator = "orlix-tcti-target-refresh-system-accessor-v2");
+	EXPECT_PROVENANCE_MUTATION_REJECTED(
+		mutated.producer_sha256 =
+		"eddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
 	EXPECT_PROVENANCE_MUTATION_REJECTED(
 		mutated.source_architecture = "vFATAp1-B");
 	EXPECT_PROVENANCE_MUTATION_REJECTED(mutated.source_build = "819");

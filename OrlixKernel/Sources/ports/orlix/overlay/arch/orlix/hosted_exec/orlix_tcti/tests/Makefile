@@ -2,48 +2,6 @@
 
 include $(ORLIX_TCTI_PROOF_REGISTRY_PROVENANCE_MAKEFILE)
 
-# These variables are the direct Kbuild consumers of durable ISA artifacts.
-# Keep the paths in the real prerequisite lists so the source contract can
-# compare the canonical contributors with the consumer set.
-override ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES := \
-	ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS \
-	ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS \
-	ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS \
-	ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS \
-	ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS \
-	ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS \
-	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS \
-	ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS \
-	ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS
-$(foreach variable,$(ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES),$(if $(filter undefined file,$(origin $(variable))),,$(error $(variable) cannot be overridden; origin=$(origin $(variable)))))
-
-override ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS = \
-	$(src)/../isa/inventory.def \
-	$(src)/../isa/generations/current/source_manifest.def \
-	$(src)/../isa/target_classification.def
-override ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/source_manifest.def \
-	$(src)/../isa/target_classification.def \
-	$(src)/../isa/generations/current/target_system_accessor_reconciliation.def
-override ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
-override ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def \
-	$(src)/../isa/generations/current/target_feature_artifact.def
-override ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS = \
-	$(src)/../isa/target_execution_slice_map.def \
-	$(src)/../isa/generations/current/source_manifest.def
-override ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_artifact.def
-override ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
-	$(src)/../isa/generations/current/target_feature_artifact.def
-override ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS = \
-	$(src)/../isa/generations/current/target_feature_applicability.def
-override ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS = \
-	$(src)/../isa/source_bound_proof.def \
-	$(src)/../isa/proof_registry_projection.def
-
 obj-$(CONFIG_ORLIX_TCTI_KUNIT_TEST) += orlix_tcti_test.o
 orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_instruction_artifact.o \
@@ -140,11 +98,15 @@ targets += inventory.h target_inventory.h
 clean-files += inventory.h target_inventory.h target_inventory.h.tmp
 
 $(obj)/inventory.h: $(obj)/gen_inventory \
-			    $(ORLIX_TCTI_INVENTORY_ARTIFACT_INPUTS) FORCE
+			    $(src)/../isa/inventory.def \
+			    $(src)/../isa/generations/current/source_manifest.def \
+			    $(src)/../isa/target_classification.def FORCE
 	$(call if_changed,orlix_tcti_inventory)
 
 $(obj)/target_inventory.h: $(obj)/target_isa_kbuild_generator \
-			   $(ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS) FORCE
+			   $(src)/../isa/generations/current/source_manifest.def \
+			   $(src)/../isa/target_classification.def \
+			   $(src)/../isa/generations/current/target_system_accessor_reconciliation.def FORCE
 	$(call if_changed,orlix_tcti_target_inventory)
 
 $(obj)/orlix_tcti_decode_test.o: $(obj)/inventory.h $(obj)/target_inventory.h
@@ -152,21 +114,23 @@ $(obj)/orlix_tcti_source_leaf_classification_test.o: $(obj)/target_inventory.h
 $(obj)/orlix_tcti_test.o: $(obj)/inventory.h $(obj)/target_inventory.h \
 	$(obj)/target_proof_registry_provenance.h
 $(obj)/runtime_projection.o: $(obj)/target_inventory.h \
-	$(ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS)
+	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def
 $(obj)/target_runtime_capability_cohort_artifact.o: \
-	$(ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS)
+	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def \
+	$(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_execution_slice_map.o: \
-	$(ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS)
-$(obj)/target_feature_artifact.o: $(ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS)
+	$(src)/../isa/target_execution_slice_map.def \
+	$(src)/../isa/generations/current/source_manifest.def
+$(obj)/target_feature_artifact.o: $(src)/../isa/generations/current/target_feature_artifact.def
 $(obj)/target_feature_field_domain_binding_artifact.o: \
-	$(ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS)
-$(obj)/target_feature_applicability_artifact.o: $(ORLIX_TCTI_FEATURE_APPLICABILITY_ARTIFACT_INPUTS)
+	$(src)/../isa/generations/current/target_feature_field_domain_binding.def \
+	$(src)/../isa/generations/current/target_feature_artifact.def
+$(obj)/target_feature_applicability_artifact.o: $(src)/../isa/generations/current/target_feature_applicability.def
 $(obj)/target_proof_registry_provenance.h: $(src)/orlix_tcti_decode_test.c $(src)/orlix_tcti_system_accessor_partition_test.h $(src)/Makefile FORCE
 	@$(call orlix_tcti_write_proof_registry_provenance,$@,$(src)/orlix_tcti_decode_test.c,$(src)/orlix_tcti_system_accessor_partition_test.h,$(src)/Makefile)
 
-$(obj)/target_proof_registry.o: $(ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS) \
+$(obj)/target_proof_registry.o: $(src)/../isa/source_bound_proof.def \
+	$(src)/../isa/proof_registry_projection.def \
 	$(obj)/target_proof_registry_provenance.h
-$(obj)/target_proof_registry_test.o: \
-	$(src)/proof_registry_projection_synthetic_source_bound.def
 
 ccflags-y += -I$(obj)

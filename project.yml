@@ -14,7 +14,7 @@ settings:
   base:
     ARCHS[sdk=iphonesimulator*]: arm64
     CLANG_ENABLE_MODULES: YES
-    CURRENT_PROJECT_VERSION: 36
+    CURRENT_PROJECT_VERSION: 35
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     MARKETING_VERSION: "0.1"
     SWIFT_ACTIVE_COMPILATION_CONDITIONS:
@@ -68,39 +68,26 @@ targets:
     platform: iOS
     sources:
       - path: OrlixKernel/Sources/boot
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/boot
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/terminal
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/memory
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/observability
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/execution
-        createIntermediateGroups: true
         includes:
           - "*.c"
       - path: OrlixKernel/Sources/include
-        createIntermediateGroups: true
         buildPhase: headers
         headerVisibility: public
-      - path: OrlixKernel/Sources/Support
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixKernel/Sources/ports
-        createIntermediateGroups: true
-        buildPhase: none
     dependencies:
       - sdk: CoreFoundation.framework
     preBuildScripts:
@@ -156,12 +143,8 @@ targets:
     platform: iOS
     sources:
       - path: OrlixMLibC/Sources/Provider
-        createIntermediateGroups: true
         excludes:
           - Info.plist
-      - path: OrlixMLibC/Sources/patches
-        createIntermediateGroups: true
-        buildPhase: none
     dependencies:
       - target: OrlixKernel
         link: false
@@ -186,15 +169,8 @@ targets:
     platform: iOS
     sources:
       - path: OrlixCoreUtils/Sources/Provider
-        createIntermediateGroups: true
         excludes:
           - Info.plist
-      - path: OrlixCoreUtils/Sources/Programs
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixCoreUtils/Sources/make
-        createIntermediateGroups: true
-        buildPhase: none
     dependencies:
       - target: OrlixMLibC
         link: false
@@ -219,19 +195,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOS/Sources/Session
-        createIntermediateGroups: true
-      - path: OrlixOS/Sources/init
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixOS/Sources/make
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixOS/Sources/include
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixOS/Sources/patches
-        createIntermediateGroups: true
-        buildPhase: none
     dependencies:
       - target: OrlixKernel
         link: true
@@ -412,13 +375,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOS/Tests/XCTest/OrlixOSTests
-        createIntermediateGroups: true
-      - path: OrlixOS/Tests/ConsolePolicy
-        createIntermediateGroups: true
-        buildPhase: none
-      - path: OrlixOS/Tests/TerminalMux
-        createIntermediateGroups: true
-        buildPhase: none
     dependencies:
       - target: OrlixOSTestApp
       - target: OrlixOS
@@ -434,45 +390,31 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/Orlix/App
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Compatibility
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Features
-        createIntermediateGroups: true
       - path: Orlix/Orlix/GhosttyTerminal
-        createIntermediateGroups: true
       - path: Orlix/OrlixShared
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Assets.xcassets
-        createIntermediateGroups: true
         buildPhase: resources
       - path: Orlix/Orlix/Resources
-        createIntermediateGroups: true
         buildPhase: resources
         excludes:
           - Assets.xcassets
           - ghostty
           - terminfo
       - path: Orlix/Orlix/Resources/Assets.xcassets
-        createIntermediateGroups: true
         buildPhase: resources
       - path: Orlix/Orlix/Resources/ghostty
-        createIntermediateGroups: true
         buildPhase: resources
         type: folder
       - path: Orlix/Orlix/Resources/terminfo
-        createIntermediateGroups: true
         buildPhase: resources
         type: folder
       - path: Orlix/Orlix/PrivacyInfo.xcprivacy
-        createIntermediateGroups: true
         buildPhase: resources
       - path: docs/sources/release/orlix-app-release-inputs.json
-        createIntermediateGroups: true
         buildPhase: resources
     dependencies:
       - target: OrlixOS
@@ -575,49 +517,34 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/Orlix/App
-        createIntermediateGroups: true
         excludes:
           - Orlix.swift
       - path: Orlix/Orlix/Compatibility
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Features
-        createIntermediateGroups: true
       - path: Orlix/Orlix/GhosttyTerminal
-        createIntermediateGroups: true
       - path: Orlix/OrlixShared
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Core/Analytics/OrlixTelemetry.swift
-        createIntermediateGroups: true
       - path: OrlixTestApp/Sources
-        createIntermediateGroups: true
       - path: Orlix/Orlix/Assets.xcassets
-        createIntermediateGroups: true
         buildPhase: resources
       - path: Orlix/Orlix/Resources
-        createIntermediateGroups: true
         buildPhase: resources
         excludes:
           - Assets.xcassets
           - ghostty
           - terminfo
       - path: Orlix/Orlix/Resources/Assets.xcassets
-        createIntermediateGroups: true
         buildPhase: resources
       - path: Orlix/Orlix/Resources/ghostty
-        createIntermediateGroups: true
         buildPhase: resources
         type: folder
       - path: Orlix/Orlix/Resources/terminfo
-        createIntermediateGroups: true
         buildPhase: resources
         type: folder
       - path: Orlix/Orlix/PrivacyInfo.xcprivacy
-        createIntermediateGroups: true
         buildPhase: resources
       - path: docs/sources/release/orlix-app-release-inputs.json
-        createIntermediateGroups: true
         buildPhase: resources
     dependencies:
       - target: OrlixOS
@@ -655,15 +582,12 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/OrlixLiveActivity
-        createIntermediateGroups: true
         excludes:
           - Assets.xcassets
           - Info.plist
       - path: Orlix/OrlixShared
-        createIntermediateGroups: true
     resources:
       - path: Orlix/OrlixLiveActivity/Assets.xcassets
-        createIntermediateGroups: true
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
@@ -682,7 +606,6 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/OrlixTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixTestApp
       - package: SwiftMosh
@@ -711,7 +634,6 @@ targets:
     platform: iOS
     sources:
       - path: Orlix/OrlixUITests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixTestApp
     settings:
@@ -730,7 +652,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Sources
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOS
         embed: true
@@ -809,7 +730,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixKernel/Tests/XCTest/OrlixKernelHostedTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixTestApp
       - target: OrlixKernel
@@ -830,22 +750,17 @@ targets:
     platform: iOS
     sources:
       - path: OrlixHostAdapter/Tests/XCTest/OrlixHostAdapterTests
-        createIntermediateGroups: true
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/boot
-        createIntermediateGroups: true
         includes:
           - progress.c
           - resources.c
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/terminal
-        createIntermediateGroups: true
         includes:
           - console.c
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/memory
-        createIntermediateGroups: true
         includes:
           - kernel_mapping.c
       - path: OrlixHostAdapter/Sources/OrlixHostAdapter/observability
-        createIntermediateGroups: true
         includes:
           - log.c
     settings:
@@ -863,7 +778,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/OrlixOSTestAppTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -877,9 +791,7 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/Support
-        createIntermediateGroups: true
       - path: OrlixOSTestApp/Tests/XCTest/OrlixKernelConformanceTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -893,9 +805,7 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/Support
-        createIntermediateGroups: true
       - path: OrlixOSTestApp/Tests/XCTest/OrlixMLibCConformanceTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -909,9 +819,7 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/Support
-        createIntermediateGroups: true
       - path: OrlixOSTestApp/Tests/XCTest/OrlixPackagesConformanceTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOSTestApp
     settings:
@@ -925,7 +833,6 @@ targets:
     platform: iOS
     sources:
       - path: OrlixOSTestApp/Tests/XCTest/OrlixOSRuntimeTests
-        createIntermediateGroups: true
     dependencies:
       - target: OrlixOSTestApp
       - target: OrlixOS

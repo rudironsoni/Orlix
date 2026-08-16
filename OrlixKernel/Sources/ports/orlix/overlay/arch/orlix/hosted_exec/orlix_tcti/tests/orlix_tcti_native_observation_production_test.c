@@ -332,7 +332,7 @@ static void capture_rejects_mismatched_system_accessor_variant(
 	capture = orlix_tcti_native_capture_claim_resume(current);
 	KUNIT_ASSERT_NOT_NULL(test, capture);
 
-	/* TPIDR_EL0 uses the same generic MRS mask as FPMR.  Decode its
+	/* TPIDR_EL0 uses the same generic MRS mask as FPMR. Decode its
 	 * generated selector and prove that the producer cannot credit FPMR. */
 	wrong = orlix_tcti_decode_aarch64(0xd53bd040U);
 	native_capture_seed_regs(&regs, 0x1000U);

@@ -113,6 +113,7 @@ static bool valid_provenance(
 		valid_component(provenance->schema, ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME) &&
 		valid_component(provenance->generator,
 				ORLIX_TCTI_TARGET_ARTIFACT_MAX_NAME) &&
+		valid_sha256(provenance->producer_sha256) &&
 		valid_source_text(provenance->source_architecture) &&
 		valid_source_text(provenance->source_build) &&
 		valid_source_text(provenance->source_release) &&
@@ -481,14 +482,14 @@ static int format_source_binding(
 		" source_schema=%s source_timestamp=%s"
 		" instructions_byte_length=%zu instructions_sha256=%s"
 		" features_byte_length=%zu features_sha256=%s"
-		" registers_byte_length=%zu registers_sha256=%s"
+		" registers_byte_length=%zu registers_sha256=%s producer_sha256=%s"
 		" reconciliation_identity=%s",
 		provenance->source_architecture, provenance->source_build,
 		provenance->source_release, provenance->source_schema,
 		provenance->source_timestamp, provenance->instructions_byte_length,
 		provenance->instructions_sha256, provenance->features_byte_length,
 		provenance->features_sha256, provenance->registers_byte_length,
-		provenance->registers_sha256,
+		provenance->registers_sha256, provenance->producer_sha256,
 		provenance->reconciliation_identity);
 
 	return count > 0 &&
@@ -878,6 +879,10 @@ int orlix_tcti_target_artifact_verify(
 			    expected_provenance->registers_sha256))
 		goto provenance_mismatch;
 	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
+	    !line_has_value(line, line_length, "producer_sha256=",
+			    expected_provenance->producer_sha256))
+		goto provenance_mismatch;
+	if (next_manifest_line(&cursor, &line, &line_length, &line_offset) != 1 ||
 	    !line_has_value(line, line_length, "reconciliation_identity=",
 			    expected_provenance->reconciliation_identity))
 		goto provenance_mismatch;
@@ -1217,6 +1222,7 @@ int orlix_tcti_target_artifact_reconciliation_identity(
 	if (!provenance || !digest ||
 	    !valid_source_text(provenance->schema) ||
 	    !valid_source_text(provenance->generator) ||
+	    !valid_sha256(provenance->producer_sha256) ||
 	    !valid_source_text(provenance->source_architecture) ||
 	    !valid_source_text(provenance->source_build) ||
 	    !valid_source_text(provenance->source_release) ||
@@ -1232,11 +1238,12 @@ int orlix_tcti_target_artifact_reconciliation_identity(
 		return -1;
 	}
 	if (appendf(&buffer, &length, &capacity,
-		    "ORLIX_TCTI_AARCHMRS_THREE_SOURCE_V2\n"
+		    "ORLIX_TCTI_AARCHMRS_THREE_SOURCE_V3\n"
 		    "artifact_schema=%s\ngenerator=%s\n"
 		    "architecture=%s\nbuild=%s\nrelease=%s\nschema=%s\n"
 		    "timestamp=%s\n"
-		    "instructions=%zu:%s\nfeatures=%zu:%s\nregisters=%zu:%s\n",
+		    "instructions=%zu:%s\nfeatures=%zu:%s\nregisters=%zu:%s\n"
+		    "producer_sha256=%s\n",
 		    provenance->schema, provenance->generator,
 		    provenance->source_architecture, provenance->source_build,
 		    provenance->source_release, provenance->source_schema,
@@ -1246,7 +1253,7 @@ int orlix_tcti_target_artifact_reconciliation_identity(
 		    provenance->features_byte_length,
 		    provenance->features_sha256,
 		    provenance->registers_byte_length,
-		    provenance->registers_sha256)) {
+		    provenance->registers_sha256, provenance->producer_sha256)) {
 		errno = ENOMEM;
 		goto out;
 	}
@@ -1352,7 +1359,7 @@ static int build_manifest(const char *generation,
 		 "source_release=%s\nsource_schema=%s\nsource_timestamp=%s\n"
 		 "instructions_byte_length=%zu\ninstructions_sha256=%s\n"
 		 "features_byte_length=%zu\nfeatures_sha256=%s\n"
-		 "registers_byte_length=%zu\nregisters_sha256=%s\n"
+		 "registers_byte_length=%zu\nregisters_sha256=%s\nproducer_sha256=%s\n"
 		 "reconciliation_identity=%s\n",
 		 generation, provenance->schema, provenance->generator,
 		 provenance->source_architecture, provenance->source_build,
@@ -1360,7 +1367,7 @@ static int build_manifest(const char *generation,
 		 provenance->source_timestamp, provenance->instructions_byte_length,
 		 provenance->instructions_sha256, provenance->features_byte_length,
 		 provenance->features_sha256, provenance->registers_byte_length,
-		 provenance->registers_sha256,
+		 provenance->registers_sha256, provenance->producer_sha256,
 		 provenance->reconciliation_identity))
 		goto fail;
 	for (index = 0; index < artifact_count; index++) {

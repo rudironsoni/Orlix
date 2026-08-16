@@ -5,7 +5,7 @@
 #include <linux/types.h>
 
 /*
- * The FPMR is per-task architectural state. FP8 consumers use this narrow
+ * The FPMR is per-task architectural state.  FP8 consumers use this narrow
  * interface rather than reaching into thread_struct or SystemAccessor.
  */
 u64 orlix_tcti_fpmr_current(void);
