@@ -5,6 +5,7 @@
 #include <linux/errno.h>
 
 #include "decode_aarch64.h"
+#include "sme_fp_decode.h"
 #include "system_accessor.h"
 
 #define AARCH64_SVC_MASK 0xffe0001fU
@@ -905,6 +906,9 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	default:
 		break;
 	}
+
+	if (!orlix_tcti_decode_sme_fp(instruction, &decoded))
+		return decoded;
 
 	sve_ret = orlix_tcti_decode_sve_predicated_integer_binary(instruction,
 						      &sve_predicated_binary);

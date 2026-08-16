@@ -17,6 +17,7 @@
 #include "decode_aarch64.h"
 #include "fixed_fp.h"
 #include "semantics.h"
+#include "sme_fp.h"
 #include "system_accessor.h"
 #include "sve_state.h"
 #include "switch_debug.h"
@@ -7754,7 +7755,9 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 	case ORLIX_TCTI_DECODE_SYSTEM_REGISTER:
 		return orlix_tcti_execute_system_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE:
-		return -EOPNOTSUPP;
+		return orlix_tcti_execute_sme_pstate(regs, decoded);
+	case ORLIX_TCTI_DECODE_SME_FP:
+		return orlix_tcti_fixed_execute_sme_fp(regs, decoded);
 	case ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR:
 		orlix_tcti_clear_exclusive_monitor();
 		regs->pc += sizeof(u32);

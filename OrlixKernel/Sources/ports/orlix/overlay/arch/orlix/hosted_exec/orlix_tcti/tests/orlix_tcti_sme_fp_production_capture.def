@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #141-owned declaration. Registry projection is owned separately. */
+#ifdef ORLIX_TCTI_PROOF_FAMILY_METADATA
+ORLIX_TCTI_PROOF_FAMILY_METADATA(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_sme_fp_source_bound_test.c",
+	"75fa1f9b65611844be4b829614d3453b3f06d2d2bb583d8a4acf4cd8ca5c4bdd",
+	"orlix_tcti_sme_fp_source_bound_test.o",
+	"orlix-tcti-sme-fp-source-bound",
+	"sme_fp_source_bound_suite", "sme_fp_source_bound_cases",
+	"sme_fp_source_resume_all_canonical_rows",
+	"sme_fp_source_rejects_reserved_and_non_family_neighbours")
+#endif
+
+#ifdef ORLIX_TCTI_PROOF_FAMILY_OPERATION
+ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:sme-fp-source-bound", "SME_FP")
+#endif

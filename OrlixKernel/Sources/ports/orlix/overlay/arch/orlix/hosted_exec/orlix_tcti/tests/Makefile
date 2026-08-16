@@ -64,6 +64,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_crypto_decode_boundary_test.o \
 	orlix_tcti_crc32_decode_boundary_test.o \
 	orlix_tcti_crc32_source_bound_test.o \
+	orlix_tcti_sme_fp_source_bound_test.o \
 	orlix_tcti_crypto_extension_decode_boundary_test.o \
 	orlix_tcti_atomic_128_rmw_test.o \
 	target_lse_operation_catalog.o \
@@ -123,6 +124,8 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_advsimd_structure_load_store_source_bound_test.o \
 	orlix_tcti_pauth_bti_gcs_obligation_test.o \
 	orlix_tcti_sme_state_contract_test.o \
+	orlix_tcti_sme_fp_decode_test.o \
+	orlix_tcti_sme_fp_semantics_test.o \
 	orlix_tcti_mops_provenance_test.o \
 	orlix_tcti_mops_copy_test.o
 

@@ -9,6 +9,7 @@
 #include "gadget_program.h"
 #include "native_capture.h"
 #include "semantics.h"
+#include "sme_fp.h"
 
 #define ORLIX_TCTI_GADGET_DONE 1
 
@@ -62,8 +63,8 @@ static int orlix_tcti_gadget_execute_decoded(struct mm_struct *mm,
 }
 
 static int orlix_tcti_gadget_execute_crc32(struct mm_struct *mm,
-				     struct pt_regs *regs,
-				     const struct orlix_tcti_gadget_word **cursor,
+					     struct pt_regs *regs,
+					     const struct orlix_tcti_gadget_word **cursor,
 				     unsigned long *fault_address,
 				     struct orlix_tcti_native_capture *capture)
 {
@@ -93,9 +94,34 @@ static int orlix_tcti_gadget_execute_flag_manipulation(
 	return orlix_tcti_execute_flag_manipulation_semantics(regs, &decoded);
 }
 
+/* SME FP is a family-owned fixed executor.  Keep it out of the generic
+ * switch-debug semantic dispatcher even when its decoded payload travels in
+ * the same authorized gadget program as every other guest instruction. */
+static int orlix_tcti_gadget_execute_sme_fp(struct mm_struct *mm,
+					       struct pt_regs *regs,
+					       const struct orlix_tcti_gadget_word **cursor,
+					       unsigned long *fault_address,
+					       struct orlix_tcti_native_capture *capture)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+	int ret;
+
+	memcpy(&decoded, *cursor, sizeof(decoded));
+	*cursor += ORLIX_TCTI_DECODED_INSTRUCTION_WORDS;
+	orlix_tcti_native_capture_before_decoded(capture, mm, regs, &decoded);
+	ret = orlix_tcti_fixed_execute_sme_fp(regs, &decoded);
+	if (ret)
+		orlix_tcti_native_capture_fault(capture, &decoded, *fault_address, ret);
+	else
+		orlix_tcti_native_capture_after_decoded(capture, mm, regs, &decoded);
+	return ret;
+}
+
 static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_SME_FP)
+		return orlix_tcti_gadget_execute_sme_fp;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return orlix_tcti_gadget_execute_flag_manipulation;
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE &&
@@ -108,6 +134,7 @@ static orlix_tcti_gadget_fn orlix_tcti_gadget_for_decoded(
 static bool orlix_tcti_gadget_has_decoded_payload(orlix_tcti_gadget_fn gadget)
 {
 	return gadget == orlix_tcti_gadget_execute_decoded ||
+		gadget == orlix_tcti_gadget_execute_sme_fp ||
 		gadget == orlix_tcti_gadget_execute_crc32 ||
 		gadget == orlix_tcti_gadget_execute_flag_manipulation;
 }

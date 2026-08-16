@@ -45,6 +45,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_MOVE_WIDE_IMMEDIATE,
 	ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
 	ORLIX_TCTI_DECODE_SME_PSTATE_IMMEDIATE,
+	ORLIX_TCTI_DECODE_SME_FP,
 	ORLIX_TCTI_DECODE_SVE_PREDICATED_INTEGER_BINARY,
 	ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
@@ -625,6 +626,7 @@ struct orlix_tcti_decoded_instruction {
 	enum orlix_tcti_move_wide_op move_wide_op;
 	enum orlix_tcti_branch_register_op branch_register_op;
 	enum orlix_tcti_sme_pstate_operation sme_pstate_operation;
+	u16 sme_fp_source_ordinal;
 	enum orlix_tcti_sve_integer_binary_op sve_integer_binary_op;
 	enum orlix_tcti_sve_predication sve_predication;
 	enum orlix_tcti_barrier_op barrier_op;
