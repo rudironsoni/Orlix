@@ -6,6 +6,7 @@
 
 ORLIX_TCTI_ISA_BUILD_TIME_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/build-time
 ORLIX_TCTI_ISA_CANONICAL_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa
+ORLIX_TCTI_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti
 ORLIX_TCTI_ISA_TEST_ROOT := $(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests
 ORLIX_TCTI_ISA_MAINTAINER_OUT := $(ORLIX_BUILD_ROOT)/OrlixKernel/orlix-tcti-target-refresh
 ORLIX_TCTI_ISA_MAINTAINER_CFLAGS ?= -std=c11 -Wall -Wextra -Werror -pedantic
@@ -18,6 +19,7 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES := \
 	-DTARGET_FEATURE_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_FEATURE_FIELD_DOMAIN_BINDING_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_RUNTIME_CAPABILITY_COHORT_ARTIFACT_GENERATOR_NO_MAIN \
+	-DTARGET_ACTIVE_EXECUTION_PROFILE_ARTIFACT_GENERATOR_NO_MAIN \
 	-DTARGET_REGISTER_ARTIFACT_GENERATOR_NO_MAIN
 ORLIX_TCTI_ISA_MAINTAINER_REFRESH_TEST_DEFINES := \
 	$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_DEFINES) \
@@ -31,11 +33,19 @@ ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES := \
 	target_feature_sat.c target_feature_applicability_generator.c \
 	target_feature_field_domain_binding_artifact_generator.c \
 	target_runtime_capability_cohort_artifact_generator.c \
+	target_active_execution_profile_artifact_generator.c \
 	target_register_model.c target_register_artifact_generator.c \
 	target_arm_xml_package.c target_asl_availability.c \
 	target_system_accessor_reconciliation.c
 
 include $(ORLIX_TCTI_ISA_BUILD_TIME_ROOT)/instruction-artifact-contributors.mk
+
+# The kernel surface still has a compatibility append for this wrapper. Keep
+# that append empty when the wrapper is already a canonical contributor, but
+# expose the real path to the later active-artifact source check.
+ORLIX_TCTI_ISA_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER := \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_active_execution_profile_artifact.def
+override ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER = $(if $(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER_APPENDED),$(ORLIX_TCTI_ISA_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER),$(eval ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER_APPENDED := 1))
 
 .PHONY: __tcti-isa-check __tcti-isa-refresh __tcti-instruction-source-check __tcti-operational-note-pipeline-test
 
@@ -158,6 +168,10 @@ __tcti-isa-check:
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_runtime_capability_cohort_artifact_generator_test' \
 		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' '$(ORLIX_AARCHMRS_FEATURES)'
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
+		target_artifact_publisher.c target_active_execution_profile_artifact_generator_test.c \
+		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_active_execution_profile_artifact_generator_test'
+	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_active_execution_profile_artifact_generator_test'
+	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
 		target_register_model.c target_register_model_test.c \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_register_model_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_register_model_test' '$(ORLIX_AARCHMRS_REGISTERS)'
@@ -185,7 +199,8 @@ __tcti-isa-check:
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh_test'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh_test' \
 		'$(ORLIX_AARCHMRS_INSTRUCTIONS)' '$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)' \
-		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)'
+		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)' \
+		'$(ORLIX_TCTI_ROOT)'
 
 __tcti-isa-refresh: __tcti-isa-check
 	@$(ORLIX_TCTI_ISA_MAINTAINER_COMPILE) -O2 $(ORLIX_TCTI_ISA_MAINTAINER_CPPFLAGS) \
@@ -194,6 +209,6 @@ __tcti-isa-refresh: __tcti-isa-check
 		target_refresh.c $(filter-out target_refresh.c,$(ORLIX_TCTI_ISA_MAINTAINER_REFRESH_SOURCES)) \
 		-o '$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh'
 	@'$(ORLIX_TCTI_ISA_MAINTAINER_OUT)/target_refresh' \
-		'$(ORLIX_TCTI_ISA_CANONICAL_ROOT)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
+		'$(ORLIX_TCTI_ROOT)' '$(ORLIX_AARCHMRS_INSTRUCTIONS)' \
 		'$(ORLIX_AARCHMRS_FEATURES)' '$(ORLIX_AARCHMRS_REGISTERS)' \
 		'$(ORLIX_A64_ISA_XML_ARCHIVE)' '$(ORLIX_A64_ISA_XML_RELEASE)'

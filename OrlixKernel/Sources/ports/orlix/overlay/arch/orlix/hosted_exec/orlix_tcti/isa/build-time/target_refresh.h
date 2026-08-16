@@ -21,6 +21,7 @@ enum orlix_tcti_target_refresh_error {
 	ORLIX_TCTI_TARGET_REFRESH_FEATURE_FIELD_DOMAINS,
 	ORLIX_TCTI_TARGET_REFRESH_FEATURE_APPLICABILITY,
 	ORLIX_TCTI_TARGET_REFRESH_RUNTIME_CAPABILITY_COHORT,
+	ORLIX_TCTI_TARGET_REFRESH_ACTIVE_EXECUTION_PROFILE,
 	ORLIX_TCTI_TARGET_REFRESH_REGISTERS,
 	ORLIX_TCTI_TARGET_REFRESH_SYSTEM_ACCESSORS,
 	ORLIX_TCTI_TARGET_REFRESH_PUBLISH,
@@ -48,24 +49,26 @@ struct orlix_tcti_target_refresh_fault {
 /*
  * Import each pinned Arm source in memory, emit all source-derived C artifacts
  * before publication, then atomically select one immutable, full-bundle-
- * addressed generation below the authoritative ISA source-tree descriptor.
+ * addressed generation below publish_root_fd. All profile, ledger, and proof
+ * inputs are read below source_tcti_root_fd: its isa child and tests sibling
+ * are deliberately one closed source tree.
  */
-int orlix_tcti_target_refresh(int canonical_root_fd,
+int orlix_tcti_target_refresh(int publish_root_fd, int source_tcti_root_fd,
 			      const char *instructions_path,
 			      const char *features_path, const char *registers_path,
 			      const char *arm_xml_archive_path,
 			      const char *arm_xml_release_path,
-			struct orlix_tcti_target_refresh_result *result);
+			      struct orlix_tcti_target_refresh_result *result);
 
 /* Test-only deterministic publication fault injection. Production uses the
  * wrapper above, which always passes a NULL fault. */
-int orlix_tcti_target_refresh_with_fault(int canonical_root_fd,
+int orlix_tcti_target_refresh_with_fault(int publish_root_fd, int source_tcti_root_fd,
 				 const char *instructions_path,
 				 const char *features_path, const char *registers_path,
 				 const char *arm_xml_archive_path,
 				 const char *arm_xml_release_path,
-					 const struct orlix_tcti_target_refresh_fault *fault,
-			struct orlix_tcti_target_refresh_result *result);
+			 const struct orlix_tcti_target_refresh_fault *fault,
+			 struct orlix_tcti_target_refresh_result *result);
 
 const char *orlix_tcti_target_refresh_error_name(enum orlix_tcti_target_refresh_error error);
 

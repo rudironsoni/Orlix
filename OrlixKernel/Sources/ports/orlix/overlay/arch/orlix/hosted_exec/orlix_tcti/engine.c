@@ -24,6 +24,7 @@
 #include <asm/unistd.h>
 
 #include "block_cache.h"
+#include "active_execution_profile.h"
 #include "decode_aarch64.h"
 #include "engine.h"
 #include "gadget_program.h"
@@ -95,6 +96,8 @@ static bool orlix_tcti_decoded_requires_fp16(
 static bool orlix_tcti_decoded_runtime_available(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	if (!orlix_tcti_active_execution_profile_allows_decoded(decoded))
+		return false;
 	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)

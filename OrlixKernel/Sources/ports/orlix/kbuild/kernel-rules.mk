@@ -121,6 +121,7 @@ ORLIX_KERNEL_LINUX_SOURCES := \
 	arch/$(ORLIX_PORT_ARCH)/kernel/cpuinfo.c \
 	arch/$(ORLIX_PORT_ARCH)/kernel/hosted_exec.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/engine.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/active_execution_profile.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/native_capture.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_contract.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_native_proof_registry.c \
@@ -1059,6 +1060,7 @@ ORLIX_KERNEL_LINUX_SOURCES += \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_feature_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_instruction_artifact.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_runtime_capability_cohort_artifact.c \
+	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_active_execution_profile_test.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_execution_slice_map.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/target_proof_registry.c \
 	arch/$(ORLIX_PORT_ARCH)/hosted_exec/orlix_tcti/tests/orlix_tcti_atomic_memory_test.c \
@@ -1263,6 +1265,11 @@ include OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tct
 ORLIX_TCTI_PROOF_PROVENANCE_SOURCE := OrlixKernel/Sources/ports/orlix/kbuild/proof-provenance.mk
 include $(ORLIX_TCTI_PROOF_PROVENANCE_SOURCE)
 
+ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER := OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_active_execution_profile_artifact.def
+ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT := OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/target_active_execution_profile_artifact.def
+ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_MANIFEST := OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest
+ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS += $(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER)
+
 # The ISA build-time declaration is the only accepted contributor encoding.
 # It rejects command-line and environment overrides before a value reaches a
 # shell array below.
@@ -1270,7 +1277,7 @@ ifneq ($(origin ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS),file)
 $(error instruction-artifact-contributors.mk must define ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS)
 endif
 
-.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __candidate-source-revision-tests __candidate-source-revision-artifact-override-rejection-probe __profile-lock-held-probe __target-refresh-syntax-source-check __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
+.PHONY: all setup-env build test clean mrproper help prepare scripts dtbs headers_install kunit kselftest kselftest-install xcodeproj run __xcodeproj-generate __bootstrap-linux-upstream __validate-linux-abi __validate-profile __prepare-port __prepare-kbuild __headers-install __kunit __kunit-object-contract-tests __kernel-archive __candidate-source-revision-tests __candidate-source-revision-artifact-override-rejection-probe __profile-lock-held-probe __target-refresh-syntax-source-check __tcti-isa-refresh-materialization-source-check __tcti-active-execution-profile-artifact-source-check __verify-xcodegen-boundary __verify-framework-symbols __orlixmlibc-sysroot __kselftest-install __kselftest-initramfs __kernel-payload __ios-simulator-framework __ios-simulator-xcframework
 all: build
 
 help:
@@ -1294,6 +1301,48 @@ prepare: __tcti-isa-refresh
 else
 prepare: __prepare-kbuild
 endif
+
+# ISA refresh requires the exact ORLIX_BUILD_ROOT port to be reconstructed
+# from this worktree's durable overlay before the publisher can run.  Keep the
+# edge on the refresh target so direct callers cannot bypass materialization.
+__tcti-isa-refresh: __prepare-port
+
+__tcti-isa-refresh-materialization-source-check:
+	@set -euo pipefail; \
+	rules='$(CURDIR)/OrlixKernel/Sources/ports/orlix/kbuild/kernel-rules.mk'; \
+	awk '\
+		/^__tcti-isa-refresh:[[:space:]]/ { \
+			if ($$0 !~ /(^|[[:space:]])__prepare-port([[:space:]]|$$)/) exit 1; \
+			found = 1; \
+		} \
+		END { exit found ? 0 : 1 }' "$$rules" || { \
+		echo 'TCTI ISA refresh must materialize the durable overlay before publishing' >&2; exit 1; \
+	}; \
+	grep -Fq 'cp -R "$$$$overlay_dir/." "$$$$port_tmp_dir"' "$$rules" || { \
+		echo 'Orlix kernel port preparation no longer copies the durable overlay' >&2; exit 1; \
+	}; \
+	printf '%s\n' 'TCTI ISA refresh materialization dependency: passed'
+
+__tcti-active-execution-profile-artifact-source-check:
+	@set -euo pipefail; \
+	$(orlix_tcti_file_sha256) \
+	wrapper='$(CURDIR)/$(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_WRAPPER)'; \
+	artifact='$(CURDIR)/$(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT)'; \
+	manifest='$(CURDIR)/$(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_MANIFEST)'; \
+	[ -s "$$wrapper" ] || { echo "missing active execution profile artifact wrapper: $$wrapper" >&2; exit 1; }; \
+	grep -Fqx '#include "generations/current/target_active_execution_profile_artifact.def"' "$$wrapper" || { echo "active execution profile artifact wrapper is stale or malformed: $$wrapper" >&2; exit 1; }; \
+	[ -s "$$artifact" ] || { echo "missing active execution profile generated artifact: $$artifact" >&2; exit 1; }; \
+	[ -s "$$manifest" ] || { echo "missing active execution profile generation manifest: $$manifest" >&2; exit 1; }; \
+	current_generation="$$(readlink "$(CURDIR)/OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current")"; \
+	current_generation="$${current_generation##*/}"; \
+	manifest_generation="$$(awk -F= '$$1 == "generation" { value = $$2; count++ } END { if (count != 1 || value == "") exit 1; print value }' "$$manifest")" || { echo "active execution profile generation identity is missing: $$manifest" >&2; exit 1; }; \
+	[ -n "$$current_generation" ] && [ "$$current_generation" = "$$manifest_generation" ] || { echo "active execution profile generation identity is stale: $$manifest" >&2; exit 1; }; \
+	artifact_sha256="$$(orlix_tcti_file_sha256 "$$artifact")" || { echo "cannot hash active execution profile generated artifact: $$artifact" >&2; exit 1; }; \
+	manifest_artifact_sha256="$$(awk '$$1 == "artifact=target_active_execution_profile_artifact.def" { for (field_index = 1; field_index <= NF; field_index++) if ($$field_index ~ /^sha256=/) { sub(/^sha256=/, "", $$field_index); value = $$field_index; count++ } } END { if (count != 1 || value !~ /^[[:xdigit:]]{64}$$/) exit 1; print value }' "$$manifest")" || { echo "active execution profile artifact identity is missing: $$manifest" >&2; exit 1; }; \
+	[ "$$artifact_sha256" = "$$manifest_artifact_sha256" ] || { echo "active execution profile generated artifact is stale: $$artifact" >&2; exit 1; }; \
+	printf '%s\n' 'active execution profile artifact source check: passed'
+
+__orlix-tcti-instruction-artifact-inputs-source-check: __tcti-active-execution-profile-artifact-source-check
 
 scripts dtbs: __prepare-kbuild
 
@@ -1980,7 +2029,7 @@ __headers-install: __prepare-port
 	printf 'profile=%s\nlinux_version=%s\nlinux_uapi_arch=%s\n' "$(PROFILE)" "$(LINUX_VERSION)" "$(LINUX_UAPI_ARCH)" > "$$header_install_stamp"; \
 	echo "installed Orlix UAPI headers: $(ORLIX_MLIBC_KERNEL_HEADERS_DIR)/include"
 
-__kunit: __prepare-kbuild
+__kunit: __tcti-active-execution-profile-artifact-source-check __prepare-kbuild
 	@set -euo pipefail; \
 	$(orlix_tcti_file_sha256) \
 	$(orlix_tcti_candidate_source_revision) \
@@ -2055,7 +2104,7 @@ __kunit-object-contract-tests:
 	archive_bytes="$$(wc -c < "$$archive")"; \
 	echo "Orlix KUnit object contract archive: $$archive ($$archive_bytes bytes)"
 
-__kernel-archive: __prepare-kbuild
+__kernel-archive: __tcti-active-execution-profile-artifact-source-check __prepare-kbuild
 	@set -euo pipefail; \
 	$(orlix_tcti_file_sha256) \
 	$(orlix_tcti_candidate_source_revision) \

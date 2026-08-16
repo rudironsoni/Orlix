@@ -20,6 +20,7 @@ endif
 ORLIX_TCTI_INSTRUCTION_ARTIFACT_INPUTS := \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/manifest \
 	$(addprefix OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/generations/current/,$(ORLIX_TCTI_TARGET_REFRESH_ARTIFACTS)) \
+	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_active_execution_profile_artifact.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/inventory.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_classification.def \
 	OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/isa/target_execution_slice_map.def \

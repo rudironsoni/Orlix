@@ -17,6 +17,9 @@
 } while (0)
 
 #define CONCURRENT_FIRST_USE_THREADS 16U
+#define PROOF_REGISTRY_PROJECTION_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/" \
+	"orlix_tcti/isa/proof_registry_projection.def"
 
 #define ORLIX_TCTI_A64_PROOF_REGISTRY_BINDING(ordinal, proof_id) \
 	{ ordinal, proof_id },

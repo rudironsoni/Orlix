@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * ENABLED runtime_profile.def rows require one row per exact derived cohort
+ * ordinal here.  Each row binds that ordinal to its classification identity
+ * and exact source-bound proof and registry proof ID.  The generator rejects
+ * a missing, extra, duplicate, stale, unrelated, or mismatched binding.
+ * This prerequisite slice has no enabled families, so the manifest is empty.
+ */

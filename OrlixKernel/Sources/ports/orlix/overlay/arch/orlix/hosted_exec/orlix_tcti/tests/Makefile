@@ -10,6 +10,7 @@ override ORLIX_TCTI_DIRECT_ARTIFACT_INPUT_VARIABLES := \
 	ORLIX_TCTI_TARGET_INVENTORY_ARTIFACT_INPUTS \
 	ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS \
 	ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS \
+	ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_INPUTS \
 	ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS \
 	ORLIX_TCTI_FEATURE_ARTIFACT_INPUTS \
 	ORLIX_TCTI_FEATURE_FIELD_DOMAIN_ARTIFACT_INPUTS \
@@ -30,6 +31,9 @@ override ORLIX_TCTI_RUNTIME_PROJECTION_ARTIFACT_INPUTS = \
 override ORLIX_TCTI_RUNTIME_COHORT_ARTIFACT_INPUTS = \
 	$(src)/../isa/generations/current/target_runtime_capability_cohort_artifact.def \
 	$(src)/../isa/generations/current/target_feature_artifact.def
+override ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_INPUTS = \
+	$(src)/../isa/target_active_execution_profile_artifact.def \
+	$(src)/../isa/generations/current/target_active_execution_profile_artifact.def
 override ORLIX_TCTI_EXECUTION_SLICE_MAP_ARTIFACT_INPUTS = \
 	$(src)/../isa/target_execution_slice_map.def \
 	$(src)/../isa/generations/current/source_manifest.def
@@ -55,6 +59,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	target_feature_field_domain_binding_artifact.o \
 	target_feature_applicability_artifact.o \
 	target_runtime_capability_cohort_artifact.o \
+	orlix_tcti_active_execution_profile_test.o \
 	target_execution_slice_map.o \
 	target_proof_registry.o \
 	target_native_proof_registry.o \
@@ -168,5 +173,7 @@ $(obj)/target_proof_registry.o: $(ORLIX_TCTI_PROOF_REGISTRY_ARTIFACT_INPUTS) \
 	$(obj)/target_proof_registry_provenance.h
 $(obj)/target_proof_registry_test.o: \
 	$(src)/proof_registry_projection_synthetic_source_bound.def
+$(obj)/orlix_tcti_active_execution_profile_test.o: \
+	$(ORLIX_TCTI_ACTIVE_EXECUTION_PROFILE_ARTIFACT_INPUTS)
 
 ccflags-y += -I$(obj)

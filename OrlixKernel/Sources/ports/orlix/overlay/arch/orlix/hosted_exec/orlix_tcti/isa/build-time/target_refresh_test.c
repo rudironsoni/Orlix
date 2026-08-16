@@ -33,7 +33,7 @@
 
 static struct orlix_tcti_target_artifact_provenance pinned_provenance = {
 	.schema = "orlix-tcti-aarchmrs-source-v3",
-	.generator = "orlix-tcti-target-refresh-system-accessor-v2",
+	.generator = "orlix-tcti-target-refresh-active-execution-profile-v3",
 	.source_architecture = "vFATAp1-A",
 	.source_build = "818",
 	.source_release = "2026-06_rel",
@@ -50,6 +50,7 @@ static struct orlix_tcti_target_artifact_provenance pinned_provenance = {
 		"5bd76c3c3ce90322eb4fd179675dafe82df2fd1cb789beee516e5b29c471b874",
 };
 static char pinned_reconciliation_identity[65];
+static int refresh_tcti_root_fd = -1;
 
 static int initialize_pinned_provenance(void)
 {
@@ -166,7 +167,7 @@ static int generation_entry_count(const char *root)
 		return -1;
 	directory = opendir(path);
 	if (!directory)
-		return -1;
+		return errno == ENOENT ? 0 : -1;
 	while ((entry = readdir(directory)))
 		if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, ".."))
 			count++;
@@ -229,7 +230,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 	EXPECT(root);
 	fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	EXPECT(fd >= 0);
-	refresh_status = orlix_tcti_target_refresh(fd, instructions, features,
+	refresh_status = orlix_tcti_target_refresh(fd, refresh_tcti_root_fd, instructions, features,
 		registers, arm_xml_archive, arm_xml_release, &result);
 	if (refresh_status)
 		fprintf(stderr, "refresh failed: %s / %s / %s\n",
@@ -247,7 +248,7 @@ static int full_refresh_is_authoritative_and_idempotent(
 	EXPECT(!strcmp(first, result.publish.generation));
 	EXPECT(!orlix_tcti_target_artifact_verify(
 		fd, "generations", &pinned_provenance, &verify_result));
-	EXPECT(!orlix_tcti_target_refresh(fd, instructions, features, registers,
+	EXPECT(!orlix_tcti_target_refresh(fd, refresh_tcti_root_fd, instructions, features, registers,
 					  arm_xml_archive, arm_xml_release,
 					  &result));
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_OK);
@@ -300,7 +301,7 @@ static int injected_failure_preserves_prior(
 	if (!before_bytes)
 		goto out;
 	if (orlix_tcti_target_refresh_with_fault(
-		    fd, instructions, features, registers, arm_xml_archive,
+		    fd, refresh_tcti_root_fd, instructions, features, registers, arm_xml_archive,
 		    arm_xml_release, &fault, &result) >= 0)
 		goto out;
 	if ((refresh_stage == ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE &&
@@ -339,7 +340,7 @@ static int all_injected_failures_are_atomic(
 		ORLIX_TCTI_TARGET_REFRESH_FAULT_PARSE,
 		ORLIX_TCTI_TARGET_ARTIFACT_STAGE_NONE, 0U, instructions, features,
 		registers, arm_xml_archive, arm_xml_release));
-	for (artifact = 0; artifact < 9U; artifact++) {
+	for (artifact = 0; artifact < 10U; artifact++) {
 		char *root = make_root();
 		char before[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
 		char after[ORLIX_TCTI_TARGET_ARTIFACT_MAX_GENERATION + 1U];
@@ -357,7 +358,7 @@ static int all_injected_failures_are_atomic(
 		EXPECT(!seed_prior(fd, &prior));
 		EXPECT(!selected_generation(root, before));
 		EXPECT(orlix_tcti_target_refresh_with_fault(
-			fd, instructions, features, registers, arm_xml_archive,
+			fd, refresh_tcti_root_fd, instructions, features, registers, arm_xml_archive,
 			arm_xml_release, &fault, &result) < 0);
 		EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_VALIDATION);
 		EXPECT(!selected_generation(root, after));
@@ -402,7 +403,7 @@ static int wrong_source_identity_does_not_publish(
 	EXPECT(fd >= 0);
 	EXPECT(!seed_prior(fd, &prior));
 	EXPECT(!selected_generation(root, before));
-	EXPECT(orlix_tcti_target_refresh(fd, "/dev/null", features, registers,
+	EXPECT(orlix_tcti_target_refresh(fd, refresh_tcti_root_fd, "/dev/null", features, registers,
 					 arm_xml_archive, arm_xml_release,
 					 &result) < 0);
 	EXPECT(result.error == ORLIX_TCTI_TARGET_REFRESH_SOURCE_IDENTITY);
@@ -415,11 +416,52 @@ static int wrong_source_identity_does_not_publish(
 	return 0;
 }
 
+static int source_descriptor_must_be_a_tcti_root(
+	const char *instructions, const char *features, const char *registers,
+	const char *arm_xml_archive, const char *arm_xml_release)
+{
+	char *publish_root = make_root();
+	char *wrong_source_root = make_root();
+	struct orlix_tcti_target_refresh_result result;
+	int publish_fd = -1;
+	int source_fd = -1;
+	int status = -1;
+
+	if (!publish_root || !wrong_source_root)
+		goto out;
+	publish_fd = open(publish_root,
+			  O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	source_fd = open(wrong_source_root,
+			 O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (publish_fd < 0 || source_fd < 0)
+		goto out;
+	if (orlix_tcti_target_refresh(publish_fd, source_fd, instructions, features,
+				      registers, arm_xml_archive, arm_xml_release,
+				      &result) >= 0 ||
+	    result.error != ORLIX_TCTI_TARGET_REFRESH_INVALID_ARGUMENT)
+		goto out;
+	if (generation_entry_count(publish_root) != 0)
+		goto out;
+	status = 0;
+out:
+	if (source_fd >= 0)
+		close(source_fd);
+	if (publish_fd >= 0)
+		close(publish_fd);
+	if (wrong_source_root)
+		remove_tree(wrong_source_root);
+	if (publish_root)
+		remove_tree(publish_root);
+	free(wrong_source_root);
+	free(publish_root);
+	return status;
+}
+
 int main(int argc, char **argv)
 {
-	if (argc != 6) {
+	if (argc != 7) {
 		fprintf(stderr,
-			"usage: %s Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06\n",
+			"usage: %s Instructions.json Features.json Registers.json ISA_A64_xml_A_profile-2026-06.tar.gz ISA_A64_xml_A_profile-2026-06 tcti-root\n",
 			argv[0]);
 		return 2;
 	}
@@ -427,6 +469,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "cannot initialize pinned three-source provenance\n");
 		return EXIT_FAILURE;
 	}
+	refresh_tcti_root_fd = open(argv[6], O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (refresh_tcti_root_fd < 0)
+		return EXIT_FAILURE;
 	if (full_refresh_is_authoritative_and_idempotent(
 		    argv[1], argv[2], argv[3], argv[4], argv[5]) ||
 	    malformed_feature_domain_artifact_does_not_publish(
@@ -434,8 +479,10 @@ int main(int argc, char **argv)
 	    all_injected_failures_are_atomic(argv[1], argv[2], argv[3],
 					     argv[4], argv[5]) ||
 	    wrong_source_identity_does_not_publish(argv[2], argv[3], argv[4],
-					   argv[5]))
-		return 1;
+			   argv[5]) ||
+	    source_descriptor_must_be_a_tcti_root(argv[1], argv[2], argv[3],
+					       argv[4], argv[5]))
+		return EXIT_FAILURE;
 	puts("PASS target refresh authoritative transaction");
 	return 0;
 }
