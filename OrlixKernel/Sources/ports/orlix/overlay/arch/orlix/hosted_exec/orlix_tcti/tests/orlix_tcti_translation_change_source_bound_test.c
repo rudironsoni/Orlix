@@ -7,6 +7,7 @@
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -269,8 +270,31 @@ static struct kunit_case tchange_cases[] = {
 	{}
 };
 
+static int tchange_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void tchange_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static struct kunit_suite tchange_suite = {
 	.name = "orlix-tcti-translation-change-source-bound",
+	.init = tchange_init,
+	.exit = tchange_exit,
 	.test_cases = tchange_cases,
 };
 

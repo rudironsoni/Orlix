@@ -10,6 +10,7 @@
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -439,8 +440,31 @@ static struct kunit_case crc_source_bound_cases[] = {
 	{}
 };
 
+static int crc_source_bound_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void crc_source_bound_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static struct kunit_suite crc_source_bound_test_suite = {
 	.name = "orlix-tcti-crc32-source-bound",
+	.init = crc_source_bound_test_init,
+	.exit = crc_source_bound_test_exit,
 	.test_cases = crc_source_bound_cases,
 };
 

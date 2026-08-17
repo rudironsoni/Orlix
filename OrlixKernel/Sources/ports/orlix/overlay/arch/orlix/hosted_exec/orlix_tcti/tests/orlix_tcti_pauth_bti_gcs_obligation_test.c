@@ -11,6 +11,7 @@
 #include <kunit/test.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -168,8 +169,31 @@ static struct kunit_case pauth_bti_gcs_cases[] = {
 	{}
 };
 
+static int orlix_tcti_pauth_bti_gcs_obligation_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_pauth_bti_gcs_obligation_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 struct kunit_suite orlix_tcti_pauth_bti_gcs_obligation_test_suite = {
 	.name = "orlix-tcti-pauth-bti-gcs-obligations",
+	.init = orlix_tcti_pauth_bti_gcs_obligation_test_init,
+	.exit = orlix_tcti_pauth_bti_gcs_obligation_test_exit,
 	.test_cases = pauth_bti_gcs_cases,
 };
 

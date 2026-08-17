@@ -10,6 +10,7 @@
 #include <kunit/test.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -559,8 +560,31 @@ static struct kunit_case osls_cases[] = {
 	{}
 };
 
+static int orlix_tcti_ordinary_single_load_store_source_bound_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_ordinary_single_load_store_source_bound_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static struct kunit_suite orlix_tcti_ordinary_single_load_store_source_bound_suite = {
 	.name = "orlix-tcti-ordinary-single-load-store-source-bound",
+	.init = orlix_tcti_ordinary_single_load_store_source_bound_init,
+	.exit = orlix_tcti_ordinary_single_load_store_source_bound_exit,
 	.test_cases = osls_cases,
 };
 
