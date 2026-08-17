@@ -58,8 +58,10 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * FEAT_CSSC instruction may enter a guest only after Linux advertises CSSC.
  * ORLIX_EL0_HWCAP2 is currently zero, so all CSSC forms must take the normal
  * unsupported-instruction exit without changing guest architectural state.
- * Scalar FP16 uses HWCAP_FPHP and AdvSIMD FP16 uses HWCAP_ASIMDHP. Both are
- * likewise zero until their owning complete-target proof authorizes them.
+ * Linux still advertises neither HWCAP_FPHP nor HWCAP_ASIMDHP. Scalar FP16
+ * stays gated on that advertisement. AdvSIMD FP16 three-same decode and
+ * native execute are owned, so those SIMD_VECTOR_ARITHMETIC forms may enter
+ * a guest without the Linux HWCAP_ASIMDHP bit.
  */
 static bool orlix_tcti_decoded_requires_cssc(
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -99,10 +101,15 @@ static bool orlix_tcti_decoded_runtime_available(
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return false;
-	if (orlix_tcti_decoded_requires_fp16(decoded))
+	if (orlix_tcti_decoded_requires_fp16(decoded)) {
+		if (decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC &&
+		    decoded->simd_arithmetic_op >= ORLIX_TCTI_SIMD_ARITH_FABD &&
+		    decoded->simd_arithmetic_op <= ORLIX_TCTI_SIMD_ARITH_FSUB)
+			return true;
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :
 			(ELF_HWCAP & HWCAP_FPHP);
+	}
 	return !orlix_tcti_decoded_requires_cssc(decoded) ||
 		(ELF_HWCAP2 & HWCAP2_CSSC);
 }
