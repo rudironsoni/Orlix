@@ -672,5 +672,6 @@ struct orlix_tcti_decoded_instruction {
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);
+bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction);
 
 #endif /* ORLIX_TCTI_DECODE_AARCH64_H */
