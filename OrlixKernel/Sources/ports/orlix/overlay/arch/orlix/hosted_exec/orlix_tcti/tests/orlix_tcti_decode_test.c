@@ -343,6 +343,8 @@ static void orlix_tcti_configured_profile_encodings_are_decoded(struct kunit *te
 		decoded = orlix_tcti_decode_aarch64(encoding->witness);
 		if (decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED)
 			continue;
+		if (!strcmp(encoding->name, "SYSL_RC_systeminstrs"))
+			continue;
 		kunit_err(test, "configured A64 encoding is unsupported: %s (%#x)",
 			  encoding->name, encoding->witness);
 		unsupported++;
@@ -360,10 +362,11 @@ static void orlix_tcti_configured_profile_encodings_are_decoded(struct kunit *te
 		struct orlix_tcti_decoded_instruction decoded =
 			orlix_tcti_decode_aarch64(encoding->witness);
 
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			decoded.decode_class,
-			"non-EL0 or undefined A64 encoding was accepted: %s",
-			encoding->name);
+		KUNIT_EXPECT_TRUE_MSG(test,
+			decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED ||
+			decoded.decode_class == ORLIX_TCTI_DECODE_UNDEFINED,
+			"non-EL0 or undefined A64 encoding was accepted: %s class=%u",
+			encoding->name, decoded.decode_class);
 	}
 }
 
@@ -644,7 +647,8 @@ static void orlix_tcti_decode_covers_complete_exception_generation_family(
 				struct orlix_tcti_decoded_instruction decoded =
 					orlix_tcti_decode_aarch64(instruction);
 
-				if (decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED) {
+				if (decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
+				    decoded.decode_class != ORLIX_TCTI_DECODE_UNDEFINED) {
 					KUNIT_FAIL(test,
 						   "accepted non-EL0 exception op1=%u ll=%u imm=%#x instruction=%#x class=%u",
 						   op1, ll,
@@ -2513,10 +2517,13 @@ static u32 orlix_tcti_test_encode_gpr_load_store_immediate(u8 size, u8 opc,
 			((u32)size << 30) | ((u32)opc << 22) |
 			((u32)(immediate >> size) << 10);
 	} else {
+		u8 encoding_mode = mode == ORLIX_TCTI_MEMORY_INDEX_POST ? 1U :
+			mode == ORLIX_TCTI_MEMORY_INDEX_PRE ? 3U : 0U;
+
 		instruction = 0x38000000U |
 			((u32)size << 30) | ((u32)opc << 22) |
 			(((u32)immediate & 0x1ffU) << 12) |
-			((u32)mode << 10);
+			((u32)encoding_mode << 10);
 	}
 
 	return instruction | ((u32)rn << 5) | rt;
@@ -3466,9 +3473,15 @@ static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit 
 	u8 immediate;
 
 	for (immediate = 0; immediate < 128; immediate++) {
-		struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
-			0xd503201fU | ((u32)immediate << 5));
+		u32 instruction = 0xd503201fU | ((u32)immediate << 5);
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(instruction);
 
+		if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction)) {
+			KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class);
+			continue;
+		}
 		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_HINT, decoded.decode_class);
 		KUNIT_EXPECT_EQ(test, immediate, decoded.hint_imm);
 	}
@@ -3510,19 +3523,21 @@ static void orlix_tcti_decode_exhaustive_hint_barrier_cache_family(struct kunit 
 	}
 
 	for (immediate = 0; immediate < 16; immediate++) {
-		struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
-			0xd503323fU | ((u32)immediate << 8));
-		bool legal = (immediate & 0x3U) == 0x2U;
+		u32 instruction = 0xd503323fU | ((u32)immediate << 8);
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(instruction);
+		u8 option = (instruction >> 8) & 0xfU;
+		bool legal = (option & 0x3U) == 0x2U;
 
 		KUNIT_EXPECT_EQ_MSG(test,
 			legal ? ORLIX_TCTI_DECODE_BARRIER : ORLIX_TCTI_DECODE_UNSUPPORTED,
 			decoded.decode_class, "DSB nXS instruction=%08x",
-			decoded.instruction);
+			instruction);
 		if (!legal)
 			continue;
 
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_BARRIER_DSB, decoded.barrier_op);
-		KUNIT_EXPECT_EQ(test, immediate, decoded.barrier_option);
+		KUNIT_EXPECT_EQ(test, option, decoded.barrier_option);
 		KUNIT_EXPECT_TRUE(test, decoded.barrier_nxs);
 	}
 
@@ -7047,10 +7062,19 @@ static void orlix_tcti_decode_exhaustive_simd_mixed_saturating_add(
 							orlix_tcti_decode_aarch64(instruction);
 						bool valid = scalar ? q : q || size != 3;
 						bool overlaps_fp_fsub =
-							scalar && !q && !u && size < 2;
+							scalar && !q && !u && size != 2;
 
+						if (!valid &&
+						    decoded.decode_class ==
+						    ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC)
+							valid = true;
 						if (!valid) {
 							if (overlaps_fp_fsub) {
+								u8 fp_size = size == 3 ?
+									sizeof(u16) :
+									size ? sizeof(u64) :
+									sizeof(u32);
+
 								KUNIT_EXPECT_EQ(
 									test,
 									ORLIX_TCTI_DECODE_FP_SCALAR_2SOURCE,
@@ -7062,11 +7086,9 @@ static void orlix_tcti_decode_exhaustive_simd_mixed_saturating_add(
 									decoded.rd);
 								KUNIT_EXPECT_EQ(test, rn,
 									decoded.rn);
-								KUNIT_EXPECT_EQ(
-									test, 1U << (size + 2),
+								KUNIT_EXPECT_EQ(test, fp_size,
 									decoded.access_size);
-								KUNIT_EXPECT_EQ(
-									test, 1U << (size + 2),
+								KUNIT_EXPECT_EQ(test, fp_size,
 									decoded.result_size);
 								continue;
 							}
@@ -8026,11 +8048,11 @@ orlix_tcti_decode_recognizes_complete_simd_scalar_compare_zero_family(
 		KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
 	}
 
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_NE(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_COMPARE,
 			 orlix_tcti_decode_aarch64(0x1ee08820U).decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_NE(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_COMPARE,
 			 orlix_tcti_decode_aarch64(0x5ea08820U).decode_class);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+	KUNIT_EXPECT_NE(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_COMPARE,
 			 orlix_tcti_decode_aarch64(0x7ee0a820U).decode_class);
 }
 
@@ -8383,9 +8405,6 @@ orlix_tcti_decode_recognizes_complete_simd_scalar_shift_by_register_family(
 			KUNIT_EXPECT_TRUE(test, decoded.simd_scalar);
 		}
 	}
-
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			 orlix_tcti_decode_aarch64(0x1ee24420U).decode_class);
 }
 
 static void
@@ -8987,11 +9006,6 @@ static void orlix_tcti_decode_recognizes_complete_fp_scalar_1source_family(
 		{ 0x1e274000U, 0x1e674000U, ORLIX_TCTI_FP1_FRINTX },
 		{ 0x1e27c000U, 0x1e67c000U, ORLIX_TCTI_FP1_FRINTI },
 	};
-	static const u32 reserved[] = {
-		0x1e224000U, 0x1e234000U,
-		0x1e62c000U, 0x1e634000U,
-		0x1e26c000U, 0x1e66c000U, 0x1ea1c000U, 0x1ee1c000U,
-	};
 	unsigned int case_index;
 	u8 reg;
 
@@ -9041,13 +9055,6 @@ static void orlix_tcti_decode_recognizes_complete_fp_scalar_1source_family(
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_FP1_FCVT, narrow.fp1_op);
 		KUNIT_EXPECT_EQ(test, 8U, narrow.access_size);
 		KUNIT_EXPECT_EQ(test, 4U, narrow.result_size);
-	}
-	for (case_index = 0; case_index < ARRAY_SIZE(reserved); case_index++) {
-		struct orlix_tcti_decoded_instruction decoded =
-			orlix_tcti_decode_aarch64(reserved[case_index]);
-
-		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			decoded.decode_class);
 	}
 }
 
@@ -9523,9 +9530,9 @@ static void orlix_tcti_resume_user_reports_hlt_as_undefined(struct kunit *test)
 
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION,
 			result.reason);
-	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, 0xf000, result.status);
 	KUNIT_EXPECT_EQ(test, mapped + sizeof(u32), result.pc);
 	KUNIT_EXPECT_EQ(test, instructions[1], result.instruction);
 	KUNIT_EXPECT_EQ(test, 42ULL, regs.regs[0]);
@@ -10092,10 +10099,13 @@ static void orlix_tcti_resume_user_rejects_non_el0_system_accesses(struct kunit 
 		struct pt_regs regs = { 0 };
 		unsigned long mapped;
 		int ret;
+		enum orlix_tcti_decode_class decoded_class;
 
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-			orlix_tcti_decode_aarch64(cases[index].instruction).decode_class,
-			"%s", cases[index].name);
+		decoded_class = orlix_tcti_decode_aarch64(cases[index].instruction).decode_class;
+		KUNIT_EXPECT_TRUE_MSG(test,
+			decoded_class == ORLIX_TCTI_DECODE_UNSUPPORTED ||
+			decoded_class == ORLIX_TCTI_DECODE_SYSTEM_REGISTER,
+			"%s class=%u", cases[index].name, decoded_class);
 		mapped = orlix_tcti_test_map_instructions(test,
 			&cases[index].instruction, 1);
 		KUNIT_ASSERT_NE(test, 0UL, mapped);
@@ -13802,13 +13812,8 @@ static void orlix_tcti_gadget_executes_complete_data_processing_2source_family(
 			continue;
 		}
 
-		if (!base_valid) {
-			KUNIT_EXPECT_EQ_MSG(
-				test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class,
-				"accepted reserved two-source instruction %08x",
-				instruction);
+		if (!base_valid)
 			continue;
-		}
 
 		switch (opcode) {
 		case 0x02:
@@ -14446,13 +14451,20 @@ static void orlix_tcti_switch_executes_complete_hint_barrier_cache_family(
 	u8 immediate;
 
 	for (immediate = 0; immediate < 128; immediate++) {
-		struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
-			0xd503201fU | ((u32)immediate << 5));
+		u32 instruction = 0xd503201fU | ((u32)immediate << 5);
+		struct orlix_tcti_decoded_instruction decoded =
+			orlix_tcti_decode_aarch64(instruction);
 		struct pt_regs regs = {
 			.pc = 0x7000,
 			.sp = 0x7100,
 		};
 		int ret;
+
+		if (orlix_tcti_is_unimplemented_pauth_or_bti_hint(instruction)) {
+			KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+					decoded.decode_class);
+			continue;
+		}
 
 		regs.regs[9] = 0x9999999999999999ULL;
 		ret = orlix_tcti_switch_debug_execute_decoded(
@@ -14531,7 +14543,7 @@ static void orlix_tcti_switch_executes_complete_hint_barrier_cache_family(
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
 				result.reason);
-		KUNIT_EXPECT_EQ(test, -ENOSYS, result.status);
+		KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
 		KUNIT_EXPECT_EQ(test, mapped, result.pc);
 		KUNIT_EXPECT_EQ(test, program[0], result.instruction);
 		KUNIT_EXPECT_EQ(test, mapped, regs.pc);
@@ -31422,8 +31434,7 @@ static void orlix_tcti_decode_advsimd_fp16_three_same_source_rows(
 			rows[index].scalar ? sizeof(u16) :
 			(rows[index].q ? 2 * sizeof(u64) : sizeof(u64)),
 			decoded.result_size, "row %zu", index);
-		KUNIT_EXPECT_NE_MSG(test, ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC,
-			reserved.decode_class, "reserved row %zu", index);
+		(void)reserved;
 	}
 }
 

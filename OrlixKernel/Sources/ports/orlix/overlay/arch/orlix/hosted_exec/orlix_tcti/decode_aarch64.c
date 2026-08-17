@@ -797,7 +797,7 @@ static void orlix_tcti_decode_memory_common(struct orlix_tcti_decoded_instructio
  * silently successful HINT.  They remain undefined to the OrlixTCTI guest until
  * their individual source leaves have production semantics and proof.
  */
-static bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
+bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction)
 {
 	static const u32 pauth_hints[] = {
 		0xd50320ffU, /* XPACLRI */
@@ -5057,7 +5057,7 @@ fp_int_gpr_unclaimed:
 
 	if ((instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MRS_PATTERN ||
 	    (instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN) {
-		u16 sysreg = (instruction >> 5) & 0xffffU;
+		u16 sysreg = (instruction >> 5) & 0x7fffU;
 
 		if (!orlix_tcti_system_accessor_decode(sysreg,
 			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSR_PATTERN,
@@ -5086,7 +5086,7 @@ fp_int_gpr_unclaimed:
 
 	if ((instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSRR_PATTERN ||
 	    (instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MRRS_PATTERN) {
-		u16 selector = (instruction >> 5) & 0xffffU;
+		u16 selector = (instruction >> 5) & 0x7fffU;
 		enum orlix_tcti_system_accessor_route route =
 			(instruction & AARCH64_SYSTEM_REGISTER_MASK) == AARCH64_MSRR_PATTERN ?
 			ORLIX_TCTI_SYSTEM_ACCESSOR_ROUTE_MSRR :
