@@ -270,7 +270,17 @@ static void orlix_tcti_exclusive_resume_executes_every_base_leaf(struct kunit *t
 							  words);
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s source=%u", entry->name,
 				    entry->source_ordinal);
-		ret = orlix_tcti_write_user_data(current->mm, data, old, bytes);
+		{
+			u64 memory_old[2] = { old[0] & mask, old[1] & mask };
+
+			if (decoded.pair && decoded.access_size < sizeof(u64)) {
+				memory_old[0] = (old[0] & mask) |
+					((old[1] & mask) << (decoded.access_size * 8));
+				memory_old[1] = 0;
+			}
+			ret = orlix_tcti_write_user_data(current->mm, data, memory_old,
+						   bytes);
+		}
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s source=%u", entry->name,
 				    entry->source_ordinal);
 		orlix_tcti_exclusive_resume_init_regs(&regs, instructions, data);
@@ -305,17 +315,34 @@ static void orlix_tcti_exclusive_resume_executes_every_base_leaf(struct kunit *t
 			if (entry->pair)
 				KUNIT_EXPECT_EQ(test, old[1] & mask,
 						regs.regs[ORLIX_TCTI_EXCLUSIVE_RT2]);
-			KUNIT_EXPECT_EQ(test, old[0] & mask, observed[0]);
-			if (entry->pair)
-				KUNIT_EXPECT_EQ(test, old[1] & mask,
-						observed[1]);
+			if (entry->pair && decoded.access_size < sizeof(u64))
+				KUNIT_EXPECT_EQ(test,
+					(old[0] & mask) |
+						((old[1] & mask) <<
+						 (decoded.access_size * 8)),
+					observed[0]);
+			else {
+				KUNIT_EXPECT_EQ(test, old[0] & mask, observed[0]);
+				if (entry->pair)
+					KUNIT_EXPECT_EQ(test, old[1] & mask,
+							observed[1]);
+			}
 		} else {
 			KUNIT_EXPECT_EQ(test, 0ULL,
 					regs.regs[ORLIX_TCTI_EXCLUSIVE_RS]);
-			KUNIT_EXPECT_EQ(test, desired[0] & mask, observed[0]);
-			if (entry->pair)
-				KUNIT_EXPECT_EQ(test, desired[1] & mask,
-						observed[1]);
+			if (entry->pair && decoded.access_size < sizeof(u64))
+				KUNIT_EXPECT_EQ(test,
+					(desired[0] & mask) |
+						((desired[1] & mask) <<
+						 (decoded.access_size * 8)),
+					observed[0]);
+			else {
+				KUNIT_EXPECT_EQ(test, desired[0] & mask,
+						observed[0]);
+				if (entry->pair)
+					KUNIT_EXPECT_EQ(test, desired[1] & mask,
+							observed[1]);
+			}
 		}
 		orlix_tcti_prepare_signal_delivery();
 	}
@@ -383,7 +410,17 @@ orlix_tcti_exclusive_resume_store_faults_preserve_state(struct kunit *test)
 			instructions, setup_program, ARRAY_SIZE(setup_program));
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s source=%u", entry->name,
 				    entry->source_ordinal);
-		ret = orlix_tcti_write_user_data(current->mm, data, old, bytes);
+		{
+			u64 memory_old[2] = { old[0] & mask, old[1] & mask };
+
+			if (entry->pair && decoded.access_size < sizeof(u64)) {
+				memory_old[0] = (old[0] & mask) |
+					((old[1] & mask) << (decoded.access_size * 8));
+				memory_old[1] = 0;
+			}
+			ret = orlix_tcti_write_user_data(current->mm, data, memory_old,
+						   bytes);
+		}
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s source=%u", entry->name,
 				    entry->source_ordinal);
 		orlix_tcti_exclusive_resume_init_regs(&regs, instructions, data);
@@ -441,9 +478,16 @@ orlix_tcti_exclusive_resume_store_faults_preserve_state(struct kunit *test)
 		ret = orlix_tcti_read_user_data(current->mm, data, observed, bytes);
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s source=%u", entry->name,
 				    entry->source_ordinal);
-		KUNIT_EXPECT_EQ(test, old[0] & mask, observed[0]);
-		if (entry->pair)
-			KUNIT_EXPECT_EQ(test, old[1] & mask, observed[1]);
+		if (entry->pair && decoded.access_size < sizeof(u64))
+			KUNIT_EXPECT_EQ(test,
+				(old[0] & mask) |
+					((old[1] & mask) << (decoded.access_size * 8)),
+				observed[0]);
+		else {
+			KUNIT_EXPECT_EQ(test, old[0] & mask, observed[0]);
+			if (entry->pair)
+				KUNIT_EXPECT_EQ(test, old[1] & mask, observed[1]);
+		}
 	}
 	KUNIT_EXPECT_TRUE(test, seen_scalar[sizeof(u8)]);
 	KUNIT_EXPECT_TRUE(test, seen_scalar[sizeof(u16)]);

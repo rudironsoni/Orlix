@@ -215,11 +215,17 @@ static void orlix_tcti_crypto_decode_rejects_fixed_bit_neighbours(struct kunit *
 					leaf->source_id);
 				continue;
 			}
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-					decoded.decode_class,
-					"reserved neighbour %#x of %s (%u, %s)",
-					mutation, leaf->mnemonic, leaf->source_ordinal,
-					leaf->source_id);
+			/*
+			 * A single fixed-bit flip can become a different legal
+			 * A64 encoding (LDR literal, TBL, THREE_SAME). Keep
+			 * the original crypto leaf from surviving that flip.
+			 */
+			KUNIT_EXPECT_TRUE_MSG(test,
+				decoded.decode_class !=
+					ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ||
+				decoded.simd_arithmetic_op != leaf->operation,
+				"retained %s after reserved mutation %#x",
+				leaf->mnemonic, mutation);
 		}
 	}
 }
