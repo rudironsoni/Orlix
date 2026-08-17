@@ -613,6 +613,7 @@ struct orlix_tcti_decoded_instruction {
 	bool simd_indexed;
 	bool sign_extend_load;
 	bool prefetch;
+	bool allocation_tag_store;
 	u8 offset_extend;
 	bool offset_shift;
 	bool invert_second_operand;
@@ -673,5 +674,6 @@ struct orlix_tcti_decoded_instruction {
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);
 bool orlix_tcti_is_unimplemented_pauth_or_bti_hint(u32 instruction);
+void orlix_tcti_allocation_tag_last_store(unsigned long *address, u8 *tag);
 
 #endif /* ORLIX_TCTI_DECODE_AARCH64_H */

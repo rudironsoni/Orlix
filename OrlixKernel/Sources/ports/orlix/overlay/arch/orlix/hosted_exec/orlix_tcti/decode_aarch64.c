@@ -1404,7 +1404,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			 * opc=3 is the FEAT_LSUI 128-bit pair form (STTP/LDTP Q).
 			 * Ordinary STP/LDP Q uses opc=2.
 			 */
-			scale = opc + 2;
+			scale = opc == 3 ? 4 : opc + 2;
 		} else {
 			if (opc == 0) {
 				scale = 2;
@@ -1438,6 +1438,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		if (!simd_fp && opc == 1 && !(instruction & BIT(22))) {
 			decoded.access_size = sizeof(u64);
 			decoded.result_size = sizeof(u64);
+			decoded.allocation_tag_store = true;
 		}
 		decoded.memory_offset =
 			sign_extend64((instruction >> 15) & 0x7fU, 6) << scale;
@@ -1596,6 +1597,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 
 		if (!simd_fp && size == 3 && opc == 2) {
 			decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+			decoded.prefetch = true;
 			return decoded;
 		}
 
@@ -1642,8 +1644,10 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		bool simd_fp = instruction & BIT(26);
 
 		if (!simd_fp && size == 3 && opc == 2) {
-			if (mode == 0)
+			if (mode == 0) {
 				decoded.decode_class = ORLIX_TCTI_DECODE_HINT;
+				decoded.prefetch = true;
+			}
 			return decoded;
 		}
 

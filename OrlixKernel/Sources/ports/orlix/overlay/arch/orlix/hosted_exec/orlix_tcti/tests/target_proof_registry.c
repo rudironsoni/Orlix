@@ -608,6 +608,16 @@ production_capture_bindings[] = {
 #define DECODE_SUITE "orlix-tcti-decode"
 #define DECODE_SUITE_SYMBOL "orlix_tcti_decode_test_suite"
 #define DECODE_CASE_ARRAY "orlix_tcti_decode_test_cases"
+#define BASE_LOAD_STORE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_load_store_source_bound_test.c"
+#define BASE_LOAD_STORE_SUITE "orlix-tcti-base-load-store-source-bound"
+#define BASE_LOAD_STORE_SUITE_SYMBOL \
+	"orlix_tcti_base_load_store_source_bound_test_suite"
+#define BASE_LOAD_STORE_CASE_ARRAY "bls_cases"
+#define BASE_LOAD_STORE_HELPER_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_memory_proof.h"
+#define BASE_LOAD_STORE_HELPER_INCLUDE \
+	"#include \"orlix_tcti_memory_proof.h\""
 #define CSSC_CONDITION \
 	"54434e4401070000002e0700000017070000000c010000000101010000000101010000000101020000000d00000009464541545f43535343"
 #define ADD_SUB_IMMEDIATE_CONDITION \
@@ -646,7 +656,12 @@ production_capture_bindings[] = {
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define ORDINARY_LOAD_STORE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS)
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
 #define PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
@@ -762,6 +777,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ DECODE_SOURCE,
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
+	{ BASE_LOAD_STORE_SOURCE,
+	  "3443fb38d01519a77c93f78e84cfd9e5f2bf5627362972941b01b45b6dc30a05",
+	  "orlix_tcti_base_load_store_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "74be0134fc52035ef22e99c2610d3d67339c3930e8fb05bf2eb1d807b96093d0",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ SCALAR_FP_SOURCE,
 	  "8c245ce10f189b2f7a3fef91c9fc478b3e4e1cd2af69a98ec2b930229b75c993",
 	  "orlix_tcti_scalar_fp_semantics_test.o", NULL, NULL, NULL },
@@ -1130,6 +1151,25 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_decode_exhaustive_load_store_register_offset_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_LOAD_STORE_SOURCE, BASE_LOAD_STORE_SUITE,
+	  BASE_LOAD_STORE_SUITE_SYMBOL, BASE_LOAD_STORE_CASE_ARRAY,
+	  "bls_source_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_LOAD_STORE_SOURCE, BASE_LOAD_STORE_SUITE,
+	  BASE_LOAD_STORE_SUITE_SYMBOL, BASE_LOAD_STORE_CASE_ARRAY,
+	  "bls_reserved_is_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_LOAD_STORE_SOURCE, BASE_LOAD_STORE_SUITE,
+	  BASE_LOAD_STORE_SUITE_SYMBOL, BASE_LOAD_STORE_CASE_ARRAY,
+	  "bls_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_LOAD_STORE_SOURCE, BASE_LOAD_STORE_SUITE,
+	  BASE_LOAD_STORE_SUITE_SYMBOL, BASE_LOAD_STORE_CASE_ARRAY,
+	  "bls_unmapped_load_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ SCALAR_FP_SOURCE, SCALAR_FP_SUITE, SCALAR_FP_SUITE_SYMBOL,
 	  SCALAR_FP_CASE_ARRAY, "orlix_tcti_scalar_fp_convert_resume_source_rows",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -1559,6 +1599,34 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "STURH", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "STUR_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "STUR_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "GCSSTR", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "GCSSTTR", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDNP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDNP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDPSW", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDRSW_lit", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_lit_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDR_lit_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTNP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTNP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "LDTP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "PRFM_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "PRFM_lit", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "PRFM_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "PRFUM", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "RPRFM_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STGP", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STNP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STNP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTNP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTNP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTP_fpsimd", ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "STTP_gen", ORDINARY_LOAD_STORE_OBLIGATIONS },
 #define LSE_REQUIREMENT(operation) \
 	{ operation, LSE_REQUIRED_OBLIGATIONS }
 	LSE_REQUIREMENT("CASB"),
@@ -2364,8 +2432,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
 #define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
-#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 42U
-#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 134U
+#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 70U
+#define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 209U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
 #define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 45U
@@ -2623,6 +2691,34 @@ static struct ordinary_load_store_registry_operation
 	{ .operation_id = "STURH", .proof_id = "kunit:ordinary-load-store-sturh" },
 	{ .operation_id = "STUR_fpsimd", .proof_id = "kunit:ordinary-load-store-stur-fpsimd" },
 	{ .operation_id = "STUR_gen", .proof_id = "kunit:ordinary-load-store-stur-gen" },
+	{ .operation_id = "GCSSTR", .proof_id = "kunit:ordinary-load-store-gcsstr" },
+	{ .operation_id = "GCSSTTR", .proof_id = "kunit:ordinary-load-store-gcssttr" },
+	{ .operation_id = "LDNP_fpsimd", .proof_id = "kunit:ordinary-load-store-ldnp-fpsimd" },
+	{ .operation_id = "LDNP_gen", .proof_id = "kunit:ordinary-load-store-ldnp-gen" },
+	{ .operation_id = "LDPSW", .proof_id = "kunit:ordinary-load-store-ldpsw" },
+	{ .operation_id = "LDP_fpsimd", .proof_id = "kunit:ordinary-load-store-ldp-fpsimd" },
+	{ .operation_id = "LDP_gen", .proof_id = "kunit:ordinary-load-store-ldp-gen" },
+	{ .operation_id = "LDRSW_lit", .proof_id = "kunit:ordinary-load-store-ldrsw-lit" },
+	{ .operation_id = "LDR_lit_fpsimd", .proof_id = "kunit:ordinary-load-store-ldr-lit-fpsimd" },
+	{ .operation_id = "LDR_lit_gen", .proof_id = "kunit:ordinary-load-store-ldr-lit-gen" },
+	{ .operation_id = "LDTNP_fpsimd", .proof_id = "kunit:ordinary-load-store-ldtnp-fpsimd" },
+	{ .operation_id = "LDTNP_gen", .proof_id = "kunit:ordinary-load-store-ldtnp-gen" },
+	{ .operation_id = "LDTP_fpsimd", .proof_id = "kunit:ordinary-load-store-ldtp-fpsimd" },
+	{ .operation_id = "LDTP_gen", .proof_id = "kunit:ordinary-load-store-ldtp-gen" },
+	{ .operation_id = "PRFM_imm", .proof_id = "kunit:ordinary-load-store-prfm-imm" },
+	{ .operation_id = "PRFM_lit", .proof_id = "kunit:ordinary-load-store-prfm-lit" },
+	{ .operation_id = "PRFM_reg", .proof_id = "kunit:ordinary-load-store-prfm-reg" },
+	{ .operation_id = "PRFUM", .proof_id = "kunit:ordinary-load-store-prfum" },
+	{ .operation_id = "RPRFM_reg", .proof_id = "kunit:ordinary-load-store-rprfm-reg" },
+	{ .operation_id = "STGP", .proof_id = "kunit:ordinary-load-store-stgp" },
+	{ .operation_id = "STNP_fpsimd", .proof_id = "kunit:ordinary-load-store-stnp-fpsimd" },
+	{ .operation_id = "STNP_gen", .proof_id = "kunit:ordinary-load-store-stnp-gen" },
+	{ .operation_id = "STP_fpsimd", .proof_id = "kunit:ordinary-load-store-stp-fpsimd" },
+	{ .operation_id = "STP_gen", .proof_id = "kunit:ordinary-load-store-stp-gen" },
+	{ .operation_id = "STTNP_fpsimd", .proof_id = "kunit:ordinary-load-store-sttnp-fpsimd" },
+	{ .operation_id = "STTNP_gen", .proof_id = "kunit:ordinary-load-store-sttnp-gen" },
+	{ .operation_id = "STTP_fpsimd", .proof_id = "kunit:ordinary-load-store-sttp-fpsimd" },
+	{ .operation_id = "STTP_gen", .proof_id = "kunit:ordinary-load-store-sttp-gen" },
 };
 
 static struct orlix_tcti_target_proof_binding ordinary_load_store_registry_bindings[
@@ -3308,12 +3404,17 @@ source_manifest_binding(orlix_tcti_proof_u32 ordinal)
 }
 
 static const struct orlix_tcti_target_proof_case ordinary_load_store_cases[] = {
-	{ "orlix_tcti_decode_exhaustive_load_store_unsigned_immediate_family",
-	  ORDINARY_LOAD_STORE_OBLIGATIONS },
-	{ "orlix_tcti_decode_exhaustive_load_store_signed_immediate_family",
-	  ORDINARY_LOAD_STORE_OBLIGATIONS },
-	{ "orlix_tcti_decode_exhaustive_load_store_register_offset_family",
-	  ORDINARY_LOAD_STORE_OBLIGATIONS },
+	{ "bls_source_decode",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "bls_reserved_is_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "bls_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "bls_unmapped_load_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 };
 
 static struct ordinary_load_store_registry_operation *
@@ -3332,13 +3433,8 @@ ordinary_load_store_registry_operation_for(const char *proof_id)
 static orlix_tcti_proof_u64 ordinary_load_store_case_mask(
 	const struct source_manifest_binding *source)
 {
-	if ((source->encoding_pattern & 0x3b000000U) == 0x39000000U)
-		return ORLIX_TCTI_PROOF_U64_C(1);
-	if ((source->encoding_pattern & 0x3b200000U) == 0x38000000U)
-		return ORLIX_TCTI_PROOF_U64_C(2);
-	if ((source->encoding_pattern & 0x3b200c00U) == 0x38200800U)
-		return ORLIX_TCTI_PROOF_U64_C(4);
-	return 0;
+	(void)source;
+	return ORLIX_TCTI_PROOF_U64_C(0xf);
 }
 
 static bool build_ordinary_load_store_registry(void)
@@ -3422,8 +3518,8 @@ static bool build_ordinary_load_store_registry(void)
 				.obligations = ORDINARY_LOAD_STORE_OBLIGATIONS,
 				.linux_interface =
 					ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
-				.kunit_source = DECODE_SOURCE,
-				.kunit_suite = DECODE_SUITE,
+				.kunit_source = BASE_LOAD_STORE_SOURCE,
+				.kunit_suite = BASE_LOAD_STORE_SUITE,
 				.kunit_cases = ordinary_load_store_cases,
 				.kunit_case_count = ARRAY_COUNT(ordinary_load_store_cases),
 				.bindings = &ordinary_load_store_registry_bindings[
@@ -3743,20 +3839,25 @@ production_capture_family_cases[] = {
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
 };
+static const struct production_capture_family_descriptor
+production_capture_families[] = {
 #define ORLIX_TCTI_PROOF_FAMILY_METADATA(source_value, source_sha256_value, \
 		object_value, suite_value, suite_symbol_value, case_array_value, \
 		decode_case_value, production_case_value) \
-static const struct production_capture_family_descriptor \
-production_capture_family = { \
-	.kunit_source = source_value, .kunit_source_sha256 = source_sha256_value, \
-	.kunit_object = object_value, .kunit_suite = suite_value, \
-	.kunit_suite_symbol = suite_symbol_value, .kunit_case_array = case_array_value, \
-	.kunit_cases = production_capture_family_cases, \
-	.kunit_case_count = ARRAY_COUNT(production_capture_family_cases), \
-	.kselftest = &exception_interface_kselftest, \
-};
+	{ \
+		.kunit_source = source_value, \
+		.kunit_source_sha256 = source_sha256_value, \
+		.kunit_object = object_value, \
+		.kunit_suite = suite_value, \
+		.kunit_suite_symbol = suite_symbol_value, \
+		.kunit_case_array = case_array_value, \
+		.kunit_cases = production_capture_family_cases, \
+		.kunit_case_count = 2U, \
+		.kselftest = &exception_interface_kselftest, \
+	},
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_METADATA
+};
 static const struct production_capture_operation_descriptor
 production_capture_family_operations[] = {
 #define ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_REQUIRED \
@@ -3791,8 +3892,15 @@ static bool build_production_capture_family_registry(void)
 
 	if (production_capture_family_registry_ready)
 		return true;
+	if (!ARRAY_COUNT(production_capture_families))
+		return false;
+	/*
+	 * Families share one operation table today. A later family adds its
+	 * own METADATA row here. Bind that family's operations before calling
+	 * production_capture_family_build for that row.
+	 */
 	if (production_capture_family_build(
-			&production_capture_family,
+			&production_capture_families[0],
 			production_capture_family_operations,
 			ARRAY_COUNT(production_capture_family_operations),
 			&proof_registry_entries[entry_base],

@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Generic registry input. Family workers add one ORLIX_TCTI_PRODUCTION_CAPTURE
  * row per executable source/obligation. Do not invent a second observation
- * schema. #120 is the shared contract those rows bind. */
+ * schema. #120 is the shared contract those rows bind. Later families add
+ * another include; METADATA is an array so a second family does not redefine
+ * a singleton. #134 binds through the ordinary-load-store registry and the
+ * capture rows in orlix_tcti_base_load_store_production_capture.def.
+ */
 #include "orlix_tcti_branch_control_production_capture.def"
+#include "orlix_tcti_base_load_store_production_capture.def"
