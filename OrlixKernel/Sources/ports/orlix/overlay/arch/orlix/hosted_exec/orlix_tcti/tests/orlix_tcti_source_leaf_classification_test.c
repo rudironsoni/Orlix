@@ -6,6 +6,7 @@
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -431,8 +432,31 @@ static struct kunit_case orlix_tcti_source_leaf_classification_test_cases[] = {
 	{}
 };
 
+static int orlix_tcti_source_leaf_classification_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_source_leaf_classification_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 struct kunit_suite orlix_tcti_source_leaf_classification_test_suite = {
 	.name = "orlix-tcti-source-leaf-classification",
+	.init = orlix_tcti_source_leaf_classification_test_init,
+	.exit = orlix_tcti_source_leaf_classification_test_exit,
 	.test_cases = orlix_tcti_source_leaf_classification_test_cases,
 };
 kunit_test_suite(orlix_tcti_source_leaf_classification_test_suite);

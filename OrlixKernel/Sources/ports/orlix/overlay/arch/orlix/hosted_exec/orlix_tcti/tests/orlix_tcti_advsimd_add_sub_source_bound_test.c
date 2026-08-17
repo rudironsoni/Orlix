@@ -2,6 +2,7 @@
 #include <kunit/test.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/sched/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
 #include <linux/syscalls.h>
@@ -455,8 +456,31 @@ static struct kunit_case orlix_tcti_advsimd_add_sub_source_bound_cases[] = {
 	{}
 };
 
+static int orlix_tcti_advsimd_add_sub_source_bound_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_advsimd_add_sub_source_bound_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static struct kunit_suite orlix_tcti_advsimd_add_sub_source_bound_suite = {
 	.name = "orlix-tcti-advsimd-add-sub-source-bound",
+	.init = orlix_tcti_advsimd_add_sub_source_bound_init,
+	.exit = orlix_tcti_advsimd_add_sub_source_bound_exit,
 	.test_cases = orlix_tcti_advsimd_add_sub_source_bound_cases,
 };
 

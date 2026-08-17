@@ -4,6 +4,7 @@
 #include <asm/ptrace.h>
 #include <kunit/test.h>
 #include <linux/err.h>
+#include <linux/sched/mm.h>
 #include <linux/bitops.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
@@ -486,8 +487,31 @@ static struct kunit_case orlix_tcti_mops_copy_cases[] = {
 	{}
 };
 
+static int orlix_tcti_mops_copy_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_mops_copy_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
 static struct kunit_suite orlix_tcti_mops_copy_suite = {
 	.name = "orlix-tcti-mops-copy",
+	.init = orlix_tcti_mops_copy_init,
+	.exit = orlix_tcti_mops_copy_exit,
 	.test_cases = orlix_tcti_mops_copy_cases,
 };
 
