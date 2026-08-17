@@ -481,8 +481,18 @@ static void pending_capacity_exhaustion_preserves_live_wires(
 	copied_wire = wires[0];
 	orlix_tcti_native_wire_record_destroy(&copied_wire);
 	KUNIT_EXPECT_NOT_NULL(test, wires[0].bytes);
-	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(ledger,
-		&wires[0], NULL));
+	KUNIT_EXPECT_NE(test, 0ULL, wires[0].producer_nonce);
+	KUNIT_EXPECT_EQ(test, 1U, wires[0].production_origin);
+	{
+		enum orlix_tcti_target_proof_ingestion_error ingest_error = 0;
+
+		KUNIT_EXPECT_EQ_MSG(test, 0,
+			orlix_tcti_target_proof_ingest_native(ledger, &wires[0],
+				&ingest_error),
+			"ingest_error=%d nonce=%llu origin=%u sealed=%u",
+			ingest_error, wires[0].producer_nonce,
+			wires[0].production_origin, wires[0].sealed);
+	}
 	KUNIT_EXPECT_TRUE(test, wires[0].consumed);
 	KUNIT_EXPECT_EQ(test, 1U, ledger->count);
 	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
@@ -542,8 +552,8 @@ static void production_capture_seals_explicit_tls_after_state(struct kunit *test
 	current->thread.user_fpmr = fpmr_after;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
-	if (orlix_tcti_native_capture_take_wire(session, &wire))
-		goto out;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_take_wire(session,
+		&wire));
 	if (orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
 		capture_token, &semantic_variant_identity) ||
 	    orlix_tcti_native_proof_registry_resolve_production(capture_token, 2227U,

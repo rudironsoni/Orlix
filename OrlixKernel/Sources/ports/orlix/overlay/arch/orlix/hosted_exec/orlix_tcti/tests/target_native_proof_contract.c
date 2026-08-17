@@ -553,7 +553,8 @@ static int native_wire_declared_payload_length(
 			return -1;
 		break;
 	case ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_FP_SIMD:
-		component = native_wire_get32(payload + 16U);
+		/* Header is FPCR, FPSR, validity, then the V-lane byte count. */
+		component = native_wire_get32(payload + 20U);
 		if (component != 64U * sizeof(orlix_tcti_proof_u64))
 			return -1;
 		if (!native_wire_add(&declared, component))
