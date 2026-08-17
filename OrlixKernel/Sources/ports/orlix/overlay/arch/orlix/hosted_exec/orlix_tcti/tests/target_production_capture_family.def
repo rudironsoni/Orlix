@@ -1,3 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Generic registry input. Family workers extend this list with owning data. */
+/* Generic registry input. Family workers add one ORLIX_TCTI_PRODUCTION_CAPTURE
+ * row per executable source/obligation. Do not invent a second observation
+ * schema. #120 is the shared contract those rows bind. */
 #include "orlix_tcti_branch_control_production_capture.def"

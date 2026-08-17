@@ -780,7 +780,8 @@ static int native_capture_append(struct orlix_tcti_native_capture_session *sessi
 #define NATIVE_CAPTURE_FP_SIMD_HEADER_BYTES 24U
 #define NATIVE_CAPTURE_SVE_HEADER_BYTES 24U
 #define NATIVE_CAPTURE_SME_HEADER_BYTES 24U
-#define NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES 40U
+#define NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES \
+	ORLIX_TCTI_NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES
 
 static void native_capture_put32(u8 *bytes, size_t offset, u32 value)
 {

@@ -632,6 +632,209 @@ out:
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 }
 
+static const u32 native_capture_required_selectors[] = {
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_RESULT,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_GPR,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_FP_SIMD,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SVE,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SME,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_DECODED_FIELD,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_MEMORY,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_FAULT,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_ARITHMETIC,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_ATOMICITY,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_ORDERING,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SYSTEM_CONTROL,
+	ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_LINUX_INTERFACE,
+};
+
+static void static_registry_grants_zero_execution_credit(struct kunit *test)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary = {};
+	size_t count;
+	size_t index;
+	size_t production_rows = 0;
+
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	KUNIT_ASSERT_NOT_NULL(test, entries);
+	KUNIT_ASSERT_GT(test, count, 0);
+	for (index = 0; index < count; index++)
+		if (entries[index].production_capture)
+			production_rows++;
+	KUNIT_ASSERT_GT(test, production_rows, 0);
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, 0U, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, 0U, summary.native_passed);
+	KUNIT_EXPECT_EQ(test, 0U, summary.kselftest_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+}
+
+static void production_capture_ingests_complete_selector_set(struct kunit *test)
+{
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary = {};
+	const struct orlix_tcti_native_proof_registry_entry *entry = NULL;
+	const void *capture_token =
+		orlix_tcti_branch_control_production_capture_token(2227U);
+	struct pt_regs regs;
+	struct orlix_tcti_result result;
+	u8 *bytes;
+	u64 semantic_variant_identity;
+	unsigned long address;
+	size_t cursor = 72U;
+	size_t index;
+
+	address = native_capture_map_svc(test);
+	native_capture_seed_regs(&regs, address);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(
+		capture_token, 2227U,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &session));
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_take_wire(session, &wire));
+	KUNIT_ASSERT_TRUE(test, wire.sealed);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_proof_registry_capture_token_semantic_variant_identity(
+			capture_token, &semantic_variant_identity));
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_native_proof_registry_resolve_production(capture_token, 2227U,
+			semantic_variant_identity,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &entry, NULL));
+	KUNIT_ASSERT_NOT_NULL(test, entry);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_wire_record_validate(&wire,
+		entry->capture_declaration,
+		orlix_tcti_native_proof_registry_entry_identity(entry)));
+	bytes = (u8 *)wire.bytes;
+	KUNIT_ASSERT_EQ(test, ARRAY_SIZE(native_capture_required_selectors),
+		native_capture_wire_get32(bytes + 52U));
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	for (index = 0; index < ARRAY_SIZE(native_capture_required_selectors);
+	     index++) {
+		u32 length = native_capture_wire_get32(bytes + cursor + 12U);
+
+		KUNIT_ASSERT_EQ(test, native_capture_required_selectors[index],
+			native_capture_wire_get32(bytes + cursor));
+		KUNIT_ASSERT_EQ(test, index, native_capture_wire_get32(bytes + cursor + 4U));
+		KUNIT_ASSERT_GT(test, length, 0U);
+		if (native_capture_required_selectors[index] ==
+		    ORLIX_TCTI_NATIVE_CAPTURE_SELECTOR_SYSTEM_CONTROL)
+			KUNIT_ASSERT_EQ(test,
+				ORLIX_TCTI_NATIVE_CAPTURE_SYSTEM_CONTROL_BYTES, length);
+		bytes[cursor + 16U] ^= 0x80U;
+		KUNIT_EXPECT_LT(test,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL), 0);
+		KUNIT_EXPECT_FALSE(test, wire.consumed);
+		bytes[cursor + 16U] ^= 0x80U;
+		cursor += 16U + length;
+	}
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(ledger,
+		&wire, NULL));
+	KUNIT_EXPECT_TRUE(test, wire.consumed);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, 1U, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, 1U, summary.native_passed);
+	KUNIT_EXPECT_LT(test, orlix_tcti_target_proof_ingest_native(ledger,
+		&wire, NULL), 0);
+	KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
+static u32 native_capture_mrs_msr(u32 selector, bool write, u8 rt)
+{
+	return (write ? 0xd5100000U : 0xd5300000U) | (selector << 5) | rt;
+}
+
+static void production_capture_ingests_matching_system_accessor_variant(
+	struct kunit *test)
+{
+	const struct orlix_tcti_native_proof_registry_entry *entries;
+	const struct orlix_tcti_native_proof_registry_entry *target = NULL;
+	struct orlix_tcti_native_capture_session *session = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_target_proof_ingestion_summary summary = {};
+	struct pt_regs regs;
+	struct orlix_tcti_result result;
+	const void *capture_token;
+	u64 saved_fpmr = current->thread.user_fpmr;
+	unsigned long address;
+	u32 instruction;
+	size_t count;
+	size_t index;
+
+	entries = orlix_tcti_native_proof_registry_entries(&count);
+	KUNIT_ASSERT_NOT_NULL(test, entries);
+	for (index = 0; index < count; index++) {
+		if (entries[index].production_capture &&
+		    entries[index].source.subject_kind ==
+			ORLIX_TCTI_NATIVE_SUBJECT_SEMANTIC_VARIANT &&
+		    entries[index].source.variant_direction != 2U &&
+		    !strcmp(entries[index].source.semantic_variant, "FPMR")) {
+			target = &entries[index];
+			break;
+		}
+	}
+	KUNIT_ASSERT_NOT_NULL(test, target);
+	capture_token =
+		orlix_tcti_native_proof_registry_capture_token_for_entry(target);
+	KUNIT_ASSERT_NOT_NULL(test, capture_token);
+	instruction = native_capture_mrs_msr(target->source.concrete_selector,
+		false, 0U);
+	{
+		u32 program[] = { instruction, NATIVE_CAPTURE_SVC };
+
+		address = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(address));
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			address, program, sizeof(program)));
+		KUNIT_ASSERT_EQ(test, 0, sys_mprotect(address, PAGE_SIZE,
+			PROT_READ | PROT_EXEC));
+	}
+	native_capture_seed_regs(&regs, address);
+	current->thread.user_fpmr = 0x0123456789abcdefULL;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_begin(capture_token,
+		target->source.source_ordinal, target->obligation, &session));
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0x0123456789abcdefULL, regs.regs[0]);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_capture_take_wire(session, &wire));
+	KUNIT_ASSERT_TRUE(test, wire.sealed);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_native_wire_record_validate(&wire,
+		target->capture_declaration,
+		orlix_tcti_native_proof_registry_entry_identity(target)));
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_target_proof_ingest_native(ledger,
+		&wire, NULL));
+	KUNIT_EXPECT_TRUE(test, wire.consumed);
+	KUNIT_ASSERT_EQ(test, 0,
+		orlix_tcti_target_proof_ingestion_summary(ledger, &summary));
+	KUNIT_EXPECT_EQ(test, 1U, summary.accepted_records);
+	KUNIT_EXPECT_EQ(test, 1U, summary.native_passed);
+	KUNIT_EXPECT_EQ(test, target->source.source_ordinal,
+		ledger->slots[0].source_ordinal);
+	KUNIT_EXPECT_EQ(test, target->source.semantic_variant_identity,
+		ledger->slots[0].semantic_variant_identity);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(session);
+	current->thread.user_fpmr = saved_fpmr;
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
+}
+
 static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(capture_binds_only_its_registered_row),
 	KUNIT_CASE(production_capture_variant_authority_is_exact),
@@ -641,6 +844,9 @@ static struct kunit_case native_capture_production_test_cases[] = {
 	KUNIT_CASE(capture_rejects_mismatched_system_accessor_variant),
 	KUNIT_CASE(pending_capacity_exhaustion_preserves_live_wires),
 	KUNIT_CASE(production_capture_seals_explicit_tls_after_state),
+	KUNIT_CASE(static_registry_grants_zero_execution_credit),
+	KUNIT_CASE(production_capture_ingests_complete_selector_set),
+	KUNIT_CASE(production_capture_ingests_matching_system_accessor_variant),
 	{}
 };
 static struct kunit_suite native_capture_production_test_suite = {
