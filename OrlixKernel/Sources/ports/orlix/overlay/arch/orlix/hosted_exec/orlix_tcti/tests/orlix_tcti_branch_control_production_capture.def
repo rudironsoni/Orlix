@@ -27,7 +27,9 @@ ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbnz", "TBNZ", NOT_APPLI
 #endif
 
 #ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
-/* Keep one exact source/obligation per executable row. */
+/* Keep one exact source/obligation per executable row. Families name the same
+ * ORLIX_TCTI_PRODUCTION_CAPTURE shape and consume the shared native
+ * observation contract. */
 ORLIX_TCTI_PRODUCTION_CAPTURE(
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
 	"orlix-tcti-branch-control-source-bound", "bcs_production_resume",
