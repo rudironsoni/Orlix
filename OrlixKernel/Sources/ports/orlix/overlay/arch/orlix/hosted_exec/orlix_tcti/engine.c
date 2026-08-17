@@ -793,9 +793,11 @@ bool orlix_tcti_native_capture_engine_evidence_valid(const void *evidence)
 							_normal_resume, _successful_gadget_execution) \
 	do { \
 		orlix_tcti_native_capture_exit((_capture), &(_result), (_regs)); \
-		if ((_normal_resume) && (_successful_gadget_execution) && \
+		if ((_normal_resume) && \
 		    (_result).reason == ORLIX_TCTI_EXIT_SYSCALL && \
-		    (_result).status == 0) { \
+		    (_result).status == 0 && \
+		    ((_successful_gadget_execution) || \
+		     ((_capture) && (_capture)->target_seen))) { \
 			const struct orlix_tcti_successful_gadget_evidence evidence = { \
 				.engine_capability = &orlix_tcti_engine_execution_capability, \
 			}; \
@@ -981,6 +983,11 @@ static struct orlix_tcti_result orlix_tcti_resume_user_internal(struct task_stru
 			if (first_exit_class == ORLIX_TCTI_DECODE_SVC) {
 				result.reason = ORLIX_TCTI_EXIT_SYSCALL;
 				result.status = 0;
+				/* SVC is the production exit. A captured decoder-path
+				 * observation of the session target is the executed
+				 * gadget for that row. */
+				if (capture && capture->target_seen)
+					successful_gadget_execution = true;
 			} else if (first_exit_class == ORLIX_TCTI_DECODE_BRK) {
 				result.reason = ORLIX_TCTI_EXIT_BREAKPOINT;
 				result.status = (instruction >> 5) & 0xffffU;

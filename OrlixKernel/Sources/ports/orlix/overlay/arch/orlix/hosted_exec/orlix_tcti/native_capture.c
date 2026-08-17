@@ -454,6 +454,7 @@ static int native_capture_builder_seal(
 	if (builder->origin->creditable) {
 		record->producer_nonce = builder->origin->seal_nonce;
 		record->producer_binding = builder->origin->registry_binding;
+		record->production_origin = 1U;
 		if (!native_pending_publish_take_ownership(builder->origin,
 			record->identity, builder->owner)) {
 			/* Publication failed before touching the pending table. Do not
@@ -978,25 +979,30 @@ static bool native_capture_is_memory(const struct orlix_tcti_decoded_instruction
 		decoded->decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC;
 }
 
-static bool native_capture_matches_entry(
+enum native_capture_relevance {
+	NATIVE_CAPTURE_IRRELEVANT = 0,
+	NATIVE_CAPTURE_MATCH,
+	NATIVE_CAPTURE_VARIANT_CONFLICT,
+};
+
+static enum native_capture_relevance native_capture_classify_entry(
 	const struct orlix_tcti_native_capture_session *session,
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
 	const struct orlix_tcti_native_proof_registry_entry *entry;
 
-	if (!session || !decoded || !(entry = session->entry) ||
-	    !entry->source.encoding_mask)
-		return false;
-	if ((decoded->instruction & entry->source.encoding_mask) !=
-	    entry->source.encoding_pattern)
-		return false;
-	/* Generic MRS/MSR encodings are shared by many SystemAccessor rows.
-	 * Raw mask/pattern equality is therefore not source identity.  Require
-	 * the complete generated semantic binding before a callback can credit a
-	 * variant capture. */
+	if (!session || !decoded || !(entry = session->entry))
+		return NATIVE_CAPTURE_IRRELEVANT;
+	/*
+	 * SystemAccessor rows share the MRS/MSR encoding space. Any decoded
+	 * system-register neighbour of a variant session is a producer
+	 * conflict, even when the stored mask is tighter than the generic MRS
+	 * pattern.
+	 */
 	if (entry->source.subject_kind == ORLIX_TCTI_NATIVE_SUBJECT_SEMANTIC_VARIANT) {
-		if (decoded->decode_class != ORLIX_TCTI_DECODE_SYSTEM_REGISTER ||
-		    decoded->system_accessor_id != entry->source.secondary_index ||
+		if (decoded->decode_class != ORLIX_TCTI_DECODE_SYSTEM_REGISTER)
+			goto encoding;
+		if (decoded->system_accessor_id != entry->source.secondary_index ||
 		    decoded->system_accessor_selector != entry->source.concrete_selector ||
 		    decoded->system_accessor_condition !=
 			entry->source.condition_expression ||
@@ -1013,9 +1019,16 @@ static bool native_capture_matches_entry(
 			entry->source.access_identity ||
 		    decoded->system_register_write !=
 			(entry->source.variant_direction == 2U))
-			return false;
+			return NATIVE_CAPTURE_VARIANT_CONFLICT;
+		return NATIVE_CAPTURE_MATCH;
 	}
-	return true;
+encoding:
+	if (!entry->source.encoding_mask)
+		return NATIVE_CAPTURE_IRRELEVANT;
+	if ((decoded->instruction & entry->source.encoding_mask) !=
+	    entry->source.encoding_pattern)
+		return NATIVE_CAPTURE_IRRELEVANT;
+	return NATIVE_CAPTURE_MATCH;
 }
 
 static void native_capture_before_decoded(struct orlix_tcti_native_capture *capture,
@@ -1027,13 +1040,23 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 	u64 base;
 	u32 length;
 
-	if (!session || !mm || !regs || !decoded)
+	if (!session || !decoded)
 		goto fail;
-	/* A session is bound to one canonical source row. Other instructions in
-	 * the same normal resume are observationally irrelevant and must never
-	 * contribute to this record. */
-	if (!native_capture_matches_entry(session, decoded))
+	/* A session is bound to one canonical source row. Other encodings in
+	 * the same normal resume are observationally irrelevant. A same-mask
+	 * SystemAccessor neighbour cannot seal this row. */
+	switch (native_capture_classify_entry(session, decoded)) {
+	case NATIVE_CAPTURE_IRRELEVANT:
 		return;
+	case NATIVE_CAPTURE_VARIANT_CONFLICT:
+		goto fail;
+	case NATIVE_CAPTURE_MATCH:
+		break;
+	default:
+		goto fail;
+	}
+	if (!regs)
+		goto fail;
 	if (session->decoded_seen || ++capture->target_execution_count != 1U)
 		goto fail;
 	session->decoded = *decoded;
@@ -1043,6 +1066,8 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 	session->before_pstate = regs->pstate;
 	if (!native_capture_is_memory(decoded))
 		return;
+	if (!mm)
+		goto fail;
 	length = decoded->access_size * (decoded->pair ? 2U : 1U);
 	base = decoded->rn == 31U ? regs->sp : regs->regs[decoded->rn];
 	session->memory_address = base + decoded->memory_offset;
@@ -1079,10 +1104,20 @@ static void native_capture_after_decoded(struct orlix_tcti_native_capture *captu
 		return;
 	}
 	/* A capture session observes one canonical target inside a normal
-	 * multi-instruction block. Successful non-target instructions are not
-	 * evidence for that target and must not invalidate the session. */
-	if (!native_capture_matches_entry(session, decoded))
+	 * multi-instruction block. Successful non-target encodings are not
+	 * evidence for that target. A same-mask SystemAccessor neighbour is. */
+	switch (native_capture_classify_entry(session, decoded)) {
+	case NATIVE_CAPTURE_IRRELEVANT:
 		return;
+	case NATIVE_CAPTURE_VARIANT_CONFLICT:
+		session->failed = true;
+		return;
+	case NATIVE_CAPTURE_MATCH:
+		break;
+	default:
+		session->failed = true;
+		return;
+	}
 	if (!session->decoded_seen ||
 	    decoded->instruction != session->decoded.instruction) {
 		session->failed = true;
@@ -1104,10 +1139,21 @@ static void native_capture_fault(struct orlix_tcti_native_capture *capture,
 			session->failed = true;
 		return;
 	}
-	/* A fault from another instruction in the same gadget is not evidence for
-	 * this session's canonical target. */
-	if (!native_capture_matches_entry(session, decoded))
+	/* A fault from another encoding in the same gadget is not evidence for
+	 * this session's canonical target. A same-mask SystemAccessor neighbour
+	 * is a producer conflict. */
+	switch (native_capture_classify_entry(session, decoded)) {
+	case NATIVE_CAPTURE_IRRELEVANT:
 		return;
+	case NATIVE_CAPTURE_VARIANT_CONFLICT:
+		session->failed = true;
+		return;
+	case NATIVE_CAPTURE_MATCH:
+		break;
+	default:
+		session->failed = true;
+		return;
+	}
 	if (!session->decoded_seen ||
 	    decoded->instruction != session->decoded.instruction) {
 		session->failed = true;
@@ -1176,8 +1222,13 @@ static void native_capture_finalize(struct orlix_tcti_native_capture *capture,
 	size_t index;
 
 	if (!session || !result || !regs || session->failed || capture->finalized ||
-	    !session->exit_seen || !capture->target_seen ||
-	    capture->target_execution_count != 1U)
+	    !session->exit_seen)
+		goto fail;
+	/*
+	 * Generic or non-matching events must still seal a fail-closed wire.
+	 * Only a mismatched target count is producer corruption.
+	 */
+	if (capture->target_seen && capture->target_execution_count != 1U)
 		goto fail;
 	if (session->memory_length > SIZE_MAX - 16U)
 		goto fail;
