@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
+#include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/sched.h>
+#include <linux/sched/mm.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
@@ -24,14 +26,19 @@
 struct native_capture_test_context {
 	struct orlix_tcti_sve_state sve;
 	unsigned long simd[ARRAY_SIZE(current->thread.user_simd)];
+	struct mm_struct *mm;
 };
 
 static int native_capture_production_test_init(struct kunit *test)
 {
 	struct native_capture_test_context *context;
+	struct mm_struct *mm;
 
 	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
 	if (!context)
+		return -ENOMEM;
+	mm = mm_alloc();
+	if (!mm)
 		return -ENOMEM;
 	memcpy(&context->sve, &current->thread.user_sve,
 	       sizeof(context->sve));
@@ -39,8 +46,12 @@ static int native_capture_production_test_init(struct kunit *test)
 	       sizeof(context->simd));
 	if (orlix_tcti_sve_state_reset(&current->thread.user_sve,
 				       current->thread.user_simd,
-				       ORLIX_TCTI_SVE_DEFAULT_VL_BYTES))
+				       ORLIX_TCTI_SVE_DEFAULT_VL_BYTES)) {
+		mmput(mm);
 		return -EINVAL;
+	}
+	kthread_use_mm(mm);
+	context->mm = mm;
 	test->priv = context;
 	return 0;
 }
@@ -51,6 +62,10 @@ static void native_capture_production_test_exit(struct kunit *test)
 
 	if (!context)
 		return;
+	if (context->mm) {
+		kthread_unuse_mm(context->mm);
+		mmput(context->mm);
+	}
 	memcpy(&current->thread.user_sve, &context->sve,
 	       sizeof(context->sve));
 	memcpy(current->thread.user_simd, context->simd,
