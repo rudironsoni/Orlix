@@ -208,12 +208,28 @@ static void lse_source_bound_executes_every_base_leaf(struct kunit *test)
 		operand[0] &= mask;
 		operand[1] &= mask;
 		regs.regs[decoded.rn] = mapped;
-		regs.regs[decoded.rs] = old[0];
-		regs.regs[decoded.rt] = operand[0];
+		if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS) {
+			regs.regs[decoded.rs] = old[0];
+			regs.regs[decoded.rt] = operand[0];
+		} else {
+			regs.regs[decoded.rs] = operand[0];
+			regs.regs[decoded.rt] = U64_MAX;
+		}
 		if (decoded.pair) {
-			regs.regs[decoded.rs + 1] = old[1];
-			regs.regs[decoded.rt + 1] = operand[1];
-			ret = orlix_tcti_write_user_data(current->mm, mapped, old,
+			u64 memory_old[2] = { old[0], old[1] };
+
+			if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS) {
+				regs.regs[decoded.rs + 1] = old[1];
+				regs.regs[decoded.rt + 1] = operand[1];
+			} else {
+				regs.regs[decoded.rs + 1] = operand[1];
+				regs.regs[decoded.rt + 1] = U64_MAX;
+			}
+			if (width < sizeof(u64)) {
+				memory_old[0] = old[0] | (old[1] << (width * 8));
+				memory_old[1] = 0;
+			}
+			ret = orlix_tcti_write_user_data(current->mm, mapped, memory_old,
 					  2 * width);
 		} else {
 			ret = orlix_tcti_write_user_data(current->mm, mapped, old, width);
@@ -230,12 +246,18 @@ static void lse_source_bound_executes_every_base_leaf(struct kunit *test)
 			ret = orlix_tcti_read_user_data(current->mm, mapped, observed, width);
 		KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s", entry->source_leaf);
 		if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CAS) {
-			KUNIT_EXPECT_EQ(test, operand[0], observed[0]);
-			KUNIT_EXPECT_EQ(test, old[0], regs.regs[decoded.rs]);
-			if (decoded.pair) {
-				KUNIT_EXPECT_EQ(test, operand[1], observed[1]);
-				KUNIT_EXPECT_EQ(test, old[1], regs.regs[decoded.rs + 1]);
+			if (decoded.pair && width < sizeof(u64)) {
+				KUNIT_EXPECT_EQ(test,
+					operand[0] | (operand[1] << (width * 8)),
+					observed[0]);
+			} else {
+				KUNIT_EXPECT_EQ(test, operand[0], observed[0]);
+				if (decoded.pair)
+					KUNIT_EXPECT_EQ(test, operand[1], observed[1]);
 			}
+			KUNIT_EXPECT_EQ(test, old[0], regs.regs[decoded.rs]);
+			if (decoded.pair)
+				KUNIT_EXPECT_EQ(test, old[1], regs.regs[decoded.rs + 1]);
 		} else {
 			KUNIT_EXPECT_EQ(test,
 				lse_source_bound_rmw_result(decoded.lse_atomic_op,

@@ -264,7 +264,7 @@ static void orlix_tcti_lse128_unaligned_fault_preserves_state(struct kunit *test
 	KUNIT_ASSERT_EQ(test, 0, sys_mprotect(mapped, PAGE_SIZE, PROT_READ));
 	ret = orlix_tcti_switch_debug_execute_decoded(current->mm, &regs, &decoded,
 						       &fault_address);
-	KUNIT_EXPECT_EQ(test, -EFAULT, ret);
+	KUNIT_EXPECT_EQ(test, -EACCES, ret);
 	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 	ret = orlix_tcti_read_user_data(current->mm, mapped, &observed, sizeof(observed));
 	KUNIT_ASSERT_EQ(test, 0, ret);

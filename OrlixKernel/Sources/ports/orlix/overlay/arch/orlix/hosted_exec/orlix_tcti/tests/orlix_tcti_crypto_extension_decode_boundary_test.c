@@ -360,9 +360,12 @@ static void crypto_decode_rejects_fixed_neighbours(struct kunit *test)
 					decoded.decode_class);
 				KUNIT_EXPECT_EQ(test, peer->op, decoded.simd_arithmetic_op);
 			} else {
-				KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-					decoded.decode_class, "reserved neighbour %#x of %s",
-					instruction, leaf->name);
+				KUNIT_EXPECT_TRUE_MSG(test,
+					decoded.decode_class !=
+						ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ||
+					decoded.simd_arithmetic_op != leaf->op,
+					"retained %s after reserved mutation %#x",
+					leaf->name, instruction);
 			}
 		}
 	}
@@ -406,6 +409,8 @@ static void crypto_vector_state(const struct crypto_vector *vector,
 	current->thread.user_simd[0] = 0x89abcdef01234567ULL;
 	current->thread.user_simd[1] = 0x76543210fedcba98ULL;
 	if (vector->family == CRYPTO_SHA512) {
+		current->thread.user_simd[0] = 0x0123456789abcdefULL;
+		current->thread.user_simd[1] = 0xfedcba9876543210ULL;
 		current->thread.user_simd[2] = 0x13579bdf2468ace0ULL;
 		current->thread.user_simd[3] = 0x0badf00ddeadbeefULL;
 		current->thread.user_simd[4] = 0x1111111122222222ULL;

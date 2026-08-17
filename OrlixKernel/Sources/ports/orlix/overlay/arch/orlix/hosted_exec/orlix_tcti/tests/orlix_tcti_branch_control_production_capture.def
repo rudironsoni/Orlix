@@ -3,7 +3,7 @@
 #ifdef ORLIX_TCTI_PROOF_FAMILY_METADATA
 ORLIX_TCTI_PROOF_FAMILY_METADATA(
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
-	"a5aeca380597683ba71e5f512634819d9ce770b141608b2aee579a09b079e3a7",
+	"99f4f043e4a7cb2435eb6ae71836bff74008e9d877f32aad4f69f0f949cf639f",
 	"orlix_tcti_branch_control_source_bound_test.o",
 	"orlix-tcti-branch-control-source-bound",
 	"orlix_tcti_branch_control_source_bound_test_suite", "bcs_cases",

@@ -563,11 +563,9 @@ static void orlix_tcti_lse128_resume_fault_does_not_mutate(struct kunit *test)
 		.low = 0x1111222233334444ULL,
 		.high = 0xaaaabbbbccccddddULL,
 	};
-	const struct orlix_tcti_lse128_leaf leaf = {
-		ORLIX_TCTI_LSE_ATOMIC_SWP, 0x19e08000U,
-	};
+	const struct orlix_tcti_lse128_leaf *leaf = &orlix_tcti_lse128_leaves[2];
 	const u32 program[] = {
-		orlix_tcti_lse128_instruction(&leaf, 6, 10, 8), ORLIX_TCTI_LSE128_SVC,
+		orlix_tcti_lse128_instruction(leaf, 6, 10, 8), ORLIX_TCTI_LSE128_SVC,
 	};
 	unsigned long instructions = orlix_tcti_lse128_map(test, PROT_READ | PROT_WRITE);
 	unsigned long data = orlix_tcti_lse128_map(test, PROT_READ | PROT_WRITE);

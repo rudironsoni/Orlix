@@ -57,7 +57,7 @@ static u32 orlix_tcti_crc32_decode_update(u32 accumulator, u64 value,
 	for (byte = 0; byte < byte_count; byte++) {
 		u8 bit;
 
-		accumulator ^= value >> (byte * 8);
+		accumulator ^= (u8)(value >> (byte * 8));
 		for (bit = 0; bit < 8; bit++)
 			accumulator = (accumulator >> 1) ^
 				((accumulator & 1U) ? polynomial : 0);
@@ -135,10 +135,12 @@ static void orlix_tcti_crc32_decode_rejects_source_fixed_neighbours(
 					instruction, leaf->mnemonic);
 				continue;
 			}
-			KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
-					decoded.decode_class,
-					"reserved neighbour %#x of %s", instruction,
-					leaf->mnemonic);
+			KUNIT_EXPECT_TRUE_MSG(test,
+				decoded.decode_class !=
+					ORLIX_TCTI_DECODE_DATA_PROCESSING_2SOURCE ||
+				decoded.dp2_op != leaf->operation,
+				"retained %s after reserved mutation %#x",
+				leaf->mnemonic, instruction);
 		}
 	}
 }

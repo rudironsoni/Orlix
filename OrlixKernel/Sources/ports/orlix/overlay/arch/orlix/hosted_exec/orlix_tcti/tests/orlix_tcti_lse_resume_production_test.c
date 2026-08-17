@@ -184,11 +184,16 @@ static void orlix_tcti_lse_resume_executes_order_variants(struct kunit *test)
 			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s", entry->name);
 		}
 		orlix_tcti_lse_resume_init_regs(&regs, instructions, data);
-		regs.regs[6] = old;
-		regs.regs[8] = operand;
-		if (entry->kind == ORLIX_TCTI_LSE_RESUME_CASP) {
-			regs.regs[7] = old_high;
-			regs.regs[9] = operand_high;
+		if (entry->kind == ORLIX_TCTI_LSE_RESUME_RMW) {
+			regs.regs[6] = operand;
+			regs.regs[8] = U64_MAX;
+		} else {
+			regs.regs[6] = old;
+			regs.regs[8] = operand;
+			if (entry->kind == ORLIX_TCTI_LSE_RESUME_CASP) {
+				regs.regs[7] = old_high;
+				regs.regs[9] = operand_high;
+			}
 		}
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		orlix_tcti_lse_resume_expect_exit(test, entry, &result, instructions);
