@@ -72,6 +72,21 @@ static unsigned long orlix_tcti_lse_map(struct kunit *test)
 	return mapped;
 }
 
+static int orlix_tcti_lse_write_resume_program(unsigned long address,
+					 const u32 *program, size_t count)
+{
+	int ret;
+
+	ret = sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
+	if (ret)
+		return ret;
+	ret = orlix_tcti_write_user_data(current->mm, address, program,
+				   count * sizeof(*program));
+	if (ret)
+		return ret;
+	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
+}
+
 static void orlix_tcti_lse_set_exclusive(
 	const struct orlix_tcti_lse_exclusive_state *state)
 {
@@ -868,9 +883,8 @@ static void orlix_tcti_lse_resume_reports_alignment_faults(struct kunit *test)
 		struct pt_regs before;
 		struct orlix_tcti_result result;
 
-		ret = orlix_tcti_write_user_data(current->mm, instructions,
-					   &cases[i].instruction,
-					   sizeof(cases[i].instruction));
+		ret = orlix_tcti_lse_write_resume_program(instructions,
+						    &cases[i].instruction, 1);
 		KUNIT_ASSERT_EQ(test, 0, ret);
 		ret = orlix_tcti_write_user_data(current->mm, data, initial,
 					   sizeof(initial));
@@ -1054,21 +1068,6 @@ static u32 orlix_tcti_lse_exclusive_instruction(u8 size, bool ordered, bool load
 		((u32)rn << 5) | rt;
 }
 
-static int orlix_tcti_lse_write_resume_program(unsigned long address,
-					 const u32 *program, size_t count)
-{
-	int ret;
-
-	ret = sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_WRITE);
-	if (ret)
-		return ret;
-	ret = orlix_tcti_write_user_data(current->mm, address, program,
-				   count * sizeof(*program));
-	if (ret)
-		return ret;
-	return sys_mprotect(address, PAGE_SIZE, PROT_READ | PROT_EXEC);
-}
-
 static void orlix_tcti_lse_resume_executes_exclusive_and_ordered_matrix(
 	struct kunit *test)
 {
@@ -1130,8 +1129,20 @@ static void orlix_tcti_lse_resume_executes_exclusive_and_ordered_matrix(
 							   ARRAY_SIZE(program));
 			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
 					    form_index, width);
-			ret = orlix_tcti_write_user_data(current->mm, data, initial,
-					   total_size);
+			{
+				u64 memory_initial[2] = {
+					initial[0],
+					initial[1],
+				};
+
+				if (pair && width < sizeof(u64)) {
+					memory_initial[0] = initial[0] |
+						(initial[1] << (width * 8));
+					memory_initial[1] = 0;
+				}
+				ret = orlix_tcti_write_user_data(current->mm, data,
+							   memory_initial, total_size);
+			}
 			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
 					    form_index, width);
 			regs.regs[4] = desired[0];
@@ -1171,11 +1182,19 @@ static void orlix_tcti_lse_resume_executes_exclusive_and_ordered_matrix(
 			ret = orlix_tcti_read_user_data(current->mm, data, observed, total_size);
 			KUNIT_ASSERT_EQ_MSG(test, 0, ret, "form=%zu size=%u",
 					    form_index, width);
-			KUNIT_EXPECT_EQ_MSG(test, desired[0], observed[0],
-					    "form=%zu size=%u", form_index, width);
-			if (pair)
-				KUNIT_EXPECT_EQ_MSG(test, desired[1], observed[1],
+			if (pair && width < sizeof(u64)) {
+				u64 packed = desired[0] |
+					(desired[1] << (width * 8));
+
+				KUNIT_EXPECT_EQ_MSG(test, packed, observed[0],
 						    "form=%zu size=%u", form_index, width);
+			} else {
+				KUNIT_EXPECT_EQ_MSG(test, desired[0], observed[0],
+						    "form=%zu size=%u", form_index, width);
+				if (pair)
+					KUNIT_EXPECT_EQ_MSG(test, desired[1], observed[1],
+							    "form=%zu size=%u", form_index, width);
+			}
 			KUNIT_EXPECT_EQ_MSG(test, 0, current->thread.user_exclusive_valid,
 					    "form=%zu size=%u", form_index, width);
 		}
@@ -1183,6 +1202,27 @@ static void orlix_tcti_lse_resume_executes_exclusive_and_ordered_matrix(
 
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(instructions, PAGE_SIZE));
+}
+
+static int orlix_tcti_lse_decode_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_lse_decode_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
 }
 
 static struct kunit_case orlix_tcti_lse_decode_test_cases[] = {
@@ -1206,6 +1246,8 @@ static struct kunit_case orlix_tcti_lse_decode_test_cases[] = {
 
 struct kunit_suite orlix_tcti_lse_decode_test_suite = {
 	.name = "orlix-tcti-lse-decode",
+	.init = orlix_tcti_lse_decode_test_init,
+	.exit = orlix_tcti_lse_decode_test_exit,
 	.test_cases = orlix_tcti_lse_decode_test_cases,
 };
 
