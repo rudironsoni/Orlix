@@ -253,15 +253,28 @@ static void bls_source_decode(struct kunit *test)
 	bls_for_each_member(test, bls_visit_decode);
 }
 
-static unsigned long bls_map_program(struct kunit *test, u32 instruction)
+static unsigned long bls_map_program_bytes(struct kunit *test, u32 instruction,
+					   const void *literal, size_t literal_len)
 {
-	u32 program[4] = { instruction, BLS_SVC, 0xa1b2c3d4U, 0x55667788U };
+	u8 program[32] = {};
+	u32 svc = BLS_SVC;
 	unsigned long mapped;
 
+	memcpy(program, &instruction, sizeof(instruction));
+	memcpy(program + sizeof(u32), &svc, sizeof(svc));
+	if (literal && literal_len) {
+		KUNIT_ASSERT_LE(test, literal_len, sizeof(program) - 2 * sizeof(u32));
+		memcpy(program + 2 * sizeof(u32), literal, literal_len);
+	}
 	mapped = orlix_tcti_memory_proof_map_bytes(test, program, sizeof(program),
 						   PROT_READ | PROT_EXEC);
 	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
 	return mapped;
+}
+
+static unsigned long bls_map_program(struct kunit *test, u32 instruction)
+{
+	return bls_map_program_bytes(test, instruction, NULL, 0);
 }
 
 static void bls_expect_success(struct kunit *test, const struct bls_source_leaf *leaf,
@@ -362,13 +375,9 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 	current->thread.user_simd[5] = stored[3];
 	access = decoded.access_size ? decoded.access_size : 8;
 	if (bls_is_loadlit(leaf) && !bls_is_prefetch(leaf)) {
-		ret = sys_mprotect(code, PAGE_SIZE, PROT_READ | PROT_WRITE);
-		KUNIT_ASSERT_EQ(test, 0, ret);
-		ret = orlix_tcti_write_user_data(current->mm, code + 8, stored,
-						 access);
-		KUNIT_ASSERT_EQ(test, 0, ret);
-		ret = sys_mprotect(code, PAGE_SIZE, PROT_READ | PROT_EXEC);
-		KUNIT_ASSERT_EQ(test, 0, ret);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		code = bls_map_program_bytes(test, instruction, stored, access);
+		regs.pc = code;
 	} else if (bls_is_load(leaf) && !bls_is_prefetch(leaf) && data) {
 		address = decoded.memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST ?
 			regs.regs[1] : regs.regs[1] + decoded.memory_offset;
@@ -386,7 +395,7 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 	}
 	before = regs;
 	token = orlix_tcti_base_load_store_production_capture_token(leaf->ordinal);
-	if (token) {
+	if (token && !bls_is_loadlit(leaf)) {
 		ret = orlix_tcti_native_capture_begin(token, leaf->ordinal,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &capture);
 		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin", leaf->name);
@@ -403,17 +412,11 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 							     leaf->name);
 	} else if (bls_is_load(leaf)) {
 		if (decoded.simd_fp) {
-			KUNIT_EXPECT_EQ_MSG(test, stored[0],
-				current->thread.user_simd[0],
-				"%s simd0", leaf->name);
-			if (access > 8)
-				KUNIT_EXPECT_EQ_MSG(test, stored[1],
-					current->thread.user_simd[1],
-					"%s simd1", leaf->name);
+			orlix_tcti_memory_proof_expect_simd_dest(test, 0, access,
+				stored[0], stored[1], leaf->name);
 			if (bls_is_pair(leaf))
-				KUNIT_EXPECT_EQ_MSG(test, stored[2],
-					current->thread.user_simd[4],
-					"%s simd_rt2", leaf->name);
+				orlix_tcti_memory_proof_expect_simd_dest(test, 2,
+					access, stored[2], stored[3], leaf->name);
 		} else {
 			KUNIT_EXPECT_EQ_MSG(test,
 				bls_expected_loaded(&decoded, stored[0]),
@@ -425,22 +428,43 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 		}
 	} else if (data) {
 		u64 first = stored[0];
+		u64 first_high = stored[1];
 
-		if (access == sizeof(u32))
-			first = (u32)stored[0];
-		else if (access == 1)
-			first = (u8)stored[0];
-		else if (access == 2)
-			first = (u16)stored[0];
-		orlix_tcti_memory_proof_expect_bytes(test, address, &first,
-			access > 8 ? 8 : access, leaf->name);
+		if (decoded.simd_fp) {
+			orlix_tcti_memory_proof_expect_bytes(test, address, &first,
+				access > 8 ? 8 : access, leaf->name);
+			if (access > 8)
+				orlix_tcti_memory_proof_expect_bytes(test,
+					address + 8, &first_high, 8, leaf->name);
+		} else {
+			if (access == sizeof(u32))
+				first = (u32)stored[0];
+			else if (access == 1)
+				first = (u8)stored[0];
+			else if (access == 2)
+				first = (u16)stored[0];
+			orlix_tcti_memory_proof_expect_bytes(test, address, &first,
+				access > 8 ? 8 : access, leaf->name);
+		}
 		if (bls_is_pair(leaf)) {
 			u64 second = stored[2];
+			u64 second_high = stored[3];
 
-			if (access == sizeof(u32))
-				second = (u32)stored[2];
-			orlix_tcti_memory_proof_expect_bytes(test, address + access,
-				&second, access > 8 ? 8 : access, leaf->name);
+			if (decoded.simd_fp) {
+				orlix_tcti_memory_proof_expect_bytes(test,
+					address + access, &second,
+					access > 8 ? 8 : access, leaf->name);
+				if (access > 8)
+					orlix_tcti_memory_proof_expect_bytes(test,
+						address + access + 8, &second_high,
+						8, leaf->name);
+			} else {
+				if (access == sizeof(u32))
+					second = (u32)stored[2];
+				orlix_tcti_memory_proof_expect_bytes(test,
+					address + access, &second,
+					access > 8 ? 8 : access, leaf->name);
+			}
 		}
 		if (bls_is_stgp(leaf)) {
 			unsigned long tag_address = 0;
@@ -454,11 +478,10 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 		}
 	}
 	if (!bls_is_prefetch(leaf) && !bls_is_loadlit(leaf) &&
-	    decoded.memory_index_mode != ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET &&
 	    decoded.decode_class != ORLIX_TCTI_DECODE_HINT)
-		KUNIT_EXPECT_EQ_MSG(test,
-			before.regs[1] + decoded.memory_offset, regs.regs[1],
-			"%s writeback", leaf->name);
+		orlix_tcti_memory_proof_expect_writeback(test,
+			decoded.memory_index_mode, before.regs[1],
+			decoded.memory_offset, regs.regs[1], leaf->name);
 
 	if (capture && result.reason == ORLIX_TCTI_EXIT_SYSCALL) {
 		ret = orlix_tcti_native_capture_take_wire(capture, &wire);
@@ -601,17 +624,10 @@ static void bls_visit_unmapped_fault(struct kunit *test,
 		KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
 		KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
 	} else {
-		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason,
-				    "%s unmapped reason", leaf->name);
-		KUNIT_EXPECT_TRUE_MSG(test,
-				      result.status == -EFAULT ||
-				      result.status == -EACCES,
-				      "%s unmapped status %ld", leaf->name,
-				      result.status);
+		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
+							  regs.pc, leaf->name);
 		KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
-		KUNIT_EXPECT_EQ(test, code, regs.pc);
 		if (!bls_is_loadlit(leaf) &&
-		    decoded.memory_index_mode != ORLIX_TCTI_MEMORY_INDEX_SIGNED_OFFSET &&
 		    decoded.decode_class != ORLIX_TCTI_DECODE_HINT)
 			KUNIT_EXPECT_EQ_MSG(test, before.regs[1], regs.regs[1],
 					    "%s no writeback on fault", leaf->name);
@@ -626,11 +642,47 @@ static void bls_unmapped_load_faults(struct kunit *test)
 	bls_for_each_member(test, bls_visit_unmapped_fault);
 }
 
+static void bls_write_protect_store_faults(struct kunit *test)
+{
+	const struct bls_source_leaf *leaf = bls_source_leaf(3351U);
+	u32 instruction;
+	struct orlix_tcti_result result;
+	struct pt_regs regs = {};
+	struct pt_regs before;
+	unsigned long code;
+	unsigned long data;
+	u8 sentinel[32];
+	u64 stored = 0x0102030480000001ULL;
+
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	instruction = bls_test_instruction(leaf);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ);
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = stored;
+	regs.regs[1] = data + 16;
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	orlix_tcti_memory_proof_expect_user_fault(test, &result, code, regs.pc,
+						  leaf->name);
+	KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
+	orlix_tcti_memory_proof_expect_bytes(test, data, sentinel, sizeof(sentinel),
+					     leaf->name);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
 static struct kunit_case bls_cases[] = {
 	KUNIT_CASE(bls_source_decode),
 	KUNIT_CASE(bls_reserved_is_rejected),
 	KUNIT_CASE(bls_production_resume),
 	KUNIT_CASE(bls_unmapped_load_faults),
+	KUNIT_CASE(bls_write_protect_store_faults),
 	{}
 };
 

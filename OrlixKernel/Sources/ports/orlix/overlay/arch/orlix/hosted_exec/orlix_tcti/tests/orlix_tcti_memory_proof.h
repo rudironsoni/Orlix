@@ -9,6 +9,8 @@
 #include <linux/syscalls.h>
 #include <asm/orlix_tcti.h>
 
+#include "../decode_aarch64.h"
+
 /*
  * Shared guest-memory fixtures for #134 and later memory families.
  * Callers must not use these helpers to claim another family's ordinals.
@@ -43,6 +45,70 @@ static inline void orlix_tcti_memory_proof_expect_bytes(struct kunit *test,
 	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, address,
 							   actual, length));
 	KUNIT_EXPECT_MEMEQ_MSG(test, expected, actual, length, "%s", name);
+}
+
+static inline u64 orlix_tcti_memory_proof_simd_loaded(u64 stored, u8 access_size)
+{
+	if (access_size == sizeof(u8))
+		return (u8)stored;
+	if (access_size == sizeof(u16))
+		return (u16)stored;
+	if (access_size == sizeof(u32))
+		return (u32)stored;
+	return stored;
+}
+
+static inline void orlix_tcti_memory_proof_expect_simd_dest(struct kunit *test,
+	u8 reg, u8 access_size, u64 stored_low, u64 stored_high, const char *name)
+{
+	u64 expected_low = orlix_tcti_memory_proof_simd_loaded(stored_low,
+							       access_size);
+	u64 expected_high = access_size > sizeof(u64) ? stored_high : 0;
+
+	KUNIT_EXPECT_EQ_MSG(test, expected_low,
+			    current->thread.user_simd[reg * 2],
+			    "%s simd%u", name, reg * 2);
+	if (access_size > sizeof(u64))
+		KUNIT_EXPECT_EQ_MSG(test, expected_high,
+				    current->thread.user_simd[reg * 2 + 1],
+				    "%s simd%u", name, reg * 2 + 1);
+	else
+		KUNIT_EXPECT_EQ_MSG(test, 0ULL,
+				    current->thread.user_simd[reg * 2 + 1],
+				    "%s simd%u high", name, reg * 2 + 1);
+}
+
+static inline bool orlix_tcti_memory_proof_writes_back(
+	enum orlix_tcti_memory_index_mode mode)
+{
+	return mode == ORLIX_TCTI_MEMORY_INDEX_PRE ||
+		mode == ORLIX_TCTI_MEMORY_INDEX_POST;
+}
+
+static inline void orlix_tcti_memory_proof_expect_writeback(struct kunit *test,
+	enum orlix_tcti_memory_index_mode mode, u64 before_rn, s64 offset,
+	u64 after_rn, const char *name)
+{
+	if (!orlix_tcti_memory_proof_writes_back(mode)) {
+		KUNIT_EXPECT_EQ_MSG(test, before_rn, after_rn,
+				    "%s no writeback", name);
+		return;
+	}
+	KUNIT_EXPECT_EQ_MSG(test, before_rn + offset, after_rn,
+			    "%s writeback", name);
+}
+
+static inline void orlix_tcti_memory_proof_expect_user_fault(struct kunit *test,
+	const struct orlix_tcti_result *result, unsigned long before_pc,
+	unsigned long after_pc, const char *name)
+{
+	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_USER_FAULT, result->reason,
+			    "%s unmapped reason", name);
+	KUNIT_EXPECT_TRUE_MSG(test,
+			      result->status == -EFAULT ||
+			      result->status == -EACCES,
+			      "%s unmapped status %ld", name, result->status);
+	KUNIT_EXPECT_EQ_MSG(test, before_pc, after_pc, "%s fault pc", name);
 }
 
 #endif
