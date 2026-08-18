@@ -1791,6 +1791,7 @@ static int orlix_tcti_execute_simd_single_structure(
 			orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
 		orlix_tcti_write_memory_base(regs, decoded->rn, address + increment);
 	}
+	current->thread.user_simd_valid = 1;
 	regs->pc += sizeof(u32);
 	return 0;
 }
@@ -1836,12 +1837,6 @@ static int orlix_tcti_execute_simd_multiple_structure(
 		}
 	} else {
 		lanes = decoded->result_size / decoded->access_size;
-		if (decoded->load && !decoded->simd_q) {
-			for (index = 0; index < decoded->simd_structure_count;
-			     index++)
-				current->thread.user_simd[
-					((decoded->rd + index) & 0x1fU) * 2 + 1] = 0;
-		}
 
 		for (lane = 0; lane < lanes; lane++) {
 			for (index = 0; index < decoded->simd_structure_count;
@@ -1871,6 +1866,12 @@ static int orlix_tcti_execute_simd_multiple_structure(
 					return ret;
 			}
 		}
+		if (decoded->load && !decoded->simd_q) {
+			for (index = 0; index < decoded->simd_structure_count;
+			     index++)
+				current->thread.user_simd[
+					((decoded->rd + index) & 0x1fU) * 2 + 1] = 0;
+		}
 	}
 
 	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST) {
@@ -1880,6 +1881,7 @@ static int orlix_tcti_execute_simd_multiple_structure(
 
 		orlix_tcti_write_memory_base(regs, decoded->rn, address + increment);
 	}
+	current->thread.user_simd_valid = 1;
 	regs->pc += sizeof(u32);
 	return 0;
 }

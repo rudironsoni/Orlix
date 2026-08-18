@@ -5,6 +5,9 @@
  * another include; METADATA is an array so a second family does not redefine
  * a singleton. #134 binds through the ordinary-load-store registry and the
  * capture rows in orlix_tcti_base_load_store_production_capture.def.
+ * #126 binds through the AdvSIMD load/store registry and the capture rows
+ * in orlix_tcti_advsimd_load_store_production_capture.def.
  */
 #include "orlix_tcti_branch_control_production_capture.def"
 #include "orlix_tcti_base_load_store_production_capture.def"
+#include "orlix_tcti_advsimd_load_store_production_capture.def"

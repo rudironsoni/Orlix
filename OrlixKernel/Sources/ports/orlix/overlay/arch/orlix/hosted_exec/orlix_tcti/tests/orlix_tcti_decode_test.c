@@ -5046,8 +5046,9 @@ static bool orlix_tcti_test_simd_single_structure_is_legal(
 {
 	u8 base_opcode = opcode & ~1U;
 
+	/* STL1/LDAP1 encode asisdlso D-size with Rm=00001. */
 	if (!post_index && rm)
-		return false;
+		return rm == 1 && opcode == 4 && size == 1 && !s;
 	if (load && !s && (opcode == 6 || opcode == 7))
 		return true;
 	if (base_opcode == 0)

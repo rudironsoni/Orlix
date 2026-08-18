@@ -7,6 +7,10 @@ updated: 2026-08-18
 ---
 # Orlix Knowledge Log
 
+## [2026-08-18] record | Land the ADVSIMD_LOAD_STORE proof contract
+
+Recorded that the 152 unique `ADVSIMD_LOAD_STORE` leaves have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. The family uses the same `orlix_tcti_memory_proof.h` fixtures and ordinal-plus-obligation capture walk as `BASE_LOAD_STORE`. STL1 and LDAP1 are proved for structure transfer only. Their release/acquire ordering is not proved. Exclusive, LSE, SVE, and SME memory families remain open. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-18] record | Land the BASE_LOAD_STORE proof contract
 
 Recorded that the 209 unique `BASE_LOAD_STORE` leaves have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. Later memory families reuse `orlix_tcti_memory_proof.h` and the ordinal-plus-obligation capture walk. A matching user fault credits only a `FAULTS` observation. Exclusive, LSE, AdvSIMD-structure, SVE, and SME memory families remain open. The 4,350-leaf coverage task stays doing.
