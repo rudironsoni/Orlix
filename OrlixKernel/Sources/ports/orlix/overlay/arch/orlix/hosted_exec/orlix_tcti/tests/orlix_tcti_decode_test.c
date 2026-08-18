@@ -1604,13 +1604,12 @@ static u32 orlix_tcti_test_encode_load_store_pair(bool simd_fp, u8 opc, u8 mode,
 static bool orlix_tcti_test_load_store_pair_shape_is_valid(bool simd_fp, u8 opc,
 	u8 mode, bool load)
 {
-	if (opc == 3)
-		return false;
+	(void)load;
 	if (simd_fp)
 		return true;
 	if (opc != 1)
 		return true;
-	return load && mode != 0;
+	return mode != 0;
 }
 
 static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *test)
@@ -1643,9 +1642,15 @@ static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *te
 								decoded.decode_class);
 							continue;
 						}
-						access_size = simd_fp ? BIT(opc + 2) :
-							(opc == 2 ? sizeof(u64) :
-							 sizeof(u32));
+						if (simd_fp)
+							access_size = opc == 3 ?
+								16U : BIT(opc + 2);
+						else if (opc == 1 && !load)
+							access_size = sizeof(u64);
+						else if (opc >= 2)
+							access_size = sizeof(u64);
+						else
+							access_size = sizeof(u32);
 						KUNIT_EXPECT_EQ(test,
 							ORLIX_TCTI_DECODE_LOAD_STORE_PAIR,
 							decoded.decode_class);
@@ -1658,14 +1663,19 @@ static void orlix_tcti_decode_exhaustive_load_store_pair_family(struct kunit *te
 						KUNIT_EXPECT_EQ(test, access_size,
 							decoded.access_size);
 						KUNIT_EXPECT_EQ(test,
-							!simd_fp && opc == 1,
+							!simd_fp && opc == 1 && load,
 							decoded.sign_extend_load);
 						KUNIT_EXPECT_EQ(test,
-							!simd_fp && opc == 1 ?
+							!simd_fp && opc == 1 && load ?
 								sizeof(u64) : access_size,
 							decoded.result_size);
 						KUNIT_EXPECT_EQ(test,
-							(s64)immediate * access_size,
+							!simd_fp && opc == 1 && !load,
+							decoded.allocation_tag_store);
+						KUNIT_EXPECT_EQ(test,
+							(s64)immediate *
+							(!simd_fp && opc == 1 && !load ?
+								16U : access_size),
 							decoded.memory_offset);
 						KUNIT_EXPECT_EQ(test,
 							mode == 1 ? ORLIX_TCTI_MEMORY_INDEX_POST :
@@ -1870,12 +1880,12 @@ static void orlix_tcti_gadget_executes_complete_load_store_pair_family(
 					if (!orlix_tcti_test_load_store_pair_shape_is_valid(
 						    simd_fp, opc, mode, load))
 						continue;
-					access_size = simd_fp ? BIT(opc + 2) :
-						(opc == 2 ? sizeof(u64) : sizeof(u32));
 					instruction = orlix_tcti_test_encode_load_store_pair(
 						simd_fp, opc, mode, load, 1, 0, 2, 10);
 					decoded = orlix_tcti_decode_aarch64(instruction);
-					address = mode == 1 ? base : base + access_size;
+					access_size = decoded.access_size;
+					address = mode == 1 ? base :
+						base + decoded.memory_offset;
 					regs.regs[10] = base;
 					memset(current->thread.user_simd, 0,
 					       sizeof(current->thread.user_simd));
@@ -1911,7 +1921,7 @@ static void orlix_tcti_gadget_executes_complete_load_store_pair_family(
 					KUNIT_EXPECT_EQ(test, 0xb004ULL, regs.pc);
 					KUNIT_EXPECT_EQ(test,
 						mode == 1 || mode == 3 ?
-							base + access_size : base,
+							base + decoded.memory_offset : base,
 						regs.regs[10]);
 
 					if (load && simd_fp) {

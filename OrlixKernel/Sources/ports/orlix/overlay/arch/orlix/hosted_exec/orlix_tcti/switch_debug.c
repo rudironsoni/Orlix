@@ -1961,6 +1961,23 @@ static int orlix_tcti_execute_load_literal(struct mm_struct *mm,
 	return 0;
 }
 
+static unsigned long orlix_tcti_last_allocation_tag_address;
+static u8 orlix_tcti_last_allocation_tag;
+
+void orlix_tcti_allocation_tag_last_store(unsigned long *address, u8 *tag)
+{
+	if (address)
+		*address = orlix_tcti_last_allocation_tag_address;
+	if (tag)
+		*tag = orlix_tcti_last_allocation_tag;
+}
+
+static void orlix_tcti_write_allocation_tag(unsigned long address)
+{
+	orlix_tcti_last_allocation_tag_address = address & ~0xfUL;
+	orlix_tcti_last_allocation_tag = (address >> 56) & 0xfU;
+}
+
 static int orlix_tcti_execute_load_store_pair(struct mm_struct *mm,
 					struct pt_regs *regs,
 					const struct orlix_tcti_decoded_instruction *decoded,
@@ -2049,6 +2066,8 @@ static int orlix_tcti_execute_load_store_pair(struct mm_struct *mm,
 			if (ret)
 				return ret;
 		}
+		if (decoded->allocation_tag_store)
+			orlix_tcti_write_allocation_tag(address);
 	}
 
 	orlix_tcti_apply_memory_writeback(regs, decoded);
@@ -2067,6 +2086,11 @@ static int orlix_tcti_execute_load_store_immediate(struct mm_struct *mm,
 
 	if (!mm)
 		return -EINVAL;
+	if (decoded->prefetch) {
+		orlix_tcti_apply_memory_writeback(regs, decoded);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 	if (fault_address)
 		*fault_address = address;
 

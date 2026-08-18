@@ -59,9 +59,11 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * ORLIX_EL0_HWCAP2 is currently zero, so all CSSC forms must take the normal
  * unsupported-instruction exit without changing guest architectural state.
  * Linux still advertises neither HWCAP_FPHP nor HWCAP_ASIMDHP. Scalar FP16
- * stays gated on that advertisement. AdvSIMD FP16 three-same decode and
- * native execute are owned, so those SIMD_VECTOR_ARITHMETIC forms may enter
- * a guest without the Linux HWCAP_ASIMDHP bit.
+ * arithmetic stays gated on that advertisement. SIMD/FP memory transfers of
+ * 16-bit data are ordinary FEAT_FP loads and stores, not FEAT_FP16
+ * arithmetic, so they execute without HWCAP_FPHP. AdvSIMD FP16 three-same
+ * decode and native execute are owned, so those SIMD_VECTOR_ARITHMETIC forms
+ * may enter a guest without the Linux HWCAP_ASIMDHP bit.
  */
 static bool orlix_tcti_decoded_requires_cssc(
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -86,10 +88,34 @@ static bool orlix_tcti_decoded_requires_cssc(
 	}
 }
 
+static bool orlix_tcti_decoded_is_memory_transfer(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (!decoded)
+		return false;
+
+	switch (decoded->decode_class) {
+	case ORLIX_TCTI_DECODE_LOAD_LITERAL:
+	case ORLIX_TCTI_DECODE_LOAD_STORE_PAIR:
+	case ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE:
+	case ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE:
+	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
+	case ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
+	case ORLIX_TCTI_DECODE_HINT:
+	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE:
+	case ORLIX_TCTI_DECODE_SIMD_LOAD_REPLICATE:
+	case ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_MULTIPLE_STRUCTURE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool orlix_tcti_decoded_requires_fp16(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
 	return decoded && decoded->simd_fp &&
+		!orlix_tcti_decoded_is_memory_transfer(decoded) &&
 		(decoded->access_size == sizeof(u16) ||
 		 decoded->result_size == sizeof(u16));
 }
@@ -774,7 +800,7 @@ static int orlix_tcti_execute_authorized_capture(
 }
 
 /* This private capability is wrapped in a stack evidence object created only
- * at the ordinary successful-gadget boundary below. */
+ * at the engine observation boundaries below. */
 struct orlix_tcti_successful_gadget_evidence {
 	const void *engine_capability;
 };
@@ -802,6 +828,16 @@ bool orlix_tcti_native_capture_engine_evidence_valid(const void *evidence)
 				.engine_capability = &orlix_tcti_engine_execution_capability, \
 			}; \
 			orlix_tcti_native_capture_complete_successful_gadget((_capture), \
+				&evidence); \
+		} \
+		if ((_normal_resume) && \
+		    ((_result).reason == ORLIX_TCTI_EXIT_USER_FAULT || \
+		     (_result).reason == ORLIX_TCTI_EXIT_ALIGNMENT_FAULT) && \
+		    (_capture) && (_capture)->target_seen) { \
+			const struct orlix_tcti_successful_gadget_evidence evidence = { \
+				.engine_capability = &orlix_tcti_engine_execution_capability, \
+			}; \
+			orlix_tcti_native_capture_complete_fault_observation((_capture), \
 				&evidence); \
 		} \
 		orlix_tcti_native_capture_finalize((_capture), &(_result), (_regs)); \

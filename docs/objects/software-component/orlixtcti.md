@@ -3,7 +3,7 @@ type: software-component
 tags:
   - architecture
   - ownership
-updated: 2026-07-26
+updated: 2026-08-18
 status: active
 summary: "Private Orlix-owned AArch64 EL0 execution component for safe Linux ELF execution."
 part_of:
@@ -33,3 +33,5 @@ Production TCTI behavior, the ISA inventory, diagnostics, and correctness proof 
 TCTI is not a second kernel, a Linux syscall emulator, or a general Orlix runtime. OrlixKernel remains Linux and owns VMAs, page tables, tasks, scheduling, syscalls, VFS, file descriptors, signals, wait and reaping, PTYs, and process semantics. TCTI exists only at the guest AArch64 EL0 execution boundary required by iOS executable-memory restrictions, as established by [ADR 0022](../architecture-decision/0022-use-hosted-linux-elf-execution.md).
 
 KUnit owns instruction decoding, state-transition, reserved-encoding, and structured-exit proof. Linux kselftest owns Linux-visible ISA integration. The authoritative ownership boundaries are defined by [component ownership](../../concepts/component-ownership.md).
+
+Base A64 load, store, and prefetch proof lives in the `BASE_LOAD_STORE` cohort. Shared guest-memory fixtures live in `orlix_tcti_memory_proof.h`. A production capture session is selected by source ordinal and obligation. A matching user fault may credit only a `FAULTS` observation through engine evidence. A successful gadget does not credit `FAULTS`. COW and self-modifying-code invalidation remain in the mapping-invalidation suite.

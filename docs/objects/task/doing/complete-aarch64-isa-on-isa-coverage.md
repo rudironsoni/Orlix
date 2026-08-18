@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-07-28
+updated: 2026-08-18
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
@@ -124,6 +124,8 @@ The current runtime HWCAP profile may remain narrower while implementation is in
 Privileged and non-EL0 leaves remain visible in the inventory. Completion proves their architecturally correct EL0 rejection or exception behavior rather than silently discarding them.
 
 Passing mlibc, Coreutils, or another package suite is downstream compatibility evidence. It does not close this task while any of the 4,350 source leaves is unclassified, any applicable EL0 leaf lacks exact production semantics and typed evidence, or any privileged leaf lacks its required EL0 behavior.
+
+The 209 unique `BASE_LOAD_STORE` source leaves now have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. Later memory families reuse `orlix_tcti_memory_proof.h` and the same capture token plus obligation walk. Exclusive, LSE, AdvSIMD-structure, SVE, and SME memory families remain open. This landed cohort does not close the 4,350-leaf audit.
 
 The current audit foundation retains raw source spans for all 4,350 direct
 leaves, binds all pinned inline operation objects as explicit shared-ASL

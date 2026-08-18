@@ -28,6 +28,17 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-kthread-handoff")
     }
 
+    func testFocusedOrlixTCTIBaseLoadStoreDiagnosticSelectsExactOuterSuite() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIBaseLoadStoreDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-base-load-store-source-bound " +
+            "orlix.kselftest=boot_profile_contract"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-base-load-store-source-bound")
+    }
+
     func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
         XCTAssertEqual(
             OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(

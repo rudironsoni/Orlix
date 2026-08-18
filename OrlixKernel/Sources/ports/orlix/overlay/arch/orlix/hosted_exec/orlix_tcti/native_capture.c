@@ -979,6 +979,21 @@ static bool native_capture_is_memory(const struct orlix_tcti_decoded_instruction
 		decoded->decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC;
 }
 
+static u64 native_capture_memory_address(
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct pt_regs *regs)
+{
+	u64 base;
+
+	/* Load-literal has no Rn. The access address is PC-relative. */
+	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOAD_LITERAL)
+		return regs->pc + decoded->memory_offset;
+	base = decoded->rn == 31U ? regs->sp : regs->regs[decoded->rn];
+	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST)
+		return base;
+	return base + decoded->memory_offset;
+}
+
 enum native_capture_relevance {
 	NATIVE_CAPTURE_IRRELEVANT = 0,
 	NATIVE_CAPTURE_MATCH,
@@ -1037,7 +1052,6 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 {
 	struct orlix_tcti_native_capture_session *session =
 		container_of(capture, struct orlix_tcti_native_capture_session, capture);
-	u64 base;
 	u32 length;
 
 	if (!session || !decoded)
@@ -1069,8 +1083,7 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 	if (!mm)
 		goto fail;
 	length = decoded->access_size * (decoded->pair ? 2U : 1U);
-	base = decoded->rn == 31U ? regs->sp : regs->regs[decoded->rn];
-	session->memory_address = base + decoded->memory_offset;
+	session->memory_address = native_capture_memory_address(decoded, regs);
 	session->memory_effect = decoded->exclusive ||
 		decoded->decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC ?
 		ORLIX_TCTI_NATIVE_MEMORY_READ_MODIFY_WRITE :
@@ -1081,9 +1094,17 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 	session->memory_bytes = kmalloc(length, GFP_KERNEL);
 	if (!session->memory_bytes)
 		goto fail;
+	/*
+	 * An unmapped or unreadable before-image is not producer corruption.
+	 * FAULTS observations record the fault. They do not need a snapshot.
+	 */
 	if (orlix_tcti_read_user_data(mm, session->memory_address,
-				       session->memory_bytes, length))
-		goto fail;
+				       session->memory_bytes, length)) {
+		kfree(session->memory_bytes);
+		session->memory_bytes = NULL;
+		session->memory_length = 0;
+		return;
+	}
 	session->memory_length = length;
 	return;
 fail:
@@ -1197,9 +1218,30 @@ void orlix_tcti_native_capture_complete_successful_gadget(
 		return;
 	session = container_of(capture, struct orlix_tcti_native_capture_session,
 		capture);
+	/* A successful gadget is not a FAULTS observation. */
 	if (session->claimed_by_resume && !session->failed &&
+	    session->entry &&
+	    session->entry->obligation !=
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS &&
 	    !session->origin.creditable)
 		session->origin.creditable = true;
+}
+
+void orlix_tcti_native_capture_complete_fault_observation(
+	struct orlix_tcti_native_capture *capture, const void *evidence)
+{
+	struct orlix_tcti_native_capture_session *session;
+
+	if (!capture || !orlix_tcti_native_capture_engine_evidence_valid(evidence))
+		return;
+	session = container_of(capture, struct orlix_tcti_native_capture_session,
+		capture);
+	if (!session->claimed_by_resume || session->failed ||
+	    !session->fault_seen || !session->entry ||
+	    session->entry->obligation !=
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+		return;
+	session->origin.creditable = true;
 }
 
 static void native_capture_finalize(struct orlix_tcti_native_capture *capture,
