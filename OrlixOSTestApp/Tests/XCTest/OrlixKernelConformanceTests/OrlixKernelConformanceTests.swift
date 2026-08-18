@@ -196,4 +196,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIBaseLoadStoreKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIBaseLoadStoreDiagnostic)
     }
+
+    func testOrlixTCTIAdvsimdLoadStoreKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIAdvsimdLoadStoreDiagnostic)
+    }
 }

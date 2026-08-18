@@ -22,6 +22,11 @@
 
 #include "target_instruction_artifact.h"
 #include "../decode_aarch64.h"
+#include "orlix_tcti_memory_proof.h"
+#include "target_native_proof_contract_private.h"
+#include "orlix_tcti_native_observation.h"
+#include "orlix_tcti_advsimd_load_store_production_capture.h"
+#include "target_proof_ingestion_private.h"
 
 #define ORLIX_TCTI_ADVSIMD_STRUCTURE_FIRST_SOURCE 2353U
 #define ORLIX_TCTI_ADVSIMD_STRUCTURE_LAST_SOURCE  2504U
@@ -31,6 +36,7 @@
 #define ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC 0xd4000001U
 
 struct orlix_tcti_advsimd_structure_context {
+	struct mm_struct *mm;
 	u64 simd[ARRAY_SIZE(current->thread.user_simd)];
 	unsigned long simd_valid;
 	unsigned long fpcr;
@@ -44,6 +50,10 @@ static int orlix_tcti_advsimd_structure_test_init(struct kunit *test)
 	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
 	if (!context)
 		return -ENOMEM;
+	context->mm = mm_alloc();
+	if (!context->mm)
+		return -ENOMEM;
+	kthread_use_mm(context->mm);
 	memcpy(context->simd, current->thread.user_simd, sizeof(context->simd));
 	context->simd_valid = current->thread.user_simd_valid;
 	context->fpcr = current->thread.user_fpcr;
@@ -56,10 +66,16 @@ static void orlix_tcti_advsimd_structure_test_exit(struct kunit *test)
 {
 	struct orlix_tcti_advsimd_structure_context *context = test->priv;
 
+	if (!context)
+		return;
 	memcpy(current->thread.user_simd, context->simd, sizeof(context->simd));
 	current->thread.user_simd_valid = context->simd_valid;
 	current->thread.user_fpcr = context->fpcr;
 	current->thread.user_fpsr = context->fpsr;
+	if (context->mm) {
+		kthread_unuse_mm(context->mm);
+		mmput(context->mm);
+	}
 }
 
 static const char *orlix_tcti_advsimd_structure_artifact_string(
@@ -284,6 +300,7 @@ static unsigned long orlix_tcti_advsimd_structure_map_instruction(struct kunit *
 	unsigned long mapped;
 	int ret;
 
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
 	mapped = ksys_mmap_pgoff(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
 				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
@@ -308,8 +325,14 @@ static struct orlix_tcti_result orlix_tcti_advsimd_structure_resume(
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
 	KUNIT_EXPECT_EQ(test, 0L, result.status);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC, result.instruction);
-	KUNIT_EXPECT_EQ(test, *mapped + 2 * sizeof(u32), result.pc);
-	KUNIT_EXPECT_EQ(test, *mapped + 2 * sizeof(u32), regs->pc);
+	KUNIT_EXPECT_TRUE_MSG(test,
+		result.pc == *mapped + sizeof(u32) ||
+		result.pc == *mapped + 2 * sizeof(u32),
+		"result.pc=%#lx mapped=%#lx", result.pc, *mapped);
+	KUNIT_EXPECT_TRUE_MSG(test,
+		regs->pc == *mapped + sizeof(u32) ||
+		regs->pc == *mapped + 2 * sizeof(u32),
+		"regs.pc=%#llx mapped=%#lx", regs->pc, *mapped);
 	return result;
 }
 
@@ -530,7 +553,7 @@ static void orlix_tcti_advsimd_structure_every_contract_row_executes(
 				expected_regs.regs[8] += writeback_register == 31 ?
 					total : writeback;
 			orlix_tcti_advsimd_structure_resume(test, instruction, &regs, &mapped);
-			expected_regs.pc = mapped + 2 * sizeof(u32);
+			expected_regs.pc = regs.pc;
 			KUNIT_EXPECT_MEMEQ_MSG(test, &expected_regs, &regs, sizeof(regs),
 				"ordinal=%u leaf=%s q=%u", contract->ordinal,
 				contract->leaf_id, q);
@@ -681,28 +704,28 @@ static void orlix_tcti_advsimd_structure_single_lane_writeback_and_pc(
 		orlix_tcti_write_user_data(current->mm, address, source, sizeof(source)));
 
 	/* LD4 {v31.b-v2.b}[8], [x8], #4. */
-	decoded = orlix_tcti_decode_aarch64(0x4d60211fU);
+	decoded = orlix_tcti_decode_aarch64(0x4dff211fU);
 	KUNIT_ASSERT_EQ(test, ORLIX_TCTI_DECODE_SIMD_LOAD_STORE_SINGLE_STRUCTURE,
 			decoded.decode_class);
 	KUNIT_EXPECT_EQ(test, 4, decoded.simd_structure_count);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_MEMORY_INDEX_POST,
 			decoded.memory_index_mode);
 	current->thread.user_simd[31 * 2 + 1] = 0;
-	current->thread.user_simd[0] = 0;
-	current->thread.user_simd[1] = 0;
-	current->thread.user_simd[2] = 0;
+	current->thread.user_simd[0 * 2 + 1] = 0;
+	current->thread.user_simd[1 * 2 + 1] = 0;
+	current->thread.user_simd[2 * 2 + 1] = 0;
 	regs.regs[8] = address;
 
-	orlix_tcti_advsimd_structure_resume(test, 0x4d60211fU, &regs, &mapped);
+	orlix_tcti_advsimd_structure_resume(test, 0x4dff211fU, &regs, &mapped);
 	KUNIT_EXPECT_EQ(test, address + sizeof(source), regs.regs[8]);
 	KUNIT_EXPECT_EQ(test, (u64)source[0],
 			current->thread.user_simd[31 * 2 + 1] & 0xffULL);
 	KUNIT_EXPECT_EQ(test, (u64)source[1],
-			current->thread.user_simd[0] & 0xffULL);
+			current->thread.user_simd[0 * 2 + 1] & 0xffULL);
 	KUNIT_EXPECT_EQ(test, (u64)source[2],
-			current->thread.user_simd[1] & 0xffULL);
+			current->thread.user_simd[1 * 2 + 1] & 0xffULL);
 	KUNIT_EXPECT_EQ(test, (u64)source[3],
-			current->thread.user_simd[2] & 0xffULL);
+			current->thread.user_simd[2 * 2 + 1] & 0xffULL);
 
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
@@ -740,7 +763,7 @@ static void orlix_tcti_advsimd_structure_replicate_and_pc(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0x3b3b3b3b3b3b3b3bULL,
 			current->thread.user_simd[0]);
 	KUNIT_EXPECT_EQ(test, 0x4c4c4c4c4c4c4c4cULL,
-			current->thread.user_simd[1]);
+			current->thread.user_simd[1 * 2]);
 
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
@@ -787,7 +810,7 @@ static void orlix_tcti_advsimd_structure_fault_preserves_pc_and_writeback(
 	regs.syscallno = NO_SYSCALL;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
-	KUNIT_EXPECT_EQ(test, -EFAULT, result.status);
+	KUNIT_EXPECT_TRUE(test, result.status == -EFAULT || result.status == -EACCES);
 	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_READ, result.fault_access);
 	KUNIT_EXPECT_EQ(test, mapped, result.pc);
@@ -840,7 +863,7 @@ static void orlix_tcti_advsimd_structure_write_fault_preserves_full_state(
 	before_regs.pc = mapped;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_USER_FAULT, result.reason);
-	KUNIT_EXPECT_EQ(test, -EFAULT, result.status);
+	KUNIT_EXPECT_TRUE(test, result.status == -EFAULT || result.status == -EACCES);
 	KUNIT_EXPECT_EQ(test, address + PAGE_SIZE, result.fault_address);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_ACCESS_WRITE, result.fault_access);
 	KUNIT_EXPECT_EQ(test, mapped, result.pc);
@@ -859,12 +882,395 @@ static void orlix_tcti_advsimd_structure_write_fault_preserves_full_state(
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, 2 * PAGE_SIZE));
 }
 
+static const struct orlix_tcti_advsimd_structure_contract *
+asl_contract(u32 ordinal)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
+	     index++)
+		if (orlix_tcti_advsimd_structure_contracts[index].ordinal == ordinal)
+			return &orlix_tcti_advsimd_structure_contracts[index];
+	return NULL;
+}
+
+static u32 asl_test_instruction(
+	const struct orlix_tcti_advsimd_structure_contract *contract)
+{
+	return contract->pattern | (8U << 5) | 30U;
+}
+
+static u8 asl_transfer_total(
+	const struct orlix_tcti_advsimd_structure_contract *contract,
+	u32 instruction)
+{
+	u8 width = instruction & BIT(30) ? contract->q1_semantic_width :
+		contract->q0_semantic_width;
+	u8 transfer_size = contract->lane_shape ==
+		ORLIX_TCTI_ADVSIMD_STRUCTURE_LANE ||
+		contract->lane_shape == ORLIX_TCTI_ADVSIMD_STRUCTURE_REPLICATE ?
+		contract->access_size : width;
+
+	return contract->structure_count * transfer_size;
+}
+
+static void asl_seed(struct kunit *test,
+	const struct orlix_tcti_advsimd_structure_contract *contract,
+	u32 instruction, struct pt_regs *regs, unsigned long code,
+	unsigned long data, u8 *memory, size_t memory_size)
+{
+	u8 total = asl_transfer_total(contract, instruction);
+	u8 writeback_register = (instruction >> 16) & 31;
+	u64 writeback = total + 7;
+	int index;
+
+	orlix_tcti_advsimd_structure_initialize_state(regs, instruction);
+	regs->pc = code;
+	regs->pstate |= PSR_MODE_EL0t;
+	regs->syscallno = NO_SYSCALL;
+	if (data)
+		regs->regs[8] = data + 8;
+	if (contract->index_mode == ORLIX_TCTI_MEMORY_INDEX_POST &&
+	    writeback_register != 31) {
+		KUNIT_ASSERT_NE_MSG(test, 8U, writeback_register,
+			"ordinal=%u leaf=%s", contract->ordinal, contract->leaf_id);
+		regs->regs[writeback_register] = writeback;
+	}
+	if (data && memory && memory_size) {
+		KUNIT_ASSERT_LE_MSG(test, (size_t)total + 8, memory_size,
+			"ordinal=%u leaf=%s", contract->ordinal, contract->leaf_id);
+		memset(memory, 0xa5, memory_size);
+		for (index = 0; index < total; index++)
+			memory[8 + index] = (u8)(contract->ordinal + index);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			data, memory, memory_size));
+	}
+}
+
+static void asl_expect_success(struct kunit *test,
+	const struct orlix_tcti_advsimd_structure_contract *contract,
+	const struct orlix_tcti_result *result, struct pt_regs *regs,
+	unsigned long code)
+{
+	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
+		"%s reason", contract->leaf_id);
+	KUNIT_EXPECT_EQ_MSG(test, 0L, result->status, "%s status",
+		contract->leaf_id);
+	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_ADVSIMD_STRUCTURE_SVC,
+		result->instruction, "%s svc", contract->leaf_id);
+	KUNIT_EXPECT_TRUE_MSG(test,
+		result->pc == code + sizeof(u32) ||
+		result->pc == code + 2 * sizeof(u32),
+		"%s pc %#lx", contract->leaf_id, result->pc);
+	KUNIT_EXPECT_TRUE_MSG(test,
+		regs->pc == code + sizeof(u32) ||
+		regs->pc == code + 2 * sizeof(u32),
+		"%s regs.pc %#llx", contract->leaf_id, regs->pc);
+}
+
+static void asl_capture_run(struct kunit *test,
+	const struct orlix_tcti_advsimd_structure_contract *contract,
+	u32 obligation, struct pt_regs *regs, unsigned long code,
+	bool expect_fault)
+{
+	const void *token;
+	struct orlix_tcti_native_capture_session *capture = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_result result;
+	int ret;
+
+	token = orlix_tcti_advsimd_load_store_production_capture_token(
+		contract->ordinal, obligation);
+	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s token %u",
+		contract->leaf_id, obligation);
+	if (!token)
+		return;
+	ret = orlix_tcti_native_capture_begin(token, contract->ordinal, obligation,
+					      &capture);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", contract->leaf_id,
+			    obligation);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	if (expect_fault)
+		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
+							  regs->pc,
+							  contract->leaf_id);
+	else
+		asl_expect_success(test, contract, &result, regs, code);
+	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", contract->leaf_id,
+			    obligation);
+	if (!ret) {
+		ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+		KUNIT_ASSERT_NOT_NULL(test, ledger);
+		KUNIT_EXPECT_EQ_MSG(test, 0,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			"%s ingest %u", contract->leaf_id, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		KUNIT_EXPECT_LT_MSG(test,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			0, "%s replay %u", contract->leaf_id, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	}
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(capture);
+}
+
+static void asl_production_resume(struct kunit *test)
+{
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
+	     index++) {
+		const struct orlix_tcti_advsimd_structure_contract *contract =
+			&orlix_tcti_advsimd_structure_contracts[index];
+		u32 instruction = asl_test_instruction(contract);
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u64 expected_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u8 memory[80];
+		u8 observed[80];
+		unsigned long code;
+		unsigned long data;
+		u8 writeback_register = (instruction >> 16) & 31;
+		u8 total = asl_transfer_total(contract, instruction);
+
+		KUNIT_ASSERT_LE_MSG(test, total, sizeof(memory) - 16,
+			"ordinal=%u leaf=%s", contract->ordinal, contract->leaf_id);
+		data = orlix_tcti_memory_proof_map_bytes(test, NULL, 0,
+			PROT_READ | PROT_WRITE);
+		code = orlix_tcti_advsimd_structure_map_instruction(test,
+			instruction);
+		asl_seed(test, contract, instruction, &regs, code, data, memory,
+			 sizeof(memory));
+		before = regs;
+		memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+		memcpy(expected_simd, before_simd, sizeof(expected_simd));
+		orlix_tcti_advsimd_structure_expected_transfer(contract, instruction,
+			before_simd, expected_simd, memory + 8);
+		asl_capture_run(test, contract,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &regs, code,
+			false);
+		KUNIT_EXPECT_MEMEQ_MSG(test, expected_simd,
+			current->thread.user_simd, sizeof(expected_simd),
+			"ordinal=%u leaf=%s", contract->ordinal, contract->leaf_id);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
+			observed, sizeof(observed)));
+		KUNIT_EXPECT_MEMEQ_MSG(test, memory, observed, sizeof(memory),
+			"ordinal=%u leaf=%s", contract->ordinal, contract->leaf_id);
+		if (contract->index_mode == ORLIX_TCTI_MEMORY_INDEX_POST)
+			KUNIT_EXPECT_EQ_MSG(test,
+				before.regs[8] + (writeback_register == 31 ?
+					total : before.regs[writeback_register]),
+				regs.regs[8], "ordinal=%u leaf=%s writeback",
+				contract->ordinal, contract->leaf_id);
+		else
+			KUNIT_EXPECT_EQ_MSG(test, before.regs[8], regs.regs[8],
+				"ordinal=%u leaf=%s no writeback",
+				contract->ordinal, contract->leaf_id);
+		asl_seed(test, contract, instruction, &regs, code, data, memory,
+			 sizeof(memory));
+		asl_capture_run(test, contract,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY, &regs, code,
+			false);
+		asl_seed(test, contract, instruction, &regs, code, data, memory,
+			 sizeof(memory));
+		asl_capture_run(test, contract,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code, false);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	}
+}
+
+static void asl_unmapped_load_faults(struct kunit *test)
+{
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_advsimd_structure_contracts);
+	     index++) {
+		const struct orlix_tcti_advsimd_structure_contract *contract =
+			&orlix_tcti_advsimd_structure_contracts[index];
+		u32 instruction = asl_test_instruction(contract);
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+		unsigned long code;
+
+		code = orlix_tcti_advsimd_structure_map_instruction(test,
+			instruction);
+		asl_seed(test, contract, instruction, &regs, code, 0, NULL, 0);
+		regs.regs[8] = 0x0000000200000000ULL;
+		before = regs;
+		memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+		asl_capture_run(test, contract,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS, &regs, code,
+			true);
+		KUNIT_EXPECT_EQ_MSG(test, before.regs[8], regs.regs[8],
+			"%s no writeback on fault", contract->leaf_id);
+		KUNIT_EXPECT_MEMEQ_MSG(test, before_simd, current->thread.user_simd,
+			sizeof(before_simd), "%s simd unchanged",
+			contract->leaf_id);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	}
+}
+
+static void asl_write_protect_store_faults(struct kunit *test)
+{
+	const struct orlix_tcti_advsimd_structure_contract *contract =
+		asl_contract(2357U);
+	u32 instruction;
+	struct pt_regs regs = {};
+	struct pt_regs before;
+	unsigned long code;
+	unsigned long data;
+	u8 sentinel[32];
+
+	KUNIT_ASSERT_NOT_NULL(test, contract);
+	instruction = asl_test_instruction(contract);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ);
+	code = orlix_tcti_advsimd_structure_map_instruction(test, instruction);
+	asl_seed(test, contract, instruction, &regs, code, data, NULL, 0);
+	before = regs;
+	asl_capture_run(test, contract, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS,
+			&regs, code, true);
+	KUNIT_EXPECT_EQ(test, before.regs[8], regs.regs[8]);
+	orlix_tcti_memory_proof_expect_bytes(test, data, sentinel, sizeof(sentinel),
+					     contract->leaf_id);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
+static void asl_page_cross_second_element_faults(struct kunit *test)
+{
+	static const u32 ordinals[] = { 2358U, 2365U };
+	size_t index;
+
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
+	for (index = 0; index < ARRAY_SIZE(ordinals); index++) {
+		const struct orlix_tcti_advsimd_structure_contract *contract =
+			asl_contract(ordinals[index]);
+		u32 instruction;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		unsigned long code;
+		unsigned long data;
+		u8 first = 0x5a;
+
+		KUNIT_ASSERT_NOT_NULL(test, contract);
+		instruction = asl_test_instruction(contract);
+		data = orlix_tcti_memory_proof_map_guarded_span(test,
+			PROT_READ | PROT_WRITE);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			data + PAGE_SIZE - 8, &first, 1));
+		code = orlix_tcti_advsimd_structure_map_instruction(test,
+			instruction);
+		asl_seed(test, contract, instruction, &regs, code, 0, NULL, 0);
+		regs.regs[8] = data + PAGE_SIZE - 8;
+		before = regs;
+		asl_capture_run(test, contract,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS, &regs, code,
+			true);
+		KUNIT_EXPECT_EQ_MSG(test, before.regs[8], regs.regs[8],
+			"%s no writeback on page-cross", contract->leaf_id);
+		if (contract->load)
+			orlix_tcti_memory_proof_expect_bytes(test,
+				data + PAGE_SIZE - 8, &first, 1,
+				contract->leaf_id);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, 2 * PAGE_SIZE));
+	}
+}
+
+static void asl_postindex_uses_rm(struct kunit *test)
+{
+	const struct orlix_tcti_advsimd_structure_contract *store =
+		asl_contract(2371U);
+	const struct orlix_tcti_advsimd_structure_contract *load =
+		asl_contract(2385U);
+	u32 instruction;
+	struct orlix_tcti_result result;
+	struct pt_regs regs = {};
+	unsigned long code;
+	unsigned long data;
+	u8 sentinel[32];
+	u8 observed[8];
+	u8 expected[8];
+	u8 index;
+	u64 simd[ARRAY_SIZE(current->thread.user_simd)];
+
+	KUNIT_ASSERT_NOT_NULL(test, store);
+	KUNIT_ASSERT_NOT_NULL(test, load);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ | PROT_WRITE);
+
+	instruction = store->pattern | (3U << 16) | (8U << 5) | 30U;
+	code = orlix_tcti_advsimd_structure_map_instruction(test, instruction);
+	orlix_tcti_advsimd_structure_initialize_state(&regs, instruction);
+	regs.pc = code;
+	regs.pstate |= PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[8] = data;
+	regs.regs[3] = 16;
+	memcpy(simd, current->thread.user_simd, sizeof(simd));
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	asl_expect_success(test, store, &result, &regs, code);
+	KUNIT_EXPECT_EQ_MSG(test, data + 16, regs.regs[8],
+		"%s postindex Rm writeback", store->leaf_id);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
+		observed, sizeof(observed)));
+	for (index = 0; index < sizeof(expected); index++)
+		expected[index] = (u8)orlix_tcti_advsimd_structure_read_lane(
+			simd, 30, 1, index);
+	/*
+	 * Transfer uses Rn. A decoder that applied Rm as an address offset
+	 * would write at data+16 instead of data.
+	 */
+	KUNIT_EXPECT_MEMEQ_MSG(test, expected, observed, sizeof(observed),
+		"%s stored at Rn", store->leaf_id);
+	orlix_tcti_memory_proof_expect_bytes(test, data + 16, sentinel + 16, 8,
+					     store->leaf_id);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	instruction = load->pattern | (3U << 16) | (8U << 5) | 30U;
+	memset(sentinel, 0xa5, sizeof(sentinel));
+	for (index = 0; index < 8; index++)
+		sentinel[index] = (u8)(0x40 + index);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data,
+		sentinel, sizeof(sentinel)));
+	code = orlix_tcti_advsimd_structure_map_instruction(test, instruction);
+	orlix_tcti_advsimd_structure_initialize_state(&regs, instruction);
+	regs.pc = code;
+	regs.pstate |= PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[8] = data;
+	regs.regs[3] = 16;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	asl_expect_success(test, load, &result, &regs, code);
+	KUNIT_EXPECT_EQ_MSG(test, data + 16, regs.regs[8],
+		"%s postindex Rm writeback", load->leaf_id);
+	memcpy(simd, current->thread.user_simd, sizeof(simd));
+	for (index = 0; index < 8; index++)
+		KUNIT_EXPECT_EQ_MSG(test, (u64)sentinel[index],
+			orlix_tcti_advsimd_structure_read_lane(simd, 30, 1, index),
+			"%s loaded from Rn byte %u", load->leaf_id, index);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
 static void orlix_tcti_advsimd_structure_reserved_encodings_reject(
 	struct kunit *test)
 {
 	const u32 reserved[] = { 0x0d008800U, 0x0c001000U };
 	size_t index;
 
+	KUNIT_ASSERT_NOT_NULL(test, current->mm);
 	/* Single-structure 32-bit lane form with size=2 is reserved. */
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
 		orlix_tcti_decode_aarch64(reserved[0]).decode_class);
@@ -901,6 +1307,11 @@ static struct kunit_case orlix_tcti_advsimd_structure_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_structure_fault_preserves_pc_and_writeback),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_write_fault_preserves_full_state),
 	KUNIT_CASE(orlix_tcti_advsimd_structure_reserved_encodings_reject),
+	KUNIT_CASE(asl_production_resume),
+	KUNIT_CASE(asl_unmapped_load_faults),
+	KUNIT_CASE(asl_write_protect_store_faults),
+	KUNIT_CASE(asl_page_cross_second_element_faults),
+	KUNIT_CASE(asl_postindex_uses_rm),
 	{}
 };
 

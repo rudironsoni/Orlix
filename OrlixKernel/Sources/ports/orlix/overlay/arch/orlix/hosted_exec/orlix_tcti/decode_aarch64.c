@@ -1520,7 +1520,13 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		bool post_index = instruction & BIT(23);
 		bool replicate;
 
-		if (!post_index && rm)
+		/*
+		 * STL1/LDAP1 (FEAT_LRCPC3) are asisdlso D-size forms with
+		 * Rm encoded as 00001. Other nonzero Rm values stay reserved.
+		 */
+		if (!post_index && rm &&
+		    !(rm == 1 && opcode == 4 && size == 1 &&
+		      !(instruction & BIT(12))))
 			return decoded;
 
 		decoded.rd = instruction & 0x1fU;
