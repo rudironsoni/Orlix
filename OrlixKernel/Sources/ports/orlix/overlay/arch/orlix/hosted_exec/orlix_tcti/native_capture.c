@@ -985,6 +985,7 @@ static u64 native_capture_memory_address(
 {
 	u64 base;
 
+	/* Load-literal has no Rn. The access address is PC-relative. */
 	if (decoded->decode_class == ORLIX_TCTI_DECODE_LOAD_LITERAL)
 		return regs->pc + decoded->memory_offset;
 	base = decoded->rn == 31U ? regs->sp : regs->regs[decoded->rn];
@@ -1093,9 +1094,17 @@ static void native_capture_before_decoded(struct orlix_tcti_native_capture *capt
 	session->memory_bytes = kmalloc(length, GFP_KERNEL);
 	if (!session->memory_bytes)
 		goto fail;
+	/*
+	 * An unmapped or unreadable before-image is not producer corruption.
+	 * FAULTS observations record the fault. They do not need a snapshot.
+	 */
 	if (orlix_tcti_read_user_data(mm, session->memory_address,
-				       session->memory_bytes, length))
-		goto fail;
+				       session->memory_bytes, length)) {
+		kfree(session->memory_bytes);
+		session->memory_bytes = NULL;
+		session->memory_length = 0;
+		return;
+	}
 	session->memory_length = length;
 	return;
 fail:
@@ -1209,9 +1218,30 @@ void orlix_tcti_native_capture_complete_successful_gadget(
 		return;
 	session = container_of(capture, struct orlix_tcti_native_capture_session,
 		capture);
+	/* A successful gadget is not a FAULTS observation. */
 	if (session->claimed_by_resume && !session->failed &&
+	    session->entry &&
+	    session->entry->obligation !=
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS &&
 	    !session->origin.creditable)
 		session->origin.creditable = true;
+}
+
+void orlix_tcti_native_capture_complete_fault_observation(
+	struct orlix_tcti_native_capture *capture, const void *evidence)
+{
+	struct orlix_tcti_native_capture_session *session;
+
+	if (!capture || !orlix_tcti_native_capture_engine_evidence_valid(evidence))
+		return;
+	session = container_of(capture, struct orlix_tcti_native_capture_session,
+		capture);
+	if (!session->claimed_by_resume || session->failed ||
+	    !session->fault_seen || !session->entry ||
+	    session->entry->obligation !=
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS)
+		return;
+	session->origin.creditable = true;
 }
 
 static void native_capture_finalize(struct orlix_tcti_native_capture *capture,

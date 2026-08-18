@@ -6,7 +6,8 @@
 #include "target_proof_registry.h"
 
 static inline const void *
-orlix_tcti_base_load_store_production_capture_token(u32 source_ordinal)
+orlix_tcti_base_load_store_production_capture_token(u32 source_ordinal,
+						    u32 obligation)
 {
 	const struct orlix_tcti_target_production_capture_binding *bindings;
 	size_t count;
@@ -17,8 +18,7 @@ orlix_tcti_base_load_store_production_capture_token(u32 source_ordinal)
 		return NULL;
 	for (index = 0; index < count; index++)
 		if (bindings[index].source_ordinal == source_ordinal &&
-		    bindings[index].obligation ==
-			    ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS)
+		    bindings[index].obligation == obligation)
 			return orlix_tcti_native_proof_registry_capture_token_internal(
 				index);
 	return NULL;

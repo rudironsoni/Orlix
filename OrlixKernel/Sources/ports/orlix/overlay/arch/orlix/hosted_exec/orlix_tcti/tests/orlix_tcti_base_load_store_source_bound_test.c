@@ -292,26 +292,6 @@ static void bls_expect_success(struct kunit *test, const struct bls_source_leaf 
 			      (unsigned long long)regs->pc);
 }
 
-static u64 bls_expected_loaded(const struct orlix_tcti_decoded_instruction *decoded,
-			       u64 stored)
-{
-	if (decoded->result_size == sizeof(u32) && !decoded->sign_extend_load)
-		return (u32)stored;
-	if (decoded->sign_extend_load && decoded->access_size == sizeof(u32))
-		return (s64)(s32)stored;
-	if (decoded->sign_extend_load && decoded->access_size == 1)
-		return (s64)(s8)stored;
-	if (decoded->sign_extend_load && decoded->access_size == 2)
-		return (s64)(s16)stored;
-	if (decoded->access_size == sizeof(u32) && !decoded->sign_extend_load)
-		return (u32)stored;
-	if (decoded->access_size == 1 && !decoded->sign_extend_load)
-		return (u8)stored;
-	if (decoded->access_size == 2 && !decoded->sign_extend_load)
-		return (u16)stored;
-	return stored;
-}
-
 static unsigned long bls_effective_address(
 	const struct orlix_tcti_decoded_instruction *decoded,
 	const struct pt_regs *before)
@@ -325,15 +305,98 @@ static unsigned long bls_effective_address(
 	return before->regs[1] + decoded->memory_offset;
 }
 
+static void bls_seed_guest(struct kunit *test, const struct bls_source_leaf *leaf,
+			   const struct orlix_tcti_decoded_instruction *decoded,
+			   struct pt_regs *regs, unsigned long code,
+			   unsigned long data, const u64 *stored,
+			   const u8 *sentinel, size_t access)
+{
+	unsigned long address;
+	int ret;
+
+	memset(regs, 0, sizeof(*regs));
+	regs->pc = code;
+	regs->pstate = PSR_MODE_EL0t;
+	regs->syscallno = NO_SYSCALL;
+	regs->regs[0] = stored[0];
+	regs->regs[1] = data ? data + 16 : 0;
+	regs->regs[2] = stored[2];
+	regs->regs[3] = 0;
+	current->thread.user_simd_valid = 1;
+	current->thread.user_simd[0] = stored[0];
+	current->thread.user_simd[1] = stored[1];
+	current->thread.user_simd[4] = stored[2];
+	current->thread.user_simd[5] = stored[3];
+	if (data && sentinel)
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			data, sentinel, 256));
+	if (bls_is_load(leaf) && !bls_is_prefetch(leaf) && data) {
+		address = decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST ?
+			regs->regs[1] : regs->regs[1] + decoded->memory_offset;
+		if (decoded->decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET)
+			address = regs->regs[1] + regs->regs[3];
+		ret = orlix_tcti_write_user_data(current->mm, address, stored,
+						 access);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		if (bls_is_pair(leaf))
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(
+				current->mm, address + access, stored + 2, access));
+		if (decoded->simd_fp && access > 8)
+			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(
+				current->mm, address + 8, stored + 1, 8));
+	}
+}
+
+static void bls_capture_run(struct kunit *test, const struct bls_source_leaf *leaf,
+			    u32 obligation, struct pt_regs *regs,
+			    unsigned long code, bool expect_fault)
+{
+	const void *token;
+	struct orlix_tcti_native_capture_session *capture = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_result result;
+	int ret;
+
+	token = orlix_tcti_base_load_store_production_capture_token(leaf->ordinal,
+								   obligation);
+	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s token %u", leaf->name,
+			      obligation);
+	if (!token)
+		return;
+	ret = orlix_tcti_native_capture_begin(token, leaf->ordinal, obligation,
+					      &capture);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", leaf->name, obligation);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	if (expect_fault)
+		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
+							  regs->pc, leaf->name);
+	else
+		bls_expect_success(test, leaf, &result, regs, code);
+	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", leaf->name, obligation);
+	if (!ret) {
+		ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+		KUNIT_ASSERT_NOT_NULL(test, ledger);
+		KUNIT_EXPECT_EQ_MSG(test, 0,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			"%s ingest %u", leaf->name, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		KUNIT_EXPECT_LT_MSG(test,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			0, "%s replay %u", leaf->name, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	}
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(capture);
+}
+
 static void bls_visit_production(struct kunit *test, const struct bls_source_leaf *leaf)
 {
 	u32 instruction = bls_test_instruction(leaf);
 	struct orlix_tcti_decoded_instruction decoded =
 		orlix_tcti_decode_aarch64(instruction);
-	struct orlix_tcti_native_capture_session *capture = NULL;
-	struct orlix_tcti_native_wire_record wire = {};
-	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
-	struct orlix_tcti_result result;
 	struct pt_regs regs = {};
 	struct pt_regs before;
 	unsigned long code;
@@ -344,9 +407,7 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 		0x212223247ffffffeULL, 0x3132333435363738ULL,
 	};
 	u8 sentinel[256];
-	const void *token;
 	size_t access;
-	int ret;
 
 	KUNIT_ASSERT_TRUE_MSG(test, bls_decode_is_memory(decoded.decode_class),
 		"%s ordinal %u class %u", leaf->name, leaf->ordinal,
@@ -364,44 +425,11 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 		code = bls_map_program_bytes(test, instruction, stored, access);
 	else
 		code = bls_map_program(test, instruction);
-	memset(&regs, 0, sizeof(regs));
-	regs.pc = code;
-	regs.pstate = PSR_MODE_EL0t;
-	regs.syscallno = NO_SYSCALL;
-	regs.regs[0] = stored[0];
-	regs.regs[1] = data ? data + 16 : 0;
-	regs.regs[2] = stored[2];
-	regs.regs[3] = 0;
-	current->thread.user_simd_valid = 1;
-	current->thread.user_simd[0] = stored[0];
-	current->thread.user_simd[1] = stored[1];
-	current->thread.user_simd[4] = stored[2];
-	current->thread.user_simd[5] = stored[3];
-	if (bls_is_load(leaf) && !bls_is_prefetch(leaf) && data) {
-		address = decoded.memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_POST ?
-			regs.regs[1] : regs.regs[1] + decoded.memory_offset;
-		if (decoded.decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET)
-			address = regs.regs[1] + regs.regs[3];
-		ret = orlix_tcti_write_user_data(current->mm, address, stored,
-						 access);
-		KUNIT_ASSERT_EQ(test, 0, ret);
-		if (bls_is_pair(leaf))
-			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(
-				current->mm, address + access, stored + 2, access));
-		if (decoded.simd_fp && access > 8)
-			KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(
-				current->mm, address + 8, stored + 1, 8));
-	}
+	bls_seed_guest(test, leaf, &decoded, &regs, code, data, stored, sentinel,
+		       access);
 	before = regs;
-	token = orlix_tcti_base_load_store_production_capture_token(leaf->ordinal);
-	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s capture token", leaf->name);
-	if (token) {
-		ret = orlix_tcti_native_capture_begin(token, leaf->ordinal,
-			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &capture);
-		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin", leaf->name);
-	}
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	bls_expect_success(test, leaf, &result, &regs, code);
+	bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+			&regs, code, false);
 	address = bls_effective_address(&decoded, &before);
 
 	if (bls_is_prefetch(leaf)) {
@@ -418,13 +446,14 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 				orlix_tcti_memory_proof_expect_simd_dest(test, 2,
 					access, stored[2], stored[3], leaf->name);
 		} else {
-			KUNIT_EXPECT_EQ_MSG(test,
-				bls_expected_loaded(&decoded, stored[0]),
-				regs.regs[0], "%s dest", leaf->name);
+			orlix_tcti_memory_proof_expect_gpr_dest(test, regs.regs[0],
+				stored[0], decoded.access_size, decoded.result_size,
+				decoded.sign_extend_load, leaf->name);
 			if (bls_is_pair(leaf))
-				KUNIT_EXPECT_EQ_MSG(test,
-					bls_expected_loaded(&decoded, stored[2]),
-					regs.regs[2], "%s dest2", leaf->name);
+				orlix_tcti_memory_proof_expect_gpr_dest(test,
+					regs.regs[2], stored[2], decoded.access_size,
+					decoded.result_size, decoded.sign_extend_load,
+					leaf->name);
 		}
 	} else if (data) {
 		u64 first = stored[0];
@@ -483,25 +512,14 @@ static void bls_visit_production(struct kunit *test, const struct bls_source_lea
 			decoded.memory_index_mode, before.regs[1],
 			decoded.memory_offset, regs.regs[1], leaf->name);
 
-	if (capture && result.reason == ORLIX_TCTI_EXIT_SYSCALL) {
-		ret = orlix_tcti_native_capture_take_wire(capture, &wire);
-		KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire", leaf->name);
-		if (!ret) {
-			ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
-			KUNIT_ASSERT_NOT_NULL(test, ledger);
-			KUNIT_EXPECT_EQ_MSG(test, 0,
-				orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-				"%s ingest", leaf->name);
-			KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-			KUNIT_EXPECT_LT_MSG(test,
-				orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-				0, "%s replay", leaf->name);
-			KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-			orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
-		}
-	}
-	orlix_tcti_native_wire_record_destroy(&wire);
-	orlix_tcti_native_capture_destroy(capture);
+	bls_seed_guest(test, leaf, &decoded, &regs, code, data, stored, sentinel,
+		       access);
+	bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY,
+			&regs, code, false);
+	bls_seed_guest(test, leaf, &decoded, &regs, code, data, stored, sentinel,
+		       access);
+	bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+			&regs, code, false);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 	if (data)
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
@@ -617,15 +635,15 @@ static void bls_visit_unmapped_fault(struct kunit *test,
 		regs.pc = code;
 	}
 	before = regs;
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	if (bls_is_prefetch(leaf)) {
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
 				    "%s prefetch no-fault", leaf->name);
 		KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
 		KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
 	} else {
-		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
-							  regs.pc, leaf->name);
+		bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS,
+				&regs, code, true);
 		KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
 		if (!bls_is_loadlit(leaf) &&
 		    decoded.decode_class != ORLIX_TCTI_DECODE_HINT)
@@ -646,7 +664,6 @@ static void bls_write_protect_store_faults(struct kunit *test)
 {
 	const struct bls_source_leaf *leaf = bls_source_leaf(3351U);
 	u32 instruction;
-	struct orlix_tcti_result result;
 	struct pt_regs regs = {};
 	struct pt_regs before;
 	unsigned long code;
@@ -666,9 +683,8 @@ static void bls_write_protect_store_faults(struct kunit *test)
 	regs.regs[0] = stored;
 	regs.regs[1] = data + 16;
 	before = regs;
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	orlix_tcti_memory_proof_expect_user_fault(test, &result, code, regs.pc,
-						  leaf->name);
+	bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS,
+			&regs, code, true);
 	KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
 	KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
 	orlix_tcti_memory_proof_expect_bytes(test, data, sentinel, sizeof(sentinel),
@@ -687,7 +703,6 @@ static void bls_pair_second_element_faults(struct kunit *test)
 			bls_source_leaf(pair_ordinals[index]);
 		u32 instruction;
 		struct orlix_tcti_decoded_instruction decoded;
-		struct orlix_tcti_result result;
 		struct pt_regs regs = {};
 		struct pt_regs before;
 		unsigned long code;
@@ -710,9 +725,8 @@ static void bls_pair_second_element_faults(struct kunit *test)
 		regs.regs[1] = data + PAGE_SIZE - 16;
 		regs.regs[2] = 0x2222222222222222ULL;
 		before = regs;
-		result = orlix_tcti_resume_user(current, &regs, current->mm);
-		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
-							  regs.pc, leaf->name);
+		bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS,
+				&regs, code, true);
 		KUNIT_EXPECT_EQ_MSG(test, before.regs[0], regs.regs[0],
 				    "%s dest unchanged", leaf->name);
 		KUNIT_EXPECT_EQ_MSG(test, before.regs[2], regs.regs[2],
@@ -732,6 +746,201 @@ static void bls_pair_second_element_faults(struct kunit *test)
 	}
 }
 
+static void bls_prefetch_is_not_a_fault(struct kunit *test)
+{
+	const struct bls_source_leaf *leaf = bls_source_leaf(3353U);
+	u32 instruction;
+	struct orlix_tcti_result result;
+	struct pt_regs regs = {};
+	struct pt_regs before;
+	unsigned long code;
+	unsigned long data;
+	u8 sentinel[32];
+
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	instruction = bls_test_instruction(leaf);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ | PROT_WRITE);
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = 0x1111;
+	regs.regs[1] = data + 16;
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, leaf, &result, &regs, code);
+	KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
+	orlix_tcti_memory_proof_expect_bytes(test, data, sentinel, sizeof(sentinel),
+					     leaf->name);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+
+	code = bls_map_program(test, instruction);
+	regs = before;
+	regs.pc = code;
+	regs.regs[1] = 0x0000000200000000ULL;
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, leaf, &result, &regs, code);
+	KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+}
+
+static void bls_page_cross_single_faults(struct kunit *test)
+{
+	static const u32 ordinals[] = { 3351U, 3352U };
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(ordinals); index++) {
+		const struct bls_source_leaf *leaf = bls_source_leaf(ordinals[index]);
+		u32 instruction;
+		struct pt_regs regs = {};
+		struct pt_regs before;
+		unsigned long code;
+		unsigned long data;
+		u8 sentinel = 0x5a;
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		instruction = (leaf->pattern & leaf->mask) | (1U << 5);
+		data = orlix_tcti_memory_proof_map_guarded_span(test,
+							       PROT_READ | PROT_WRITE);
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			data + PAGE_SIZE - 8, &sentinel, 1));
+		code = bls_map_program(test, instruction);
+		regs.pc = code;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[0] = 0x0102030480000001ULL;
+		regs.regs[1] = data + PAGE_SIZE - 4;
+		before = regs;
+		bls_capture_run(test, leaf, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS,
+				&regs, code, true);
+		KUNIT_EXPECT_EQ(test, before.regs[0], regs.regs[0]);
+		KUNIT_EXPECT_EQ(test, before.regs[1], regs.regs[1]);
+		orlix_tcti_memory_proof_expect_bytes(test, data + PAGE_SIZE - 8,
+						     &sentinel, 1, leaf->name);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, 2 * PAGE_SIZE));
+	}
+}
+
+static void bls_regoff_uses_rm(struct kunit *test)
+{
+	const struct bls_source_leaf *store = bls_source_leaf(3322U);
+	const struct bls_source_leaf *load = bls_source_leaf(3323U);
+	u32 instruction;
+	struct orlix_tcti_result result;
+	struct pt_regs regs = {};
+	unsigned long code;
+	unsigned long data;
+	u64 stored = 0x0102030480000001ULL;
+	u64 wrong = 0xaaaaaaaaaaaaaaaaULL;
+	u8 sentinel[32];
+
+	KUNIT_ASSERT_NOT_NULL(test, store);
+	KUNIT_ASSERT_NOT_NULL(test, load);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ | PROT_WRITE);
+	instruction = bls_test_instruction(store);
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = stored;
+	regs.regs[1] = data;
+	regs.regs[3] = 16;
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data,
+							    &wrong, sizeof(wrong)));
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, store, &result, &regs, code);
+	orlix_tcti_memory_proof_expect_bytes(test, data + 16, &stored, 8, store->name);
+	orlix_tcti_memory_proof_expect_bytes(test, data, &wrong, 8, store->name);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	instruction = bls_test_instruction(load);
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = 0;
+	regs.regs[1] = data;
+	regs.regs[3] = 16;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, load, &result, &regs, code);
+	orlix_tcti_memory_proof_expect_gpr_dest(test, regs.regs[0], stored, 8, 8,
+						false, load->name);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
+static void bls_xzr_and_sp_base(struct kunit *test)
+{
+	const struct bls_source_leaf *store = bls_source_leaf(3351U);
+	const struct bls_source_leaf *load = bls_source_leaf(3352U);
+	u32 instruction;
+	struct orlix_tcti_result result;
+	struct pt_regs regs = {};
+	unsigned long code;
+	unsigned long data;
+	u64 stored = 0x0102030480000001ULL;
+	u64 zeros = 0;
+	u8 sentinel[32];
+
+	KUNIT_ASSERT_NOT_NULL(test, store);
+	KUNIT_ASSERT_NOT_NULL(test, load);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	data = orlix_tcti_memory_proof_map_bytes(test, sentinel, sizeof(sentinel),
+						 PROT_READ | PROT_WRITE);
+
+	instruction = (store->pattern & store->mask) | (1U << 5) | 31U | (1U << 10);
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = stored;
+	regs.regs[1] = data;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, store, &result, &regs, code);
+	orlix_tcti_memory_proof_expect_bytes(test, data + 8, &zeros, 8, store->name);
+	KUNIT_EXPECT_EQ(test, stored, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	instruction = (load->pattern & load->mask) | (1U << 5) | 31U | (1U << 10);
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data + 8,
+							    &stored, sizeof(stored)));
+	code = bls_map_program(test, instruction);
+	regs.pc = code;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = 0x2222;
+	regs.regs[1] = data;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, load, &result, &regs, code);
+	KUNIT_EXPECT_EQ(test, 0x2222ULL, regs.regs[0]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	instruction = (store->pattern & store->mask) | (31U << 5) | (1U << 10);
+	code = bls_map_program(test, instruction);
+	memset(sentinel, 0x5a, sizeof(sentinel));
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data,
+							    sentinel, sizeof(sentinel)));
+	regs.pc = code;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[0] = stored;
+	regs.sp = data;
+	regs.regs[1] = 0xdead;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	bls_expect_success(test, store, &result, &regs, code);
+	orlix_tcti_memory_proof_expect_bytes(test, data + 8, &stored, 8, store->name);
+	KUNIT_EXPECT_EQ(test, 0xdeadULL, regs.regs[1]);
+	KUNIT_EXPECT_EQ(test, data, regs.sp);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
 static struct kunit_case bls_cases[] = {
 	KUNIT_CASE(bls_source_decode),
 	KUNIT_CASE(bls_reserved_is_rejected),
@@ -739,6 +948,10 @@ static struct kunit_case bls_cases[] = {
 	KUNIT_CASE(bls_unmapped_load_faults),
 	KUNIT_CASE(bls_write_protect_store_faults),
 	KUNIT_CASE(bls_pair_second_element_faults),
+	KUNIT_CASE(bls_prefetch_is_not_a_fault),
+	KUNIT_CASE(bls_page_cross_single_faults),
+	KUNIT_CASE(bls_regoff_uses_rm),
+	KUNIT_CASE(bls_xzr_and_sp_base),
 	{}
 };
 

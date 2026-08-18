@@ -91,9 +91,11 @@ static inline void orlix_tcti_native_capture_finalize(
 struct orlix_tcti_native_capture *orlix_tcti_native_capture_claim_resume(
 	struct task_struct *task);
 
-/* Only engine.c can present its private successful-gadget evidence. */
+/* Only engine.c can present its private execution-boundary evidence. */
 bool orlix_tcti_native_capture_engine_evidence_valid(const void *evidence);
 void orlix_tcti_native_capture_complete_successful_gadget(
+	struct orlix_tcti_native_capture *capture, const void *evidence);
+void orlix_tcti_native_capture_complete_fault_observation(
 	struct orlix_tcti_native_capture *capture, const void *evidence);
 
 #endif /* ORLIX_TCTI_NATIVE_CAPTURE_H */

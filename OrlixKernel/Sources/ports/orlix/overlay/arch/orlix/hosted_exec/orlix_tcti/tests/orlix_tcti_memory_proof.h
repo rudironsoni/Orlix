@@ -65,6 +65,37 @@ static inline void orlix_tcti_memory_proof_expect_bytes(struct kunit *test,
 	KUNIT_EXPECT_MEMEQ_MSG(test, expected, actual, length, "%s", name);
 }
 
+static inline u64 orlix_tcti_memory_proof_gpr_loaded(u64 stored, u8 access_size,
+						     u8 result_size,
+						     bool sign_extend)
+{
+	if (result_size == sizeof(u32) && !sign_extend)
+		return (u32)stored;
+	if (sign_extend && access_size == sizeof(u32))
+		return (s64)(s32)stored;
+	if (sign_extend && access_size == 1)
+		return (s64)(s8)stored;
+	if (sign_extend && access_size == 2)
+		return (s64)(s16)stored;
+	if (access_size == sizeof(u32) && !sign_extend)
+		return (u32)stored;
+	if (access_size == 1 && !sign_extend)
+		return (u8)stored;
+	if (access_size == 2 && !sign_extend)
+		return (u16)stored;
+	return stored;
+}
+
+static inline void orlix_tcti_memory_proof_expect_gpr_dest(struct kunit *test,
+	u64 actual, u64 stored, u8 access_size, u8 result_size, bool sign_extend,
+	const char *name)
+{
+	KUNIT_EXPECT_EQ_MSG(test,
+		orlix_tcti_memory_proof_gpr_loaded(stored, access_size,
+						   result_size, sign_extend),
+		actual, "%s dest", name);
+}
+
 static inline u64 orlix_tcti_memory_proof_simd_loaded(u64 stored, u8 access_size)
 {
 	if (access_size == sizeof(u8))
