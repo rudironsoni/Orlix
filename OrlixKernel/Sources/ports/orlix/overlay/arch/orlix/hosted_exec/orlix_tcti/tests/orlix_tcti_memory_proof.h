@@ -35,6 +35,24 @@ static inline unsigned long orlix_tcti_memory_proof_map_bytes(struct kunit *test
 	return mapped;
 }
 
+static inline unsigned long orlix_tcti_memory_proof_map_guarded_span(
+	struct kunit *test, int first_prot)
+{
+	unsigned long mapped;
+	int ret;
+
+	mapped = ksys_mmap_pgoff(0, 2 * PAGE_SIZE, PROT_READ | PROT_WRITE,
+				 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	KUNIT_ASSERT_FALSE(test, IS_ERR_VALUE(mapped));
+	if (first_prot != (PROT_READ | PROT_WRITE)) {
+		ret = sys_mprotect(mapped, PAGE_SIZE, first_prot);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+	}
+	ret = sys_mprotect(mapped + PAGE_SIZE, PAGE_SIZE, PROT_NONE);
+	KUNIT_ASSERT_EQ(test, 0, ret);
+	return mapped;
+}
+
 static inline void orlix_tcti_memory_proof_expect_bytes(struct kunit *test,
 	unsigned long address, const void *expected, size_t length,
 	const char *name)

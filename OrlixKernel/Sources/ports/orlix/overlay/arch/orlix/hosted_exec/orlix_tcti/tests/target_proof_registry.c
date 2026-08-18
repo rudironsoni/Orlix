@@ -778,10 +778,10 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  ORLIX_TCTI_DECODE_SOURCE_SHA256,
 	  "orlix_tcti_decode_test.o", NULL, NULL, NULL },
 	{ BASE_LOAD_STORE_SOURCE,
-	  "d7b21c9686d6ae94ad263710b754a150d9e4ba459d03780daddb76bcd6cb44f4",
+	  "8b5a4d3861140e9b755befaae20ad8953d6ca7b08d555374f4a6de8ece588412",
 	  "orlix_tcti_base_load_store_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
-	  "21050995cb3665042c46a2dbb46046933826b1077ec9e77b0cce80f96e788f32",
+	  "d9adedc579b6900f066482e6df75a98c3a77704371f795af3b534797306518ef",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ SCALAR_FP_SOURCE,
 	  "8c245ce10f189b2f7a3fef91c9fc478b3e4e1cd2af69a98ec2b930229b75c993",
@@ -1175,6 +1175,12 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "bls_write_protect_store_faults",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ BASE_LOAD_STORE_SOURCE, BASE_LOAD_STORE_SUITE,
+	  BASE_LOAD_STORE_SUITE_SYMBOL, BASE_LOAD_STORE_CASE_ARRAY,
+	  "bls_pair_second_element_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
 	{ SCALAR_FP_SOURCE, SCALAR_FP_SUITE, SCALAR_FP_SUITE_SYMBOL,
 	  SCALAR_FP_CASE_ARRAY, "orlix_tcti_scalar_fp_convert_resume_source_rows",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
