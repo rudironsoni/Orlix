@@ -9,7 +9,7 @@ updated: 2026-08-20
 
 ## [2026-08-20] record | Land the BASE_ATOMICS proof contract
 
-Recorded that the 498 unique `BASE_ATOMICS` leaves have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, and `PC` on success, plus `FAULTS` on the unmapped walk. Exclusive-monitor mismatch and CASP whole-pair extras stay on the same suite. Product `FEAT_THE` with `FEAT_D128` disabled keeps pair RCW UNDEFINED at EL0. `linux_proof_executed` stays 0. `HWCAP_ATOMICS` is not advertised. The 4,350-leaf coverage task stays doing.
+Recorded that the 498 unique `BASE_ATOMICS` leaves have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, and `PC` on success, plus `ATOMICITY` and `ORDERING` where the leaf requires them, and `FAULTS` on the unmapped walk. Exclusive-monitor mismatch, CAS/RMW old-value, and CASP whole-pair extras (including 32-bit pair packing) stay on the same suite. Product `FEAT_THE` with `FEAT_D128` disabled keeps pair RCW UNDEFINED at EL0. `linux_proof_executed` stays 0. `HWCAP_ATOMICS` is not advertised. The 4,350-leaf coverage task stays doing.
 
 ## [2026-08-18] record | Land the ADVSIMD_LOAD_STORE proof contract
 
