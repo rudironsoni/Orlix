@@ -829,6 +829,30 @@ static int orlix_tcti_execute_add_sub_with_carry(struct pt_regs *regs,
 	return 0;
 }
 
+static u64 orlix_tcti_pointer_add(u64 base, u64 addend, bool subtract)
+{
+	u64 tag = base >> 56;
+	u64 addr = base & (BIT_ULL(56) - 1U);
+	u64 offset = addend & (BIT_ULL(56) - 1U);
+	u64 result_addr = subtract ? addr - offset : addr + offset;
+
+	return (tag << 56) | (result_addr & (BIT_ULL(56) - 1U));
+}
+
+static int orlix_tcti_execute_add_sub_pointer(struct pt_regs *regs,
+					const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u64 left = orlix_tcti_read_gpr_or_sp(regs, decoded->rn, sizeof(u64));
+	u64 right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
+	u64 result;
+
+	right <<= decoded->shift_amount;
+	result = orlix_tcti_pointer_add(left, right, decoded->subtract);
+	orlix_tcti_write_gpr_or_sp(regs, decoded->rd, sizeof(u64), result);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static int orlix_tcti_execute_logical_shifted_register(struct pt_regs *regs,
 						 const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -8100,6 +8124,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 		return orlix_tcti_execute_add_sub_extended_register(regs, decoded);
 	case ORLIX_TCTI_DECODE_ADD_SUB_WITH_CARRY:
 		return orlix_tcti_execute_add_sub_with_carry(regs, decoded);
+	case ORLIX_TCTI_DECODE_ADD_SUB_POINTER:
+		return orlix_tcti_execute_add_sub_pointer(regs, decoded);
 	case ORLIX_TCTI_DECODE_UNCONDITIONAL_BRANCH_IMMEDIATE:
 		if (decoded->link)
 			regs->regs[30] = regs->pc + sizeof(u32);

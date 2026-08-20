@@ -521,6 +521,17 @@ proof_registry_projection[] = {
 #define ADD_SUB_REGISTER_SUITE_SYMBOL \
 	"orlix_tcti_add_sub_register_source_bound_test_suite"
 #define ADD_SUB_REGISTER_CASE_ARRAY "asr_cases"
+#define BASE_ADD_SUB_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_add_sub_source_bound_test.c"
+#define BASE_ADD_SUB_SUITE "orlix-tcti-base-add-sub-source-bound"
+#define BASE_ADD_SUB_SUITE_SYMBOL \
+	"orlix_tcti_base_add_sub_source_bound_suite"
+#define BASE_ADD_SUB_CASE_ARRAY \
+	"orlix_tcti_base_add_sub_source_bound_cases"
+#define BASE_ADD_SUB_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_add_sub_production_capture.h\""
+#define ADD_SUB_PT_CONDITION \
+	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define SCALAR_FP_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_fp_semantics_test.c"
 #define SCALAR_FP_SUITE "orlix-tcti-scalar-fp-semantics"
@@ -783,6 +794,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADD_SUB_REGISTER_SOURCE,
 	  "f3648d0527379a31f76804762f730f33209c06658eb657b3c662ae14f00cc55e",
 	  "orlix_tcti_add_sub_register_source_bound_test.o", NULL, NULL, NULL },
+	{ BASE_ADD_SUB_SOURCE,
+	  "1740d6e16cf305d3e36bd8767df187c25ce381ea79638042fc8ed5a6bc138739",
+	  "orlix_tcti_base_add_sub_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  "02957dd1bc834975fba91fdf41170b319d373d17084255b6629d9659da27d18c",
 	  "orlix_tcti_source_leaf_classification_test.o",
@@ -1230,6 +1247,46 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY, "orlix_tcti_base_add_sub_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY, "orlix_tcti_base_add_sub_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_sp_zr_and_w_upper_zero",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_extend_shift_and_carry",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_simd_state_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, BASE_ADD_SUB_SUITE_SYMBOL,
+	  BASE_ADD_SUB_CASE_ARRAY,
+	  "orlix_tcti_base_add_sub_pointer_preserves_tag",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -1622,24 +1679,10 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 static const struct operation_requirements operation_requirements[] = {
 	{ "RMIF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
 	{ "SETF", INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS },
-	{ "ADD_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "ADDS_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
-	{ "SUB_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
-	{ "SUBS_addsub_imm", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
-		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "ADD_addsub_imm", SCALAR_FLAGS_OBLIGATIONS },
+	{ "ADDS_addsub_imm", SCALAR_FLAGS_OBLIGATIONS },
+	{ "SUB_addsub_imm", SCALAR_FLAGS_OBLIGATIONS },
+	{ "SUBS_addsub_imm", SCALAR_FLAGS_OBLIGATIONS },
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) \
 	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 #include "target_production_capture_family.def"
@@ -1732,18 +1775,20 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("LSRV", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ASRV", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("RORV", SCALAR_BASE_OBLIGATIONS),
-	SCALAR_REQUIREMENT("ADD_addsub_shift", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADD_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADDS_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SUB_addsub_shift", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUB_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SUBS_addsub_shift", SCALAR_FLAGS_OBLIGATIONS),
-	SCALAR_REQUIREMENT("ADD_addsub_ext", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADD_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADDS_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SUB_addsub_ext", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUB_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SUBS_addsub_ext", SCALAR_FLAGS_OBLIGATIONS),
-	SCALAR_REQUIREMENT("ADC", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADC", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADCS", SCALAR_FLAGS_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SBC", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SBC", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SBCS", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDPT", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUBPT", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
@@ -2277,13 +2322,15 @@ static const struct orlix_tcti_target_proof_case cssc_data_processing_cases[] = 
 #define ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS \
 	(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
-	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
-#define ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS \
-	(ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
+#define ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS \
+	ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS
 
-static const struct orlix_tcti_target_proof_case add_sub_immediate_base_cases[] = {
+static const struct orlix_tcti_target_proof_case add_sub_immediate_base_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_add_sub_immediate_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -2300,7 +2347,8 @@ static const struct orlix_tcti_target_proof_case add_sub_immediate_base_cases[] 
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
 };
 
-static const struct orlix_tcti_target_proof_case add_sub_immediate_flags_cases[] = {
+static const struct orlix_tcti_target_proof_case add_sub_immediate_flags_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_add_sub_immediate_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -2321,6 +2369,35 @@ static const struct orlix_tcti_target_proof_case add_sub_immediate_flags_cases[]
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
 	{ "orlix_tcti_add_sub_immediate_source_mask_boundaries",
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
+};
+
+static const struct orlix_tcti_target_proof_case base_add_sub_production_cases[] = {
+	{ "orlix_tcti_base_add_sub_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_add_sub_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_add_sub_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_add_sub_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_base_add_sub_sp_zr_and_w_upper_zero",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_add_sub_extend_shift_and_carry",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS },
+	{ "orlix_tcti_base_add_sub_simd_state_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS },
+	{ "orlix_tcti_base_add_sub_pointer_preserves_tag",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
 static const struct orlix_tcti_target_proof_case lse_source_bound_cases[]
@@ -2514,10 +2591,10 @@ static const struct orlix_tcti_target_proof_case exclusive_source_bound_cases[]
 
 #define ADD_SUB_IMMEDIATE_BASE_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
-	  ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
+	  ORLIX_TCTI_PROOF_U64_C(0xff), ordinal }
 #define ADD_SUB_IMMEDIATE_FLAGS_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xff800000U, pattern, ADD_SUB_IMMEDIATE_CONDITION, \
-	  ORLIX_TCTI_PROOF_U64_C(0x3f), ordinal }
+	  ORLIX_TCTI_PROOF_U64_C(0xff), ordinal }
 
 static const struct orlix_tcti_target_proof_binding add_sub_immediate_add_bindings[] = {
 	ADD_SUB_IMMEDIATE_BASE_BINDING(2173U, "ADD_32_addsub_imm", "ADD", 0x11000000U),
@@ -2786,7 +2863,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADD_SUB_IMMEDIATE_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, obligations, \
 	  ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
-	  ADD_SUB_IMMEDIATE_SOURCE, ADD_SUB_IMMEDIATE_SUITE, cases, \
+	  BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE, cases, \
 	  ARRAY_COUNT(cases), bindings, ARRAY_COUNT(bindings), NULL, obligations }
 
 #define ADVSIMD_FP_ARITHMETIC_ENTRY(proof_id, operation, cases, bindings) \
@@ -2826,8 +2903,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 45U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 73U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 47U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 75U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 13U
@@ -2969,19 +3046,19 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 		flag_setf_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-add", "ADD_addsub_imm",
 				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
-				add_sub_immediate_base_cases,
+				base_add_sub_production_cases,
 				add_sub_immediate_add_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-adds", "ADDS_addsub_imm",
 				ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS,
-				add_sub_immediate_flags_cases,
+				base_add_sub_production_cases,
 				add_sub_immediate_adds_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-sub", "SUB_addsub_imm",
 				ADD_SUB_IMMEDIATE_BASE_OBLIGATIONS,
-				add_sub_immediate_base_cases,
+				base_add_sub_production_cases,
 				add_sub_immediate_sub_bindings),
 	ADD_SUB_IMMEDIATE_ENTRY("kunit:add-sub-immediate-subs", "SUBS_addsub_imm",
 				ADD_SUB_IMMEDIATE_FLAGS_OBLIGATIONS,
-				add_sub_immediate_flags_cases,
+				base_add_sub_production_cases,
 				add_sub_immediate_subs_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmla-source-leaf", "FMLA_advsimd_vec", orlix_tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits_cases, orlix_tcti_advsimd_fp_fmla_source_leaf_execute_exact_bits_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fadd-source-leaf", "FADD_advsimd", orlix_tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits_cases, orlix_tcti_advsimd_fp_fadd_source_leaf_execute_exact_bits_bindings),
@@ -3414,7 +3491,8 @@ static const struct orlix_tcti_target_proof_case variable_shift_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
-static const struct orlix_tcti_target_proof_case add_sub_register_base_cases[] = {
+static const struct orlix_tcti_target_proof_case add_sub_register_base_cases[]
+	__attribute__((unused)) = {
 	{ "asr_source_and_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
 	{ "asr_resume_semantics", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -3426,7 +3504,8 @@ static const struct orlix_tcti_target_proof_case add_sub_register_base_cases[] =
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
-static const struct orlix_tcti_target_proof_case add_sub_register_flags_cases[] = {
+static const struct orlix_tcti_target_proof_case add_sub_register_flags_cases[]
+	__attribute__((unused)) = {
 	{ "asr_source_and_decode", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
 	{ "asr_resume_semantics", ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
@@ -3512,41 +3591,47 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		VARIABLE_SHIFT_SOURCE, VARIABLE_SHIFT_SUITE,
 		variable_shift_cases, 3361U, 3380U, 2),
 	SCALAR_OPERATION("ADD_addsub_shift", "kunit:add-sub-register-add-shift",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3450U, 3457U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3450U, 3457U, 2),
 	SCALAR_OPERATION("ADDS_addsub_shift", "kunit:add-sub-register-adds-shift",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3450U, 3457U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3450U, 3457U, 2),
 	SCALAR_OPERATION("SUB_addsub_shift", "kunit:add-sub-register-sub-shift",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3450U, 3457U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3450U, 3457U, 2),
 	SCALAR_OPERATION("SUBS_addsub_shift", "kunit:add-sub-register-subs-shift",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3450U, 3457U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3450U, 3457U, 2),
 	SCALAR_OPERATION("ADD_addsub_ext", "kunit:add-sub-register-add-ext",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3458U, 3465U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3458U, 3465U, 2),
 	SCALAR_OPERATION("ADDS_addsub_ext", "kunit:add-sub-register-adds-ext",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3458U, 3465U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3458U, 3465U, 2),
 	SCALAR_OPERATION("SUB_addsub_ext", "kunit:add-sub-register-sub-ext",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3458U, 3465U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3458U, 3465U, 2),
 	SCALAR_OPERATION("SUBS_addsub_ext", "kunit:add-sub-register-subs-ext",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3458U, 3465U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3458U, 3465U, 2),
 	SCALAR_OPERATION("ADC", "kunit:add-sub-register-adc",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3466U, 3473U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3466U, 3473U, 2),
 	SCALAR_OPERATION("ADCS", "kunit:add-sub-register-adcs",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3466U, 3473U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3466U, 3473U, 2),
 	SCALAR_OPERATION("SBC", "kunit:add-sub-register-sbc",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_base_cases, 3466U, 3473U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3466U, 3473U, 2),
 	SCALAR_OPERATION("SBCS", "kunit:add-sub-register-sbcs",
-		ADD_SUB_REGISTER_SOURCE, ADD_SUB_REGISTER_SUITE,
-		add_sub_register_flags_cases, 3466U, 3473U, 2),
+		BASE_ADD_SUB_SOURCE, BASE_ADD_SUB_SUITE,
+		base_add_sub_production_cases, 3466U, 3473U, 2),
+	{ "ADDPT", "kunit:base-add-sub-addpt", BASE_ADD_SUB_SOURCE,
+	  BASE_ADD_SUB_SUITE, ADD_SUB_PT_CONDITION, base_add_sub_production_cases,
+	  ARRAY_COUNT(base_add_sub_production_cases), 3474U, 3474U, 1, 0, 0 },
+	{ "SUBPT", "kunit:base-add-sub-subpt", BASE_ADD_SUB_SOURCE,
+	  BASE_ADD_SUB_SUITE, ADD_SUB_PT_CONDITION, base_add_sub_production_cases,
+	  ARRAY_COUNT(base_add_sub_production_cases), 3475U, 3475U, 1, 0, 0 },
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
 		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",

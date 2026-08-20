@@ -69,6 +69,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT,
 	ORLIX_TCTI_DECODE_FP_INT_CONVERT,
 	ORLIX_TCTI_DECODE_MOPS_COPY,
+	ORLIX_TCTI_DECODE_ADD_SUB_POINTER,
 };
 
 enum orlix_tcti_mops_copy_stage {

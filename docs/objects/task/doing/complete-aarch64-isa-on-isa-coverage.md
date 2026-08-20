@@ -3,7 +3,7 @@ type: task
 tags:
   - task
   - orlix-tcti
-updated: 2026-08-18
+updated: 2026-08-20
 status: doing
 summary: "Classify, implement, and prove all 4,350 pinned AArch64 ISA leaves through OrlixTCTI."
 task_of:
@@ -125,7 +125,7 @@ Privileged and non-EL0 leaves remain visible in the inventory. Completion proves
 
 Passing mlibc, Coreutils, or another package suite is downstream compatibility evidence. It does not close this task while any of the 4,350 source leaves is unclassified, any applicable EL0 leaf lacks exact production semantics and typed evidence, or any privileged leaf lacks its required EL0 behavior.
 
-The 209 unique `BASE_LOAD_STORE` source leaves now have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. The 152 unique `ADVSIMD_LOAD_STORE` source leaves now have the same production observations through the same `orlix_tcti_memory_proof.h` fixtures and capture walk. STL1 and LDAP1 are proved for structure transfer only. Exclusive, LSE, SVE, and SME memory families remain open. These landed cohorts do not close the 4,350-leaf audit.
+The 209 unique `BASE_LOAD_STORE` source leaves now have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, `PC`, and `FAULTS`. The 152 unique `ADVSIMD_LOAD_STORE` source leaves now have the same production observations through the same `orlix_tcti_memory_proof.h` fixtures and capture walk. STL1 and LDAP1 are proved for structure transfer only. The 498 unique `BASE_ATOMICS` source leaves now have production observations for `REGISTERS`, `MEMORY`, and `PC` on success, plus `ATOMICITY` and `ORDERING` where the leaf requires them. The 34 unique `BASE_ADD_SUBTRACT` source leaves now have production observations for `REGISTERS`, `PC`, and `FLAGS`. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable for add and subtract. ADDPT and SUBPT stay in this cohort. `FEAT_CPA` is not advertised. SVE and SME memory families remain open. These landed cohorts do not close the 4,350-leaf audit.
 
 The current audit foundation retains raw source spans for all 4,350 direct
 leaves, binds all pinned inline operation objects as explicit shared-ASL

@@ -54,6 +54,9 @@
 #define AARCH64_ADD_SUB_EXTENDED_REG_PATTERN 0x0b200000U
 #define AARCH64_ADD_SUB_WITH_CARRY_MASK 0x1fe0fc00U
 #define AARCH64_ADD_SUB_WITH_CARRY_PATTERN 0x1a000000U
+#define AARCH64_ADD_SUB_PT_MASK 0xffe0e000U
+#define AARCH64_ADD_SUB_PT_ADD_PATTERN 0x9a002000U
+#define AARCH64_ADD_SUB_PT_SUB_PATTERN 0xda002000U
 #define AARCH64_UNCONDITIONAL_BRANCH_IMM_MASK 0x7c000000U
 #define AARCH64_UNCONDITIONAL_BRANCH_IMM_PATTERN 0x14000000U
 #define AARCH64_BRANCH_REGISTER_MASK 0xfffffc1fU
@@ -882,6 +885,29 @@ static const struct orlix_tcti_atomic_source_row orlix_tcti_atomic_source_rows[]
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE
 #undef ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW
 
+static void orlix_tcti_bind_base_add_sub_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_ADD_SUBTRACT)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -1559,6 +1585,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.subtract = instruction & BIT(30);
 		decoded.set_flags = instruction & BIT(29);
+		orlix_tcti_bind_base_add_sub_source(&decoded);
 		return decoded;
 	}
 
@@ -1580,6 +1607,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = is_64bit;
 		decoded.subtract = instruction & BIT(30);
 		decoded.set_flags = instruction & BIT(29);
+		orlix_tcti_bind_base_add_sub_source(&decoded);
 		return decoded;
 	}
 
@@ -1599,6 +1627,22 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.subtract = instruction & BIT(30);
 		decoded.set_flags = instruction & BIT(29);
+		orlix_tcti_bind_base_add_sub_source(&decoded);
+		return decoded;
+	}
+
+	if ((instruction & AARCH64_ADD_SUB_PT_MASK) ==
+		    AARCH64_ADD_SUB_PT_ADD_PATTERN ||
+	    (instruction & AARCH64_ADD_SUB_PT_MASK) ==
+		    AARCH64_ADD_SUB_PT_SUB_PATTERN) {
+		decoded.decode_class = ORLIX_TCTI_DECODE_ADD_SUB_POINTER;
+		decoded.rd = instruction & 0x1fU;
+		decoded.rn = (instruction >> 5) & 0x1fU;
+		decoded.rm = (instruction >> 16) & 0x1fU;
+		decoded.shift_amount = (instruction >> 10) & 0x7U;
+		decoded.is_64bit = true;
+		decoded.subtract = instruction & BIT(30);
+		orlix_tcti_bind_base_add_sub_source(&decoded);
 		return decoded;
 	}
 
@@ -1611,6 +1655,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.subtract = instruction & BIT(30);
 		decoded.set_flags = instruction & BIT(29);
+		orlix_tcti_bind_base_add_sub_source(&decoded);
 		return decoded;
 	}
 

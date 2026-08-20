@@ -80,6 +80,7 @@ orlix_tcti_test-y := orlix_tcti_decode_test.o runtime_projection.o \
 	orlix_tcti_native_observation_production_test.o \
 	orlix_tcti_tls_repair_test.o \
 	orlix_tcti_add_sub_immediate_test.o \
+	orlix_tcti_base_add_sub_source_bound_test.o \
 	orlix_tcti_logical_shifted_register_test.o \
 	orlix_tcti_logical_immediate_source_bound_test.o \
 	orlix_tcti_move_wide_source_bound_test.o \
