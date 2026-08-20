@@ -208,4 +208,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIBaseAddSubKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIBaseAddSubDiagnostic)
     }
+
+    func testOrlixTCTIBaseControlFlowKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIBaseControlFlowDiagnostic)
+    }
 }

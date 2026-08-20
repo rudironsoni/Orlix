@@ -63,6 +63,8 @@
 #define AARCH64_BR_PATTERN 0xd61f0000U
 #define AARCH64_BLR_PATTERN 0xd63f0000U
 #define AARCH64_RET_PATTERN 0xd65f0000U
+#define AARCH64_BRANCH_REG_GROUP_MASK 0xfe000000U
+#define AARCH64_BRANCH_REG_GROUP_PATTERN 0xd6000000U
 #define AARCH64_COMPARE_BRANCH_IMM_MASK 0x7e000000U
 #define AARCH64_COMPARE_BRANCH_IMM_PATTERN 0x34000000U
 #define AARCH64_COMPARE_BRANCH_EXTENSION_MASK 0x7c000000U
@@ -908,6 +910,29 @@ static void orlix_tcti_bind_base_add_sub_source(
 	}
 }
 
+static void orlix_tcti_bind_base_control_flow_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_CONTROL_FLOW)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -1665,6 +1690,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.branch_imm = sign_extend64(
 			(u64)(instruction & 0x03ffffffU) << 2, 27);
 		decoded.link = instruction & BIT(31);
+		orlix_tcti_bind_base_control_flow_source(&decoded);
 		return decoded;
 	}
 
@@ -1680,7 +1706,17 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			pattern == AARCH64_BR_PATTERN ? ORLIX_TCTI_BRANCH_REGISTER_BR :
 			pattern == AARCH64_BLR_PATTERN ? ORLIX_TCTI_BRANCH_REGISTER_BLR :
 							  ORLIX_TCTI_BRANCH_REGISTER_RET;
+		orlix_tcti_bind_base_control_flow_source(&decoded);
 		return decoded;
+	}
+
+	if ((instruction & AARCH64_BRANCH_REG_GROUP_MASK) ==
+	    AARCH64_BRANCH_REG_GROUP_PATTERN) {
+		orlix_tcti_bind_base_control_flow_source(&decoded);
+		if (decoded.source_ordinal) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
+			return decoded;
+		}
 	}
 
 	if ((instruction & AARCH64_COMPARE_BRANCH_IMM_MASK) ==

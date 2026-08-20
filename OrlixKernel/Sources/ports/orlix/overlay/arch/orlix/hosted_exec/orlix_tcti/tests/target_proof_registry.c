@@ -530,6 +530,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_base_add_sub_source_bound_cases"
 #define BASE_ADD_SUB_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_base_add_sub_production_capture.h\""
+#define BASE_CONTROL_FLOW_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_control_flow_source_bound_test.c"
+#define BASE_CONTROL_FLOW_SUITE "orlix-tcti-base-control-flow-source-bound"
+#define BASE_CONTROL_FLOW_SUITE_SYMBOL \
+	"orlix_tcti_base_control_flow_source_bound_suite"
+#define BASE_CONTROL_FLOW_CASE_ARRAY \
+	"orlix_tcti_base_control_flow_source_bound_cases"
+#define BASE_CONTROL_FLOW_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_control_flow_production_capture.h\""
 #define ADD_SUB_PT_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define SCALAR_FP_SOURCE \
@@ -797,6 +806,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ BASE_ADD_SUB_SOURCE,
 	  "1740d6e16cf305d3e36bd8767df187c25ce381ea79638042fc8ed5a6bc138739",
 	  "orlix_tcti_base_add_sub_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ BASE_CONTROL_FLOW_SOURCE,
+	  "8ed64b822e04bf804a2d620497b235cbf0656f791d7ad7ca1b1012a35356375a",
+	  "orlix_tcti_base_control_flow_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1287,6 +1302,50 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_base_add_sub_pointer_preserves_tag",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_link_and_xzr",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_offsets_and_alignment",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+	  BASE_CONTROL_FLOW_SUITE_SYMBOL, BASE_CONTROL_FLOW_CASE_ARRAY,
+	  "orlix_tcti_base_control_flow_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -1687,6 +1746,11 @@ static const struct operation_requirements operation_requirements[] = {
 	{ operation_value, PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
+	{ "BR", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "BLR", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "RET", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "B_uncond", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "BL", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -2400,6 +2464,38 @@ static const struct orlix_tcti_target_proof_case base_add_sub_production_cases[]
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 };
 
+static const struct orlix_tcti_target_proof_case
+base_control_flow_production_cases[] = {
+	{ "orlix_tcti_base_control_flow_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_control_flow_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_control_flow_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_control_flow_link_and_xzr",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_control_flow_offsets_and_alignment",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_control_flow_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_control_flow_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_control_flow_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
 static const struct orlix_tcti_target_proof_case lse_source_bound_cases[]
 	__attribute__((unused)) = {
 	{ "lse_source_bound_decodes_every_base_leaf",
@@ -2903,19 +2999,19 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 47U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 75U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 52U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 80U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 13U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 14U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 14U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 15U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
 };
-#define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 15U
+#define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 10U
 #define MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT 32U
 #define MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT 96U
 #define BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT 294U
@@ -3632,6 +3728,21 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	{ "SUBPT", "kunit:base-add-sub-subpt", BASE_ADD_SUB_SOURCE,
 	  BASE_ADD_SUB_SUITE, ADD_SUB_PT_CONDITION, base_add_sub_production_cases,
 	  ARRAY_COUNT(base_add_sub_production_cases), 3475U, 3475U, 1, 0, 0 },
+	SCALAR_OPERATION("BR", "kunit:branch-control-br",
+		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+		base_control_flow_production_cases, 2288U, 2288U, 1),
+	SCALAR_OPERATION("BLR", "kunit:branch-control-blr",
+		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+		base_control_flow_production_cases, 2291U, 2291U, 1),
+	SCALAR_OPERATION("RET", "kunit:branch-control-ret",
+		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+		base_control_flow_production_cases, 2294U, 2294U, 1),
+	SCALAR_OPERATION("B_uncond", "kunit:branch-control-b-uncond",
+		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+		base_control_flow_production_cases, 2312U, 2312U, 1),
+	SCALAR_OPERATION("BL", "kunit:branch-control-bl",
+		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
+		base_control_flow_production_cases, 2313U, 2313U, 1),
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
 		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",
@@ -4279,11 +4390,29 @@ source_leaf_rejection_registry_operations[] = {
 	{ .proof_id = "kunit:source-leaf-dcps3-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
-	  .classification = 2 },
+	  .classification = 2,
+	  .source = BASE_CONTROL_FLOW_SOURCE,
+	  .suite = BASE_CONTROL_FLOW_SUITE,
+	  .cases = base_control_flow_production_cases,
+	  .case_count = ARRAY_COUNT(base_control_flow_production_cases) },
 	{ .proof_id = "kunit:source-leaf-ereta-non-el0",
-	  .classification = 2 },
+	  .classification = 2,
+	  .source = BASE_CONTROL_FLOW_SOURCE,
+	  .suite = BASE_CONTROL_FLOW_SUITE,
+	  .cases = base_control_flow_production_cases,
+	  .case_count = ARRAY_COUNT(base_control_flow_production_cases) },
+	{ .proof_id = "kunit:source-leaf-texit-non-el0",
+	  .classification = 2,
+	  .source = BASE_CONTROL_FLOW_SOURCE,
+	  .suite = BASE_CONTROL_FLOW_SUITE,
+	  .cases = base_control_flow_production_cases,
+	  .case_count = ARRAY_COUNT(base_control_flow_production_cases) },
 	{ .proof_id = "kunit:source-leaf-drps-non-el0",
-	  .classification = 2 },
+	  .classification = 2,
+	  .source = BASE_CONTROL_FLOW_SOURCE,
+	  .suite = BASE_CONTROL_FLOW_SUITE,
+	  .cases = base_control_flow_production_cases,
+	  .case_count = ARRAY_COUNT(base_control_flow_production_cases) },
 	{ .proof_id = "kunit:translation-change-tchangeb-reg-el0-rejection",
 	  .classification = 2,
 	  .source = TRANSLATION_CHANGE_SOURCE,
@@ -4405,7 +4534,7 @@ static bool build_source_leaf_rejection_registry(void)
 			.encoding_pattern = source->encoding_pattern,
 			.condition_tcnd_hex = source->condition_tcnd_hex,
 			.kunit_case_mask = operation->cases ?
-				ORLIX_TCTI_PROOF_U64_C(0x7) :
+				((ORLIX_TCTI_PROOF_U64_C(1) << operation->case_count) - 1) :
 				ORLIX_TCTI_PROOF_U64_C(0x3),
 			.source_ordinal = source->ordinal,
 		};
