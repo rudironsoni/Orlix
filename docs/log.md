@@ -7,6 +7,10 @@ updated: 2026-08-20
 ---
 # Orlix Knowledge Log
 
+## [2026-08-20] record | Land the BASE_ADD_SUBTRACT proof contract
+
+Recorded that the 34 unique `BASE_ADD_SUBTRACT` leaves have production decode, execute, and typed native observations for `REGISTERS`, `PC`, and `FLAGS`. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. Immediate, shifted, extended, and carry forms stay on one production-capture suite with ADDPT and SUBPT. ADDPT and SUBPT keep PAC tag bits [63:56] and do 56-bit pointer arithmetic. Reserved encodings stay decode `UNSUPPORTED`. `linux_proof_executed` stays 0. `FEAT_CPA` is not advertised. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-20] record | Land the BASE_ATOMICS proof contract
 
 Recorded that the 498 unique `BASE_ATOMICS` leaves have production decode, execute, and typed native observations for `REGISTERS`, `MEMORY`, and `PC` on success, plus `ATOMICITY` and `ORDERING` where the leaf requires them, and `FAULTS` on the unmapped walk. Exclusive-monitor mismatch, CAS/RMW old-value, and CASP whole-pair extras (including 32-bit pair packing) stay on the same suite. Product `FEAT_THE` with `FEAT_D128` disabled keeps pair RCW UNDEFINED at EL0. `linux_proof_executed` stays 0. `HWCAP_ATOMICS` is not advertised. The 4,350-leaf coverage task stays doing.
