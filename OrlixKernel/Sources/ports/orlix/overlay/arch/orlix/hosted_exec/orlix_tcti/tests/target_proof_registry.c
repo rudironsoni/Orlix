@@ -754,7 +754,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "5d80460fba9cebadbe3f54b3b9a7f8deeb2be0c8d341826a9af8f0fb09ebb0bd",
 	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ BASE_ATOMIC_SOURCE,
-	  "3230c0535cdf4e607eb353e75833c01d9da147f354c2f0241f073b699117bc0f",
+	  "1058543b93ff3051d528b5280b810235da77c8d95d036c8dede772d85261eddc",
 	  "orlix_tcti_base_atomic_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
@@ -930,7 +930,8 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_base_atomic_production_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
 	  BASE_ATOMIC_CASE_ARRAY,
 	  "orlix_tcti_base_atomic_unmapped_faults",
@@ -945,6 +946,16 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_cas_rmw_returns_old_value",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_production_atomicity",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2376,7 +2387,8 @@ static const struct orlix_tcti_target_proof_case base_atomic_source_bound_cases[
 	{ "orlix_tcti_base_atomic_production_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ "orlix_tcti_base_atomic_unmapped_faults",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ "orlix_tcti_base_atomic_monitor_mismatch_fails_store",
@@ -2385,15 +2397,24 @@ static const struct orlix_tcti_target_proof_case base_atomic_source_bound_cases[
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "orlix_tcti_base_atomic_cas_rmw_returns_old_value",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+	{ "orlix_tcti_base_atomic_production_atomicity",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 };
 
 static const struct orlix_tcti_target_proof_case base_atomic_production_cases[] = {
 	{ "orlix_tcti_base_atomic_production_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ "orlix_tcti_base_atomic_unmapped_faults",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_base_atomic_production_atomicity",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 };
 
 static const struct orlix_tcti_target_proof_case base_ordered_source_bound_cases[] = {
@@ -2443,7 +2464,8 @@ static const struct orlix_tcti_target_proof_case base_ordered_source_bound_cases
 	{ "orlix_tcti_base_atomic_production_resume",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
-		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
 	{ "orlix_tcti_base_atomic_unmapped_faults",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 };
@@ -4694,6 +4716,10 @@ enum base_atomic_case_index {
 	BASE_ATOMIC_CASE_ORDERING,
 	BASE_ATOMIC_CASE_PRODUCTION_RESUME,
 	BASE_ATOMIC_CASE_UNMAPPED_FAULTS,
+	BASE_ATOMIC_CASE_MONITOR_MISMATCH,
+	BASE_ATOMIC_CASE_CASP,
+	BASE_ATOMIC_CASE_CAS_RMW,
+	BASE_ATOMIC_CASE_PRODUCTION_ATOMICITY,
 };
 
 static orlix_tcti_proof_u64 base_atomic_case_mask(
@@ -4733,6 +4759,7 @@ static orlix_tcti_proof_u64 base_atomic_case_mask(
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_ORDERING;
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_PRODUCTION_RESUME;
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_UNMAPPED_FAULTS;
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_PRODUCTION_ATOMICITY;
 	}
 	return mask;
 }

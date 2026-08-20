@@ -1293,6 +1293,26 @@ static bool orlix_tcti_base_atomic_is_exclusive_store(
 		orlix_tcti_base_atomic_name_has(source, "ldstexcl");
 }
 
+static bool orlix_tcti_base_atomic_is_ordered_access(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return !strncmp(source->operation, "LDAR", 4) ||
+		!strncmp(source->operation, "LDAP", 4) ||
+		!strncmp(source->operation, "LDLAR", 5) ||
+		!strncmp(source->operation, "STLR", 4) ||
+		!strncmp(source->operation, "STLUR", 5) ||
+		!strncmp(source->operation, "STLLR", 5) ||
+		!strncmp(source->operation, "LDIAPP", 6) ||
+		!strncmp(source->operation, "STILP", 5) ||
+		!strncmp(source->operation, "STLP", 4);
+}
+
+static bool orlix_tcti_base_atomic_requires_atomicity(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return !orlix_tcti_base_atomic_is_ordered_access(source);
+}
+
 static bool orlix_tcti_base_atomic_is_load(
 	const struct orlix_tcti_test_atomic_source *source)
 {
@@ -1604,10 +1624,67 @@ static void orlix_tcti_base_atomic_production_resume(struct kunit *test)
 		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
 		orlix_tcti_base_atomic_capture_run(test, source,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code, false);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, data,
+					    stored, true);
+		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING, &regs, code,
+			false);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 	}
 	KUNIT_EXPECT_EQ(test, 498U, seen);
+}
+
+static void orlix_tcti_base_atomic_production_atomicity(struct kunit *test)
+{
+	struct orlix_tcti_rcw_el1_state rcw_state;
+	size_t index;
+	size_t seen = 0;
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&rcw_state));
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
+		const struct orlix_tcti_test_atomic_source *source =
+			&orlix_tcti_test_sources[index];
+		u32 instruction;
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		unsigned long code;
+		unsigned long data;
+		u64 stored[2] = { 0x0102030480000001ULL, 0x1112131415161718ULL };
+		u32 program[3];
+		size_t words = 0;
+		u8 sentinel[32];
+
+		if (!orlix_tcti_test_is_base_atomic(source))
+			continue;
+		if (!orlix_tcti_base_atomic_requires_atomicity(source))
+			continue;
+		seen++;
+		instruction = orlix_tcti_base_atomic_production_instruction(source);
+		decoded = orlix_tcti_decode_aarch64(instruction);
+		if (!orlix_tcti_base_atomic_rcw_defined_in_product(&decoded,
+								  &rcw_state))
+			continue;
+		memset(sentinel, 0x5a, sizeof(sentinel));
+		data = orlix_tcti_memory_proof_map_bytes(test, sentinel,
+			sizeof(sentinel), PROT_READ | PROT_WRITE);
+		if (orlix_tcti_base_atomic_is_exclusive_store(source))
+			program[words++] =
+				orlix_tcti_base_atomic_exclusive_setup_load(source);
+		program[words++] = instruction;
+		program[words++] = BAS_SVC;
+		code = orlix_tcti_base_atomic_map_program(test, program, words);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, data,
+					    stored, true);
+		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY, &regs, code,
+			false);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	}
+	KUNIT_EXPECT_EQ(test, 440U, seen);
 }
 
 static void orlix_tcti_base_atomic_unmapped_faults(struct kunit *test)
@@ -1701,21 +1778,105 @@ static void orlix_tcti_base_atomic_monitor_mismatch_fails_store(struct kunit *te
 
 static void orlix_tcti_base_atomic_casp_whole_pair(struct kunit *test)
 {
-	const struct orlix_tcti_test_atomic_source *leaf =
-		orlix_tcti_test_base_atomic_name("CASP_CP64_comswappr");
-	u32 instruction;
+	static const struct {
+		const char *name;
+		bool pack32;
+	} leaves[] = {
+		{ "CASP_CP64_comswappr", false },
+		{ "CASP_CP32_comswappr", true },
+	};
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(leaves); index++) {
+		const struct orlix_tcti_test_atomic_source *leaf =
+			orlix_tcti_test_base_atomic_name(leaves[index].name);
+		u32 instruction;
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct orlix_tcti_result result;
+		unsigned long code;
+		unsigned long data;
+		u64 old[2] = { 0x1111111111111111ULL, 0x2222222222222222ULL };
+		u64 desired[2] = { 0xaaaaaaaaaaaaaaaaULL, 0xbbbbbbbbbbbbbbbbULL };
+		u64 observed[2] = {};
+		u64 packed_old;
+		u64 packed_desired;
+		u64 packed_observed = 0;
+		size_t bytes;
+
+		KUNIT_ASSERT_NOT_NULL(test, leaf);
+		instruction = orlix_tcti_base_atomic_fill_regs(leaf, leaf->pattern,
+							       false);
+		decoded = orlix_tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_TRUE_MSG(test, decoded.pair, "%s", leaf->name);
+		KUNIT_ASSERT_EQ_MSG(test, leaves[index].pack32 ? sizeof(u32) :
+				    sizeof(u64), decoded.access_size, "%s",
+				    leaf->name);
+		bytes = decoded.access_size * 2U;
+		if (leaves[index].pack32) {
+			old[0] &= 0xffffffffULL;
+			old[1] &= 0xffffffffULL;
+			desired[0] &= 0xffffffffULL;
+			desired[1] &= 0xffffffffULL;
+			packed_old = old[0] | (old[1] << 32);
+			packed_desired = desired[0] | (desired[1] << 32);
+			data = orlix_tcti_memory_proof_map_bytes(test, &packed_old,
+								 sizeof(packed_old),
+								 PROT_READ | PROT_WRITE);
+		} else {
+			data = orlix_tcti_memory_proof_map_bytes(test, old, sizeof(old),
+								 PROT_READ | PROT_WRITE);
+		}
+		code = orlix_tcti_base_atomic_map_program(test,
+			(u32[]){ instruction, BAS_SVC }, 2);
+		memset(&regs, 0, sizeof(regs));
+		regs.pc = code;
+		regs.pstate = PSR_MODE_EL0t;
+		regs.syscallno = NO_SYSCALL;
+		regs.regs[BAS_RN] = data;
+		regs.regs[2] = old[0];
+		regs.regs[3] = old[1];
+		regs.regs[8] = desired[0];
+		regs.regs[9] = desired[1];
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		orlix_tcti_base_atomic_expect_success(test, leaf, &result, &regs, code);
+		if (leaves[index].pack32) {
+			KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(
+				current->mm, data, &packed_observed, bytes));
+			KUNIT_EXPECT_EQ_MSG(test, packed_desired, packed_observed,
+					    "%s packed 32-bit pair", leaf->name);
+		} else {
+			KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(
+				current->mm, data, observed, bytes));
+			KUNIT_EXPECT_EQ(test, desired[0], observed[0]);
+			KUNIT_EXPECT_EQ(test, desired[1], observed[1]);
+		}
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	}
+}
+
+static void orlix_tcti_base_atomic_cas_rmw_returns_old_value(struct kunit *test)
+{
+	const struct orlix_tcti_test_atomic_source *cas =
+		orlix_tcti_test_base_atomic_name("CAS_C64_comswap");
+	const struct orlix_tcti_test_atomic_source *swp =
+		orlix_tcti_test_base_atomic_name("SWP_64_memop");
+	u64 old = 0x1111111111111111ULL;
+	u64 desired = 0xaaaaaaaaaaaaaaaaULL;
+	u64 observed = 0;
+	unsigned long data;
+	unsigned long code;
 	struct pt_regs regs = {};
 	struct orlix_tcti_result result;
-	unsigned long code;
-	unsigned long data;
-	u64 old[2] = { 0x1111111111111111ULL, 0x2222222222222222ULL };
-	u64 desired[2] = { 0xaaaaaaaaaaaaaaaaULL, 0xbbbbbbbbbbbbbbbbULL };
-	u64 observed[2] = {};
+	u32 instruction;
 
-	KUNIT_ASSERT_NOT_NULL(test, leaf);
-	instruction = orlix_tcti_base_atomic_fill_regs(leaf, leaf->pattern, false);
-	data = orlix_tcti_memory_proof_map_bytes(test, old, sizeof(old),
+	KUNIT_ASSERT_NOT_NULL(test, cas);
+	KUNIT_ASSERT_NOT_NULL(test, swp);
+	data = orlix_tcti_memory_proof_map_bytes(test, &old, sizeof(old),
 						 PROT_READ | PROT_WRITE);
+
+	instruction = orlix_tcti_base_atomic_fill_regs(cas, cas->pattern, false);
 	code = orlix_tcti_base_atomic_map_program(test,
 		(u32[]){ instruction, BAS_SVC }, 2);
 	memset(&regs, 0, sizeof(regs));
@@ -1723,16 +1884,35 @@ static void orlix_tcti_base_atomic_casp_whole_pair(struct kunit *test)
 	regs.pstate = PSR_MODE_EL0t;
 	regs.syscallno = NO_SYSCALL;
 	regs.regs[BAS_RN] = data;
-	regs.regs[2] = old[0];
-	regs.regs[3] = old[1];
-	regs.regs[8] = desired[0];
-	regs.regs[9] = desired[1];
+	regs.regs[BAS_RS] = old;
+	regs.regs[BAS_RT] = desired;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	orlix_tcti_base_atomic_expect_success(test, leaf, &result, &regs, code);
+	orlix_tcti_base_atomic_expect_success(test, cas, &result, &regs, code);
+	KUNIT_EXPECT_EQ_MSG(test, old, regs.regs[BAS_RS], "CAS old value");
 	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
-							   observed, 16));
-	KUNIT_EXPECT_EQ(test, desired[0], observed[0]);
-	KUNIT_EXPECT_EQ(test, desired[1], observed[1]);
+							   &observed, sizeof(observed)));
+	KUNIT_EXPECT_EQ(test, desired, observed);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm, data,
+							    &old, sizeof(old)));
+	instruction = orlix_tcti_base_atomic_fill_regs(swp, swp->pattern, false);
+	code = orlix_tcti_base_atomic_map_program(test,
+		(u32[]){ instruction, BAS_SVC }, 2);
+	memset(&regs, 0, sizeof(regs));
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[BAS_RN] = data;
+	regs.regs[BAS_RS] = desired;
+	regs.regs[BAS_RT] = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	orlix_tcti_base_atomic_expect_success(test, swp, &result, &regs, code);
+	KUNIT_EXPECT_EQ_MSG(test, old, regs.regs[BAS_RT], "SWP old value");
+	observed = 0;
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
+							   &observed, sizeof(observed)));
+	KUNIT_EXPECT_EQ(test, desired, observed);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 }
@@ -1756,6 +1936,8 @@ static struct kunit_case orlix_tcti_base_atomic_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_base_atomic_unmapped_faults),
 	KUNIT_CASE(orlix_tcti_base_atomic_monitor_mismatch_fails_store),
 	KUNIT_CASE(orlix_tcti_base_atomic_casp_whole_pair),
+	KUNIT_CASE(orlix_tcti_base_atomic_cas_rmw_returns_old_value),
+	KUNIT_CASE(orlix_tcti_base_atomic_production_atomicity),
 	{}
 };
 
