@@ -73,6 +73,7 @@ orlix_tcti_fault_access_for_decoded(const struct orlix_tcti_decoded_instruction 
 	case ORLIX_TCTI_DECODE_LOAD_STORE_REGISTER_OFFSET:
 	case ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE:
 	case ORLIX_TCTI_DECODE_LSE_ATOMIC:
+	case ORLIX_TCTI_DECODE_LS64:
 		return decoded->load ? ORLIX_TCTI_ACCESS_READ : ORLIX_TCTI_ACCESS_WRITE;
 	default:
 		return ORLIX_TCTI_ACCESS_FETCH;
@@ -2220,7 +2221,7 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 					    const struct orlix_tcti_decoded_instruction *decoded,
 					    unsigned long *fault_address)
 {
-	unsigned long address = orlix_tcti_memory_base(regs, decoded->rn);
+	unsigned long address = orlix_tcti_indexed_address(regs, decoded);
 	u8 loaded[2 * sizeof(u64)] = {};
 	u8 desired[2 * sizeof(u64)] = {};
 	u8 total_size = decoded->access_size * (decoded->pair ? 2 : 1);
@@ -2236,6 +2237,30 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		*fault_address = address;
 	if (!IS_ALIGNED(address, total_size))
 		return -EFAULT;
+	if (decoded->simd_fp) {
+		if (decoded->release) {
+			if (decoded->limited_ordering)
+				smp_wmb();
+			else
+				smp_mb();
+		}
+		ret = decoded->load ?
+			orlix_tcti_load_simd_fp(mm, address, decoded->rt,
+					       decoded->access_size) :
+			orlix_tcti_store_simd_fp(mm, address, decoded->rt,
+						decoded->access_size);
+		if (ret)
+			return ret;
+		if (decoded->acquire) {
+			if (decoded->limited_ordering || decoded->rcpc_acquire)
+				smp_rmb();
+			else
+				smp_mb();
+		}
+		orlix_tcti_apply_memory_writeback(regs, decoded);
+		regs->pc += sizeof(u32);
+		return 0;
+	}
 
 	if (decoded->load) {
 		if (!mm)
@@ -2273,14 +2298,23 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 			current->thread.user_exclusive_size = total_size;
 			current->thread.user_exclusive_valid = 1;
 		}
-		if (decoded->acquire)
-			smp_mb();
+		if (decoded->acquire) {
+			if (decoded->limited_ordering || decoded->rcpc_acquire)
+				smp_rmb();
+			else
+				smp_mb();
+		}
+		orlix_tcti_apply_memory_writeback(regs, decoded);
 		regs->pc += sizeof(u32);
 		return 0;
 	}
 
-	if (decoded->release)
-		smp_mb();
+	if (decoded->release) {
+		if (decoded->limited_ordering)
+			smp_wmb();
+		else
+			smp_mb();
+	}
 
 	if (decoded->exclusive &&
 	    (!current->thread.user_exclusive_valid ||
@@ -2318,10 +2352,58 @@ static int orlix_tcti_execute_load_store_exclusive(struct mm_struct *mm,
 		orlix_tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32),
 				       exchanged ? 0 : 1);
 	} else {
-		ret = orlix_tcti_store_integer(mm, address, decoded->access_size,
-					 value);
+		ret = orlix_tcti_encode_integer(desired, decoded->access_size, value);
+		if (!ret && decoded->pair) {
+			value2 = orlix_tcti_read_gpr_or_zero(regs, decoded->rt2,
+						      decoded->access_size);
+			ret = orlix_tcti_encode_integer(desired + decoded->access_size,
+						decoded->access_size, value2);
+		}
+		if (!ret)
+			ret = orlix_tcti_write_user_data(mm, address, desired,
+						 decoded->pair ? total_size :
+						 decoded->access_size);
 		if (ret)
 			return ret;
+	}
+	orlix_tcti_apply_memory_writeback(regs, decoded);
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
+static int orlix_tcti_execute_ls64(struct mm_struct *mm, struct pt_regs *regs,
+				 const struct orlix_tcti_decoded_instruction *decoded,
+				 unsigned long *fault_address)
+{
+	unsigned long address;
+	u64 data[8];
+	u8 index;
+	int ret;
+
+	if (!mm || !regs || !decoded || (decoded->rt & 1U) || decoded->rt >= 24U)
+		return -EINVAL;
+	address = orlix_tcti_memory_base(regs, decoded->rn);
+	if (fault_address)
+		*fault_address = address;
+	if (!IS_ALIGNED(address, 64U))
+		return -EFAULT;
+	if (decoded->load) {
+		ret = orlix_tcti_read_user_data(mm, address, data, sizeof(data));
+		if (ret)
+			return ret;
+		for (index = 0; index < ARRAY_SIZE(data); index++)
+			regs->regs[decoded->rt + index] = data[index];
+	} else {
+		for (index = 0; index < ARRAY_SIZE(data); index++)
+			data[index] = regs->regs[decoded->rt + index];
+		if (decoded->ls64_accdata)
+			data[0] = (data[0] & GENMASK_ULL(63, 32)) |
+				  (current->thread.user_accdata_el1 & GENMASK_ULL(31, 0));
+		ret = orlix_tcti_write_user_data(mm, address, data, sizeof(data));
+		if (ret)
+			return ret;
+		if (decoded->ls64_status)
+			orlix_tcti_write_gpr_or_zero(regs, decoded->rs, sizeof(u32), 0);
 	}
 	regs->pc += sizeof(u32);
 	return 0;
@@ -2384,6 +2466,148 @@ static int orlix_tcti_lse_memory_operation(enum orlix_tcti_lse_atomic_op lse_op,
 	}
 }
 
+static enum orlix_tcti_simd_vector_arithmetic_op
+orlix_tcti_fp_atomic_arithmetic(enum orlix_tcti_lse_atomic_op operation)
+{
+	switch (operation) {
+	case ORLIX_TCTI_LSE_ATOMIC_FADD:
+	case ORLIX_TCTI_LSE_ATOMIC_BFADD:
+		return ORLIX_TCTI_SIMD_ARITH_FADD;
+	case ORLIX_TCTI_LSE_ATOMIC_FMAX:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMAX:
+		return ORLIX_TCTI_SIMD_ARITH_FMAX;
+	case ORLIX_TCTI_LSE_ATOMIC_FMAXNM:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMAXNM:
+		return ORLIX_TCTI_SIMD_ARITH_FMAXNM;
+	case ORLIX_TCTI_LSE_ATOMIC_FMIN:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMIN:
+		return ORLIX_TCTI_SIMD_ARITH_FMIN;
+	case ORLIX_TCTI_LSE_ATOMIC_FMINNM:
+	case ORLIX_TCTI_LSE_ATOMIC_BFMINNM:
+		return ORLIX_TCTI_SIMD_ARITH_FMINNM;
+	default:
+		return (enum orlix_tcti_simd_vector_arithmetic_op)-1;
+	}
+}
+
+static bool orlix_tcti_fp_atomic_is_bfloat(
+	enum orlix_tcti_lse_atomic_op operation)
+{
+	return operation >= ORLIX_TCTI_LSE_ATOMIC_BFADD &&
+		operation <= ORLIX_TCTI_LSE_ATOMIC_BFMINNM;
+}
+
+static u16 orlix_tcti_fp32_to_bfloat16(u32 value, unsigned long fpcr)
+{
+	u16 upper = value >> 16;
+	u16 lower = value;
+	u32 exponent = value & GENMASK(30, 23);
+	u32 fraction = value & GENMASK(22, 0);
+	u8 rounding = (fpcr >> 22) & 0x3U;
+	bool increment = false;
+
+	/* FEAT_LSFE fixes DN to one for the atomic operation. */
+	if (exponent == GENMASK(30, 23) && fraction)
+		return (value & BIT(31) ? BIT(15) : 0) | 0x7fc0U;
+	switch (rounding) {
+	case 0: /* nearest, ties to even */
+		increment = lower > 0x8000U ||
+			(lower == 0x8000U && (upper & 1U));
+		break;
+	case 1: /* plus infinity */
+		increment = !(value & BIT(31)) && lower;
+		break;
+	case 2: /* minus infinity */
+		increment = (value & BIT(31)) && lower;
+		break;
+	case 3: /* toward zero */
+		break;
+	}
+	return upper + increment;
+}
+
+struct orlix_tcti_fp_atomic_context {
+	enum orlix_tcti_lse_atomic_op operation;
+	unsigned long fpcr;
+};
+
+static int orlix_tcti_fp_atomic_transform(void *result_buffer,
+					 const void *old_buffer,
+					 const void *operand_buffer, size_t size,
+					 void *opaque)
+{
+	struct orlix_tcti_fp_atomic_context *context = opaque;
+	enum orlix_tcti_simd_vector_arithmetic_op operation =
+		orlix_tcti_fp_atomic_arithmetic(context->operation);
+	u64 left[2] = {};
+	u64 right[2] = {};
+	u64 result[2] = {};
+	unsigned long ignored_fpsr = 0;
+	unsigned long operation_fpcr =
+		(context->fpcr & AARCH64_FPCR_WRITABLE_MASK & ~GENMASK(12, 8)) |
+		BIT(25);
+	int ret;
+
+	if ((int)operation < 0)
+		return -EINVAL;
+	if (orlix_tcti_fp_atomic_is_bfloat(context->operation)) {
+		u32 old32;
+		u32 operand32;
+
+		if (size != sizeof(u16))
+			return -EINVAL;
+		old32 = (u32)*(const u16 *)old_buffer << 16;
+		operand32 = (u32)*(const u16 *)operand_buffer << 16;
+		left[0] = old32;
+		right[0] = operand32;
+		ret = orlix_tcti_native_simd_fp_three_same(operation, true,
+				sizeof(u32), sizeof(u32), result, left, right,
+				left, operation_fpcr, &ignored_fpsr);
+		if (!ret)
+			*(u16 *)result_buffer = orlix_tcti_fp32_to_bfloat16(
+				(u32)result[0], context->fpcr);
+		return ret;
+	}
+	memcpy(left, old_buffer, size);
+	memcpy(right, operand_buffer, size);
+	if (size == sizeof(u16))
+		ret = orlix_tcti_native_simd_fp16_three_same(operation, true, false,
+			result, left, right, left, operation_fpcr, &ignored_fpsr);
+	else
+		ret = orlix_tcti_native_simd_fp_three_same(operation, true, size,
+			size, result, left, right, left, operation_fpcr,
+			&ignored_fpsr);
+	if (!ret)
+		memcpy(result_buffer, result, size);
+	return ret;
+}
+
+static int orlix_tcti_execute_fp_atomic(
+	struct mm_struct *mm, struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded,
+	unsigned long address, enum orlix_tcti_atomic_memory_order order)
+{
+	struct orlix_tcti_fp_atomic_context context = {
+		.operation = decoded->lse_atomic_op,
+		.fpcr = current->thread.user_fpcr,
+	};
+	u64 operand = current->thread.user_simd[decoded->rs * 2];
+	u64 old_value = 0;
+	int ret;
+
+	ret = orlix_tcti_atomic_transform_user_data(mm, address, order, &operand,
+		&old_value, decoded->access_size, orlix_tcti_fp_atomic_transform,
+		&context);
+	if (ret)
+		return ret;
+	if (!decoded->atomic_store_only)
+		orlix_tcti_write_simd_fp_register(decoded->rt,
+			decoded->access_size, old_value, 0);
+	orlix_tcti_clear_exclusive_monitor();
+	regs->pc += sizeof(u32);
+	return 0;
+}
+
 static bool
 orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *decoded,
 			 unsigned long address)
@@ -2396,6 +2620,187 @@ orlix_tcti_lse_alignment_fault(const struct orlix_tcti_decoded_instruction *deco
 		return true;
 	size = decoded->access_size * (decoded->pair ? 2 : 1);
 	return size && !IS_ALIGNED(address, size);
+}
+
+struct orlix_tcti_rcw_transform_context {
+	enum orlix_tcti_lse_atomic_op operation;
+	struct orlix_tcti_rcw_el1_state state;
+	u8 expected[2 * sizeof(u64)];
+	u8 nzcv;
+	bool soft;
+	bool wrote_new;
+};
+
+static bool orlix_tcti_rcw_bit(const u64 value[2], unsigned int bit)
+{
+	return value[bit / 64U] & BIT_ULL(bit % 64U);
+}
+
+static void orlix_tcti_rcw_assign_bit(u64 value[2], unsigned int bit, bool set)
+{
+	if (set)
+		value[bit / 64U] |= BIT_ULL(bit % 64U);
+	else
+		value[bit / 64U] &= ~BIT_ULL(bit % 64U);
+}
+
+static void orlix_tcti_rcw_assign_range(u64 value[2], unsigned int first,
+				       unsigned int last, bool set)
+{
+	unsigned int bit;
+
+	for (bit = first; bit <= last; bit++)
+		orlix_tcti_rcw_assign_bit(value, bit, set);
+}
+
+static void orlix_tcti_rcw_effective_mask(u64 mask[2], size_t size,
+					 bool soft, bool protection)
+{
+	if (size == sizeof(u64)) {
+		orlix_tcti_rcw_assign_range(mask, 18, 49,
+					    orlix_tcti_rcw_bit(mask, 17));
+		orlix_tcti_rcw_assign_bit(mask, 0, false);
+		if (soft && protection)
+			orlix_tcti_rcw_assign_bit(mask, 52, false);
+		mask[1] = 0;
+		return;
+	}
+
+	orlix_tcti_rcw_assign_range(mask, 17, 55,
+				    orlix_tcti_rcw_bit(mask, 16));
+	orlix_tcti_rcw_assign_range(mask, 0, 1, false);
+	orlix_tcti_rcw_assign_range(mask, 56, 90, false);
+	orlix_tcti_rcw_assign_range(mask, 101, 107, false);
+	orlix_tcti_rcw_assign_range(mask, 119, 120, false);
+	orlix_tcti_rcw_assign_range(mask, 125, 126, false);
+	if (soft)
+		orlix_tcti_rcw_assign_bit(mask, 114, false);
+}
+
+static bool orlix_tcti_rcw_changed_outside(const u64 old[2],
+					   const u64 new[2],
+					   const u64 mask[2], size_t size)
+{
+	if ((old[0] ^ new[0]) & ~mask[0])
+		return true;
+	return size == 2 * sizeof(u64) && ((old[1] ^ new[1]) & ~mask[1]);
+}
+
+static u8 orlix_tcti_rcw_check(const u64 old[2], const u64 new[2], size_t size,
+			      const struct orlix_tcti_rcw_transform_context *context)
+{
+	u64 rcwmask[2] = { context->state.rcwmask_el1[0],
+			    context->state.rcwmask_el1[1] };
+	u64 rcwsmask[2] = { context->state.rcwsmask_el1[0],
+			     context->state.rcwsmask_el1[1] };
+	const bool protection = context->state.feat_d128 ||
+		(context->state.tcr2_el1_enabled && context->state.tcr2_el1_pnch);
+	const unsigned int protected_bit = size == 2 * sizeof(u64) ? 114 : 52;
+	bool rcw_state_fail = false;
+	bool rcws_state_fail = false;
+	bool rcw_mask_fail = false;
+	bool rcws_mask_fail = false;
+
+	orlix_tcti_rcw_effective_mask(rcwmask, size, false, protection);
+	orlix_tcti_rcw_effective_mask(rcwsmask, size, true, protection);
+	if (protection) {
+		if (orlix_tcti_rcw_bit(old, protected_bit))
+			rcw_state_fail =
+				orlix_tcti_rcw_bit(new, protected_bit) !=
+					orlix_tcti_rcw_bit(old, protected_bit) ||
+				orlix_tcti_rcw_bit(new, 0) != orlix_tcti_rcw_bit(old, 0);
+		else
+			rcw_state_fail =
+				orlix_tcti_rcw_bit(new, protected_bit) !=
+					orlix_tcti_rcw_bit(old, protected_bit);
+		if (orlix_tcti_rcw_bit(old, protected_bit) &&
+		    orlix_tcti_rcw_bit(old, 0))
+			rcw_mask_fail = orlix_tcti_rcw_changed_outside(
+				old, new, rcwmask, size);
+	}
+	if (context->soft) {
+		if (orlix_tcti_rcw_bit(old, 0) || !protection ||
+		    !orlix_tcti_rcw_bit(old, protected_bit))
+			rcws_state_fail = orlix_tcti_rcw_bit(new, 0) !=
+				orlix_tcti_rcw_bit(old, 0);
+		if (orlix_tcti_rcw_bit(old, 0))
+			rcws_mask_fail = orlix_tcti_rcw_changed_outside(
+				old, new, rcwsmask, size);
+	}
+	/* N=0, Z=RCW failure, C=!RCWS failure, V=0. */
+	return ((rcw_state_fail || rcw_mask_fail) ? 0x4U : 0U) |
+		((rcws_state_fail || rcws_mask_fail) ? 0U : 0x2U);
+}
+
+static int orlix_tcti_rcw_transform(void *result, const void *old_value,
+				   const void *operand, size_t size, void *opaque)
+{
+	struct orlix_tcti_rcw_transform_context *context = opaque;
+	u64 old[2] = {};
+	u64 new[2] = {};
+	u64 value[2] = {};
+	unsigned int lane;
+
+	if (!context || (size != sizeof(u64) && size != 2 * sizeof(u64)))
+		return -EINVAL;
+	memcpy(old, old_value, size);
+	memcpy(value, operand, size);
+	if (context->operation == ORLIX_TCTI_LSE_ATOMIC_CAS &&
+	    memcmp(old_value, context->expected, size)) {
+		context->nzcv = 0xaU;
+		memcpy(result, old_value, size);
+		return 0;
+	}
+	for (lane = 0; lane < size / sizeof(u64); lane++) {
+		switch (context->operation) {
+		case ORLIX_TCTI_LSE_ATOMIC_CAS:
+		case ORLIX_TCTI_LSE_ATOMIC_SWP:
+			new[lane] = value[lane];
+			break;
+		case ORLIX_TCTI_LSE_ATOMIC_CLR:
+			new[lane] = old[lane] & ~value[lane];
+			break;
+		case ORLIX_TCTI_LSE_ATOMIC_SET:
+			new[lane] = old[lane] | value[lane];
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+	context->nzcv = orlix_tcti_rcw_check(old, new, size, context);
+	context->wrote_new = context->nzcv == 0x2U;
+	/* Arm permits the failed RCW access to write back the old value. */
+	memcpy(result, context->wrote_new ? new : old, size);
+	return 0;
+}
+
+int orlix_tcti_rcw_evaluate(
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct orlix_tcti_rcw_el1_state *state, const void *old_value,
+	const void *expected, const void *operand, void *result, u8 *nzcv,
+	bool *wrote_new)
+{
+	struct orlix_tcti_rcw_transform_context context = {};
+	size_t size;
+	int ret;
+
+	if (!decoded || !state || !old_value || !expected || !operand || !result ||
+	    !nzcv || !wrote_new || !decoded->atomic_rcw)
+		return -EINVAL;
+	size = decoded->access_size * (decoded->pair ? 2U : 1U);
+	if ((size != sizeof(u64) && size != 2U * sizeof(u64)) ||
+	    decoded->pair != state->feat_d128 || !state->feat_the)
+		return -ENOEXEC;
+	context.operation = decoded->lse_atomic_op;
+	context.state = *state;
+	context.soft = decoded->atomic_rcw_soft;
+	memcpy(context.expected, expected, size);
+	ret = orlix_tcti_rcw_transform(result, old_value, operand, size, &context);
+	if (ret)
+		return ret;
+	*nzcv = context.nzcv;
+	*wrote_new = context.wrote_new;
+	return 0;
 }
 
 static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
@@ -2415,6 +2820,7 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 	u64 old;
 	u64 old2;
 	bool exchanged;
+	struct orlix_tcti_rcw_transform_context rcw_context = {};
 	int ret;
 
 	if (!mm || !regs || !decoded)
@@ -2441,6 +2847,9 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 	ret = orlix_tcti_lse_memory_order(decoded, &order);
 	if (ret)
 		return ret;
+	if (decoded->atomic_fp)
+		return orlix_tcti_execute_fp_atomic(mm, regs, decoded, address,
+						     order);
 	ret = orlix_tcti_lse_memory_operation(decoded->lse_atomic_op, &operation);
 	if (ret)
 		return ret;
@@ -2479,6 +2888,36 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 				return ret;
 		}
 	}
+	if (decoded->atomic_rcw) {
+		ret = orlix_tcti_rcw_el1_state_read(&rcw_context.state);
+		if (ret)
+			return ret;
+		if (!rcw_context.state.feat_the)
+			return -EOPNOTSUPP;
+		/* Scalar RCW is UNDEFINED with D128; pair RCW is UNDEFINED without it. */
+		if (decoded->pair != rcw_context.state.feat_d128)
+			return -ENOEXEC;
+		rcw_context.operation = decoded->lse_atomic_op;
+		rcw_context.soft = decoded->atomic_rcw_soft;
+		memcpy(rcw_context.expected, expected, total_size);
+		ret = orlix_tcti_atomic_transform_user_data(
+			mm, address, order, operand, old_value, total_size,
+			orlix_tcti_rcw_transform, &rcw_context);
+		if (ret)
+			return ret;
+		exchanged = true;
+		orlix_tcti_clear_exclusive_monitor();
+		regs->pstate &= ~(PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT);
+		if (rcw_context.nzcv & 0x8U)
+			regs->pstate |= PSR_N_BIT;
+		if (rcw_context.nzcv & 0x4U)
+			regs->pstate |= PSR_Z_BIT;
+		if (rcw_context.nzcv & 0x2U)
+			regs->pstate |= PSR_C_BIT;
+		if (rcw_context.nzcv & 0x1U)
+			regs->pstate |= PSR_V_BIT;
+		goto writeback;
+	}
 
 	ret = orlix_tcti_atomic_user_data(mm, address, operation, order,
 				    operation == ORLIX_TCTI_ATOMIC_MEMORY_CAS ? expected : NULL,
@@ -2487,6 +2926,7 @@ static int orlix_tcti_execute_lse_atomic(struct mm_struct *mm,
 		return ret;
 	if (operation != ORLIX_TCTI_ATOMIC_MEMORY_CAS || exchanged)
 		orlix_tcti_clear_exclusive_monitor();
+writeback:
 	ret = orlix_tcti_decode_integer(old_value, decoded->access_size, &old);
 	if (ret)
 		return ret;
@@ -7790,6 +8230,8 @@ int orlix_tcti_execute_decoded_semantics(struct mm_struct *mm,
 							 fault_address);
 	case ORLIX_TCTI_DECODE_LSE_ATOMIC:
 		return orlix_tcti_execute_lse_atomic(mm, regs, decoded, fault_address);
+	case ORLIX_TCTI_DECODE_LS64:
+		return orlix_tcti_execute_ls64(mm, regs, decoded, fault_address);
 	case ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
 		return orlix_tcti_execute_simd_modified_immediate(regs, decoded);
 	case ORLIX_TCTI_DECODE_FP_SCALAR_IMMEDIATE:

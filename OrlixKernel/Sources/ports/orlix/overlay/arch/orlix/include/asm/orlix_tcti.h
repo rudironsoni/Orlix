@@ -81,6 +81,23 @@ enum orlix_tcti_atomic_memory_order {
 	ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE,
 	ORLIX_TCTI_ATOMIC_MEMORY_RELEASE,
 	ORLIX_TCTI_ATOMIC_MEMORY_ACQ_REL,
+	ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE_RCPC,
+	ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_ACQUIRE,
+	ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_RELEASE,
+};
+
+/*
+ * Canonical EL1 state consumed by FEAT_THE at EL0.  The two mask registers
+ * are 128-bit when FEAT_D128 is enabled.  ProtectionEnabled(EL0) is derived
+ * from D128 or the EL1 TCR2.PnCH controls, never supplied by the caller.
+ */
+struct orlix_tcti_rcw_el1_state {
+	u64 rcwmask_el1[2];
+	u64 rcwsmask_el1[2];
+	bool feat_the;
+	bool feat_d128;
+	bool tcr2_el1_enabled;
+	bool tcr2_el1_pnch;
 };
 
 enum orlix_tcti_atomic_memory_operation {
@@ -95,6 +112,10 @@ enum orlix_tcti_atomic_memory_operation {
 	ORLIX_TCTI_ATOMIC_MEMORY_UMAX,
 	ORLIX_TCTI_ATOMIC_MEMORY_UMIN,
 };
+
+typedef int (*orlix_tcti_atomic_transform_fn)(void *result, const void *old_value,
+					      const void *operand, size_t size,
+					      void *context);
 
 struct orlix_tcti_result {
 	enum orlix_tcti_exit_reason reason;
@@ -148,6 +169,12 @@ int orlix_tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
 			  enum orlix_tcti_atomic_memory_order order,
 			  const void *expected, const void *operand,
 			  void *old_value, size_t size, bool *exchanged);
+int orlix_tcti_atomic_transform_user_data(
+	struct mm_struct *mm, unsigned long user_va,
+	enum orlix_tcti_atomic_memory_order order, const void *operand,
+	void *old_value, size_t size, orlix_tcti_atomic_transform_fn transform,
+	void *context);
+int orlix_tcti_rcw_el1_state_read(struct orlix_tcti_rcw_el1_state *state);
 int orlix_tcti_compare_exchange_user_data(struct mm_struct *mm,
 				     unsigned long user_va,
 				     const void *expected,

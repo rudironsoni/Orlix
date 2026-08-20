@@ -49,6 +49,7 @@ enum orlix_tcti_decode_class {
 	ORLIX_TCTI_DECODE_EXCLUSIVE_MONITOR_CLEAR,
 	ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE,
 	ORLIX_TCTI_DECODE_LSE_ATOMIC,
+	ORLIX_TCTI_DECODE_LS64,
 	ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
 	ORLIX_TCTI_DECODE_SIMD_VECTOR_ELEMENT_MOVE,
 	ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP,
@@ -248,6 +249,16 @@ enum orlix_tcti_lse_atomic_op {
 	ORLIX_TCTI_LSE_ATOMIC_SMIN,
 	ORLIX_TCTI_LSE_ATOMIC_UMAX,
 	ORLIX_TCTI_LSE_ATOMIC_UMIN,
+	ORLIX_TCTI_LSE_ATOMIC_FADD,
+	ORLIX_TCTI_LSE_ATOMIC_FMAX,
+	ORLIX_TCTI_LSE_ATOMIC_FMAXNM,
+	ORLIX_TCTI_LSE_ATOMIC_FMIN,
+	ORLIX_TCTI_LSE_ATOMIC_FMINNM,
+	ORLIX_TCTI_LSE_ATOMIC_BFADD,
+	ORLIX_TCTI_LSE_ATOMIC_BFMAX,
+	ORLIX_TCTI_LSE_ATOMIC_BFMAXNM,
+	ORLIX_TCTI_LSE_ATOMIC_BFMIN,
+	ORLIX_TCTI_LSE_ATOMIC_BFMINNM,
 };
 
 enum orlix_tcti_data_processing_1source_op {
@@ -670,6 +681,17 @@ struct orlix_tcti_decoded_instruction {
 	bool mops_forward_only;
 	u8 mops_options;
 	u32 mops_source_ordinal;
+	bool atomic_fp;
+	bool atomic_store_only;
+	bool atomic_rcw;
+	bool atomic_rcw_soft;
+	bool unprivileged;
+	bool limited_ordering;
+	bool rcpc_acquire;
+	bool ls64_status;
+	bool ls64_accdata;
+	u32 source_ordinal;
+	const char *source_condition_tcnd_hex;
 };
 
 struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction);

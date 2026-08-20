@@ -11,3 +11,4 @@
 #include "orlix_tcti_branch_control_production_capture.def"
 #include "orlix_tcti_base_load_store_production_capture.def"
 #include "orlix_tcti_advsimd_load_store_production_capture.def"
+#include "orlix_tcti_base_atomic_production_capture.def"

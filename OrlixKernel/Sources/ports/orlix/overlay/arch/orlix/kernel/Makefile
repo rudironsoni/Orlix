@@ -14,4 +14,5 @@ obj-y += process.o
 obj-y += signal.o
 obj-y += syscall.o
 obj-y += time.o
+obj-y += tcti_config.o
 obj-y += traps.o

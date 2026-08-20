@@ -662,9 +662,14 @@ static int orlix_tcti_atomic_memory_order_before(enum orlix_tcti_atomic_memory_o
 	switch (order) {
 	case ORLIX_TCTI_ATOMIC_MEMORY_RELAXED:
 	case ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE:
+	case ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE_RCPC:
+	case ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_ACQUIRE:
 		return 0;
 	case ORLIX_TCTI_ATOMIC_MEMORY_RELEASE:
 	case ORLIX_TCTI_ATOMIC_MEMORY_ACQ_REL:
+		smp_mb();
+		return 0;
+	case ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_RELEASE:
 		smp_wmb();
 		return 0;
 	default:
@@ -677,6 +682,9 @@ static void orlix_tcti_atomic_memory_order_after(enum orlix_tcti_atomic_memory_o
 {
 	if (order == ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE ||
 	    order == ORLIX_TCTI_ATOMIC_MEMORY_ACQ_REL)
+		smp_mb();
+	else if (order == ORLIX_TCTI_ATOMIC_MEMORY_ACQUIRE_RCPC ||
+		 order == ORLIX_TCTI_ATOMIC_MEMORY_LIMITED_ACQUIRE)
 		smp_rmb();
 }
 
@@ -863,6 +871,86 @@ int orlix_tcti_atomic_user_data(struct mm_struct *mm, unsigned long user_va,
 	if (ret)
 		return ret;
 	return 0;
+}
+
+int orlix_tcti_atomic_transform_user_data(
+	struct mm_struct *mm, unsigned long user_va,
+	enum orlix_tcti_atomic_memory_order order, const void *operand,
+	void *old_value, size_t size, orlix_tcti_atomic_transform_fn transform,
+	void *context)
+{
+	struct orlix_tcti_user_page page;
+	unsigned long linux_perms;
+	void *host_page;
+	void *host_data;
+	u8 result[2 * sizeof(u64)];
+	int ret;
+
+	if (!mm || !operand || !old_value || !transform ||
+	    (size != sizeof(u16) && size != sizeof(u32) && size != sizeof(u64) &&
+	     size != 2 * sizeof(u64)))
+		return -EINVAL;
+	if (!IS_ALIGNED(user_va, size) ||
+	    size > PAGE_SIZE - offset_in_page(user_va) || user_va >= TASK_SIZE ||
+	    size > TASK_SIZE - user_va)
+		return -EFAULT;
+	ret = orlix_tcti_atomic_memory_order_before(order);
+	if (ret)
+		return ret;
+
+	for (;;) {
+		ret = orlix_tcti_fault_in_user_page(mm, user_va,
+						    ORLIX_TCTI_ACCESS_WRITE);
+		if (ret)
+			return ret;
+		ret = orlix_tcti_sync_faulted_user_window(mm, user_va,
+						       ORLIX_TCTI_ACCESS_WRITE);
+		if (ret)
+			return ret;
+		ret = orlix_tcti_pin_user_page(mm, user_va, ORLIX_TCTI_ACCESS_WRITE,
+						&page);
+		if (ret == -EFAULT || ret == -EACCES)
+			continue;
+		if (ret)
+			return ret;
+		host_data = (char *)page.host_data + offset_in_page(user_va);
+		host_page = (void *)((unsigned long)host_data & PAGE_MASK);
+		linux_perms = page.linux_perms;
+		lock_page(page.page);
+		if (!orlix_tcti_mapping_access_lock(mm,
+						   page.translation_generation)) {
+			unlock_page(page.page);
+			orlix_tcti_unpin_user_page(&page);
+			continue;
+		}
+		memcpy(old_value, host_data, size);
+		ret = transform(result, old_value, operand, size, context);
+		if (!ret) {
+			memcpy(host_data, result, size);
+			orlix_tcti_reservation_generation_bump(page.page);
+		}
+		orlix_tcti_mapping_access_unlock(mm);
+		if (ret) {
+			unlock_page(page.page);
+			orlix_tcti_unpin_user_page(&page);
+			return ret;
+		}
+		break;
+	}
+	if (linux_perms & VM_EXEC)
+		orlix_tcti_block_cache_invalidate_range(mm, user_va, user_va + size);
+#if defined(ORLIX_APP_HOSTED_BOOT)
+	ret = orlix_refresh_user_mapping_range_from_kernel(mm, user_va, host_page,
+							   size);
+	if (ret) {
+		orlix_tcti_note_committed_refresh_failure(mm, user_va, size, ret);
+		ret = 0;
+	}
+#endif
+	orlix_tcti_atomic_memory_order_after(order);
+	unlock_page(page.page);
+	orlix_tcti_unpin_user_page(&page);
+	return ret;
 }
 
 

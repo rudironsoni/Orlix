@@ -60,6 +60,53 @@ config ORLIX_TCTI_HOSTED_EXEC
 	  host data and must not request host-executable mappings for guest ELF
 	  text.
 
+config ORLIX_TCTI_FEAT_THE
+	bool "Enable FEAT_THE execution in OrlixTCTI"
+	depends on ORLIX_TCTI_HOSTED_EXEC
+	default y
+	help
+	  Select the production architectural domain for Translation Hardening
+	  Extension RCW and RCWS instructions. Runtime EL0 entry remains gated by
+	  the Linux HWCAP projection.
+
+config ORLIX_TCTI_FEAT_D128
+	bool "Use the FEAT_D128 RCW domain"
+	depends on ORLIX_TCTI_FEAT_THE
+	default n
+	help
+	  Select the 128-bit RCW/RCWS domain. When disabled, the scalar 64-bit
+	  domain is selected and pair RCW encodings are architecturally undefined.
+
+config ORLIX_TCTI_RCWMASK_EL1_LO
+	hex
+	depends on ORLIX_TCTI_FEAT_THE
+	default 0x0
+
+config ORLIX_TCTI_RCWMASK_EL1_HI
+	hex
+	depends on ORLIX_TCTI_FEAT_D128
+	default 0x0
+
+config ORLIX_TCTI_RCWSMASK_EL1_LO
+	hex
+	depends on ORLIX_TCTI_FEAT_THE
+	default 0x0
+
+config ORLIX_TCTI_RCWSMASK_EL1_HI
+	hex
+	depends on ORLIX_TCTI_FEAT_D128
+	default 0x0
+
+config ORLIX_TCTI_TCR2_EL1_ENABLED
+	bool
+	depends on ORLIX_TCTI_FEAT_THE && !ORLIX_TCTI_FEAT_D128
+	default n
+
+config ORLIX_TCTI_TCR2_EL1_PNCH
+	bool
+	depends on ORLIX_TCTI_TCR2_EL1_ENABLED
+	default n
+
 config ORLIX_TCTI_DEBUG_SWITCH
 	bool "Enable OrlixTCTI switch debug oracle"
 	depends on ORLIX_TCTI_HOSTED_EXEC
