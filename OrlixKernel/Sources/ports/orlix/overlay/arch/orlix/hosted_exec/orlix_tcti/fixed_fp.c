@@ -716,38 +716,44 @@ int orlix_tcti_native_simd_fp_three_same(
 	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FADDP,
 		"faddp v0.2s, v0.2s, v1.2s", "faddp v0.4s, v0.4s, v1.4s",
 		"faddp v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FADD,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FADD,
+		"fadd s0, s0, s1", "fadd d0, d0, d1",
 		"fadd v0.2s, v0.2s, v1.2s", "fadd v0.4s, v0.4s, v1.4s",
 		"fadd v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FDIV,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FDIV,
+		"fdiv s0, s0, s1", "fdiv d0, d0, d1",
 		"fdiv v0.2s, v0.2s, v1.2s", "fdiv v0.4s, v0.4s, v1.4s",
 		"fdiv v0.2d, v0.2d, v1.2d");
 	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMAXNMP,
 		"fmaxnmp v0.2s, v0.2s, v1.2s",
 		"fmaxnmp v0.4s, v0.4s, v1.4s",
 		"fmaxnmp v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMAXNM,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FMAXNM,
+		"fmaxnm s0, s0, s1", "fmaxnm d0, d0, d1",
 		"fmaxnm v0.2s, v0.2s, v1.2s",
 		"fmaxnm v0.4s, v0.4s, v1.4s",
 		"fmaxnm v0.2d, v0.2d, v1.2d");
 	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMAXP,
 		"fmaxp v0.2s, v0.2s, v1.2s", "fmaxp v0.4s, v0.4s, v1.4s",
 		"fmaxp v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMAX,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FMAX,
+		"fmax s0, s0, s1", "fmax d0, d0, d1",
 		"fmax v0.2s, v0.2s, v1.2s", "fmax v0.4s, v0.4s, v1.4s",
 		"fmax v0.2d, v0.2d, v1.2d");
 	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMINNMP,
 		"fminnmp v0.2s, v0.2s, v1.2s",
 		"fminnmp v0.4s, v0.4s, v1.4s",
 		"fminnmp v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMINNM,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FMINNM,
+		"fminnm s0, s0, s1", "fminnm d0, d0, d1",
 		"fminnm v0.2s, v0.2s, v1.2s",
 		"fminnm v0.4s, v0.4s, v1.4s",
 		"fminnm v0.2d, v0.2d, v1.2d");
 	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMINP,
 		"fminp v0.2s, v0.2s, v1.2s", "fminp v0.4s, v0.4s, v1.4s",
 		"fminp v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FMIN,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FMIN,
+		"fmin s0, s0, s1", "fmin d0, d0, d1",
 		"fmin v0.2s, v0.2s, v1.2s", "fmin v0.4s, v0.4s, v1.4s",
 		"fmin v0.2d, v0.2d, v1.2d");
 	ORLIX_TCTI_NATIVE_SIMD_FP_ACCUMULATE_CASE(ORLIX_TCTI_SIMD_ARITH_FMLA,
@@ -762,7 +768,8 @@ int orlix_tcti_native_simd_fp_three_same(
 		"fmul s0, s0, s1", "fmul d0, d0, d1",
 		"fmul v0.2s, v0.2s, v1.2s", "fmul v0.4s, v0.4s, v1.4s",
 		"fmul v0.2d, v0.2d, v1.2d");
-	ORLIX_TCTI_NATIVE_SIMD_FP_VECTOR_CASE(ORLIX_TCTI_SIMD_ARITH_FSUB,
+	ORLIX_TCTI_NATIVE_SIMD_FP_CASE(ORLIX_TCTI_SIMD_ARITH_FSUB,
+		"fsub s0, s0, s1", "fsub d0, d0, d1",
 		"fsub v0.2s, v0.2s, v1.2s", "fsub v0.4s, v0.4s, v1.4s",
 		"fsub v0.2d, v0.2d, v1.2d");
 	default:

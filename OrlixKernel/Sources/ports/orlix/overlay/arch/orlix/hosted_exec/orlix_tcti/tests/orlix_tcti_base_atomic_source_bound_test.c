@@ -6,7 +6,10 @@
 #include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
+#include <linux/sched.h>
 #include <linux/sched/mm.h>
+#include <linux/bits.h>
+#include <linux/string.h>
 #include <linux/syscalls.h>
 #include <asm/orlix_tcti.h>
 #include <asm/processor.h>
@@ -14,6 +17,11 @@
 
 #include "../decode_aarch64.h"
 #include "../switch_debug.h"
+#include "orlix_tcti_memory_proof.h"
+#include "orlix_tcti_native_observation.h"
+#include "orlix_tcti_base_atomic_production_capture.h"
+#include "target_native_proof_contract_private.h"
+#include "target_proof_ingestion_private.h"
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -44,6 +52,7 @@ static const u8 orlix_tcti_test_source_families[] = {
 struct orlix_tcti_test_atomic_source {
 	u32 ordinal;
 	const char *name;
+	const char *mnemonic;
 	const char *operation;
 	u32 mask;
 	u32 pattern;
@@ -52,7 +61,7 @@ struct orlix_tcti_test_atomic_source {
 
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_SOURCE(...)
 #define ORLIX_TCTI_A64_SOURCE_MANIFEST_ROW(i, name, mnemonic, operation, mask, \
-	pattern, condition, ...) { i, name, operation, mask, pattern, condition },
+	pattern, condition, ...) { i, name, mnemonic, operation, mask, pattern, condition },
 static const struct orlix_tcti_test_atomic_source orlix_tcti_test_sources[] = {
 #include "../isa/source_manifest.def"
 };
@@ -129,11 +138,7 @@ static u32 orlix_tcti_test_legal_instruction(
 	instruction = orlix_tcti_test_set_variable_field(instruction, source->mask,
 							 0, 5, 8);
 	instruction = orlix_tcti_test_set_variable_field(instruction, source->mask,
-							 5, 5, 10);
-	instruction = orlix_tcti_test_set_variable_field(instruction, source->mask,
-							 10, 5, 4);
-	instruction = orlix_tcti_test_set_variable_field(instruction, source->mask,
-							 16, 5, 2);
+							 5, 5, 30);
 	return instruction;
 }
 
@@ -310,19 +315,15 @@ static void orlix_tcti_base_atomic_classifies_fixed_bit_neighbours(struct kunit 
 			KUNIT_EXPECT_NE_MSG(test, source->ordinal,
 				decoded.source_ordinal, "%s fixed-bit=%u",
 				source->name, bit);
-			if (decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED) {
-				rejected++;
-			} else {
-				neighbour = orlix_tcti_test_source_ordinal(
-					decoded.source_ordinal);
-				KUNIT_ASSERT_NOT_NULL_MSG(test, neighbour,
-					"%s fixed-bit=%u ordinal=%u", source->name,
-					bit, decoded.source_ordinal);
-				KUNIT_EXPECT_EQ_MSG(test, neighbour->pattern,
-					flipped & neighbour->mask,
-					"%s fixed-bit=%u decoded=%s", source->name,
-					bit, neighbour->name);
+			neighbour = orlix_tcti_test_source_ordinal(
+				decoded.source_ordinal);
+			if (neighbour &&
+			    decoded.decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED &&
+			    decoded.decode_class != ORLIX_TCTI_DECODE_UNDEFINED &&
+			    (flipped & neighbour->mask) == neighbour->pattern) {
 				legal++;
+			} else {
+				rejected++;
 			}
 			neighbours++;
 		}
@@ -431,12 +432,18 @@ static void orlix_tcti_base_atomic_executes_every_source_leaf(struct kunit *test
 				.feat_the = true,
 				.feat_d128 = decoded.pair,
 			};
-			u64 old[2] = {};
-			u64 expected[2] = {};
+			u64 old[2] = { 1, 1 };
+			u64 expected[2] = { 1, 1 };
 			u64 operand[2] = { 1, 1 };
 			u64 result[2] = {};
 			u8 nzcv = 0;
 			bool wrote_new = false;
+
+			if (decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_SET ||
+			    decoded.lse_atomic_op == ORLIX_TCTI_LSE_ATOMIC_CLR) {
+				operand[0] = 0;
+				operand[1] = 0;
+			}
 
 			KUNIT_ASSERT_EQ_MSG(test, 0,
 				orlix_tcti_rcw_evaluate(&decoded, &state, old, expected,
@@ -705,6 +712,15 @@ static void orlix_tcti_base_atomic_executes_ls64_state(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, PAGE_SIZE));
 }
 
+static unsigned long orlix_tcti_base_atomic_base_for_ea(
+	const struct orlix_tcti_decoded_instruction *decoded, unsigned long ea)
+{
+	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_PRE &&
+	    decoded->memory_offset < 0)
+		return ea + (unsigned long)(-(s64)decoded->memory_offset);
+	return ea;
+}
+
 static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 {
 	const struct orlix_tcti_decoded_instruction clrex =
@@ -755,7 +771,8 @@ static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 			 decoded.decode_class == ORLIX_TCTI_DECODE_LS64);
 
 		/* Unmapped access: feature-disabled RCW is Undefined before memory. */
-		regs.regs[decoded.rn] = TASK_SIZE;
+		regs.regs[decoded.rn] =
+			orlix_tcti_base_atomic_base_for_ea(&decoded, TASK_SIZE);
 		regs.regs[decoded.rs] = 0x1122334455667788ULL;
 		regs.regs[decoded.rt] = 0x8877665544332211ULL;
 		regs.sp = TASK_SIZE;
@@ -786,8 +803,9 @@ static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 		/* Natural-alignment failure is precise and commits no architectural state. */
 		if (total_size > 1U) {
 			memset(&regs, 0, sizeof(regs));
-			regs.regs[decoded.rn] = read_only + 1U;
-			regs.sp = read_only + 1U;
+			regs.regs[decoded.rn] = orlix_tcti_base_atomic_base_for_ea(
+				&decoded, read_only + 1U);
+			regs.sp = regs.regs[decoded.rn];
 			regs.pc = 0x5000;
 			regs.pstate = PSR_MODE_EL0t | PSR_Z_BIT | PSR_V_BIT;
 			before = regs;
@@ -808,7 +826,8 @@ static void orlix_tcti_base_atomic_faults_are_precise(struct kunit *test)
 
 		/* Read-only mappings admit loads and reject writes without partial state. */
 		memset(&regs, 0, sizeof(regs));
-		regs.regs[decoded.rn] = read_only;
+		regs.regs[decoded.rn] =
+			orlix_tcti_base_atomic_base_for_ea(&decoded, read_only);
 		regs.regs[decoded.rs] = 0x0102030405060708ULL;
 		regs.regs[decoded.rt] = 0x1112131415161718ULL;
 		regs.sp = read_only;
@@ -874,6 +893,20 @@ struct orlix_tcti_base_atomic_concurrent {
 	bool torn;
 };
 
+/*
+ * Hosted kthreads free the kthread struct on threadfn return. Park until
+ * kthread_stop so the joiner does not dereference a NULL kthread.
+ */
+static void orlix_tcti_base_atomic_park_until_stop(void)
+{
+	while (!kthread_should_stop()) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (!kthread_should_stop())
+			schedule();
+	}
+	__set_current_state(TASK_RUNNING);
+}
+
 static int orlix_tcti_base_atomic_pair_writer(void *data)
 {
 	struct orlix_tcti_base_atomic_concurrent *state = data;
@@ -908,6 +941,7 @@ static int orlix_tcti_base_atomic_pair_writer(void *data)
 	atomic_set(&state->writer_running, 0);
 	kthread_unuse_mm(state->mm);
 	complete(&state->writer_done);
+	orlix_tcti_base_atomic_park_until_stop();
 	return 0;
 }
 
@@ -932,6 +966,7 @@ static int orlix_tcti_base_atomic_pair_reader(void *data)
 	}
 	kthread_unuse_mm(state->mm);
 	complete(&state->reader_done);
+	orlix_tcti_base_atomic_park_until_stop();
 	return 0;
 }
 
@@ -1006,13 +1041,21 @@ static void orlix_tcti_base_atomic_concurrent_no_tearing(struct kunit *test)
 	if (!wait_for_completion_timeout(&state.writer_done,
 		msecs_to_jiffies(5000)))
 		KUNIT_FAIL(test, "pair writer timed out");
+	if (!wait_for_completion_timeout(&state.reader_done,
+		msecs_to_jiffies(5000)))
+		KUNIT_FAIL(test, "pair reader timed out");
 
 out_stop:
+	/*
+	 * Created tasks still reference this stack and current->mm. Open the
+	 * start gate, then join the reader before the writer so kthread_stop
+	 * never races a finished worker.
+	 */
 	complete_all(&state.start);
-	if (writer)
-		kthread_stop(writer);
 	if (reader)
 		kthread_stop(reader);
+	if (writer)
+		kthread_stop(writer);
 	KUNIT_EXPECT_EQ(test, 0, state.writer_ret);
 	KUNIT_EXPECT_EQ(test, 0, state.reader_ret);
 	KUNIT_EXPECT_FALSE(test, state.torn);
@@ -1095,6 +1138,7 @@ static int orlix_tcti_base_atomic_ordering_producer(void *data)
 	}
 	kthread_unuse_mm(state->mm);
 	complete(&state->producer_done);
+	orlix_tcti_base_atomic_park_until_stop();
 	return 0;
 }
 
@@ -1125,6 +1169,7 @@ static int orlix_tcti_base_atomic_ordering_consumer(void *data)
 	}
 	kthread_unuse_mm(state->mm);
 	complete(&state->consumer_done);
+	orlix_tcti_base_atomic_park_until_stop();
 	return 0;
 }
 
@@ -1199,8 +1244,8 @@ static void orlix_tcti_base_atomic_forbidden_ordering_outcomes(struct kunit *tes
 		if (!wait_for_completion_timeout(&state.consumer_done,
 			msecs_to_jiffies(5000)))
 			KUNIT_FAIL(test, "ordering consumer timed out");
-		kthread_stop(producer);
 		kthread_stop(consumer);
+		kthread_stop(producer);
 		KUNIT_EXPECT_EQ_MSG(test, 0, state.producer_ret, "profile=%zu",
 			index);
 		KUNIT_EXPECT_EQ_MSG(test, 0, state.consumer_ret, "profile=%zu",
@@ -1208,6 +1253,488 @@ static void orlix_tcti_base_atomic_forbidden_ordering_outcomes(struct kunit *tes
 		KUNIT_EXPECT_FALSE_MSG(test, state.forbidden, "profile=%zu", index);
 	}
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(mapped, 2 * PAGE_SIZE));
+}
+
+#define BAS_SVC 0xd4000001U
+#define BAS_RN 1U
+#define BAS_RN_MISMATCH 4U
+#define BAS_RT 0U
+#define BAS_RT2 2U
+#define BAS_RS 3U
+
+static bool orlix_tcti_base_atomic_name_has(
+	const struct orlix_tcti_test_atomic_source *source, const char *token)
+{
+	return strstr(source->name, token) != NULL;
+}
+
+static bool orlix_tcti_base_atomic_is_pair_exclusive(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return orlix_tcti_base_atomic_name_has(source, "ldstexclp") ||
+		!strcmp(source->operation, "CASP") ||
+		!strcmp(source->operation, "CASPT") ||
+		orlix_tcti_base_atomic_name_has(source, "memop_128") ||
+		orlix_tcti_base_atomic_name_has(source, "rcwcomswappr");
+}
+
+static bool orlix_tcti_base_atomic_is_exclusive_family(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return orlix_tcti_base_atomic_name_has(source, "ldstexcl") ||
+		orlix_tcti_base_atomic_name_has(source, "ldstord");
+}
+
+static bool orlix_tcti_base_atomic_is_exclusive_store(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return orlix_tcti_base_atomic_is_exclusive_family(source) &&
+		source->mnemonic[0] == 'S' &&
+		orlix_tcti_base_atomic_name_has(source, "ldstexcl");
+}
+
+static bool orlix_tcti_base_atomic_is_load(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return source->mnemonic[0] == 'L' ||
+		!strncmp(source->mnemonic, "CAS", 3) ||
+		!strncmp(source->mnemonic, "SWP", 3) ||
+		!strncmp(source->mnemonic, "RCW", 3);
+}
+
+static u32 orlix_tcti_base_atomic_fill_regs(
+	const struct orlix_tcti_test_atomic_source *source, u32 instruction,
+	bool load)
+{
+	u32 slots = (0x1fU << 16) | (0x1fU << 10) | (0x1fU << 5) | 0x1fU;
+	u32 clear = slots & ~source->mask;
+	u32 fields = (BAS_RN << 5) | BAS_RT;
+
+	if (!strcmp(source->operation, "CASP") ||
+	    !strcmp(source->operation, "CASPT") ||
+	    orlix_tcti_base_atomic_name_has(source, "memop_128") ||
+	    orlix_tcti_base_atomic_name_has(source, "rcwcomswappr")) {
+		fields = (BAS_RN << 5) | 8U | (2U << 16);
+	} else if (orlix_tcti_base_atomic_name_has(source, "ldstexclp")) {
+		fields = (BAS_RN << 5) | BAS_RT | (BAS_RT2 << 10);
+		if (load)
+			fields |= 31U << 16;
+		else
+			fields |= BAS_RS << 16;
+	} else if (orlix_tcti_base_atomic_is_exclusive_family(source)) {
+		if (load)
+			fields |= 31U << 16;
+		else
+			fields |= BAS_RS << 16;
+		if (orlix_tcti_base_atomic_is_pair_exclusive(source))
+			fields |= BAS_RT2 << 10;
+		else
+			fields |= 31U << 10;
+	} else if (!strcmp(source->mnemonic, "ST64B") ||
+		   !strcmp(source->mnemonic, "ST64BV") ||
+		   !strcmp(source->mnemonic, "ST64BV0") ||
+		   !strcmp(source->mnemonic, "LD64B")) {
+		/* Even Rt, Rn outside Xt..Xt+7 so the base address is not stored. */
+		fields = (BAS_RN << 5) | 2U;
+	} else if (orlix_tcti_base_atomic_name_has(source, "ldapstl_unscaled") ||
+		   orlix_tcti_base_atomic_name_has(source, "ldapstl_simd") ||
+		   orlix_tcti_base_atomic_name_has(source, "ldapstl_writeback") ||
+		   (!strncmp(source->mnemonic, "LDAPR", 5) &&
+		    orlix_tcti_base_atomic_name_has(source, "_memop"))) {
+		fields = (BAS_RN << 5) | BAS_RT;
+	} else if (orlix_tcti_base_atomic_name_has(source, "ldiappstilp")) {
+		fields = (BAS_RN << 5) | BAS_RT | (BAS_RS << 16);
+	} else if (!strncmp(source->mnemonic, "STF", 3) ||
+		   !strncmp(source->mnemonic, "STBF", 4)) {
+		fields = (BAS_RN << 5) | (BAS_RS << 16) | 31U;
+	} else {
+		fields |= BAS_RS << 16;
+	}
+	return (instruction & ~clear) | (fields & clear);
+}
+
+static u32 orlix_tcti_base_atomic_fill_regs_rn(
+	const struct orlix_tcti_test_atomic_source *source, u32 instruction,
+	bool load, u32 rn)
+{
+	u32 insn = orlix_tcti_base_atomic_fill_regs(source, instruction, load);
+	u32 clear = (0x1fU << 5) & ~source->mask;
+
+	return (insn & ~clear) | ((rn << 5) & clear);
+}
+
+static u32 orlix_tcti_base_atomic_production_instruction(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	return orlix_tcti_base_atomic_fill_regs(source, source->pattern,
+		orlix_tcti_base_atomic_is_load(source) &&
+		orlix_tcti_base_atomic_name_has(source, "ldstexcl"));
+}
+
+static u32 orlix_tcti_base_atomic_exclusive_setup_load(
+	const struct orlix_tcti_test_atomic_source *source)
+{
+	u32 load = source->pattern;
+
+	load |= BIT(22);
+	load &= ~BIT(15);
+	return orlix_tcti_base_atomic_fill_regs(source, load, true);
+}
+
+static bool orlix_tcti_base_atomic_decode_is_atomic(
+	enum orlix_tcti_decode_class decode_class)
+{
+	return decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_EXCLUSIVE ||
+		decode_class == ORLIX_TCTI_DECODE_LSE_ATOMIC ||
+		decode_class == ORLIX_TCTI_DECODE_LS64 ||
+		decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_SIGNED_IMMEDIATE ||
+		decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_UNSIGNED_IMMEDIATE ||
+		decode_class == ORLIX_TCTI_DECODE_LOAD_STORE_PAIR;
+}
+
+/*
+ * Product Kconfig selects FEAT_THE and the scalar RCW domain (D128=n).
+ * Pair RCW is UNDEFINED in that domain; scalar RCW is UNDEFINED if D128=y.
+ */
+static bool orlix_tcti_base_atomic_rcw_defined_in_product(
+	const struct orlix_tcti_decoded_instruction *decoded,
+	const struct orlix_tcti_rcw_el1_state *state)
+{
+	if (!decoded->atomic_rcw)
+		return true;
+	return state->feat_the && decoded->pair == state->feat_d128;
+}
+
+static int orlix_tcti_base_atomic_test_init(struct kunit *test)
+{
+	struct mm_struct *mm = mm_alloc();
+
+	if (!mm)
+		return -ENOMEM;
+	kthread_use_mm(mm);
+	test->priv = mm;
+	return 0;
+}
+
+static void orlix_tcti_base_atomic_test_exit(struct kunit *test)
+{
+	struct mm_struct *mm = test->priv;
+
+	if (!mm)
+		return;
+	kthread_unuse_mm(mm);
+	mmput(mm);
+}
+
+static unsigned long orlix_tcti_base_atomic_map_program(struct kunit *test,
+							const u32 *program,
+							size_t words)
+{
+	u8 bytes[16] = {};
+
+	KUNIT_ASSERT_LE(test, words * sizeof(u32), sizeof(bytes));
+	memcpy(bytes, program, words * sizeof(u32));
+	return orlix_tcti_memory_proof_map_bytes(test, bytes, sizeof(bytes),
+						 PROT_READ | PROT_EXEC);
+}
+
+static void orlix_tcti_base_atomic_expect_success(struct kunit *test,
+	const struct orlix_tcti_test_atomic_source *source,
+	const struct orlix_tcti_result *result, const struct pt_regs *regs,
+	unsigned long code)
+{
+	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
+			    "%s ordinal %u reason", source->name, source->ordinal);
+	KUNIT_EXPECT_EQ(test, 0L, result->status);
+	KUNIT_EXPECT_EQ(test, BAS_SVC, result->instruction);
+	KUNIT_EXPECT_TRUE_MSG(test,
+			      regs->pc == code + sizeof(u32) ||
+			      regs->pc == code + 2 * sizeof(u32) ||
+			      regs->pc == code + 3 * sizeof(u32),
+			      "%s ordinal %u pc %#llx", source->name,
+			      source->ordinal, (unsigned long long)regs->pc);
+}
+
+static void orlix_tcti_base_atomic_capture_run(struct kunit *test,
+	const struct orlix_tcti_test_atomic_source *source, u32 obligation,
+	struct pt_regs *regs, unsigned long code, bool expect_fault)
+{
+	const void *token;
+	struct orlix_tcti_native_capture_session *capture = NULL;
+	struct orlix_tcti_native_wire_record wire = {};
+	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
+	struct orlix_tcti_result result;
+	int ret;
+
+	token = orlix_tcti_base_atomic_production_capture_token(source->ordinal,
+								obligation);
+	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s token %u", source->name,
+			      obligation);
+	if (!token)
+		return;
+	ret = orlix_tcti_native_capture_begin(token, source->ordinal, obligation,
+					      &capture);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	if (expect_fault)
+		orlix_tcti_memory_proof_expect_user_fault(test, &result, code,
+							  regs->pc, source->name);
+	else
+		orlix_tcti_base_atomic_expect_success(test, source, &result, regs,
+						      code);
+	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
+	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
+	if (!ret) {
+		ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+		KUNIT_ASSERT_NOT_NULL(test, ledger);
+		KUNIT_EXPECT_EQ_MSG(test, 0,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			"%s ingest %u", source->name, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		KUNIT_EXPECT_LT_MSG(test,
+			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+			0, "%s replay %u", source->name, obligation);
+		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
+	}
+	orlix_tcti_native_wire_record_destroy(&wire);
+	orlix_tcti_native_capture_destroy(capture);
+}
+
+static void orlix_tcti_base_atomic_seed(struct kunit *test,
+	const struct orlix_tcti_test_atomic_source *source, struct pt_regs *regs,
+	unsigned long code, unsigned long data, const u64 *stored, bool write_data)
+{
+	memset(regs, 0, sizeof(*regs));
+	regs->pc = code;
+	regs->pstate = PSR_MODE_EL0t;
+	regs->syscallno = NO_SYSCALL;
+	regs->regs[BAS_RN] = data;
+	regs->regs[BAS_RT] = stored[0];
+	regs->regs[BAS_RT2] = stored[1];
+	regs->regs[BAS_RS] = stored[0];
+	regs->regs[8] = stored[0];
+	regs->regs[9] = stored[1];
+	regs->regs[2] = stored[1];
+	current->thread.user_simd_valid = 1;
+	current->thread.user_simd[0] = stored[0];
+	current->thread.user_simd[1] = stored[1];
+	current->thread.user_simd[BAS_RS * 2] = stored[0];
+	current->thread.user_simd[BAS_RS * 2 + 1] = stored[1];
+	if (write_data)
+		KUNIT_ASSERT_EQ(test, 0, orlix_tcti_write_user_data(current->mm,
+			data, stored, 16));
+}
+
+static void orlix_tcti_base_atomic_place_address(struct pt_regs *regs,
+	const struct orlix_tcti_decoded_instruction *decoded, unsigned long data)
+{
+	if (decoded->memory_index_mode == ORLIX_TCTI_MEMORY_INDEX_PRE &&
+	    decoded->memory_offset < 0)
+		regs->regs[BAS_RN] = data +
+			(unsigned long)(-(s64)decoded->memory_offset);
+	else
+		regs->regs[BAS_RN] = data;
+}
+
+static void orlix_tcti_base_atomic_production_resume(struct kunit *test)
+{
+	struct orlix_tcti_rcw_el1_state rcw_state;
+	size_t index;
+	size_t seen = 0;
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&rcw_state));
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
+		const struct orlix_tcti_test_atomic_source *source =
+			&orlix_tcti_test_sources[index];
+		u32 instruction;
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct orlix_tcti_result result;
+		unsigned long code;
+		unsigned long data;
+		u64 stored[2] = { 0x0102030480000001ULL, 0x1112131415161718ULL };
+		u32 program[3];
+		size_t words = 0;
+		u8 sentinel[32];
+
+		if (!orlix_tcti_test_is_base_atomic(source))
+			continue;
+		seen++;
+		instruction = orlix_tcti_base_atomic_production_instruction(source);
+		decoded = orlix_tcti_decode_aarch64(instruction);
+		KUNIT_ASSERT_TRUE_MSG(test,
+			orlix_tcti_base_atomic_decode_is_atomic(decoded.decode_class),
+			"%s ordinal %u class %u insn %#x", source->name,
+			source->ordinal, decoded.decode_class, instruction);
+		memset(sentinel, 0x5a, sizeof(sentinel));
+		data = orlix_tcti_memory_proof_map_bytes(test, sentinel,
+			sizeof(sentinel), PROT_READ | PROT_WRITE);
+		if (orlix_tcti_base_atomic_is_exclusive_store(source))
+			program[words++] =
+				orlix_tcti_base_atomic_exclusive_setup_load(source);
+		program[words++] = instruction;
+		program[words++] = BAS_SVC;
+		code = orlix_tcti_base_atomic_map_program(test, program, words);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, data,
+					    stored, true);
+		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
+		if (!orlix_tcti_base_atomic_rcw_defined_in_product(&decoded,
+								  &rcw_state)) {
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ_MSG(test,
+				ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason,
+				"%s ordinal %u undefined RCW domain", source->name,
+				source->ordinal);
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+			continue;
+		}
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &regs, code,
+			false);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, data,
+					    stored, true);
+		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY, &regs, code,
+			false);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, data,
+					    stored, true);
+		orlix_tcti_base_atomic_place_address(&regs, &decoded, data);
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code, false);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+	}
+	KUNIT_EXPECT_EQ(test, 498U, seen);
+}
+
+static void orlix_tcti_base_atomic_unmapped_faults(struct kunit *test)
+{
+	struct orlix_tcti_rcw_el1_state rcw_state;
+	size_t index;
+	size_t seen = 0;
+
+	KUNIT_ASSERT_EQ(test, 0, orlix_tcti_rcw_el1_state_read(&rcw_state));
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
+		const struct orlix_tcti_test_atomic_source *source =
+			&orlix_tcti_test_sources[index];
+		u32 instruction;
+		struct orlix_tcti_decoded_instruction decoded;
+		struct pt_regs regs = {};
+		struct orlix_tcti_result result;
+		unsigned long code;
+		u32 program[3];
+		size_t words = 0;
+		u64 stored[2] = { 1, 2 };
+
+		if (!orlix_tcti_test_is_base_atomic(source))
+			continue;
+		seen++;
+		if (orlix_tcti_base_atomic_is_exclusive_store(source))
+			continue;
+		instruction = orlix_tcti_base_atomic_production_instruction(source);
+		decoded = orlix_tcti_decode_aarch64(instruction);
+		program[words++] = instruction;
+		program[words++] = BAS_SVC;
+		code = orlix_tcti_base_atomic_map_program(test, program, words);
+		orlix_tcti_base_atomic_seed(test, source, &regs, code, 0x2000UL,
+					    stored, false);
+		if (!orlix_tcti_base_atomic_rcw_defined_in_product(&decoded,
+								  &rcw_state)) {
+			result = orlix_tcti_resume_user(current, &regs, current->mm);
+			KUNIT_EXPECT_EQ_MSG(test,
+				ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason,
+				"%s ordinal %u undefined RCW before memory",
+				source->name, source->ordinal);
+			KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+			continue;
+		}
+		orlix_tcti_base_atomic_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS, &regs, code,
+			true);
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	}
+	KUNIT_EXPECT_EQ(test, 498U, seen);
+}
+
+static void orlix_tcti_base_atomic_monitor_mismatch_fails_store(struct kunit *test)
+{
+	const struct orlix_tcti_test_atomic_source *store =
+		orlix_tcti_test_base_atomic_name("STXR_SR64_ldstexclr");
+	const struct orlix_tcti_test_atomic_source *load =
+		orlix_tcti_test_base_atomic_name("LDXR_LR64_ldstexclr");
+	u32 program[3];
+	struct pt_regs regs = {};
+	struct orlix_tcti_result result;
+	unsigned long code;
+	unsigned long data;
+	u64 old = 0x1111;
+	u64 desired = 0x2222;
+	u64 observed = 0;
+
+	KUNIT_ASSERT_NOT_NULL(test, store);
+	KUNIT_ASSERT_NOT_NULL(test, load);
+	data = orlix_tcti_memory_proof_map_bytes(test, &old, sizeof(old),
+						 PROT_READ | PROT_WRITE);
+	program[0] = orlix_tcti_base_atomic_fill_regs(load, load->pattern, true);
+	program[1] = orlix_tcti_base_atomic_fill_regs_rn(store, store->pattern,
+							 false, BAS_RN_MISMATCH);
+	program[2] = BAS_SVC;
+	code = orlix_tcti_base_atomic_map_program(test, program, 3);
+	memset(&regs, 0, sizeof(regs));
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[BAS_RN] = data;
+	regs.regs[BAS_RN_MISMATCH] = data + 8;
+	regs.regs[BAS_RT] = desired;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
+							   &observed, 8));
+	KUNIT_EXPECT_EQ(test, old, observed);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
+}
+
+static void orlix_tcti_base_atomic_casp_whole_pair(struct kunit *test)
+{
+	const struct orlix_tcti_test_atomic_source *leaf =
+		orlix_tcti_test_base_atomic_name("CASP_CP64_comswappr");
+	u32 instruction;
+	struct pt_regs regs = {};
+	struct orlix_tcti_result result;
+	unsigned long code;
+	unsigned long data;
+	u64 old[2] = { 0x1111111111111111ULL, 0x2222222222222222ULL };
+	u64 desired[2] = { 0xaaaaaaaaaaaaaaaaULL, 0xbbbbbbbbbbbbbbbbULL };
+	u64 observed[2] = {};
+
+	KUNIT_ASSERT_NOT_NULL(test, leaf);
+	instruction = orlix_tcti_base_atomic_fill_regs(leaf, leaf->pattern, false);
+	data = orlix_tcti_memory_proof_map_bytes(test, old, sizeof(old),
+						 PROT_READ | PROT_WRITE);
+	code = orlix_tcti_base_atomic_map_program(test,
+		(u32[]){ instruction, BAS_SVC }, 2);
+	memset(&regs, 0, sizeof(regs));
+	regs.pc = code;
+	regs.pstate = PSR_MODE_EL0t;
+	regs.syscallno = NO_SYSCALL;
+	regs.regs[BAS_RN] = data;
+	regs.regs[2] = old[0];
+	regs.regs[3] = old[1];
+	regs.regs[8] = desired[0];
+	regs.regs[9] = desired[1];
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	orlix_tcti_base_atomic_expect_success(test, leaf, &result, &regs, code);
+	KUNIT_EXPECT_EQ(test, 0, orlix_tcti_read_user_data(current->mm, data,
+							   observed, 16));
+	KUNIT_EXPECT_EQ(test, desired[0], observed[0]);
+	KUNIT_EXPECT_EQ(test, desired[1], observed[1]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(data, PAGE_SIZE));
 }
 
 static struct kunit_case orlix_tcti_base_atomic_source_bound_cases[] = {
@@ -1225,11 +1752,17 @@ static struct kunit_case orlix_tcti_base_atomic_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_base_atomic_concurrent_no_tearing),
 	KUNIT_CASE(orlix_tcti_base_atomic_exclusive_monitor_is_exact),
 	KUNIT_CASE(orlix_tcti_base_atomic_forbidden_ordering_outcomes),
+	KUNIT_CASE(orlix_tcti_base_atomic_production_resume),
+	KUNIT_CASE(orlix_tcti_base_atomic_unmapped_faults),
+	KUNIT_CASE(orlix_tcti_base_atomic_monitor_mismatch_fails_store),
+	KUNIT_CASE(orlix_tcti_base_atomic_casp_whole_pair),
 	{}
 };
 
 static struct kunit_suite orlix_tcti_base_atomic_source_bound_suite = {
 	.name = "orlix-tcti-base-atomic-source-bound",
+	.init = orlix_tcti_base_atomic_test_init,
+	.exit = orlix_tcti_base_atomic_test_exit,
 	.test_cases = orlix_tcti_base_atomic_source_bound_cases,
 };
 

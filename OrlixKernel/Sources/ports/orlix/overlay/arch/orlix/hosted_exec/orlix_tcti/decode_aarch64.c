@@ -920,16 +920,20 @@ static bool orlix_tcti_atomic_pair_operation(const char *operation)
 
 static u8 orlix_tcti_atomic_named_size(const char *name, u32 instruction)
 {
-	if (strstr(name, "_Q_"))
+	if (strstr(name, "128") || strstr(name, "_Q_"))
 		return 2 * sizeof(u64);
-	if (strstr(name, "_8") || strstr(name, "_B_"))
+	if (strstr(name, "B_C32") || strstr(name, "B_C64") ||
+	    strstr(name, "RB_") || strstr(name, "LB_") || strstr(name, "AB_") ||
+	    strstr(name, "_B_") || strstr(name, "_8"))
 		return sizeof(u8);
-	if (strstr(name, "_16") || strstr(name, "_H_"))
+	if (strstr(name, "H_C32") || strstr(name, "H_C64") ||
+	    strstr(name, "RH_") || strstr(name, "LH_") || strstr(name, "AH_") ||
+	    strstr(name, "_H_") || strstr(name, "_16"))
 		return sizeof(u16);
-	if (strstr(name, "_32") || strstr(name, "_S_"))
-		return sizeof(u32);
-	if (strstr(name, "_64") || strstr(name, "_D_"))
+	if (strstr(name, "64") || strstr(name, "_D_"))
 		return sizeof(u64);
+	if (strstr(name, "32") || strstr(name, "_S_"))
+		return sizeof(u32);
 	return 1U << orlix_tcti_bits(instruction, 30, 2);
 }
 
@@ -945,12 +949,26 @@ static void orlix_tcti_atomic_order(
 	decoded->release = strchr(suffix, 'L') != NULL;
 }
 
+static bool orlix_tcti_atomic_rcws_operation(const char *operation)
+{
+	const char *rest;
+
+	if (!orlix_tcti_text_has_prefix(operation, "RCWS"))
+		return false;
+	rest = operation + 4;
+	/* RCWSWP/RCWSET are RCW+SWP/SET. RCWSSWP/RCWSSET are the soft forms. */
+	return orlix_tcti_text_has_prefix(rest, "CAS") ||
+		orlix_tcti_text_has_prefix(rest, "SWP") ||
+		orlix_tcti_text_has_prefix(rest, "CLR") ||
+		orlix_tcti_text_has_prefix(rest, "SET");
+}
+
 static bool orlix_tcti_atomic_operation(
 	const char *operation, enum orlix_tcti_lse_atomic_op *op)
 {
 	const char *name = operation;
 
-	if (orlix_tcti_text_has_prefix(name, "RCWS"))
+	if (orlix_tcti_atomic_rcws_operation(name))
 		name += 4;
 	else if (orlix_tcti_text_has_prefix(name, "RCW"))
 		name += 3;
@@ -1183,10 +1201,13 @@ orlix_tcti_decode_base_atomic_source(u32 instruction, bool *matched)
 		decoded.decode_class = ORLIX_TCTI_DECODE_LSE_ATOMIC;
 		decoded.atomic_rcw = orlix_tcti_text_has_prefix(operation, "RCW");
 		decoded.atomic_rcw_soft =
-			orlix_tcti_text_has_prefix(operation, "RCWS");
+			orlix_tcti_atomic_rcws_operation(operation);
 		decoded.pair = orlix_tcti_atomic_pair_operation(operation);
-		if (decoded.atomic_rcw && decoded.pair)
+		if (decoded.atomic_rcw && decoded.pair) {
 			decoded.rt2 = decoded.rt + 1U;
+			decoded.access_size = sizeof(u64);
+			decoded.result_size = sizeof(u64);
+		}
 		decoded.lse128 = !strcmp(operation, "LDCLRP") ||
 			!strcmp(operation, "LDSETP") || !strcmp(operation, "SWPP");
 		decoded.unprivileged = strchr(operation, 'T') != NULL;

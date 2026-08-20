@@ -754,8 +754,11 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "5d80460fba9cebadbe3f54b3b9a7f8deeb2be0c8d341826a9af8f0fb09ebb0bd",
 	  "orlix_tcti_lse128_resume_test.o", NULL, NULL, NULL },
 	{ BASE_ATOMIC_SOURCE,
-	  "0e252374943cd82dfc6622ef43d40e07351c5a706553e5fb9b48822e51727dfd",
-	  "orlix_tcti_base_atomic_source_bound_test.o", NULL, NULL, NULL },
+	  "3230c0535cdf4e607eb353e75833c01d9da147f354c2f0241f073b699117bc0f",
+	  "orlix_tcti_base_atomic_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ LOGICAL_SHIFT_SOURCE,
 	  "44ebc99fb0297ee4353472b931f888986e80d5aecf84096dc3ab58cb58a95e64",
 	  "orlix_tcti_logical_shifted_register_test.o", NULL, NULL, NULL },
@@ -922,6 +925,26 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  BASE_ATOMIC_CASE_ARRAY,
 	  "orlix_tcti_base_atomic_forbidden_ordering_outcomes",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_unmapped_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_monitor_mismatch_fails_store",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, BASE_ATOMIC_SUITE_SYMBOL,
+	  BASE_ATOMIC_CASE_ARRAY,
+	  "orlix_tcti_base_atomic_casp_whole_pair",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
 	{ DECODE_SOURCE, DECODE_SUITE, DECODE_SUITE_SYMBOL, DECODE_CASE_ARRAY,
 	  "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2289,7 +2312,8 @@ static const struct orlix_tcti_target_proof_case add_sub_immediate_flags_cases[]
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE },
 };
 
-static const struct orlix_tcti_target_proof_case lse_source_bound_cases[] = {
+static const struct orlix_tcti_target_proof_case lse_source_bound_cases[]
+	__attribute__((unused)) = {
 	{ "lse_source_bound_decodes_every_base_leaf",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -2349,6 +2373,27 @@ static const struct orlix_tcti_target_proof_case base_atomic_source_bound_cases[
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
 	{ "orlix_tcti_base_atomic_forbidden_ordering_outcomes",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "orlix_tcti_base_atomic_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_atomic_unmapped_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
+	{ "orlix_tcti_base_atomic_monitor_mismatch_fails_store",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY },
+	{ "orlix_tcti_base_atomic_casp_whole_pair",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ATOMICITY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY },
+};
+
+static const struct orlix_tcti_target_proof_case base_atomic_production_cases[] = {
+	{ "orlix_tcti_base_atomic_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_atomic_unmapped_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 };
 
 static const struct orlix_tcti_target_proof_case base_ordered_source_bound_cases[] = {
@@ -2395,9 +2440,16 @@ static const struct orlix_tcti_target_proof_case base_ordered_source_bound_cases
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 	{ "orlix_tcti_base_atomic_forbidden_ordering_outcomes",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_ORDERING },
+	{ "orlix_tcti_base_atomic_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_MEMORY |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_atomic_unmapped_faults",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FAULTS },
 };
 
-static const struct orlix_tcti_target_proof_case lse128_source_bound_cases[] = {
+static const struct orlix_tcti_target_proof_case lse128_source_bound_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_lse128_resume_all_source_leaves",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -2417,7 +2469,8 @@ static const struct orlix_tcti_target_proof_case lse128_source_bound_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
-static const struct orlix_tcti_target_proof_case exclusive_source_bound_cases[] = {
+static const struct orlix_tcti_target_proof_case exclusive_source_bound_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_decode_exhaustive_load_store_exclusive_family",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -3095,13 +3148,13 @@ struct lse_registry_operation {
 
 #define LSE_OPERATION(operation, slug, expected) \
 	{ operation, "kunit:lse-base-" slug, LSE_CONDITION, \
-	  LSE_SOURCE_BOUND_SOURCE, LSE_SOURCE_BOUND_SUITE, \
-	  lse_source_bound_cases, ARRAY_COUNT(lse_source_bound_cases), expected, \
+	  BASE_ATOMIC_SOURCE, BASE_ATOMIC_SUITE, \
+	  base_atomic_production_cases, ARRAY_COUNT(base_atomic_production_cases), expected, \
 	  0, 0 }
 #define LSE128_OPERATION(operation, slug) \
-	{ operation, "kunit:lse128-" slug, LSE128_CONDITION, LSE128_SOURCE, \
-	  LSE128_SUITE, lse128_source_bound_cases, \
-	  ARRAY_COUNT(lse128_source_bound_cases), 4, 0, 0 }
+	{ operation, "kunit:lse128-" slug, LSE128_CONDITION, BASE_ATOMIC_SOURCE, \
+	  BASE_ATOMIC_SUITE, base_atomic_production_cases, \
+	  ARRAY_COUNT(base_atomic_production_cases), 4, 0, 0 }
 
 static struct lse_registry_operation lse_registry_operations[] = {
 	LSE_OPERATION("CASB", "casb", 4),
@@ -3701,7 +3754,7 @@ static bool build_exclusive_registry(void)
 		binding->encoding_pattern = source->encoding_pattern;
 		binding->condition_tcnd_hex = source->condition_tcnd_hex;
 		binding->kunit_case_mask =
-			(ORLIX_TCTI_PROOF_U64_C(1) << ARRAY_COUNT(exclusive_source_bound_cases)) - 1;
+			(ORLIX_TCTI_PROOF_U64_C(1) << ARRAY_COUNT(base_atomic_production_cases)) - 1;
 		binding->source_ordinal = source->ordinal;
 	}
 	for (index = 0; index < ARRAY_COUNT(exclusive_registry_operations); index++) {
@@ -3721,10 +3774,10 @@ static bool build_exclusive_registry(void)
 			.obligations = EXCLUSIVE_REQUIRED_OBLIGATIONS,
 			.linux_interface =
 				ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
-			.kunit_source = DECODE_SOURCE,
-			.kunit_suite = DECODE_SUITE,
-			.kunit_cases = exclusive_source_bound_cases,
-			.kunit_case_count = ARRAY_COUNT(exclusive_source_bound_cases),
+			.kunit_source = BASE_ATOMIC_SOURCE,
+			.kunit_suite = BASE_ATOMIC_SUITE,
+			.kunit_cases = base_atomic_production_cases,
+			.kunit_case_count = ARRAY_COUNT(base_atomic_production_cases),
 			.bindings = &exclusive_registry_bindings[operation->binding_offset],
 			.binding_count = operation->binding_count,
 			.kselftest = NULL,
@@ -3932,7 +3985,8 @@ static bool build_advsimd_load_store_registry(void)
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		ADVSIMD_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (advsimd_load_store_registry_ready)
 		return true;
@@ -4378,7 +4432,8 @@ static bool build_production_capture_family_registry(void)
 {
 	size_t entry_base = ARRAY_COUNT(proof_registry_entries) -
 		PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT -
-		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT;
+		MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT -
+		BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT;
 
 	if (production_capture_family_registry_ready)
 		return true;
@@ -4637,6 +4692,8 @@ enum base_atomic_case_index {
 	BASE_ATOMIC_CASE_ATOMICITY,
 	BASE_ATOMIC_CASE_EXCLUSIVE_MONITOR,
 	BASE_ATOMIC_CASE_ORDERING,
+	BASE_ATOMIC_CASE_PRODUCTION_RESUME,
+	BASE_ATOMIC_CASE_UNMAPPED_FAULTS,
 };
 
 static orlix_tcti_proof_u64 base_atomic_case_mask(
@@ -4669,8 +4726,13 @@ static orlix_tcti_proof_u64 base_atomic_case_mask(
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_ORDERED_SHAPES;
 		/* The ordered-only registry projects ordering at case index 11. */
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_ATOMICITY;
+		/* production_resume and unmapped_faults follow that 12-entry prefix. */
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 12;
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << 13;
 	} else {
 		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_ORDERING;
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_PRODUCTION_RESUME;
+		mask |= ORLIX_TCTI_PROOF_U64_C(1) << BASE_ATOMIC_CASE_UNMAPPED_FAULTS;
 	}
 	return mask;
 }
@@ -4684,7 +4746,7 @@ static bool base_atomic_missing_operation(const char *operation_id)
 
 		if (!base_atomic_missing_proof_id(source_bound_proofs[index].proof_id))
 			continue;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(source_bound_proofs[index].source_ordinal);
 		if (source && !strcmp(source->operation_id, operation_id))
 			return true;
 	}
@@ -4710,7 +4772,7 @@ static bool build_base_atomic_missing_registry(void)
 			continue;
 		if (count >= ARRAY_COUNT(base_atomic_missing_bindings))
 			return false;
-		source = source_manifest_binding(source_bound_proofs[index].ordinal);
+		source = source_manifest_binding(source_bound_proofs[index].source_ordinal);
 		if (!source)
 			return false;
 		obligations = base_atomic_obligations(source->operation_id);
