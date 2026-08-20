@@ -178,6 +178,17 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIBaseControlFlowDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-base-control-flow-source-bound " +
+            "orlix.kselftest=boot_profile_contract",
+        expectedKUnitSuite: "orlix-tcti-base-control-flow-source-bound",
+        hostDirectoryFixture: true
+    )
+
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

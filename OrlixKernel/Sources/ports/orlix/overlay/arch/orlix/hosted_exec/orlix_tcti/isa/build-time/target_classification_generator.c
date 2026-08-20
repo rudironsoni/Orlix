@@ -80,6 +80,12 @@ static const struct reviewed_classification_binding reviewed_bindings[] = {
 	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-dcps3-non-el0" },
 	{ "ERET_64E_branch_reg", CLASS_NON_EL0,
 	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-eret-non-el0" },
+	{ "ERETAA_64E_branch_reg", CLASS_NON_EL0,
+	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-ereta-non-el0" },
+	{ "ERETAB_64E_branch_reg", CLASS_NON_EL0,
+	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-ereta-non-el0" },
+	{ "TEXIT_te_branch_reg", CLASS_NON_EL0,
+	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-texit-non-el0" },
 	{ "DRPS_64E_branch_reg", CLASS_NON_EL0,
 	  "pinned-source:privileged-el0-rejection", "kunit:source-leaf-drps-non-el0" },
 };

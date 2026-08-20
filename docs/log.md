@@ -7,6 +7,10 @@ updated: 2026-08-20
 ---
 # Orlix Knowledge Log
 
+## [2026-08-20] record | Land the BASE_CONTROL_FLOW proof contract
+
+Recorded that the 10 unique `BASE_CONTROL_FLOW` leaves have production decode and EL0 classification. The five EL0 leaves B, BL, BR, BLR, and RET have production observations for `REGISTERS` and `PC`. `FLAGS`, `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable for those EL0 leaves. ERET, ERETAA, ERETAB, DRPS, and TEXIT are classified `NON_EL0` and prove EL0 rejection. TEXIT official DDI0602 semantics are unspecified. Reserved encodings stay decode `UNSUPPORTED`. `linux_proof_executed` stays 0. `FEAT_TEV` is not advertised. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-20] record | Land the BASE_ADD_SUBTRACT proof contract
 
 Recorded that the 34 unique `BASE_ADD_SUBTRACT` leaves have production decode, execute, and typed native observations for `REGISTERS`, `PC`, and `FLAGS`. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. Immediate, shifted, extended, and carry forms stay on one production-capture suite with ADDPT and SUBPT. ADDPT and SUBPT keep PAC tag bits [63:56] and do 56-bit pointer arithmetic. Reserved encodings stay decode `UNSUPPORTED`. `linux_proof_executed` stays 0. `FEAT_CPA` is not advertised. The 4,350-leaf coverage task stays doing.
