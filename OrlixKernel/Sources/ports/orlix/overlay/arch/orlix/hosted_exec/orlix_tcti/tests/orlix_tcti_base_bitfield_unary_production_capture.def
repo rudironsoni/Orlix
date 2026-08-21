@@ -1,0 +1,236 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #129 production-path observations. These rows bind all 19 always-on
+ * EL0 BASE_BITFIELD_UNARY ordinals on orlix-tcti-base-bitfield-unary-source-bound.
+ * They do not add a second METADATA family. FEAT_CSSC CTZ/CNT/ABS stay
+ * NON_EL0 reject. UDIV/LSLV stay off this suite.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2169U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2169U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2170U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2170U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2205U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2205U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2206U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2206U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2207U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2207U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2208U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2208U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2209U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2209U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2210U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	2210U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3389U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3389U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3390U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3390U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3391U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3391U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3392U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3392U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3393U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3393U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3397U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3397U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3398U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3398U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3399U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3399U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3400U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3400U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3401U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3401U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3402U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c",
+	"orlix-tcti-base-bitfield-unary-source-bound", "orlix_tcti_base_bitfield_unary_production_resume",
+	3402U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

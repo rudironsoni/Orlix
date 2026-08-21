@@ -105,6 +105,17 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-base-conditional-source-bound")
     }
 
+    func testFocusedOrlixTCTIBaseBitfieldUnaryDiagnosticSelectsExactOuterSuite() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIBaseBitfieldUnaryDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-base-bitfield-unary-source-bound " +
+            "orlix.kselftest=boot_profile_contract"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-base-bitfield-unary-source-bound")
+    }
+
     func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
         XCTAssertEqual(
             OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
