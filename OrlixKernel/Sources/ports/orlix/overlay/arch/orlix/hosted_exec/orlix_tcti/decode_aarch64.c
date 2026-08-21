@@ -958,6 +958,29 @@ static void orlix_tcti_bind_base_exceptions_source(
 	}
 }
 
+static void orlix_tcti_bind_base_conditional_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_CONDITIONAL)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -1767,61 +1790,16 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.nonzero = instruction & BIT(24);
 		decoded.branch_imm = sign_extend64(imm << 2, 20);
+		orlix_tcti_bind_base_conditional_source(&decoded);
 		return decoded;
 	}
 
 	if ((instruction & AARCH64_COMPARE_BRANCH_EXTENSION_MASK) ==
 	    AARCH64_COMPARE_BRANCH_EXTENSION_PATTERN) {
-		u8 condition = (instruction >> 21) & 0x7U;
-		u8 size = (instruction >> 14) & 0x3U;
-
-		if (condition == 4 || condition == 5)
+		orlix_tcti_bind_base_conditional_source(&decoded);
+		if (decoded.source_ordinal) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
 			return decoded;
-		decoded.compare_branch_immediate = instruction & BIT(24);
-		if (decoded.compare_branch_immediate) {
-			if (instruction & BIT(14))
-				return decoded;
-			decoded.compare_branch_access_size =
-				instruction & BIT(31) ? sizeof(u64) : sizeof(u32);
-			decoded.imm6 = ((instruction >> 16) & 0x1fU) |
-				       ((instruction >> 10) & 0x20U);
-		} else {
-			if (size == 1 || (size && (instruction & BIT(31))))
-				return decoded;
-			decoded.compare_branch_access_size =
-				size == 2 ? sizeof(u8) :
-				size == 3 ? sizeof(u16) :
-				instruction & BIT(31) ? sizeof(u64) : sizeof(u32);
-			decoded.rm = (instruction >> 16) & 0x1fU;
-		}
-
-		decoded.decode_class = ORLIX_TCTI_DECODE_COMPARE_BRANCH_EXTENSION;
-		decoded.rt = instruction & 0x1fU;
-		decoded.branch_imm = sign_extend64(
-			((instruction >> 5) & 0x1ffU) << 2, 11);
-		switch (condition) {
-		case 0:
-			decoded.compare_branch_condition = ORLIX_TCTI_COMPARE_BRANCH_GT;
-			break;
-		case 1:
-			decoded.compare_branch_condition =
-				decoded.compare_branch_immediate ? ORLIX_TCTI_COMPARE_BRANCH_LT :
-				ORLIX_TCTI_COMPARE_BRANCH_GE;
-			break;
-		case 2:
-			decoded.compare_branch_condition = ORLIX_TCTI_COMPARE_BRANCH_HI;
-			break;
-		case 3:
-			decoded.compare_branch_condition =
-				decoded.compare_branch_immediate ? ORLIX_TCTI_COMPARE_BRANCH_LO :
-				ORLIX_TCTI_COMPARE_BRANCH_HS;
-			break;
-		case 6:
-			decoded.compare_branch_condition = ORLIX_TCTI_COMPARE_BRANCH_EQ;
-			break;
-		default:
-			decoded.compare_branch_condition = ORLIX_TCTI_COMPARE_BRANCH_NE;
-			break;
 		}
 		return decoded;
 	}
@@ -1836,6 +1814,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.nonzero = instruction & BIT(24);
 		decoded.test_bit = bit_5 | ((instruction >> 19) & 0x1fU);
 		decoded.branch_imm = sign_extend64(imm << 2, 15);
+		orlix_tcti_bind_base_conditional_source(&decoded);
 		return decoded;
 	}
 
@@ -1846,7 +1825,16 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.decode_class = ORLIX_TCTI_DECODE_CONDITIONAL_BRANCH_IMMEDIATE;
 		decoded.condition = instruction & 0xfU;
 		decoded.branch_imm = sign_extend64(imm << 2, 20);
+		orlix_tcti_bind_base_conditional_source(&decoded);
 		return decoded;
+	}
+
+	if ((instruction & 0xff000000U) == 0x54000000U) {
+		orlix_tcti_bind_base_conditional_source(&decoded);
+		if (decoded.source_ordinal) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
+			return decoded;
+		}
 	}
 
 	if ((instruction & AARCH64_CONDITIONAL_COMPARE_MASK) ==
@@ -1860,6 +1848,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.is_64bit = instruction & BIT(31);
 		decoded.subtract = instruction & BIT(30);
 		decoded.immediate = instruction & BIT(11);
+		orlix_tcti_bind_base_conditional_source(&decoded);
 		return decoded;
 	}
 
@@ -1879,6 +1868,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 			!op && op2 ? ORLIX_TCTI_CONDITIONAL_SELECT_CSINC :
 			op && !op2 ? ORLIX_TCTI_CONDITIONAL_SELECT_CSINV :
 				     ORLIX_TCTI_CONDITIONAL_SELECT_CSNEG;
+		orlix_tcti_bind_base_conditional_source(&decoded);
 		return decoded;
 	}
 

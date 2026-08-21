@@ -3,7 +3,7 @@
 #ifdef ORLIX_TCTI_PROOF_FAMILY_METADATA
 ORLIX_TCTI_PROOF_FAMILY_METADATA(
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
-	"d97af0db8a966a86c3b2a803f408df548dc61179cd2b56e9354c1a73bb724e66",
+	"350c6cec4be70a33302882f22e353cedeb77f5ac74d244895a1a06ed73ddfe3a",
 	"orlix_tcti_branch_control_source_bound_test.o",
 	"orlix-tcti-branch-control-source-bound",
 	"orlix_tcti_branch_control_source_bound_test_suite", "bcs_cases",
@@ -11,9 +11,4 @@ ORLIX_TCTI_PROOF_FAMILY_METADATA(
 #endif
 
 #ifdef ORLIX_TCTI_PROOF_FAMILY_OPERATION
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-b-cond", "B_cond", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbz", "CBZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbnz", "CBNZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbz", "TBZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbnz", "TBNZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
 #endif

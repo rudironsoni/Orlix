@@ -2,7 +2,7 @@
 /* #132 production-path observations. These rows bind BASE_EXCEPTIONS
  * registry entries on orlix-tcti-base-exceptions-source-bound. They do not
  * add a second METADATA family. Old branch-control capture rows for SVC/BRK
- * move here. B.cond/CBZ stay on the old suite as NOT_APPLICABLE.
+ * move here. B.cond/CBZ/TBZ production credit lives in #131.
  */
 #ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
 ORLIX_TCTI_PRODUCTION_CAPTURE(

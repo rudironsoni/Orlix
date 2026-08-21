@@ -15,3 +15,4 @@
 #include "orlix_tcti_base_add_sub_production_capture.def"
 #include "orlix_tcti_base_control_flow_production_capture.def"
 #include "orlix_tcti_base_exceptions_production_capture.def"
+#include "orlix_tcti_base_conditional_production_capture.def"
