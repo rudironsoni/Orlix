@@ -268,9 +268,7 @@ static void orlix_tcti_base_conditional_seed_taken(
 static bool orlix_tcti_base_conditional_has_capture(
 	const struct orlix_tcti_test_conditional_source *source)
 {
-	return source->ordinal == 2211U || source->ordinal == 2314U ||
-		source->ordinal == 2342U || source->ordinal == 3487U ||
-		source->ordinal == 3480U;
+	return orlix_tcti_test_is_el0_conditional(source);
 }
 
 static void orlix_tcti_base_conditional_expect_success(struct kunit *test,
@@ -390,7 +388,6 @@ static void orlix_tcti_base_conditional_production_resume(struct kunit *test)
 {
 	size_t index;
 	size_t seen = 0;
-	size_t captured = 0;
 
 	for (index = 0; index < ARRAY_SIZE(orlix_tcti_test_sources); index++) {
 		const struct orlix_tcti_test_conditional_source *source =
@@ -398,12 +395,14 @@ static void orlix_tcti_base_conditional_production_resume(struct kunit *test)
 		u32 instruction;
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
-		struct orlix_tcti_result result;
 		unsigned long code;
 		bool branch;
 
 		if (!orlix_tcti_test_is_el0_conditional(source))
 			continue;
+		KUNIT_ASSERT_TRUE_MSG(test,
+			orlix_tcti_base_conditional_has_capture(source),
+			"%s missing #120 capture", source->name);
 		seen++;
 		instruction = orlix_tcti_base_conditional_legal_instruction(source);
 		decoded = orlix_tcti_decode_aarch64(instruction);
@@ -417,42 +416,24 @@ static void orlix_tcti_base_conditional_production_resume(struct kunit *test)
 		code = branch ?
 			orlix_tcti_base_conditional_map_branch(test, instruction) :
 			orlix_tcti_base_conditional_map_data(test, instruction);
-		if (orlix_tcti_base_conditional_has_capture(source)) {
-			captured++;
-			if (branch)
-				orlix_tcti_base_conditional_seed_taken(&regs, code,
-								       source, true);
-			else
-				orlix_tcti_base_conditional_seed(&regs, code,
-								 PSR_Z_BIT);
-			orlix_tcti_base_conditional_capture_run(test, source,
-				ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &regs,
-				code, branch);
-			if (branch)
-				orlix_tcti_base_conditional_seed_taken(&regs, code,
-								       source, true);
-			else
-				orlix_tcti_base_conditional_seed(&regs, code,
-								 PSR_Z_BIT);
-			orlix_tcti_base_conditional_capture_run(test, source,
-				ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code,
-				branch);
-		} else {
-			if (branch)
-				orlix_tcti_base_conditional_seed_taken(&regs, code,
-								       source, true);
-			else
-				orlix_tcti_base_conditional_seed(&regs, code,
-								 PSR_Z_BIT);
-			result = orlix_tcti_resume_user(current, &regs, current->mm);
-			orlix_tcti_base_conditional_expect_success(test, source,
-								   &result, &regs,
-								   code, branch);
-		}
+		if (branch)
+			orlix_tcti_base_conditional_seed_taken(&regs, code, source,
+							       true);
+		else
+			orlix_tcti_base_conditional_seed(&regs, code, PSR_Z_BIT);
+		orlix_tcti_base_conditional_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS, &regs, code,
+			branch);
+		if (branch)
+			orlix_tcti_base_conditional_seed_taken(&regs, code, source,
+							       true);
+		else
+			orlix_tcti_base_conditional_seed(&regs, code, PSR_Z_BIT);
+		orlix_tcti_base_conditional_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code, branch);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 	}
 	KUNIT_EXPECT_EQ(test, BCD_EL0_COUNT, seen);
-	KUNIT_EXPECT_EQ(test, 5U, captured);
 }
 
 static bool orlix_tcti_base_conditional_cond_passed(u8 cond, u64 nzcv)
@@ -700,8 +681,8 @@ static void orlix_tcti_base_conditional_csel_aliases_and_w_upper(struct kunit *t
 					regs.regs[0]);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 
-		for (cond = 0; cond < 16 && !strcmp(source->operation, "CSEL") &&
-		     strstr(source->name, "64"); cond++) {
+		for (cond = 0; cond < 16 && !strcmp(source->operation, "CSEL");
+		     cond++) {
 			u32 insn = (source->pattern & source->mask) | (1U << 5) |
 				(2U << 16) | ((u32)cond << 12);
 
@@ -795,13 +776,10 @@ static void orlix_tcti_base_conditional_ccmp_true_false_nzcv(struct kunit *test)
 				    orlix_tcti_base_conditional_true_nzcv(source),
 				    regs.pstate & BCD_NZCV, "%s true nzcv",
 				    source->name);
-		if (source->ordinal == 3480U) {
-			orlix_tcti_base_conditional_seed_true_compare(&regs, code,
-								      source);
-			orlix_tcti_base_conditional_capture_run(test, source,
-				ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS, &regs,
-				code, false);
-		}
+		orlix_tcti_base_conditional_seed_true_compare(&regs, code, source);
+		orlix_tcti_base_conditional_capture_run(test, source,
+			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS, &regs, code,
+			false);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 	}
 }
