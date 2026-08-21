@@ -539,6 +539,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_base_control_flow_source_bound_cases"
 #define BASE_CONTROL_FLOW_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_base_control_flow_production_capture.h\""
+#define BASE_EXCEPTIONS_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_exceptions_source_bound_test.c"
+#define BASE_EXCEPTIONS_SUITE "orlix-tcti-base-exceptions-source-bound"
+#define BASE_EXCEPTIONS_SUITE_SYMBOL \
+	"orlix_tcti_base_exceptions_source_bound_suite"
+#define BASE_EXCEPTIONS_CASE_ARRAY \
+	"orlix_tcti_base_exceptions_source_bound_cases"
+#define BASE_EXCEPTIONS_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_exceptions_production_capture.h\""
 #define ADD_SUB_PT_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define SCALAR_FP_SOURCE \
@@ -812,6 +821,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ BASE_CONTROL_FLOW_SOURCE,
 	  "8ed64b822e04bf804a2d620497b235cbf0656f791d7ad7ca1b1012a35356375a",
 	  "orlix_tcti_base_control_flow_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ BASE_EXCEPTIONS_SOURCE,
+	  "99c8e4fdb18334d547e0aec46daffb2e573f4033b2d9bb11dc7f5a101f67ea12",
+	  "orlix_tcti_base_exceptions_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1346,6 +1361,50 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_base_control_flow_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_el0_traps",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_syscall_handoff",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+	  BASE_EXCEPTIONS_SUITE_SYMBOL, BASE_EXCEPTIONS_CASE_ARRAY,
+	  "orlix_tcti_base_exceptions_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -1751,6 +1810,12 @@ static const struct operation_requirements operation_requirements[] = {
 	{ "RET", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "B_uncond", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
 	{ "BL", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS },
+	{ "SVC", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE },
+	{ "BRK", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE },
+	{ "HLT", PRODUCTION_CAPTURE_FAMILY_OBLIGATIONS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LINUX_INTERFACE },
 	{ "AND_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "BIC_log_shift", LOGICAL_BASE_OBLIGATIONS },
 	{ "ORR_log_shift", LOGICAL_BASE_OBLIGATIONS },
@@ -2496,6 +2561,38 @@ base_control_flow_production_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
+static const struct orlix_tcti_target_proof_case
+base_exceptions_production_cases[] = {
+	{ "orlix_tcti_base_exceptions_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_exceptions_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_exceptions_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_exceptions_el0_traps",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_exceptions_syscall_handoff",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_exceptions_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_exceptions_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_exceptions_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
 static const struct orlix_tcti_target_proof_case lse_source_bound_cases[]
 	__attribute__((unused)) = {
 	{ "lse_source_bound_decodes_every_base_leaf",
@@ -2999,19 +3096,19 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 52U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 80U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 55U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 83U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 14U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 15U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 15U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 16U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
 #include "target_production_capture_family.def"
 #undef ORLIX_TCTI_PROOF_FAMILY_OPERATION
 };
-#define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 10U
+#define PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_BINDING_COUNT 7U
 #define MOPS_COPY_PROOF_REGISTRY_ENTRY_COUNT 32U
 #define MOPS_COPY_PROOF_REGISTRY_BINDING_COUNT 96U
 #define BASE_ATOMIC_MISSING_PROOF_REGISTRY_ENTRY_COUNT 294U
@@ -3743,6 +3840,15 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("BL", "kunit:branch-control-bl",
 		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
 		base_control_flow_production_cases, 2313U, 2313U, 1),
+	SCALAR_OPERATION("SVC", "kunit:branch-control-svc",
+		BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+		base_exceptions_production_cases, 2227U, 2227U, 1),
+	SCALAR_OPERATION("BRK", "kunit:branch-control-brk",
+		BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+		base_exceptions_production_cases, 2230U, 2230U, 1),
+	SCALAR_OPERATION("HLT", "kunit:branch-control-hlt",
+		BASE_EXCEPTIONS_SOURCE, BASE_EXCEPTIONS_SUITE,
+		base_exceptions_production_cases, 2231U, 2231U, 1),
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
 		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",
@@ -3869,6 +3975,10 @@ static bool build_scalar_registry(void)
 			.classification_mask = ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0,
 			.obligations = obligations,
 			.linux_interface =
+				(!strcmp(operation->proof_id, "kunit:branch-control-svc") ||
+				 !strcmp(operation->proof_id, "kunit:branch-control-brk") ||
+				 !strcmp(operation->proof_id, "kunit:branch-control-hlt")) ?
+				ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_REQUIRED :
 				ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE,
 			.kunit_source = operation->source,
 			.kunit_suite = operation->suite,
@@ -3876,7 +3986,11 @@ static bool build_scalar_registry(void)
 			.kunit_case_count = operation->case_count,
 			.bindings = &scalar_registry_bindings[operation->binding_offset],
 			.binding_count = operation->binding_count,
-			.kselftest = NULL,
+			.kselftest =
+				(!strcmp(operation->proof_id, "kunit:branch-control-svc") ||
+				 !strcmp(operation->proof_id, "kunit:branch-control-brk") ||
+				 !strcmp(operation->proof_id, "kunit:branch-control-hlt")) ?
+				&exception_interface_kselftest : NULL,
 			.unproved_obligations = obligations,
 		};
 	}
@@ -4388,6 +4502,8 @@ source_leaf_rejection_registry_operations[] = {
 	{ .proof_id = "kunit:source-leaf-dcps2-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-dcps3-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-tenter-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2,

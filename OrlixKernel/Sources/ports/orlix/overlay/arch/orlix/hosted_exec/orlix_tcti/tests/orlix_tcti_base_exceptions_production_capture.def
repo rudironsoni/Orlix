@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #132 production-path observations. These rows bind BASE_EXCEPTIONS
+ * registry entries on orlix-tcti-base-exceptions-source-bound. They do not
+ * add a second METADATA family. Old branch-control capture rows for SVC/BRK
+ * move here. B.cond/CBZ stay on the old suite as NOT_APPLICABLE.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_exceptions_source_bound_test.c",
+	"orlix-tcti-base-exceptions-source-bound", "orlix_tcti_base_exceptions_production_resume",
+	2227U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_exceptions_source_bound_test.c",
+	"orlix-tcti-base-exceptions-source-bound", "orlix_tcti_base_exceptions_production_resume",
+	2227U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

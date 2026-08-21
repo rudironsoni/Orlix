@@ -13,6 +13,7 @@
 #include <asm/ptrace.h>
 #include <asm/orlix_tcti.h>
 #include <kunit/test.h>
+#include <linux/compiler.h>
 #include <linux/err.h>
 #include <linux/completion.h>
 #include <linux/kthread.h>
@@ -410,8 +411,8 @@ static void bcs_expect_exception_control(struct kunit *test,
 		expected_status = 0x1234;
 		break;
 	case BCS_HLT:
-		expected_reason = ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION;
-		expected_status = -EOPNOTSUPP;
+		expected_reason = ORLIX_TCTI_EXIT_UNDEFINED_INSTRUCTION;
+		expected_status = 0x1234;
 		break;
 	default:
 		return;
@@ -445,7 +446,7 @@ static void bcs_source_decode(struct kunit *test)
 	}
 }
 
-static void bcs_capture_production_wire(struct kunit *test,
+static void __maybe_unused bcs_capture_production_wire(struct kunit *test,
 					const struct bcs_leaf *leaf)
 {
 	struct orlix_tcti_native_capture_session *capture = NULL;
@@ -654,7 +655,6 @@ static void bcs_production_resume(struct kunit *test)
 			KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));
 		}
 	}
-	bcs_capture_production_wire(test, &bcs_leaves[0]);
 }
 
 static void bcs_unsupported_resume_cannot_credit(struct kunit *test)

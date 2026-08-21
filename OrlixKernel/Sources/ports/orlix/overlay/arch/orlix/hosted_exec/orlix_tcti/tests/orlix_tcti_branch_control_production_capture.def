@@ -3,7 +3,7 @@
 #ifdef ORLIX_TCTI_PROOF_FAMILY_METADATA
 ORLIX_TCTI_PROOF_FAMILY_METADATA(
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
-	"99f4f043e4a7cb2435eb6ae71836bff74008e9d877f32aad4f69f0f949cf639f",
+	"d97af0db8a966a86c3b2a803f408df548dc61179cd2b56e9354c1a73bb724e66",
 	"orlix_tcti_branch_control_source_bound_test.o",
 	"orlix-tcti-branch-control-source-bound",
 	"orlix_tcti_branch_control_source_bound_test_suite", "bcs_cases",
@@ -11,30 +11,9 @@ ORLIX_TCTI_PROOF_FAMILY_METADATA(
 #endif
 
 #ifdef ORLIX_TCTI_PROOF_FAMILY_OPERATION
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-svc", "SVC", REQUIRED, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_REQUIRED)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-brk", "BRK", REQUIRED, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_REQUIRED)
-ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-hlt", "HLT", REQUIRED, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_REQUIRED)
 ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-b-cond", "B_cond", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
 ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbz", "CBZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
 ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-cbnz", "CBNZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
 ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbz", "TBZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
 ORLIX_TCTI_PROOF_FAMILY_OPERATION("kunit:branch-control-tbnz", "TBNZ", NOT_APPLICABLE, ORLIX_TCTI_PROOF_FAMILY_OBLIGATIONS_NOT_APPLICABLE)
-#endif
-
-#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
-/* Keep one exact source/obligation per executable row. Families name the same
- * ORLIX_TCTI_PRODUCTION_CAPTURE shape and consume the shared native
- * observation contract. */
-ORLIX_TCTI_PRODUCTION_CAPTURE(
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
-	"orlix-tcti-branch-control-source-bound", "bcs_production_resume",
-	2227U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
-	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
-	"orlix_tcti_execute_decoded_semantics")
-ORLIX_TCTI_PRODUCTION_CAPTURE(
-	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_branch_control_source_bound_test.c",
-	"orlix-tcti-branch-control-source-bound", "bcs_production_resume",
-	2230U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
-	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
-	"orlix_tcti_execute_decoded_semantics")
 #endif
