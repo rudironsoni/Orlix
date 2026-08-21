@@ -7,6 +7,10 @@ updated: 2026-08-21
 ---
 # Orlix Knowledge Log
 
+## [2026-08-21] record | Land the BASE_BITFIELD_UNARY proof contract
+
+Recorded that the 25 unique `BASE_BITFIELD_UNARY` leaves have production decode and EL0 classification. The 19 always-on EL0 leaves `EXTR`, `SBFM`/`BFM`/`UBFM`, and `RBIT`/`REV*`/`CLZ`/`CLS` have production observations for `REGISTERS` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. `CTZ`/`CNT`/`ABS` (`FEAT_CSSC`) are classified `NON_EL0` and prove EL0 rejection. `FEAT_CSSC` is not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-21] record | Bind every EL0 BASE_CONDITIONAL #120 capture
 
 Recorded that the `BASE_CONDITIONAL` production capture family now binds all 23 always-on EL0 ordinals. Each leaf has typed `REGISTERS` and `PC` observations. The eight `CCMP`/`CCMN` leaves also have `FLAGS`. The earlier five-ordinal representative list is gone. `linux_proof_executed` stays 0. `FEAT_CMPBR` and `FEAT_HBC` are not advertised. The 4,350-leaf coverage task stays doing.

@@ -164,6 +164,18 @@ static const struct reviewed_classification_binding reviewed_bindings[] = {
 	  "pinned-source:feat-cmpbr-el0-rejection", "kunit:source-leaf-cbcc-imm-non-el0" },
 	{ "CBNE_64_imm", CLASS_NON_EL0,
 	  "pinned-source:feat-cmpbr-el0-rejection", "kunit:source-leaf-cbcc-imm-non-el0" },
+	{ "CTZ_32_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-ctz-non-el0" },
+	{ "CTZ_64_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-ctz-non-el0" },
+	{ "CNT_32_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-cnt-non-el0" },
+	{ "CNT_64_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-cnt-non-el0" },
+	{ "ABS_32_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-abs-non-el0" },
+	{ "ABS_64_dp_1src", CLASS_NON_EL0,
+	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-abs-non-el0" },
 };
 
 static const struct reviewed_classification_binding *

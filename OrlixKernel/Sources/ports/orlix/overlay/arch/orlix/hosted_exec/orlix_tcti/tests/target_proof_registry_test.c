@@ -579,18 +579,6 @@ static int cssc_min_max_immediate_registry_is_source_bound(void)
 		  "SMIN_64_dp_2src", "SMIN", 0x9ac06800U },
 		{ "kunit:cssc-data-processing-umin", "UMIN_reg",
 		  "UMIN_64_dp_2src", "UMIN", 0x9ac06c00U },
-		{ "kunit:cssc-data-processing-ctz", "CTZ",
-		  "CTZ_32_dp_1src", "CTZ", 0x5ac01800U },
-		{ "kunit:cssc-data-processing-cnt", "CNT",
-		  "CNT_32_dp_1src", "CNT", 0x5ac01c00U },
-		{ "kunit:cssc-data-processing-abs", "ABS",
-		  "ABS_32_dp_1src", "ABS", 0x5ac02000U },
-		{ "kunit:cssc-data-processing-ctz", "CTZ",
-		  "CTZ_64_dp_1src", "CTZ", 0xdac01800U },
-		{ "kunit:cssc-data-processing-cnt", "CNT",
-		  "CNT_64_dp_1src", "CNT", 0xdac01c00U },
-		{ "kunit:cssc-data-processing-abs", "ABS",
-		  "ABS_64_dp_1src", "ABS", 0xdac02000U },
 	};
 	const struct orlix_tcti_target_proof_registry_entry *entries;
 	enum orlix_tcti_target_proof_registry_error error;
@@ -971,6 +959,22 @@ static int scalar_bitops_registry_binds_exact_source_rows(void)
 		const char *mnemonic;
 		const char *operation_id;
 	} expected[] = {
+		{ 2169U, "kunit:bitfield-unary-extr", "EXTR_32_extract",
+		  "EXTR", "EXTR" },
+		{ 2170U, "kunit:bitfield-unary-extr", "EXTR_64_extract",
+		  "EXTR", "EXTR" },
+		{ 2205U, "kunit:bitfield-unary-sbfm", "SBFM_32M_bitfield",
+		  "SBFM", "SBFM" },
+		{ 2206U, "kunit:bitfield-unary-bfm", "BFM_32M_bitfield",
+		  "BFM", "BFM" },
+		{ 2207U, "kunit:bitfield-unary-ubfm", "UBFM_32M_bitfield",
+		  "UBFM", "UBFM" },
+		{ 2208U, "kunit:bitfield-unary-sbfm", "SBFM_64M_bitfield",
+		  "SBFM", "SBFM" },
+		{ 2209U, "kunit:bitfield-unary-bfm", "BFM_64M_bitfield",
+		  "BFM", "BFM" },
+		{ 2210U, "kunit:bitfield-unary-ubfm", "UBFM_64M_bitfield",
+		  "UBFM", "UBFM" },
 		{ 3389U, "kunit:scalar-bitops-rbit", "RBIT_32_dp_1src",
 		  "RBIT", "RBIT_int" },
 		{ 3390U, "kunit:scalar-bitops-rev16", "REV16_32_dp_1src",
@@ -1015,12 +1019,12 @@ static int scalar_bitops_registry_binds_exact_source_rows(void)
 		EXPECT(entry != NULL);
 		EXPECT(!strcmp(entry->operation_id, expected[index].operation_id));
 		EXPECT(!strcmp(entry->kunit_source,
-			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_scalar_bitops_source_bound_test.c"));
+			"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c"));
 		EXPECT(!strcmp(entry->kunit_suite,
-			"orlix-tcti-scalar-bitops-source-bound"));
-		EXPECT(entry->kunit_case_count == 1);
+			"orlix-tcti-base-bitfield-unary-source-bound"));
+		EXPECT(entry->kunit_case_count == 9);
 		EXPECT(!strcmp(entry->kunit_cases[0].name,
-			"orlix_tcti_scalar_bitops_source_bindings"));
+			"orlix_tcti_base_bitfield_unary_decodes_exact_source_cohort"));
 		EXPECT(entry->kunit_cases[0].obligations ==
 			(ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 			 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS));

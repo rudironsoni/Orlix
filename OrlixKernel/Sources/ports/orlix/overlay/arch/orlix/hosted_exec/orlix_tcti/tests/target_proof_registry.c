@@ -557,6 +557,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_base_conditional_source_bound_cases"
 #define BASE_CONDITIONAL_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_base_conditional_production_capture.h\""
+#define BASE_BITFIELD_UNARY_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_bitfield_unary_source_bound_test.c"
+#define BASE_BITFIELD_UNARY_SUITE "orlix-tcti-base-bitfield-unary-source-bound"
+#define BASE_BITFIELD_UNARY_SUITE_SYMBOL \
+	"orlix_tcti_base_bitfield_unary_source_bound_suite"
+#define BASE_BITFIELD_UNARY_CASE_ARRAY \
+	"orlix_tcti_base_bitfield_unary_source_bound_cases"
+#define BASE_BITFIELD_UNARY_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_bitfield_unary_production_capture.h\""
 #define ADD_SUB_PT_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define SCALAR_FP_SOURCE \
@@ -680,6 +689,8 @@ production_capture_bindings[] = {
 #define LOGICAL_SHIFT_CONDITION \
 	"54434e440107000000220700000017070000000c010000000101010000000101010000000101010000000101"
 #define SCALAR_CONDITION LOGICAL_SHIFT_CONDITION
+#define EXTR_CONDITION \
+	"54434e4401070000003b0700000030070000000c0100000001010100000001010a0000001a0300000008000000046f70323104000000080000000427313127010000000101"
 #define SCALAR_FP_CONDITION \
 	"54434e4401070000002c0700000017070000000c010000000101010000000101010000000101020000000b00000007464541545f4650"
 #define LSE_CONDITION \
@@ -842,6 +853,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ BASE_CONDITIONAL_SOURCE,
 	  "9ff7322513d81a382be0c16219d3bf4e4a197114eb3c73ba67fa1769ec4c0be7",
 	  "orlix_tcti_base_conditional_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ BASE_BITFIELD_UNARY_SOURCE,
+	  "18cc5870d682cc498def40d3e1cb070c0b24bfd04c7124ba4de8f8ff60a1ecf5",
+	  "orlix_tcti_base_bitfield_unary_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1469,6 +1486,54 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_base_conditional_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_aliases_and_w_upper",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_extract_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_rbit_rev_clz",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+	  BASE_BITFIELD_UNARY_SUITE_SYMBOL, BASE_BITFIELD_UNARY_CASE_ARRAY,
+	  "orlix_tcti_base_bitfield_unary_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -1963,6 +2028,10 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("MOVN", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("MOVZ", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("MOVK", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("EXTR", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SBFM", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BFM", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UBFM", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("RBIT_int", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("REV16_int", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("REV", SCALAR_BASE_OBLIGATIONS),
@@ -2694,6 +2763,40 @@ base_conditional_production_cases[] = {
 };
 
 static const struct orlix_tcti_target_proof_case
+base_bitfield_unary_production_cases[] = {
+	{ "orlix_tcti_base_bitfield_unary_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_bitfield_unary_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_bitfield_unary_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_aliases_and_w_upper",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_extract_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_rbit_rev_clz",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_bitfield_unary_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
 base_conditional_flags_cases[] = {
 	{ "orlix_tcti_base_conditional_decodes_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -2974,8 +3077,6 @@ static const struct orlix_tcti_target_proof_binding cssc_umin_bindings[] = {
 
 #define CSSC_DP2_BINDING(ordinal, leaf, mnemonic, pattern) \
 	{ leaf, mnemonic, 0xffe0fc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
-#define CSSC_DP1_BINDING(ordinal, leaf, mnemonic, pattern) \
-	{ leaf, mnemonic, 0xfffffc00U, pattern, CSSC_CONDITION, ORLIX_TCTI_PROOF_U64_C(0x1f), ordinal }
 
 static const struct orlix_tcti_target_proof_binding cssc_smax_reg_bindings[] = {
 	CSSC_DP2_BINDING(3368U, "SMAX_32_dp_2src", "SMAX", 0x1ac06000U),
@@ -2997,22 +3098,6 @@ static const struct orlix_tcti_target_proof_binding cssc_umin_reg_bindings[] = {
 	CSSC_DP2_BINDING(3387U, "UMIN_64_dp_2src", "UMIN", 0x9ac06c00U),
 };
 
-static const struct orlix_tcti_target_proof_binding cssc_ctz_bindings[] = {
-	CSSC_DP1_BINDING(3394U, "CTZ_32_dp_1src", "CTZ", 0x5ac01800U),
-	CSSC_DP1_BINDING(3403U, "CTZ_64_dp_1src", "CTZ", 0xdac01800U),
-};
-
-static const struct orlix_tcti_target_proof_binding cssc_cnt_bindings[] = {
-	CSSC_DP1_BINDING(3395U, "CNT_32_dp_1src", "CNT", 0x5ac01c00U),
-	CSSC_DP1_BINDING(3404U, "CNT_64_dp_1src", "CNT", 0xdac01c00U),
-};
-
-static const struct orlix_tcti_target_proof_binding cssc_abs_bindings[] = {
-	CSSC_DP1_BINDING(3396U, "ABS_32_dp_1src", "ABS", 0x5ac02000U),
-	CSSC_DP1_BINDING(3405U, "ABS_64_dp_1src", "ABS", 0xdac02000U),
-};
-
-#undef CSSC_DP1_BINDING
 #undef CSSC_DP2_BINDING
 
 static const struct orlix_tcti_target_proof_case integer_conditional_base_cases[] = {
@@ -3231,19 +3316,19 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 64U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 61U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 70U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 209U
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 22U
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 60U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 90U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 64U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 98U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 20U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 53U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 23U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 59U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
@@ -3315,12 +3400,6 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 			cssc_smin_reg_bindings),
 	CSSC_DATA_ENTRY("kunit:cssc-data-processing-umin", "UMIN_reg",
 			cssc_umin_reg_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-ctz", "CTZ",
-			cssc_ctz_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-cnt", "CNT",
-			cssc_cnt_bindings),
-	CSSC_DATA_ENTRY("kunit:cssc-data-processing-abs", "ABS",
-			cssc_abs_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
 		integer_udiv_bindings),
@@ -3812,7 +3891,8 @@ static const struct orlix_tcti_target_proof_case move_wide_cases[] = {
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
 
-static const struct orlix_tcti_target_proof_case scalar_bitops_cases[] = {
+static const struct orlix_tcti_target_proof_case scalar_bitops_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_scalar_bitops_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -3896,24 +3976,36 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
 	SCALAR_OPERATION("MOVK", "kunit:move-wide-movk", MOVE_WIDE_SOURCE,
 		MOVE_WIDE_SUITE, move_wide_cases, 2199U, 2204U, 2),
+	{ "EXTR", "kunit:bitfield-unary-extr", BASE_BITFIELD_UNARY_SOURCE,
+	  BASE_BITFIELD_UNARY_SUITE, EXTR_CONDITION, base_bitfield_unary_production_cases,
+	  ARRAY_COUNT(base_bitfield_unary_production_cases), 2169U, 2170U, 2, 0, 0 },
+	SCALAR_OPERATION("SBFM", "kunit:bitfield-unary-sbfm",
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 2205U, 2208U, 2),
+	SCALAR_OPERATION("BFM", "kunit:bitfield-unary-bfm",
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 2206U, 2209U, 2),
+	SCALAR_OPERATION("UBFM", "kunit:bitfield-unary-ubfm",
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 2207U, 2210U, 2),
 	SCALAR_OPERATION("RBIT_int", "kunit:scalar-bitops-rbit",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3389U, 3397U, 2),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3389U, 3397U, 2),
 	SCALAR_OPERATION("REV16_int", "kunit:scalar-bitops-rev16",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3390U, 3398U, 2),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3390U, 3398U, 2),
 	SCALAR_OPERATION("REV", "kunit:scalar-bitops-rev",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3391U, 3400U, 2),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3391U, 3400U, 2),
 	SCALAR_OPERATION("CLZ_int", "kunit:scalar-bitops-clz",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3392U, 3401U, 2),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3392U, 3401U, 2),
 	SCALAR_OPERATION("CLS_int", "kunit:scalar-bitops-cls",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3393U, 3402U, 2),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3393U, 3402U, 2),
 	SCALAR_OPERATION("REV32_int", "kunit:scalar-bitops-rev32",
-		SCALAR_BITOPS_SOURCE, SCALAR_BITOPS_SUITE,
-		scalar_bitops_cases, 3399U, 3399U, 1),
+		BASE_BITFIELD_UNARY_SOURCE, BASE_BITFIELD_UNARY_SUITE,
+		base_bitfield_unary_production_cases, 3399U, 3399U, 1),
 	SCALAR_OPERATION("LSLV", "kunit:variable-shift-lslv",
 		VARIABLE_SHIFT_SOURCE, VARIABLE_SHIFT_SUITE,
 		variable_shift_cases, 3358U, 3377U, 2),
@@ -4693,6 +4785,24 @@ source_leaf_rejection_registry_operations[] = {
 	  .suite = BASE_CONDITIONAL_SUITE,
 	  .cases = base_conditional_production_cases,
 	  .case_count = ARRAY_COUNT(base_conditional_production_cases) },
+	{ .proof_id = "kunit:source-leaf-ctz-non-el0",
+	  .classification = 2,
+	  .source = BASE_BITFIELD_UNARY_SOURCE,
+	  .suite = BASE_BITFIELD_UNARY_SUITE,
+	  .cases = base_bitfield_unary_production_cases,
+	  .case_count = ARRAY_COUNT(base_bitfield_unary_production_cases) },
+	{ .proof_id = "kunit:source-leaf-cnt-non-el0",
+	  .classification = 2,
+	  .source = BASE_BITFIELD_UNARY_SOURCE,
+	  .suite = BASE_BITFIELD_UNARY_SUITE,
+	  .cases = base_bitfield_unary_production_cases,
+	  .case_count = ARRAY_COUNT(base_bitfield_unary_production_cases) },
+	{ .proof_id = "kunit:source-leaf-abs-non-el0",
+	  .classification = 2,
+	  .source = BASE_BITFIELD_UNARY_SOURCE,
+	  .suite = BASE_BITFIELD_UNARY_SUITE,
+	  .cases = base_bitfield_unary_production_cases,
+	  .case_count = ARRAY_COUNT(base_bitfield_unary_production_cases) },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2,
 	  .source = BASE_CONTROL_FLOW_SOURCE,

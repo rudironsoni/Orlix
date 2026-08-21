@@ -211,6 +211,17 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIBaseBitfieldUnaryDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-base-bitfield-unary-source-bound " +
+            "orlix.kselftest=boot_profile_contract",
+        expectedKUnitSuite: "orlix-tcti-base-bitfield-unary-source-bound",
+        hostDirectoryFixture: true
+    )
+
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",
