@@ -7,14 +7,8 @@
 static inline const void *
 orlix_tcti_branch_control_production_capture_token(u32 source_ordinal)
 {
-	switch (source_ordinal) {
-	case 2227U:
-		return orlix_tcti_native_proof_registry_capture_token_internal(0U);
-	case 2230U:
-		return orlix_tcti_native_proof_registry_capture_token_internal(1U);
-	default:
-		return NULL;
-	}
+	(void)source_ordinal;
+	return NULL;
 }
 
 #endif

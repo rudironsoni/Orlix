@@ -21,6 +21,8 @@
 #define AARCH64_DCPS1_PATTERN 0xd4a00001U
 #define AARCH64_DCPS2_PATTERN 0xd4a00002U
 #define AARCH64_DCPS3_PATTERN 0xd4a00003U
+#define AARCH64_EXCEPTION_GROUP_MASK 0xff000000U
+#define AARCH64_EXCEPTION_GROUP_PATTERN 0xd4000000U
 #define AARCH64_SMSTOP_SM 0xd503427fU
 #define AARCH64_SMSTART_SM 0xd503437fU
 #define AARCH64_SMSTOP_ZA 0xd503447fU
@@ -933,6 +935,29 @@ static void orlix_tcti_bind_base_control_flow_source(
 	}
 }
 
+static void orlix_tcti_bind_base_exceptions_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_EXCEPTIONS)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -1309,18 +1334,21 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	if ((instruction & AARCH64_SVC_MASK) == AARCH64_SVC_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_SVC;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		orlix_tcti_bind_base_exceptions_source(&decoded);
 		return decoded;
 	}
 
 	if ((instruction & AARCH64_BRK_MASK) == AARCH64_BRK_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_BRK;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		orlix_tcti_bind_base_exceptions_source(&decoded);
 		return decoded;
 	}
 
 	if ((instruction & AARCH64_HLT_MASK) == AARCH64_HLT_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_HLT;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		orlix_tcti_bind_base_exceptions_source(&decoded);
 		return decoded;
 	}
 
@@ -1352,7 +1380,18 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 	    (instruction & AARCH64_SVC_MASK) == AARCH64_DCPS3_PATTERN) {
 		decoded.decode_class = ORLIX_TCTI_DECODE_UNDEFINED;
 		decoded.imm16 = (instruction >> 5) & 0xffffU;
+		orlix_tcti_bind_base_exceptions_source(&decoded);
 		return decoded;
+	}
+
+	if ((instruction & AARCH64_EXCEPTION_GROUP_MASK) ==
+	    AARCH64_EXCEPTION_GROUP_PATTERN) {
+		orlix_tcti_bind_base_exceptions_source(&decoded);
+		if (decoded.source_ordinal) {
+			decoded.decode_class = ORLIX_TCTI_DECODE_UNSUPPORTED;
+			decoded.imm16 = (instruction >> 5) & 0xffffU;
+			return decoded;
+		}
 	}
 
 	switch (instruction) {
