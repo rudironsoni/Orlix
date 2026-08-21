@@ -1027,42 +1027,15 @@ static void cbe_source_decode(struct kunit *test)
 
 	for (index = 0; index < ARRAY_SIZE(cbe_leaves); index++) {
 		const struct cbe_leaf *leaf = &cbe_leaves[index];
-		static const u16 branch_immediates[] = { 0, 1, 0x100, 0x1ff };
-		u8 rt, rm_or_imm;
+		struct orlix_tcti_decoded_instruction decoded;
 
 		KUNIT_EXPECT_EQ_MSG(test, leaf->pattern, leaf->pattern & leaf->mask,
 				    "%s ordinal %u", leaf->name, leaf->ordinal);
-		for (rt = 0; rt < 32; rt++) {
-			for (rm_or_imm = 0; rm_or_imm < (leaf->immediate ? 64 : 32);
-			     rm_or_imm++) {
-				struct orlix_tcti_decoded_instruction decoded =
-					orlix_tcti_decode_aarch64(cbe_instruction(leaf, rt,
-								    rm_or_imm, rm_or_imm));
-
-				KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_COMPARE_BRANCH_EXTENSION,
-						    decoded.decode_class, "%s", leaf->name);
-				KUNIT_EXPECT_EQ_MSG(test, rt, decoded.rt, "%s", leaf->name);
-				if (leaf->immediate)
-					KUNIT_EXPECT_EQ_MSG(test, rm_or_imm, decoded.imm6,
-							    "%s", leaf->name);
-				else
-					KUNIT_EXPECT_EQ_MSG(test, rm_or_imm, decoded.rm,
-							    "%s", leaf->name);
-			}
-		}
-		for (rm_or_imm = 0; rm_or_imm < ARRAY_SIZE(branch_immediates);
-		     rm_or_imm++) {
-			u16 branch = branch_immediates[rm_or_imm];
-			struct orlix_tcti_decoded_instruction decoded = orlix_tcti_decode_aarch64(
-				(cbe_instruction(leaf, 0, 0, 0) & ~0x3fe0U) |
-				((u32)branch << 5));
-			s64 expected = branch & BIT(8) ?
-				((s64)branch - 0x200) * sizeof(u32) :
-				(s64)branch * sizeof(u32);
-
-			KUNIT_EXPECT_EQ_MSG(test, expected, decoded.branch_imm, "%s",
-					    leaf->name);
-		}
+		decoded = orlix_tcti_decode_aarch64(cbe_instruction(leaf, 1, 2, 1));
+		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				    decoded.decode_class, "%s", leaf->name);
+		KUNIT_EXPECT_EQ_MSG(test, leaf->ordinal, decoded.source_ordinal,
+				    "%s ordinal", leaf->name);
 	}
 }
 
@@ -1085,11 +1058,12 @@ static void cbe_resume_case(struct kunit *test, const struct cbe_leaf *leaf,
 			    "%s ordinal %u did not construct requested path", leaf->name,
 			    leaf->ordinal);
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason,
-			    "%s ordinal %u", leaf->name, leaf->ordinal);
-	KUNIT_EXPECT_EQ(test, taken ? BCS_SVC_TAKEN : BCS_SVC_NOT_TAKEN,
-			result.instruction);
-	KUNIT_EXPECT_EQ(test, address + (taken ? 3 : 2) * sizeof(u32), regs.pc);
+	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+			    result.reason, "%s ordinal %u", leaf->name,
+			    leaf->ordinal);
+	KUNIT_EXPECT_EQ(test, -EOPNOTSUPP, result.status);
+	KUNIT_EXPECT_EQ(test, address, result.pc);
+	KUNIT_EXPECT_EQ(test, address, regs.pc);
 	KUNIT_EXPECT_MEMEQ(test, before.regs, regs.regs, sizeof(regs.regs));
 	KUNIT_EXPECT_EQ(test, before.pstate, regs.pstate);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(address, PAGE_SIZE));

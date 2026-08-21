@@ -7,6 +7,10 @@ updated: 2026-08-21
 ---
 # Orlix Knowledge Log
 
+## [2026-08-21] record | Land the BASE_CONDITIONAL proof contract
+
+Recorded that the 60 unique `BASE_CONDITIONAL` leaves have production decode and EL0 classification. The 23 always-on EL0 leaves `B.cond`, `CBZ`/`CBNZ`, `TBZ`/`TBNZ`, `CSEL`/`CSINC`/`CSINV`/`CSNEG`, and `CCMP`/`CCMN` have production observations for `REGISTERS` and `PC`, plus `FLAGS` for the compare forms. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. `BC.cond` (`FEAT_HBC`) and the 36 `FEAT_CMPBR` compare-and-branch leaves are classified `NON_EL0` and prove EL0 rejection. `FEAT_CMPBR` and `FEAT_HBC` are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-21] record | Land the BASE_EXCEPTIONS proof contract
 
 Recorded that the 10 unique `BASE_EXCEPTIONS` leaves have production decode and EL0 classification. SVC has production observations for `REGISTERS` and `PC` through the structured `EXIT_SYSCALL` path. BRK, HLT, and UDF prove architecturally required EL0 structured exits. HVC, SMC, DCPS1, DCPS2, DCPS3, and TENTER are classified `NON_EL0` or architecturally undefined and prove EL0 rejection. TENTER official DDI0602 semantics are unspecified. Linux keeps syscall dispatch. `linux_proof_executed` stays 0. `FEAT_TEV` is not advertised. The 4,350-leaf coverage task stays doing.
