@@ -7,6 +7,10 @@ updated: 2026-08-21
 ---
 # Orlix Knowledge Log
 
+## [2026-08-21] record | Bind every EL0 BASE_CONDITIONAL #120 capture
+
+Recorded that the `BASE_CONDITIONAL` production capture family now binds all 23 always-on EL0 ordinals. Each leaf has typed `REGISTERS` and `PC` observations. The eight `CCMP`/`CCMN` leaves also have `FLAGS`. The earlier five-ordinal representative list is gone. `linux_proof_executed` stays 0. `FEAT_CMPBR` and `FEAT_HBC` are not advertised. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-21] record | Land the BASE_CONDITIONAL proof contract
 
 Recorded that the 60 unique `BASE_CONDITIONAL` leaves have production decode and EL0 classification. The 23 always-on EL0 leaves `B.cond`, `CBZ`/`CBNZ`, `TBZ`/`TBNZ`, `CSEL`/`CSINC`/`CSINV`/`CSNEG`, and `CCMP`/`CCMN` have production observations for `REGISTERS` and `PC`, plus `FLAGS` for the compare forms. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. `BC.cond` (`FEAT_HBC`) and the 36 `FEAT_CMPBR` compare-and-branch leaves are classified `NON_EL0` and prove EL0 rejection. `FEAT_CMPBR` and `FEAT_HBC` are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
