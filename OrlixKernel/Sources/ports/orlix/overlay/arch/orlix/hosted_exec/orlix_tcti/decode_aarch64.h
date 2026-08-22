@@ -557,6 +557,8 @@ enum orlix_tcti_multiply_add_sub_op {
 	ORLIX_TCTI_MUL_UMADDL,
 	ORLIX_TCTI_MUL_UMSUBL,
 	ORLIX_TCTI_MUL_UMULH,
+	ORLIX_TCTI_MUL_MADDPT,
+	ORLIX_TCTI_MUL_MSUBPT,
 };
 
 enum orlix_tcti_min_max_immediate_op {

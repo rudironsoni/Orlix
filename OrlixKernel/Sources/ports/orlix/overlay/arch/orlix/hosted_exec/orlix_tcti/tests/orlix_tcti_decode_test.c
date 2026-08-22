@@ -14087,7 +14087,7 @@ static void orlix_tcti_gadget_executes_complete_data_processing_3source_family(
 		rm = (31 - rn + family + ra) & 0x1fU;
 		rd = (rn + ra + subtract) & 0x1fU;
 		valid = family == 0 ||
-			(is_64bit && (family == 1 || family == 5)) ||
+			(is_64bit && (family == 1 || family == 3 || family == 5)) ||
 			(is_64bit && !subtract && ra == 31 &&
 			 (family == 2 || family == 6));
 		instruction = orlix_tcti_test_encode_data_processing_3source(
@@ -14111,6 +14111,10 @@ static void orlix_tcti_gadget_executes_complete_data_processing_3source_family(
 			break;
 		case 2:
 			expected_op = ORLIX_TCTI_MUL_SMULH;
+			break;
+		case 3:
+			expected_op = subtract ? ORLIX_TCTI_MUL_MSUBPT :
+				ORLIX_TCTI_MUL_MADDPT;
 			break;
 		case 5:
 			expected_op = subtract ? ORLIX_TCTI_MUL_UMSUBL :
@@ -14189,6 +14193,17 @@ static void orlix_tcti_gadget_executes_complete_data_processing_3source_family(
 		case ORLIX_TCTI_MUL_UMULH:
 			expected = (u64)(((__uint128_t)left * right) >> 64);
 			break;
+		case ORLIX_TCTI_MUL_MADDPT:
+		case ORLIX_TCTI_MUL_MSUBPT: {
+			u64 tag = accumulator >> 56;
+			u64 addr = accumulator & (BIT_ULL(56) - 1U);
+			u64 offset = (left * right) & (BIT_ULL(56) - 1U);
+			u64 result_addr = expected_op == ORLIX_TCTI_MUL_MSUBPT ?
+				addr - offset : addr + offset;
+
+			expected = (tag << 56) | (result_addr & (BIT_ULL(56) - 1U));
+			break;
+		}
 		default:
 			KUNIT_FAIL(test, "invalid data-processing three-source operation");
 			return;

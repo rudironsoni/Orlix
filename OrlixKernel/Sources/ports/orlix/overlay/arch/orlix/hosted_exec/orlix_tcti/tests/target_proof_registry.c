@@ -566,6 +566,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_base_bitfield_unary_source_bound_cases"
 #define BASE_BITFIELD_UNARY_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_base_bitfield_unary_production_capture.h\""
+#define BASE_MULTIPLY_DIVIDE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c"
+#define BASE_MULTIPLY_DIVIDE_SUITE "orlix-tcti-base-multiply-divide-source-bound"
+#define BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL \
+	"orlix_tcti_base_multiply_divide_source_bound_suite"
+#define BASE_MULTIPLY_DIVIDE_CASE_ARRAY \
+	"orlix_tcti_base_multiply_divide_source_bound_cases"
+#define BASE_MULTIPLY_DIVIDE_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_base_multiply_divide_production_capture.h\""
 #define ADD_SUB_PT_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f435041"
 #define SCALAR_FP_SOURCE \
@@ -859,6 +868,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ BASE_BITFIELD_UNARY_SOURCE,
 	  "18cc5870d682cc498def40d3e1cb070c0b24bfd04c7124ba4de8f8ff60a1ecf5",
 	  "orlix_tcti_base_bitfield_unary_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE,
+	  "f6b727465e779a0ef9d5e3b55a573c5dcf5cd3c4ffdbb37ba49f2190b2a28d4f",
+	  "orlix_tcti_base_multiply_divide_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1534,6 +1549,51 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_base_bitfield_unary_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_divide_zero_signed_min_w_upper",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_long_form_high_half",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_accumulator_alias_xzr",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_pointer_preserves_tag",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE,
+	  BASE_MULTIPLY_DIVIDE_SUITE_SYMBOL, BASE_MULTIPLY_DIVIDE_CASE_ARRAY,
+	  "orlix_tcti_base_multiply_divide_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -2056,6 +2116,8 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("SBCS", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("ADDPT", SCALAR_FLAGS_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SUBPT", SCALAR_FLAGS_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MADDPT", SCALAR_BASE_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MSUBPT", SCALAR_BASE_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
@@ -2797,6 +2859,37 @@ base_bitfield_unary_production_cases[] = {
 };
 
 static const struct orlix_tcti_target_proof_case
+base_multiply_divide_production_cases[] = {
+	{ "orlix_tcti_base_multiply_divide_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_multiply_divide_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_base_multiply_divide_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_divide_zero_signed_min_w_upper",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_long_form_high_half",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_accumulator_alias_xzr",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_simd_and_flags_unchanged",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_pointer_preserves_tag",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_base_multiply_divide_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
 base_conditional_flags_cases[] = {
 	{ "orlix_tcti_base_conditional_decodes_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -3100,7 +3193,8 @@ static const struct orlix_tcti_target_proof_binding cssc_umin_reg_bindings[] = {
 
 #undef CSSC_DP2_BINDING
 
-static const struct orlix_tcti_target_proof_case integer_conditional_base_cases[] = {
+static const struct orlix_tcti_target_proof_case integer_conditional_base_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_integer_conditional_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -3180,10 +3274,10 @@ static const struct orlix_tcti_target_proof_binding flag_setf_bindings[] = {
 
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_udiv_bindings, 3356U,
 	"UDIV_32_dp_2src", 3373U, "UDIV_64_dp_2src", "UDIV", 0xffe0fc00U,
-	0x1ac00800U, 0x9ac00800U, ORLIX_TCTI_PROOF_U64_C(0x13));
+	0x1ac00800U, 0x9ac00800U, ORLIX_TCTI_PROOF_U64_C(0x1ff));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_sdiv_bindings, 3357U,
 	"SDIV_32_dp_2src", 3374U, "SDIV_64_dp_2src", "SDIV", 0xffe0fc00U,
-	0x1ac00c00U, 0x9ac00c00U, ORLIX_TCTI_PROOF_U64_C(0x13));
+	0x1ac00c00U, 0x9ac00c00U, ORLIX_TCTI_PROOF_U64_C(0x1ff));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_ccmn_reg_bindings, 3479U,
 	"CCMN_32_condcmp_reg", 3481U, "CCMN_64_condcmp_reg", "CCMN", 0xffe00c10U,
 	0x3a400000U, 0xba400000U, ORLIX_TCTI_PROOF_U64_C(0x27));
@@ -3210,33 +3304,33 @@ INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_csneg_bindings, 3490U,
 	0x5a800400U, 0xda800400U, ORLIX_TCTI_PROOF_U64_C(0x15));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_madd_bindings, 3495U,
 	"MADD_32A_dp_3src", 3497U, "MADD_64A_dp_3src", "MADD", 0xffe08000U,
-	0x1b000000U, 0x9b000000U, ORLIX_TCTI_PROOF_U64_C(0x19));
+	0x1b000000U, 0x9b000000U, ORLIX_TCTI_PROOF_U64_C(0x1ff));
 INTEGER_CONDITIONAL_PAIR_BINDINGS(integer_msub_bindings, 3496U,
 	"MSUB_32A_dp_3src", 3498U, "MSUB_64A_dp_3src", "MSUB", 0xffe08000U,
-	0x1b008000U, 0x9b008000U, ORLIX_TCTI_PROOF_U64_C(0x19));
+	0x1b008000U, 0x9b008000U, ORLIX_TCTI_PROOF_U64_C(0x1ff));
 static const struct orlix_tcti_target_proof_binding integer_smaddl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3499U, "SMADDL_64WA_dp_3src", "SMADDL",
-		0xffe08000U, 0x9b200000U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe08000U, 0x9b200000U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 static const struct orlix_tcti_target_proof_binding integer_smsubl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3500U, "SMSUBL_64WA_dp_3src", "SMSUBL",
-		0xffe08000U, 0x9b208000U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe08000U, 0x9b208000U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 static const struct orlix_tcti_target_proof_binding integer_smulh_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3501U, "SMULH_64_dp_3src", "SMULH",
-		0xffe0fc00U, 0x9b407c00U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe0fc00U, 0x9b407c00U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 static const struct orlix_tcti_target_proof_binding integer_umaddl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3504U, "UMADDL_64WA_dp_3src", "UMADDL",
-		0xffe08000U, 0x9ba00000U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe08000U, 0x9ba00000U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 static const struct orlix_tcti_target_proof_binding integer_umsubl_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3505U, "UMSUBL_64WA_dp_3src", "UMSUBL",
-		0xffe08000U, 0x9ba08000U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe08000U, 0x9ba08000U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	INTEGER_CONDITIONAL_BINDING(3506U, "UMULH_64_dp_3src", "UMULH",
-		0xffe0fc00U, 0x9bc07c00U, ORLIX_TCTI_PROOF_U64_C(0x19)),
+		0xffe0fc00U, 0x9bc07c00U, ORLIX_TCTI_PROOF_U64_C(0x1ff)),
 };
 #undef INTEGER_CONDITIONAL_PAIR_BINDINGS
 #undef INTEGER_CONDITIONAL_BINDING
@@ -3262,7 +3356,7 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define INTEGER_CONDITIONAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
 	{ proof_id, operation, ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0, \
 	  obligations, ORLIX_TCTI_TARGET_PROOF_LINUX_INTERFACE_NOT_APPLICABLE, \
-	  INTEGER_CONDITIONAL_SOURCE, INTEGER_CONDITIONAL_SUITE, \
+	  BASE_MULTIPLY_DIVIDE_SOURCE, BASE_MULTIPLY_DIVIDE_SUITE, \
 	  cases, ARRAY_COUNT(cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, obligations }
 #define BASE_CONDITIONAL_ENTRY(proof_id, operation, obligations, cases, bindings) \
@@ -3323,8 +3417,8 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 64U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 98U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 66U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 100U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
 #define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 23U
@@ -3401,10 +3495,10 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	CSSC_DATA_ENTRY("kunit:cssc-data-processing-umin", "UMIN_reg",
 			cssc_umin_reg_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-udiv", "UDIV",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_udiv_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-sdiv", "SDIV",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_sdiv_bindings),
 	BASE_CONDITIONAL_ENTRY("kunit:integer-conditional-ccmn-reg", "CCMN_reg",
 		INTEGER_CONDITIONAL_FLAGS_OBLIGATIONS, base_conditional_flags_cases,
@@ -3431,28 +3525,28 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_conditional_production_cases,
 		integer_csneg_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-madd", "MADD",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_madd_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-msub", "MSUB",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_msub_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smaddl", "SMADDL",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_smaddl_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smsubl", "SMSUBL",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_smsubl_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-smulh", "SMULH",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_smulh_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umaddl", "UMADDL",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_umaddl_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umsubl", "UMSUBL",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_umsubl_bindings),
 	INTEGER_CONDITIONAL_ENTRY("kunit:integer-conditional-umulh", "UMULH",
-		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, integer_conditional_base_cases,
+		INTEGER_CONDITIONAL_BASE_OBLIGATIONS, base_multiply_divide_production_cases,
 		integer_umulh_bindings),
 	FLAG_MANIPULATION_ENTRY("kunit:flag-manipulation-rmif", "RMIF",
 		flag_rmif_bindings),
@@ -4060,6 +4154,14 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 	{ "SUBPT", "kunit:base-add-sub-subpt", BASE_ADD_SUB_SOURCE,
 	  BASE_ADD_SUB_SUITE, ADD_SUB_PT_CONDITION, base_add_sub_production_cases,
 	  ARRAY_COUNT(base_add_sub_production_cases), 3475U, 3475U, 1, 0, 0 },
+	{ "MADDPT", "kunit:base-multiply-divide-maddpt", BASE_MULTIPLY_DIVIDE_SOURCE,
+	  BASE_MULTIPLY_DIVIDE_SUITE, ADD_SUB_PT_CONDITION,
+	  base_multiply_divide_production_cases,
+	  ARRAY_COUNT(base_multiply_divide_production_cases), 3502U, 3502U, 1, 0, 0 },
+	{ "MSUBPT", "kunit:base-multiply-divide-msubpt", BASE_MULTIPLY_DIVIDE_SOURCE,
+	  BASE_MULTIPLY_DIVIDE_SUITE, ADD_SUB_PT_CONDITION,
+	  base_multiply_divide_production_cases,
+	  ARRAY_COUNT(base_multiply_divide_production_cases), 3503U, 3503U, 1, 0, 0 },
 	SCALAR_OPERATION("BR", "kunit:branch-control-br",
 		BASE_CONTROL_FLOW_SOURCE, BASE_CONTROL_FLOW_SUITE,
 		base_control_flow_production_cases, 2288U, 2288U, 1),

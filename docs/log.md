@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-21
+updated: 2026-08-22
 ---
 # Orlix Knowledge Log
+
+## [2026-08-22] record | Land the BASE_MULTIPLY_DIVIDE proof contract
+
+Recorded that the 16 unique `BASE_MULTIPLY_DIVIDE` leaves have production decode and EL0 classification. All 16 EL0 leaves `UDIV`/`SDIV`, `MADD`/`MSUB`, `SMADDL`/`SMSUBL`/`SMULH`, `UMADDL`/`UMSUBL`/`UMULH`, and `MADDPT`/`MSUBPT` have production observations for `REGISTERS` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Zero divisor, signed minimum divided by `-1`, W upper-zeroing, long-form source extension, high-half products, accumulator aliasing, and XZR operands are proved. MADDPT and MSUBPT keep PAC tag bits [63:56] and do 56-bit pointer arithmetic. `FEAT_CPA` is not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
 
 ## [2026-08-21] record | Land the BASE_BITFIELD_UNARY proof contract
 

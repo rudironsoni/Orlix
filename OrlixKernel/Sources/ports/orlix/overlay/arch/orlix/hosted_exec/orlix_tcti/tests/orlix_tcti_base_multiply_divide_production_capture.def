@@ -1,0 +1,200 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #136 production-path observations. These rows bind all 16 EL0
+ * BASE_MULTIPLY_DIVIDE ordinals on orlix-tcti-base-multiply-divide-source-bound.
+ * They do not add a second METADATA family. LSLV stays off this suite.
+ * FEAT_CPA is not advertised.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3356U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3356U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3357U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3357U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3373U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3373U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3374U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3374U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3495U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3495U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3496U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3496U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3497U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3497U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3498U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3498U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3499U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3499U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3500U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3500U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3501U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3501U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3502U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3502U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3503U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3503U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3504U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3504U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3505U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3505U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3506U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_base_multiply_divide_source_bound_test.c",
+	"orlix-tcti-base-multiply-divide-source-bound", "orlix_tcti_base_multiply_divide_production_resume",
+	3506U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif
