@@ -25,7 +25,7 @@
 #define DECODE_SOURCE \
 	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_decode_test.c"
 #define DECODE_SOURCE_SHA256 \
-	"0baac30bf4df50437d090b3e9ac04921568852c50d418280ff35f2039fa9f6fe"
+	"52032e4b8b44f8116064fb96ce7fa3f6f512301e536017a7c9f06e56915fd9e6"
 #define DECODE_OBJECT "orlix_tcti_decode_test.o"
 #define DECODE_SUITE "orlix-tcti-decode"
 #define DECODE_SUITE_SYMBOL "orlix_tcti_decode_test_suite"

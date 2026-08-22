@@ -1288,6 +1288,18 @@ static int orlix_tcti_execute_multiply_add_sub(struct pt_regs *regs,
 		result = (u64)(((unsigned __int128)left * right) >> 64);
 		orlix_tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u64), result);
 		break;
+	case ORLIX_TCTI_MUL_MADDPT:
+	case ORLIX_TCTI_MUL_MSUBPT:
+		left = orlix_tcti_read_gpr_or_zero(regs, decoded->rn, sizeof(u64));
+		right = orlix_tcti_read_gpr_or_zero(regs, decoded->rm, sizeof(u64));
+		accumulator = orlix_tcti_read_gpr_or_zero(regs, decoded->ra,
+						    sizeof(u64));
+		product = left * right;
+		result = orlix_tcti_pointer_add(
+			accumulator, product,
+			decoded->mul_op == ORLIX_TCTI_MUL_MSUBPT);
+		orlix_tcti_write_gpr_or_zero(regs, decoded->rd, sizeof(u64), result);
+		break;
 	default:
 		return -EINVAL;
 	}

@@ -1004,6 +1004,29 @@ static void orlix_tcti_bind_base_bitfield_unary_source(
 	}
 }
 
+static void orlix_tcti_bind_base_multiply_divide_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_BASE_MULTIPLY_DIVIDE)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -2501,6 +2524,8 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.rn = (instruction >> 5) & 0x1fU;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.is_64bit = instruction & BIT(31);
+		if (opcode == 0x02 || opcode == 0x03)
+			orlix_tcti_bind_base_multiply_divide_source(&decoded);
 		return decoded;
 	}
 
@@ -2527,6 +2552,12 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 				return decoded;
 			decoded.mul_op = ORLIX_TCTI_MUL_SMULH;
 			break;
+		case 3:
+			if (!is_64bit)
+				return decoded;
+			decoded.mul_op = subtract ? ORLIX_TCTI_MUL_MSUBPT :
+						   ORLIX_TCTI_MUL_MADDPT;
+			break;
 		case 5:
 			if (!is_64bit)
 				return decoded;
@@ -2548,6 +2579,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.ra = ra;
 		decoded.rm = (instruction >> 16) & 0x1fU;
 		decoded.is_64bit = is_64bit;
+		orlix_tcti_bind_base_multiply_divide_source(&decoded);
 		return decoded;
 	}
 
