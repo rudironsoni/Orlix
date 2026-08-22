@@ -1027,6 +1027,37 @@ static void orlix_tcti_bind_base_multiply_divide_source(
 	}
 }
 
+static void orlix_tcti_bind_advsimd_crypto_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_CRYPTO)
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
+static struct orlix_tcti_decoded_instruction
+orlix_tcti_decoded_with_advsimd_crypto_source(
+	struct orlix_tcti_decoded_instruction decoded)
+{
+	orlix_tcti_bind_advsimd_crypto_source(&decoded);
+	return decoded;
+}
+
 static bool orlix_tcti_text_has_prefix(const char *text, const char *prefix)
 {
 	return text && prefix && !strncmp(text, prefix, strlen(prefix));
@@ -3806,7 +3837,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_AESE +
 					     ((instruction >> 12) & 0x3U);
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA1_THREE_REGISTER_MASK) ==
@@ -3820,7 +3851,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SHA1C +
 					     ((instruction >> 12) & 0x3U);
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA1_TWO_REGISTER_MASK) ==
@@ -3840,7 +3871,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_scalar = !schedule;
 		decoded.simd_arithmetic_op = schedule ? ORLIX_TCTI_SIMD_ARITH_SHA1SU1 :
 						       ORLIX_TCTI_SIMD_ARITH_SHA1H;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA256_THREE_REGISTER_MASK) ==
@@ -3857,7 +3888,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SHA256H + operation;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA256SU0_MASK) ==
@@ -3869,7 +3900,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SHA256SU0;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA512_THREE_REGISTER_MASK) ==
@@ -3891,7 +3922,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SHA512H + operation;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SHA512SU0_MASK) ==
@@ -3903,7 +3934,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SHA512SU0;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_EOR3_MASK) ==
@@ -3917,7 +3948,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_EOR3;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_RAX1_MASK) ==
@@ -3930,7 +3961,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_RAX1;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_XAR_MASK) ==
@@ -3944,7 +3975,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_XAR;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_BCAX_MASK) ==
@@ -3958,7 +3989,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_BCAX;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SM4E_MASK) ==
@@ -3978,7 +4009,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = key ? ORLIX_TCTI_SIMD_ARITH_SM4EKEY :
 						   ORLIX_TCTI_SIMD_ARITH_SM4E;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SM3SS1_MASK) ==
@@ -3992,7 +4023,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.result_size = 2 * sizeof(u64);
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SM3SS1;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SM3TT_MASK) ==
@@ -4018,7 +4049,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_SM3TT1A +
 					     operation;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SM3PARTW_MASK) ==
@@ -4037,7 +4068,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = second ? ORLIX_TCTI_SIMD_ARITH_SM3PARTW2 :
 						      ORLIX_TCTI_SIMD_ARITH_SM3PARTW1;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_SCALAR_SQDM_LONG_MASK) ==
@@ -4143,7 +4174,7 @@ struct orlix_tcti_decoded_instruction orlix_tcti_decode_aarch64(u32 instruction)
 		decoded.simd_source_index = !!(instruction & BIT(30));
 		decoded.simd_fp = true;
 		decoded.simd_arithmetic_op = ORLIX_TCTI_SIMD_ARITH_PMULL;
-		return decoded;
+		return orlix_tcti_decoded_with_advsimd_crypto_source(decoded);
 	}
 
 	if ((instruction & AARCH64_SIMD_MUL_PMUL_MASK) ==

@@ -228,4 +228,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIBaseMultiplyDivideKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIBaseMultiplyDivideDiagnostic)
     }
+
+    func testOrlixTCTIAdvSIMDCryptoKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDCryptoDiagnostic)
+    }
 }

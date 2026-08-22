@@ -127,6 +127,17 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-base-multiply-divide-source-bound")
     }
 
+    func testFocusedOrlixTCTIAdvSIMDCryptoDiagnosticSelectsExactOuterSuite() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIAdvSIMDCryptoDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-advsimd-crypto-source-bound " +
+            "orlix.kselftest=boot_profile_contract"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-advsimd-crypto-source-bound")
+    }
+
     func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
         XCTAssertEqual(
             OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(
