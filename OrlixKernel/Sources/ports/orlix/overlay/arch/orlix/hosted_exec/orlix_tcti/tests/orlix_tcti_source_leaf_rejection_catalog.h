@@ -74,6 +74,8 @@ orlix_tcti_source_leaf_is_unconditional_el0_rejection(const char *proof_id)
 		"kunit:source-leaf-ctz-non-el0",
 		"kunit:source-leaf-cnt-non-el0",
 		"kunit:source-leaf-abs-non-el0",
+		"kunit:source-leaf-luti4-non-el0",
+		"kunit:source-leaf-luti2-non-el0",
 		"kunit:source-leaf-eret-non-el0",
 		"kunit:source-leaf-ereta-non-el0",
 		"kunit:source-leaf-texit-non-el0",

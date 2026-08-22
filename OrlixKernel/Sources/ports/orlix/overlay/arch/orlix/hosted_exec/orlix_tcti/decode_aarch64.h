@@ -143,6 +143,8 @@ enum orlix_tcti_simd_element_move_op {
 enum orlix_tcti_simd_table_lookup_op {
 	ORLIX_TCTI_SIMD_TABLE_LOOKUP_TBL = 0,
 	ORLIX_TCTI_SIMD_TABLE_LOOKUP_TBX,
+	ORLIX_TCTI_SIMD_TABLE_LOOKUP_LUTI2,
+	ORLIX_TCTI_SIMD_TABLE_LOOKUP_LUTI4,
 };
 
 enum orlix_tcti_move_wide_op {
