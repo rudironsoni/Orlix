@@ -585,6 +585,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_advsimd_crypto_source_bound_cases"
 #define ADVSIMD_CRYPTO_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_advsimd_crypto_production_capture.h\""
+#define ADVSIMD_PERMUTE_MOVE_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c"
+#define ADVSIMD_PERMUTE_MOVE_SUITE "orlix-tcti-advsimd-permute-move-source-bound"
+#define ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL \
+	"orlix_tcti_advsimd_permute_move_source_bound_suite"
+#define ADVSIMD_PERMUTE_MOVE_CASE_ARRAY \
+	"orlix_tcti_advsimd_permute_move_source_bound_cases"
+#define ADVSIMD_PERMUTE_MOVE_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_advsimd_permute_move_production_capture.h\""
 #define AES_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f414553"
 #define SHA1_CONDITION \
@@ -748,6 +757,12 @@ production_capture_bindings[] = {
 #define ADVSIMD_CRYPTO_REQUIRED_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define ADVSIMD_PERMUTE_MOVE_GPR_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define ADVSIMD_HALVING_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define ADVSIMD_MUL_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS \
@@ -909,6 +924,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADVSIMD_CRYPTO_SOURCE,
 	  "57d40c45be85dc59af1eae398cb423a64db1913cbfc97f1983656df27708e026",
 	  "orlix_tcti_advsimd_crypto_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE,
+	  "7602e1f8916fee15571f27ff402b8edda7d1a373f597bd063ee8766f376cfdd6",
+	  "orlix_tcti_advsimd_permute_move_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1664,6 +1685,43 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_advsimd_crypto_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_lane_q0_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_tbl_tbx_smov",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE,
+	  ADVSIMD_PERMUTE_MOVE_SUITE_SYMBOL, ADVSIMD_PERMUTE_MOVE_CASE_ARRAY,
+	  "orlix_tcti_advsimd_permute_move_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -2220,6 +2278,25 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("XAR_advsimd", ADVSIMD_CRYPTO_REQUIRED_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SHA512SU0_advsimd", ADVSIMD_CRYPTO_REQUIRED_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SM4E_advsimd", ADVSIMD_CRYPTO_REQUIRED_OBLIGATIONS),
+	SCALAR_REQUIREMENT("DUP_advsimd_elt", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TBL_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TBX_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UZP1_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TRN1_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ZIP1_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UZP2_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("TRN2_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ZIP2_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("EXT_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("DUP_advsimd_gen", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMOV_advsimd", ADVSIMD_PERMUTE_MOVE_GPR_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMOV_advsimd", ADVSIMD_PERMUTE_MOVE_GPR_OBLIGATIONS),
+	SCALAR_REQUIREMENT("INS_advsimd_gen", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("INS_advsimd_elt", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV64_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV16_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("REV32_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MOVI_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
@@ -3017,6 +3094,50 @@ advsimd_crypto_production_cases[] = {
 };
 
 static const struct orlix_tcti_target_proof_case
+advsimd_permute_move_simd_cases[] = {
+	{ "orlix_tcti_advsimd_permute_move_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_permute_move_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_permute_move_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_permute_move_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_advsimd_permute_move_lane_q0_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_permute_move_tbl_tbx_smov",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_permute_move_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
+advsimd_permute_move_gpr_cases[] = {
+	{ "orlix_tcti_advsimd_permute_move_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_permute_move_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_permute_move_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_permute_move_tbl_tbx_smov",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_permute_move_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
 base_conditional_flags_cases[] = {
 	{ "orlix_tcti_base_conditional_decodes_exact_source_cohort",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
@@ -3544,12 +3665,12 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 98U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 132U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 117U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 165U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 23U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 59U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 25U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 63U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
@@ -4181,6 +4302,14 @@ static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[] = {
 	{ operation, proof, ADVSIMD_CRYPTO_SOURCE, ADVSIMD_CRYPTO_SUITE, \
 	  condition, advsimd_crypto_production_cases, \
 	  ARRAY_COUNT(advsimd_crypto_production_cases), minimum, minimum, 1, 0, 0 }
+#define PERMUTE_MOVE_SIMD_OPERATION(operation, proof, minimum, maximum, expected) \
+	{ operation, proof, ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE, \
+	  ADVSIMD_CONDITION, advsimd_permute_move_simd_cases, \
+	  ARRAY_COUNT(advsimd_permute_move_simd_cases), minimum, maximum, expected, 0, 0 }
+#define PERMUTE_MOVE_GPR_OPERATION(operation, proof, minimum, maximum, expected) \
+	{ operation, proof, ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE, \
+	  ADVSIMD_CONDITION, advsimd_permute_move_gpr_cases, \
+	  ARRAY_COUNT(advsimd_permute_move_gpr_cases), minimum, maximum, expected, 0, 0 }
 
 static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("AND_log_imm", "kunit:logical-immediate-and",
@@ -4396,6 +4525,44 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		SHA512_CONDITION, 4082U),
 	CRYPTO_OPERATION("SM4E_advsimd", "kunit:advsimd-crypto-sm4e",
 		SM4_CONDITION, 4083U),
+	PERMUTE_MOVE_SIMD_OPERATION("DUP_advsimd_elt",
+		"kunit:advsimd-permute-move-dup-elt", 3521U, 3691U, 2),
+	PERMUTE_MOVE_SIMD_OPERATION("TBL_advsimd",
+		"kunit:advsimd-permute-move-tbl", 3672U, 3678U, 4),
+	PERMUTE_MOVE_SIMD_OPERATION("TBX_advsimd",
+		"kunit:advsimd-permute-move-tbx", 3673U, 3679U, 4),
+	PERMUTE_MOVE_SIMD_OPERATION("UZP1_advsimd",
+		"kunit:advsimd-permute-move-uzp1", 3684U, 3684U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("TRN1_advsimd",
+		"kunit:advsimd-permute-move-trn1", 3685U, 3685U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("ZIP1_advsimd",
+		"kunit:advsimd-permute-move-zip1", 3686U, 3686U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("UZP2_advsimd",
+		"kunit:advsimd-permute-move-uzp2", 3687U, 3687U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("TRN2_advsimd",
+		"kunit:advsimd-permute-move-trn2", 3688U, 3688U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("ZIP2_advsimd",
+		"kunit:advsimd-permute-move-zip2", 3689U, 3689U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("EXT_advsimd",
+		"kunit:advsimd-permute-move-ext", 3690U, 3690U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("DUP_advsimd_gen",
+		"kunit:advsimd-permute-move-dup-gen", 3692U, 3692U, 1),
+	PERMUTE_MOVE_GPR_OPERATION("SMOV_advsimd",
+		"kunit:advsimd-permute-move-smov", 3693U, 3696U, 2),
+	PERMUTE_MOVE_GPR_OPERATION("UMOV_advsimd",
+		"kunit:advsimd-permute-move-umov", 3694U, 3697U, 2),
+	PERMUTE_MOVE_SIMD_OPERATION("INS_advsimd_gen",
+		"kunit:advsimd-permute-move-ins-gen", 3695U, 3695U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("INS_advsimd_elt",
+		"kunit:advsimd-permute-move-ins-elt", 3698U, 3698U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("REV64_advsimd",
+		"kunit:advsimd-permute-move-rev64", 3783U, 3783U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("REV16_advsimd",
+		"kunit:advsimd-permute-move-rev16", 3784U, 3784U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("REV32_advsimd",
+		"kunit:advsimd-permute-move-rev32", 3818U, 3818U, 1),
+	PERMUTE_MOVE_SIMD_OPERATION("MOVI_advsimd",
+		"kunit:advsimd-permute-move-movi", 3979U, 3993U, 6),
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
 		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",
@@ -4431,6 +4598,8 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 };
 
 #undef CRYPTO_OPERATION
+#undef PERMUTE_MOVE_SIMD_OPERATION
+#undef PERMUTE_MOVE_GPR_OPERATION
 #undef SCALAR_FP_OPERATION
 #undef SCALAR_OPERATION
 
@@ -5101,6 +5270,10 @@ source_leaf_rejection_registry_operations[] = {
 	  .suite = BASE_BITFIELD_UNARY_SUITE,
 	  .cases = base_bitfield_unary_production_cases,
 	  .case_count = ARRAY_COUNT(base_bitfield_unary_production_cases) },
+	{ .proof_id = "kunit:source-leaf-luti4-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-luti2-non-el0",
+	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2,
 	  .source = BASE_CONTROL_FLOW_SOURCE,

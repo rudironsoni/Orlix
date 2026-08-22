@@ -1,0 +1,404 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #127 production-path observations. These rows bind all 33 EL0
+ * ADVSIMD_PERMUTE_MOVE ordinals on orlix-tcti-advsimd-permute-move-source-bound.
+ * LUTI stays NON_EL0 reject. SVE/SME LUTI stay off this suite.
+ * FEAT_LUT is not advertised.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3521U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3521U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3672U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3672U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3673U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3673U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3674U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3674U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3675U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3675U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3676U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3676U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3677U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3677U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3678U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3678U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3679U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3679U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3684U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3684U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3685U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3685U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3686U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3686U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3687U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3687U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3688U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3688U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3689U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3689U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3690U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3690U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3691U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3691U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3692U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3692U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3693U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3693U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3694U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3694U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3695U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3695U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3696U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3696U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3697U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3697U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3698U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3698U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3783U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3783U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3784U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3784U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3818U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3818U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3979U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3979U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3981U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3981U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3983U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3983U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3984U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3984U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3992U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3992U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3993U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_permute_move_source_bound_test.c",
+	"orlix-tcti-advsimd-permute-move-source-bound", "orlix_tcti_advsimd_permute_move_production_resume",
+	3993U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

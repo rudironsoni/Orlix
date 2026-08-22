@@ -176,6 +176,14 @@ static const struct reviewed_classification_binding reviewed_bindings[] = {
 	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-abs-non-el0" },
 	{ "ABS_64_dp_1src", CLASS_NON_EL0,
 	  "pinned-source:feat-cssc-el0-rejection", "kunit:source-leaf-abs-non-el0" },
+	{ "LUTI4_asimdtbl_L7", CLASS_NON_EL0,
+	  "pinned-source:feat-lut-el0-rejection", "kunit:source-leaf-luti4-non-el0" },
+	{ "LUTI4_asimdtbl_L5", CLASS_NON_EL0,
+	  "pinned-source:feat-lut-el0-rejection", "kunit:source-leaf-luti4-non-el0" },
+	{ "LUTI2_asimdtbl_L5", CLASS_NON_EL0,
+	  "pinned-source:feat-lut-el0-rejection", "kunit:source-leaf-luti2-non-el0" },
+	{ "LUTI2_asimdtbl_L6", CLASS_NON_EL0,
+	  "pinned-source:feat-lut-el0-rejection", "kunit:source-leaf-luti2-non-el0" },
 };
 
 static const struct reviewed_classification_binding *

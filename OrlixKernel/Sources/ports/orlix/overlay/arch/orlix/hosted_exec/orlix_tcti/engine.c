@@ -65,6 +65,17 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * decode and native execute are owned, so those SIMD_VECTOR_ARITHMETIC forms
  * may enter a guest without the Linux HWCAP_ASIMDHP bit.
  */
+static bool orlix_tcti_decoded_requires_lut(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	return decoded &&
+		decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_TABLE_LOOKUP &&
+		(decoded->simd_table_lookup_op ==
+			 ORLIX_TCTI_SIMD_TABLE_LOOKUP_LUTI2 ||
+		 decoded->simd_table_lookup_op ==
+			 ORLIX_TCTI_SIMD_TABLE_LOOKUP_LUTI4);
+}
+
 static bool orlix_tcti_decoded_requires_cssc(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -123,6 +134,9 @@ static bool orlix_tcti_decoded_requires_fp16(
 static bool orlix_tcti_decoded_runtime_available(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
+	/* FEAT_LUT remains unavailable. AdvSIMD LUTI rejects at EL0. */
+	if (orlix_tcti_decoded_requires_lut(decoded))
+		return false;
 	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)

@@ -232,4 +232,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIAdvSIMDCryptoKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDCryptoDiagnostic)
     }
+
+    func testOrlixTCTIAdvSIMDPermuteMoveKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDPermuteMoveDiagnostic)
+    }
 }

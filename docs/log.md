@@ -7,6 +7,10 @@ updated: 2026-08-22
 ---
 # Orlix Knowledge Log
 
+## [2026-08-22] record | Land the ADVSIMD_PERMUTE_MOVE proof contract
+
+Recorded that the 37 unique `ADVSIMD_PERMUTE_MOVE` leaves have production decode and EL0 classification. The 33 always-on EL0 leaves DUP/INS/UMOV/SMOV, ZIP/UZP/TRN/EXT/REV, TBL/TBX, and MOVI have production observations for `FP_SIMD` and `PC`, plus `REGISTERS` for UMOV/SMOV. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. LUTI2/LUTI4 (`FEAT_LUT`) are classified `NON_EL0` and prove EL0 rejection. `FEAT_LUT` is not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-22] record | Land the ADVSIMD_CRYPTO proof contract
 
 Recorded that the 32 unique `ADVSIMD_CRYPTO` leaves have production decode and EL0 classification. All 32 EL0 leaves AESE/AESD/AESMC/AESIMC, SHA-1/SHA-256/SHA-512, SHA-3 (EOR3/BCAX/RAX1/XAR), SM3, SM4, and PMULL have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Destructive destinations, source/destination aliasing, PMULL versus PMULL2 source halves, all-zero/all-one polynomial operands, AES round ordering, and Q=0 upper-bit preservation are proved. `HWCAP_AES`, `HWCAP_PMULL`, `HWCAP_SHA1`, `HWCAP_SHA2`, `HWCAP_SHA3`, `HWCAP_SHA512`, `HWCAP_SM3`, and `HWCAP_SM4` are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
