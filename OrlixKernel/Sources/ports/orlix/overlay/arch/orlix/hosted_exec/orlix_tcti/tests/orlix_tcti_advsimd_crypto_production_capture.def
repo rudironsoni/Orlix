@@ -1,0 +1,392 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #123 production-path observations. These rows bind all 32 EL0
+ * ADVSIMD_CRYPTO ordinals on orlix-tcti-advsimd-crypto-source-bound.
+ * They do not add a second METADATA family. PMUL, TBL/TBX, and
+ * SVE/SME AES stay off this suite. Crypto HWCAP bits are not advertised.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3507U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3507U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3508U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3508U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3509U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3509U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3510U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3510U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3511U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3511U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3512U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3512U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3513U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3513U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3514U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3514U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3515U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3515U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3516U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3516U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3517U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3517U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3518U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3518U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3519U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3519U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3520U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3520U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3883U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	3883U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4067U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4067U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4068U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4068U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4069U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4069U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4070U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4070U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4071U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4071U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4072U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4072U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4073U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4073U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4074U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4074U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4075U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4075U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4076U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4076U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4077U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4077U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4078U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4078U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4079U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4079U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4080U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4080U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4081U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4081U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4082U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4082U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4083U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_crypto_source_bound_test.c",
+	"orlix-tcti-advsimd-crypto-source-bound", "orlix_tcti_advsimd_crypto_production_resume",
+	4083U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

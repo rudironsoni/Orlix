@@ -18,3 +18,4 @@
 #include "orlix_tcti_base_conditional_production_capture.def"
 #include "orlix_tcti_base_bitfield_unary_production_capture.def"
 #include "orlix_tcti_base_multiply_divide_production_capture.def"
+#include "orlix_tcti_advsimd_crypto_production_capture.def"

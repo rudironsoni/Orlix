@@ -7,6 +7,10 @@ updated: 2026-08-22
 ---
 # Orlix Knowledge Log
 
+## [2026-08-22] record | Land the ADVSIMD_CRYPTO proof contract
+
+Recorded that the 32 unique `ADVSIMD_CRYPTO` leaves have production decode and EL0 classification. All 32 EL0 leaves AESE/AESD/AESMC/AESIMC, SHA-1/SHA-256/SHA-512, SHA-3 (EOR3/BCAX/RAX1/XAR), SM3, SM4, and PMULL have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Destructive destinations, source/destination aliasing, PMULL versus PMULL2 source halves, all-zero/all-one polynomial operands, AES round ordering, and Q=0 upper-bit preservation are proved. `HWCAP_AES`, `HWCAP_PMULL`, `HWCAP_SHA1`, `HWCAP_SHA2`, `HWCAP_SHA3`, `HWCAP_SHA512`, `HWCAP_SM3`, and `HWCAP_SM4` are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-22] record | Land the BASE_MULTIPLY_DIVIDE proof contract
 
 Recorded that the 16 unique `BASE_MULTIPLY_DIVIDE` leaves have production decode and EL0 classification. All 16 EL0 leaves `UDIV`/`SDIV`, `MADD`/`MSUB`, `SMADDL`/`SMSUBL`/`SMULH`, `UMADDL`/`UMSUBL`/`UMULH`, and `MADDPT`/`MSUBPT` have production observations for `REGISTERS` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Zero divisor, signed minimum divided by `-1`, W upper-zeroing, long-form source extension, high-half products, accumulator aliasing, and XZR operands are proved. MADDPT and MSUBPT keep PAC tag bits [63:56] and do 56-bit pointer arithmetic. `FEAT_CPA` is not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
