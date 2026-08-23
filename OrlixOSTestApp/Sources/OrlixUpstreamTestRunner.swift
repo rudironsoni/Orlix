@@ -266,6 +266,17 @@ struct OrlixUpstreamTestRunSpec: Equatable, Sendable {
         hostDirectoryFixture: true
     )
 
+    static let kernelTCTIAdvSIMDFPDiagnostic = OrlixUpstreamTestRunSpec(
+        suite: .kernel,
+        completionMarker: "ORLIX-KSELFTEST-END",
+        timeout: 300,
+        kernelCommandLineSuffix:
+            "kunit.filter_glob=orlix-tcti-advsimd-fp-source-bound " +
+            "orlix.kselftest=boot_profile_contract",
+        expectedKUnitSuite: "orlix-tcti-advsimd-fp-source-bound",
+        hostDirectoryFixture: true
+    )
+
     static let kernelMountNamespace = OrlixUpstreamTestRunSpec(
         suite: .kernel,
         completionMarker: "ORLIX-KSELFTEST-END",

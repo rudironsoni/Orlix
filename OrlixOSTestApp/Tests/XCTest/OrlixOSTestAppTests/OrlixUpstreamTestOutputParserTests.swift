@@ -160,6 +160,17 @@ final class OrlixUpstreamTestOutputParserTests: XCTestCase {
         XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-advsimd-integer-source-bound")
     }
 
+    func testFocusedOrlixTCTIAdvSIMDFPDiagnosticSelectsExactOuterSuite() {
+        let spec = OrlixUpstreamTestRunSpec.kernelTCTIAdvSIMDFPDiagnostic
+
+        XCTAssertEqual(
+            spec.kernelCommandLineSuffix,
+            "kunit.filter_glob=orlix-tcti-advsimd-fp-source-bound " +
+            "orlix.kselftest=boot_profile_contract"
+        )
+        XCTAssertEqual(spec.expectedKUnitSuite, "orlix-tcti-advsimd-fp-source-bound")
+    }
+
     func testLiveTerminalOutputIsNotDuplicatedByRecentConsoleFallback() {
         XCTAssertEqual(
             OrlixUpstreamTestSessionRunner.combinedUpstreamOutput(

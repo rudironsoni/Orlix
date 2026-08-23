@@ -63,9 +63,8 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * 16-bit data are ordinary FEAT_FP loads and stores, not FEAT_FP16
  * arithmetic, so they execute without HWCAP_FPHP. Integer AdvSIMD 16-bit
  * lanes (XTN, SQXTN, SHRN, ADDHN, SADDLV, SQSHL, and by-element multiply)
- * are FEAT_AdvSIMD, not FEAT_FP16. AdvSIMD FP16 three-same decode and native
- * execute are owned, so those SIMD_VECTOR_ARITHMETIC forms may enter a guest
- * without the Linux HWCAP_ASIMDHP bit.
+ * are FEAT_AdvSIMD, not FEAT_FP16. AdvSIMD FP16, FHM, BF16, FCMA, FRINTTS,
+ * FP8, FAMINMAX, and FSCALE stay unadvertised and reject at EL0.
  */
 static bool orlix_tcti_decoded_requires_lut(
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -175,8 +174,165 @@ static bool orlix_tcti_decoded_runtime_available(
 	/* FEAT_LUT remains unavailable. AdvSIMD LUTI rejects at EL0. */
 	if (orlix_tcti_decoded_requires_lut(decoded))
 		return false;
-	/* FEAT_RDM, FEAT_DotProd, and FEAT_I8MM remain unadvertised. */
+	/* FEAT_RDM, FEAT_DotProd, FEAT_I8MM, and unadvertised AdvSIMD FP
+	 * extensions remain unavailable.
+	 */
 	switch (decoded ? decoded->source_ordinal : 0U) {
+	case 3522U:
+	case 3523U:
+	case 3524U:
+	case 3525U:
+	case 3526U:
+	case 3527U:
+	case 3528U:
+	case 3529U:
+	case 3530U:
+	case 3531U:
+	case 3532U:
+	case 3533U:
+	case 3534U:
+	case 3535U:
+	case 3536U:
+	case 3537U:
+	case 3538U:
+	case 3539U:
+	case 3540U:
+	case 3541U:
+	case 3542U:
+	case 3543U:
+	case 3544U:
+	case 3545U:
+	case 3546U:
+	case 3547U:
+	case 3548U:
+	case 3549U:
+	case 3550U:
+	case 3589U:
+	case 3590U:
+	case 3591U:
+	case 3592U:
+	case 3593U:
+	case 3662U:
+	case 3663U:
+	case 3664U:
+	case 3670U:
+	case 3699U:
+	case 3700U:
+	case 3701U:
+	case 3702U:
+	case 3703U:
+	case 3704U:
+	case 3705U:
+	case 3706U:
+	case 3707U:
+	case 3708U:
+	case 3709U:
+	case 3710U:
+	case 3711U:
+	case 3712U:
+	case 3713U:
+	case 3714U:
+	case 3715U:
+	case 3716U:
+	case 3717U:
+	case 3718U:
+	case 3719U:
+	case 3720U:
+	case 3721U:
+	case 3722U:
+	case 3723U:
+	case 3724U:
+	case 3725U:
+	case 3726U:
+	case 3727U:
+	case 3728U:
+	case 3729U:
+	case 3730U:
+	case 3731U:
+	case 3732U:
+	case 3733U:
+	case 3734U:
+	case 3735U:
+	case 3736U:
+	case 3737U:
+	case 3738U:
+	case 3739U:
+	case 3740U:
+	case 3741U:
+	case 3742U:
+	case 3743U:
+	case 3744U:
+	case 3745U:
+	case 3746U:
+	case 3747U:
+	case 3748U:
+	case 3749U:
+	case 3750U:
+	case 3751U:
+	case 3752U:
+	case 3753U:
+	case 3754U:
+	case 3756U:
+	case 3757U:
+	case 3758U:
+	case 3759U:
+	case 3761U:
+	case 3765U:
+	case 3766U:
+	case 3767U:
+	case 3768U:
+	case 3769U:
+	case 3770U:
+	case 3771U:
+	case 3772U:
+	case 3773U:
+	case 3776U:
+	case 3777U:
+	case 3778U:
+	case 3779U:
+	case 3780U:
+	case 3781U:
+	case 3805U:
+	case 3806U:
+	case 3817U:
+	case 3837U:
+	case 3838U:
+	case 3840U:
+	case 3842U:
+	case 3852U:
+	case 3853U:
+	case 3858U:
+	case 3859U:
+	case 3860U:
+	case 3861U:
+	case 3926U:
+	case 3931U:
+	case 3935U:
+	case 3967U:
+	case 3971U:
+	case 3975U:
+	case 3977U:
+	case 3986U:
+	case 4033U:
+	case 4034U:
+	case 4035U:
+	case 4036U:
+	case 4038U:
+	case 4039U:
+	case 4040U:
+	case 4044U:
+	case 4045U:
+	case 4047U:
+	case 4056U:
+	case 4057U:
+	case 4059U:
+	case 4060U:
+	case 4061U:
+	case 4062U:
+	case 4063U:
+	case 4064U:
+	case 4065U:
+	case 4066U:
 	case 3551U:
 	case 3552U:
 	case 3668U:
@@ -203,15 +359,10 @@ static bool orlix_tcti_decoded_runtime_available(
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
 		return false;
-	if (orlix_tcti_decoded_requires_fp16(decoded)) {
-		if (decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC &&
-		    decoded->simd_arithmetic_op >= ORLIX_TCTI_SIMD_ARITH_FABD &&
-		    decoded->simd_arithmetic_op <= ORLIX_TCTI_SIMD_ARITH_FSUB)
-			return true;
+	if (orlix_tcti_decoded_requires_fp16(decoded))
 		return decoded->decode_class == ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC ?
 			(ELF_HWCAP & HWCAP_ASIMDHP) :
 			(ELF_HWCAP & HWCAP_FPHP);
-	}
 	return !orlix_tcti_decoded_requires_cssc(decoded) ||
 		(ELF_HWCAP2 & HWCAP2_CSSC);
 }
