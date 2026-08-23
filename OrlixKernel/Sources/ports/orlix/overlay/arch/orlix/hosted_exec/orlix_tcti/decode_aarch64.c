@@ -1086,6 +1086,264 @@ static void orlix_tcti_bind_advsimd_permute_move_source(
 	}
 }
 
+static bool orlix_tcti_advsimd_fp_optional_ordinal(u32 ordinal)
+{
+	switch (ordinal) {
+	case 3522U:
+	case 3523U:
+	case 3524U:
+	case 3525U:
+	case 3526U:
+	case 3527U:
+	case 3528U:
+	case 3529U:
+	case 3530U:
+	case 3531U:
+	case 3532U:
+	case 3533U:
+	case 3534U:
+	case 3535U:
+	case 3536U:
+	case 3537U:
+	case 3538U:
+	case 3539U:
+	case 3540U:
+	case 3541U:
+	case 3542U:
+	case 3543U:
+	case 3544U:
+	case 3545U:
+	case 3546U:
+	case 3547U:
+	case 3548U:
+	case 3549U:
+	case 3550U:
+	case 3589U:
+	case 3590U:
+	case 3591U:
+	case 3592U:
+	case 3593U:
+	case 3662U:
+	case 3663U:
+	case 3664U:
+	case 3670U:
+	case 3699U:
+	case 3700U:
+	case 3701U:
+	case 3702U:
+	case 3703U:
+	case 3704U:
+	case 3705U:
+	case 3706U:
+	case 3707U:
+	case 3708U:
+	case 3709U:
+	case 3710U:
+	case 3711U:
+	case 3712U:
+	case 3713U:
+	case 3714U:
+	case 3715U:
+	case 3716U:
+	case 3717U:
+	case 3718U:
+	case 3719U:
+	case 3720U:
+	case 3721U:
+	case 3722U:
+	case 3723U:
+	case 3724U:
+	case 3725U:
+	case 3726U:
+	case 3727U:
+	case 3728U:
+	case 3729U:
+	case 3730U:
+	case 3731U:
+	case 3732U:
+	case 3733U:
+	case 3734U:
+	case 3735U:
+	case 3736U:
+	case 3737U:
+	case 3738U:
+	case 3739U:
+	case 3740U:
+	case 3741U:
+	case 3742U:
+	case 3743U:
+	case 3744U:
+	case 3745U:
+	case 3746U:
+	case 3747U:
+	case 3748U:
+	case 3749U:
+	case 3750U:
+	case 3751U:
+	case 3752U:
+	case 3753U:
+	case 3754U:
+	case 3756U:
+	case 3757U:
+	case 3758U:
+	case 3759U:
+	case 3761U:
+	case 3765U:
+	case 3766U:
+	case 3767U:
+	case 3768U:
+	case 3769U:
+	case 3770U:
+	case 3771U:
+	case 3772U:
+	case 3773U:
+	case 3776U:
+	case 3777U:
+	case 3778U:
+	case 3779U:
+	case 3780U:
+	case 3781U:
+	case 3805U:
+	case 3806U:
+	case 3817U:
+	case 3837U:
+	case 3838U:
+	case 3840U:
+	case 3842U:
+	case 3852U:
+	case 3853U:
+	case 3858U:
+	case 3859U:
+	case 3860U:
+	case 3861U:
+	case 3926U:
+	case 3931U:
+	case 3935U:
+	case 3967U:
+	case 3971U:
+	case 3975U:
+	case 3977U:
+	case 3986U:
+	case 4033U:
+	case 4034U:
+	case 4035U:
+	case 4036U:
+	case 4038U:
+	case 4039U:
+	case 4040U:
+	case 4044U:
+	case 4045U:
+	case 4047U:
+	case 4056U:
+	case 4057U:
+	case 4059U:
+	case 4060U:
+	case 4061U:
+	case 4062U:
+	case 4063U:
+	case 4064U:
+	case 4065U:
+	case 4066U:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool orlix_tcti_decode_class_is_advsimd_fp(u32 decode_class)
+{
+	switch (decode_class) {
+	case ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC:
+	case ORLIX_TCTI_DECODE_SIMD_VECTOR_COMPARE:
+	case ORLIX_TCTI_DECODE_SIMD_VECTOR_REDUCTION:
+	case ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void orlix_tcti_bind_advsimd_fp_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded || decoded->source_ordinal)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_FP)
+			continue;
+		if (orlix_tcti_advsimd_fp_optional_ordinal(row->ordinal))
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
+static void orlix_tcti_bind_advsimd_fp_optional_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded || decoded->source_ordinal)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_FP ||
+		    !orlix_tcti_advsimd_fp_optional_ordinal(row->ordinal))
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		decoded->decode_class = ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+		decoded->rd = decoded->instruction & 0x1fU;
+		decoded->rn = (decoded->instruction >> 5) & 0x1fU;
+		decoded->rm = (decoded->instruction >> 16) & 0x1fU;
+		decoded->result_size = (decoded->instruction & BIT(30)) ?
+			2 * sizeof(u64) : sizeof(u64);
+		decoded->simd_fp = true;
+		return;
+	}
+}
+
+static void orlix_tcti_advsimd_fp_promote_unsupported(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (!decoded || !decoded->source_ordinal)
+		return;
+	if (decoded->decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED)
+		return;
+	if (decoded->source_ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+	    orlix_tcti_source_families[decoded->source_ordinal] !=
+		    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_FP)
+		return;
+	/* Q=0 2D AdvSIMD FP three-same is reserved. Keep UNSUPPORTED. */
+	if (!(decoded->instruction & BIT(28)) &&
+	    (decoded->instruction & BIT(22)) &&
+	    !(decoded->instruction & BIT(30)))
+		return;
+	decoded->decode_class = ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
+	decoded->rd = decoded->instruction & 0x1fU;
+	decoded->rn = (decoded->instruction >> 5) & 0x1fU;
+	decoded->rm = (decoded->instruction >> 16) & 0x1fU;
+	decoded->result_size = (decoded->instruction & BIT(30)) ?
+		2 * sizeof(u64) : sizeof(u64);
+	decoded->simd_fp = true;
+}
+
 static bool orlix_tcti_advsimd_integer_optional_ordinal(u32 ordinal)
 {
 	switch (ordinal) {
@@ -1210,6 +1468,15 @@ orlix_tcti_decode_aarch64_finish(struct orlix_tcti_decoded_instruction decoded)
 	if (decoded.source_ordinal == 0 &&
 	    decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED)
 		orlix_tcti_bind_advsimd_integer_optional_source(&decoded);
+	/*
+	 * AdvSIMD FP16/FHM/BF16/FCMA and friends already decode as SIMD
+	 * arithmetic or as leftover scalar/convert classes. Bind those
+	 * optional leaves before integer required so a wider integer mask
+	 * cannot steal the FP16 encoding, then bind required FP convert
+	 * leaves that live in FP_INT_CONVERT.
+	 */
+	if (decoded.source_ordinal == 0)
+		orlix_tcti_bind_advsimd_fp_optional_source(&decoded);
 	if (decoded.source_ordinal == 0 &&
 	    decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED)
 		orlix_tcti_bind_advsimd_integer_source(&decoded);
@@ -1217,6 +1484,9 @@ orlix_tcti_decode_aarch64_finish(struct orlix_tcti_decoded_instruction decoded)
 	if (decoded.source_ordinal == 0 &&
 	    orlix_tcti_decode_class_is_advsimd_integer(decoded.decode_class))
 		orlix_tcti_bind_advsimd_integer_source(&decoded);
+	if (decoded.source_ordinal == 0)
+		orlix_tcti_bind_advsimd_fp_source(&decoded);
+	orlix_tcti_advsimd_fp_promote_unsupported(&decoded);
 	return decoded;
 }
 

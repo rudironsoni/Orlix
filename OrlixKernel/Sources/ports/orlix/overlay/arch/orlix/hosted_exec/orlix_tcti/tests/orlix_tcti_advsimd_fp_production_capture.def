@@ -1,0 +1,1364 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* #124 production-path observations. These rows bind all 113 EL0
+ * ADVSIMD_FP ordinals on orlix-tcti-advsimd-fp-source-bound.
+ * FP16/FHM/BF16/FCMA/FRINTTS/FP8/FAMINMAX/FSCALE stay NON_EL0 reject.
+ * Those features are not advertised.
+ */
+#ifdef ORLIX_TCTI_PRODUCTION_CAPTURE
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3560U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3560U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3561U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3561U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3562U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3562U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3563U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3563U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3564U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3564U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3565U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3565U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3566U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3566U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3567U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3567U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3568U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3568U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3569U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3569U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3570U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3570U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3578U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3578U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3579U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3579U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3580U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3580U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3581U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3581U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3582U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3582U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3583U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3583U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3584U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3584U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3585U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3585U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3586U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3586U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3587U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3587U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3594U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3594U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3595U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3595U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3596U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3596U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3597U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3597U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3598U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3598U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3613U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3613U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3614U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3614U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3615U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3615U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3616U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3616U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3628U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3628U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3629U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3629U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3630U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3630U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3631U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3631U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3632U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3632U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3641U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3641U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3642U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3642U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3655U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3655U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3656U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3656U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3665U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3665U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3666U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3666U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3667U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3667U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3671U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3671U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3797U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3797U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3798U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3798U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3799U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3799U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3800U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3800U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3801U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3801U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3802U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3802U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3803U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3803U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3804U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3804U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3807U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3807U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3808U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3808U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3809U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3809U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3810U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3810U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3811U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3811U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3812U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3812U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3813U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3813U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3814U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3814U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3816U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3816U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3830U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3830U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3831U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3831U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3832U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3832U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3833U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3833U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3834U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3834U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3835U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3835U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3836U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3836U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3843U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3843U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3844U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3844U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3845U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3845U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3846U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3846U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3847U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3847U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3848U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3848U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3850U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3850U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3851U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3851U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3865U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3865U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3866U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3866U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3867U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3867U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3868U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3868U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3918U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3918U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3919U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3919U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3920U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3920U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3921U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3921U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3922U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3922U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3923U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3923U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3924U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3924U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3928U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3928U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3929U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3929U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3930U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3930U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3932U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3932U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3933U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3933U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3959U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3959U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3960U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3960U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3961U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3961U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3962U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3962U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3963U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3963U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3964U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3964U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3965U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3965U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3969U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3969U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3970U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3970U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3972U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3972U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3973U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3973U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3974U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3974U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3985U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3985U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3994U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	3994U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4006U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4006U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4007U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4007U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4021U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4021U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4022U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4022U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4041U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4041U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4042U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4042U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4043U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4043U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4058U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+ORLIX_TCTI_PRODUCTION_CAPTURE(
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_fp_source_bound_test.c",
+	"orlix-tcti-advsimd-fp-source-bound", "orlix_tcti_advsimd_fp_production_resume",
+	4058U, ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC,
+	"orlix_tcti_resume_user", "orlix_tcti_decode_aarch64",
+	"orlix_tcti_execute_decoded_semantics")
+#endif

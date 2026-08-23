@@ -240,4 +240,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIAdvSIMDIntegerKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDIntegerDiagnostic)
     }
+
+    func testOrlixTCTIAdvSIMDFPKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDFPDiagnostic)
+    }
 }

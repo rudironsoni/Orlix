@@ -7,6 +7,10 @@ updated: 2026-08-23
 ---
 # Orlix Knowledge Log
 
+## [2026-08-23] record | Land the ADVSIMD_FP proof contract
+
+Recorded that the 268 unique `ADVSIMD_FP` leaves have production decode and EL0 classification. The 113 always-on EL0 leaves have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. NaN, infinity, signed-zero, subnormal, FPCR rounding, FPSR IOC, Q=0 upper-half clearing, reserved Q=0 2D, and overlapping source/destination registers are proved. The 155 optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE leaves are classified `NON_EL0` and prove EL0 rejection. `HWCAP_FPHP`, `HWCAP_ASIMDHP`, `HWCAP_ASIMDFHM`, `HWCAP_BF16`, FCMA, FRINTTS, FAMINMAX, FP8, and FSCALE are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
+
 ## [2026-08-23] record | Land the ADVSIMD_INTEGER proof contract
 
 Recorded that the 240 unique `ADVSIMD_INTEGER` leaves have production decode and EL0 classification. The 222 always-on EL0 leaves have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. Lane endpoints, signed versus unsigned saturation, QC updates, high-half forms, narrowing destination preservation, variable shift counts outside element width, and overlapping source/destination registers are proved. The 18 optional RDM/DotProd/I8MM leaves are classified `NON_EL0` and prove EL0 rejection. XTN and PMUL stay in this family. `HWCAP_ASIMDRDM`, `HWCAP_ASIMDDP`, and `HWCAP_I8MM` are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
