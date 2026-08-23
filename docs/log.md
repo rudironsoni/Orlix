@@ -7,6 +7,10 @@ updated: 2026-08-23
 ---
 # Orlix Knowledge Log
 
+## [2026-08-23] record | Keep optional ADVSIMD_FP leaves in the EL0 complete target
+
+Recorded that optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE AdvSIMD leaves remain architecturally valid EL0 when their features apply. Runtime rejection without `HWCAP_FPHP` / `HWCAP_ASIMDHP` / related bits does not classify those 155 leaves `NON_EL0` and does not complete them. They stay unclassified blockers in the complete target. Unimplemented FP16 forms and reserved `immh == 0000` encodings stay `DECODE_UNSUPPORTED`. Production EL0 proof compares destination SIMD and FPSR against a source-mnemonic architectural result before ingest. `linux_proof_executed` stays 0.
+
 ## [2026-08-23] record | Land the ADVSIMD_FP proof contract
 
 Recorded that the 268 unique `ADVSIMD_FP` leaves have production decode and EL0 classification. The 113 always-on EL0 leaves have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. NaN, infinity, signed-zero, subnormal, FPCR rounding, FPSR IOC, Q=0 upper-half clearing, reserved Q=0 2D, and overlapping source/destination registers are proved. The 155 optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE leaves are classified `NON_EL0` and prove EL0 rejection. `HWCAP_FPHP`, `HWCAP_ASIMDHP`, `HWCAP_ASIMDFHM`, `HWCAP_BF16`, FCMA, FRINTTS, FAMINMAX, FP8, and FSCALE are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
