@@ -39,6 +39,24 @@
 #define FP_RN 1U
 #define FP_RM 2U
 #define AARCH64_FPSR_IOC BIT(0)
+#define AARCH64_FPCR_RMODE_POSINF BIT(22)
+#define AARCH64_FPCR_RMODE_NEGINF BIT(23)
+#define AARCH64_FPCR_RMODE_ZERO (BIT(22) | BIT(23))
+#define FP32_POS_INF 0x7f800000U
+#define FP32_NEG_INF 0xff800000U
+#define FP32_POS_ZERO 0x0U
+#define FP32_NEG_ZERO 0x80000000U
+#define FP32_MIN_SUBNORMAL 0x1U
+#define FP32_ONE 0x3f800000U
+#define FP32_ONE_POINT_FIVE 0x3fc00000U
+#define FP32_NEG_ONE_POINT_FIVE 0xbfc00000U
+#define FP32_TWO_EXP_NEG_24 0x33800000U
+#define FP32_SNAN 0x7f800001U
+
+static u64 orlix_tcti_advsimd_fp_pack_s(u32 lo, u32 hi)
+{
+	return (u64)lo | ((u64)hi << 32);
+}
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -1033,6 +1051,30 @@ static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
 	orlix_tcti_native_capture_destroy(capture);
 }
 
+static void orlix_tcti_advsimd_fp_run_pinned(
+	struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source,
+	u32 instruction,
+	u64 rn_lo, u64 rn_hi, u64 rm_lo, u64 rm_hi, unsigned long fpcr)
+{
+	struct pt_regs regs = {};
+	unsigned long code;
+
+	code = orlix_tcti_advsimd_fp_map(test, instruction);
+	orlix_tcti_advsimd_fp_seed(&regs, code);
+	current->thread.user_fpcr = fpcr;
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[FP_RN * 2U] = rn_lo;
+	current->thread.user_simd[FP_RN * 2U + 1U] = rn_hi;
+	current->thread.user_simd[FP_RM * 2U] = rm_lo;
+	current->thread.user_simd[FP_RM * 2U + 1U] = rm_hi;
+	current->thread.user_simd[FP_RD * 2U] = 0;
+	current->thread.user_simd[FP_RD * 2U + 1U] = 0;
+	orlix_tcti_advsimd_fp_capture_run(test, source, instruction,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD, &regs, code);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+}
+
 static void orlix_tcti_advsimd_fp_decodes_exact_source_cohort(struct kunit *test)
 {
 	size_t index;
@@ -1231,6 +1273,51 @@ static void orlix_tcti_advsimd_fp_nan_rounding_overlap(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
+static void orlix_tcti_advsimd_fp_edge_vectors(struct kunit *test)
+{
+	const struct orlix_tcti_test_fp_source *fadd =
+		orlix_tcti_test_fp_name("FADD_asimdsame_only");
+	const struct orlix_tcti_test_fp_source *frinti =
+		orlix_tcti_test_fp_name("FRINTI_asimdmisc_R");
+	u32 fadd_insn;
+	u32 frinti_insn;
+	u64 one = orlix_tcti_advsimd_fp_pack_s(FP32_ONE, FP32_ONE);
+	u64 inf = orlix_tcti_advsimd_fp_pack_s(FP32_POS_INF, FP32_NEG_INF);
+	u64 pos_zero = orlix_tcti_advsimd_fp_pack_s(FP32_POS_ZERO, FP32_NEG_ZERO);
+	u64 neg_zero = orlix_tcti_advsimd_fp_pack_s(FP32_NEG_ZERO, FP32_POS_ZERO);
+	u64 min_sub = orlix_tcti_advsimd_fp_pack_s(FP32_MIN_SUBNORMAL,
+						   FP32_MIN_SUBNORMAL);
+	u64 halves = orlix_tcti_advsimd_fp_pack_s(FP32_ONE_POINT_FIVE,
+						  FP32_NEG_ONE_POINT_FIVE);
+	u64 tiny = orlix_tcti_advsimd_fp_pack_s(FP32_TWO_EXP_NEG_24,
+					       FP32_TWO_EXP_NEG_24);
+	u64 snan = orlix_tcti_advsimd_fp_pack_s(FP32_SNAN, FP32_ONE);
+
+	KUNIT_ASSERT_NOT_NULL(test, fadd);
+	KUNIT_ASSERT_NOT_NULL(test, frinti);
+	fadd_insn = orlix_tcti_advsimd_fp_legal_instruction(fadd);
+	frinti_insn = orlix_tcti_advsimd_fp_legal_instruction(frinti);
+
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, inf, inf, one,
+					 one, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, pos_zero, 0,
+					 neg_zero, 0, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, min_sub, min_sub,
+					 min_sub, min_sub, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, snan, 0, one, 0,
+					 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, one, one, tiny,
+					 tiny, AARCH64_FPCR_RMODE_POSINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, one, one, tiny,
+					 tiny, AARCH64_FPCR_RMODE_ZERO);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_POSINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_NEGINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_ZERO);
+}
+
 static void orlix_tcti_advsimd_fp_reserved_encodings(struct kunit *test)
 {
 	struct orlix_tcti_decoded_instruction decoded;
@@ -1271,6 +1358,7 @@ static struct kunit_case orlix_tcti_advsimd_fp_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_fp_production_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_non_el0_rejected),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_nan_rounding_overlap),
+	KUNIT_CASE(orlix_tcti_advsimd_fp_edge_vectors),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_reserved_encodings),
 	{}
 };

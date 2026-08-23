@@ -9,7 +9,7 @@ updated: 2026-08-23
 
 ## [2026-08-23] record | Keep optional ADVSIMD_FP leaves in the EL0 complete target
 
-Recorded that optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE AdvSIMD leaves remain architecturally valid EL0 when their features apply. Runtime rejection without `HWCAP_FPHP` / `HWCAP_ASIMDHP` / related bits does not classify those 155 leaves `NON_EL0` and does not complete them. They stay unclassified blockers in the complete target. Unimplemented FP16 forms and reserved `immh == 0000` encodings stay `DECODE_UNSUPPORTED`. Production EL0 proof compares destination SIMD and FPSR against a source-mnemonic architectural result before ingest. `linux_proof_executed` stays 0.
+Recorded that optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE AdvSIMD leaves remain architecturally valid EL0 when their features apply. Runtime rejection without `HWCAP_FPHP` / `HWCAP_ASIMDHP` / related bits does not classify those 155 leaves `NON_EL0` and does not complete them. They stay unclassified blockers in the complete target. Unimplemented FP16 forms and reserved `immh == 0000` encodings stay `DECODE_UNSUPPORTED`. Production EL0 proof compares destination SIMD and FPSR against a source-mnemonic architectural result before ingest, including pinned infinity, signed-zero, subnormal, signaling-NaN, and non-default FPCR rounding vectors. `linux_proof_executed` stays 0.
 
 ## [2026-08-23] record | Land the ADVSIMD_FP proof contract
 
