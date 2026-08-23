@@ -962,7 +962,7 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
 	{ ADVSIMD_FP_SOURCE,
-	  "f2716fa406ec01b66078d5d22602d1b4181eeb578529ab74b02fc0123683de2d",
+	  "59237069ae66875467947d2c1ade625b17ffb36e10ccaf1f5dbe253bae1720cf",
 	  "orlix_tcti_advsimd_fp_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",

@@ -17,13 +17,13 @@
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
+#include <linux/preempt.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
 
 #include "../decode_aarch64.h"
-#include "../fixed_fp.h"
 #include "../switch_debug.h"
 #include "orlix_tcti_memory_proof.h"
 #include "orlix_tcti_native_observation.h"
@@ -245,165 +245,6 @@ static u64 orlix_tcti_advsimd_fp_expand_fp64_imm(u8 imm8)
 		((exponent_bit ? 0xffULL : 0) << 54) | (fraction << 48);
 }
 
-static int orlix_tcti_advsimd_fp_arith_from_source(
-	const struct orlix_tcti_test_fp_source *source)
-{
-	const char *m = source->mnemonic;
-	const char *name = source->name;
-	bool zero = strstr(name, "_FZ") != NULL;
-
-	if (!strcmp(m, "FADD"))
-		return ORLIX_TCTI_SIMD_ARITH_FADD;
-	if (!strcmp(m, "FSUB"))
-		return ORLIX_TCTI_SIMD_ARITH_FSUB;
-	if (!strcmp(m, "FMUL"))
-		return ORLIX_TCTI_SIMD_ARITH_FMUL;
-	if (!strcmp(m, "FDIV"))
-		return ORLIX_TCTI_SIMD_ARITH_FDIV;
-	if (!strcmp(m, "FMLA"))
-		return ORLIX_TCTI_SIMD_ARITH_FMLA;
-	if (!strcmp(m, "FMLS"))
-		return ORLIX_TCTI_SIMD_ARITH_FMLS;
-	if (!strcmp(m, "FMAX"))
-		return ORLIX_TCTI_SIMD_ARITH_FMAX;
-	if (!strcmp(m, "FMIN"))
-		return ORLIX_TCTI_SIMD_ARITH_FMIN;
-	if (!strcmp(m, "FMAXNM"))
-		return ORLIX_TCTI_SIMD_ARITH_FMAXNM;
-	if (!strcmp(m, "FMINNM"))
-		return ORLIX_TCTI_SIMD_ARITH_FMINNM;
-	if (!strcmp(m, "FMULX"))
-		return ORLIX_TCTI_SIMD_ARITH_FMULX;
-	if (!strcmp(m, "FABD"))
-		return ORLIX_TCTI_SIMD_ARITH_FABD;
-	if (!strcmp(m, "FACGE"))
-		return ORLIX_TCTI_SIMD_ARITH_FACGE;
-	if (!strcmp(m, "FACGT"))
-		return ORLIX_TCTI_SIMD_ARITH_FACGT;
-	if (!strcmp(m, "FRECPS"))
-		return ORLIX_TCTI_SIMD_ARITH_FRECPS;
-	if (!strcmp(m, "FRSQRTS"))
-		return ORLIX_TCTI_SIMD_ARITH_FRSQRTS;
-	if (!strcmp(m, "FADDP"))
-		return ORLIX_TCTI_SIMD_ARITH_FADDP;
-	if (!strcmp(m, "FMAXP"))
-		return ORLIX_TCTI_SIMD_ARITH_FMAXP;
-	if (!strcmp(m, "FMINP"))
-		return ORLIX_TCTI_SIMD_ARITH_FMINP;
-	if (!strcmp(m, "FMAXNMP"))
-		return ORLIX_TCTI_SIMD_ARITH_FMAXNMP;
-	if (!strcmp(m, "FMINNMP"))
-		return ORLIX_TCTI_SIMD_ARITH_FMINNMP;
-	if (!strcmp(m, "FABS"))
-		return ORLIX_TCTI_SIMD_ARITH_FABS;
-	if (!strcmp(m, "FNEG"))
-		return ORLIX_TCTI_SIMD_ARITH_FNEG;
-	if (!strcmp(m, "FSQRT"))
-		return ORLIX_TCTI_SIMD_ARITH_FSQRT;
-	if (!strcmp(m, "FRECPE"))
-		return ORLIX_TCTI_SIMD_ARITH_FRECPE;
-	if (!strcmp(m, "FRECPX"))
-		return ORLIX_TCTI_SIMD_ARITH_FRECPX;
-	if (!strcmp(m, "FRSQRTE"))
-		return ORLIX_TCTI_SIMD_ARITH_FRSQRTE;
-	if (!strcmp(m, "FRINTN"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTN;
-	if (!strcmp(m, "FRINTP"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTP;
-	if (!strcmp(m, "FRINTM"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTM;
-	if (!strcmp(m, "FRINTZ"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTZ;
-	if (!strcmp(m, "FRINTA"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTA;
-	if (!strcmp(m, "FRINTX"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTX;
-	if (!strcmp(m, "FRINTI"))
-		return ORLIX_TCTI_SIMD_ARITH_FRINTI;
-	if (!strcmp(m, "FCVTN"))
-		return ORLIX_TCTI_SIMD_ARITH_FCVTN;
-	if (!strcmp(m, "FCVTL"))
-		return ORLIX_TCTI_SIMD_ARITH_FCVTL;
-	if (!strcmp(m, "FCVTXN"))
-		return ORLIX_TCTI_SIMD_ARITH_FCVTXN;
-	if (!strcmp(m, "FCMEQ"))
-		return zero ? ORLIX_TCTI_SIMD_ARITH_FCMEQ_ZERO :
-			ORLIX_TCTI_SIMD_ARITH_FCMEQ;
-	if (!strcmp(m, "FCMGE"))
-		return zero ? ORLIX_TCTI_SIMD_ARITH_FCMGE_ZERO :
-			ORLIX_TCTI_SIMD_ARITH_FCMGE;
-	if (!strcmp(m, "FCMGT"))
-		return zero ? ORLIX_TCTI_SIMD_ARITH_FCMGT_ZERO :
-			ORLIX_TCTI_SIMD_ARITH_FCMGT;
-	if (!strcmp(m, "FCMLE"))
-		return ORLIX_TCTI_SIMD_ARITH_FCMLE_ZERO;
-	if (!strcmp(m, "FCMLT"))
-		return ORLIX_TCTI_SIMD_ARITH_FCMLT_ZERO;
-	return -EINVAL;
-}
-
-static int orlix_tcti_advsimd_fp_convert_from_source(
-	const struct orlix_tcti_test_fp_source *source, bool fixed)
-{
-	const char *m = source->mnemonic;
-
-	if (!strcmp(m, "SCVTF"))
-		return fixed ? ORLIX_TCTI_FP_INT_SCVTF_FIXED_SIMD :
-			ORLIX_TCTI_FP_INT_SCVTF_SIMD;
-	if (!strcmp(m, "UCVTF"))
-		return fixed ? ORLIX_TCTI_FP_INT_UCVTF_FIXED_SIMD :
-			ORLIX_TCTI_FP_INT_UCVTF_SIMD;
-	if (!strcmp(m, "FCVTZS"))
-		return fixed ? ORLIX_TCTI_FP_INT_FCVTZS_FIXED_SIMD :
-			ORLIX_TCTI_FP_INT_FCVTZS_SIMD;
-	if (!strcmp(m, "FCVTZU"))
-		return fixed ? ORLIX_TCTI_FP_INT_FCVTZU_FIXED_SIMD :
-			ORLIX_TCTI_FP_INT_FCVTZU_SIMD;
-	if (!strcmp(m, "FCVTNS"))
-		return ORLIX_TCTI_FP_INT_FCVTNS_SIMD;
-	if (!strcmp(m, "FCVTNU"))
-		return ORLIX_TCTI_FP_INT_FCVTNU_SIMD;
-	if (!strcmp(m, "FCVTPS"))
-		return ORLIX_TCTI_FP_INT_FCVTPS_SIMD;
-	if (!strcmp(m, "FCVTPU"))
-		return ORLIX_TCTI_FP_INT_FCVTPU_SIMD;
-	if (!strcmp(m, "FCVTMS"))
-		return ORLIX_TCTI_FP_INT_FCVTMS_SIMD;
-	if (!strcmp(m, "FCVTMU"))
-		return ORLIX_TCTI_FP_INT_FCVTMU_SIMD;
-	if (!strcmp(m, "FCVTAS"))
-		return ORLIX_TCTI_FP_INT_FCVTAS_SIMD;
-	if (!strcmp(m, "FCVTAU"))
-		return ORLIX_TCTI_FP_INT_FCVTAU_SIMD;
-	return -EINVAL;
-}
-
-static int orlix_tcti_advsimd_fp_reduction_from_source(
-	const struct orlix_tcti_test_fp_source *source)
-{
-	const char *m = source->mnemonic;
-
-	if (!strcmp(m, "FADDP"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FADDP;
-	if (!strcmp(m, "FMAXP"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMAXP;
-	if (!strcmp(m, "FMINP"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMINP;
-	if (!strcmp(m, "FMAXNMP"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMAXNMP;
-	if (!strcmp(m, "FMINNMP"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMINNMP;
-	if (!strcmp(m, "FMAXNMV"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMAXNMV;
-	if (!strcmp(m, "FMAXV"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMAXV;
-	if (!strcmp(m, "FMINNMV"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMINNMV;
-	if (!strcmp(m, "FMINV"))
-		return ORLIX_TCTI_SIMD_REDUCTION_FMINV;
-	return -EINVAL;
-}
-
 static void orlix_tcti_advsimd_fp_broadcast_lane(u64 dest[2], const u64 src[2],
 						 u8 lane_bytes, u8 index,
 						 u8 result_bytes)
@@ -423,6 +264,505 @@ static void orlix_tcti_advsimd_fp_broadcast_lane(u64 dest[2], const u64 src[2],
 	}
 }
 
+#define ORLIX_TCTI_ADV_FP_HOST_UN(insn) \
+	asm volatile("ldr q0, [%[source]]\n" insn "\n str q0, [%[result]]\n" \
+		     : : [result] "r" (result), [source] "r" (source) \
+		     : "v0", "memory")
+#define ORLIX_TCTI_ADV_FP_HOST_BIN(insn) \
+	asm volatile("ldr q0, [%[left]]\n ldr q1, [%[right]]\n" insn \
+		     "\n str q0, [%[result]]\n" \
+		     : : [result] "r" (result), [left] "r" (left), \
+			 [right] "r" (right) : "v0", "v1", "memory")
+#define ORLIX_TCTI_ADV_FP_HOST_ACC(insn) \
+	asm volatile("ldr q0, [%[left]]\n ldr q1, [%[right]]\n" \
+		     "ldr q2, [%[acc]]\n" insn "\n str q2, [%[result]]\n" \
+		     : : [result] "r" (result), [left] "r" (left), \
+			 [right] "r" (right), [acc] "r" (acc) \
+		     : "v0", "v1", "v2", "memory")
+
+static int orlix_tcti_advsimd_fp_host_wrap(int (*body)(void *), void *ctx,
+					  unsigned long fpcr,
+					  unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret;
+
+	if (!fpsr)
+		return -EINVAL;
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n msr fpsr, %1\n isb\n"
+		     : : "r" (fpcr), "r" (*fpsr) : "memory");
+	ret = body(ctx);
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n msr fpsr, %1\n isb\n"
+		     : : "r" (host_fpcr), "r" (host_fpsr) : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+struct orlix_tcti_advsimd_fp_host_bin_ctx {
+	const char *mnemonic;
+	const char *name;
+	bool scalar;
+	u8 access;
+	u8 result;
+	u64 *result_reg;
+	const u64 *left;
+	const u64 *right;
+	const u64 *acc;
+};
+
+static int orlix_tcti_advsimd_fp_host_bin_body(void *opaque)
+{
+	struct orlix_tcti_advsimd_fp_host_bin_ctx *c = opaque;
+	const char *m = c->mnemonic;
+	u64 *result = c->result_reg;
+	const u64 *left = c->left;
+	const u64 *right = c->right;
+	const u64 *acc = c->acc;
+	bool s = c->scalar && c->access == sizeof(u32);
+	bool d = c->scalar && c->access == sizeof(u64);
+	bool v2s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == sizeof(u64);
+	bool v4s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == 2 * sizeof(u64);
+	bool v2d = !c->scalar && c->access == sizeof(u64) &&
+		c->result == 2 * sizeof(u64);
+	bool accu = !strcmp(m, "FMLA") || !strcmp(m, "FMLS");
+	bool zero = strstr(c->name, "_FZ") != NULL;
+
+	if (!s && !d && !v2s && !v4s && !v2d)
+		return -EINVAL;
+	if (accu) {
+		if (!strcmp(m, "FMLA")) {
+			if (s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla s2, s0, v1.s[0]");
+			else if (d)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla d2, d0, v1.d[0]");
+			else if (v2s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.2s, v0.2s, v1.2s");
+			else if (v4s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.4s, v0.4s, v1.4s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.2d, v0.2d, v1.2d");
+			return 0;
+		}
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls s2, s0, v1.s[0]");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls d2, d0, v1.d[0]");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.4s, v0.4s, v1.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.2d, v0.2d, v1.2d");
+		return 0;
+	}
+#define ORLIX_TCTI_ADV_FP_HOST_BIN5(op) \
+	do { \
+		if (s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " s0, s0, s1"); \
+		else if (d) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " d0, d0, d1"); \
+		else if (v2s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.2s, v0.2s, v1.2s"); \
+		else if (v4s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.4s, v0.4s, v1.4s"); \
+		else \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.2d, v0.2d, v1.2d"); \
+	} while (0)
+	if (!strcmp(m, "FADD"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fadd");
+	else if (!strcmp(m, "FSUB"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fsub");
+	else if (!strcmp(m, "FMUL"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmul");
+	else if (!strcmp(m, "FDIV"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fdiv");
+	else if (!strcmp(m, "FMAX"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmax");
+	else if (!strcmp(m, "FMIN"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmin");
+	else if (!strcmp(m, "FMAXNM"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmaxnm");
+	else if (!strcmp(m, "FMINNM"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fminnm");
+	else if (!strcmp(m, "FMULX"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmulx");
+	else if (!strcmp(m, "FABD"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fabd");
+	else if (!strcmp(m, "FACGE"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("facge");
+	else if (!strcmp(m, "FACGT"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("facgt");
+	else if (!strcmp(m, "FRECPS"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("frecps");
+	else if (!strcmp(m, "FRSQRTS"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("frsqrts");
+	else if (!strcmp(m, "FCMEQ") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmeq");
+	else if (!strcmp(m, "FCMGE") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmge");
+	else if (!strcmp(m, "FCMGT") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmgt");
+	else if (!strcmp(m, "FADDP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMAXP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMINP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMAXNMP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMINNMP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else
+		return -EINVAL;
+#undef ORLIX_TCTI_ADV_FP_HOST_BIN5
+	return 0;
+}
+
+struct orlix_tcti_advsimd_fp_host_un_ctx {
+	const char *mnemonic;
+	const char *name;
+	bool scalar;
+	bool q;
+	u8 access;
+	u8 result;
+	u8 src_index;
+	u8 dst_index;
+	u8 fbits;
+	u64 *result_reg;
+	const u64 *source;
+	const u64 *acc;
+};
+
+static int orlix_tcti_advsimd_fp_host_un_body(void *opaque)
+{
+	struct orlix_tcti_advsimd_fp_host_un_ctx *c = opaque;
+	const char *m = c->mnemonic;
+	u64 *result = c->result_reg;
+	const u64 *source = c->source;
+	const u64 *acc = c->acc;
+	bool s = c->scalar && c->access == sizeof(u32);
+	bool d = c->scalar && c->access == sizeof(u64);
+	bool v2s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == sizeof(u64);
+	bool v4s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == 2 * sizeof(u64);
+	bool v2d = !c->scalar && c->access == sizeof(u64) &&
+		c->result == 2 * sizeof(u64);
+	bool zero = strstr(c->name, "_FZ") != NULL;
+
+	if (!strcmp(m, "FCVTL")) {
+		if (c->src_index)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtl2 v0.2d, v0.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtl v0.2d, v0.2s");
+		return 0;
+	}
+	if (!strcmp(m, "FCVTN")) {
+		if (c->dst_index)
+			asm volatile("ldr q0, [%[source]]\n ldr q1, [%[acc]]\n"
+				     "fcvtn2 v1.4s, v0.2d\n str q1, [%[result]]\n"
+				     : : [result] "r" (result), [source] "r" (source),
+					 [acc] "r" (acc) : "v0", "v1", "memory");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtn v0.2s, v0.2d");
+		return 0;
+	}
+	if (!strcmp(m, "FCVTXN")) {
+		if (c->scalar)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtxn s0, d0");
+		else if (c->dst_index)
+			asm volatile("ldr q0, [%[source]]\n ldr q1, [%[acc]]\n"
+				     "fcvtxn2 v1.4s, v0.2d\n str q1, [%[result]]\n"
+				     : : [result] "r" (result), [source] "r" (source),
+					 [acc] "r" (acc) : "v0", "v1", "memory");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtxn v0.2s, v0.2d");
+		return 0;
+	}
+	if (!strcmp(m, "FADDP") || !strcmp(m, "FMAXP") || !strcmp(m, "FMINP") ||
+	    !strcmp(m, "FMAXNMP") || !strcmp(m, "FMINNMP") ||
+	    !strcmp(m, "FMAXV") || !strcmp(m, "FMINV") ||
+	    !strcmp(m, "FMAXNMV") || !strcmp(m, "FMINNMV")) {
+		if (!strcmp(m, "FADDP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("faddp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("faddp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxp d0, v0.2d");
+		} else if (!strcmp(m, "FMINP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXNMP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmp d0, v0.2d");
+		} else if (!strcmp(m, "FMINNMP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminnmp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminnmp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fmaxv s0, v0.4s");
+		else if (!strcmp(m, "FMINV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fminv s0, v0.4s");
+		else if (!strcmp(m, "FMAXNMV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmv s0, v0.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fminnmv s0, v0.4s");
+		return 0;
+	}
+#define ORLIX_TCTI_ADV_FP_HOST_UN5(op) \
+	do { \
+		if (s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " s0, s0"); \
+		else if (d) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " d0, d0"); \
+		else if (v2s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.2s, v0.2s"); \
+		else if (v4s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.4s, v0.4s"); \
+		else if (v2d) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.2d, v0.2d"); \
+		else \
+			return -EINVAL; \
+	} while (0)
+	if (c->fbits) {
+		if (c->fbits == 32 && v4s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.4s, v0.4s, #32");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 32 && v2s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2s, v0.2s, #32");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 64 && v2d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2d, v0.2d, #64");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 63 && d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf d0, d0, #63");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf d0, d0, #63");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs d0, d0, #63");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu d0, d0, #63");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 32 && s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf s0, s0, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf s0, s0, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs s0, s0, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu s0, s0, #32");
+			else
+				return -EINVAL;
+		} else
+			return -EINVAL;
+		return 0;
+	}
+	if (!strcmp(m, "FABS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fabs");
+	else if (!strcmp(m, "FNEG"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fneg");
+	else if (!strcmp(m, "FSQRT"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fsqrt");
+	else if (!strcmp(m, "FRECPE"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frecpe");
+	else if (!strcmp(m, "FRSQRTE"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frsqrte");
+	else if (!strcmp(m, "FRECPX")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("frecpx s0, s0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("frecpx d0, d0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FRINTN"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintn");
+	else if (!strcmp(m, "FRINTP"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintp");
+	else if (!strcmp(m, "FRINTM"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintm");
+	else if (!strcmp(m, "FRINTZ"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintz");
+	else if (!strcmp(m, "FRINTA"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frinta");
+	else if (!strcmp(m, "FRINTX"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintx");
+	else if (!strcmp(m, "FRINTI"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frinti");
+	else if (!strcmp(m, "FCMEQ") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMGE") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMGT") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMLE")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMLT")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "SCVTF"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("scvtf");
+	else if (!strcmp(m, "UCVTF"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("ucvtf");
+	else if (!strcmp(m, "FCVTZS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtzs");
+	else if (!strcmp(m, "FCVTZU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtzu");
+	else if (!strcmp(m, "FCVTNS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtns");
+	else if (!strcmp(m, "FCVTNU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtnu");
+	else if (!strcmp(m, "FCVTPS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtps");
+	else if (!strcmp(m, "FCVTPU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtpu");
+	else if (!strcmp(m, "FCVTMS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtms");
+	else if (!strcmp(m, "FCVTMU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtmu");
+	else if (!strcmp(m, "FCVTAS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtas");
+	else if (!strcmp(m, "FCVTAU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtau");
+	else
+		return -EINVAL;
+#undef ORLIX_TCTI_ADV_FP_HOST_UN5
+	return 0;
+}
+
 static int orlix_tcti_advsimd_fp_expected_from_source(
 	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	const u64 rn[2], const u64 rm[2], const u64 rd[2],
@@ -438,7 +778,6 @@ static int orlix_tcti_advsimd_fp_expected_from_source(
 	u64 left[2] = { rn[0], rn[1] };
 	u64 right[2] = { rm[0], rm[1] };
 	u64 acc[2] = { rd[0], rd[1] };
-	int op;
 	int ret;
 
 	*expected_fpsr = fpsr_in;
@@ -465,91 +804,131 @@ static int orlix_tcti_advsimd_fp_expected_from_source(
 		return 0;
 	}
 	if (strstr(name, "asimdall") || strstr(name, "asisdpair")) {
-		op = orlix_tcti_advsimd_fp_reduction_from_source(source);
-		if (op < 0)
-			return op;
-		ret = orlix_tcti_native_simd_fp_reduction(op, access, expected_rd,
-							  left, fpcr, expected_fpsr);
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
+
+		ret = orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
+			expected_fpsr);
 		if (!ret && !q && !scalar)
 			expected_rd[1] = 0;
 		return ret;
 	}
 	if (strstr(name, "asimdelem") || strstr(name, "asisdelem")) {
+		struct orlix_tcti_advsimd_fp_host_bin_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.left = left,
+			.right = right,
+			.acc = acc,
+		};
 		u8 h = (instruction >> 11) & 1U;
 		u8 l = (instruction >> 21) & 1U;
 		u8 index = sz ? h : ((h << 1) | l);
 
 		orlix_tcti_advsimd_fp_broadcast_lane(right, rm, access, index,
 						     result);
-		op = orlix_tcti_advsimd_fp_arith_from_source(source);
-		if (op < 0)
-			return op;
-		return orlix_tcti_native_simd_fp_three_same(op, scalar, access,
-			result, expected_rd, left, right, acc, fpcr, expected_fpsr);
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_bin_body, &ctx, fpcr,
+			expected_fpsr);
 	}
 	if (strstr(name, "asimdshf") || strstr(name, "asisdshf")) {
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
 		u32 immh = (instruction >> 19) & 0xfU;
 		u32 immb = (instruction >> 16) & 0x7U;
 		u32 imm = (immh << 3) | immb;
 		u8 esize = (immh & 8U) ? 64 : (immh & 4U) ? 32 : 16;
-		u8 fbits = (u8)(esize * 2U - imm);
 
 		access = esize / 8U;
-		op = orlix_tcti_advsimd_fp_convert_from_source(source, true);
-		if (op < 0)
-			return op;
-		return orlix_tcti_native_fixed_simd_fp_convert(op, scalar, q,
-			access, fbits, expected_rd, left, fpcr, expected_fpsr);
-	}
-	if (!strcmp(source->mnemonic, "FCVTL"))
-		return orlix_tcti_native_simd_fp_two_register(
-			ORLIX_TCTI_SIMD_ARITH_FCVTL, sizeof(u32), 2 * sizeof(u64),
-			q ? 1U : 0, 0, expected_rd, left, acc, fpcr,
+		ctx.access = access;
+		ctx.result = scalar ? access : (q ? 2 * sizeof(u64) : sizeof(u64));
+		ctx.fbits = (u8)(esize * 2U - imm);
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
 			expected_fpsr);
-	if (!strcmp(source->mnemonic, "FCVTN") ||
-	    (!strcmp(source->mnemonic, "FCVTXN") && !scalar))
-		return orlix_tcti_native_simd_fp_two_register(
-			!strcmp(source->mnemonic, "FCVTN") ?
-				ORLIX_TCTI_SIMD_ARITH_FCVTN :
-				ORLIX_TCTI_SIMD_ARITH_FCVTXN,
-			sizeof(u64), q ? 2 * sizeof(u64) : sizeof(u64), 0,
-			q ? 1U : 0, expected_rd, left, acc, fpcr, expected_fpsr);
-	if (!strcmp(source->mnemonic, "FCVTXN"))
-		return orlix_tcti_native_simd_fp_scalar_unary(
-			ORLIX_TCTI_SIMD_ARITH_FCVTXN, sizeof(u64), sizeof(u32),
-			expected_rd, left, fpcr, expected_fpsr);
-	op = orlix_tcti_advsimd_fp_convert_from_source(source, false);
-	if (op >= 0)
-		return orlix_tcti_native_simd_fp_convert(op, scalar, q, access,
-			expected_rd, left, fpcr, expected_fpsr);
-	op = orlix_tcti_advsimd_fp_arith_from_source(source);
-	if (op < 0)
-		return op;
-	if (op == ORLIX_TCTI_SIMD_ARITH_FRECPX || strstr(name, "asisdmisc"))
-		return orlix_tcti_native_simd_fp_scalar_unary(op, access, result,
-			expected_rd, left, fpcr, expected_fpsr);
-	if (strstr(name, "asimdmisc") ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FABS ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FNEG ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FSQRT ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRECPE ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRSQRTE ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTN ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTP ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTM ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTZ ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTA ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTX ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FRINTI ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FCMEQ_ZERO ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FCMGE_ZERO ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FCMGT_ZERO ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FCMLE_ZERO ||
-	    op == ORLIX_TCTI_SIMD_ARITH_FCMLT_ZERO)
-		return orlix_tcti_native_simd_fp_two_register(op, access, result,
-			0, 0, expected_rd, left, acc, fpcr, expected_fpsr);
-	return orlix_tcti_native_simd_fp_three_same(op, scalar, access, result,
-		expected_rd, left, right, acc, fpcr, expected_fpsr);
+	}
+	if (!strcmp(source->mnemonic, "FCVTL") ||
+	    !strcmp(source->mnemonic, "FCVTN") ||
+	    !strcmp(source->mnemonic, "FCVTXN") ||
+	    strstr(name, "asimdmisc") || strstr(name, "asisdmisc") ||
+	    !strcmp(source->mnemonic, "FABS") ||
+	    !strcmp(source->mnemonic, "FNEG") ||
+	    !strcmp(source->mnemonic, "FSQRT") ||
+	    !strcmp(source->mnemonic, "FRECPE") ||
+	    !strcmp(source->mnemonic, "FRSQRTE") ||
+	    !strcmp(source->mnemonic, "FRECPX") ||
+	    !strncmp(source->mnemonic, "FRINT", 5) ||
+	    !strcmp(source->mnemonic, "SCVTF") ||
+	    !strcmp(source->mnemonic, "UCVTF") ||
+	    !strncmp(source->mnemonic, "FCVT", 4)) {
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
+
+		if (!strcmp(source->mnemonic, "FCVTL")) {
+			ctx.access = sizeof(u32);
+			ctx.result = 2 * sizeof(u64);
+			ctx.src_index = q ? 1U : 0;
+		} else if (!strcmp(source->mnemonic, "FCVTN") ||
+			   (!strcmp(source->mnemonic, "FCVTXN") && !scalar)) {
+			ctx.access = sizeof(u64);
+			ctx.result = q ? 2 * sizeof(u64) : sizeof(u64);
+			ctx.dst_index = q ? 1U : 0;
+		} else if (!strcmp(source->mnemonic, "FCVTXN")) {
+			ctx.access = sizeof(u64);
+			ctx.result = sizeof(u32);
+			ctx.scalar = true;
+		}
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
+			expected_fpsr);
+	}
+	{
+		struct orlix_tcti_advsimd_fp_host_bin_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.left = left,
+			.right = right,
+			.acc = acc,
+		};
+
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_bin_body, &ctx, fpcr,
+			expected_fpsr);
+	}
 }
 
 static void orlix_tcti_advsimd_fp_seed_simd(void)
