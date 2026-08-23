@@ -61,9 +61,11 @@ static atomic_t orlix_tcti_block_trace_budget = ATOMIC_INIT(64);
  * Linux still advertises neither HWCAP_FPHP nor HWCAP_ASIMDHP. Scalar FP16
  * arithmetic stays gated on that advertisement. SIMD/FP memory transfers of
  * 16-bit data are ordinary FEAT_FP loads and stores, not FEAT_FP16
- * arithmetic, so they execute without HWCAP_FPHP. AdvSIMD FP16 three-same
- * decode and native execute are owned, so those SIMD_VECTOR_ARITHMETIC forms
- * may enter a guest without the Linux HWCAP_ASIMDHP bit.
+ * arithmetic, so they execute without HWCAP_FPHP. Integer AdvSIMD 16-bit
+ * lanes (XTN, SQXTN, SHRN, ADDHN, SADDLV, SQSHL, and by-element multiply)
+ * are FEAT_AdvSIMD, not FEAT_FP16. AdvSIMD FP16 three-same decode and native
+ * execute are owned, so those SIMD_VECTOR_ARITHMETIC forms may enter a guest
+ * without the Linux HWCAP_ASIMDHP bit.
  */
 static bool orlix_tcti_decoded_requires_lut(
 	const struct orlix_tcti_decoded_instruction *decoded)
@@ -122,11 +124,47 @@ static bool orlix_tcti_decoded_is_memory_transfer(
 	}
 }
 
+static bool orlix_tcti_decoded_is_fp_operation(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	if (!decoded)
+		return false;
+	switch (decoded->decode_class) {
+	case ORLIX_TCTI_DECODE_FP_SCALAR_IMMEDIATE:
+	case ORLIX_TCTI_DECODE_FP_SCALAR_MOVE:
+	case ORLIX_TCTI_DECODE_FP_SCALAR_1SOURCE:
+	case ORLIX_TCTI_DECODE_FP_SCALAR_2SOURCE:
+	case ORLIX_TCTI_DECODE_FP_SCALAR_3SOURCE:
+	case ORLIX_TCTI_DECODE_FP_SCALAR_COMPARE:
+	case ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT:
+	case ORLIX_TCTI_DECODE_FP_INT_CONVERT:
+		return true;
+	case ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC:
+		if (decoded->simd_arithmetic_op == ORLIX_TCTI_SIMD_ARITH_FNEG)
+			return true;
+		if (decoded->simd_arithmetic_op >= ORLIX_TCTI_SIMD_ARITH_FABD &&
+		    decoded->simd_arithmetic_op <= ORLIX_TCTI_SIMD_ARITH_FSUB)
+			return true;
+		return decoded->simd_arithmetic_op >=
+			       ORLIX_TCTI_SIMD_ARITH_FRECPE &&
+			decoded->simd_arithmetic_op <=
+				ORLIX_TCTI_SIMD_ARITH_FCVTL;
+	case ORLIX_TCTI_DECODE_SIMD_VECTOR_REDUCTION:
+		return decoded->simd_reduction_op >=
+			       ORLIX_TCTI_SIMD_REDUCTION_FADDP &&
+			decoded->simd_reduction_op <=
+				ORLIX_TCTI_SIMD_REDUCTION_FMINV;
+	default:
+		return false;
+	}
+}
+
 static bool orlix_tcti_decoded_requires_fp16(
 	const struct orlix_tcti_decoded_instruction *decoded)
 {
 	return decoded && decoded->simd_fp &&
 		!orlix_tcti_decoded_is_memory_transfer(decoded) &&
+		orlix_tcti_decoded_is_fp_operation(decoded) &&
 		(decoded->access_size == sizeof(u16) ||
 		 decoded->result_size == sizeof(u16));
 }
@@ -137,6 +175,30 @@ static bool orlix_tcti_decoded_runtime_available(
 	/* FEAT_LUT remains unavailable. AdvSIMD LUTI rejects at EL0. */
 	if (orlix_tcti_decoded_requires_lut(decoded))
 		return false;
+	/* FEAT_RDM, FEAT_DotProd, and FEAT_I8MM remain unadvertised. */
+	switch (decoded ? decoded->source_ordinal : 0U) {
+	case 3551U:
+	case 3552U:
+	case 3668U:
+	case 3669U:
+	case 3755U:
+	case 3760U:
+	case 3762U:
+	case 3763U:
+	case 3764U:
+	case 3774U:
+	case 3775U:
+	case 3782U:
+	case 4032U:
+	case 4037U:
+	case 4046U:
+	case 4053U:
+	case 4054U:
+	case 4055U:
+		return false;
+	default:
+		break;
+	}
 	/* FEAT_FlagM remains unavailable until its Linux HWCAP contract is owned. */
 	if (decoded &&
 	    decoded->decode_class == ORLIX_TCTI_DECODE_FLAG_MANIPULATION)
