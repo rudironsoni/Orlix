@@ -594,6 +594,15 @@ proof_registry_projection[] = {
 	"orlix_tcti_advsimd_permute_move_source_bound_cases"
 #define ADVSIMD_PERMUTE_MOVE_CAPTURE_INCLUDE \
 	"#include \"orlix_tcti_advsimd_permute_move_production_capture.h\""
+#define ADVSIMD_INTEGER_SOURCE \
+	"OrlixKernel/Sources/ports/orlix/overlay/arch/orlix/hosted_exec/orlix_tcti/tests/orlix_tcti_advsimd_integer_source_bound_test.c"
+#define ADVSIMD_INTEGER_SUITE "orlix-tcti-advsimd-integer-source-bound"
+#define ADVSIMD_INTEGER_SUITE_SYMBOL \
+	"orlix_tcti_advsimd_integer_source_bound_suite"
+#define ADVSIMD_INTEGER_CASE_ARRAY \
+	"orlix_tcti_advsimd_integer_source_bound_cases"
+#define ADVSIMD_INTEGER_CAPTURE_INCLUDE \
+	"#include \"orlix_tcti_advsimd_integer_production_capture.h\""
 #define AES_CONDITION \
 	"54434e4401070000002d0700000017070000000c010000000101010000000101010000000101020000000c00000008464541545f414553"
 #define SHA1_CONDITION \
@@ -763,6 +772,9 @@ production_capture_bindings[] = {
 #define ADVSIMD_PERMUTE_MOVE_GPR_OBLIGATIONS \
 	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
+#define ADVSIMD_INTEGER_SIMD_OBLIGATIONS \
+	(BASELINE_OBLIGATIONS | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC)
 #define ADVSIMD_HALVING_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define ADVSIMD_MUL_OBLIGATIONS ADVSIMD_FP_ARITHMETIC_OBLIGATIONS
 #define ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS \
@@ -930,6 +942,12 @@ static const struct kunit_source_provenance kunit_sources[] = {
 	{ ADVSIMD_PERMUTE_MOVE_SOURCE,
 	  "7602e1f8916fee15571f27ff402b8edda7d1a373f597bd063ee8766f376cfdd6",
 	  "orlix_tcti_advsimd_permute_move_source_bound_test.o",
+	  BASE_LOAD_STORE_HELPER_SOURCE,
+	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
+	  BASE_LOAD_STORE_HELPER_INCLUDE },
+	{ ADVSIMD_INTEGER_SOURCE,
+	  "0d10a48610ff5ccdcf6a1640b3d48e0c395a6c0740a12e58f13f1b3ba5fb69f6",
+	  "orlix_tcti_advsimd_integer_source_bound_test.o",
 	  BASE_LOAD_STORE_HELPER_SOURCE,
 	  "81af9073e09b365867b177687a7fd540ae3a964396090c86f7e669057a94adfe",
 	  BASE_LOAD_STORE_HELPER_INCLUDE },
@@ -1722,6 +1740,41 @@ static const struct kunit_case_provenance kunit_case_provenance[] = {
 	  "orlix_tcti_advsimd_permute_move_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_saturation_qc",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_narrow_shift_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE,
+	  ADVSIMD_INTEGER_SUITE_SYMBOL, ADVSIMD_INTEGER_CASE_ARRAY,
+	  "orlix_tcti_advsimd_integer_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 	{ SOURCE_LEAF_CLASSIFICATION_SOURCE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE,
 	  SOURCE_LEAF_CLASSIFICATION_SUITE_SYMBOL,
@@ -2297,6 +2350,160 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("REV16_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
 	SCALAR_REQUIREMENT("REV32_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
 	SCALAR_REQUIREMENT("MOVI_advsimd", ADVSIMD_PERMUTE_MOVE_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUQADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQABS_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMGT_advsimd_zero", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMEQ_advsimd_zero", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMLT_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ABS_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQXTN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USQADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQNEG_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMGE_advsimd_zero", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMLE_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("NEG_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQXTUN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQXTN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDP_advsimd_pair", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMLAL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMLSL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMULL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSUB_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMGT_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMGE_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSHL_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRSHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQRSHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMTST_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMULH_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQSUB_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMHI_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMHS_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQSHL_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URSHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQRSHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUB_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CMEQ_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQRDMULH_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSHR_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSRA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRSHR_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRSRA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSHL_advsimd_imm", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQRSHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USHR_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USRA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URSHR_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URSRA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRI_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SLI_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSHLU_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQSHL_advsimd_imm", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQSHRUN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQRSHRUN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQSHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UQRSHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMLAL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMLSL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMULL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQDMULH_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SQRDMULH_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SADDLP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CLS_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CNT_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SADALP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("XTN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URECPE_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UADDLP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("CLZ_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UADALP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHLL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("NOT_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("RBIT_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URSQRTE_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SADDLV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMAXV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMINV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UADDLV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMAXV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMINV_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SADDL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SADDW_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSUBL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSUBW_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDHN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SABAL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SUBHN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SABDL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMLAL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMLSL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMULL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UADDL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UADDW_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USUBL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USUBW_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("RADDHN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UABAL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("RSUBHN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UABDL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMLAL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMLSL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMULL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SRHADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHSUB_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMAX_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMIN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SABD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SABA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MLA_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MUL_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMAXP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMINP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ADDP_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("AND_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BIC_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ORR_advsimd_reg", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ORN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UHADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("URHADD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UHSUB_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMAX_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMIN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UABD_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UABA_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MLS_advsimd_vec", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("PMUL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMAXP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMINP_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("EOR_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BSL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BIT_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BIF_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("ORR_advsimd_imm", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MVNI_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("BIC_advsimd_imm", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("RSHRN_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SSHLL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("USHLL_advsimd", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMLAL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMLSL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MUL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("SMULL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MLA_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMLAL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("MLS_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMLSL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
+	SCALAR_REQUIREMENT("UMULL_advsimd_elt", ADVSIMD_INTEGER_SIMD_OBLIGATIONS),
 	SCALAR_REQUIREMENT("SCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("UCVTF_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FCVTZS_float_fix", SCALAR_FP_CONVERT_OBLIGATIONS),
@@ -2321,23 +2528,6 @@ static const struct operation_requirements operation_requirements[] = {
 	SCALAR_REQUIREMENT("FMIN_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FMUL_advsimd_vec", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
 	SCALAR_REQUIREMENT("FDIV_advsimd", ADVSIMD_FP_ARITHMETIC_OBLIGATIONS),
-	SCALAR_REQUIREMENT("MLA_advsimd_vec", ADVSIMD_MUL_OBLIGATIONS),
-	SCALAR_REQUIREMENT("MUL_advsimd_vec", ADVSIMD_MUL_OBLIGATIONS),
-	SCALAR_REQUIREMENT("MLS_advsimd_vec", ADVSIMD_MUL_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SRHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SHSUB_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("URHADD_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UHSUB_advsimd", ADVSIMD_HALVING_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SMAXV_advsimd",
-			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
-	SCALAR_REQUIREMENT("SMINV_advsimd",
-			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UMAXV_advsimd",
-			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
-	SCALAR_REQUIREMENT("UMINV_advsimd",
-			   ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS),
 #undef SCALAR_REQUIREMENT
 	{ "LDRB_imm", ORDINARY_LOAD_STORE_OBLIGATIONS },
 	{ "LDRB_reg", ORDINARY_LOAD_STORE_OBLIGATIONS },
@@ -2625,7 +2815,8 @@ ADVSIMD_FP_ARITHMETIC_PROOF(orlix_tcti_advsimd_fp_fmul_source_leaf_execute_exact
 ADVSIMD_FP_ARITHMETIC_PROOF(orlix_tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits, 3965U, "FDIV_asimdsame_only", "FDIV", 0x2e20fc00U);
 #undef ADVSIMD_FP_ARITHMETIC_PROOF
 
-static const struct orlix_tcti_target_proof_case advsimd_halving_cases[] = {
+static const struct orlix_tcti_target_proof_case advsimd_halving_cases[]
+	__attribute__((unused)) = {
 	{ "orlix_tcti_advsimd_halving_source_leaves_decode",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -2639,7 +2830,8 @@ static const struct orlix_tcti_target_proof_case advsimd_halving_cases[] = {
 };
 
 #define ADVSIMD_HALVING_BINDING(name, ordinal, leaf, mnemonic, pattern) \
-	static const struct orlix_tcti_target_proof_binding name##_bindings[] = { \
+	static const struct orlix_tcti_target_proof_binding name##_bindings[] \
+		__attribute__((unused)) = { \
 		{ leaf, mnemonic, 0xbf20fc00U, pattern, \
 		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
 		  ORLIX_TCTI_PROOF_U64_C(1), ordinal }, \
@@ -2658,7 +2850,8 @@ ADVSIMD_HALVING_BINDING(advsimd_halving_uhsub, 3940U,
 	"UHSUB_asimdsame_only", "UHSUB", 0x2e202400U);
 #undef ADVSIMD_HALVING_BINDING
 
-static const struct orlix_tcti_target_proof_case advsimd_mul_cases[] = {
+static const struct orlix_tcti_target_proof_case advsimd_mul_cases[]
+	__attribute__((unused)) = {
 	{ "advsimd_mul_bind_canonical_artifacts",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS |
@@ -2675,7 +2868,8 @@ static const struct orlix_tcti_target_proof_case advsimd_mul_cases[] = {
 };
 
 #define ADVSIMD_MUL_BINDING(name, ordinal, leaf, mnemonic, pattern) \
-	static const struct orlix_tcti_target_proof_binding name##_bindings[] = { \
+	static const struct orlix_tcti_target_proof_binding name##_bindings[] \
+		__attribute__((unused)) = { \
 		{ leaf, mnemonic, 0xbf20fc00U, pattern, \
 		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
 		  ORLIX_TCTI_PROOF_U64_C(1), ordinal }, \
@@ -2691,7 +2885,7 @@ ADVSIMD_MUL_BINDING(advsimd_mul_mls, 3954U, "MLS_asimdsame_only", "MLS",
 #undef ADVSIMD_MUL_BINDING
 
 static const struct orlix_tcti_target_proof_case
-advsimd_minmax_reduction_cases[] = {
+advsimd_minmax_reduction_cases[] __attribute__((unused)) = {
 	{ "orlix_tcti_minmaxv_source_bindings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
@@ -2711,7 +2905,8 @@ advsimd_minmax_reduction_cases[] = {
 };
 
 #define ADVSIMD_MINMAX_REDUCTION_BINDING(name, ordinal, leaf, mnemonic, pattern) \
-	static const struct orlix_tcti_target_proof_binding name##_bindings[] = { \
+	static const struct orlix_tcti_target_proof_binding name##_bindings[] \
+		__attribute__((unused)) = { \
 		{ leaf, mnemonic, 0xbf3ffc00U, pattern, \
 		  "54434e440107000000310700000017070000000c01000000010101000000010101000000010102000000100000000c464541545f41647653494d44", \
 		  ORLIX_TCTI_PROOF_U64_C(0xf), ordinal }, \
@@ -3114,6 +3309,31 @@ advsimd_permute_move_simd_cases[] = {
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
 	{ "orlix_tcti_advsimd_permute_move_reserved_encodings",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+};
+
+static const struct orlix_tcti_target_proof_case
+advsimd_integer_simd_cases[] = {
+	{ "orlix_tcti_advsimd_integer_decodes_exact_source_cohort",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_integer_binds_pinned_ddi0602_semantics",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_LEGAL_ENCODINGS },
+	{ "orlix_tcti_advsimd_integer_production_resume",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_integer_non_el0_rejected",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
+	{ "orlix_tcti_advsimd_integer_saturation_qc",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_integer_narrow_shift_overlap",
+	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD |
+		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC },
+	{ "orlix_tcti_advsimd_integer_reserved_encodings",
 	  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_DECODE |
 		  ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REJECTED_ENCODINGS },
 };
@@ -3658,19 +3878,19 @@ static const struct orlix_tcti_target_proof_binding integer_umulh_bindings[] = {
 	  ARRAY_COUNT(advsimd_minmax_reduction_cases), \
 	  bindings, ARRAY_COUNT(bindings), NULL, \
 	  ADVSIMD_MINMAX_REDUCTION_OBLIGATIONS }
-#define CORE_PROOF_REGISTRY_ENTRY_COUNT 61U
+#define CORE_PROOF_REGISTRY_ENTRY_COUNT 48U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 70U
 #define ORDINARY_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 209U
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_ENTRY_COUNT 22U
 #define ADVSIMD_LOAD_STORE_PROOF_REGISTRY_BINDING_COUNT 152U
 #define LSE_PROOF_REGISTRY_ENTRY_COUNT 34U
 #define LSE_PROOF_REGISTRY_BINDING_COUNT 180U
-#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 117U
-#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 165U
+#define SCALAR_PROOF_REGISTRY_ENTRY_COUNT 271U
+#define SCALAR_PROOF_REGISTRY_BINDING_COUNT 387U
 #define EXCLUSIVE_PROOF_REGISTRY_ENTRY_COUNT 16U
 #define EXCLUSIVE_PROOF_REGISTRY_BINDING_COUNT 24U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 25U
-#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 63U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_ENTRY_COUNT 39U
+#define SOURCE_LEAF_REJECTION_PROOF_REGISTRY_BINDING_COUNT 81U
 enum {
 	PRODUCTION_CAPTURE_FAMILY_PROOF_REGISTRY_ENTRY_COUNT = 0
 #define ORLIX_TCTI_PROOF_FAMILY_OPERATION(proof_id_value, operation_value, linux_value, obligations_value) + 1
@@ -3824,36 +4044,6 @@ static struct orlix_tcti_target_proof_registry_entry proof_registry_entries[
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmin-source-leaf", "FMIN_advsimd", orlix_tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_cases, orlix_tcti_advsimd_fp_fmin_source_leaf_execute_exact_bits_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fmul-source-leaf", "FMUL_advsimd_vec", orlix_tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_cases, orlix_tcti_advsimd_fp_fmul_source_leaf_execute_exact_bits_bindings),
 	ADVSIMD_FP_ARITHMETIC_ENTRY("kunit:advsimd-fp-fdiv-source-leaf", "FDIV_advsimd", orlix_tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_cases, orlix_tcti_advsimd_fp_fdiv_source_leaf_execute_exact_bits_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-shadd-source-leaf",
-		"SHADD_advsimd", advsimd_halving_shadd_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-srhadd-source-leaf",
-		"SRHADD_advsimd", advsimd_halving_srhadd_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-shsub-source-leaf",
-		"SHSUB_advsimd", advsimd_halving_shsub_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-uhadd-source-leaf",
-		"UHADD_advsimd", advsimd_halving_uhadd_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-urhadd-source-leaf",
-		"URHADD_advsimd", advsimd_halving_urhadd_bindings),
-	ADVSIMD_HALVING_ENTRY("kunit:advsimd-halving-uhsub-source-leaf",
-			       "UHSUB_advsimd", advsimd_halving_uhsub_bindings),
-	ADVSIMD_MUL_ENTRY("kunit:advsimd-mul-mla-source-leaf",
-			   "MLA_advsimd_vec", advsimd_mul_mla_bindings),
-	ADVSIMD_MUL_ENTRY("kunit:advsimd-mul-mul-source-leaf",
-			   "MUL_advsimd_vec", advsimd_mul_mul_bindings),
-	ADVSIMD_MUL_ENTRY("kunit:advsimd-mul-mls-source-leaf",
-			   "MLS_advsimd_vec", advsimd_mul_mls_bindings),
-	ADVSIMD_MINMAX_REDUCTION_ENTRY(
-		"kunit:advsimd-minmax-reduction-smaxv-source-leaf",
-		"SMAXV_advsimd", advsimd_minmax_reduction_smaxv_bindings),
-	ADVSIMD_MINMAX_REDUCTION_ENTRY(
-		"kunit:advsimd-minmax-reduction-sminv-source-leaf",
-		"SMINV_advsimd", advsimd_minmax_reduction_sminv_bindings),
-	ADVSIMD_MINMAX_REDUCTION_ENTRY(
-		"kunit:advsimd-minmax-reduction-umaxv-source-leaf",
-		"UMAXV_advsimd", advsimd_minmax_reduction_umaxv_bindings),
-	ADVSIMD_MINMAX_REDUCTION_ENTRY(
-		"kunit:advsimd-minmax-reduction-uminv-source-leaf",
-		"UMINV_advsimd", advsimd_minmax_reduction_uminv_bindings),
 };
 
 #undef LOGICAL_ENTRY
@@ -4310,6 +4500,10 @@ static const struct orlix_tcti_target_proof_case scalar_fp_convert_cases[] = {
 	{ operation, proof, ADVSIMD_PERMUTE_MOVE_SOURCE, ADVSIMD_PERMUTE_MOVE_SUITE, \
 	  ADVSIMD_CONDITION, advsimd_permute_move_gpr_cases, \
 	  ARRAY_COUNT(advsimd_permute_move_gpr_cases), minimum, maximum, expected, 0, 0 }
+#define INTEGER_SIMD_OPERATION(operation, proof, minimum, maximum, expected) \
+	{ operation, proof, ADVSIMD_INTEGER_SOURCE, ADVSIMD_INTEGER_SUITE, \
+	  "", advsimd_integer_simd_cases, \
+	  ARRAY_COUNT(advsimd_integer_simd_cases), minimum, maximum, expected, 0, 0 }
 
 static struct scalar_registry_operation scalar_registry_operations[] = {
 	SCALAR_OPERATION("AND_log_imm", "kunit:logical-immediate-and",
@@ -4563,6 +4757,314 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 		"kunit:advsimd-permute-move-rev32", 3818U, 3818U, 1),
 	PERMUTE_MOVE_SIMD_OPERATION("MOVI_advsimd",
 		"kunit:advsimd-permute-move-movi", 3979U, 3993U, 6),
+	INTEGER_SIMD_OPERATION("SUQADD_advsimd",
+		"kunit:advsimd-integer-suqadd-advsimd", 3553U, 3786U, 2),
+	INTEGER_SIMD_OPERATION("SQABS_advsimd",
+		"kunit:advsimd-integer-sqabs-advsimd", 3554U, 3790U, 2),
+	INTEGER_SIMD_OPERATION("CMGT_advsimd_zero",
+		"kunit:advsimd-integer-cmgt-advsimd-zero", 3555U, 3791U, 2),
+	INTEGER_SIMD_OPERATION("CMEQ_advsimd_zero",
+		"kunit:advsimd-integer-cmeq-advsimd-zero", 3556U, 3792U, 2),
+	INTEGER_SIMD_OPERATION("CMLT_advsimd",
+		"kunit:advsimd-integer-cmlt-advsimd", 3557U, 3793U, 2),
+	INTEGER_SIMD_OPERATION("ABS_advsimd",
+		"kunit:advsimd-integer-abs-advsimd", 3558U, 3794U, 2),
+	INTEGER_SIMD_OPERATION("SQXTN_advsimd",
+		"kunit:advsimd-integer-sqxtn-advsimd", 3559U, 3796U, 2),
+	INTEGER_SIMD_OPERATION("USQADD_advsimd",
+		"kunit:advsimd-integer-usqadd-advsimd", 3571U, 3820U, 2),
+	INTEGER_SIMD_OPERATION("SQNEG_advsimd",
+		"kunit:advsimd-integer-sqneg-advsimd", 3572U, 3823U, 2),
+	INTEGER_SIMD_OPERATION("CMGE_advsimd_zero",
+		"kunit:advsimd-integer-cmge-advsimd-zero", 3573U, 3824U, 2),
+	INTEGER_SIMD_OPERATION("CMLE_advsimd",
+		"kunit:advsimd-integer-cmle-advsimd", 3574U, 3825U, 2),
+	INTEGER_SIMD_OPERATION("NEG_advsimd",
+		"kunit:advsimd-integer-neg-advsimd", 3575U, 3826U, 2),
+	INTEGER_SIMD_OPERATION("SQXTUN_advsimd",
+		"kunit:advsimd-integer-sqxtun-advsimd", 3576U, 3827U, 2),
+	INTEGER_SIMD_OPERATION("UQXTN_advsimd",
+		"kunit:advsimd-integer-uqxtn-advsimd", 3577U, 3829U, 2),
+	INTEGER_SIMD_OPERATION("ADDP_advsimd_pair",
+		"kunit:advsimd-integer-addp-advsimd-pair", 3588U, 3588U, 1),
+	INTEGER_SIMD_OPERATION("SQDMLAL_advsimd_vec",
+		"kunit:advsimd-integer-sqdmlal-advsimd-vec", 3599U, 3878U, 2),
+	INTEGER_SIMD_OPERATION("SQDMLSL_advsimd_vec",
+		"kunit:advsimd-integer-sqdmlsl-advsimd-vec", 3600U, 3880U, 2),
+	INTEGER_SIMD_OPERATION("SQDMULL_advsimd_vec",
+		"kunit:advsimd-integer-sqdmull-advsimd-vec", 3601U, 3882U, 2),
+	INTEGER_SIMD_OPERATION("SQADD_advsimd",
+		"kunit:advsimd-integer-sqadd-advsimd", 3602U, 3896U, 2),
+	INTEGER_SIMD_OPERATION("SQSUB_advsimd",
+		"kunit:advsimd-integer-sqsub-advsimd", 3603U, 3899U, 2),
+	INTEGER_SIMD_OPERATION("CMGT_advsimd_reg",
+		"kunit:advsimd-integer-cmgt-advsimd-reg", 3604U, 3900U, 2),
+	INTEGER_SIMD_OPERATION("CMGE_advsimd_reg",
+		"kunit:advsimd-integer-cmge-advsimd-reg", 3605U, 3901U, 2),
+	INTEGER_SIMD_OPERATION("SSHL_advsimd",
+		"kunit:advsimd-integer-sshl-advsimd", 3606U, 3902U, 2),
+	INTEGER_SIMD_OPERATION("SQSHL_advsimd_reg",
+		"kunit:advsimd-integer-sqshl-advsimd-reg", 3607U, 3903U, 2),
+	INTEGER_SIMD_OPERATION("SRSHL_advsimd",
+		"kunit:advsimd-integer-srshl-advsimd", 3608U, 3904U, 2),
+	INTEGER_SIMD_OPERATION("SQRSHL_advsimd",
+		"kunit:advsimd-integer-sqrshl-advsimd", 3609U, 3905U, 2),
+	INTEGER_SIMD_OPERATION("ADD_advsimd",
+		"kunit:advsimd-integer-add-advsimd", 3610U, 3910U, 2),
+	INTEGER_SIMD_OPERATION("CMTST_advsimd",
+		"kunit:advsimd-integer-cmtst-advsimd", 3611U, 3911U, 2),
+	INTEGER_SIMD_OPERATION("SQDMULH_advsimd_vec",
+		"kunit:advsimd-integer-sqdmulh-advsimd-vec", 3612U, 3916U, 2),
+	INTEGER_SIMD_OPERATION("UQADD_advsimd",
+		"kunit:advsimd-integer-uqadd-advsimd", 3617U, 3938U, 2),
+	INTEGER_SIMD_OPERATION("UQSUB_advsimd",
+		"kunit:advsimd-integer-uqsub-advsimd", 3618U, 3941U, 2),
+	INTEGER_SIMD_OPERATION("CMHI_advsimd",
+		"kunit:advsimd-integer-cmhi-advsimd", 3619U, 3942U, 2),
+	INTEGER_SIMD_OPERATION("CMHS_advsimd",
+		"kunit:advsimd-integer-cmhs-advsimd", 3620U, 3943U, 2),
+	INTEGER_SIMD_OPERATION("USHL_advsimd",
+		"kunit:advsimd-integer-ushl-advsimd", 3621U, 3944U, 2),
+	INTEGER_SIMD_OPERATION("UQSHL_advsimd_reg",
+		"kunit:advsimd-integer-uqshl-advsimd-reg", 3622U, 3945U, 2),
+	INTEGER_SIMD_OPERATION("URSHL_advsimd",
+		"kunit:advsimd-integer-urshl-advsimd", 3623U, 3946U, 2),
+	INTEGER_SIMD_OPERATION("UQRSHL_advsimd",
+		"kunit:advsimd-integer-uqrshl-advsimd", 3624U, 3947U, 2),
+	INTEGER_SIMD_OPERATION("SUB_advsimd",
+		"kunit:advsimd-integer-sub-advsimd", 3625U, 3952U, 2),
+	INTEGER_SIMD_OPERATION("CMEQ_advsimd_reg",
+		"kunit:advsimd-integer-cmeq-advsimd-reg", 3626U, 3953U, 2),
+	INTEGER_SIMD_OPERATION("SQRDMULH_advsimd_vec",
+		"kunit:advsimd-integer-sqrdmulh-advsimd-vec", 3627U, 3958U, 2),
+	INTEGER_SIMD_OPERATION("SSHR_advsimd",
+		"kunit:advsimd-integer-sshr-advsimd", 3633U, 3995U, 2),
+	INTEGER_SIMD_OPERATION("SSRA_advsimd",
+		"kunit:advsimd-integer-ssra-advsimd", 3634U, 3996U, 2),
+	INTEGER_SIMD_OPERATION("SRSHR_advsimd",
+		"kunit:advsimd-integer-srshr-advsimd", 3635U, 3997U, 2),
+	INTEGER_SIMD_OPERATION("SRSRA_advsimd",
+		"kunit:advsimd-integer-srsra-advsimd", 3636U, 3998U, 2),
+	INTEGER_SIMD_OPERATION("SHL_advsimd",
+		"kunit:advsimd-integer-shl-advsimd", 3637U, 3999U, 2),
+	INTEGER_SIMD_OPERATION("SQSHL_advsimd_imm",
+		"kunit:advsimd-integer-sqshl-advsimd-imm", 3638U, 4000U, 2),
+	INTEGER_SIMD_OPERATION("SQSHRN_advsimd",
+		"kunit:advsimd-integer-sqshrn-advsimd", 3639U, 4003U, 2),
+	INTEGER_SIMD_OPERATION("SQRSHRN_advsimd",
+		"kunit:advsimd-integer-sqrshrn-advsimd", 3640U, 4004U, 2),
+	INTEGER_SIMD_OPERATION("USHR_advsimd",
+		"kunit:advsimd-integer-ushr-advsimd", 3643U, 4008U, 2),
+	INTEGER_SIMD_OPERATION("USRA_advsimd",
+		"kunit:advsimd-integer-usra-advsimd", 3644U, 4009U, 2),
+	INTEGER_SIMD_OPERATION("URSHR_advsimd",
+		"kunit:advsimd-integer-urshr-advsimd", 3645U, 4010U, 2),
+	INTEGER_SIMD_OPERATION("URSRA_advsimd",
+		"kunit:advsimd-integer-ursra-advsimd", 3646U, 4011U, 2),
+	INTEGER_SIMD_OPERATION("SRI_advsimd",
+		"kunit:advsimd-integer-sri-advsimd", 3647U, 4012U, 2),
+	INTEGER_SIMD_OPERATION("SLI_advsimd",
+		"kunit:advsimd-integer-sli-advsimd", 3648U, 4013U, 2),
+	INTEGER_SIMD_OPERATION("SQSHLU_advsimd",
+		"kunit:advsimd-integer-sqshlu-advsimd", 3649U, 4014U, 2),
+	INTEGER_SIMD_OPERATION("UQSHL_advsimd_imm",
+		"kunit:advsimd-integer-uqshl-advsimd-imm", 3650U, 4015U, 2),
+	INTEGER_SIMD_OPERATION("SQSHRUN_advsimd",
+		"kunit:advsimd-integer-sqshrun-advsimd", 3651U, 4016U, 2),
+	INTEGER_SIMD_OPERATION("SQRSHRUN_advsimd",
+		"kunit:advsimd-integer-sqrshrun-advsimd", 3652U, 4017U, 2),
+	INTEGER_SIMD_OPERATION("UQSHRN_advsimd",
+		"kunit:advsimd-integer-uqshrn-advsimd", 3653U, 4018U, 2),
+	INTEGER_SIMD_OPERATION("UQRSHRN_advsimd",
+		"kunit:advsimd-integer-uqrshrn-advsimd", 3654U, 4019U, 2),
+	INTEGER_SIMD_OPERATION("SQDMLAL_advsimd_elt",
+		"kunit:advsimd-integer-sqdmlal-advsimd-elt", 3657U, 4024U, 2),
+	INTEGER_SIMD_OPERATION("SQDMLSL_advsimd_elt",
+		"kunit:advsimd-integer-sqdmlsl-advsimd-elt", 3658U, 4026U, 2),
+	INTEGER_SIMD_OPERATION("SQDMULL_advsimd_elt",
+		"kunit:advsimd-integer-sqdmull-advsimd-elt", 3659U, 4029U, 2),
+	INTEGER_SIMD_OPERATION("SQDMULH_advsimd_elt",
+		"kunit:advsimd-integer-sqdmulh-advsimd-elt", 3660U, 4030U, 2),
+	INTEGER_SIMD_OPERATION("SQRDMULH_advsimd_elt",
+		"kunit:advsimd-integer-sqrdmulh-advsimd-elt", 3661U, 4031U, 2),
+	INTEGER_SIMD_OPERATION("SADDLP_advsimd",
+		"kunit:advsimd-integer-saddlp-advsimd", 3785U, 3785U, 1),
+	INTEGER_SIMD_OPERATION("CLS_advsimd",
+		"kunit:advsimd-integer-cls-advsimd", 3787U, 3787U, 1),
+	INTEGER_SIMD_OPERATION("CNT_advsimd",
+		"kunit:advsimd-integer-cnt-advsimd", 3788U, 3788U, 1),
+	INTEGER_SIMD_OPERATION("SADALP_advsimd",
+		"kunit:advsimd-integer-sadalp-advsimd", 3789U, 3789U, 1),
+	INTEGER_SIMD_OPERATION("XTN_advsimd",
+		"kunit:advsimd-integer-xtn-advsimd", 3795U, 3795U, 1),
+	INTEGER_SIMD_OPERATION("URECPE_advsimd",
+		"kunit:advsimd-integer-urecpe-advsimd", 3815U, 3815U, 1),
+	INTEGER_SIMD_OPERATION("UADDLP_advsimd",
+		"kunit:advsimd-integer-uaddlp-advsimd", 3819U, 3819U, 1),
+	INTEGER_SIMD_OPERATION("CLZ_advsimd",
+		"kunit:advsimd-integer-clz-advsimd", 3821U, 3821U, 1),
+	INTEGER_SIMD_OPERATION("UADALP_advsimd",
+		"kunit:advsimd-integer-uadalp-advsimd", 3822U, 3822U, 1),
+	INTEGER_SIMD_OPERATION("SHLL_advsimd",
+		"kunit:advsimd-integer-shll-advsimd", 3828U, 3828U, 1),
+	INTEGER_SIMD_OPERATION("NOT_advsimd",
+		"kunit:advsimd-integer-not-advsimd", 3839U, 3839U, 1),
+	INTEGER_SIMD_OPERATION("RBIT_advsimd",
+		"kunit:advsimd-integer-rbit-advsimd", 3841U, 3841U, 1),
+	INTEGER_SIMD_OPERATION("URSQRTE_advsimd",
+		"kunit:advsimd-integer-ursqrte-advsimd", 3849U, 3849U, 1),
+	INTEGER_SIMD_OPERATION("SADDLV_advsimd",
+		"kunit:advsimd-integer-saddlv-advsimd", 3854U, 3854U, 1),
+	INTEGER_SIMD_OPERATION("SMAXV_advsimd",
+		"kunit:advsimd-integer-smaxv-advsimd", 3855U, 3855U, 1),
+	INTEGER_SIMD_OPERATION("SMINV_advsimd",
+		"kunit:advsimd-integer-sminv-advsimd", 3856U, 3856U, 1),
+	INTEGER_SIMD_OPERATION("ADDV_advsimd",
+		"kunit:advsimd-integer-addv-advsimd", 3857U, 3857U, 1),
+	INTEGER_SIMD_OPERATION("UADDLV_advsimd",
+		"kunit:advsimd-integer-uaddlv-advsimd", 3862U, 3862U, 1),
+	INTEGER_SIMD_OPERATION("UMAXV_advsimd",
+		"kunit:advsimd-integer-umaxv-advsimd", 3863U, 3863U, 1),
+	INTEGER_SIMD_OPERATION("UMINV_advsimd",
+		"kunit:advsimd-integer-uminv-advsimd", 3864U, 3864U, 1),
+	INTEGER_SIMD_OPERATION("SADDL_advsimd",
+		"kunit:advsimd-integer-saddl-advsimd", 3869U, 3869U, 1),
+	INTEGER_SIMD_OPERATION("SADDW_advsimd",
+		"kunit:advsimd-integer-saddw-advsimd", 3870U, 3870U, 1),
+	INTEGER_SIMD_OPERATION("SSUBL_advsimd",
+		"kunit:advsimd-integer-ssubl-advsimd", 3871U, 3871U, 1),
+	INTEGER_SIMD_OPERATION("SSUBW_advsimd",
+		"kunit:advsimd-integer-ssubw-advsimd", 3872U, 3872U, 1),
+	INTEGER_SIMD_OPERATION("ADDHN_advsimd",
+		"kunit:advsimd-integer-addhn-advsimd", 3873U, 3873U, 1),
+	INTEGER_SIMD_OPERATION("SABAL_advsimd",
+		"kunit:advsimd-integer-sabal-advsimd", 3874U, 3874U, 1),
+	INTEGER_SIMD_OPERATION("SUBHN_advsimd",
+		"kunit:advsimd-integer-subhn-advsimd", 3875U, 3875U, 1),
+	INTEGER_SIMD_OPERATION("SABDL_advsimd",
+		"kunit:advsimd-integer-sabdl-advsimd", 3876U, 3876U, 1),
+	INTEGER_SIMD_OPERATION("SMLAL_advsimd_vec",
+		"kunit:advsimd-integer-smlal-advsimd-vec", 3877U, 3877U, 1),
+	INTEGER_SIMD_OPERATION("SMLSL_advsimd_vec",
+		"kunit:advsimd-integer-smlsl-advsimd-vec", 3879U, 3879U, 1),
+	INTEGER_SIMD_OPERATION("SMULL_advsimd_vec",
+		"kunit:advsimd-integer-smull-advsimd-vec", 3881U, 3881U, 1),
+	INTEGER_SIMD_OPERATION("UADDL_advsimd",
+		"kunit:advsimd-integer-uaddl-advsimd", 3884U, 3884U, 1),
+	INTEGER_SIMD_OPERATION("UADDW_advsimd",
+		"kunit:advsimd-integer-uaddw-advsimd", 3885U, 3885U, 1),
+	INTEGER_SIMD_OPERATION("USUBL_advsimd",
+		"kunit:advsimd-integer-usubl-advsimd", 3886U, 3886U, 1),
+	INTEGER_SIMD_OPERATION("USUBW_advsimd",
+		"kunit:advsimd-integer-usubw-advsimd", 3887U, 3887U, 1),
+	INTEGER_SIMD_OPERATION("RADDHN_advsimd",
+		"kunit:advsimd-integer-raddhn-advsimd", 3888U, 3888U, 1),
+	INTEGER_SIMD_OPERATION("UABAL_advsimd",
+		"kunit:advsimd-integer-uabal-advsimd", 3889U, 3889U, 1),
+	INTEGER_SIMD_OPERATION("RSUBHN_advsimd",
+		"kunit:advsimd-integer-rsubhn-advsimd", 3890U, 3890U, 1),
+	INTEGER_SIMD_OPERATION("UABDL_advsimd",
+		"kunit:advsimd-integer-uabdl-advsimd", 3891U, 3891U, 1),
+	INTEGER_SIMD_OPERATION("UMLAL_advsimd_vec",
+		"kunit:advsimd-integer-umlal-advsimd-vec", 3892U, 3892U, 1),
+	INTEGER_SIMD_OPERATION("UMLSL_advsimd_vec",
+		"kunit:advsimd-integer-umlsl-advsimd-vec", 3893U, 3893U, 1),
+	INTEGER_SIMD_OPERATION("UMULL_advsimd_vec",
+		"kunit:advsimd-integer-umull-advsimd-vec", 3894U, 3894U, 1),
+	INTEGER_SIMD_OPERATION("SHADD_advsimd",
+		"kunit:advsimd-integer-shadd-advsimd", 3895U, 3895U, 1),
+	INTEGER_SIMD_OPERATION("SRHADD_advsimd",
+		"kunit:advsimd-integer-srhadd-advsimd", 3897U, 3897U, 1),
+	INTEGER_SIMD_OPERATION("SHSUB_advsimd",
+		"kunit:advsimd-integer-shsub-advsimd", 3898U, 3898U, 1),
+	INTEGER_SIMD_OPERATION("SMAX_advsimd",
+		"kunit:advsimd-integer-smax-advsimd", 3906U, 3906U, 1),
+	INTEGER_SIMD_OPERATION("SMIN_advsimd",
+		"kunit:advsimd-integer-smin-advsimd", 3907U, 3907U, 1),
+	INTEGER_SIMD_OPERATION("SABD_advsimd",
+		"kunit:advsimd-integer-sabd-advsimd", 3908U, 3908U, 1),
+	INTEGER_SIMD_OPERATION("SABA_advsimd",
+		"kunit:advsimd-integer-saba-advsimd", 3909U, 3909U, 1),
+	INTEGER_SIMD_OPERATION("MLA_advsimd_vec",
+		"kunit:advsimd-integer-mla-advsimd-vec", 3912U, 3912U, 1),
+	INTEGER_SIMD_OPERATION("MUL_advsimd_vec",
+		"kunit:advsimd-integer-mul-advsimd-vec", 3913U, 3913U, 1),
+	INTEGER_SIMD_OPERATION("SMAXP_advsimd",
+		"kunit:advsimd-integer-smaxp-advsimd", 3914U, 3914U, 1),
+	INTEGER_SIMD_OPERATION("SMINP_advsimd",
+		"kunit:advsimd-integer-sminp-advsimd", 3915U, 3915U, 1),
+	INTEGER_SIMD_OPERATION("ADDP_advsimd_vec",
+		"kunit:advsimd-integer-addp-advsimd-vec", 3917U, 3917U, 1),
+	INTEGER_SIMD_OPERATION("AND_advsimd",
+		"kunit:advsimd-integer-and-advsimd", 3925U, 3925U, 1),
+	INTEGER_SIMD_OPERATION("BIC_advsimd_reg",
+		"kunit:advsimd-integer-bic-advsimd-reg", 3927U, 3927U, 1),
+	INTEGER_SIMD_OPERATION("ORR_advsimd_reg",
+		"kunit:advsimd-integer-orr-advsimd-reg", 3934U, 3934U, 1),
+	INTEGER_SIMD_OPERATION("ORN_advsimd",
+		"kunit:advsimd-integer-orn-advsimd", 3936U, 3936U, 1),
+	INTEGER_SIMD_OPERATION("UHADD_advsimd",
+		"kunit:advsimd-integer-uhadd-advsimd", 3937U, 3937U, 1),
+	INTEGER_SIMD_OPERATION("URHADD_advsimd",
+		"kunit:advsimd-integer-urhadd-advsimd", 3939U, 3939U, 1),
+	INTEGER_SIMD_OPERATION("UHSUB_advsimd",
+		"kunit:advsimd-integer-uhsub-advsimd", 3940U, 3940U, 1),
+	INTEGER_SIMD_OPERATION("UMAX_advsimd",
+		"kunit:advsimd-integer-umax-advsimd", 3948U, 3948U, 1),
+	INTEGER_SIMD_OPERATION("UMIN_advsimd",
+		"kunit:advsimd-integer-umin-advsimd", 3949U, 3949U, 1),
+	INTEGER_SIMD_OPERATION("UABD_advsimd",
+		"kunit:advsimd-integer-uabd-advsimd", 3950U, 3950U, 1),
+	INTEGER_SIMD_OPERATION("UABA_advsimd",
+		"kunit:advsimd-integer-uaba-advsimd", 3951U, 3951U, 1),
+	INTEGER_SIMD_OPERATION("MLS_advsimd_vec",
+		"kunit:advsimd-integer-mls-advsimd-vec", 3954U, 3954U, 1),
+	INTEGER_SIMD_OPERATION("PMUL_advsimd",
+		"kunit:advsimd-integer-pmul-advsimd", 3955U, 3955U, 1),
+	INTEGER_SIMD_OPERATION("UMAXP_advsimd",
+		"kunit:advsimd-integer-umaxp-advsimd", 3956U, 3956U, 1),
+	INTEGER_SIMD_OPERATION("UMINP_advsimd",
+		"kunit:advsimd-integer-uminp-advsimd", 3957U, 3957U, 1),
+	INTEGER_SIMD_OPERATION("EOR_advsimd",
+		"kunit:advsimd-integer-eor-advsimd", 3966U, 3966U, 1),
+	INTEGER_SIMD_OPERATION("BSL_advsimd",
+		"kunit:advsimd-integer-bsl-advsimd", 3968U, 3968U, 1),
+	INTEGER_SIMD_OPERATION("BIT_advsimd",
+		"kunit:advsimd-integer-bit-advsimd", 3976U, 3976U, 1),
+	INTEGER_SIMD_OPERATION("BIF_advsimd",
+		"kunit:advsimd-integer-bif-advsimd", 3978U, 3978U, 1),
+	INTEGER_SIMD_OPERATION("ORR_advsimd_imm",
+		"kunit:advsimd-integer-orr-advsimd-imm", 3980U, 3982U, 2),
+	INTEGER_SIMD_OPERATION("MVNI_advsimd",
+		"kunit:advsimd-integer-mvni-advsimd", 3987U, 3991U, 3),
+	INTEGER_SIMD_OPERATION("BIC_advsimd_imm",
+		"kunit:advsimd-integer-bic-advsimd-imm", 3988U, 3990U, 2),
+	INTEGER_SIMD_OPERATION("SHRN_advsimd",
+		"kunit:advsimd-integer-shrn-advsimd", 4001U, 4001U, 1),
+	INTEGER_SIMD_OPERATION("RSHRN_advsimd",
+		"kunit:advsimd-integer-rshrn-advsimd", 4002U, 4002U, 1),
+	INTEGER_SIMD_OPERATION("SSHLL_advsimd",
+		"kunit:advsimd-integer-sshll-advsimd", 4005U, 4005U, 1),
+	INTEGER_SIMD_OPERATION("USHLL_advsimd",
+		"kunit:advsimd-integer-ushll-advsimd", 4020U, 4020U, 1),
+	INTEGER_SIMD_OPERATION("SMLAL_advsimd_elt",
+		"kunit:advsimd-integer-smlal-advsimd-elt", 4023U, 4023U, 1),
+	INTEGER_SIMD_OPERATION("SMLSL_advsimd_elt",
+		"kunit:advsimd-integer-smlsl-advsimd-elt", 4025U, 4025U, 1),
+	INTEGER_SIMD_OPERATION("MUL_advsimd_elt",
+		"kunit:advsimd-integer-mul-advsimd-elt", 4027U, 4027U, 1),
+	INTEGER_SIMD_OPERATION("SMULL_advsimd_elt",
+		"kunit:advsimd-integer-smull-advsimd-elt", 4028U, 4028U, 1),
+	INTEGER_SIMD_OPERATION("MLA_advsimd_elt",
+		"kunit:advsimd-integer-mla-advsimd-elt", 4048U, 4048U, 1),
+	INTEGER_SIMD_OPERATION("UMLAL_advsimd_elt",
+		"kunit:advsimd-integer-umlal-advsimd-elt", 4049U, 4049U, 1),
+	INTEGER_SIMD_OPERATION("MLS_advsimd_elt",
+		"kunit:advsimd-integer-mls-advsimd-elt", 4050U, 4050U, 1),
+	INTEGER_SIMD_OPERATION("UMLSL_advsimd_elt",
+		"kunit:advsimd-integer-umlsl-advsimd-elt", 4051U, 4051U, 1),
+	INTEGER_SIMD_OPERATION("UMULL_advsimd_elt",
+		"kunit:advsimd-integer-umull-advsimd-elt", 4052U, 4052U, 1),
 	SCALAR_FP_OPERATION("SCVTF_float_fix",
 		"kunit:scalar-fp-convert-scvtf-fix", 4084U),
 	SCALAR_FP_OPERATION("UCVTF_float_fix",
@@ -4600,6 +5102,7 @@ static struct scalar_registry_operation scalar_registry_operations[] = {
 #undef CRYPTO_OPERATION
 #undef PERMUTE_MOVE_SIMD_OPERATION
 #undef PERMUTE_MOVE_GPR_OPERATION
+#undef INTEGER_SIMD_OPERATION
 #undef SCALAR_FP_OPERATION
 #undef SCALAR_OPERATION
 
@@ -4617,7 +5120,8 @@ scalar_registry_operation_for(const struct source_manifest_binding *source)
 			&scalar_registry_operations[index];
 
 		if (!strcmp(source->operation_id, operation->operation_id) &&
-		    !strcmp(source->condition_tcnd_hex, operation->condition) &&
+		    (!operation->condition[0] ||
+		     !strcmp(source->condition_tcnd_hex, operation->condition)) &&
 		    source->ordinal >= operation->minimum_ordinal &&
 		    source->ordinal <= operation->maximum_ordinal)
 			return operation;
@@ -5273,6 +5777,34 @@ source_leaf_rejection_registry_operations[] = {
 	{ .proof_id = "kunit:source-leaf-luti4-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-luti2-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sqrdmlah-vec-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sqrdmlsh-vec-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sqrdmlah-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sqrdmlsh-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sdot-vec-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-usdot-vec-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-udot-vec-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sdot-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-sudot-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-usdot-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-udot-elt-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-smmla-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-usmmla-non-el0",
+	  .classification = 2 },
+	{ .proof_id = "kunit:source-leaf-ummla-non-el0",
 	  .classification = 2 },
 	{ .proof_id = "kunit:source-leaf-eret-non-el0",
 	  .classification = 2,
