@@ -1024,13 +1024,13 @@ static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
 	orlix_tcti_advsimd_fp_expect_success(test, source, &result, regs, code);
-	KUNIT_EXPECT_EQ_MSG(test, expected_rd[0],
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
 			    current->thread.user_simd[FP_RD * 2U],
 			    "%s dest lo %s", source->name, source->mnemonic);
-	KUNIT_EXPECT_EQ_MSG(test, expected_rd[1],
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
 			    current->thread.user_simd[FP_RD * 2U + 1U],
 			    "%s dest hi %s", source->name, source->mnemonic);
-	KUNIT_EXPECT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s", source->name, source->mnemonic);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
