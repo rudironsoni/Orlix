@@ -1280,13 +1280,13 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 				    (source)->ordinal); \
 	} while (0)
 
-#define ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd) \
+#define ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd, rd) \
 	do { \
 		size_t orlix_tcti_adv_int_index; \
 		for (orlix_tcti_adv_int_index = 0; \
 		     orlix_tcti_adv_int_index < ARRAY_SIZE(current->thread.user_simd); \
 		     orlix_tcti_adv_int_index++) { \
-			if (orlix_tcti_adv_int_index / 2U == INT_RD) \
+			if (orlix_tcti_adv_int_index / 2U == (rd)) \
 				continue; \
 			KUNIT_ASSERT_EQ_MSG((test), \
 				(before_simd)[orlix_tcti_adv_int_index], \
@@ -1313,15 +1313,28 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 			(source)->mnemonic); \
 	} while (0)
 
+static u8 orlix_tcti_advsimd_integer_rd_index(u32 instruction)
+{
+	return instruction & 0x1fU;
+}
+
+static u8 orlix_tcti_advsimd_integer_rn_index(u32 instruction)
+{
+	return (instruction >> 5) & 0x1fU;
+}
+
 static u8 orlix_tcti_advsimd_integer_rm_index(
 	const struct orlix_tcti_test_integer_source *source, u32 instruction)
 {
 	u8 size = (instruction >> 22) & 3U;
 
+	if (strstr(source->name, "asimdshf") || strstr(source->name, "asisdshf") ||
+	    strstr(source->name, "asimdimm"))
+		return INT_RM;
 	if ((strstr(source->name, "asimdelem") ||
-	     strstr(source->name, "asisdelem")) && size >= 2U)
-		return (instruction >> 16) & 0x1fU;
-	return INT_RM;
+	     strstr(source->name, "asisdelem")) && size < 2U)
+		return INT_RM;
+	return (instruction >> 16) & 0x1fU;
 }
 
 static bool orlix_tcti_advsimd_integer_variant_is_executable(
@@ -1430,16 +1443,20 @@ static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
 	u64 expected_rd[2];
 	unsigned long expected_fpsr;
 	unsigned long before_fpcr;
+	u8 rd;
+	u8 rn;
 	u8 rm;
 	int ret;
 
+	rd = orlix_tcti_advsimd_integer_rd_index(instruction);
+	rn = orlix_tcti_advsimd_integer_rn_index(instruction);
 	rm = orlix_tcti_advsimd_integer_rm_index(source, instruction);
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
 	before_regs = *regs;
 	before_fpcr = current->thread.user_fpcr;
 	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
-		&before_simd[INT_RN * 2U], &before_simd[rm * 2U],
-		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
+		&before_simd[rn * 2U], &before_simd[rm * 2U],
+		&before_simd[rd * 2U], current->thread.user_fpsr,
 		expected_rd, &expected_fpsr);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
 			    source->name, source->mnemonic, instruction);
@@ -1447,11 +1464,11 @@ static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
 	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
 	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_GPRS(test, source, &before_regs, regs);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
-			    current->thread.user_simd[INT_RD * 2U],
+			    current->thread.user_simd[rd * 2U],
 			    "%s dest lo %s insn %#x", source->name, source->mnemonic,
 			    instruction);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
-			    current->thread.user_simd[INT_RD * 2U + 1U],
+			    current->thread.user_simd[rd * 2U + 1U],
 			    "%s dest hi %s insn %#x", source->name, source->mnemonic,
 			    instruction);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
@@ -1460,7 +1477,7 @@ static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
 	KUNIT_ASSERT_EQ_MSG(test, before_fpcr, current->thread.user_fpcr,
 			    "%s fpcr %s insn %#x", source->name, source->mnemonic,
 			    instruction);
-	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd, rd);
 }
 
 static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
@@ -1477,16 +1494,20 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	u64 expected_rd[2];
 	unsigned long expected_fpsr;
 	unsigned long before_fpcr;
+	u8 rd;
+	u8 rn;
 	u8 rm;
 	int ret;
 
+	rd = orlix_tcti_advsimd_integer_rd_index(instruction);
+	rn = orlix_tcti_advsimd_integer_rn_index(instruction);
 	rm = orlix_tcti_advsimd_integer_rm_index(source, instruction);
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
 	before_regs = *regs;
 	before_fpcr = current->thread.user_fpcr;
 	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
-		&before_simd[INT_RN * 2U], &before_simd[rm * 2U],
-		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
+		&before_simd[rn * 2U], &before_simd[rm * 2U],
+		&before_simd[rd * 2U], current->thread.user_fpsr,
 		expected_rd, &expected_fpsr);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
 			    source->name, source->mnemonic, instruction);
@@ -1503,16 +1524,16 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
 	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_GPRS(test, source, &before_regs, regs);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
-			    current->thread.user_simd[INT_RD * 2U],
+			    current->thread.user_simd[rd * 2U],
 			    "%s dest lo %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
-			    current->thread.user_simd[INT_RD * 2U + 1U],
+			    current->thread.user_simd[rd * 2U + 1U],
 			    "%s dest hi %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, before_fpcr, current->thread.user_fpcr,
 			    "%s fpcr %s", source->name, source->mnemonic);
-	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd, rd);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
 	if (!ret) {
@@ -1652,7 +1673,7 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 					u8 immb;
 
 					for (immh = 1U; immh < 16U; immh++) {
-						for (immb = 0; immb < 8U; immb += 7U) {
+						for (immb = 0; immb < 8U; immb++) {
 							u32 extra = variant;
 
 							extra &= ~(0x7fU << 16);
@@ -1719,6 +1740,20 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 						test, source, variant);
 				}
 			}
+		}
+		{
+			u32 high = instruction;
+
+			if ((source->mask & 0x1fU) == 0)
+				high = (high & ~0x1fU) | 16U;
+			if (!imm && (source->mask & (0x1fU << 5)) == 0)
+				high = (high & ~(0x1fU << 5)) | (17U << 5);
+			if (!shf && !elem && !imm &&
+			    (source->mask & (0x1fU << 16)) == 0)
+				high = (high & ~(0x1fU << 16)) | (18U << 16);
+			if (high != instruction)
+				ORLIX_TCTI_ADV_INT_COMPARE_MAPPED(test, source,
+								 high);
 		}
 		code = orlix_tcti_advsimd_integer_map(test, instruction);
 		orlix_tcti_advsimd_integer_seed(&regs, code);
