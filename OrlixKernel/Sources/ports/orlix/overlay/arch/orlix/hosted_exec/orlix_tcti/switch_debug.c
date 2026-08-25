@@ -3817,8 +3817,17 @@ static u64 orlix_tcti_simd_saturating_double_mul_long_lane(u64 left, u64 right,
 	__int128 minimum;
 	__int128 maximum;
 
+	minimum = -((__int128)1 << (result_bits - 1));
+	maximum = ((__int128)1 << (result_bits - 1)) - 1;
 	result = (__int128)sign_extend64(left & source_mask, source_bits - 1) *
 		 sign_extend64(right & source_mask, source_bits - 1) * 2;
+	if (result < minimum) {
+		*saturated = true;
+		result = minimum;
+	} else if (result > maximum) {
+		*saturated = true;
+		result = maximum;
+	}
 	if (accumulate) {
 		__int128 signed_accumulator =
 			sign_extend64(accumulator & result_mask,
@@ -3826,15 +3835,13 @@ static u64 orlix_tcti_simd_saturating_double_mul_long_lane(u64 left, u64 right,
 
 		result = subtract ? signed_accumulator - result :
 				    signed_accumulator + result;
-	}
-	minimum = -((__int128)1 << (result_bits - 1));
-	maximum = ((__int128)1 << (result_bits - 1)) - 1;
-	if (result < minimum) {
-		*saturated = true;
-		result = minimum;
-	} else if (result > maximum) {
-		*saturated = true;
-		result = maximum;
+		if (result < minimum) {
+			*saturated = true;
+			result = minimum;
+		} else if (result > maximum) {
+			*saturated = true;
+			result = maximum;
+		}
 	}
 	return (u64)result & result_mask;
 }

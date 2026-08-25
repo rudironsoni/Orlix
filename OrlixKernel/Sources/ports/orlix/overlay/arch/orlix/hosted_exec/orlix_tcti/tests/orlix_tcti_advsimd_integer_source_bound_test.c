@@ -786,16 +786,22 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 						out = orlix_tcti_advsimd_integer_sat_signed(
 							(__int128)sa * (__int128)sb * 2,
 							dst_bytes * 8, &qc);
-					else if (!strcmp(m, "SQDMLAL"))
+					else if (!strcmp(m, "SQDMLAL") ||
+						 !strcmp(m, "SQDMLSL")) {
+						u64 product =
+							orlix_tcti_advsimd_integer_sat_signed(
+								(__int128)sa *
+								(__int128)sb * 2,
+								dst_bytes * 8, &qc);
+						s64 sp = sign_extend64(product,
+								       dst_bytes * 8 - 1);
+
 						out = orlix_tcti_advsimd_integer_sat_signed(
-							(__int128)sacc +
-							(__int128)sa * (__int128)sb * 2,
+							!strcmp(m, "SQDMLSL") ?
+							(__int128)sacc - sp :
+							(__int128)sacc + sp,
 							dst_bytes * 8, &qc);
-					else if (!strcmp(m, "SQDMLSL"))
-						out = orlix_tcti_advsimd_integer_sat_signed(
-							(__int128)sacc -
-							(__int128)sa * (__int128)sb * 2,
-							dst_bytes * 8, &qc);
+					}
 					else if (!strcmp(m, "SSHLL") || !strcmp(m, "SHLL"))
 						out = (u64)sa << (strcmp(m, "SHLL") ? shl : src_bytes * 8);
 					else if (!strcmp(m, "USHLL"))
@@ -1279,6 +1285,14 @@ static bool orlix_tcti_advsimd_integer_variant_is_executable(
 	if ((size == 0U || size == 3U) &&
 	    orlix_tcti_advsimd_integer_size00_reserved(source))
 		return false;
+	if (strstr(name, "asimdshf") || strstr(name, "asisdshf")) {
+		u32 immh = (instruction >> 19) & 0xfU;
+
+		if (!immh)
+			return false;
+		if (!scalar && !q && (immh & 8U))
+			return false;
+	}
 	if (!strcmp(m, "CNT") || !strcmp(m, "NOT") || !strcmp(m, "REV16"))
 		return size == 0U;
 	if (!strcmp(m, "RBIT"))
@@ -1319,6 +1333,29 @@ static bool orlix_tcti_advsimd_integer_instruction_matches_source(
 	return decoded.source_ordinal == source->ordinal &&
 		orlix_tcti_test_integer_decode_is_family(decoded.decode_class) &&
 		decoded.access_size != 0;
+}
+
+static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
+	const struct orlix_tcti_test_integer_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code);
+
+static void orlix_tcti_advsimd_integer_compare_mapped(
+	struct kunit *test,
+	const struct orlix_tcti_test_integer_source *source, u32 variant)
+{
+	struct pt_regs regs = {};
+	unsigned long variant_code;
+
+	if (!orlix_tcti_advsimd_integer_instruction_matches_source(source, variant))
+		return;
+	if (!orlix_tcti_advsimd_integer_variant_is_executable(source, variant))
+		return;
+	variant_code = orlix_tcti_advsimd_integer_map(test, variant);
+	orlix_tcti_advsimd_integer_seed(&regs, variant_code);
+	current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
+	orlix_tcti_advsimd_integer_compare_run(test, source, variant, &regs,
+					       variant_code);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(variant_code, PAGE_SIZE));
 }
 
 static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
@@ -1493,6 +1530,9 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 		unsigned long code;
 		bool q_free;
 		bool size_free;
+		bool shf;
+		bool elem;
+		bool imm;
 
 		if (!orlix_tcti_test_is_el0_integer(source))
 			continue;
@@ -1511,9 +1551,12 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 				    decoded.decode_class, instruction);
 		q_free = (source->mask & BIT(30)) == 0 &&
 			!(source->pattern & BIT(28));
-		size_free = (source->mask & (3U << 22)) == 0 &&
-			!strstr(source->name, "asimdshf") &&
-			!strstr(source->name, "asisdshf");
+		shf = strstr(source->name, "asimdshf") ||
+			strstr(source->name, "asisdshf");
+		elem = strstr(source->name, "asimdelem") ||
+			strstr(source->name, "asisdelem");
+		imm = strstr(source->name, "asimdimm") != NULL;
+		size_free = (source->mask & (3U << 22)) == 0 && !shf;
 		default_size = (instruction >> 22) & 3U;
 		size_lo = size_free ? 0U : default_size;
 		size_hi = size_free ? 3U : default_size;
@@ -1524,7 +1567,6 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 				continue;
 			for (size = size_lo; size <= size_hi; size++) {
 				u32 variant = instruction;
-				unsigned long variant_code;
 
 				variant &= ~BIT(30);
 				if (q_bit)
@@ -1533,22 +1575,63 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 					variant &= ~(3U << 22);
 					variant |= ((u32)size << 22);
 				}
-				if (!orlix_tcti_advsimd_integer_instruction_matches_source(
-					    source, variant))
-					continue;
-				if (!orlix_tcti_advsimd_integer_variant_is_executable(
-					    source, variant))
-					continue;
-				variant_code = orlix_tcti_advsimd_integer_map(
-					test, variant);
-				orlix_tcti_advsimd_integer_seed(&regs,
-								variant_code);
-				current->thread.user_fpsr =
-					AARCH64_FPSR_PRESERVED;
-				orlix_tcti_advsimd_integer_compare_run(test,
-					source, variant, &regs, variant_code);
-				KUNIT_EXPECT_EQ(test, 0,
-					vm_munmap(variant_code, PAGE_SIZE));
+				if (shf) {
+					u8 immh;
+
+					for (immh = 1U; immh <= 8U; immh <<= 1) {
+						u32 extra = variant;
+
+						extra &= ~(0xfU << 19);
+						extra |= ((u32)immh << 19);
+						orlix_tcti_advsimd_integer_compare_mapped(
+							test, source, extra);
+					}
+				} else if (elem) {
+					u8 h;
+					u8 l;
+					u8 mbit;
+
+					for (h = 0; h < 2U; h++) {
+						for (l = 0; l < 2U; l++) {
+							for (mbit = 0; mbit < 2U; mbit++) {
+								u32 extra = variant;
+
+								if (size == 3U && l)
+									continue;
+								if (size == 2U && mbit)
+									continue;
+								extra &= ~(BIT(11) | BIT(21) |
+									   BIT(20));
+								if (h)
+									extra |= BIT(11);
+								if (l)
+									extra |= BIT(21);
+								if (mbit)
+									extra |= BIT(20);
+								orlix_tcti_advsimd_integer_compare_mapped(
+									test, source, extra);
+							}
+						}
+					}
+				} else if (imm) {
+					static const u8 imm8s[] = { 0x00U, 0x5AU, 0xffU };
+					size_t imm8_index;
+
+					for (imm8_index = 0; imm8_index < ARRAY_SIZE(imm8s);
+					     imm8_index++) {
+						u8 imm8 = imm8s[imm8_index];
+						u32 extra = variant;
+
+						extra &= ~((0x7U << 16) | (0x1fU << 5));
+						extra |= ((u32)(imm8 >> 5) & 0x7U) << 16;
+						extra |= ((u32)imm8 & 0x1fU) << 5;
+						orlix_tcti_advsimd_integer_compare_mapped(
+							test, source, extra);
+					}
+				} else {
+					orlix_tcti_advsimd_integer_compare_mapped(
+						test, source, variant);
+				}
 			}
 		}
 		code = orlix_tcti_advsimd_integer_map(test, instruction);
