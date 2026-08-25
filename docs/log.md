@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-23
+updated: 2026-08-25
 ---
 # Orlix Knowledge Log
+
+## [2026-08-23] record | Keep optional ADVSIMD_FP leaves in the EL0 complete target
+
+[CORRECTION] The following `ADVSIMD_FP` land entry is wrong to classify all 268 leaves and to call the 155 optional leaves `NON_EL0`. Optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE AdvSIMD leaves remain architecturally valid EL0 when their features apply. Runtime rejection without `HWCAP_FPHP` / `HWCAP_ASIMDHP` / related bits does not classify those 155 leaves `NON_EL0` and does not complete them. They stay unclassified blockers in the complete target. Unimplemented FP16 forms and reserved `immh == 0000` encodings stay `DECODE_UNSUPPORTED`. Production EL0 proof compares destination SIMD, FPSR, resume success, and every non-destination SIMD register against a source-mnemonic architectural result before ingest, including every legal size and Q variant plus pinned infinity, signed-zero, subnormal, signaling-NaN, and non-default FPCR rounding vectors. The size and Q walk skips reserved encodings that production rejects: vector three-same `Q=0` 2D, and by-element 2D with `L=1`. For 2D by-element it clears `L` so the index is `H` only. `linux_proof_executed` stays 0.
 
 ## [2026-08-23] record | Land the ADVSIMD_FP proof contract
 

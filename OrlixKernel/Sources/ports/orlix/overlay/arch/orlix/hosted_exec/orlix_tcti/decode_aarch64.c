@@ -1308,15 +1308,33 @@ static void orlix_tcti_bind_advsimd_fp_optional_source(
 			continue;
 		decoded->source_ordinal = row->ordinal;
 		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
-		decoded->decode_class = ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
-		decoded->rd = decoded->instruction & 0x1fU;
-		decoded->rn = (decoded->instruction >> 5) & 0x1fU;
-		decoded->rm = (decoded->instruction >> 16) & 0x1fU;
-		decoded->result_size = (decoded->instruction & BIT(30)) ?
-			2 * sizeof(u64) : sizeof(u64);
-		decoded->simd_fp = true;
 		return;
 	}
+}
+
+static bool orlix_tcti_advsimd_fp_keep_unsupported(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u32 instruction;
+
+	if (!decoded)
+		return true;
+	if (orlix_tcti_advsimd_fp_optional_ordinal(decoded->source_ordinal))
+		return true;
+	instruction = decoded->instruction;
+	/* Q=0 2D AdvSIMD FP three-same is reserved. Keep UNSUPPORTED. */
+	if (!(instruction & BIT(28)) &&
+	    (instruction & BIT(22)) &&
+	    !(instruction & BIT(30)))
+		return true;
+	/* asimdshf / asisdshf with immh == 0000 is reserved, e.g. 0x5f00e400. */
+	if ((((instruction & 0xff800000U) == 0x0f000000U) ||
+	     ((instruction & 0xff800000U) == 0x4f000000U) ||
+	     ((instruction & 0xff800000U) == 0x5f000000U) ||
+	     ((instruction & 0xff800000U) == 0x7f000000U)) &&
+	    ((instruction >> 19) & 0xfU) == 0)
+		return true;
+	return false;
 }
 
 static void orlix_tcti_advsimd_fp_promote_unsupported(
@@ -1330,10 +1348,7 @@ static void orlix_tcti_advsimd_fp_promote_unsupported(
 	    orlix_tcti_source_families[decoded->source_ordinal] !=
 		    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_FP)
 		return;
-	/* Q=0 2D AdvSIMD FP three-same is reserved. Keep UNSUPPORTED. */
-	if (!(decoded->instruction & BIT(28)) &&
-	    (decoded->instruction & BIT(22)) &&
-	    !(decoded->instruction & BIT(30)))
+	if (orlix_tcti_advsimd_fp_keep_unsupported(decoded))
 		return;
 	decoded->decode_class = ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 	decoded->rd = decoded->instruction & 0x1fU;
