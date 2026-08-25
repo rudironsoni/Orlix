@@ -207,6 +207,37 @@ static bool orlix_tcti_test_fp_decode_is_family(u32 decode_class)
 		decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_COMPARE;
 }
 
+static bool orlix_tcti_advsimd_fp_instruction_matches_source(
+	const struct orlix_tcti_test_fp_source *source, u32 instruction)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	if ((instruction & source->mask) != source->pattern)
+		return false;
+	decoded = orlix_tcti_decode_aarch64(instruction);
+	return decoded.source_ordinal == source->ordinal &&
+		orlix_tcti_test_fp_decode_is_family(decoded.decode_class);
+}
+
+static bool orlix_tcti_advsimd_fp_variant_is_executable(
+	const struct orlix_tcti_test_fp_source *source, u32 instruction)
+{
+	bool q = instruction & BIT(30);
+	bool sz = instruction & BIT(22);
+	bool scalar = source->pattern & BIT(28);
+	bool elem = strstr(source->name, "asimdelem") ||
+		strstr(source->name, "asisdelem");
+	bool three_same = strstr(source->name, "asimdsame") != NULL;
+
+	/* Vector Q=0 2D three-same and by-element 2D are reserved. */
+	if (!scalar && sz && !q && (three_same || elem))
+		return false;
+	/* 2D by-element index is H only, so L (bit 21) must be 0. */
+	if (sz && elem && (instruction & BIT(21)))
+		return false;
+	return true;
+}
+
 static int orlix_tcti_advsimd_fp_test_init(struct kunit *test)
 {
 	struct mm_struct *mm = mm_alloc();
@@ -618,6 +649,17 @@ static int orlix_tcti_advsimd_fp_host_un_body(void *opaque)
 				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2s, v0.2s, #32");
 			else
 				return -EINVAL;
+		} else if (c->fbits == 32 && v2d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2d, v0.2d, #32");
+			else
+				return -EINVAL;
 		} else if (c->fbits == 64 && v2d) {
 			if (!strcmp(m, "SCVTF"))
 				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2d, v0.2d, #64");
@@ -977,17 +1019,65 @@ static void orlix_tcti_advsimd_fp_seed(struct pt_regs *regs, unsigned long code)
 	orlix_tcti_advsimd_fp_seed_simd();
 }
 
-static void orlix_tcti_advsimd_fp_expect_success(struct kunit *test,
+static void orlix_tcti_advsimd_fp_assert_success(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source,
 	const struct orlix_tcti_result *result, const struct pt_regs *regs,
 	unsigned long code)
 {
-	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
+	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
 			    "%s ordinal %u reason", source->name, source->ordinal);
-	KUNIT_EXPECT_EQ(test, 0L, result->status);
-	KUNIT_EXPECT_EQ(test, FP_SVC, result->instruction);
-	KUNIT_EXPECT_EQ_MSG(test, code + sizeof(u32), regs->pc,
+	KUNIT_ASSERT_EQ(test, 0L, result->status);
+	KUNIT_ASSERT_EQ(test, FP_SVC, result->instruction);
+	KUNIT_ASSERT_EQ_MSG(test, code + sizeof(u32), regs->pc,
 			    "%s ordinal %u pc", source->name, source->ordinal);
+}
+
+static void orlix_tcti_advsimd_fp_assert_preserved_simd(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, const u64 *before_simd)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
+		if (index / 2U == FP_RD)
+			continue;
+		KUNIT_ASSERT_EQ_MSG(test, before_simd[index],
+				    current->thread.user_simd[index],
+				    "%s preserved simd[%zu] %s", source->name, index,
+				    source->mnemonic);
+	}
+}
+
+static void orlix_tcti_advsimd_fp_compare_run(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code)
+{
+	struct orlix_tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_rd[2];
+	unsigned long expected_fpsr;
+	int ret;
+
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	ret = orlix_tcti_advsimd_fp_expected_from_source(source, instruction,
+		&before_simd[FP_RN * 2U], &before_simd[FP_RM * 2U],
+		&before_simd[FP_RD * 2U], current->thread.user_fpcr,
+		current->thread.user_fpsr, expected_rd, &expected_fpsr);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
+			    source->name, source->mnemonic, instruction);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	orlix_tcti_advsimd_fp_assert_success(test, source, &result, regs, code);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
+			    current->thread.user_simd[FP_RD * 2U],
+			    "%s dest lo %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
+			    current->thread.user_simd[FP_RD * 2U + 1U],
+			    "%s dest hi %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+			    "%s fpsr %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	orlix_tcti_advsimd_fp_assert_preserved_simd(test, source, before_simd);
 }
 
 static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
@@ -1009,21 +1099,17 @@ static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
 		&before_simd[FP_RN * 2U], &before_simd[FP_RM * 2U],
 		&before_simd[FP_RD * 2U], current->thread.user_fpcr,
 		current->thread.user_fpsr, expected_rd, &expected_fpsr);
-	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s expected-from-source %s",
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s",
 			    source->name, source->mnemonic);
-	if (ret)
-		return;
 	token = orlix_tcti_advsimd_fp_production_capture_token(source->ordinal,
 							      obligation);
-	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s token %u", source->name,
+	KUNIT_ASSERT_TRUE_MSG(test, token != NULL, "%s token %u", source->name,
 			      obligation);
-	if (!token)
-		return;
 	ret = orlix_tcti_native_capture_begin(token, source->ordinal, obligation,
 					      &capture);
-	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
-	orlix_tcti_advsimd_fp_expect_success(test, source, &result, regs, code);
+	orlix_tcti_advsimd_fp_assert_success(test, source, &result, regs, code);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
 			    current->thread.user_simd[FP_RD * 2U],
 			    "%s dest lo %s", source->name, source->mnemonic);
@@ -1032,21 +1118,20 @@ static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
 			    "%s dest hi %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s", source->name, source->mnemonic);
+	orlix_tcti_advsimd_fp_assert_preserved_simd(test, source, before_simd);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
-	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
-	if (!ret) {
-		ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
-		KUNIT_ASSERT_NOT_NULL(test, ledger);
-		KUNIT_EXPECT_EQ_MSG(test, 0,
-			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-			"%s ingest %u", source->name, obligation);
-		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-		KUNIT_EXPECT_LT_MSG(test,
-			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-			0, "%s replay %u", source->name, obligation);
-		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
-	}
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_ASSERT_EQ_MSG(test, 0,
+		orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+		"%s ingest %u", source->name, obligation);
+	KUNIT_ASSERT_EQ(test, 1U, ledger->native_passed);
+	KUNIT_EXPECT_LT_MSG(test,
+		orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+		0, "%s replay %u", source->name, obligation);
+	KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
 	orlix_tcti_native_wire_record_destroy(&wire);
 	orlix_tcti_native_capture_destroy(capture);
 }
@@ -1145,9 +1230,13 @@ static void orlix_tcti_advsimd_fp_production_resume(struct kunit *test)
 		const struct orlix_tcti_test_fp_source *source =
 			&orlix_tcti_test_sources[index];
 		u32 instruction;
+		u32 q_bit;
+		u32 sz_bit;
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
 		unsigned long code;
+		bool q_free;
+		bool sz_free;
 
 		if (!orlix_tcti_test_is_el0_fp(source))
 			continue;
@@ -1164,6 +1253,44 @@ static void orlix_tcti_advsimd_fp_production_resume(struct kunit *test)
 				    source->name, decoded.simd_arithmetic_op,
 				    decoded.simd_scalar, decoded.immediate,
 				    decoded.decode_class, instruction);
+		q_free = (source->mask & BIT(30)) == 0 &&
+			!(source->pattern & BIT(28));
+		sz_free = (source->mask & BIT(22)) == 0;
+		for (q_bit = 0; q_bit < 2U; q_bit++) {
+			if (!q_free && !!q_bit != !!(instruction & BIT(30)))
+				continue;
+			for (sz_bit = 0; sz_bit < 2U; sz_bit++) {
+				u32 variant = instruction;
+				unsigned long variant_code;
+
+				if (!sz_free &&
+				    !!sz_bit != !!(instruction & BIT(22)))
+					continue;
+				variant &= ~BIT(30);
+				variant &= ~BIT(22);
+				if (q_bit)
+					variant |= BIT(30);
+				if (sz_bit)
+					variant |= BIT(22);
+				if ((variant & BIT(22)) &&
+				    (strstr(source->name, "asimdelem") ||
+				     strstr(source->name, "asisdelem")))
+					variant &= ~BIT(21);
+				if (!orlix_tcti_advsimd_fp_instruction_matches_source(
+					    source, variant))
+					continue;
+				if (!orlix_tcti_advsimd_fp_variant_is_executable(
+					    source, variant))
+					continue;
+				variant_code = orlix_tcti_advsimd_fp_map(test,
+									 variant);
+				orlix_tcti_advsimd_fp_seed(&regs, variant_code);
+				orlix_tcti_advsimd_fp_compare_run(test, source,
+					variant, &regs, variant_code);
+				KUNIT_EXPECT_EQ(test, 0,
+						vm_munmap(variant_code, PAGE_SIZE));
+			}
+		}
 		code = orlix_tcti_advsimd_fp_map(test, instruction);
 		orlix_tcti_advsimd_fp_seed(&regs, code);
 		orlix_tcti_advsimd_fp_capture_run(test, source, instruction,
