@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Production-path proof for the 268 ADVSIMD_FP leaves owned by GitHub #124.
+ * Production-path proof for the 113 always-on EL0 ADVSIMD_FP leaves.
  * Leftover CORE FP arithmetic stays regression and does not receive #120
- * close credit. FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE
- * stay off this suite. Those features are not advertised.
+ * close credit. The 155 optional FP16, FHM, BF16, FCMA, FRINTTS, FP8,
+ * FAMINMAX, and FSCALE leaves remain in the EL0 complete target as
+ * unclassified blockers. Runtime rejection does not complete them.
+ * Those features are not advertised.
  */
 #include <asm/processor.h>
 #include <asm/ptrace.h>
@@ -15,6 +17,7 @@
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
+#include <linux/preempt.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
 #include <linux/string.h>
@@ -36,6 +39,24 @@
 #define FP_RN 1U
 #define FP_RM 2U
 #define AARCH64_FPSR_IOC BIT(0)
+#define AARCH64_FPCR_RMODE_POSINF BIT(22)
+#define AARCH64_FPCR_RMODE_NEGINF BIT(23)
+#define AARCH64_FPCR_RMODE_ZERO (BIT(22) | BIT(23))
+#define FP32_POS_INF 0x7f800000U
+#define FP32_NEG_INF 0xff800000U
+#define FP32_POS_ZERO 0x0U
+#define FP32_NEG_ZERO 0x80000000U
+#define FP32_MIN_SUBNORMAL 0x1U
+#define FP32_ONE 0x3f800000U
+#define FP32_ONE_POINT_FIVE 0x3fc00000U
+#define FP32_NEG_ONE_POINT_FIVE 0xbfc00000U
+#define FP32_TWO_EXP_NEG_24 0x33800000U
+#define FP32_SNAN 0x7f800001U
+
+static u64 orlix_tcti_advsimd_fp_pack_s(u32 lo, u32 hi)
+{
+	return (u64)lo | ((u64)hi << 32);
+}
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -152,7 +173,11 @@ static u32 orlix_tcti_advsimd_fp_legal_instruction(
 {
 	u32 instruction = source->pattern & source->mask;
 
-	instruction |= (FP_RN << 5) | FP_RD;
+	/* asimdimm bits 9:5 are imm8, not Rn. */
+	if (strstr(source->name, "asimdimm"))
+		instruction |= FP_RD;
+	else
+		instruction |= (FP_RN << 5) | FP_RD;
 	if ((source->mask & BIT(30)) == 0 && !(source->pattern & BIT(28)))
 		instruction |= BIT(30);
 	if ((strstr(source->name, "asimdshf") ||
@@ -180,6 +205,37 @@ static bool orlix_tcti_test_fp_decode_is_family(u32 decode_class)
 		decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_1SOURCE ||
 		decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_2SOURCE ||
 		decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_COMPARE;
+}
+
+static bool orlix_tcti_advsimd_fp_instruction_matches_source(
+	const struct orlix_tcti_test_fp_source *source, u32 instruction)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	if ((instruction & source->mask) != source->pattern)
+		return false;
+	decoded = orlix_tcti_decode_aarch64(instruction);
+	return decoded.source_ordinal == source->ordinal &&
+		orlix_tcti_test_fp_decode_is_family(decoded.decode_class);
+}
+
+static bool orlix_tcti_advsimd_fp_variant_is_executable(
+	const struct orlix_tcti_test_fp_source *source, u32 instruction)
+{
+	bool q = instruction & BIT(30);
+	bool sz = instruction & BIT(22);
+	bool scalar = source->pattern & BIT(28);
+	bool elem = strstr(source->name, "asimdelem") ||
+		strstr(source->name, "asisdelem");
+	bool three_same = strstr(source->name, "asimdsame") != NULL;
+
+	/* Vector Q=0 2D three-same and by-element 2D are reserved. */
+	if (!scalar && sz && !q && (three_same || elem))
+		return false;
+	/* 2D by-element index is H only, so L (bit 21) must be 0. */
+	if (sz && elem && (instruction & BIT(21)))
+		return false;
+	return true;
 }
 
 static int orlix_tcti_advsimd_fp_test_init(struct kunit *test)
@@ -213,6 +269,728 @@ static unsigned long orlix_tcti_advsimd_fp_map(struct kunit *test, u32 instructi
 						 PROT_READ | PROT_EXEC);
 }
 
+static u8 orlix_tcti_advsimd_fp_imm8(u32 instruction)
+{
+	return (((instruction >> 16) & 0x7U) << 5) | ((instruction >> 5) & 0x1fU);
+}
+
+static u32 orlix_tcti_advsimd_fp_expand_fp32_imm(u8 imm8)
+{
+	u32 sign = (imm8 >> 7) & 1U;
+	u32 exponent_bit = (imm8 >> 6) & 1U;
+	u32 fraction = imm8 & 0x3fU;
+
+	return (sign << 31) | ((!exponent_bit) << 30) |
+		((exponent_bit ? 0x1fU : 0) << 25) | (fraction << 19);
+}
+
+static u64 orlix_tcti_advsimd_fp_expand_fp64_imm(u8 imm8)
+{
+	u64 sign = (imm8 >> 7) & 1U;
+	u64 exponent_bit = (imm8 >> 6) & 1U;
+	u64 fraction = imm8 & 0x3fU;
+
+	return (sign << 63) | ((u64)!exponent_bit << 62) |
+		((exponent_bit ? 0xffULL : 0) << 54) | (fraction << 48);
+}
+
+static void orlix_tcti_advsimd_fp_broadcast_lane(u64 dest[2], const u64 src[2],
+						 u8 lane_bytes, u8 index,
+						 u8 result_bytes)
+{
+	u64 mask = lane_bytes == 8 ? ~0ULL : (BIT_ULL(lane_bytes * 8) - 1);
+	u8 src_byte = index * lane_bytes;
+	u64 lane = (src[src_byte / 8U] >> ((src_byte % 8U) * 8U)) & mask;
+	u8 lane_count = result_bytes / lane_bytes;
+	u8 i;
+
+	dest[0] = 0;
+	dest[1] = 0;
+	for (i = 0; i < lane_count; i++) {
+		u8 byte = i * lane_bytes;
+
+		dest[byte / 8U] |= lane << ((byte % 8U) * 8U);
+	}
+}
+
+#define ORLIX_TCTI_ADV_FP_HOST_UN(insn) \
+	asm volatile("ldr q0, [%[source]]\n" insn "\n str q0, [%[result]]\n" \
+		     : : [result] "r" (result), [source] "r" (source) \
+		     : "v0", "memory")
+#define ORLIX_TCTI_ADV_FP_HOST_BIN(insn) \
+	asm volatile("ldr q0, [%[left]]\n ldr q1, [%[right]]\n" insn \
+		     "\n str q0, [%[result]]\n" \
+		     : : [result] "r" (result), [left] "r" (left), \
+			 [right] "r" (right) : "v0", "v1", "memory")
+#define ORLIX_TCTI_ADV_FP_HOST_ACC(insn) \
+	asm volatile("ldr q0, [%[left]]\n ldr q1, [%[right]]\n" \
+		     "ldr q2, [%[acc]]\n" insn "\n str q2, [%[result]]\n" \
+		     : : [result] "r" (result), [left] "r" (left), \
+			 [right] "r" (right), [acc] "r" (acc) \
+		     : "v0", "v1", "v2", "memory")
+
+static int orlix_tcti_advsimd_fp_host_wrap(int (*body)(void *), void *ctx,
+					  unsigned long fpcr,
+					  unsigned long *fpsr)
+{
+	unsigned long host_fpcr;
+	unsigned long host_fpsr;
+	unsigned long guest_fpsr;
+	int ret;
+
+	if (!fpsr)
+		return -EINVAL;
+	preempt_disable();
+	asm volatile("mrs %0, fpcr\n mrs %1, fpsr\n"
+		     : "=r" (host_fpcr), "=r" (host_fpsr));
+	asm volatile("msr fpcr, %0\n msr fpsr, %1\n isb\n"
+		     : : "r" (fpcr), "r" (*fpsr) : "memory");
+	ret = body(ctx);
+	asm volatile("mrs %0, fpsr\n" : "=r" (guest_fpsr));
+	asm volatile("msr fpcr, %0\n msr fpsr, %1\n isb\n"
+		     : : "r" (host_fpcr), "r" (host_fpsr) : "memory");
+	*fpsr = guest_fpsr;
+	preempt_enable();
+	return ret;
+}
+
+struct orlix_tcti_advsimd_fp_host_bin_ctx {
+	const char *mnemonic;
+	const char *name;
+	bool scalar;
+	u8 access;
+	u8 result;
+	u64 *result_reg;
+	const u64 *left;
+	const u64 *right;
+	const u64 *acc;
+};
+
+static int orlix_tcti_advsimd_fp_host_bin_body(void *opaque)
+{
+	struct orlix_tcti_advsimd_fp_host_bin_ctx *c = opaque;
+	const char *m = c->mnemonic;
+	u64 *result = c->result_reg;
+	const u64 *left = c->left;
+	const u64 *right = c->right;
+	const u64 *acc = c->acc;
+	bool s = c->scalar && c->access == sizeof(u32);
+	bool d = c->scalar && c->access == sizeof(u64);
+	bool v2s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == sizeof(u64);
+	bool v4s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == 2 * sizeof(u64);
+	bool v2d = !c->scalar && c->access == sizeof(u64) &&
+		c->result == 2 * sizeof(u64);
+	bool accu = !strcmp(m, "FMLA") || !strcmp(m, "FMLS");
+	bool zero = strstr(c->name, "_FZ") != NULL;
+
+	if (!s && !d && !v2s && !v4s && !v2d)
+		return -EINVAL;
+	if (accu) {
+		if (!strcmp(m, "FMLA")) {
+			if (s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla s2, s0, v1.s[0]");
+			else if (d)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla d2, d0, v1.d[0]");
+			else if (v2s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.2s, v0.2s, v1.2s");
+			else if (v4s)
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.4s, v0.4s, v1.4s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_ACC("fmla v2.2d, v0.2d, v1.2d");
+			return 0;
+		}
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls s2, s0, v1.s[0]");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls d2, d0, v1.d[0]");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.4s, v0.4s, v1.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_ACC("fmls v2.2d, v0.2d, v1.2d");
+		return 0;
+	}
+#define ORLIX_TCTI_ADV_FP_HOST_BIN5(op) \
+	do { \
+		if (s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " s0, s0, s1"); \
+		else if (d) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " d0, d0, d1"); \
+		else if (v2s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.2s, v0.2s, v1.2s"); \
+		else if (v4s) \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.4s, v0.4s, v1.4s"); \
+		else \
+			ORLIX_TCTI_ADV_FP_HOST_BIN(op " v0.2d, v0.2d, v1.2d"); \
+	} while (0)
+	if (!strcmp(m, "FADD"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fadd");
+	else if (!strcmp(m, "FSUB"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fsub");
+	else if (!strcmp(m, "FMUL"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmul");
+	else if (!strcmp(m, "FDIV"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fdiv");
+	else if (!strcmp(m, "FMAX"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmax");
+	else if (!strcmp(m, "FMIN"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmin");
+	else if (!strcmp(m, "FMAXNM"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmaxnm");
+	else if (!strcmp(m, "FMINNM"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fminnm");
+	else if (!strcmp(m, "FMULX"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fmulx");
+	else if (!strcmp(m, "FABD"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fabd");
+	else if (!strcmp(m, "FACGE"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("facge");
+	else if (!strcmp(m, "FACGT"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("facgt");
+	else if (!strcmp(m, "FRECPS"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("frecps");
+	else if (!strcmp(m, "FRSQRTS"))
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("frsqrts");
+	else if (!strcmp(m, "FCMEQ") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmeq");
+	else if (!strcmp(m, "FCMGE") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmge");
+	else if (!strcmp(m, "FCMGT") && !zero)
+		ORLIX_TCTI_ADV_FP_HOST_BIN5("fcmgt");
+	else if (!strcmp(m, "FADDP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("faddp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMAXP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMINP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMAXNMP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fmaxnmp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FMINNMP") && !c->scalar) {
+		if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.2s, v0.2s, v1.2s");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.4s, v0.4s, v1.4s");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_BIN("fminnmp v0.2d, v0.2d, v1.2d");
+		else
+			return -EINVAL;
+	} else
+		return -EINVAL;
+#undef ORLIX_TCTI_ADV_FP_HOST_BIN5
+	return 0;
+}
+
+struct orlix_tcti_advsimd_fp_host_un_ctx {
+	const char *mnemonic;
+	const char *name;
+	bool scalar;
+	bool q;
+	u8 access;
+	u8 result;
+	u8 src_index;
+	u8 dst_index;
+	u8 fbits;
+	u64 *result_reg;
+	const u64 *source;
+	const u64 *acc;
+};
+
+static int orlix_tcti_advsimd_fp_host_un_body(void *opaque)
+{
+	struct orlix_tcti_advsimd_fp_host_un_ctx *c = opaque;
+	const char *m = c->mnemonic;
+	u64 *result = c->result_reg;
+	const u64 *source = c->source;
+	const u64 *acc = c->acc;
+	bool s = c->scalar && c->access == sizeof(u32);
+	bool d = c->scalar && c->access == sizeof(u64);
+	bool v2s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == sizeof(u64);
+	bool v4s = !c->scalar && c->access == sizeof(u32) &&
+		c->result == 2 * sizeof(u64);
+	bool v2d = !c->scalar && c->access == sizeof(u64) &&
+		c->result == 2 * sizeof(u64);
+	bool zero = strstr(c->name, "_FZ") != NULL;
+
+	if (!strcmp(m, "FCVTL")) {
+		if (c->src_index)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtl2 v0.2d, v0.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtl v0.2d, v0.2s");
+		return 0;
+	}
+	if (!strcmp(m, "FCVTN")) {
+		if (c->dst_index)
+			asm volatile("ldr q0, [%[source]]\n ldr q1, [%[acc]]\n"
+				     "fcvtn2 v1.4s, v0.2d\n str q1, [%[result]]\n"
+				     : : [result] "r" (result), [source] "r" (source),
+					 [acc] "r" (acc) : "v0", "v1", "memory");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtn v0.2s, v0.2d");
+		return 0;
+	}
+	if (!strcmp(m, "FCVTXN")) {
+		if (c->scalar)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtxn s0, d0");
+		else if (c->dst_index)
+			asm volatile("ldr q0, [%[source]]\n ldr q1, [%[acc]]\n"
+				     "fcvtxn2 v1.4s, v0.2d\n str q1, [%[result]]\n"
+				     : : [result] "r" (result), [source] "r" (source),
+					 [acc] "r" (acc) : "v0", "v1", "memory");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcvtxn v0.2s, v0.2d");
+		return 0;
+	}
+	if (!strcmp(m, "FADDP") || !strcmp(m, "FMAXP") || !strcmp(m, "FMINP") ||
+	    !strcmp(m, "FMAXNMP") || !strcmp(m, "FMINNMP") ||
+	    !strcmp(m, "FMAXV") || !strcmp(m, "FMINV") ||
+	    !strcmp(m, "FMAXNMV") || !strcmp(m, "FMINNMV")) {
+		if (!strcmp(m, "FADDP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("faddp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("faddp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxp d0, v0.2d");
+		} else if (!strcmp(m, "FMINP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXNMP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmp d0, v0.2d");
+		} else if (!strcmp(m, "FMINNMP")) {
+			if (c->access == sizeof(u32))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminnmp s0, v0.2s");
+			else
+				ORLIX_TCTI_ADV_FP_HOST_UN("fminnmp d0, v0.2d");
+		} else if (!strcmp(m, "FMAXV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fmaxv s0, v0.4s");
+		else if (!strcmp(m, "FMINV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fminv s0, v0.4s");
+		else if (!strcmp(m, "FMAXNMV"))
+			ORLIX_TCTI_ADV_FP_HOST_UN("fmaxnmv s0, v0.4s");
+		else
+			ORLIX_TCTI_ADV_FP_HOST_UN("fminnmv s0, v0.4s");
+		return 0;
+	}
+#define ORLIX_TCTI_ADV_FP_HOST_UN5(op) \
+	do { \
+		if (s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " s0, s0"); \
+		else if (d) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " d0, d0"); \
+		else if (v2s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.2s, v0.2s"); \
+		else if (v4s) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.4s, v0.4s"); \
+		else if (v2d) \
+			ORLIX_TCTI_ADV_FP_HOST_UN(op " v0.2d, v0.2d"); \
+		else \
+			return -EINVAL; \
+	} while (0)
+	if (c->fbits) {
+		if (c->fbits == 32 && v4s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.4s, v0.4s, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.4s, v0.4s, #32");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 32 && v2s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2s, v0.2s, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2s, v0.2s, #32");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 32 && v2d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2d, v0.2d, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2d, v0.2d, #32");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 64 && v2d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs v0.2d, v0.2d, #64");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu v0.2d, v0.2d, #64");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 63 && d) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf d0, d0, #63");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf d0, d0, #63");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs d0, d0, #63");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu d0, d0, #63");
+			else
+				return -EINVAL;
+		} else if (c->fbits == 32 && s) {
+			if (!strcmp(m, "SCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("scvtf s0, s0, #32");
+			else if (!strcmp(m, "UCVTF"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("ucvtf s0, s0, #32");
+			else if (!strcmp(m, "FCVTZS"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzs s0, s0, #32");
+			else if (!strcmp(m, "FCVTZU"))
+				ORLIX_TCTI_ADV_FP_HOST_UN("fcvtzu s0, s0, #32");
+			else
+				return -EINVAL;
+		} else
+			return -EINVAL;
+		return 0;
+	}
+	if (!strcmp(m, "FABS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fabs");
+	else if (!strcmp(m, "FNEG"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fneg");
+	else if (!strcmp(m, "FSQRT"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fsqrt");
+	else if (!strcmp(m, "FRECPE"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frecpe");
+	else if (!strcmp(m, "FRSQRTE"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frsqrte");
+	else if (!strcmp(m, "FRECPX")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("frecpx s0, s0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("frecpx d0, d0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FRINTN"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintn");
+	else if (!strcmp(m, "FRINTP"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintp");
+	else if (!strcmp(m, "FRINTM"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintm");
+	else if (!strcmp(m, "FRINTZ"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintz");
+	else if (!strcmp(m, "FRINTA"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frinta");
+	else if (!strcmp(m, "FRINTX"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frintx");
+	else if (!strcmp(m, "FRINTI"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("frinti");
+	else if (!strcmp(m, "FCMEQ") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmeq v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMGE") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmge v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMGT") && zero) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmgt v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMLE")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmle v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "FCMLT")) {
+		if (s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt s0, s0, #0.0");
+		else if (d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt d0, d0, #0.0");
+		else if (v2s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.2s, v0.2s, #0.0");
+		else if (v4s)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.4s, v0.4s, #0.0");
+		else if (v2d)
+			ORLIX_TCTI_ADV_FP_HOST_UN("fcmlt v0.2d, v0.2d, #0.0");
+		else
+			return -EINVAL;
+	} else if (!strcmp(m, "SCVTF"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("scvtf");
+	else if (!strcmp(m, "UCVTF"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("ucvtf");
+	else if (!strcmp(m, "FCVTZS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtzs");
+	else if (!strcmp(m, "FCVTZU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtzu");
+	else if (!strcmp(m, "FCVTNS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtns");
+	else if (!strcmp(m, "FCVTNU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtnu");
+	else if (!strcmp(m, "FCVTPS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtps");
+	else if (!strcmp(m, "FCVTPU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtpu");
+	else if (!strcmp(m, "FCVTMS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtms");
+	else if (!strcmp(m, "FCVTMU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtmu");
+	else if (!strcmp(m, "FCVTAS"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtas");
+	else if (!strcmp(m, "FCVTAU"))
+		ORLIX_TCTI_ADV_FP_HOST_UN5("fcvtau");
+	else
+		return -EINVAL;
+#undef ORLIX_TCTI_ADV_FP_HOST_UN5
+	return 0;
+}
+
+static int orlix_tcti_advsimd_fp_expected_from_source(
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	const u64 rn[2], const u64 rm[2], const u64 rd[2],
+	unsigned long fpcr, unsigned long fpsr_in, u64 expected_rd[2],
+	unsigned long *expected_fpsr)
+{
+	const char *name = source->name;
+	bool scalar = strstr(name, "asisd") != NULL;
+	bool q = instruction & BIT(30);
+	u8 sz = (instruction >> 22) & 1U;
+	u8 access = sz ? sizeof(u64) : sizeof(u32);
+	u8 result = scalar ? access : (q ? 2 * sizeof(u64) : sizeof(u64));
+	u64 left[2] = { rn[0], rn[1] };
+	u64 right[2] = { rm[0], rm[1] };
+	u64 acc[2] = { rd[0], rd[1] };
+	int ret;
+
+	*expected_fpsr = fpsr_in;
+	expected_rd[0] = rd[0];
+	expected_rd[1] = rd[1];
+
+	if (strstr(name, "asimdimm")) {
+		u8 imm8 = orlix_tcti_advsimd_fp_imm8(instruction);
+		u64 pattern;
+
+		if (instruction & BIT(29)) {
+			if (!q)
+				return -EINVAL;
+			pattern = orlix_tcti_advsimd_fp_expand_fp64_imm(imm8);
+			expected_rd[0] = pattern;
+			expected_rd[1] = pattern;
+		} else {
+			u32 lane = orlix_tcti_advsimd_fp_expand_fp32_imm(imm8);
+
+			pattern = (u64)lane | ((u64)lane << 32);
+			expected_rd[0] = pattern;
+			expected_rd[1] = q ? pattern : 0;
+		}
+		return 0;
+	}
+	if (strstr(name, "asimdall") || strstr(name, "asisdpair")) {
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
+
+		ret = orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
+			expected_fpsr);
+		if (!ret && !q && !scalar)
+			expected_rd[1] = 0;
+		return ret;
+	}
+	if (strstr(name, "asimdelem") || strstr(name, "asisdelem")) {
+		struct orlix_tcti_advsimd_fp_host_bin_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.left = left,
+			.right = right,
+			.acc = acc,
+		};
+		u8 h = (instruction >> 11) & 1U;
+		u8 l = (instruction >> 21) & 1U;
+		u8 index = sz ? h : ((h << 1) | l);
+
+		orlix_tcti_advsimd_fp_broadcast_lane(right, rm, access, index,
+						     result);
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_bin_body, &ctx, fpcr,
+			expected_fpsr);
+	}
+	if (strstr(name, "asimdshf") || strstr(name, "asisdshf")) {
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
+		u32 immh = (instruction >> 19) & 0xfU;
+		u32 immb = (instruction >> 16) & 0x7U;
+		u32 imm = (immh << 3) | immb;
+		u8 esize = (immh & 8U) ? 64 : (immh & 4U) ? 32 : 16;
+
+		access = esize / 8U;
+		ctx.access = access;
+		ctx.result = scalar ? access : (q ? 2 * sizeof(u64) : sizeof(u64));
+		ctx.fbits = (u8)(esize * 2U - imm);
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
+			expected_fpsr);
+	}
+	if (!strcmp(source->mnemonic, "FCVTL") ||
+	    !strcmp(source->mnemonic, "FCVTN") ||
+	    !strcmp(source->mnemonic, "FCVTXN") ||
+	    strstr(name, "asimdmisc") || strstr(name, "asisdmisc") ||
+	    !strcmp(source->mnemonic, "FABS") ||
+	    !strcmp(source->mnemonic, "FNEG") ||
+	    !strcmp(source->mnemonic, "FSQRT") ||
+	    !strcmp(source->mnemonic, "FRECPE") ||
+	    !strcmp(source->mnemonic, "FRSQRTE") ||
+	    !strcmp(source->mnemonic, "FRECPX") ||
+	    !strncmp(source->mnemonic, "FRINT", 5) ||
+	    !strcmp(source->mnemonic, "SCVTF") ||
+	    !strcmp(source->mnemonic, "UCVTF") ||
+	    !strncmp(source->mnemonic, "FCVT", 4)) {
+		struct orlix_tcti_advsimd_fp_host_un_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.q = q,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.source = left,
+			.acc = acc,
+		};
+
+		if (!strcmp(source->mnemonic, "FCVTL")) {
+			ctx.access = sizeof(u32);
+			ctx.result = 2 * sizeof(u64);
+			ctx.src_index = q ? 1U : 0;
+		} else if (!strcmp(source->mnemonic, "FCVTN") ||
+			   (!strcmp(source->mnemonic, "FCVTXN") && !scalar)) {
+			ctx.access = sizeof(u64);
+			ctx.result = q ? 2 * sizeof(u64) : sizeof(u64);
+			ctx.dst_index = q ? 1U : 0;
+		} else if (!strcmp(source->mnemonic, "FCVTXN")) {
+			ctx.access = sizeof(u64);
+			ctx.result = sizeof(u32);
+			ctx.scalar = true;
+		}
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_un_body, &ctx, fpcr,
+			expected_fpsr);
+	}
+	{
+		struct orlix_tcti_advsimd_fp_host_bin_ctx ctx = {
+			.mnemonic = source->mnemonic,
+			.name = name,
+			.scalar = scalar,
+			.access = access,
+			.result = result,
+			.result_reg = expected_rd,
+			.left = left,
+			.right = right,
+			.acc = acc,
+		};
+
+		return orlix_tcti_advsimd_fp_host_wrap(
+			orlix_tcti_advsimd_fp_host_bin_body, &ctx, fpcr,
+			expected_fpsr);
+	}
+}
+
 static void orlix_tcti_advsimd_fp_seed_simd(void)
 {
 	size_t index;
@@ -220,8 +998,12 @@ static void orlix_tcti_advsimd_fp_seed_simd(void)
 	current->thread.user_simd_valid = 1;
 	current->thread.user_fpcr = 0;
 	current->thread.user_fpsr = 0;
-	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
-		current->thread.user_simd[index] = 0;
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
+		u32 a = 0x3f800000U + ((u32)index << 13);
+		u32 b = 0x40000000U + ((u32)index << 13);
+
+		current->thread.user_simd[index] = (u64)a | ((u64)b << 32);
+	}
 }
 
 static void orlix_tcti_advsimd_fp_seed(struct pt_regs *regs, unsigned long code)
@@ -237,58 +1019,145 @@ static void orlix_tcti_advsimd_fp_seed(struct pt_regs *regs, unsigned long code)
 	orlix_tcti_advsimd_fp_seed_simd();
 }
 
-static void orlix_tcti_advsimd_fp_expect_success(struct kunit *test,
+static void orlix_tcti_advsimd_fp_assert_success(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source,
 	const struct orlix_tcti_result *result, const struct pt_regs *regs,
 	unsigned long code)
 {
-	KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
+	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
 			    "%s ordinal %u reason", source->name, source->ordinal);
-	KUNIT_EXPECT_EQ(test, 0L, result->status);
-	KUNIT_EXPECT_EQ(test, FP_SVC, result->instruction);
-	KUNIT_EXPECT_EQ_MSG(test, code + sizeof(u32), regs->pc,
+	KUNIT_ASSERT_EQ(test, 0L, result->status);
+	KUNIT_ASSERT_EQ(test, FP_SVC, result->instruction);
+	KUNIT_ASSERT_EQ_MSG(test, code + sizeof(u32), regs->pc,
 			    "%s ordinal %u pc", source->name, source->ordinal);
 }
 
-static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
-	const struct orlix_tcti_test_fp_source *source, u32 obligation,
+static void orlix_tcti_advsimd_fp_assert_preserved_simd(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, const u64 *before_simd)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
+		if (index / 2U == FP_RD)
+			continue;
+		KUNIT_ASSERT_EQ_MSG(test, before_simd[index],
+				    current->thread.user_simd[index],
+				    "%s preserved simd[%zu] %s", source->name, index,
+				    source->mnemonic);
+	}
+}
+
+static void orlix_tcti_advsimd_fp_compare_run(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	struct pt_regs *regs, unsigned long code)
+{
+	struct orlix_tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_rd[2];
+	unsigned long expected_fpsr;
+	int ret;
+
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	ret = orlix_tcti_advsimd_fp_expected_from_source(source, instruction,
+		&before_simd[FP_RN * 2U], &before_simd[FP_RM * 2U],
+		&before_simd[FP_RD * 2U], current->thread.user_fpcr,
+		current->thread.user_fpsr, expected_rd, &expected_fpsr);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
+			    source->name, source->mnemonic, instruction);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	orlix_tcti_advsimd_fp_assert_success(test, source, &result, regs, code);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
+			    current->thread.user_simd[FP_RD * 2U],
+			    "%s dest lo %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
+			    current->thread.user_simd[FP_RD * 2U + 1U],
+			    "%s dest hi %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+			    "%s fpsr %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	orlix_tcti_advsimd_fp_assert_preserved_simd(test, source, before_simd);
+}
+
+static void orlix_tcti_advsimd_fp_capture_run(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	u32 obligation, struct pt_regs *regs, unsigned long code)
 {
 	const void *token;
 	struct orlix_tcti_native_capture_session *capture = NULL;
 	struct orlix_tcti_native_wire_record wire = {};
 	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
 	struct orlix_tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_rd[2];
+	unsigned long expected_fpsr;
 	int ret;
 
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	ret = orlix_tcti_advsimd_fp_expected_from_source(source, instruction,
+		&before_simd[FP_RN * 2U], &before_simd[FP_RM * 2U],
+		&before_simd[FP_RD * 2U], current->thread.user_fpcr,
+		current->thread.user_fpsr, expected_rd, &expected_fpsr);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s",
+			    source->name, source->mnemonic);
 	token = orlix_tcti_advsimd_fp_production_capture_token(source->ordinal,
 							      obligation);
-	KUNIT_EXPECT_TRUE_MSG(test, token != NULL, "%s token %u", source->name,
+	KUNIT_ASSERT_TRUE_MSG(test, token != NULL, "%s token %u", source->name,
 			      obligation);
-	if (!token)
-		return;
 	ret = orlix_tcti_native_capture_begin(token, source->ordinal, obligation,
 					      &capture);
-	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
-	orlix_tcti_advsimd_fp_expect_success(test, source, &result, regs, code);
+	orlix_tcti_advsimd_fp_assert_success(test, source, &result, regs, code);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
+			    current->thread.user_simd[FP_RD * 2U],
+			    "%s dest lo %s", source->name, source->mnemonic);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
+			    current->thread.user_simd[FP_RD * 2U + 1U],
+			    "%s dest hi %s", source->name, source->mnemonic);
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+			    "%s fpsr %s", source->name, source->mnemonic);
+	orlix_tcti_advsimd_fp_assert_preserved_simd(test, source, before_simd);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
-	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
-	if (!ret) {
-		ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
-		KUNIT_ASSERT_NOT_NULL(test, ledger);
-		KUNIT_EXPECT_EQ_MSG(test, 0,
-			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-			"%s ingest %u", source->name, obligation);
-		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-		KUNIT_EXPECT_LT_MSG(test,
-			orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
-			0, "%s replay %u", source->name, obligation);
-		KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
-		orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
-	}
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
+	ledger = orlix_tcti_target_proof_ingestion_ledger_create(1U);
+	KUNIT_ASSERT_NOT_NULL(test, ledger);
+	KUNIT_ASSERT_EQ_MSG(test, 0,
+		orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+		"%s ingest %u", source->name, obligation);
+	KUNIT_ASSERT_EQ(test, 1U, ledger->native_passed);
+	KUNIT_EXPECT_LT_MSG(test,
+		orlix_tcti_target_proof_ingest_native(ledger, &wire, NULL),
+		0, "%s replay %u", source->name, obligation);
+	KUNIT_EXPECT_EQ(test, 1U, ledger->native_passed);
+	orlix_tcti_target_proof_ingestion_ledger_destroy(ledger);
 	orlix_tcti_native_wire_record_destroy(&wire);
 	orlix_tcti_native_capture_destroy(capture);
+}
+
+static void orlix_tcti_advsimd_fp_run_pinned(
+	struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source,
+	u32 instruction,
+	u64 rn_lo, u64 rn_hi, u64 rm_lo, u64 rm_hi, unsigned long fpcr)
+{
+	struct pt_regs regs = {};
+	unsigned long code;
+
+	code = orlix_tcti_advsimd_fp_map(test, instruction);
+	orlix_tcti_advsimd_fp_seed(&regs, code);
+	current->thread.user_fpcr = fpcr;
+	current->thread.user_fpsr = 0;
+	current->thread.user_simd[FP_RN * 2U] = rn_lo;
+	current->thread.user_simd[FP_RN * 2U + 1U] = rn_hi;
+	current->thread.user_simd[FP_RM * 2U] = rm_lo;
+	current->thread.user_simd[FP_RM * 2U + 1U] = rm_hi;
+	current->thread.user_simd[FP_RD * 2U] = 0;
+	current->thread.user_simd[FP_RD * 2U + 1U] = 0;
+	orlix_tcti_advsimd_fp_capture_run(test, source, instruction,
+		ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD, &regs, code);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
 static void orlix_tcti_advsimd_fp_decodes_exact_source_cohort(struct kunit *test)
@@ -308,10 +1177,20 @@ static void orlix_tcti_advsimd_fp_decodes_exact_source_cohort(struct kunit *test
 		KUNIT_ASSERT_EQ_MSG(test, source->pattern,
 				instruction & source->mask, "%s", source->name);
 		decoded = orlix_tcti_decode_aarch64(instruction);
-		KUNIT_EXPECT_TRUE_MSG(test,
-			orlix_tcti_test_fp_decode_is_family(decoded.decode_class),
-			"%s class %u insn %#x", source->name, decoded.decode_class,
-			instruction);
+		if (orlix_tcti_test_is_optional_fp_feature(source))
+			KUNIT_EXPECT_TRUE_MSG(test,
+				orlix_tcti_test_fp_decode_is_family(
+					decoded.decode_class) ||
+				decoded.decode_class ==
+					ORLIX_TCTI_DECODE_UNSUPPORTED,
+				"%s class %u insn %#x", source->name,
+				decoded.decode_class, instruction);
+		else
+			KUNIT_EXPECT_TRUE_MSG(test,
+				orlix_tcti_test_fp_decode_is_family(
+					decoded.decode_class),
+				"%s class %u insn %#x", source->name,
+				decoded.decode_class, instruction);
 		KUNIT_EXPECT_EQ_MSG(test, source->ordinal, decoded.source_ordinal,
 				"%s %#x", source->name, instruction);
 		count++;
@@ -351,9 +1230,13 @@ static void orlix_tcti_advsimd_fp_production_resume(struct kunit *test)
 		const struct orlix_tcti_test_fp_source *source =
 			&orlix_tcti_test_sources[index];
 		u32 instruction;
+		u32 q_bit;
+		u32 sz_bit;
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
 		unsigned long code;
+		bool q_free;
+		bool sz_free;
 
 		if (!orlix_tcti_test_is_el0_fp(source))
 			continue;
@@ -370,12 +1253,50 @@ static void orlix_tcti_advsimd_fp_production_resume(struct kunit *test)
 				    source->name, decoded.simd_arithmetic_op,
 				    decoded.simd_scalar, decoded.immediate,
 				    decoded.decode_class, instruction);
+		q_free = (source->mask & BIT(30)) == 0 &&
+			!(source->pattern & BIT(28));
+		sz_free = (source->mask & BIT(22)) == 0;
+		for (q_bit = 0; q_bit < 2U; q_bit++) {
+			if (!q_free && !!q_bit != !!(instruction & BIT(30)))
+				continue;
+			for (sz_bit = 0; sz_bit < 2U; sz_bit++) {
+				u32 variant = instruction;
+				unsigned long variant_code;
+
+				if (!sz_free &&
+				    !!sz_bit != !!(instruction & BIT(22)))
+					continue;
+				variant &= ~BIT(30);
+				variant &= ~BIT(22);
+				if (q_bit)
+					variant |= BIT(30);
+				if (sz_bit)
+					variant |= BIT(22);
+				if ((variant & BIT(22)) &&
+				    (strstr(source->name, "asimdelem") ||
+				     strstr(source->name, "asisdelem")))
+					variant &= ~BIT(21);
+				if (!orlix_tcti_advsimd_fp_instruction_matches_source(
+					    source, variant))
+					continue;
+				if (!orlix_tcti_advsimd_fp_variant_is_executable(
+					    source, variant))
+					continue;
+				variant_code = orlix_tcti_advsimd_fp_map(test,
+									 variant);
+				orlix_tcti_advsimd_fp_seed(&regs, variant_code);
+				orlix_tcti_advsimd_fp_compare_run(test, source,
+					variant, &regs, variant_code);
+				KUNIT_EXPECT_EQ(test, 0,
+						vm_munmap(variant_code, PAGE_SIZE));
+			}
+		}
 		code = orlix_tcti_advsimd_fp_map(test, instruction);
 		orlix_tcti_advsimd_fp_seed(&regs, code);
-		orlix_tcti_advsimd_fp_capture_run(test, source,
+		orlix_tcti_advsimd_fp_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD, &regs, code);
 		orlix_tcti_advsimd_fp_seed(&regs, code);
-		orlix_tcti_advsimd_fp_capture_run(test, source,
+		orlix_tcti_advsimd_fp_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 	}
@@ -404,8 +1325,9 @@ static void orlix_tcti_advsimd_fp_non_el0_rejected(struct kunit *test)
 		instruction = orlix_tcti_advsimd_fp_legal_instruction(source);
 		decoded = orlix_tcti_decode_aarch64(instruction);
 		KUNIT_EXPECT_TRUE_MSG(test,
-			orlix_tcti_test_fp_decode_is_family(decoded.decode_class),
-			"%s class", source->name);
+			orlix_tcti_test_fp_decode_is_family(decoded.decode_class) ||
+			decoded.decode_class == ORLIX_TCTI_DECODE_UNSUPPORTED,
+			"%s class %u", source->name, decoded.decode_class);
 		KUNIT_EXPECT_EQ_MSG(test, source->ordinal, decoded.source_ordinal,
 				    "%s ordinal", source->name);
 		code = orlix_tcti_advsimd_fp_map(test, instruction);
@@ -478,6 +1400,51 @@ static void orlix_tcti_advsimd_fp_nan_rounding_overlap(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
+static void orlix_tcti_advsimd_fp_edge_vectors(struct kunit *test)
+{
+	const struct orlix_tcti_test_fp_source *fadd =
+		orlix_tcti_test_fp_name("FADD_asimdsame_only");
+	const struct orlix_tcti_test_fp_source *frinti =
+		orlix_tcti_test_fp_name("FRINTI_asimdmisc_R");
+	u32 fadd_insn;
+	u32 frinti_insn;
+	u64 one = orlix_tcti_advsimd_fp_pack_s(FP32_ONE, FP32_ONE);
+	u64 inf = orlix_tcti_advsimd_fp_pack_s(FP32_POS_INF, FP32_NEG_INF);
+	u64 pos_zero = orlix_tcti_advsimd_fp_pack_s(FP32_POS_ZERO, FP32_NEG_ZERO);
+	u64 neg_zero = orlix_tcti_advsimd_fp_pack_s(FP32_NEG_ZERO, FP32_POS_ZERO);
+	u64 min_sub = orlix_tcti_advsimd_fp_pack_s(FP32_MIN_SUBNORMAL,
+						   FP32_MIN_SUBNORMAL);
+	u64 halves = orlix_tcti_advsimd_fp_pack_s(FP32_ONE_POINT_FIVE,
+						  FP32_NEG_ONE_POINT_FIVE);
+	u64 tiny = orlix_tcti_advsimd_fp_pack_s(FP32_TWO_EXP_NEG_24,
+					       FP32_TWO_EXP_NEG_24);
+	u64 snan = orlix_tcti_advsimd_fp_pack_s(FP32_SNAN, FP32_ONE);
+
+	KUNIT_ASSERT_NOT_NULL(test, fadd);
+	KUNIT_ASSERT_NOT_NULL(test, frinti);
+	fadd_insn = orlix_tcti_advsimd_fp_legal_instruction(fadd);
+	frinti_insn = orlix_tcti_advsimd_fp_legal_instruction(frinti);
+
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, inf, inf, one,
+					 one, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, pos_zero, 0,
+					 neg_zero, 0, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, min_sub, min_sub,
+					 min_sub, min_sub, 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, snan, 0, one, 0,
+					 0);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, one, one, tiny,
+					 tiny, AARCH64_FPCR_RMODE_POSINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, fadd, fadd_insn, one, one, tiny,
+					 tiny, AARCH64_FPCR_RMODE_ZERO);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_POSINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_NEGINF);
+	orlix_tcti_advsimd_fp_run_pinned(test, frinti, frinti_insn, halves,
+					 halves, 0, 0, AARCH64_FPCR_RMODE_ZERO);
+}
+
 static void orlix_tcti_advsimd_fp_reserved_encodings(struct kunit *test)
 {
 	struct orlix_tcti_decoded_instruction decoded;
@@ -498,6 +1465,18 @@ static void orlix_tcti_advsimd_fp_reserved_encodings(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
 	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	/* Reserved asisdshf immh == 0000. */
+	insn = 0x5f00e400U;
+	decoded = orlix_tcti_decode_aarch64(insn);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	code = orlix_tcti_advsimd_fp_map(test, insn);
+	orlix_tcti_advsimd_fp_seed(&regs, code);
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
+	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
 static struct kunit_case orlix_tcti_advsimd_fp_source_bound_cases[] = {
@@ -506,6 +1485,7 @@ static struct kunit_case orlix_tcti_advsimd_fp_source_bound_cases[] = {
 	KUNIT_CASE(orlix_tcti_advsimd_fp_production_resume),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_non_el0_rejected),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_nan_rounding_overlap),
+	KUNIT_CASE(orlix_tcti_advsimd_fp_edge_vectors),
 	KUNIT_CASE(orlix_tcti_advsimd_fp_reserved_encodings),
 	{}
 };
