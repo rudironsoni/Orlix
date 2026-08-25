@@ -312,14 +312,14 @@ static u64 orlix_tcti_advsimd_integer_sat_shift(u64 a, s64 sh, u8 bits,
 	s64 minimum = bits == 64 ? S64_MIN : -(s64)BIT_ULL(bits - 1);
 
 	a &= mask;
+	if (signed_to_unsigned && sa < 0) {
+		*qc = true;
+		return 0;
+	}
 	if (sh > 0) {
 		u8 n = (u8)sh;
 
 		if (signed_to_unsigned) {
-			if (sa < 0) {
-				*qc = true;
-				return 0;
-			}
 			if (n >= bits ? sa != 0 : (u64)sa > (mask >> n)) {
 				*qc = true;
 				return mask;
@@ -1094,7 +1094,7 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 			if (sh >= bits)
 				out = 0;
 			else if (sh > 0)
-				out = (sa << sh) & mask;
+				out = ((u64)sa << (u8)sh) & mask;
 			else if (-sh >= bits)
 				out = sa < 0 ? mask : 0;
 			else
@@ -1217,6 +1217,10 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 
 		if (index / 2U == INT_RN)
 			value |= 0x8080808080808080ULL;
+		if (index == INT_RN * 2U)
+			value = (value & ~0xffULL) | 0x81ULL;
+		if (index == INT_RM * 2U)
+			value = (value & ~0xffULL) | 0xffULL;
 		current->thread.user_simd[index] = value;
 	}
 }
@@ -1263,6 +1267,42 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 		} \
 	} while (0)
 
+static bool orlix_tcti_advsimd_integer_variant_is_executable(
+	const struct orlix_tcti_test_integer_source *source, u32 instruction)
+{
+	bool scalar = instruction & BIT(28);
+	bool q = instruction & BIT(30);
+	u8 size = (instruction >> 22) & 3U;
+	const char *m = source->mnemonic;
+	const char *name = source->name;
+
+	if ((size == 0U || size == 3U) &&
+	    orlix_tcti_advsimd_integer_size00_reserved(source))
+		return false;
+	if (!strcmp(m, "CNT") || !strcmp(m, "NOT") || !strcmp(m, "REV16"))
+		return size == 0U;
+	if (!strcmp(m, "RBIT"))
+		return size == 1U;
+	if (!strcmp(m, "REV32") && size > 1U)
+		return false;
+	if ((!strcmp(m, "CLS") || !strcmp(m, "CLZ") || !strcmp(m, "REV64")) &&
+	    size == 3U)
+		return false;
+	if (size == 3U) {
+		bool same = strstr(name, "same") != NULL;
+		bool pair = strstr(name, "pair") != NULL;
+
+		if (!same && !pair && strcmp(m, "PMULL"))
+			return false;
+		if (!scalar && !q)
+			return false;
+	}
+	if ((strstr(name, "asimdelem") || strstr(name, "asisdelem")) &&
+	    size == 3U && (instruction & BIT(21)))
+		return false;
+	return true;
+}
+
 static bool orlix_tcti_advsimd_integer_instruction_matches_source(
 	const struct orlix_tcti_test_integer_source *source, u32 instruction)
 {
@@ -1271,8 +1311,14 @@ static bool orlix_tcti_advsimd_integer_instruction_matches_source(
 	if ((instruction & source->mask) != source->pattern)
 		return false;
 	decoded = orlix_tcti_decode_aarch64(instruction);
+	/*
+	 * A wide source mask can bind a reserved size that the dedicated
+	 * decoder already rejected. Promote then fills a SIMD class without
+	 * access_size. Skip those shells. They are not legal variants.
+	 */
 	return decoded.source_ordinal == source->ordinal &&
-		orlix_tcti_test_integer_decode_is_family(decoded.decode_class);
+		orlix_tcti_test_integer_decode_is_family(decoded.decode_class) &&
+		decoded.access_size != 0;
 }
 
 static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
@@ -1439,10 +1485,14 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 			&orlix_tcti_test_sources[index];
 		u32 instruction;
 		u32 q_bit;
+		u8 default_size;
+		u8 size_lo;
+		u8 size_hi;
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
 		unsigned long code;
 		bool q_free;
+		bool size_free;
 
 		if (!orlix_tcti_test_is_el0_integer(source))
 			continue;
@@ -1461,30 +1511,45 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 				    decoded.decode_class, instruction);
 		q_free = (source->mask & BIT(30)) == 0 &&
 			!(source->pattern & BIT(28));
+		size_free = (source->mask & (3U << 22)) == 0 &&
+			!strstr(source->name, "asimdshf") &&
+			!strstr(source->name, "asisdshf");
+		default_size = (instruction >> 22) & 3U;
+		size_lo = size_free ? 0U : default_size;
+		size_hi = size_free ? 3U : default_size;
 		for (q_bit = 0; q_bit < 2U; q_bit++) {
-			u32 variant = instruction;
-			unsigned long variant_code;
+			u8 size;
 
 			if (!q_free && !!q_bit != !!(instruction & BIT(30)))
 				continue;
-			variant &= ~BIT(30);
-			if (q_bit)
-				variant |= BIT(30);
-			if (!orlix_tcti_advsimd_integer_instruction_matches_source(
-				    source, variant))
-				continue;
-			if (!(variant & BIT(28)) &&
-			    ((variant >> 22) & 3U) == 3U &&
-			    !(variant & BIT(30)))
-				continue;
-			variant_code = orlix_tcti_advsimd_integer_map(test,
-								     variant);
-			orlix_tcti_advsimd_integer_seed(&regs, variant_code);
-			current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
-			orlix_tcti_advsimd_integer_compare_run(test, source,
-				variant, &regs, variant_code);
-			KUNIT_EXPECT_EQ(test, 0,
+			for (size = size_lo; size <= size_hi; size++) {
+				u32 variant = instruction;
+				unsigned long variant_code;
+
+				variant &= ~BIT(30);
+				if (q_bit)
+					variant |= BIT(30);
+				if (size_free) {
+					variant &= ~(3U << 22);
+					variant |= ((u32)size << 22);
+				}
+				if (!orlix_tcti_advsimd_integer_instruction_matches_source(
+					    source, variant))
+					continue;
+				if (!orlix_tcti_advsimd_integer_variant_is_executable(
+					    source, variant))
+					continue;
+				variant_code = orlix_tcti_advsimd_integer_map(
+					test, variant);
+				orlix_tcti_advsimd_integer_seed(&regs,
+								variant_code);
+				current->thread.user_fpsr =
+					AARCH64_FPSR_PRESERVED;
+				orlix_tcti_advsimd_integer_compare_run(test,
+					source, variant, &regs, variant_code);
+				KUNIT_EXPECT_EQ(test, 0,
 					vm_munmap(variant_code, PAGE_SIZE));
+			}
 		}
 		code = orlix_tcti_advsimd_integer_map(test, instruction);
 		orlix_tcti_advsimd_integer_seed(&regs, code);
@@ -1550,6 +1615,8 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 		orlix_tcti_test_integer_name("UQADD_asimdsame_only");
 	const struct orlix_tcti_test_integer_source *uqsub =
 		orlix_tcti_test_integer_name("UQSUB_asimdsame_only");
+	const struct orlix_tcti_test_integer_source *sqshlu =
+		orlix_tcti_test_integer_name("SQSHLU_asimdshf_R");
 	u32 insn;
 	unsigned long code;
 	struct pt_regs regs = {};
@@ -1558,6 +1625,7 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, sqadd);
 	KUNIT_ASSERT_NOT_NULL(test, uqadd);
 	KUNIT_ASSERT_NOT_NULL(test, uqsub);
+	KUNIT_ASSERT_NOT_NULL(test, sqshlu);
 
 	insn = (sqadd->pattern & sqadd->mask) | (INT_RN << 5) |
 		(INT_RM << 16) | INT_RD | BIT(30);
@@ -1597,6 +1665,19 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[INT_RD * 2U] & 0xffULL);
 	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	/* 8-bit SQSHLU #0 saturates a negative source to 0 and sets QC. */
+	insn = (sqshlu->pattern & sqshlu->mask) | (INT_RN << 5) | INT_RD |
+		BIT(30) | (8U << 16);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x80;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[INT_RD * 2U] & 0xffULL);
+	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
 static void orlix_tcti_advsimd_integer_narrow_shift_overlap(struct kunit *test)
@@ -1612,7 +1693,6 @@ static void orlix_tcti_advsimd_integer_narrow_shift_overlap(struct kunit *test)
 	struct pt_regs regs = {};
 	struct orlix_tcti_result result;
 	u64 before_high;
-	u64 overlap_before;
 
 	KUNIT_ASSERT_NOT_NULL(test, xtn);
 	KUNIT_ASSERT_NOT_NULL(test, sshl);
@@ -1655,11 +1735,60 @@ static void orlix_tcti_advsimd_integer_narrow_shift_overlap(struct kunit *test)
 		(INT_RM << 16) | BIT(30);
 	code = orlix_tcti_advsimd_integer_map(test, insn);
 	orlix_tcti_advsimd_integer_seed(&regs, code);
-	overlap_before = current->thread.user_simd[INT_RD * 2U];
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
-	KUNIT_EXPECT_NE(test, overlap_before,
-			current->thread.user_simd[INT_RD * 2U]);
+	current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
+	{
+		u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u64 expected_rd[2];
+		unsigned long expected_fpsr;
+		unsigned long before_fpcr;
+		int ret;
+
+		memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+		before_fpcr = current->thread.user_fpcr;
+		ret = orlix_tcti_advsimd_integer_expected_from_source(add, insn,
+			&before_simd[INT_RD * 2U], &before_simd[INT_RM * 2U],
+			&before_simd[INT_RD * 2U], current->thread.user_fpsr,
+			expected_rd, &expected_fpsr);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+		KUNIT_ASSERT_EQ(test, expected_rd[0],
+				current->thread.user_simd[INT_RD * 2U]);
+		KUNIT_ASSERT_EQ(test, expected_rd[1],
+				current->thread.user_simd[INT_RD * 2U + 1U]);
+		KUNIT_ASSERT_EQ(test, expected_fpsr, current->thread.user_fpsr);
+		KUNIT_ASSERT_EQ(test, before_fpcr, current->thread.user_fpcr);
+	}
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	insn = (add->pattern & add->mask) | INT_RD | (INT_RN << 5) |
+		(INT_RD << 16) | BIT(30);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
+	{
+		u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+		u64 expected_rd[2];
+		unsigned long expected_fpsr;
+		unsigned long before_fpcr;
+		int ret;
+
+		memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+		before_fpcr = current->thread.user_fpcr;
+		ret = orlix_tcti_advsimd_integer_expected_from_source(add, insn,
+			&before_simd[INT_RN * 2U], &before_simd[INT_RD * 2U],
+			&before_simd[INT_RD * 2U], current->thread.user_fpsr,
+			expected_rd, &expected_fpsr);
+		KUNIT_ASSERT_EQ(test, 0, ret);
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_ASSERT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+		KUNIT_ASSERT_EQ(test, expected_rd[0],
+				current->thread.user_simd[INT_RD * 2U]);
+		KUNIT_ASSERT_EQ(test, expected_rd[1],
+				current->thread.user_simd[INT_RD * 2U + 1U]);
+		KUNIT_ASSERT_EQ(test, expected_fpsr, current->thread.user_fpsr);
+		KUNIT_ASSERT_EQ(test, before_fpcr, current->thread.user_fpcr);
+	}
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
 
