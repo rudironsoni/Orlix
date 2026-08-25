@@ -42,6 +42,7 @@
 #define AARCH64_FPSR_IDC BIT(7)
 #define AARCH64_FPSR_QC BIT(27)
 #define AARCH64_FPSR_PRESERVED (AARCH64_FPSR_IOC | AARCH64_FPSR_IDC)
+#define AARCH64_FPCR_RMODE_POSINF BIT(22)
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -1209,11 +1210,15 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 	size_t index;
 
 	current->thread.user_simd_valid = 1;
-	current->thread.user_fpcr = 0;
+	current->thread.user_fpcr = AARCH64_FPCR_RMODE_POSINF;
 	current->thread.user_fpsr = AARCH64_FPSR_PRESERVED | AARCH64_FPSR_QC;
-	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
-		current->thread.user_simd[index] =
-			0x0102030405060708ULL ^ ((u64)index << 32);
+	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
+		u64 value = 0x0102030405060708ULL ^ ((u64)index << 32);
+
+		if (index / 2U == INT_RN)
+			value |= 0x8080808080808080ULL;
+		current->thread.user_simd[index] = value;
+	}
 }
 
 static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
@@ -1258,6 +1263,56 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 		} \
 	} while (0)
 
+static bool orlix_tcti_advsimd_integer_instruction_matches_source(
+	const struct orlix_tcti_test_integer_source *source, u32 instruction)
+{
+	struct orlix_tcti_decoded_instruction decoded;
+
+	if ((instruction & source->mask) != source->pattern)
+		return false;
+	decoded = orlix_tcti_decode_aarch64(instruction);
+	return decoded.source_ordinal == source->ordinal &&
+		orlix_tcti_test_integer_decode_is_family(decoded.decode_class);
+}
+
+static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
+	const struct orlix_tcti_test_integer_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code)
+{
+	struct orlix_tcti_result result;
+	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
+	u64 expected_rd[2];
+	unsigned long expected_fpsr;
+	unsigned long before_fpcr;
+	int ret;
+
+	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_fpcr = current->thread.user_fpcr;
+	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
+		&before_simd[INT_RN * 2U], &before_simd[INT_RM * 2U],
+		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
+		expected_rd, &expected_fpsr);
+	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
+			    source->name, source->mnemonic, instruction);
+	result = orlix_tcti_resume_user(current, regs, current->mm);
+	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
+			    current->thread.user_simd[INT_RD * 2U],
+			    "%s dest lo %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
+			    current->thread.user_simd[INT_RD * 2U + 1U],
+			    "%s dest hi %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+			    "%s fpsr %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	KUNIT_ASSERT_EQ_MSG(test, before_fpcr, current->thread.user_fpcr,
+			    "%s fpcr %s insn %#x", source->name, source->mnemonic,
+			    instruction);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd);
+}
+
 static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	const struct orlix_tcti_test_integer_source *source, u32 instruction,
 	u32 obligation, struct pt_regs *regs, unsigned long code)
@@ -1270,9 +1325,11 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
 	u64 expected_rd[2];
 	unsigned long expected_fpsr;
+	unsigned long before_fpcr;
 	int ret;
 
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_fpcr = current->thread.user_fpcr;
 	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
 		&before_simd[INT_RN * 2U], &before_simd[INT_RM * 2U],
 		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
@@ -1298,6 +1355,8 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 			    "%s dest hi %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
 			    "%s fpsr %s", source->name, source->mnemonic);
+	KUNIT_ASSERT_EQ_MSG(test, before_fpcr, current->thread.user_fpcr,
+			    "%s fpcr %s", source->name, source->mnemonic);
 	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
@@ -1379,9 +1438,11 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 		const struct orlix_tcti_test_integer_source *source =
 			&orlix_tcti_test_sources[index];
 		u32 instruction;
+		u32 q_bit;
 		struct orlix_tcti_decoded_instruction decoded;
 		struct pt_regs regs = {};
 		unsigned long code;
+		bool q_free;
 
 		if (!orlix_tcti_test_is_el0_integer(source))
 			continue;
@@ -1398,6 +1459,33 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 				    source->name, decoded.simd_arithmetic_op,
 				    decoded.simd_scalar, decoded.immediate,
 				    decoded.decode_class, instruction);
+		q_free = (source->mask & BIT(30)) == 0 &&
+			!(source->pattern & BIT(28));
+		for (q_bit = 0; q_bit < 2U; q_bit++) {
+			u32 variant = instruction;
+			unsigned long variant_code;
+
+			if (!q_free && !!q_bit != !!(instruction & BIT(30)))
+				continue;
+			variant &= ~BIT(30);
+			if (q_bit)
+				variant |= BIT(30);
+			if (!orlix_tcti_advsimd_integer_instruction_matches_source(
+				    source, variant))
+				continue;
+			if (!(variant & BIT(28)) &&
+			    ((variant >> 22) & 3U) == 3U &&
+			    !(variant & BIT(30)))
+				continue;
+			variant_code = orlix_tcti_advsimd_integer_map(test,
+								     variant);
+			orlix_tcti_advsimd_integer_seed(&regs, variant_code);
+			current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
+			orlix_tcti_advsimd_integer_compare_run(test, source,
+				variant, &regs, variant_code);
+			KUNIT_EXPECT_EQ(test, 0,
+					vm_munmap(variant_code, PAGE_SIZE));
+		}
 		code = orlix_tcti_advsimd_integer_map(test, instruction);
 		orlix_tcti_advsimd_integer_seed(&regs, code);
 		current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
@@ -1460,6 +1548,8 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 		orlix_tcti_test_integer_name("SQADD_asimdsame_only");
 	const struct orlix_tcti_test_integer_source *uqadd =
 		orlix_tcti_test_integer_name("UQADD_asimdsame_only");
+	const struct orlix_tcti_test_integer_source *uqsub =
+		orlix_tcti_test_integer_name("UQSUB_asimdsame_only");
 	u32 insn;
 	unsigned long code;
 	struct pt_regs regs = {};
@@ -1467,6 +1557,7 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 
 	KUNIT_ASSERT_NOT_NULL(test, sqadd);
 	KUNIT_ASSERT_NOT_NULL(test, uqadd);
+	KUNIT_ASSERT_NOT_NULL(test, uqsub);
 
 	insn = (sqadd->pattern & sqadd->mask) | (INT_RN << 5) |
 		(INT_RM << 16) | INT_RD | BIT(30);
@@ -1491,6 +1582,19 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
 	KUNIT_EXPECT_EQ(test, 0xffULL, current->thread.user_simd[INT_RD * 2U] & 0xffULL);
+	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	insn = (uqsub->pattern & uqsub->mask) | (INT_RN << 5) |
+		(INT_RM << 16) | INT_RD | BIT(30);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x00;
+	current->thread.user_simd[INT_RM * 2U] = 0x01;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0ULL, current->thread.user_simd[INT_RD * 2U] & 0xffULL);
 	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
