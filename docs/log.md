@@ -7,6 +7,10 @@ updated: 2026-08-23
 ---
 # Orlix Knowledge Log
 
+## [2026-08-23] record | Verify ADVSIMD_INTEGER SIMD results and keep reserved encodings unsupported
+
+Recorded that reserved AdvSIMD integer encodings the raw decoder left unsupported, including ADD `Q=0,size=3` (`0x0ee08400`) and scalar `asisdshf` SSHR with `immh == 0000` (`0x5f000400`), stay `DECODE_UNSUPPORTED` and do not promote from a source-manifest mask. Vector `0x0f000400` is legal `MOVI`, not reserved SSHR. Production EL0 proof for all 222 always-on leaves compares destination SIMD and QC against a source-mnemonic architectural result before ingest. Saturating register shifts that exceed the element width set FPSR.QC. `linux_proof_executed` stays 0.
+
 ## [2026-08-23] record | Land the ADVSIMD_FP proof contract
 
 Recorded that the 268 unique `ADVSIMD_FP` leaves have production decode and EL0 classification. The 113 always-on EL0 leaves have production observations for `FP_SIMD` and `PC`. `MEMORY`, `ATOMICITY`, `ORDERING`, and `FLAGS` are not applicable. NaN, infinity, signed-zero, subnormal, FPCR rounding, FPSR IOC, Q=0 upper-half clearing, reserved Q=0 2D, and overlapping source/destination registers are proved. The 155 optional FP16, FHM, BF16, FCMA, FRINTTS, FP8, FAMINMAX, and FSCALE leaves are classified `NON_EL0` and prove EL0 rejection. `HWCAP_FPHP`, `HWCAP_ASIMDHP`, `HWCAP_ASIMDFHM`, `HWCAP_BF16`, FCMA, FRINTTS, FAMINMAX, FP8, and FSCALE are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
