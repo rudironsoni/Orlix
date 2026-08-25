@@ -392,14 +392,17 @@ static u64 orlix_tcti_advsimd_integer_sat_shift(u64 a, s64 sh, u8 bits,
 		u64 shifted;
 
 		if (r >= bits)
-			shifted = is_unsigned || signed_to_unsigned || sa >= 0 ?
-				0 : mask;
-		else if (is_unsigned || signed_to_unsigned)
-			shifted = a >> r;
-		else
-			shifted = ((u64)(sa >> r)) & mask;
-		if (rounding && r && r <= bits && (a & BIT_ULL(r - 1)))
-			shifted++;
+			shifted = rounding ? 0 :
+				(is_unsigned || signed_to_unsigned ||
+				 sa >= 0 ? 0 : mask);
+		else {
+			if (is_unsigned || signed_to_unsigned)
+				shifted = a >> r;
+			else
+				shifted = ((u64)(sa >> r)) & mask;
+			if (rounding && r && (a & BIT_ULL(r - 1)))
+				shifted++;
+		}
 		return shifted & mask;
 	}
 }
@@ -1198,13 +1201,16 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 				u8 r = (u8)(-sh);
 
 				if (r >= bits)
-					out = is_unsigned || sa >= 0 ? 0 : mask;
-				else
+					out = rounding ? 0 :
+						(is_unsigned || sa >= 0 ? 0 :
+						 mask);
+				else {
 					out = (is_unsigned ? (a >> r) :
 					       ((u64)(sa >> r))) & mask;
-				if (rounding && r && r <= bits &&
-				    (a & BIT_ULL(r - 1)))
-					out = (out + 1) & mask;
+					if (rounding && r &&
+					    (a & BIT_ULL(r - 1)))
+						out = (out + 1) & mask;
+				}
 			}
 		} else if (!strcmp(m, "SQDMULH") || !strcmp(m, "SQRDMULH")) {
 			s64 minv = -(s64)BIT_ULL(bits - 1);
@@ -1248,8 +1254,8 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 			value |= 0x8080808000000000ULL;
 		if (index == INT_RN * 2U)
 			value = (value & ~0xffULL) | 0x81ULL;
-		if (index == INT_RM * 2U)
-			value = (value & ~0xffULL) | 0xffULL;
+		if (index / 2U == INT_RM)
+			value = 0x00000000000080ffULL;
 		current->thread.user_simd[index] = value;
 	}
 }
@@ -1788,6 +1794,8 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 		current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
 		orlix_tcti_advsimd_integer_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD, &regs, code);
+		if (test->status == KUNIT_FAILURE)
+			return;
 		orlix_tcti_advsimd_integer_seed(&regs, code);
 		current->thread.user_fpsr = AARCH64_FPSR_PRESERVED |
 			AARCH64_FPSR_QC;
@@ -1853,6 +1861,8 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 		orlix_tcti_test_integer_name("SQABS_asimdmisc_R");
 	const struct orlix_tcti_test_integer_source *sqneg =
 		orlix_tcti_test_integer_name("SQNEG_asimdmisc_R");
+	const struct orlix_tcti_test_integer_source *sqsub =
+		orlix_tcti_test_integer_name("SQSUB_asimdsame_only");
 	u32 insn;
 	unsigned long code;
 	struct pt_regs regs = {};
@@ -1864,6 +1874,7 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, sqshlu);
 	KUNIT_ASSERT_NOT_NULL(test, sqabs);
 	KUNIT_ASSERT_NOT_NULL(test, sqneg);
+	KUNIT_ASSERT_NOT_NULL(test, sqsub);
 
 	insn = (sqadd->pattern & sqadd->mask) | (INT_RN << 5) |
 		(INT_RM << 16) | INT_RD | BIT(30);
@@ -1939,6 +1950,19 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 
+	insn = (sqsub->pattern & sqsub->mask) | (INT_RN << 5) |
+		(INT_RM << 16) | INT_RD | BIT(30);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x80;
+	current->thread.user_simd[INT_RM * 2U] = 0x01;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0x80ULL, current->thread.user_simd[INT_RD * 2U] & 0xffULL);
+	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
 	{
 		static const char *const sqd_names[] = {
 			"SQDMULH_asimdsame_only",
@@ -1970,8 +1994,14 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 				0x8000800080008000ULL;
 			current->thread.user_simd[INT_RM * 2U + 1U] =
 				0x8000800080008000ULL;
-			current->thread.user_simd[INT_RD * 2U] = 0;
-			current->thread.user_simd[INT_RD * 2U + 1U] = 0;
+			if (strstr(source->name, "SQDMLAL") ||
+			    strstr(source->name, "SQDMLSL")) {
+				current->thread.user_simd[INT_RD * 2U] = ~0ULL;
+				current->thread.user_simd[INT_RD * 2U + 1U] = ~0ULL;
+			} else {
+				current->thread.user_simd[INT_RD * 2U] = 0;
+				current->thread.user_simd[INT_RD * 2U + 1U] = 0;
+			}
 			current->thread.user_fpsr = 0;
 			memcpy(before_simd, current->thread.user_simd,
 			       sizeof(before_simd));
