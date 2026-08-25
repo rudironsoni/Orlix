@@ -38,7 +38,10 @@
 #define INT_RD 0U
 #define INT_RN 1U
 #define INT_RM 2U
+#define AARCH64_FPSR_IOC BIT(0)
+#define AARCH64_FPSR_IDC BIT(7)
 #define AARCH64_FPSR_QC BIT(27)
+#define AARCH64_FPSR_PRESERVED (AARCH64_FPSR_IOC | AARCH64_FPSR_IDC)
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -780,13 +783,18 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 						out = accv + (va >= vb ? va - vb : vb - va);
 					else if (!strcmp(m, "SQDMULL"))
 						out = orlix_tcti_advsimd_integer_sat_signed(
-							sa * sb * 2, dst_bytes * 8, &qc);
+							(__int128)sa * (__int128)sb * 2,
+							dst_bytes * 8, &qc);
 					else if (!strcmp(m, "SQDMLAL"))
 						out = orlix_tcti_advsimd_integer_sat_signed(
-							sacc + sa * sb * 2, dst_bytes * 8, &qc);
+							(__int128)sacc +
+							(__int128)sa * (__int128)sb * 2,
+							dst_bytes * 8, &qc);
 					else if (!strcmp(m, "SQDMLSL"))
 						out = orlix_tcti_advsimd_integer_sat_signed(
-							sacc - sa * sb * 2, dst_bytes * 8, &qc);
+							(__int128)sacc -
+							(__int128)sa * (__int128)sb * 2,
+							dst_bytes * 8, &qc);
 					else if (!strcmp(m, "SSHLL") || !strcmp(m, "SHLL"))
 						out = (u64)sa << (strcmp(m, "SHLL") ? shl : src_bytes * 8);
 					else if (!strcmp(m, "USHLL"))
@@ -989,9 +997,9 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 		else if (!strcmp(m, "UMIN"))
 			out = a <= b ? a : b;
 		else if (!strcmp(m, "ABS"))
-			out = sa < 0 ? (-sa) & mask : a;
+			out = sa < 0 ? (0U - a) & mask : a;
 		else if (!strcmp(m, "NEG"))
-			out = (-sa) & mask;
+			out = (0U - a) & mask;
 		else if (!strcmp(m, "SQABS"))
 			out = orlix_tcti_advsimd_integer_sat_signed(
 				sa < 0 ? -(__int128)sa : sa, bits, &qc);
@@ -1015,11 +1023,17 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 			out = orlix_tcti_advsimd_integer_sat_signed(
 				(__int128)sd + (__int128)a, bits, &qc);
 		} else if (!strcmp(m, "USQADD")) {
-			u64 sum = d + (u64)sa;
+			__int128 sum = (__int128)d + (__int128)sa;
 
-			out = orlix_tcti_advsimd_integer_sat_unsigned(
-				sum, bits, &qc, (sa > 0 && sum < d) ||
-				(sa < 0 && sum > d));
+			if (sum > (__int128)mask) {
+				qc = true;
+				out = mask;
+			} else if (sum < 0) {
+				qc = true;
+				out = 0;
+			} else {
+				out = (u64)sum;
+			}
 		} else if (!strcmp(m, "SHADD"))
 			out = ((sa + sb) >> 1) & mask;
 		else if (!strcmp(m, "UHADD"))
@@ -1129,7 +1143,8 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 		}
 		else if (!strcmp(m, "SRI")) {
 			u64 insert = shr >= bits ? 0 : (a >> shr);
-			u64 keep = shr >= bits ? 0 : (mask << (bits - shr));
+			u64 keep = shr >= bits ? mask :
+				((mask << (bits - shr)) & mask);
 
 			out = (d & keep) | insert;
 		} else if (!strcmp(m, "SQSHL") || !strcmp(m, "UQSHL") ||
@@ -1195,7 +1210,7 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 
 	current->thread.user_simd_valid = 1;
 	current->thread.user_fpcr = 0;
-	current->thread.user_fpsr = AARCH64_FPSR_QC;
+	current->thread.user_fpsr = AARCH64_FPSR_PRESERVED | AARCH64_FPSR_QC;
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
 			0x0102030405060708ULL ^ ((u64)index << 32);
@@ -1215,34 +1230,33 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 	orlix_tcti_advsimd_integer_seed_simd();
 }
 
-static void orlix_tcti_advsimd_integer_assert_success(struct kunit *test,
-	const struct orlix_tcti_test_integer_source *source,
-	const struct orlix_tcti_result *result, const struct pt_regs *regs,
-	unsigned long code)
-{
-	KUNIT_ASSERT_EQ_MSG(test, ORLIX_TCTI_EXIT_SYSCALL, result->reason,
-			    "%s ordinal %u reason", source->name, source->ordinal);
-	KUNIT_ASSERT_EQ(test, 0L, result->status);
-	KUNIT_ASSERT_EQ(test, INT_SVC, result->instruction);
-	KUNIT_ASSERT_EQ_MSG(test, code + sizeof(u32), regs->pc,
-			    "%s ordinal %u pc", source->name, source->ordinal);
-}
+#define ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, result, regs, code) \
+	do { \
+		KUNIT_ASSERT_EQ_MSG((test), ORLIX_TCTI_EXIT_SYSCALL, \
+				    (result)->reason, "%s ordinal %u reason", \
+				    (source)->name, (source)->ordinal); \
+		KUNIT_ASSERT_EQ((test), 0L, (result)->status); \
+		KUNIT_ASSERT_EQ((test), INT_SVC, (result)->instruction); \
+		KUNIT_ASSERT_EQ_MSG((test), (code) + sizeof(u32), (regs)->pc, \
+				    "%s ordinal %u pc", (source)->name, \
+				    (source)->ordinal); \
+	} while (0)
 
-static void orlix_tcti_advsimd_integer_assert_preserved_simd(struct kunit *test,
-	const struct orlix_tcti_test_integer_source *source,
-	const u64 *before_simd)
-{
-	size_t index;
-
-	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
-		if (index / 2U == INT_RD)
-			continue;
-		KUNIT_ASSERT_EQ_MSG(test, before_simd[index],
-				    current->thread.user_simd[index],
-				    "%s preserved simd[%zu] %s", source->name, index,
-				    source->mnemonic);
-	}
-}
+#define ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd) \
+	do { \
+		size_t orlix_tcti_adv_int_index; \
+		for (orlix_tcti_adv_int_index = 0; \
+		     orlix_tcti_adv_int_index < ARRAY_SIZE(current->thread.user_simd); \
+		     orlix_tcti_adv_int_index++) { \
+			if (orlix_tcti_adv_int_index / 2U == INT_RD) \
+				continue; \
+			KUNIT_ASSERT_EQ_MSG((test), \
+				(before_simd)[orlix_tcti_adv_int_index], \
+				current->thread.user_simd[orlix_tcti_adv_int_index], \
+				"%s preserved simd[%zu] %s", (source)->name, \
+				orlix_tcti_adv_int_index, (source)->mnemonic); \
+		} \
+	} while (0)
 
 static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	const struct orlix_tcti_test_integer_source *source, u32 instruction,
@@ -1275,18 +1289,16 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 					      &capture);
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
-	orlix_tcti_advsimd_integer_assert_success(test, source, &result, regs,
-						  code);
+	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
 			    current->thread.user_simd[INT_RD * 2U],
 			    "%s dest lo %s", source->name, source->mnemonic);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[1],
 			    current->thread.user_simd[INT_RD * 2U + 1U],
 			    "%s dest hi %s", source->name, source->mnemonic);
-	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr & AARCH64_FPSR_QC,
-			    current->thread.user_fpsr & AARCH64_FPSR_QC,
-			    "%s qc %s", source->name, source->mnemonic);
-	orlix_tcti_advsimd_integer_assert_preserved_simd(test, source, before_simd);
+	KUNIT_ASSERT_EQ_MSG(test, expected_fpsr, current->thread.user_fpsr,
+			    "%s fpsr %s", source->name, source->mnemonic);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_SIMD(test, source, before_simd);
 	ret = orlix_tcti_native_capture_take_wire(capture, &wire);
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s wire %u", source->name, obligation);
 	if (!ret) {
@@ -1388,9 +1400,12 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 				    decoded.decode_class, instruction);
 		code = orlix_tcti_advsimd_integer_map(test, instruction);
 		orlix_tcti_advsimd_integer_seed(&regs, code);
+		current->thread.user_fpsr = AARCH64_FPSR_PRESERVED;
 		orlix_tcti_advsimd_integer_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD, &regs, code);
 		orlix_tcti_advsimd_integer_seed(&regs, code);
+		current->thread.user_fpsr = AARCH64_FPSR_PRESERVED |
+			AARCH64_FPSR_QC;
 		orlix_tcti_advsimd_integer_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code);
 		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));

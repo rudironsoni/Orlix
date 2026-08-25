@@ -9,7 +9,7 @@ updated: 2026-08-25
 
 ## [2026-08-25] record | Prove ADVSIMD_INTEGER lane-width saturation and sticky QC
 
-[CORRECTION] Unsigned saturating add overflow is compared against the element mask, not 64-bit wrap. Signed saturating add and subtract use a 128-bit sum so a 64-bit lane cannot wrap before saturate. Production EL0 seed sets FPSR.QC so a translation that clears sticky QC fails the result compare. `linux_proof_executed` stays 0.
+[CORRECTION] Unsigned saturating add overflow is compared against the element mask, not 64-bit wrap. Signed saturating add and subtract use a 128-bit sum so a 64-bit lane cannot wrap before saturate. USQADD saturates against the unsigned lane bounds. Doubling multiplies use a 128-bit product. SRI with shift equal to the element width keeps the destination. ABS and NEG negate in unsigned arithmetic. Credited captures run from both clear and set QC, seed preserved FPSR exception bits, and compare the complete FPSR. Resume and preserved-SIMD assertions abort the capture function before ingest. `linux_proof_executed` stays 0.
 
 ## [2026-08-23] record | Verify ADVSIMD_INTEGER SIMD results and keep reserved encodings unsupported
 
