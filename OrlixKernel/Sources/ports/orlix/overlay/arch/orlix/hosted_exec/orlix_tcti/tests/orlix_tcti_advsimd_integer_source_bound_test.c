@@ -260,20 +260,29 @@ static void orlix_tcti_advsimd_integer_set_lane(u64 words[2], u8 lane,
 	words[byte / 8U] |= (value & mask) << shift;
 }
 
-static u64 orlix_tcti_advsimd_integer_sat_signed(s64 value, u8 bits, bool *qc)
+static u64 orlix_tcti_advsimd_integer_sat_signed(__int128 value, u8 bits,
+						 bool *qc)
 {
-	s64 max = (s64)BIT_ULL(bits - 1) - 1;
-	s64 min = -(s64)BIT_ULL(bits - 1);
+	__int128 max;
+	__int128 min;
+	u64 lane_mask = orlix_tcti_advsimd_integer_lane_mask(bits / 8);
 
+	if (bits == 64) {
+		max = S64_MAX;
+		min = S64_MIN;
+	} else {
+		max = ((__int128)1 << (bits - 1)) - 1;
+		min = -((__int128)1 << (bits - 1));
+	}
 	if (value > max) {
 		*qc = true;
-		return (u64)max & orlix_tcti_advsimd_integer_lane_mask(bits / 8);
+		return (u64)max & lane_mask;
 	}
 	if (value < min) {
 		*qc = true;
-		return (u64)min & orlix_tcti_advsimd_integer_lane_mask(bits / 8);
+		return (u64)min & lane_mask;
 	}
-	return (u64)value & orlix_tcti_advsimd_integer_lane_mask(bits / 8);
+	return (u64)value & lane_mask;
 }
 
 static u64 orlix_tcti_advsimd_integer_sat_unsigned(u64 value, u8 bits, bool *qc,
@@ -985,22 +994,26 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 			out = (-sa) & mask;
 		else if (!strcmp(m, "SQABS"))
 			out = orlix_tcti_advsimd_integer_sat_signed(
-				sa < 0 ? -sa : sa, bits, &qc);
+				sa < 0 ? -(__int128)sa : sa, bits, &qc);
 		else if (!strcmp(m, "SQNEG"))
-			out = orlix_tcti_advsimd_integer_sat_signed(-sa, bits, &qc);
+			out = orlix_tcti_advsimd_integer_sat_signed(
+				-(__int128)sa, bits, &qc);
 		else if (!strcmp(m, "SQADD"))
-			out = orlix_tcti_advsimd_integer_sat_signed(sa + sb, bits, &qc);
+			out = orlix_tcti_advsimd_integer_sat_signed(
+				(__int128)sa + (__int128)sb, bits, &qc);
 		else if (!strcmp(m, "SQSUB"))
-			out = orlix_tcti_advsimd_integer_sat_signed(sa - sb, bits, &qc);
+			out = orlix_tcti_advsimd_integer_sat_signed(
+				(__int128)sa - (__int128)sb, bits, &qc);
 		else if (!strcmp(m, "UQADD"))
 			out = orlix_tcti_advsimd_integer_sat_unsigned(
-				a + b, bits, &qc, a + b < a);
+				a + b, bits, &qc,
+				(unsigned __int128)a + (unsigned __int128)b >
+					mask);
 		else if (!strcmp(m, "UQSUB"))
 			out = a >= b ? a - b : (qc = true, 0);
 		else if (!strcmp(m, "SUQADD")) {
-			s64 sum = sd + (s64)a;
-
-			out = orlix_tcti_advsimd_integer_sat_signed(sum, bits, &qc);
+			out = orlix_tcti_advsimd_integer_sat_signed(
+				(__int128)sd + (__int128)a, bits, &qc);
 		} else if (!strcmp(m, "USQADD")) {
 			u64 sum = d + (u64)sa;
 
@@ -1182,7 +1195,7 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 
 	current->thread.user_simd_valid = 1;
 	current->thread.user_fpcr = 0;
-	current->thread.user_fpsr = 0;
+	current->thread.user_fpsr = AARCH64_FPSR_QC;
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
 			0x0102030405060708ULL ^ ((u64)index << 32);

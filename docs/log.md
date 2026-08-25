@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-23
+updated: 2026-08-25
 ---
 # Orlix Knowledge Log
+
+## [2026-08-25] record | Prove ADVSIMD_INTEGER lane-width saturation and sticky QC
+
+[CORRECTION] Unsigned saturating add overflow is compared against the element mask, not 64-bit wrap. Signed saturating add and subtract use a 128-bit sum so a 64-bit lane cannot wrap before saturate. Production EL0 seed sets FPSR.QC so a translation that clears sticky QC fails the result compare. `linux_proof_executed` stays 0.
 
 ## [2026-08-23] record | Verify ADVSIMD_INTEGER SIMD results and keep reserved encodings unsupported
 
