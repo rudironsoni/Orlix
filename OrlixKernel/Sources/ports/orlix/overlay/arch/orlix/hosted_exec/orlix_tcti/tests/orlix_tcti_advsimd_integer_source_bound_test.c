@@ -1296,6 +1296,34 @@ static void orlix_tcti_advsimd_integer_seed(struct pt_regs *regs,
 		} \
 	} while (0)
 
+#define ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_GPRS(test, source, before, after) \
+	do { \
+		size_t orlix_tcti_adv_int_reg; \
+		for (orlix_tcti_adv_int_reg = 0; \
+		     orlix_tcti_adv_int_reg < ARRAY_SIZE((before)->regs); \
+		     orlix_tcti_adv_int_reg++) { \
+			KUNIT_ASSERT_EQ_MSG((test), \
+				(before)->regs[orlix_tcti_adv_int_reg], \
+				(after)->regs[orlix_tcti_adv_int_reg], \
+				"%s preserved x%zu %s", (source)->name, \
+				orlix_tcti_adv_int_reg, (source)->mnemonic); \
+		} \
+		KUNIT_ASSERT_EQ_MSG((test), (before)->pstate, (after)->pstate, \
+			"%s preserved pstate %s", (source)->name, \
+			(source)->mnemonic); \
+	} while (0)
+
+static u8 orlix_tcti_advsimd_integer_rm_index(
+	const struct orlix_tcti_test_integer_source *source, u32 instruction)
+{
+	u8 size = (instruction >> 22) & 3U;
+
+	if ((strstr(source->name, "asimdelem") ||
+	     strstr(source->name, "asisdelem")) && size >= 2U)
+		return (instruction >> 16) & 0x1fU;
+	return INT_RM;
+}
+
 static bool orlix_tcti_advsimd_integer_variant_is_executable(
 	const struct orlix_tcti_test_integer_source *source, u32 instruction)
 {
@@ -1332,15 +1360,13 @@ static bool orlix_tcti_advsimd_integer_variant_is_executable(
 		return false;
 	if (strstr(name, "asimdall") && size >= 2U && !q)
 		return false;
-	if (size == 3U) {
-		bool same = strstr(name, "same") != NULL;
-		bool pair = strstr(name, "pair") != NULL;
-
-		if (!same && !pair && strcmp(m, "PMULL"))
-			return false;
-		if (!scalar && !q)
-			return false;
-	}
+	/*
+	 * Vector size=3 Q=0 is reserved 1D. Q=1 2D is legal for many
+	 * asimdmisc leaves (ABS/NEG/SQABS/SQNEG). Dedicated decode
+	 * rejects SHADD and other three-same 64-bit reserved forms.
+	 */
+	if (size == 3U && !scalar && !q)
+		return false;
 	if ((strstr(name, "asimdelem") || strstr(name, "asisdelem")) &&
 	    size == 3U && (instruction & BIT(21)))
 		return false;
@@ -1399,22 +1425,27 @@ static void orlix_tcti_advsimd_integer_compare_run(struct kunit *test,
 	struct pt_regs *regs, unsigned long code)
 {
 	struct orlix_tcti_result result;
+	struct pt_regs before_regs;
 	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
 	u64 expected_rd[2];
 	unsigned long expected_fpsr;
 	unsigned long before_fpcr;
+	u8 rm;
 	int ret;
 
+	rm = orlix_tcti_advsimd_integer_rm_index(source, instruction);
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_regs = *regs;
 	before_fpcr = current->thread.user_fpcr;
 	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
-		&before_simd[INT_RN * 2U], &before_simd[INT_RM * 2U],
+		&before_simd[INT_RN * 2U], &before_simd[rm * 2U],
 		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
 		expected_rd, &expected_fpsr);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
 			    source->name, source->mnemonic, instruction);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
 	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_GPRS(test, source, &before_regs, regs);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
 			    current->thread.user_simd[INT_RD * 2U],
 			    "%s dest lo %s insn %#x", source->name, source->mnemonic,
@@ -1441,16 +1472,20 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	struct orlix_tcti_native_wire_record wire = {};
 	struct orlix_tcti_target_proof_ingestion_ledger *ledger;
 	struct orlix_tcti_result result;
+	struct pt_regs before_regs;
 	u64 before_simd[ARRAY_SIZE(current->thread.user_simd)];
 	u64 expected_rd[2];
 	unsigned long expected_fpsr;
 	unsigned long before_fpcr;
+	u8 rm;
 	int ret;
 
+	rm = orlix_tcti_advsimd_integer_rm_index(source, instruction);
 	memcpy(before_simd, current->thread.user_simd, sizeof(before_simd));
+	before_regs = *regs;
 	before_fpcr = current->thread.user_fpcr;
 	ret = orlix_tcti_advsimd_integer_expected_from_source(source, instruction,
-		&before_simd[INT_RN * 2U], &before_simd[INT_RM * 2U],
+		&before_simd[INT_RN * 2U], &before_simd[rm * 2U],
 		&before_simd[INT_RD * 2U], current->thread.user_fpsr,
 		expected_rd, &expected_fpsr);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s expected-from-source %s insn %#x",
@@ -1466,6 +1501,7 @@ static void orlix_tcti_advsimd_integer_capture_run(struct kunit *test,
 	KUNIT_EXPECT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	result = orlix_tcti_resume_user(current, regs, current->mm);
 	ORLIX_TCTI_ADV_INT_ASSERT_SUCCESS(test, source, &result, regs, code);
+	ORLIX_TCTI_ADV_INT_ASSERT_PRESERVED_GPRS(test, source, &before_regs, regs);
 	KUNIT_ASSERT_EQ_MSG(test, expected_rd[0],
 			    current->thread.user_simd[INT_RD * 2U],
 			    "%s dest lo %s", source->name, source->mnemonic);
@@ -1615,7 +1651,7 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 					u8 immh;
 					u8 immb;
 
-					for (immh = 1U; immh <= 8U; immh <<= 1) {
+					for (immh = 1U; immh < 16U; immh++) {
 						for (immb = 0; immb < 8U; immb += 7U) {
 							u32 extra = variant;
 
@@ -1638,8 +1674,6 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 
 								if (size == 3U && l)
 									continue;
-								if (size == 2U && mbit)
-									continue;
 								extra &= ~(BIT(11) | BIT(21) |
 									   BIT(20));
 								if (h)
@@ -1657,17 +1691,13 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 					static const u8 imm8s[] = { 0x00U, 0x5AU, 0xffU };
 					size_t imm8_index;
 					u8 cmode;
-					u8 cmode_lo = 0;
-					u8 cmode_hi = 0;
-					u8 cmode_step = 2;
+					u8 cmode_mask = (source->mask >> 12) & 0xfU;
+					u8 cmode_pattern = (source->pattern >> 12) & 0xfU;
 
-					if ((source->mask & (0xfU << 12)) == 0)
-						cmode_hi = 12;
-					else
-						cmode_lo = cmode_hi =
-							(instruction >> 12) & 0xfU;
-					for (cmode = cmode_lo; cmode <= cmode_hi;
-					     cmode += cmode_step) {
+					for (cmode = 0; cmode < 16U; cmode++) {
+						if ((cmode & cmode_mask) !=
+						    (cmode_pattern & cmode_mask))
+							continue;
 						for (imm8_index = 0;
 						     imm8_index < ARRAY_SIZE(imm8s);
 						     imm8_index++) {
