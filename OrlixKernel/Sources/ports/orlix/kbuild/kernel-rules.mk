@@ -6,7 +6,7 @@ empty :=
 space := $(empty) $(empty)
 comma := ,
 
-LINUX_VERSION ?= 6.12
+LINUX_VERSION ?= 6.12.105
 ORLIX_PORT_ARCH ?= orlix
 LINUX_UAPI_ARCH ?= arm64
 LINUX_TAG ?= v$(LINUX_VERSION)
@@ -2384,11 +2384,11 @@ __verify-xcodegen-boundary:
 	@set -euo pipefail; \
 	project="$(ORLIX_XCODE_PROJECT)"; \
 	[ -d "$$project" ] || { echo "missing generated Xcode project: $$project" >&2; exit 1; }; \
-	if grep -R 'Build/OrlixKernel/upstream/linux-6.12.git' "$$project"; then \
+	if grep -R 'Build/OrlixKernel/upstream/linux-' "$$project"; then \
 		echo "generated Xcode project references upstream Linux source" >&2; \
 		exit 1; \
 	fi; \
-	if grep -R 'Build/OrlixKernel/src/linux-6.12-port' "$$project"; then \
+	if grep -R 'Build/OrlixKernel/src/linux-' "$$project"; then \
 		echo "generated Xcode project references disposable Linux port source" >&2; \
 		exit 1; \
 	fi; \
