@@ -42,7 +42,8 @@ static bool __init orlix_setup_devtree(const struct boot_params *params)
 #if defined(CONFIG_OF_EARLY_FLATTREE)
 	if (!params || !params->dtb_base || !params->dtb_size)
 		return false;
-	if (!early_init_dt_scan((void *)params->dtb_base)) {
+	if (!early_init_dt_scan((void *)params->dtb_base,
+				__pa(params->dtb_base))) {
 		pr_err("Orlix boot handoff supplied an invalid device tree\n");
 		return false;
 	}

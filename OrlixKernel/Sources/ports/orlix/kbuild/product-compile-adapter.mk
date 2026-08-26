@@ -37,6 +37,7 @@ ORLIX_PRODUCT_ALLOWED_MACHO_SECTIONS := \
 	__DATA,__exitcall \
 	__DATA,__param \
 	__DATA,__data_once \
+	__DATA,__do_once \
 	__DATA,__ro_after_init \
 	__DATA,__page_data \
 	__DATA,__page_bss \
@@ -213,17 +214,17 @@ require_text "$$linux_root/include/linux/cache.h" '__section(".data..ro_after_in
 	require_text "$$linux_root/include/linux/init_task.h" '__section(".data..init_thread_info")'; \
 	require_text "$$linux_root/include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")'; \
 	require_text "$$linux_root/include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")'; \
-	require_text "$$linux_root/include/linux/mmdebug.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/linux/mmdebug.h" '__section(".data..once")'; \
 	require_text "$$linux_root/include/linux/lsm_hooks.h" '__used __section(".lsm_info.init")'; \
 	require_text "$$linux_root/include/linux/lsm_hooks.h" '__used __section(".early_lsm_info.init")'; \
 	require_text "$$linux_root/include/linux/module.h" '__section("__modver")'; \
-	require_text "$$linux_root/include/linux/once.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/linux/once.h" '__section(".data..do_once")'; \
 	require_text "$$linux_root/include/linux/of.h" '__used __section("__" #table "_of_table")'; \
 	require_text "$$linux_root/include/linux/percpu-defs.h" 'PER_CPU_BASE_SECTION'; \
 	require_text "$$linux_root/include/linux/sched/debug.h" '__section(".sched.text")'; \
 	require_text "$$linux_root/include/linux/sched/debug.h" 'extern char __sched_text_start[], __sched_text_end[];'; \
 	require_text "$$linux_root/include/linux/syscalls.h" '__attribute__((alias(__stringify(__se_sys##name))))'; \
-	require_text "$$linux_root/include/net/net_debug.h" '__section(".data.once")'; \
+	require_text "$$linux_root/include/net/net_debug.h" '__section(".data..once")'; \
 	require_text "$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm/bitsperlong.h" '#define __BITS_PER_LONG 64'; \
 	require_text "$$linux_root/arch/$(ORLIX_PORT_ARCH)/include/uapi/asm/bitsperlong.h" '#include <asm-generic/bitsperlong.h>'; \
 	require_text "$$linux_root/include/asm-generic/percpu.h" '#ifndef PER_CPU_BASE_SECTION'; \
@@ -261,7 +262,7 @@ require_text "$$linux_root/include/asm-generic/vmlinux.lds.h" '*(.export_symbol)
 	require_text "$$linux_root/init/Makefile" 'obj-$$(CONFIG_BLK_DEV_INITRD)   += initramfs.o'; \
 	require_text "$$linux_root/init/Makefile" 'mounts-$$(CONFIG_BLK_DEV_INITRD)	+= do_mounts_initrd.o'; \
 	require_text "$$linux_root/kernel/sched/sched.h" '__section("__" #name "_sched_class")'; \
-	require_text "$$linux_root/mm/internal.h" '__section(".data.once")'; \
+	require_text "$$linux_root/mm/internal.h" '__section(".data..once")'; \
 	require_text "$$linux_root/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");'; \
 	require_text "$$linux_root/drivers/of/Makefile" 'empty_root.dtb.o'; \
 	require_text "$$linux_root/drivers/tty/vt/Makefile" 'obj-$$(CONFIG_VT)'; \
@@ -309,7 +310,7 @@ for pattern in \
 	'__sched_class_highest = .;' '*(__stop_sched_class)' '*(__dl_sched_class)' '*(__rt_sched_class)' '*(__fair_sched_class)' '*(__ext_sched_class)' '*(__idle_sched_class)' '__sched_class_lowest = .;' \
 	'*(.noinstr.text)' '*(.cpuidle.text)' \
 	'__irqentry_text_start = .;' '*(.irqentry.text)' '__softirqentry_text_start = .;' '*(.softirqentry.text)' \
-	'__initcall_start = .;' '__initcall_end = .;' '__param' '.data.once' '.data..ro_after_init' \
+	'__initcall_start = .;' '__initcall_end = .;' '__param' '.data..once' '.data..do_once' '.data..ro_after_init' \
 	'.data..init_thread_info' '.sched.text' '__sched_text_start = .;' '__sched_text_end = .;' '__reservedmem_of_table = .;' 'KEEP(*(__reservedmem_of_table_end))' \
 	'/DISCARD/ : {' '*(.discard)' '*(.discard.*)' '*(.export_symbol)' '*(.modinfo)'; do \
 	require_text "$$lds" "$$pattern"; \
@@ -397,20 +398,20 @@ replace_once "$$adapter_include/linux/elfnote.h" '__attribute__((section(".note.
 replace_once "$$adapter_include/linux/init_task.h" '__section(".data..init_thread_info")' '__section("__DATA,__init_tinfo")'; \
 replace_once "$$adapter_include/linux/interrupt.h" '# define __irq_entry	 __section(".irqentry.text")' '# define __irq_entry	 __section("__TEXT,__irqentry_text")'; \
 replace_once "$$adapter_include/linux/interrupt.h" '#define __softirq_entry  __section(".softirqentry.text")' '#define __softirq_entry  __section("__TEXT,__softirq_text")'; \
-replace_all "$$adapter_include/linux/mmdebug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_all "$$adapter_include/linux/mmdebug.h" '__section(".data..once")' '__section("__DATA,__data_once")'; \
 replace_once "$$adapter_include/linux/lsm_hooks.h" '__used __section(".lsm_info.init")' '__used __section("__DATA,__lsm_info")'; \
 replace_once "$$adapter_include/linux/lsm_hooks.h" '__used __section(".early_lsm_info.init")' '__used __section("__DATA,__early_lsm_info")'; \
 replace_once "$$adapter_include/linux/module.h" '__section("__modver")' '__section("__DATA,__modver")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section(".modinfo")' '__section("__DATA,__modinfo")'; \
 replace_once "$$adapter_include/linux/moduleparam.h" '__section("__param")' '__section("__DATA,__param")'; \
-replace_all "$$adapter_include/linux/once.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_all "$$adapter_include/linux/once.h" '__section(".data..do_once")' '__section("__DATA,__do_once")'; \
 perl -0pi -e 'my $$inserted = s/\n#if defined\(CONFIG_OF\) && !defined\(MODULE\)\n/\n#define __orlix_product_of_table_section_reservedmem "__DATA,__rmem_tbl"\n#define __orlix_product_of_table_section(table) __orlix_product_of_table_section_##table\n\n#if defined(CONFIG_OF) \&\& !defined(MODULE)\n/; die "failed to insert Orlix OF section table map\n" unless $$inserted == 1; my $$section = s/__used __section\("__" #table "_of_table"\)/__used __section(__orlix_product_of_table_section(table))/; die "failed to replace Linux OF declaration section for Mach-O\n" unless $$section == 1;' "$$adapter_include/linux/of.h"; \
-replace_once "$$adapter_include/linux/once_lite.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_once "$$adapter_include/linux/once_lite.h" '__section(".data..once")' '__section("__DATA,__data_once")'; \
 replace_once "$$adapter_include/kunit/test.h" '__section(".kunit_test_suites")' '__section("__DATA,__kunit_suites")'; \
 replace_once "$$adapter_include/kunit/test.h" '__section(".kunit_init_test_suites")' '__section("__DATA,__kunit_inits")'; \
 replace_once "$$adapter_include/linux/percpu-defs.h" '__section(".discard")' '__section("__DATA,__discard")'; \
 replace_once "$$adapter_include/linux/sched/debug.h" '__section(".sched.text")' '__section("__TEXT,__sched_text")'; \
-replace_all "$$adapter_include/net/net_debug.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_all "$$adapter_include/net/net_debug.h" '__section(".data..once")' '__section("__DATA,__data_once")'; \
 perl -0pi -e 'my $$cast = s/#define __SC_ARGS\(t, a\)\ta\n/#define __SC_ARGS(t, a)\ta\n#define __SC_LONG_CAST(t, a) (__typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)))(a)\n/; die "failed to insert Orlix syscall cast helper\n" unless $$cast == 1; my $$alias = s/asmlinkage long sys##name\(__MAP\(x,__SC_DECL,__VA_ARGS__\)\)\s*\\\n\t\t__attribute__\(\(alias\(__stringify\(__se_sys##name\)\)\)\);\s*\\/asmlinkage long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));\t\\\n\tasmlinkage long sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));\t\\\n\tasmlinkage long sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))\t\\\n\t{\t\t\t\t\t\t\t\t\\\n\t\treturn __se_sys##name(__MAP(x,__SC_LONG_CAST,__VA_ARGS__));\\\n\t}\t\t\t\t\t\t\t\t\\/; die "failed to replace Linux syscall alias for Mach-O\n" unless $$alias == 1;' "$$adapter_include/linux/syscalls.h"; \
 perl -0pi -e 's/#define PER_CPU_SHARED_ALIGNED_SECTION "\.\.shared_aligned"/#define PER_CPU_SHARED_ALIGNED_SECTION ""/g; s/#define PER_CPU_ALIGNED_SECTION "\.\.shared_aligned"/#define PER_CPU_ALIGNED_SECTION ""/g;' "$$adapter_include/linux/percpu-defs.h"; \
 	echo "generated Orlix product adapter headers: $$adapter_include"
@@ -444,7 +445,7 @@ replace_once "$$adapter_root/source/lib/crc32.c" 'u32 __pure __crc32c_le_base(u3
 	perl -0pi -e 'my $$changed = s/void blake2s_compress\(struct blake2s_state \*state, const u8 \*block,\n\s*size_t nblocks, const u32 inc\)\n\s*__weak __alias\(blake2s_compress_generic\);/void blake2s_compress(struct blake2s_state *state, const u8 *block,\n\t\t      size_t nblocks, const u32 inc)\n{\n\tblake2s_compress_generic(state, block, nblocks, inc);\n}/; die "failed to replace Linux blake2s weak alias for Mach-O\n" unless $$changed == 1;' "$$adapter_root/source/lib/crypto/blake2s-generic.c"; \
 	replace_once "$$adapter_root/source/drivers/of/of_reserved_mem.c" '__used __section("__reservedmem_of_table_end");' '__used __section("__DATA,__rmem_end");'; \
 replace_once "$$adapter_root/source/kernel/sched/sched.h" '__section("__" #name "_sched_class")' '__section("__DATA,__sched_class")'; \
-replace_all "$$adapter_root/source/mm/internal.h" '__section(".data.once")' '__section("__DATA,__data_once")'; \
+replace_all "$$adapter_root/source/mm/internal.h" '__section(".data..once")' '__section("__DATA,__data_once")'; \
 echo "generated Orlix product adapter sources: $$adapter_root/source"
 endef
 
