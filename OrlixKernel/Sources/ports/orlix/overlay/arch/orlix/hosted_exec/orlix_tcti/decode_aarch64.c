@@ -1457,6 +1457,25 @@ static void orlix_tcti_bind_advsimd_integer_optional_source(
 	}
 }
 
+static bool orlix_tcti_advsimd_integer_keep_unsupported(u32 instruction)
+{
+	/* Vector Q=0 size=11 is the reserved 1D arrangement, e.g. 0x0ee08400. */
+	if (!(instruction & BIT(28)) &&
+	    ((instruction >> 22) & 3U) == 3U &&
+	    !(instruction & BIT(30)))
+		return true;
+	/* asimdshf / asisdshf with immh == 0000 is reserved. */
+	if ((((instruction & 0xff800000U) == 0x0f000000U) ||
+	     ((instruction & 0xff800000U) == 0x2f000000U) ||
+	     ((instruction & 0xff800000U) == 0x4f000000U) ||
+	     ((instruction & 0xff800000U) == 0x5f000000U) ||
+	     ((instruction & 0xff800000U) == 0x6f000000U) ||
+	     ((instruction & 0xff800000U) == 0x7f000000U)) &&
+	    ((instruction >> 19) & 0xfU) == 0)
+		return true;
+	return false;
+}
+
 static void orlix_tcti_advsimd_integer_promote_unsupported(
 	struct orlix_tcti_decoded_instruction *decoded)
 {
@@ -1467,6 +1486,9 @@ static void orlix_tcti_advsimd_integer_promote_unsupported(
 	if (decoded->source_ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
 	    orlix_tcti_source_families[decoded->source_ordinal] !=
 		    ORLIX_TCTI_SOURCE_FAMILY_ADVSIMD_INTEGER)
+		return;
+	if (orlix_tcti_advsimd_integer_optional_ordinal(decoded->source_ordinal) ||
+	    orlix_tcti_advsimd_integer_keep_unsupported(decoded->instruction))
 		return;
 	decoded->decode_class = ORLIX_TCTI_DECODE_SIMD_VECTOR_ARITHMETIC;
 	decoded->rd = decoded->instruction & 0x1fU;

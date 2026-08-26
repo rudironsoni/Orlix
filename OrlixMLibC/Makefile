@@ -173,7 +173,7 @@ MLIBC_TEST_POSIX_CASES := \
 	posix/pthread_rwlock \
 	posix/pthread_spin \
 	posix/pthread_thread_local \
-	posix/shm \
+	posix/sysv_shm \
 	posix/swab \
 	posix/select \
 	posix/wcsdup \
