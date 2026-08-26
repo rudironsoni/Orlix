@@ -391,8 +391,14 @@ static u64 orlix_tcti_advsimd_integer_sat_shift(u64 a, s64 sh, u8 bits,
 		u8 r = (u8)(-sh);
 		u64 shifted;
 
-		if (r >= bits)
+		if (r > bits)
 			shifted = rounding ? 0 :
+				(is_unsigned || signed_to_unsigned ||
+				 sa >= 0 ? 0 : mask);
+		else if (r == bits)
+			shifted = rounding ?
+				((is_unsigned || signed_to_unsigned) &&
+				 (a & BIT_ULL(bits - 1)) ? 1 : 0) :
 				(is_unsigned || signed_to_unsigned ||
 				 sa >= 0 ? 0 : mask);
 		else {
@@ -1200,8 +1206,15 @@ static int orlix_tcti_advsimd_integer_expected_from_source(
 			else {
 				u8 r = (u8)(-sh);
 
-				if (r >= bits)
+				if (r > bits)
 					out = rounding ? 0 :
+						(is_unsigned || sa >= 0 ? 0 :
+						 mask);
+				else if (r == bits)
+					out = rounding ?
+						(is_unsigned &&
+						 (a & BIT_ULL(bits - 1)) ? 1 :
+						  0) :
 						(is_unsigned || sa >= 0 ? 0 :
 						 mask);
 				else {
@@ -1250,12 +1263,14 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
 		u64 value = 0x0102030405060708ULL ^ ((u64)index << 32);
 
-		if (index == INT_RN * 2U || index == INT_RM * 2U) {
-			value = 0x8006050403ff8008ULL;
+		if (index == INT_RN * 2U) {
+			value = 0x0006050403807f81ULL;
 		} else if (index == INT_RN * 2U + 1U) {
 			value = 0;
+		} else if (index == INT_RM * 2U) {
+			value = 0x0006050401f8ff08ULL;
 		} else if (index == INT_RM * 2U + 1U) {
-			value = 0x0f0e0d0c0b0a0908ULL;
+			value = 0x0f0e0d0c0b0a0980ULL;
 		}
 		current->thread.user_simd[index] = value;
 	}

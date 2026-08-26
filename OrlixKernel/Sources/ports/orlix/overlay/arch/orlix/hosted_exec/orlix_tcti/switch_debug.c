@@ -3638,9 +3638,15 @@ static u64 orlix_tcti_simd_shift_lane(u64 value, u8 bits, s8 shift,
 	if (shift < 0) {
 		u8 right = -(int)shift;
 
-		if (right >= bits) {
+		if (right > bits) {
 			if (rounding)
 				return 0;
+			return is_unsigned || signed_value >= 0 ? 0 : mask;
+		}
+		if (right == bits) {
+			if (rounding)
+				return is_unsigned &&
+					(value & BIT_ULL(bits - 1)) ? 1 : 0;
 			return is_unsigned || signed_value >= 0 ? 0 : mask;
 		}
 
