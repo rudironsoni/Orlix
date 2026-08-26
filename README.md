@@ -10,7 +10,7 @@ OrlixKernel is Linux. It does not provide a shell, libc, package manager, public
 
 Orlix has five important source areas:
 
-- `Build/OrlixKernel/upstream/linux-6.12.git` is the generated bare upstream Linux clone. Treat it as read-only input.
+- `Build/OrlixKernel/upstream/linux-<version>.git` is the generated bare upstream Linux clone. Treat it as read-only input.
 - `OrlixKernel/Sources/ports/orlix` is where durable Orlix Linux port inputs live.
 - `OrlixMLibC/Sources` is the durable component area for OrlixMLibC sysdeps, configs, and patches. The upstream mlibc bare clone is generated under `Build/OrlixMLibC/upstream/mlibc-<version>.git`, and the patched working source is generated under `Build/OrlixMLibC/src/mlibc-<version>`.
 - `OrlixOS` is the delivered OS Kit. It owns curated distribution policy, package/rootfs assembly, product payload packaging, target-derived payload metadata, and the app-facing Linux session API.
@@ -104,13 +104,13 @@ Milestone 5 does not prove `/dev/vda`, `/dev/vdb`, virtio-block request I/O, hos
 The pristine upstream Linux bare clone is generated at:
 
 ```text
-Build/OrlixKernel/upstream/linux-6.12.git
+Build/OrlixKernel/upstream/linux-<version>.git
 ```
 
 The disposable upstream-plus-Orlix port tree is generated at:
 
 ```text
-Build/OrlixKernel/src/linux-6.12-port
+Build/OrlixKernel/src/linux-<version>-port
 ```
 
 The upstream mlibc bare clone and patched source tree used by OrlixMLibC builds are generated at:

@@ -1264,11 +1264,11 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 		u64 value = 0x0102030405060708ULL ^ ((u64)index << 32);
 
 		if (index == INT_RN * 2U) {
-			value = 0x0006050403807f81ULL;
+			value = 0x8006050403807f81ULL;
 		} else if (index == INT_RN * 2U + 1U) {
 			value = 0;
 		} else if (index == INT_RM * 2U) {
-			value = 0x0006050401f8ff08ULL;
+			value = 0x8006050401f8ff08ULL;
 		} else if (index == INT_RM * 2U + 1U) {
 			value = 0x0f0e0d0c0b0a0980ULL;
 		}
@@ -1898,6 +1898,8 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 		orlix_tcti_test_integer_name("SQNEG_asisdmisc_R");
 	const struct orlix_tcti_test_integer_source *cmeq_z_s =
 		orlix_tcti_test_integer_name("CMEQ_asisdmisc_Z");
+	const struct orlix_tcti_test_integer_source *cmlt_s =
+		orlix_tcti_test_integer_name("CMLT_asisdmisc_Z");
 	const struct orlix_tcti_test_integer_source *sqsub =
 		orlix_tcti_test_integer_name("SQSUB_asimdsame_only");
 	u32 insn;
@@ -1914,6 +1916,7 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, sqneg);
 	KUNIT_ASSERT_NOT_NULL(test, sqneg_s);
 	KUNIT_ASSERT_NOT_NULL(test, cmeq_z_s);
+	KUNIT_ASSERT_NOT_NULL(test, cmlt_s);
 	KUNIT_ASSERT_NOT_NULL(test, sqsub);
 
 	insn = (sqadd->pattern & sqadd->mask) | (INT_RN << 5) |
@@ -2022,6 +2025,17 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	code = orlix_tcti_advsimd_integer_map(test, insn);
 	orlix_tcti_advsimd_integer_seed(&regs, code);
 	current->thread.user_simd[INT_RN * 2U] = 0;
+	current->thread.user_simd[INT_RN * 2U + 1U] = 0;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, ~0ULL, current->thread.user_simd[INT_RD * 2U]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	insn = orlix_tcti_advsimd_integer_legal_instruction(cmlt_s);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x8000000000000000ULL;
 	current->thread.user_simd[INT_RN * 2U + 1U] = 0;
 	current->thread.user_fpsr = 0;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);

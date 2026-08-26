@@ -16,8 +16,8 @@ ORLIX_OS_TARGET_SETTINGS ?= $(REPO_ROOT)/OrlixOS/Sources/distribution/target-set
 include $(ORLIX_OS_TARGET_SETTINGS)
 
 MLIBC_REMOTE ?= https://github.com/managarm/mlibc.git
-MLIBC_COMMIT ?= 43ab07732cdfefe2e915bf98190f5d7f4bd8d765
-MLIBC_VERSION ?= 43ab07732cdf
+MLIBC_COMMIT ?= 7c2a178142625cc9852e59a1a090468c61a62d3b
+MLIBC_VERSION ?= 7.0.0
 LLVM_PROJECT_REMOTE ?= https://github.com/llvm/llvm-project.git
 LLVM_PROJECT_REF ?= llvmorg-22.1.6
 LLVM_PROJECT_COMMIT ?= fc4aad7b5db3fff421df9a9637605b9ca5667881
