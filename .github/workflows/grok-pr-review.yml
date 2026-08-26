@@ -14,19 +14,30 @@ concurrency:
 
 jobs:
   review:
-    if: ${{ !github.event.pull_request.draft }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && secrets.GROK_AUTH_JSON != '' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: 0xr3ngar/grok-build-review-action@v1
+      - name: Restore trusted reviewer policy from the base revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth 1 origin "$BASE_SHA"
+          git checkout "$BASE_SHA" -- AGENTS.md CLAUDE.md
+
+      - uses: 0xr3ngar/grok-build-review-action@eded30018cdee4e83dfca14d18f292b860c30cdd # v1.0.2
         with:
           grok_auth_json: ${{ secrets.GROK_AUTH_JSON }}
           roast_level: professional
           custom_instructions: |
-            Follow AGENTS.md. Orlix compiles upstream Linux into an iOS-hosted
-            kernel. Do not suggest edits to generated trees under Build/. Do not
-            move Linux policy into OrlixHostAdapter. Do not invent a parallel
-            OrlixKit API. Fail loud when evidence is missing.
+            Follow AGENTS.md from the pull request base revision. Orlix compiles
+            upstream Linux into an iOS-hosted kernel. Do not suggest edits to
+            generated trees under Build/. Do not move Linux policy into
+            OrlixHostAdapter. Do not invent a parallel OrlixKit API. Fail loud
+            when evidence is missing.
