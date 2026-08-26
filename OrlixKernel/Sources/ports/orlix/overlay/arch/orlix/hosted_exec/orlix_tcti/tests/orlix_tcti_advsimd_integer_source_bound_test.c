@@ -1250,12 +1250,17 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
 		u64 value = 0x0102030405060708ULL ^ ((u64)index << 32);
 
-		if (index / 2U == INT_RN)
+		if (index == INT_RN * 2U) {
 			value |= 0x8080808000000000ULL;
-		if (index == INT_RN * 2U)
 			value = (value & ~0xffULL) | 0x81ULL;
-		if (index / 2U == INT_RM)
-			value = 0x00000000000080ffULL;
+			value &= ~0xffff0000ULL;
+		} else if (index == INT_RN * 2U + 1U) {
+			value = 0;
+		} else if (index == INT_RM * 2U) {
+			value = 0x07060504030280ffULL;
+		} else if (index == INT_RM * 2U + 1U) {
+			value = 0x0f0e0d0c0b0a0908ULL;
+		}
 		current->thread.user_simd[index] = value;
 	}
 }
@@ -1711,6 +1716,21 @@ static void orlix_tcti_advsimd_integer_production_resume(struct kunit *test)
 									extra |= BIT(20);
 								ORLIX_TCTI_ADV_INT_COMPARE_MAPPED(
 									test, source, extra);
+								{
+									u8 rm = size >= 2U ?
+										((extra >> 16) &
+										 0x1fU) :
+										INT_RM;
+									u32 aliased =
+										(extra & ~0x1fU) |
+										rm;
+
+									if (aliased != extra)
+										ORLIX_TCTI_ADV_INT_COMPARE_MAPPED(
+											test,
+											source,
+											aliased);
+								}
 							}
 						}
 					}
