@@ -1466,8 +1466,10 @@ static bool orlix_tcti_advsimd_integer_keep_unsupported(u32 instruction)
 		return true;
 	/* asimdshf / asisdshf with immh == 0000 is reserved. */
 	if ((((instruction & 0xff800000U) == 0x0f000000U) ||
+	     ((instruction & 0xff800000U) == 0x2f000000U) ||
 	     ((instruction & 0xff800000U) == 0x4f000000U) ||
 	     ((instruction & 0xff800000U) == 0x5f000000U) ||
+	     ((instruction & 0xff800000U) == 0x6f000000U) ||
 	     ((instruction & 0xff800000U) == 0x7f000000U)) &&
 	    ((instruction >> 19) & 0xfU) == 0)
 		return true;

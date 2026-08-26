@@ -13,7 +13,7 @@ updated: 2026-08-25
 
 ## [2026-08-23] record | Verify ADVSIMD_INTEGER SIMD results and keep reserved encodings unsupported
 
-Recorded that reserved AdvSIMD integer encodings the raw decoder left unsupported, including ADD `Q=0,size=3` (`0x0ee08400`) and scalar `asisdshf` SSHR with `immh == 0000` (`0x5f000400`), stay `DECODE_UNSUPPORTED` and do not promote from a source-manifest mask. Vector `0x0f000400` is legal `MOVI`, not reserved SSHR. Production EL0 proof for all 222 always-on leaves compares destination SIMD and QC against a source-mnemonic architectural result before ingest. Saturating register shifts that exceed the element width set FPSR.QC. `linux_proof_executed` stays 0.
+Recorded that reserved AdvSIMD integer encodings the raw decoder left unsupported, including ADD `Q=0,size=3` (`0x0ee08400`), scalar `asisdshf` SSHR with `immh == 0000` (`0x5f000400`), and vector U=1 `asimdshf` SQRSHRUN/UQRSHRN with `immh == 0000` (`0x2f008c00`, `0x2f009c00`, `0x6f008c00`, `0x6f009c00`), stay `DECODE_UNSUPPORTED` and do not promote from a source-manifest mask. Vector `0x0f000400` is legal `MOVI`. Vector `0x2f000400` is legal `MVNI`. Production EL0 proof for all 222 always-on leaves compares destination SIMD and QC against a source-mnemonic architectural result before ingest. Saturating register shifts that exceed the element width set FPSR.QC. `linux_proof_executed` stays 0.
 
 ## [2026-08-23] record | Keep optional ADVSIMD_FP leaves in the EL0 complete target
 

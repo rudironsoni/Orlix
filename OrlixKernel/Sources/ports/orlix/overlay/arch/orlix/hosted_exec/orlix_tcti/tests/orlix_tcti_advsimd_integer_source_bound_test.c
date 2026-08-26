@@ -2168,36 +2168,44 @@ static void orlix_tcti_advsimd_integer_narrow_shift_overlap(struct kunit *test)
 
 static void orlix_tcti_advsimd_integer_reserved_encodings(struct kunit *test)
 {
+	static const u32 reserved[] = {
+		0x5f000400U, /* asisdshf SSHR immh == 0000 */
+		0x0ee08400U, /* ADD Q=0 size=3 */
+		0x2f008c00U, /* SQRSHRUN Q=0 immh == 0000 */
+		0x2f009c00U, /* UQRSHRN Q=0 immh == 0000 */
+		0x6f008c00U, /* SQRSHRUN Q=1 immh == 0000 */
+		0x6f009c00U, /* UQRSHRN Q=1 immh == 0000 */
+	};
 	struct orlix_tcti_decoded_instruction decoded;
 	u32 insn;
+	size_t index;
 	unsigned long code;
 	struct pt_regs regs = {};
 	struct pt_regs before;
 	struct orlix_tcti_result result;
 
-	/* asisdshf SSHR with immh == 0000 is reserved. Vector 0x0f000400 is MOVI. */
-	insn = 0x5f000400U;
-	decoded = orlix_tcti_decode_aarch64(insn);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
-	code = orlix_tcti_advsimd_integer_map(test, insn);
-	orlix_tcti_advsimd_integer_seed(&regs, code);
-	before = regs;
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
-	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
-	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	/* Vector 0x0f000400 is MOVI. Vector 0x2f000400 is MVNI. */
+	decoded = orlix_tcti_decode_aarch64(0x0f000400U);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
+	decoded = orlix_tcti_decode_aarch64(0x2f000400U);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_SIMD_MODIFIED_IMMEDIATE,
+			decoded.decode_class);
 
-	/* Reserved ADD Q=0 size=3. */
-	insn = 0x0ee08400U;
-	decoded = orlix_tcti_decode_aarch64(insn);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
-	code = orlix_tcti_advsimd_integer_map(test, insn);
-	orlix_tcti_advsimd_integer_seed(&regs, code);
-	before = regs;
-	result = orlix_tcti_resume_user(current, &regs, current->mm);
-	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
-	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
-	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	for (index = 0; index < ARRAY_SIZE(reserved); index++) {
+		insn = reserved[index];
+		decoded = orlix_tcti_decode_aarch64(insn);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED,
+				decoded.decode_class);
+		code = orlix_tcti_advsimd_integer_map(test, insn);
+		orlix_tcti_advsimd_integer_seed(&regs, code);
+		before = regs;
+		result = orlix_tcti_resume_user(current, &regs, current->mm);
+		KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
+				result.reason);
+		KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+		KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+	}
 }
 
 static struct kunit_case orlix_tcti_advsimd_integer_source_bound_cases[] = {
