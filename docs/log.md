@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 # Orlix Knowledge Log
+
+## [2026-08-26] record | Pin current upstream Linux, mlibc, and Coreutils releases
+
+OrlixKernel tracks Linux 6.12.105 (`v6.12.105` on `stable/linux.git`), the current 6.12 longterm release. It does not move to mainline 7.2. OrlixMLibC tracks mlibc 7.0.0 (`7c2a178142625cc9852e59a1a090468c61a62d3b`). GNU Coreutils stays at 9.11 (`c01fd163a47468a8296fb369f5233853bb551bb6`), which is the current Coreutils stable tag. mlibc 7.0.0 already contains TLSDESC relocation and `renameat2`, so those Orlix patches are removed. The pthread guard, freeable `posix_memalign`, and locale `MB_CUR_MAX` patches are refreshed against 7.0.0.
 
 ## [2026-08-23] record | Keep optional ADVSIMD_FP leaves in the EL0 complete target
 

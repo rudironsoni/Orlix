@@ -1,11 +1,10 @@
 diff --git a/options/ansi/generic/stdlib.cpp b/options/ansi/generic/stdlib.cpp
-index 5c0d67f4..3f9f49c2 100644
 --- a/options/ansi/generic/stdlib.cpp
 +++ b/options/ansi/generic/stdlib.cpp
-@@ -38,6 +38,52 @@ namespace {
+@@ -39,6 +39,52 @@ namespace {
  	thread_local __mlibc_mbstate mbtowc_state = __MLIBC_MBSTATE_INITIALIZER;
  
- 	__mlibc_mutex exit_mutex = __MLIBC_THREAD_MUTEX_INITIALIZER;
+ 	__mlibc_mutex exit_mutex{};
 +
 +	struct AlignedAllocation {
 +		void *base;
@@ -14,7 +13,7 @@ index 5c0d67f4..3f9f49c2 100644
 +		AlignedAllocation *next;
 +	};
 +
-+	__mlibc_mutex alignedAllocationMutex = __MLIBC_THREAD_MUTEX_INITIALIZER;
++	__mlibc_mutex alignedAllocationMutex{};
 +	AlignedAllocation *alignedAllocations;
 +
 +	uintptr_t align_up(uintptr_t value, size_t align) {
@@ -55,7 +54,7 @@ index 5c0d67f4..3f9f49c2 100644
  } // namespace
  
  double atof(const char *string) {
-@@ -540,6 +586,8 @@ void free(void *ptr) {
+@@ -577,6 +623,8 @@ void free(void *ptr) {
  		if((uintptr_t)ptr & 1)
  			mlibc::infoLogger() << __builtin_return_address(0) << frg::endlog;
  	}
@@ -64,7 +63,7 @@ index 5c0d67f4..3f9f49c2 100644
  	getAllocator().free(ptr);
  }
  
-@@ -564,13 +612,24 @@ int posix_memalign(void **out, size_t align, size_t size) {
+@@ -601,13 +649,24 @@ int posix_memalign(void **out, size_t align, size_t size) {
 +	void *base;
 +	uintptr_t aligned;
 +	AlignedAllocation *entry;
