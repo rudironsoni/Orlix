@@ -1250,14 +1250,10 @@ static void orlix_tcti_advsimd_integer_seed_simd(void)
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++) {
 		u64 value = 0x0102030405060708ULL ^ ((u64)index << 32);
 
-		if (index == INT_RN * 2U) {
-			value |= 0x8080808000000000ULL;
-			value = (value & ~0xffULL) | 0x81ULL;
-			value &= ~0xffff0000ULL;
+		if (index == INT_RN * 2U || index == INT_RM * 2U) {
+			value = 0x8006050403ff8008ULL;
 		} else if (index == INT_RN * 2U + 1U) {
 			value = 0;
-		} else if (index == INT_RM * 2U) {
-			value = 0x07060504030280ffULL;
 		} else if (index == INT_RM * 2U + 1U) {
 			value = 0x0f0e0d0c0b0a0908ULL;
 		}
@@ -1879,8 +1875,14 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 		orlix_tcti_test_integer_name("SQSHLU_asimdshf_R");
 	const struct orlix_tcti_test_integer_source *sqabs =
 		orlix_tcti_test_integer_name("SQABS_asimdmisc_R");
+	const struct orlix_tcti_test_integer_source *sqabs_s =
+		orlix_tcti_test_integer_name("SQABS_asisdmisc_R");
 	const struct orlix_tcti_test_integer_source *sqneg =
 		orlix_tcti_test_integer_name("SQNEG_asimdmisc_R");
+	const struct orlix_tcti_test_integer_source *sqneg_s =
+		orlix_tcti_test_integer_name("SQNEG_asisdmisc_R");
+	const struct orlix_tcti_test_integer_source *cmeq_z_s =
+		orlix_tcti_test_integer_name("CMEQ_asisdmisc_Z");
 	const struct orlix_tcti_test_integer_source *sqsub =
 		orlix_tcti_test_integer_name("SQSUB_asimdsame_only");
 	u32 insn;
@@ -1893,7 +1895,10 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, uqsub);
 	KUNIT_ASSERT_NOT_NULL(test, sqshlu);
 	KUNIT_ASSERT_NOT_NULL(test, sqabs);
+	KUNIT_ASSERT_NOT_NULL(test, sqabs_s);
 	KUNIT_ASSERT_NOT_NULL(test, sqneg);
+	KUNIT_ASSERT_NOT_NULL(test, sqneg_s);
+	KUNIT_ASSERT_NOT_NULL(test, cmeq_z_s);
 	KUNIT_ASSERT_NOT_NULL(test, sqsub);
 
 	insn = (sqadd->pattern & sqadd->mask) | (INT_RN << 5) |
@@ -1970,6 +1975,45 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 
+	insn = orlix_tcti_advsimd_integer_legal_instruction(sqabs_s) |
+		(3U << 22);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x8000000000000000ULL;
+	current->thread.user_simd[INT_RN * 2U + 1U] = 0;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0x7fffffffffffffffULL,
+			current->thread.user_simd[INT_RD * 2U]);
+	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	insn = orlix_tcti_advsimd_integer_legal_instruction(sqneg_s) |
+		(3U << 22);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0x8000000000000000ULL;
+	current->thread.user_simd[INT_RN * 2U + 1U] = 0;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, 0x7fffffffffffffffULL,
+			current->thread.user_simd[INT_RD * 2U]);
+	KUNIT_EXPECT_NE(test, 0UL, current->thread.user_fpsr & AARCH64_FPSR_QC);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	insn = orlix_tcti_advsimd_integer_legal_instruction(cmeq_z_s);
+	code = orlix_tcti_advsimd_integer_map(test, insn);
+	orlix_tcti_advsimd_integer_seed(&regs, code);
+	current->thread.user_simd[INT_RN * 2U] = 0;
+	current->thread.user_simd[INT_RN * 2U + 1U] = 0;
+	current->thread.user_fpsr = 0;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_SYSCALL, result.reason);
+	KUNIT_EXPECT_EQ(test, ~0ULL, current->thread.user_simd[INT_RD * 2U]);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
 	insn = (sqsub->pattern & sqsub->mask) | (INT_RN << 5) |
 		(INT_RM << 16) | INT_RD | BIT(30);
 	code = orlix_tcti_advsimd_integer_map(test, insn);
@@ -1986,10 +2030,25 @@ static void orlix_tcti_advsimd_integer_saturation_qc(struct kunit *test)
 	{
 		static const char *const sqd_names[] = {
 			"SQDMULH_asimdsame_only",
+			"SQDMULH_asisdsame_only",
+			"SQDMULH_asimdelem_R",
+			"SQDMULH_asisdelem_R",
 			"SQRDMULH_asimdsame_only",
+			"SQRDMULH_asisdsame_only",
+			"SQRDMULH_asimdelem_R",
+			"SQRDMULH_asisdelem_R",
 			"SQDMULL_asimddiff_L",
+			"SQDMULL_asisddiff_only",
+			"SQDMULL_asimdelem_L",
+			"SQDMULL_asisdelem_L",
 			"SQDMLAL_asimddiff_L",
+			"SQDMLAL_asisddiff_only",
+			"SQDMLAL_asimdelem_L",
+			"SQDMLAL_asisdelem_L",
 			"SQDMLSL_asimddiff_L",
+			"SQDMLSL_asisddiff_only",
+			"SQDMLSL_asimdelem_L",
+			"SQDMLSL_asisdelem_L",
 		};
 		size_t sqd;
 
