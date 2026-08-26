@@ -1,0 +1,32 @@
+name: Grok PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: grok-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: 0xr3ngar/grok-build-review-action@v1
+        with:
+          grok_auth_json: ${{ secrets.GROK_AUTH_JSON }}
+          roast_level: professional
+          custom_instructions: |
+            Follow AGENTS.md. Orlix compiles upstream Linux into an iOS-hosted
+            kernel. Do not suggest edits to generated trees under Build/. Do not
+            move Linux policy into OrlixHostAdapter. Do not invent a parallel
+            OrlixKit API. Fail loud when evidence is missing.
