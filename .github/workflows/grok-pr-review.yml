@@ -16,15 +16,22 @@ jobs:
   review:
     if: >-
       ${{ !github.event.pull_request.draft
-          && github.event.pull_request.head.repo.full_name == github.repository
-          && secrets.GROK_AUTH_JSON != '' }}
+          && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    env:
+      HAS_GROK_AUTH: ${{ secrets.GROK_AUTH_JSON != '' }}
     steps:
+      - name: Skip when GROK_AUTH_JSON is unset
+        if: ${{ env.HAS_GROK_AUTH != 'true' }}
+        run: echo "GROK_AUTH_JSON is unset; skipping Grok review."
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: ${{ env.HAS_GROK_AUTH == 'true' }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Restore trusted reviewer policy from the base revision
+        if: ${{ env.HAS_GROK_AUTH == 'true' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -32,6 +39,7 @@ jobs:
           git checkout "$BASE_SHA" -- AGENTS.md CLAUDE.md
 
       - uses: 0xr3ngar/grok-build-review-action@eded30018cdee4e83dfca14d18f292b860c30cdd # v1.0.2
+        if: ${{ env.HAS_GROK_AUTH == 'true' }}
         with:
           grok_auth_json: ${{ secrets.GROK_AUTH_JSON }}
           roast_level: professional
