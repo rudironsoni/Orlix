@@ -51,7 +51,15 @@
 #define FP32_ONE 0x3f800000U
 #define FP32_TWO 0x40000000U
 #define FP32_ONE_POINT_FIVE 0x3fc00000U
+#define FP32_NEG_ONE_POINT_FIVE 0xbfc00000U
+#define FP32_TWO_POINT_FIVE 0x40200000U
 #define FP32_SNAN 0x7f800001U
+#define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
+#define FP64_NEG_ONE_POINT_FIVE 0xbff8000000000000ULL
+#define FP64_TWO_POINT_FIVE 0x4004000000000000ULL
+#define FP64_POS_INF 0x7ff0000000000000ULL
+#define CONVERT_GPR_NEG8 0xfffffffffffffff8ULL
+#define CONVERT_GPR_I32_MIN 0xffffffff80000000ULL
 
 enum orlix_tcti_test_source_family {
 #define ORLIX_TCTI_A64_EXECUTION_SLICE_MAP_SOURCE(...)
@@ -186,6 +194,20 @@ static u32 orlix_tcti_scalar_fp_legal_instruction(
 	return instruction;
 }
 
+static u32 orlix_tcti_scalar_fp_instruction_with_fbits(
+	const struct orlix_tcti_test_fp_source *source, u8 fbits)
+{
+	u32 instruction = orlix_tcti_scalar_fp_legal_instruction(source);
+	u8 scale;
+
+	if (!strstr(source->name, "float2fix") || fbits == 0 || fbits > 64)
+		return instruction;
+	scale = 64U - fbits;
+	instruction &= ~(0x3fU << 10);
+	instruction |= ((u32)scale & 0x3fU) << 10;
+	return instruction;
+}
+
 static bool orlix_tcti_test_fp_decode_is_family(u32 decode_class)
 {
 	return decode_class == ORLIX_TCTI_DECODE_FP_SCALAR_IMMEDIATE ||
@@ -284,6 +306,45 @@ static bool orlix_tcti_scalar_fp_is_double(
 		strstr(name, "_DS");
 }
 
+static bool orlix_tcti_scalar_fp_is_convert(
+	const struct orlix_tcti_test_fp_source *source)
+{
+	return strstr(source->name, "float2int") ||
+		strstr(source->name, "float2fix");
+}
+
+static void orlix_tcti_scalar_fp_apply_convert_operands(
+	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
+	u64 fp_bits, u64 gpr_n)
+{
+	if (!orlix_tcti_scalar_fp_is_convert(source) || !regs)
+		return;
+	regs->regs[FP_RN] = gpr_n;
+	if (strstr(source->name, "64VX"))
+		current->thread.user_simd[FP_RN * 2U + 1U] = gpr_n;
+	else
+		current->thread.user_simd[FP_RN * 2U] = fp_bits;
+}
+
+static u64 orlix_tcti_scalar_fp_convert_bits(
+	const struct orlix_tcti_test_fp_source *source, u64 f32, u64 f64)
+{
+	return orlix_tcti_scalar_fp_is_double(source) ? f64 : f32;
+}
+
+static void orlix_tcti_scalar_fp_seed_convert(
+	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
+	unsigned long code)
+{
+	u64 fp_bits;
+
+	orlix_tcti_scalar_fp_seed(regs, code);
+	fp_bits = orlix_tcti_scalar_fp_convert_bits(source,
+		FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
+	orlix_tcti_scalar_fp_apply_convert_operands(source, regs, fp_bits,
+						    CONVERT_GPR_NEG8);
+}
+
 static int orlix_tcti_scalar_fp_host_wrap(int (*body)(void *), void *ctx,
 					 unsigned long fpcr,
 					 unsigned long *fpsr)
@@ -318,6 +379,138 @@ struct orlix_tcti_scalar_fp_host_ctx {
 	u64 *out_gpr;
 	unsigned long *out_nzcv;
 };
+
+#define HOST_FIX_I2F(dreg, sreg, op, n, dstp, srcp, c1, c2) \
+	asm volatile("ldr " sreg ", [%[src]]\n " op " " dreg ", " sreg ", #" #n \
+		     "\n str " dreg ", [%[dst]]\n" \
+		     : : [dst] "r" (dstp), [src] "r" (srcp) \
+		     : c1, c2, "memory")
+#define HOST_FIX_F2I(dreg, sreg, op, n, dstp, srcp, c1, c2) \
+	asm volatile("ldr " sreg ", [%[src]]\n " op " " dreg ", " sreg ", #" #n \
+		     "\n str " dreg ", [%[dst]]\n" \
+		     : : [dst] "r" (dstp), [src] "r" (srcp) \
+		     : c1, c2, "memory")
+
+static int orlix_tcti_scalar_fp_host_fixed(
+	const char *m, const char *name, u8 fbits, u64 *result, u64 *gpr_out,
+	u64 left, u64 gpr_n)
+{
+	if (!strcmp(m, "SCVTF") && strstr(name, "S32_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("s0", "w0", "scvtf", 1, result, &gpr_n, "w0", "v0"); break;
+		case 16: HOST_FIX_I2F("s0", "w0", "scvtf", 16, result, &gpr_n, "w0", "v0"); break;
+		case 32: HOST_FIX_I2F("s0", "w0", "scvtf", 32, result, &gpr_n, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "UCVTF") && strstr(name, "S32_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("s0", "w0", "ucvtf", 1, result, &gpr_n, "w0", "v0"); break;
+		case 16: HOST_FIX_I2F("s0", "w0", "ucvtf", 16, result, &gpr_n, "w0", "v0"); break;
+		case 32: HOST_FIX_I2F("s0", "w0", "ucvtf", 32, result, &gpr_n, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "SCVTF") && strstr(name, "D32_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("d0", "w0", "scvtf", 1, result, &gpr_n, "w0", "v0"); break;
+		case 16: HOST_FIX_I2F("d0", "w0", "scvtf", 16, result, &gpr_n, "w0", "v0"); break;
+		case 32: HOST_FIX_I2F("d0", "w0", "scvtf", 32, result, &gpr_n, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "UCVTF") && strstr(name, "D32_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("d0", "w0", "ucvtf", 1, result, &gpr_n, "w0", "v0"); break;
+		case 16: HOST_FIX_I2F("d0", "w0", "ucvtf", 16, result, &gpr_n, "w0", "v0"); break;
+		case 32: HOST_FIX_I2F("d0", "w0", "ucvtf", 32, result, &gpr_n, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "SCVTF") && strstr(name, "S64_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("s0", "x0", "scvtf", 1, result, &gpr_n, "x0", "v0"); break;
+		case 32: HOST_FIX_I2F("s0", "x0", "scvtf", 32, result, &gpr_n, "x0", "v0"); break;
+		case 64: HOST_FIX_I2F("s0", "x0", "scvtf", 64, result, &gpr_n, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "UCVTF") && strstr(name, "S64_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("s0", "x0", "ucvtf", 1, result, &gpr_n, "x0", "v0"); break;
+		case 32: HOST_FIX_I2F("s0", "x0", "ucvtf", 32, result, &gpr_n, "x0", "v0"); break;
+		case 64: HOST_FIX_I2F("s0", "x0", "ucvtf", 64, result, &gpr_n, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "SCVTF") && strstr(name, "D64_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("d0", "x0", "scvtf", 1, result, &gpr_n, "x0", "v0"); break;
+		case 32: HOST_FIX_I2F("d0", "x0", "scvtf", 32, result, &gpr_n, "x0", "v0"); break;
+		case 64: HOST_FIX_I2F("d0", "x0", "scvtf", 64, result, &gpr_n, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "UCVTF") && strstr(name, "D64_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_I2F("d0", "x0", "ucvtf", 1, result, &gpr_n, "x0", "v0"); break;
+		case 32: HOST_FIX_I2F("d0", "x0", "ucvtf", 32, result, &gpr_n, "x0", "v0"); break;
+		case 64: HOST_FIX_I2F("d0", "x0", "ucvtf", 64, result, &gpr_n, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZS") && strstr(name, "32S_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("w0", "s0", "fcvtzs", 1, gpr_out, &left, "w0", "v0"); break;
+		case 16: HOST_FIX_F2I("w0", "s0", "fcvtzs", 16, gpr_out, &left, "w0", "v0"); break;
+		case 32: HOST_FIX_F2I("w0", "s0", "fcvtzs", 32, gpr_out, &left, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZU") && strstr(name, "32S_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("w0", "s0", "fcvtzu", 1, gpr_out, &left, "w0", "v0"); break;
+		case 16: HOST_FIX_F2I("w0", "s0", "fcvtzu", 16, gpr_out, &left, "w0", "v0"); break;
+		case 32: HOST_FIX_F2I("w0", "s0", "fcvtzu", 32, gpr_out, &left, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZS") && strstr(name, "32D_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("w0", "d0", "fcvtzs", 1, gpr_out, &left, "w0", "v0"); break;
+		case 16: HOST_FIX_F2I("w0", "d0", "fcvtzs", 16, gpr_out, &left, "w0", "v0"); break;
+		case 32: HOST_FIX_F2I("w0", "d0", "fcvtzs", 32, gpr_out, &left, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZU") && strstr(name, "32D_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("w0", "d0", "fcvtzu", 1, gpr_out, &left, "w0", "v0"); break;
+		case 16: HOST_FIX_F2I("w0", "d0", "fcvtzu", 16, gpr_out, &left, "w0", "v0"); break;
+		case 32: HOST_FIX_F2I("w0", "d0", "fcvtzu", 32, gpr_out, &left, "w0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZS") && strstr(name, "64S_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("x0", "s0", "fcvtzs", 1, gpr_out, &left, "x0", "v0"); break;
+		case 32: HOST_FIX_F2I("x0", "s0", "fcvtzs", 32, gpr_out, &left, "x0", "v0"); break;
+		case 64: HOST_FIX_F2I("x0", "s0", "fcvtzs", 64, gpr_out, &left, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZU") && strstr(name, "64S_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("x0", "s0", "fcvtzu", 1, gpr_out, &left, "x0", "v0"); break;
+		case 32: HOST_FIX_F2I("x0", "s0", "fcvtzu", 32, gpr_out, &left, "x0", "v0"); break;
+		case 64: HOST_FIX_F2I("x0", "s0", "fcvtzu", 64, gpr_out, &left, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZS") && strstr(name, "64D_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("x0", "d0", "fcvtzs", 1, gpr_out, &left, "x0", "v0"); break;
+		case 32: HOST_FIX_F2I("x0", "d0", "fcvtzs", 32, gpr_out, &left, "x0", "v0"); break;
+		case 64: HOST_FIX_F2I("x0", "d0", "fcvtzs", 64, gpr_out, &left, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else if (!strcmp(m, "FCVTZU") && strstr(name, "64D_float2fix")) {
+		switch (fbits) {
+		case 1: HOST_FIX_F2I("x0", "d0", "fcvtzu", 1, gpr_out, &left, "x0", "v0"); break;
+		case 32: HOST_FIX_F2I("x0", "d0", "fcvtzu", 32, gpr_out, &left, "x0", "v0"); break;
+		case 64: HOST_FIX_F2I("x0", "d0", "fcvtzu", 64, gpr_out, &left, "x0", "v0"); break;
+		default: return -EINVAL;
+		}
+	} else
+		return -EINVAL;
+	return 0;
+}
 
 static int orlix_tcti_scalar_fp_host_body(void *opaque)
 {
@@ -815,71 +1008,8 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			asm volatile("ldr d0, [%[src]]\n fcvtmu x0, d0\n str x0, [%[dst]]\n"
 				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
 				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "SCVTF") && strstr(name, "S32_float2fix") && fbits == 32)
-			asm volatile("ldr w0, [%[src]]\n scvtf s0, w0, #32\n str s0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "UCVTF") && strstr(name, "S32_float2fix") && fbits == 32)
-			asm volatile("ldr w0, [%[src]]\n ucvtf s0, w0, #32\n str s0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZS") && strstr(name, "32S_float2fix") && fbits == 32)
-			asm volatile("ldr s0, [%[src]]\n fcvtzs w0, s0, #32\n str w0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZU") && strstr(name, "32S_float2fix") && fbits == 32)
-			asm volatile("ldr s0, [%[src]]\n fcvtzu w0, s0, #32\n str w0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "SCVTF") && strstr(name, "D32_float2fix") && fbits == 32)
-			asm volatile("ldr w0, [%[src]]\n scvtf d0, w0, #32\n str d0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "UCVTF") && strstr(name, "D32_float2fix") && fbits == 32)
-			asm volatile("ldr w0, [%[src]]\n ucvtf d0, w0, #32\n str d0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZS") && strstr(name, "32D_float2fix") && fbits == 32)
-			asm volatile("ldr d0, [%[src]]\n fcvtzs w0, d0, #32\n str w0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZU") && strstr(name, "32D_float2fix") && fbits == 32)
-			asm volatile("ldr d0, [%[src]]\n fcvtzu w0, d0, #32\n str w0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "w0", "v0", "memory");
-		else if (!strcmp(m, "SCVTF") && strstr(name, "S64_float2fix") && fbits == 64)
-			asm volatile("ldr x0, [%[src]]\n scvtf s0, x0, #64\n str s0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "UCVTF") && strstr(name, "S64_float2fix") && fbits == 64)
-			asm volatile("ldr x0, [%[src]]\n ucvtf s0, x0, #64\n str s0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZS") && strstr(name, "64S_float2fix") && fbits == 64)
-			asm volatile("ldr s0, [%[src]]\n fcvtzs x0, s0, #64\n str x0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZU") && strstr(name, "64S_float2fix") && fbits == 64)
-			asm volatile("ldr s0, [%[src]]\n fcvtzu x0, s0, #64\n str x0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "SCVTF") && strstr(name, "D64_float2fix") && fbits == 64)
-			asm volatile("ldr x0, [%[src]]\n scvtf d0, x0, #64\n str d0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "UCVTF") && strstr(name, "D64_float2fix") && fbits == 64)
-			asm volatile("ldr x0, [%[src]]\n ucvtf d0, x0, #64\n str d0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [src] "r" (&gpr_n)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZS") && strstr(name, "64D_float2fix") && fbits == 64)
-			asm volatile("ldr d0, [%[src]]\n fcvtzs x0, d0, #64\n str x0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "x0", "v0", "memory");
-		else if (!strcmp(m, "FCVTZU") && strstr(name, "64D_float2fix") && fbits == 64)
-			asm volatile("ldr d0, [%[src]]\n fcvtzu x0, d0, #64\n str x0, [%[dst]]\n"
-				     : : [dst] "r" (&gpr_out), [src] "r" (&left)
-				     : "x0", "v0", "memory");
-		else
+		else if (orlix_tcti_scalar_fp_host_fixed(m, name, fbits, &result,
+							 &gpr_out, left, gpr_n))
 			return -EINVAL;
 	} else
 		return -EINVAL;
@@ -1013,7 +1143,10 @@ static void orlix_tcti_scalar_fp_capture_run(struct kunit *test,
 	ret = orlix_tcti_native_capture_begin(token, source->ordinal, obligation,
 					      &capture);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
-	orlix_tcti_scalar_fp_seed(regs, code);
+	if (orlix_tcti_scalar_fp_is_convert(source))
+		orlix_tcti_scalar_fp_seed_convert(source, regs, code);
+	else
+		orlix_tcti_scalar_fp_seed(regs, code);
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
 	if (test->status == KUNIT_FAILURE) {
 		orlix_tcti_native_capture_destroy(capture);
@@ -1126,17 +1259,92 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			"%s legal decode", source->name);
 		dest = orlix_tcti_scalar_fp_dest_obligation(source);
 		code = orlix_tcti_scalar_fp_map(test, instruction);
-		orlix_tcti_scalar_fp_seed(&regs, code);
-		orlix_tcti_scalar_fp_compare_run(test, source, instruction,
-						 &regs, code);
-		if (test->status == KUNIT_FAILURE)
-			return;
-		orlix_tcti_scalar_fp_seed(&regs, code);
+		if (orlix_tcti_scalar_fp_is_convert(source)) {
+			static const u64 fp32_vecs[] = {
+				FP32_ONE_POINT_FIVE, FP32_TWO_POINT_FIVE, FP32_POS_INF,
+			};
+			static const u64 fp64_vecs[] = {
+				FP64_ONE_POINT_FIVE, FP64_TWO_POINT_FIVE, FP64_POS_INF,
+			};
+			size_t vec;
+			u8 extra_fbits[2];
+			u8 extra_count = 0;
+
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 &regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			for (vec = 0; vec < ARRAY_SIZE(fp32_vecs); vec++) {
+				orlix_tcti_scalar_fp_seed(&regs, code);
+				orlix_tcti_scalar_fp_apply_convert_operands(source,
+					&regs, orlix_tcti_scalar_fp_is_double(source) ?
+						fp64_vecs[vec] : fp32_vecs[vec],
+					CONVERT_GPR_NEG8);
+				orlix_tcti_scalar_fp_compare_run(test, source,
+					instruction, &regs, code);
+				if (test->status == KUNIT_FAILURE)
+					return;
+			}
+			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_apply_convert_operands(source, &regs,
+				orlix_tcti_scalar_fp_convert_bits(source,
+					FP32_NEG_ONE_POINT_FIVE,
+					FP64_NEG_ONE_POINT_FIVE),
+				CONVERT_GPR_I32_MIN);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 &regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			if (strstr(source->name, "float2fix")) {
+				if (instruction & BIT(31)) {
+					extra_fbits[0] = 1;
+					extra_fbits[1] = 32;
+					extra_count = 2;
+				} else {
+					extra_fbits[0] = 1;
+					extra_fbits[1] = 16;
+					extra_count = 2;
+				}
+			}
+			for (vec = 0; vec < extra_count; vec++) {
+				u32 scaled;
+				unsigned long scaled_code;
+
+				scaled = orlix_tcti_scalar_fp_instruction_with_fbits(
+					source, extra_fbits[vec]);
+				KUNIT_ASSERT_TRUE_MSG(test,
+					orlix_tcti_scalar_fp_instruction_matches_source(
+						source, scaled),
+					"%s fbits %u insn %#x", source->name,
+					extra_fbits[vec], scaled);
+				scaled_code = orlix_tcti_scalar_fp_map(test, scaled);
+				orlix_tcti_scalar_fp_seed_convert(source, &regs,
+								  scaled_code);
+				orlix_tcti_scalar_fp_compare_run(test, source, scaled,
+								 &regs, scaled_code);
+				KUNIT_EXPECT_EQ(test, 0,
+						vm_munmap(scaled_code, PAGE_SIZE));
+				if (test->status == KUNIT_FAILURE)
+					return;
+			}
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+		} else {
+			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 &regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			orlix_tcti_scalar_fp_seed(&regs, code);
+		}
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction, dest,
 						 &regs, code);
 		if (test->status == KUNIT_FAILURE)
 			return;
-		orlix_tcti_scalar_fp_seed(&regs, code);
+		if (orlix_tcti_scalar_fp_is_convert(source))
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+		else
+			orlix_tcti_scalar_fp_seed(&regs, code);
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code);
 		if (test->status == KUNIT_FAILURE)
