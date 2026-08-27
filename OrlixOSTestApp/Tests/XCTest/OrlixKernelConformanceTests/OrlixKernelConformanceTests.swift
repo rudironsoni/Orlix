@@ -244,4 +244,8 @@ final class OrlixKernelConformanceTests: XCTestCase {
     func testOrlixTCTIAdvSIMDFPKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
         try OrlixUpstreamXCTest.run(.kernelTCTIAdvSIMDFPDiagnostic)
     }
+
+    func testOrlixTCTIScalarFPKUnitDiagnosticRunsThroughOrlixOSTerminalSession() throws {
+        try OrlixUpstreamXCTest.run(.kernelTCTIScalarFPDiagnostic)
+    }
 }

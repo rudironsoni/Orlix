@@ -3,9 +3,13 @@ type: meta
 tags:
   - documentation
   - history
-updated: 2026-08-26
+updated: 2026-08-27
 ---
 # Orlix Knowledge Log
+
+## [2026-08-27] record | Prove SCALAR_FP always-on S/D results and keep optional FP unclassified
+
+Recorded that the 266 unique `SCALAR_FP` leaves have production decode and EL0 classification. The 140 always-on EL0 FEAT_FP S/D leaves have production observations for destination `FP_SIMD` or `REGISTERS` or `FLAGS`, plus `PC`. `MEMORY`, `ATOMICITY`, and `ORDERING` are not applicable. Production EL0 proof compares destination SIMD, GPR, NZCV, and FPSR against a source-mnemonic host-asm oracle before ingest. FCVT among H/S/D stays FEAT_FP. 32-bit float2fix encodings use `scale<5>=1`. `FMOV_64VX` writes a GPR from `Vn.D[1]`. `FMOV_V64I` writes `Vd.D[1]` from a GPR. The 126 optional FP16, FPRCVT, FRINTTS, JSCVT, and BF16 leaves remain unclassified blockers in the EL0 complete target. Runtime rejection does not complete them. Those features are not advertised. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.
 
 ## [2026-08-26] record | Pin current upstream Linux, mlibc, and Coreutils releases
 

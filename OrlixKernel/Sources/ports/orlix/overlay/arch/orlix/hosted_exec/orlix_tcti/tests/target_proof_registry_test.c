@@ -214,7 +214,8 @@ static int canonical_first_use_is_concurrent_and_immutable(void)
 	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 #define SCALAR_FP_CONVERT_OBLIGATIONS \
-	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
+	(BASELINE | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD | \
+	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS | \
 	 ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC | ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FLAGS)
 
 static const struct orlix_tcti_target_proof_binding add_bindings[] = {
@@ -1121,8 +1122,17 @@ static int scalar_fp_convert_registry_binds_exact_source_rows(void)
 		EXPECT(entry->classification_mask == ORLIX_TCTI_TARGET_PROOF_CLASS_REQUIRED_EL0);
 		EXPECT(entry->obligations == SCALAR_FP_CONVERT_OBLIGATIONS);
 		EXPECT(entry->unproved_obligations == SCALAR_FP_CONVERT_OBLIGATIONS);
-		EXPECT(entry->binding_count == 1);
-		binding = entry->bindings;
+		EXPECT(entry->binding_count == 4);
+		binding = NULL;
+		for (entry_index = 0; entry_index < entry->binding_count;
+		     entry_index++) {
+			if (entry->bindings[entry_index].source_ordinal ==
+			    expected[expected_index].ordinal) {
+				binding = &entry->bindings[entry_index];
+				break;
+			}
+		}
+		EXPECT(binding != NULL);
 		EXPECT(binding->source_ordinal == expected[expected_index].ordinal);
 		EXPECT(!strcmp(binding->leaf_name, expected[expected_index].leaf_name));
 		EXPECT(!strcmp(binding->mnemonic, expected[expected_index].mnemonic));

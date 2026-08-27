@@ -1359,6 +1359,255 @@ static void orlix_tcti_advsimd_fp_promote_unsupported(
 	decoded->simd_fp = true;
 }
 
+
+bool orlix_tcti_scalar_fp_optional_ordinal(u32 ordinal)
+{
+	switch (ordinal) {
+	case 4092U:
+	case 4093U:
+	case 4094U:
+	case 4095U:
+	case 4104U:
+	case 4105U:
+	case 4106U:
+	case 4107U:
+	case 4134U:
+	case 4135U:
+	case 4136U:
+	case 4137U:
+	case 4138U:
+	case 4139U:
+	case 4140U:
+	case 4141U:
+	case 4142U:
+	case 4143U:
+	case 4144U:
+	case 4145U:
+	case 4146U:
+	case 4147U:
+	case 4148U:
+	case 4177U:
+	case 4178U:
+	case 4179U:
+	case 4180U:
+	case 4181U:
+	case 4182U:
+	case 4183U:
+	case 4184U:
+	case 4185U:
+	case 4186U:
+	case 4187U:
+	case 4188U:
+	case 4189U:
+	case 4190U:
+	case 4191U:
+	case 4192U:
+	case 4193U:
+	case 4194U:
+	case 4195U:
+	case 4196U:
+	case 4197U:
+	case 4198U:
+	case 4199U:
+	case 4200U:
+	case 4201U:
+	case 4202U:
+	case 4203U:
+	case 4204U:
+	case 4205U:
+	case 4206U:
+	case 4207U:
+	case 4208U:
+	case 4209U:
+	case 4210U:
+	case 4211U:
+	case 4212U:
+	case 4213U:
+	case 4214U:
+	case 4215U:
+	case 4216U:
+	case 4217U:
+	case 4218U:
+	case 4219U:
+	case 4220U:
+	case 4221U:
+	case 4222U:
+	case 4223U:
+	case 4224U:
+	case 4225U:
+	case 4226U:
+	case 4227U:
+	case 4228U:
+	case 4229U:
+	case 4230U:
+	case 4231U:
+	case 4232U:
+	case 4233U:
+	case 4234U:
+	case 4235U:
+	case 4236U:
+	case 4237U:
+	case 4238U:
+	case 4252U:
+	case 4253U:
+	case 4254U:
+	case 4255U:
+	case 4261U:
+	case 4270U:
+	case 4271U:
+	case 4272U:
+	case 4273U:
+	case 4274U:
+	case 4275U:
+	case 4276U:
+	case 4277U:
+	case 4280U:
+	case 4281U:
+	case 4282U:
+	case 4283U:
+	case 4284U:
+	case 4285U:
+	case 4286U:
+	case 4295U:
+	case 4296U:
+	case 4297U:
+	case 4298U:
+	case 4301U:
+	case 4306U:
+	case 4307U:
+	case 4326U:
+	case 4327U:
+	case 4328U:
+	case 4329U:
+	case 4330U:
+	case 4331U:
+	case 4332U:
+	case 4333U:
+	case 4334U:
+	case 4337U:
+	case 4346U:
+	case 4347U:
+	case 4348U:
+	case 4349U:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void orlix_tcti_bind_scalar_fp_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded || decoded->source_ordinal)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_SCALAR_FP)
+			continue;
+		if (orlix_tcti_scalar_fp_optional_ordinal(row->ordinal))
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
+static void orlix_tcti_bind_scalar_fp_optional_source(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	size_t index;
+
+	if (!decoded || decoded->source_ordinal)
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++) {
+		const struct orlix_tcti_atomic_source_row *row =
+			&orlix_tcti_atomic_source_rows[index];
+
+		if (row->ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+		    orlix_tcti_source_families[row->ordinal] !=
+			    ORLIX_TCTI_SOURCE_FAMILY_SCALAR_FP ||
+		    !orlix_tcti_scalar_fp_optional_ordinal(row->ordinal))
+			continue;
+		if ((decoded->instruction & row->mask) != row->pattern)
+			continue;
+		decoded->source_ordinal = row->ordinal;
+		decoded->source_condition_tcnd_hex = row->condition_tcnd_hex;
+		return;
+	}
+}
+
+static bool orlix_tcti_scalar_fp_keep_unsupported(
+	const struct orlix_tcti_decoded_instruction *decoded)
+{
+	u32 instruction;
+	u8 type;
+
+	if (!decoded)
+		return true;
+	if (orlix_tcti_scalar_fp_optional_ordinal(decoded->source_ordinal))
+		return true;
+	instruction = decoded->instruction;
+	type = (instruction >> 22) & 0x3U;
+	/* ftype 10 is reserved for scalar FP data-processing. */
+	if (type == 2U)
+		return true;
+	return false;
+}
+
+static void orlix_tcti_scalar_fp_promote_unsupported(
+	struct orlix_tcti_decoded_instruction *decoded)
+{
+	const struct orlix_tcti_atomic_source_row *row = NULL;
+	size_t index;
+	const char *name;
+
+	if (!decoded || !decoded->source_ordinal)
+		return;
+	if (decoded->decode_class != ORLIX_TCTI_DECODE_UNSUPPORTED)
+		return;
+	if (decoded->source_ordinal >= ARRAY_SIZE(orlix_tcti_source_families) ||
+	    orlix_tcti_source_families[decoded->source_ordinal] !=
+		    ORLIX_TCTI_SOURCE_FAMILY_SCALAR_FP)
+		return;
+	if (orlix_tcti_scalar_fp_keep_unsupported(decoded))
+		return;
+	for (index = 0; index < ARRAY_SIZE(orlix_tcti_atomic_source_rows); index++)
+		if (orlix_tcti_atomic_source_rows[index].ordinal ==
+		    decoded->source_ordinal) {
+			row = &orlix_tcti_atomic_source_rows[index];
+			break;
+		}
+	if (!row)
+		return;
+	name = row->name;
+	if (strstr(name, "floatcmp") || strstr(name, "floatccmp"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_SCALAR_COMPARE;
+	else if (strstr(name, "floatsel"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_CONDITIONAL_SELECT;
+	else if (strstr(name, "floatdp3"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_SCALAR_3SOURCE;
+	else if (strstr(name, "floatdp2"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_SCALAR_2SOURCE;
+	else if (strstr(name, "floatimm"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_SCALAR_IMMEDIATE;
+	else if (strstr(name, "float2int") || strstr(name, "float2fix"))
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_INT_CONVERT;
+	else
+		decoded->decode_class = ORLIX_TCTI_DECODE_FP_SCALAR_1SOURCE;
+	decoded->rd = decoded->instruction & 0x1fU;
+	decoded->rn = (decoded->instruction >> 5) & 0x1fU;
+	decoded->rm = (decoded->instruction >> 16) & 0x1fU;
+	decoded->simd_fp = true;
+}
+
 static bool orlix_tcti_advsimd_integer_optional_ordinal(u32 ordinal)
 {
 	switch (ordinal) {
@@ -1524,6 +1773,11 @@ orlix_tcti_decode_aarch64_finish(struct orlix_tcti_decoded_instruction decoded)
 	if (decoded.source_ordinal == 0)
 		orlix_tcti_bind_advsimd_fp_source(&decoded);
 	orlix_tcti_advsimd_fp_promote_unsupported(&decoded);
+	if (decoded.source_ordinal == 0)
+		orlix_tcti_bind_scalar_fp_optional_source(&decoded);
+	if (decoded.source_ordinal == 0)
+		orlix_tcti_bind_scalar_fp_source(&decoded);
+	orlix_tcti_scalar_fp_promote_unsupported(&decoded);
 	return decoded;
 }
 
