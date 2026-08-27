@@ -54,12 +54,17 @@
 #define FP32_NEG_ONE_POINT_FIVE 0xbfc00000U
 #define FP32_TWO_POINT_FIVE 0x40200000U
 #define FP32_SNAN 0x7f800001U
+#define FP32_QNAN 0x7fc00000U
+#define FP32_FOUR 0x40800000U
+#define FP16_ONE 0x3c00U
 #define FP64_ONE 0x3ff0000000000000ULL
 #define FP64_TWO 0x4000000000000000ULL
 #define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
 #define FP64_NEG_ONE_POINT_FIVE 0xbff8000000000000ULL
 #define FP64_TWO_POINT_FIVE 0x4004000000000000ULL
 #define FP64_POS_INF 0x7ff0000000000000ULL
+#define FP64_QNAN 0x7ff8000000000000ULL
+#define FP64_FOUR 0x4010000000000000ULL
 #define CONVERT_GPR_NEG8 0xfffffffffffffff8ULL
 #define CONVERT_GPR_I32_MIN 0xffffffff80000000ULL
 
@@ -294,6 +299,31 @@ static unsigned long orlix_tcti_scalar_fp_map(struct kunit *test, u32 instructio
 static bool orlix_tcti_scalar_fp_is_double(
 	const struct orlix_tcti_test_fp_source *source);
 
+static u64 orlix_tcti_scalar_fp_rn_seed_bits(
+	const struct orlix_tcti_test_fp_source *source)
+{
+	const char *name;
+
+	if (!source)
+		return FP32_ONE;
+	name = source->name;
+	if (!strcmp(source->mnemonic, "FCVT")) {
+		if (strstr(name, "_DS") || strstr(name, "_HS"))
+			return FP32_ONE;
+		if (strstr(name, "_SD") || strstr(name, "_HD"))
+			return FP64_ONE;
+		if (strstr(name, "_SH") || strstr(name, "_DH"))
+			return FP16_ONE;
+	}
+	return orlix_tcti_scalar_fp_is_double(source) ? FP64_ONE : FP32_ONE;
+}
+
+static u64 orlix_tcti_scalar_fp_lane_bits(
+	const struct orlix_tcti_test_fp_source *source, u64 f32, u64 f64)
+{
+	return orlix_tcti_scalar_fp_is_double(source) ? f64 : f32;
+}
+
 static void orlix_tcti_scalar_fp_seed_simd(void)
 {
 	size_t index;
@@ -322,7 +352,8 @@ static void orlix_tcti_scalar_fp_seed(
 	regs->regs[FP_RA] = 5;
 	regs->regs[30] = 0x4444444444444444ULL;
 	orlix_tcti_scalar_fp_seed_simd();
-	current->thread.user_simd[FP_RN * 2U] = d ? FP64_ONE : FP32_ONE;
+	current->thread.user_simd[FP_RN * 2U] =
+		orlix_tcti_scalar_fp_rn_seed_bits(source);
 	current->thread.user_simd[FP_RM * 2U] = d ? FP64_TWO : FP32_TWO;
 	current->thread.user_simd[FP_RD * 2U] = 0;
 	current->thread.user_simd[FP_RA * 2U] = d ? FP64_ONE : FP32_ONE;
@@ -1404,10 +1435,25 @@ static void orlix_tcti_scalar_fp_compare_encoding(struct kunit *test,
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(extra_code, PAGE_SIZE));
 }
 
+static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code)
+{
+	orlix_tcti_scalar_fp_seed(source, regs, code);
+	current->thread.user_simd[FP_RN * 2U] =
+		orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
+	if (!strstr(source->name, "_SZ") && !strstr(source->name, "_DZ"))
+		current->thread.user_simd[FP_RM * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE, FP64_ONE);
+	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
+}
+
 static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	struct pt_regs *regs, unsigned long code)
 {
+	const char *mnemonic = source->mnemonic;
+
 	if (strstr(source->name, "FRINT")) {
 		static const u64 fp32[] = {
 			FP32_ONE_POINT_FIVE, FP32_NEG_ONE_POINT_FIVE, FP32_TWO_POINT_FIVE,
@@ -1461,6 +1507,42 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		if (test->status == KUNIT_FAILURE)
 			return;
 		orlix_tcti_scalar_fp_compare_encoding(test, source, extra, false);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		if (ccmp)
+			orlix_tcti_scalar_fp_run_quiet_nan_compare(test, source,
+				instruction, regs, code);
+		return;
+	}
+	if (strstr(source->name, "floatcmp")) {
+		orlix_tcti_scalar_fp_run_quiet_nan_compare(test, source, instruction,
+							   regs, code);
+		return;
+	}
+	if (!strcmp(mnemonic, "FABS")) {
+		orlix_tcti_scalar_fp_seed(source, regs, code);
+		current->thread.user_simd[FP_RN * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source,
+				FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
+		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
+						 code);
+		return;
+	}
+	if (!strcmp(mnemonic, "FSQRT")) {
+		orlix_tcti_scalar_fp_seed(source, regs, code);
+		current->thread.user_simd[FP_RN * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source, FP32_FOUR, FP64_FOUR);
+		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
+						 code);
+		return;
+	}
+	if (!strcmp(mnemonic, "FMAX") || !strcmp(mnemonic, "FMIN") ||
+	    !strcmp(mnemonic, "FMAXNM") || !strcmp(mnemonic, "FMINNM")) {
+		orlix_tcti_scalar_fp_seed(source, regs, code);
+		current->thread.user_simd[FP_RN * 2U] =
+			orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
+		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
+						 code);
 		return;
 	}
 	if (strstr(source->name, "floatimm")) {
