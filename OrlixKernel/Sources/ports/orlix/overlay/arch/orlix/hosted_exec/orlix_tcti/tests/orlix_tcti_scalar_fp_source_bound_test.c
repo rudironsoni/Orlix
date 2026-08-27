@@ -54,6 +54,8 @@
 #define FP32_NEG_ONE_POINT_FIVE 0xbfc00000U
 #define FP32_TWO_POINT_FIVE 0x40200000U
 #define FP32_SNAN 0x7f800001U
+#define FP64_ONE 0x3ff0000000000000ULL
+#define FP64_TWO 0x4000000000000000ULL
 #define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
 #define FP64_NEG_ONE_POINT_FIVE 0xbff8000000000000ULL
 #define FP64_TWO_POINT_FIVE 0x4004000000000000ULL
@@ -194,6 +196,32 @@ static u32 orlix_tcti_scalar_fp_legal_instruction(
 	return instruction;
 }
 
+static u32 orlix_tcti_scalar_fp_instruction_with_imm8(
+	const struct orlix_tcti_test_fp_source *source, u8 imm8)
+{
+	u32 instruction = orlix_tcti_scalar_fp_legal_instruction(source);
+
+	if (!strstr(source->name, "floatimm"))
+		return instruction;
+	instruction &= ~(0xffU << 13);
+	instruction |= ((u32)imm8) << 13;
+	return instruction;
+}
+
+static u32 orlix_tcti_scalar_fp_instruction_with_cond(
+	const struct orlix_tcti_test_fp_source *source, u8 cond, u8 nzcv)
+{
+	u32 instruction = orlix_tcti_scalar_fp_legal_instruction(source);
+
+	instruction &= ~(0xfU << 12);
+	instruction |= ((u32)cond & 0xfU) << 12;
+	if (strstr(source->name, "floatccmp")) {
+		instruction &= ~0xfU;
+		instruction |= nzcv & 0xfU;
+	}
+	return instruction;
+}
+
 static u32 orlix_tcti_scalar_fp_instruction_with_fbits(
 	const struct orlix_tcti_test_fp_source *source, u8 fbits)
 {
@@ -263,6 +291,9 @@ static unsigned long orlix_tcti_scalar_fp_map(struct kunit *test, u32 instructio
 						 PROT_READ | PROT_EXEC);
 }
 
+static bool orlix_tcti_scalar_fp_is_double(
+	const struct orlix_tcti_test_fp_source *source);
+
 static void orlix_tcti_scalar_fp_seed_simd(void)
 {
 	size_t index;
@@ -275,8 +306,12 @@ static void orlix_tcti_scalar_fp_seed_simd(void)
 			(index % 2U) ? 0 : (u64)FP32_ONE;
 }
 
-static void orlix_tcti_scalar_fp_seed(struct pt_regs *regs, unsigned long code)
+static void orlix_tcti_scalar_fp_seed(
+	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
+	unsigned long code)
 {
+	bool d = source && orlix_tcti_scalar_fp_is_double(source);
+
 	memset(regs, 0, sizeof(*regs));
 	regs->pc = code;
 	regs->pstate = PSR_MODE_EL0t | PSR_Z_BIT;
@@ -287,10 +322,10 @@ static void orlix_tcti_scalar_fp_seed(struct pt_regs *regs, unsigned long code)
 	regs->regs[FP_RA] = 5;
 	regs->regs[30] = 0x4444444444444444ULL;
 	orlix_tcti_scalar_fp_seed_simd();
-	current->thread.user_simd[FP_RN * 2U] = FP32_ONE;
-	current->thread.user_simd[FP_RM * 2U] = FP32_TWO;
+	current->thread.user_simd[FP_RN * 2U] = d ? FP64_ONE : FP32_ONE;
+	current->thread.user_simd[FP_RM * 2U] = d ? FP64_TWO : FP32_TWO;
 	current->thread.user_simd[FP_RD * 2U] = 0;
-	current->thread.user_simd[FP_RA * 2U] = FP32_ONE;
+	current->thread.user_simd[FP_RA * 2U] = d ? FP64_ONE : FP32_ONE;
 }
 
 static bool orlix_tcti_scalar_fp_is_double(
@@ -338,7 +373,7 @@ static void orlix_tcti_scalar_fp_seed_convert(
 {
 	u64 fp_bits;
 
-	orlix_tcti_scalar_fp_seed(regs, code);
+	orlix_tcti_scalar_fp_seed(source, regs, code);
 	fp_bits = orlix_tcti_scalar_fp_convert_bits(source,
 		FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
 	orlix_tcti_scalar_fp_apply_convert_operands(source, regs, fp_bits,
@@ -700,19 +735,45 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 		return 0;
 	} else if (!strcmp(m, "FCSEL")) {
 		unsigned long host_nzcv;
+		u8 cond = (c->instruction >> 12) & 0xfU;
 
 		asm volatile("mrs %0, nzcv\n" : "=r" (host_nzcv));
-		asm volatile("msr nzcv, %0\n" : : "r" (c->regs->pstate & NZCV));
-		if (d)
-			asm volatile("ldr d0, [%[l]]\n ldr d1, [%[r]]\n"
-				     "fcsel d0, d0, d1, eq\n str d0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [l] "r" (&left),
-					 [r] "r" (&right) : "v0", "v1", "memory");
-		else
-			asm volatile("ldr s0, [%[l]]\n ldr s1, [%[r]]\n"
-				     "fcsel s0, s0, s1, eq\n str s0, [%[dst]]\n"
-				     : : [dst] "r" (&result), [l] "r" (&left),
-					 [r] "r" (&right) : "v0", "v1", "memory");
+		if (cond == 0) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, eq\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, eq\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 1) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, ne\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, ne\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else
+			return -EINVAL;
 		asm volatile("msr nzcv, %0\n" : : "r" (host_nzcv));
 	} else if (!strcmp(m, "FCMP") || !strcmp(m, "FCMPE") ||
 		   !strcmp(m, "FCCMP") || !strcmp(m, "FCCMPE")) {
@@ -763,48 +824,144 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 					     : [out] "=r" (nzcv)
 					     : [l] "r" (&left), [r] "r" (&right)
 					     : "v0", "v1", "cc");
-		} else if (!strcmp(m, "FCCMP")) {
+		} else if (!strcmp(m, "FCCMP") || !strcmp(m, "FCCMPE")) {
 			unsigned long guest_nzcv = c->regs->pstate & NZCV;
+			u8 cond = (c->instruction >> 12) & 0xfU;
+			u8 nzcv_imm = c->instruction & 0xfU;
+			bool signal = !strcmp(m, "FCCMPE");
 
-			if (d)
-				asm volatile("msr nzcv, %[guest]\n"
-					     "ldr d0, [%[l]]\n ldr d1, [%[r]]\n"
-					     "fccmp d0, d1, #0, eq\n"
+			if (cond > 1 || (nzcv_imm != 0 && nzcv_imm != 8))
+				return -EINVAL;
+			if (d && !signal && cond == 0 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmp d0, d1, #0, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && !signal && cond == 0 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmp d0, d1, #8, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && !signal && cond == 1 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmp d0, d1, #0, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && !signal && cond == 1 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmp d0, d1, #8, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && signal && cond == 0 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmpe d0, d1, #0, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && signal && cond == 0 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmpe d0, d1, #8, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && signal && cond == 1 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmpe d0, d1, #0, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (d && signal && cond == 1 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fccmpe d0, d1, #8, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && !signal && cond == 0 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmp s0, s1, #0, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && !signal && cond == 0 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmp s0, s1, #8, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && !signal && cond == 1 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmp s0, s1, #0, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && !signal && cond == 1 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmp s0, s1, #8, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && signal && cond == 0 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmpe s0, s1, #0, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && signal && cond == 0 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmpe s0, s1, #8, eq\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && signal && cond == 1 && nzcv_imm == 0)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmpe s0, s1, #0, ne\n"
+					     "mrs %[out], nzcv\n"
+					     : [out] "=r" (nzcv)
+					     : [guest] "r" (guest_nzcv),
+					       [l] "r" (&left), [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else if (!d && signal && cond == 1 && nzcv_imm == 8)
+				asm volatile("msr nzcv, %[guest]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fccmpe s0, s1, #8, ne\n"
 					     "mrs %[out], nzcv\n"
 					     : [out] "=r" (nzcv)
 					     : [guest] "r" (guest_nzcv),
 					       [l] "r" (&left), [r] "r" (&right)
 					     : "v0", "v1", "cc", "memory");
 			else
-				asm volatile("msr nzcv, %[guest]\n"
-					     "ldr s0, [%[l]]\n ldr s1, [%[r]]\n"
-					     "fccmp s0, s1, #0, eq\n"
-					     "mrs %[out], nzcv\n"
-					     : [out] "=r" (nzcv)
-					     : [guest] "r" (guest_nzcv),
-					       [l] "r" (&left), [r] "r" (&right)
-					     : "v0", "v1", "cc", "memory");
-		} else {
-			unsigned long guest_nzcv = c->regs->pstate & NZCV;
-
-			if (d)
-				asm volatile("msr nzcv, %[guest]\n"
-					     "ldr d0, [%[l]]\n ldr d1, [%[r]]\n"
-					     "fccmpe d0, d1, #0, eq\n"
-					     "mrs %[out], nzcv\n"
-					     : [out] "=r" (nzcv)
-					     : [guest] "r" (guest_nzcv),
-					       [l] "r" (&left), [r] "r" (&right)
-					     : "v0", "v1", "cc", "memory");
-			else
-				asm volatile("msr nzcv, %[guest]\n"
-					     "ldr s0, [%[l]]\n ldr s1, [%[r]]\n"
-					     "fccmpe s0, s1, #0, eq\n"
-					     "mrs %[out], nzcv\n"
-					     : [out] "=r" (nzcv)
-					     : [guest] "r" (guest_nzcv),
-					       [l] "r" (&left), [r] "r" (&right)
-					     : "v0", "v1", "cc", "memory");
+				return -EINVAL;
 		}
 		asm volatile("msr nzcv, %0\n" : : "r" (host_nzcv));
 		*c->out_nzcv = nzcv & NZCV;
@@ -1146,7 +1303,7 @@ static void orlix_tcti_scalar_fp_capture_run(struct kunit *test,
 	if (orlix_tcti_scalar_fp_is_convert(source))
 		orlix_tcti_scalar_fp_seed_convert(source, regs, code);
 	else
-		orlix_tcti_scalar_fp_seed(regs, code);
+		orlix_tcti_scalar_fp_seed(source, regs, code);
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
 	if (test->status == KUNIT_FAILURE) {
 		orlix_tcti_native_capture_destroy(capture);
@@ -1228,6 +1385,100 @@ static void orlix_tcti_scalar_fp_binds_pinned_ddi0602_semantics(
 	KUNIT_EXPECT_EQ(test, FP_FAMILY_COUNT, ddi);
 }
 
+static void orlix_tcti_scalar_fp_compare_encoding(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	bool z_set)
+{
+	struct pt_regs regs = {};
+	unsigned long extra_code;
+
+	KUNIT_ASSERT_TRUE_MSG(test,
+		orlix_tcti_scalar_fp_instruction_matches_source(source, instruction),
+		"%s insn %#x", source->name, instruction);
+	extra_code = orlix_tcti_scalar_fp_map(test, instruction);
+	orlix_tcti_scalar_fp_seed(source, &regs, extra_code);
+	if (!z_set)
+		regs.pstate &= ~PSR_Z_BIT;
+	orlix_tcti_scalar_fp_compare_run(test, source, instruction, &regs,
+					 extra_code);
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(extra_code, PAGE_SIZE));
+}
+
+static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction,
+	struct pt_regs *regs, unsigned long code)
+{
+	if (strstr(source->name, "FRINT")) {
+		static const u64 fp32[] = {
+			FP32_ONE_POINT_FIVE, FP32_NEG_ONE_POINT_FIVE, FP32_TWO_POINT_FIVE,
+		};
+		static const u64 fp64[] = {
+			FP64_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE, FP64_TWO_POINT_FIVE,
+		};
+		static const unsigned long modes[] = {
+			0, AARCH64_FPCR_RMODE_POSINF, AARCH64_FPCR_RMODE_NEGINF,
+			AARCH64_FPCR_RMODE_ZERO,
+		};
+		size_t i;
+
+		for (i = 0; i < ARRAY_SIZE(fp32); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code);
+			current->thread.user_simd[FP_RN * 2U] =
+				orlix_tcti_scalar_fp_is_double(source) ? fp64[i] : fp32[i];
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+		if (!strcmp(source->mnemonic, "FRINTI")) {
+			for (i = 0; i < ARRAY_SIZE(modes); i++) {
+				orlix_tcti_scalar_fp_seed(source, regs, code);
+				current->thread.user_fpcr = modes[i];
+				current->thread.user_simd[FP_RN * 2U] =
+					orlix_tcti_scalar_fp_is_double(source) ?
+					FP64_ONE_POINT_FIVE : FP32_ONE_POINT_FIVE;
+				orlix_tcti_scalar_fp_compare_run(test, source,
+					instruction, regs, code);
+				if (test->status == KUNIT_FAILURE)
+					return;
+			}
+		}
+		return;
+	}
+	if (strstr(source->name, "floatsel") || strstr(source->name, "floatccmp")) {
+		u32 extra;
+		bool ccmp = strstr(source->name, "floatccmp");
+
+		orlix_tcti_scalar_fp_seed(source, regs, code);
+		regs->pstate &= ~PSR_Z_BIT;
+		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
+						 code);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		extra = orlix_tcti_scalar_fp_instruction_with_cond(source, 1,
+			ccmp ? 8 : 0);
+		orlix_tcti_scalar_fp_compare_encoding(test, source, extra, true);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		orlix_tcti_scalar_fp_compare_encoding(test, source, extra, false);
+		return;
+	}
+	if (strstr(source->name, "floatimm")) {
+		static const u8 imm8s[] = { 0x80U, 0x40U, 0x01U, 0xffU };
+		size_t i;
+
+		for (i = 0; i < ARRAY_SIZE(imm8s); i++) {
+			u32 extra = orlix_tcti_scalar_fp_instruction_with_imm8(
+				source, imm8s[i]);
+
+			orlix_tcti_scalar_fp_compare_encoding(test, source, extra,
+							      true);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+	}
+}
+
 static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 {
 	size_t index;
@@ -1276,7 +1527,7 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			if (test->status == KUNIT_FAILURE)
 				return;
 			for (vec = 0; vec < ARRAY_SIZE(fp32_vecs); vec++) {
-				orlix_tcti_scalar_fp_seed(&regs, code);
+				orlix_tcti_scalar_fp_seed(source, &regs, code);
 				orlix_tcti_scalar_fp_apply_convert_operands(source,
 					&regs, orlix_tcti_scalar_fp_is_double(source) ?
 						fp64_vecs[vec] : fp32_vecs[vec],
@@ -1286,7 +1537,7 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 				if (test->status == KUNIT_FAILURE)
 					return;
 			}
-			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code);
 			orlix_tcti_scalar_fp_apply_convert_operands(source, &regs,
 				orlix_tcti_scalar_fp_convert_bits(source,
 					FP32_NEG_ONE_POINT_FIVE,
@@ -1330,12 +1581,16 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			}
 			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
 		} else {
-			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code);
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 &regs, code);
 			if (test->status == KUNIT_FAILURE)
 				return;
-			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_run_extra_vectors(test, source,
+				instruction, &regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			orlix_tcti_scalar_fp_seed(source, &regs, code);
 		}
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction, dest,
 						 &regs, code);
@@ -1344,7 +1599,7 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 		if (orlix_tcti_scalar_fp_is_convert(source))
 			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
 		else
-			orlix_tcti_scalar_fp_seed(&regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code);
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code);
 		if (test->status == KUNIT_FAILURE)
@@ -1379,7 +1634,7 @@ static void orlix_tcti_scalar_fp_optional_rejected(struct kunit *test)
 				    "%s ordinal insn %#x class %u", source->name,
 				    instruction, decoded.decode_class);
 		code = orlix_tcti_scalar_fp_map(test, instruction);
-		orlix_tcti_scalar_fp_seed(&regs, code);
+		orlix_tcti_scalar_fp_seed(source, &regs, code);
 		before = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
@@ -1404,19 +1659,19 @@ static void orlix_tcti_scalar_fp_edge_vectors(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, fadd);
 	insn = orlix_tcti_scalar_fp_legal_instruction(fadd);
 	code = orlix_tcti_scalar_fp_map(test, insn);
-	orlix_tcti_scalar_fp_seed(&regs, code);
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
 	current->thread.user_simd[FP_RN * 2U] = FP32_POS_INF;
 	current->thread.user_simd[FP_RM * 2U] = FP32_NEG_INF;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(&regs, code);
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
 	current->thread.user_simd[FP_RN * 2U] = FP32_POS_ZERO;
 	current->thread.user_simd[FP_RM * 2U] = FP32_NEG_ZERO;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(&regs, code);
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
 	current->thread.user_simd[FP_RN * 2U] = FP32_SNAN;
 	current->thread.user_simd[FP_RM * 2U] = FP32_ONE;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(&regs, code);
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
 	current->thread.user_fpcr = AARCH64_FPCR_RMODE_ZERO;
 	current->thread.user_simd[FP_RN * 2U] = FP32_ONE;
 	current->thread.user_simd[FP_RM * 2U] = FP32_MIN_SUBNORMAL;
@@ -1438,7 +1693,7 @@ static void orlix_tcti_scalar_fp_reserved_encodings(struct kunit *test)
 	decoded = orlix_tcti_decode_aarch64(insn);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	code = orlix_tcti_scalar_fp_map(test, insn);
-	orlix_tcti_scalar_fp_seed(&regs, code);
+	orlix_tcti_scalar_fp_seed(NULL, &regs, code);
 	before = regs;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
