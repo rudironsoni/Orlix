@@ -1559,6 +1559,18 @@ static bool orlix_tcti_scalar_fp_keep_unsupported(
 	/* ftype 10 is reserved for scalar FP data-processing. */
 	if (type == 2U)
 		return true;
+	/*
+	 * 32-bit float2fix encodings with scale<5>=0 are unallocated.
+	 * The source mask still binds the leaf, so keep the main decoder's
+	 * unsupported result instead of promoting FP_INT_CONVERT.
+	 */
+	if (((instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
+	     AARCH64_FCVTZ_FIXED_GPR_PATTERN ||
+	     (instruction & AARCH64_FCVTZ_FIXED_GPR_MASK) ==
+	     AARCH64_CVTF_FIXED_GPR_PATTERN) &&
+	    !(instruction & BIT(31)) &&
+	    !((instruction >> 10) & BIT(5)))
+		return true;
 	return false;
 }
 

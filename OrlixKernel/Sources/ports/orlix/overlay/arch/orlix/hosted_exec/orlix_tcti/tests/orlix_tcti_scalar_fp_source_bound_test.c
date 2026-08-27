@@ -201,6 +201,26 @@ static u32 orlix_tcti_scalar_fp_legal_instruction(
 	return instruction;
 }
 
+static u8 orlix_tcti_scalar_fp_rd_index(u32 instruction)
+{
+	return instruction & 0x1fU;
+}
+
+static u8 orlix_tcti_scalar_fp_rn_index(u32 instruction)
+{
+	return (instruction >> 5) & 0x1fU;
+}
+
+static u8 orlix_tcti_scalar_fp_rm_index(u32 instruction)
+{
+	return (instruction >> 16) & 0x1fU;
+}
+
+static u8 orlix_tcti_scalar_fp_ra_index(u32 instruction)
+{
+	return (instruction >> 10) & 0x1fU;
+}
+
 static u32 orlix_tcti_scalar_fp_instruction_with_imm8(
 	const struct orlix_tcti_test_fp_source *source, u8 imm8)
 {
@@ -338,25 +358,41 @@ static void orlix_tcti_scalar_fp_seed_simd(void)
 
 static void orlix_tcti_scalar_fp_seed(
 	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
-	unsigned long code)
+	unsigned long code, u32 instruction)
 {
 	bool d = source && orlix_tcti_scalar_fp_is_double(source);
+	const char *name = source ? source->name : NULL;
+	bool has_rn = name && !strstr(name, "floatimm");
+	bool has_rm = has_rn && source && (source->mask & (0x1fU << 16)) == 0;
+	bool has_ra = name && strstr(name, "floatdp3") &&
+		(source->mask & (0x1fU << 10)) == 0;
+	u8 rd = orlix_tcti_scalar_fp_rd_index(instruction);
+	u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+	u8 rm = orlix_tcti_scalar_fp_rm_index(instruction);
+	u8 ra = orlix_tcti_scalar_fp_ra_index(instruction);
 
 	memset(regs, 0, sizeof(*regs));
 	regs->pc = code;
 	regs->pstate = PSR_MODE_EL0t | PSR_Z_BIT;
 	regs->syscallno = NO_SYSCALL;
-	regs->regs[FP_RD] = 0x1111111111111111ULL;
-	regs->regs[FP_RN] = 8;
-	regs->regs[FP_RM] = 3;
-	regs->regs[FP_RA] = 5;
+	regs->regs[rd] = 0x1111111111111111ULL;
+	if (has_rn)
+		regs->regs[rn] = 8;
+	if (has_rm)
+		regs->regs[rm] = 3;
+	if (has_ra)
+		regs->regs[ra] = 5;
 	regs->regs[30] = 0x4444444444444444ULL;
 	orlix_tcti_scalar_fp_seed_simd();
-	current->thread.user_simd[FP_RN * 2U] =
-		orlix_tcti_scalar_fp_rn_seed_bits(source);
-	current->thread.user_simd[FP_RM * 2U] = d ? FP64_TWO : FP32_TWO;
-	current->thread.user_simd[FP_RD * 2U] = 0;
-	current->thread.user_simd[FP_RA * 2U] = d ? FP64_ONE : FP32_ONE;
+	if (has_rn)
+		current->thread.user_simd[rn * 2U] =
+			orlix_tcti_scalar_fp_rn_seed_bits(source);
+	if (has_rm)
+		current->thread.user_simd[rm * 2U] = d ? FP64_TWO : FP32_TWO;
+	if (rd != rn)
+		current->thread.user_simd[rd * 2U] = 0;
+	if (has_ra)
+		current->thread.user_simd[ra * 2U] = d ? FP64_ONE : FP32_ONE;
 }
 
 static bool orlix_tcti_scalar_fp_is_double(
@@ -381,15 +417,17 @@ static bool orlix_tcti_scalar_fp_is_convert(
 
 static void orlix_tcti_scalar_fp_apply_convert_operands(
 	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
-	u64 fp_bits, u64 gpr_n)
+	u64 fp_bits, u64 gpr_n, u32 instruction)
 {
+	u8 rn = orlix_tcti_scalar_fp_rn_index(instruction);
+
 	if (!orlix_tcti_scalar_fp_is_convert(source) || !regs)
 		return;
-	regs->regs[FP_RN] = gpr_n;
+	regs->regs[rn] = gpr_n;
 	if (strstr(source->name, "64VX"))
-		current->thread.user_simd[FP_RN * 2U + 1U] = gpr_n;
+		current->thread.user_simd[rn * 2U + 1U] = gpr_n;
 	else
-		current->thread.user_simd[FP_RN * 2U] = fp_bits;
+		current->thread.user_simd[rn * 2U] = fp_bits;
 }
 
 static u64 orlix_tcti_scalar_fp_convert_bits(
@@ -400,15 +438,15 @@ static u64 orlix_tcti_scalar_fp_convert_bits(
 
 static void orlix_tcti_scalar_fp_seed_convert(
 	const struct orlix_tcti_test_fp_source *source, struct pt_regs *regs,
-	unsigned long code)
+	unsigned long code, u32 instruction)
 {
 	u64 fp_bits;
 
-	orlix_tcti_scalar_fp_seed(source, regs, code);
+	orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 	fp_bits = orlix_tcti_scalar_fp_convert_bits(source,
 		FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
 	orlix_tcti_scalar_fp_apply_convert_operands(source, regs, fp_bits,
-						    CONVERT_GPR_NEG8);
+						    CONVERT_GPR_NEG8, instruction);
 }
 
 static int orlix_tcti_scalar_fp_host_wrap(int (*body)(void *), void *ctx,
@@ -584,11 +622,15 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 	const char *m = c->source->mnemonic;
 	const char *name = c->source->name;
 	bool d = orlix_tcti_scalar_fp_is_double(c->source);
-	u64 left = c->simd[FP_RN * 2U];
-	u64 right = c->simd[FP_RM * 2U];
-	u64 acc = c->simd[FP_RA * 2U];
-	u64 result = c->simd[FP_RD * 2U];
-	u64 gpr_n = c->regs->regs[FP_RN];
+	u8 rd = orlix_tcti_scalar_fp_rd_index(c->instruction);
+	u8 rn = orlix_tcti_scalar_fp_rn_index(c->instruction);
+	u8 rm = orlix_tcti_scalar_fp_rm_index(c->instruction);
+	u8 ra = orlix_tcti_scalar_fp_ra_index(c->instruction);
+	u64 left = c->simd[rn * 2U];
+	u64 right = c->simd[rm * 2U];
+	u64 acc = c->simd[ra * 2U];
+	u64 result = 0;
+	u64 gpr_n = c->regs->regs[rn];
 	u64 gpr_out = 0;
 	unsigned long nzcv = 0;
 	u8 fbits;
@@ -748,12 +790,12 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			     : "x0", "v0", "memory");
 	} else if (!strcmp(m, "FMOV") && strstr(name, "64VX")) {
 		asm volatile("ldr q0, [%[src]]\n fmov x0, v0.d[1]\n str x0, [%[dst]]\n"
-			     : : [dst] "r" (&gpr_out), [src] "r" (&c->simd[FP_RN * 2U])
+			     : : [dst] "r" (&gpr_out), [src] "r" (&c->simd[rn * 2U])
 			     : "x0", "v0", "memory");
 	} else if (!strcmp(m, "FMOV") && strstr(name, "V64I")) {
 		u64 dest_q[2] = {
-			c->simd[FP_RD * 2U],
-			c->simd[FP_RD * 2U + 1U],
+			c->simd[rd * 2U],
+			c->simd[rd * 2U + 1U],
 		};
 
 		asm volatile("ldr q0, [%[dst]]\n ldr x0, [%[src]]\n"
@@ -762,7 +804,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			     : "x0", "v0", "memory");
 		c->out_simd[0] = dest_q[0];
 		c->out_simd[1] = dest_q[1];
-		c->out_gpr[0] = c->regs->regs[FP_RD];
+		c->out_gpr[0] = c->regs->regs[rd];
 		return 0;
 	} else if (!strcmp(m, "FCSEL")) {
 		unsigned long host_nzcv;
@@ -996,9 +1038,9 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 		}
 		asm volatile("msr nzcv, %0\n" : : "r" (host_nzcv));
 		*c->out_nzcv = nzcv & NZCV;
-		c->out_simd[0] = c->simd[FP_RD * 2U];
-		c->out_simd[1] = c->simd[FP_RD * 2U + 1U];
-		c->out_gpr[0] = c->regs->regs[FP_RD];
+		c->out_simd[0] = c->simd[rd * 2U];
+		c->out_simd[1] = c->simd[rd * 2U + 1U];
+		c->out_gpr[0] = c->regs->regs[rd];
 		return 0;
 	} else if (!strcmp(m, "SCVTF") && strstr(name, "float2int")) {
 		if (strstr(name, "S32"))
@@ -1225,9 +1267,9 @@ static int orlix_tcti_scalar_fp_expected_from_source(
 		.out_nzcv = expected_nzcv,
 	};
 
-	expected_simd[0] = simd[FP_RD * 2U];
-	expected_simd[1] = simd[FP_RD * 2U + 1U];
-	*expected_gpr = regs->regs[FP_RD];
+	expected_simd[0] = simd[orlix_tcti_scalar_fp_rd_index(instruction) * 2U];
+	expected_simd[1] = simd[orlix_tcti_scalar_fp_rd_index(instruction) * 2U + 1U];
+	*expected_gpr = regs->regs[orlix_tcti_scalar_fp_rd_index(instruction)];
 	*expected_nzcv = regs->pstate & NZCV;
 	*expected_fpsr = fpsr_in;
 	if (strstr(source->name, "floatimm")) {
@@ -1290,15 +1332,18 @@ static void orlix_tcti_scalar_fp_compare_run(struct kunit *test,
 	orlix_tcti_scalar_fp_assert_success(test, source, &result, regs, code);
 	if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD) {
 		KUNIT_ASSERT_EQ_MSG(test, expected_simd[0],
-				    current->thread.user_simd[FP_RD * 2U],
+				    current->thread.user_simd[
+					orlix_tcti_scalar_fp_rd_index(instruction) * 2U],
 				    "%s dest lo %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 		KUNIT_ASSERT_EQ_MSG(test, expected_simd[1],
-				    current->thread.user_simd[FP_RD * 2U + 1U],
+				    current->thread.user_simd[
+					orlix_tcti_scalar_fp_rd_index(instruction) * 2U + 1U],
 				    "%s dest hi %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	} else if (dest == ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS) {
-		KUNIT_ASSERT_EQ_MSG(test, expected_gpr, regs->regs[FP_RD],
+		KUNIT_ASSERT_EQ_MSG(test, expected_gpr,
+				    regs->regs[orlix_tcti_scalar_fp_rd_index(instruction)],
 				    "%s gpr %s insn %#x", source->name,
 				    source->mnemonic, instruction);
 	} else {
@@ -1332,9 +1377,9 @@ static void orlix_tcti_scalar_fp_capture_run(struct kunit *test,
 					      &capture);
 	KUNIT_ASSERT_EQ_MSG(test, 0, ret, "%s begin %u", source->name, obligation);
 	if (orlix_tcti_scalar_fp_is_convert(source))
-		orlix_tcti_scalar_fp_seed_convert(source, regs, code);
+		orlix_tcti_scalar_fp_seed_convert(source, regs, code, instruction);
 	else
-		orlix_tcti_scalar_fp_seed(source, regs, code);
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
 	if (test->status == KUNIT_FAILURE) {
 		orlix_tcti_native_capture_destroy(capture);
@@ -1427,7 +1472,11 @@ static void orlix_tcti_scalar_fp_compare_encoding(struct kunit *test,
 		orlix_tcti_scalar_fp_instruction_matches_source(source, instruction),
 		"%s insn %#x", source->name, instruction);
 	extra_code = orlix_tcti_scalar_fp_map(test, instruction);
-	orlix_tcti_scalar_fp_seed(source, &regs, extra_code);
+	if (orlix_tcti_scalar_fp_is_convert(source))
+		orlix_tcti_scalar_fp_seed_convert(source, &regs, extra_code,
+						  instruction);
+	else
+		orlix_tcti_scalar_fp_seed(source, &regs, extra_code, instruction);
 	if (!z_set)
 		regs.pstate &= ~PSR_Z_BIT;
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, &regs,
@@ -1439,11 +1488,11 @@ static void orlix_tcti_scalar_fp_run_quiet_nan_compare(struct kunit *test,
 	const struct orlix_tcti_test_fp_source *source, u32 instruction,
 	struct pt_regs *regs, unsigned long code)
 {
-	orlix_tcti_scalar_fp_seed(source, regs, code);
-	current->thread.user_simd[FP_RN * 2U] =
+	orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 		orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
 	if (!strstr(source->name, "_SZ") && !strstr(source->name, "_DZ"))
-		current->thread.user_simd[FP_RM * 2U] =
+		current->thread.user_simd[orlix_tcti_scalar_fp_rm_index(instruction) * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE, FP64_ONE);
 	orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs, code);
 }
@@ -1468,8 +1517,8 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		size_t i;
 
 		for (i = 0; i < ARRAY_SIZE(fp32); i++) {
-			orlix_tcti_scalar_fp_seed(source, regs, code);
-			current->thread.user_simd[FP_RN * 2U] =
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 				orlix_tcti_scalar_fp_is_double(source) ? fp64[i] : fp32[i];
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 regs, code);
@@ -1478,9 +1527,9 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		}
 		if (!strcmp(source->mnemonic, "FRINTI")) {
 			for (i = 0; i < ARRAY_SIZE(modes); i++) {
-				orlix_tcti_scalar_fp_seed(source, regs, code);
+				orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 				current->thread.user_fpcr = modes[i];
-				current->thread.user_simd[FP_RN * 2U] =
+				current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 					orlix_tcti_scalar_fp_is_double(source) ?
 					FP64_ONE_POINT_FIVE : FP32_ONE_POINT_FIVE;
 				orlix_tcti_scalar_fp_compare_run(test, source,
@@ -1495,7 +1544,7 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		u32 extra;
 		bool ccmp = strstr(source->name, "floatccmp");
 
-		orlix_tcti_scalar_fp_seed(source, regs, code);
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
 		regs->pstate &= ~PSR_Z_BIT;
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
@@ -1520,8 +1569,8 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		return;
 	}
 	if (!strcmp(mnemonic, "FABS")) {
-		orlix_tcti_scalar_fp_seed(source, regs, code);
-		current->thread.user_simd[FP_RN * 2U] =
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source,
 				FP32_NEG_ONE_POINT_FIVE, FP64_NEG_ONE_POINT_FIVE);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
@@ -1529,8 +1578,8 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		return;
 	}
 	if (!strcmp(mnemonic, "FSQRT")) {
-		orlix_tcti_scalar_fp_seed(source, regs, code);
-		current->thread.user_simd[FP_RN * 2U] =
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source, FP32_FOUR, FP64_FOUR);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
@@ -1538,8 +1587,8 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 	}
 	if (!strcmp(mnemonic, "FMAX") || !strcmp(mnemonic, "FMIN") ||
 	    !strcmp(mnemonic, "FMAXNM") || !strcmp(mnemonic, "FMINNM")) {
-		orlix_tcti_scalar_fp_seed(source, regs, code);
-		current->thread.user_simd[FP_RN * 2U] =
+		orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+		current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
 			orlix_tcti_scalar_fp_lane_bits(source, FP32_QNAN, FP64_QNAN);
 		orlix_tcti_scalar_fp_compare_run(test, source, instruction, regs,
 						 code);
@@ -1559,6 +1608,45 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 				return;
 		}
 	}
+}
+
+static void orlix_tcti_scalar_fp_run_register_vectors(struct kunit *test,
+	const struct orlix_tcti_test_fp_source *source, u32 instruction)
+{
+	const char *name = source->name;
+	u32 high = instruction;
+	u32 alias_rn = instruction;
+	bool rd_free = (source->mask & 0x1fU) == 0;
+	bool rn_free = !strstr(name, "floatimm") &&
+		(source->mask & (0x1fU << 5)) == 0;
+	bool rm_free = !strstr(name, "floatimm") &&
+		(source->mask & (0x1fU << 16)) == 0;
+	bool ra_free = strstr(name, "floatdp3") &&
+		(source->mask & (0x1fU << 10)) == 0;
+
+	if (rd_free)
+		high = (high & ~0x1fU) | 16U;
+	if (rn_free)
+		high = (high & ~(0x1fU << 5)) | (17U << 5);
+	if (rm_free)
+		high = (high & ~(0x1fU << 16)) | (18U << 16);
+	if (ra_free)
+		high = (high & ~(0x1fU << 10)) | (19U << 10);
+	if (high != instruction) {
+		orlix_tcti_scalar_fp_compare_encoding(test, source, high, true);
+		if (test->status == KUNIT_FAILURE)
+			return;
+	}
+	if (!rd_free || !rn_free)
+		return;
+	alias_rn = (alias_rn & ~0x1fU) | 16U;
+	alias_rn = (alias_rn & ~(0x1fU << 5)) | (16U << 5);
+	if (rm_free)
+		alias_rn = (alias_rn & ~(0x1fU << 16)) | (18U << 16);
+	if (ra_free)
+		alias_rn = (alias_rn & ~(0x1fU << 10)) | (19U << 10);
+	if (alias_rn != instruction && alias_rn != high)
+		orlix_tcti_scalar_fp_compare_encoding(test, source, alias_rn, true);
 }
 
 static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
@@ -1603,28 +1691,28 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 			u8 extra_fbits[2];
 			u8 extra_count = 0;
 
-			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code, instruction);
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 &regs, code);
 			if (test->status == KUNIT_FAILURE)
 				return;
 			for (vec = 0; vec < ARRAY_SIZE(fp32_vecs); vec++) {
-				orlix_tcti_scalar_fp_seed(source, &regs, code);
+				orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 				orlix_tcti_scalar_fp_apply_convert_operands(source,
 					&regs, orlix_tcti_scalar_fp_is_double(source) ?
 						fp64_vecs[vec] : fp32_vecs[vec],
-					CONVERT_GPR_NEG8);
+					CONVERT_GPR_NEG8, instruction);
 				orlix_tcti_scalar_fp_compare_run(test, source,
 					instruction, &regs, code);
 				if (test->status == KUNIT_FAILURE)
 					return;
 			}
-			orlix_tcti_scalar_fp_seed(source, &regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 			orlix_tcti_scalar_fp_apply_convert_operands(source, &regs,
 				orlix_tcti_scalar_fp_convert_bits(source,
 					FP32_NEG_ONE_POINT_FIVE,
 					FP64_NEG_ONE_POINT_FIVE),
-				CONVERT_GPR_I32_MIN);
+				CONVERT_GPR_I32_MIN, instruction);
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 &regs, code);
 			if (test->status == KUNIT_FAILURE)
@@ -1653,7 +1741,7 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 					extra_fbits[vec], scaled);
 				scaled_code = orlix_tcti_scalar_fp_map(test, scaled);
 				orlix_tcti_scalar_fp_seed_convert(source, &regs,
-								  scaled_code);
+								  scaled_code, scaled);
 				orlix_tcti_scalar_fp_compare_run(test, source, scaled,
 								 &regs, scaled_code);
 				KUNIT_EXPECT_EQ(test, 0,
@@ -1661,9 +1749,9 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 				if (test->status == KUNIT_FAILURE)
 					return;
 			}
-			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code, instruction);
 		} else {
-			orlix_tcti_scalar_fp_seed(source, &regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 &regs, code);
 			if (test->status == KUNIT_FAILURE)
@@ -1672,16 +1760,23 @@ static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
 				instruction, &regs, code);
 			if (test->status == KUNIT_FAILURE)
 				return;
-			orlix_tcti_scalar_fp_seed(source, &regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 		}
+		orlix_tcti_scalar_fp_run_register_vectors(test, source, instruction);
+		if (test->status == KUNIT_FAILURE)
+			return;
+		if (orlix_tcti_scalar_fp_is_convert(source))
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code, instruction);
+		else
+			orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction, dest,
 						 &regs, code);
 		if (test->status == KUNIT_FAILURE)
 			return;
 		if (orlix_tcti_scalar_fp_is_convert(source))
-			orlix_tcti_scalar_fp_seed_convert(source, &regs, code);
+			orlix_tcti_scalar_fp_seed_convert(source, &regs, code, instruction);
 		else
-			orlix_tcti_scalar_fp_seed(source, &regs, code);
+			orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 		orlix_tcti_scalar_fp_capture_run(test, source, instruction,
 			ORLIX_TCTI_TARGET_PROOF_OBLIGATION_PC, &regs, code);
 		if (test->status == KUNIT_FAILURE)
@@ -1716,7 +1811,7 @@ static void orlix_tcti_scalar_fp_optional_rejected(struct kunit *test)
 				    "%s ordinal insn %#x class %u", source->name,
 				    instruction, decoded.decode_class);
 		code = orlix_tcti_scalar_fp_map(test, instruction);
-		orlix_tcti_scalar_fp_seed(source, &regs, code);
+		orlix_tcti_scalar_fp_seed(source, &regs, code, instruction);
 		before = regs;
 		result = orlix_tcti_resume_user(current, &regs, current->mm);
 		KUNIT_EXPECT_EQ_MSG(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION,
@@ -1741,22 +1836,22 @@ static void orlix_tcti_scalar_fp_edge_vectors(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, fadd);
 	insn = orlix_tcti_scalar_fp_legal_instruction(fadd);
 	code = orlix_tcti_scalar_fp_map(test, insn);
-	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
-	current->thread.user_simd[FP_RN * 2U] = FP32_POS_INF;
-	current->thread.user_simd[FP_RM * 2U] = FP32_NEG_INF;
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code, insn);
+	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(insn) * 2U] = FP32_POS_INF;
+	current->thread.user_simd[orlix_tcti_scalar_fp_rm_index(insn) * 2U] = FP32_NEG_INF;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
-	current->thread.user_simd[FP_RN * 2U] = FP32_POS_ZERO;
-	current->thread.user_simd[FP_RM * 2U] = FP32_NEG_ZERO;
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code, insn);
+	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(insn) * 2U] = FP32_POS_ZERO;
+	current->thread.user_simd[orlix_tcti_scalar_fp_rm_index(insn) * 2U] = FP32_NEG_ZERO;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
-	current->thread.user_simd[FP_RN * 2U] = FP32_SNAN;
-	current->thread.user_simd[FP_RM * 2U] = FP32_ONE;
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code, insn);
+	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(insn) * 2U] = FP32_SNAN;
+	current->thread.user_simd[orlix_tcti_scalar_fp_rm_index(insn) * 2U] = FP32_ONE;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
-	orlix_tcti_scalar_fp_seed(fadd, &regs, code);
+	orlix_tcti_scalar_fp_seed(fadd, &regs, code, insn);
 	current->thread.user_fpcr = AARCH64_FPCR_RMODE_ZERO;
-	current->thread.user_simd[FP_RN * 2U] = FP32_ONE;
-	current->thread.user_simd[FP_RM * 2U] = FP32_MIN_SUBNORMAL;
+	current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(insn) * 2U] = FP32_ONE;
+	current->thread.user_simd[orlix_tcti_scalar_fp_rm_index(insn) * 2U] = FP32_MIN_SUBNORMAL;
 	orlix_tcti_scalar_fp_compare_run(test, fadd, insn, &regs, code);
 	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
 }
@@ -1775,7 +1870,19 @@ static void orlix_tcti_scalar_fp_reserved_encodings(struct kunit *test)
 	decoded = orlix_tcti_decode_aarch64(insn);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
 	code = orlix_tcti_scalar_fp_map(test, insn);
-	orlix_tcti_scalar_fp_seed(NULL, &regs, code);
+	orlix_tcti_scalar_fp_seed(NULL, &regs, code, insn);
+	before = regs;
+	result = orlix_tcti_resume_user(current, &regs, current->mm);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
+	KUNIT_EXPECT_MEMEQ(test, &before, &regs, sizeof(regs));
+	KUNIT_EXPECT_EQ(test, 0, vm_munmap(code, PAGE_SIZE));
+
+	/* 32-bit float2fix with scale<5>=0 is unallocated. */
+	insn = 0x1e020020U;
+	decoded = orlix_tcti_decode_aarch64(insn);
+	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_DECODE_UNSUPPORTED, decoded.decode_class);
+	code = orlix_tcti_scalar_fp_map(test, insn);
+	orlix_tcti_scalar_fp_seed(NULL, &regs, code, insn);
 	before = regs;
 	result = orlix_tcti_resume_user(current, &regs, current->mm);
 	KUNIT_EXPECT_EQ(test, ORLIX_TCTI_EXIT_UNSUPPORTED_INSTRUCTION, result.reason);
