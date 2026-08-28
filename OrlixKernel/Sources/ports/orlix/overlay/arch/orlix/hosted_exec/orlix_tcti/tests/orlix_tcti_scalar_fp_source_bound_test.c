@@ -958,6 +958,74 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 						 [dst] "r" (&result), [l] "r" (&left),
 						 [r] "r" (&right)
 					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 8) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, hi\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, hi\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 10) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, ge\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, ge\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 12) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, gt\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, gt\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+		} else if (cond == 14) {
+			if (d)
+				asm volatile("msr nzcv, %[nz]\n ldr d0, [%[l]]\n"
+					     "ldr d1, [%[r]]\n fcsel d0, d0, d1, al\n"
+					     "str d0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
+			else
+				asm volatile("msr nzcv, %[nz]\n ldr s0, [%[l]]\n"
+					     "ldr s1, [%[r]]\n fcsel s0, s0, s1, al\n"
+					     "str s0, [%[dst]]\n"
+					     : : [nz] "r" (c->regs->pstate & NZCV),
+						 [dst] "r" (&result), [l] "r" (&left),
+						 [r] "r" (&right)
+					     : "v0", "v1", "cc", "memory");
 		} else
 			return -EINVAL;
 		asm volatile("msr nzcv, %0\n" : : "r" (host_nzcv));
@@ -1016,7 +1084,9 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 			u8 nzcv_imm = c->instruction & 0xfU;
 			bool signal = !strcmp(m, "FCCMPE");
 
-			if ((cond > 1 && cond != 2 && cond != 4 && cond != 6) ||
+			if ((cond > 1 && cond != 2 && cond != 4 && cond != 6 &&
+			     cond != 8 && cond != 10 && cond != 12 &&
+			     cond != 14) ||
 			    (nzcv_imm != 0 && nzcv_imm != 1 && nzcv_imm != 2 &&
 			     nzcv_imm != 4 && nzcv_imm != 8))
 				return -EINVAL;
@@ -1162,6 +1232,14 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 				HOST_FCCMP_ONE("fccmp", "d", 0, "mi");
 			else if (d && !signal && cond == 6 && nzcv_imm == 0)
 				HOST_FCCMP_ONE("fccmp", "d", 0, "vs");
+			else if (d && !signal && cond == 8 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "hi");
+			else if (d && !signal && cond == 10 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "ge");
+			else if (d && !signal && cond == 12 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "gt");
+			else if (d && !signal && cond == 14 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "d", 0, "al");
 			else if (d && !signal && cond == 1 && nzcv_imm == 4)
 				HOST_FCCMP_ONE("fccmp", "d", 4, "ne");
 			else if (d && !signal && cond == 1 && nzcv_imm == 2)
@@ -1174,6 +1252,14 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 				HOST_FCCMP_ONE("fccmpe", "d", 0, "mi");
 			else if (d && signal && cond == 6 && nzcv_imm == 0)
 				HOST_FCCMP_ONE("fccmpe", "d", 0, "vs");
+			else if (d && signal && cond == 8 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "hi");
+			else if (d && signal && cond == 10 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "ge");
+			else if (d && signal && cond == 12 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "gt");
+			else if (d && signal && cond == 14 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "d", 0, "al");
 			else if (d && signal && cond == 1 && nzcv_imm == 4)
 				HOST_FCCMP_ONE("fccmpe", "d", 4, "ne");
 			else if (d && signal && cond == 1 && nzcv_imm == 2)
@@ -1186,6 +1272,14 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 				HOST_FCCMP_ONE("fccmp", "s", 0, "mi");
 			else if (!d && !signal && cond == 6 && nzcv_imm == 0)
 				HOST_FCCMP_ONE("fccmp", "s", 0, "vs");
+			else if (!d && !signal && cond == 8 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "hi");
+			else if (!d && !signal && cond == 10 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "ge");
+			else if (!d && !signal && cond == 12 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "gt");
+			else if (!d && !signal && cond == 14 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmp", "s", 0, "al");
 			else if (!d && !signal && cond == 1 && nzcv_imm == 4)
 				HOST_FCCMP_ONE("fccmp", "s", 4, "ne");
 			else if (!d && !signal && cond == 1 && nzcv_imm == 2)
@@ -1198,6 +1292,14 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 				HOST_FCCMP_ONE("fccmpe", "s", 0, "mi");
 			else if (!d && signal && cond == 6 && nzcv_imm == 0)
 				HOST_FCCMP_ONE("fccmpe", "s", 0, "vs");
+			else if (!d && signal && cond == 8 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "hi");
+			else if (!d && signal && cond == 10 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "ge");
+			else if (!d && signal && cond == 12 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "gt");
+			else if (!d && signal && cond == 14 && nzcv_imm == 0)
+				HOST_FCCMP_ONE("fccmpe", "s", 0, "al");
 			else if (!d && signal && cond == 1 && nzcv_imm == 4)
 				HOST_FCCMP_ONE("fccmpe", "s", 4, "ne");
 			else if (!d && signal && cond == 1 && nzcv_imm == 2)
@@ -1775,9 +1877,13 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 		if (test->status == KUNIT_FAILURE)
 			return;
 		{
-			static const u8 conds[] = { 2, 4, 6 };
-			static const unsigned long flags[] = {
-				PSR_C_BIT, PSR_N_BIT, PSR_V_BIT,
+			static const u8 conds[] = { 2, 4, 6, 8, 10, 12, 14 };
+			static const unsigned long tflags[] = {
+				PSR_C_BIT, PSR_N_BIT, PSR_V_BIT, PSR_C_BIT,
+				0, 0, PSR_Z_BIT,
+			};
+			static const unsigned long fflags[] = {
+				0, 0, 0, 0, PSR_N_BIT, PSR_Z_BIT, PSR_N_BIT,
 			};
 			size_t i;
 
@@ -1785,11 +1891,11 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 				extra = orlix_tcti_scalar_fp_instruction_with_cond(
 					source, conds[i], 0);
 				orlix_tcti_scalar_fp_compare_encoding_flags(test,
-					source, extra, flags[i]);
+					source, extra, tflags[i]);
 				if (test->status == KUNIT_FAILURE)
 					return;
 				orlix_tcti_scalar_fp_compare_encoding_flags(test,
-					source, extra, 0);
+					source, extra, fflags[i]);
 				if (test->status == KUNIT_FAILURE)
 					return;
 			}
