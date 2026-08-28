@@ -7,6 +7,13 @@ updated: 2026-08-28
 ---
 # Orlix Knowledge Log
 
+## [2026-08-28] record | Strengthen SCALAR_FP status and NaN proof
+
+SCALAR_FP proof now preserves all seeded FPSR sticky bits and proves that a
+signaling NaN adds IOC without clearing the others. FCVT H/S/D extras cover
+quiet NaN and signaling NaN with FPCR.DN off and on before ingest. Optional FP
+leaves remain blockers, HWCAP stays zero, and `linux_proof_executed` stays 0.
+
 ## [2026-08-28] record | Record SCALAR_FP outcome on the owning task page
 
 Moved the durable `SCALAR_FP` family outcome onto [Complete AArch64 ISA-on-ISA coverage](objects/task/doing/complete-aarch64-isa-on-isa-coverage.md). FCSEL, FCCMP, and FCCMPE extras now include inverted bit-3 conditions LS, LT, LE, and NV. The 126 optional FP leaves stay unclassified complete-target blockers. `linux_proof_executed` stays 0. The 4,350-leaf coverage task stays doing.

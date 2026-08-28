@@ -39,10 +39,19 @@
 #define FP_RM 2U
 #define FP_RA 3U
 #define AARCH64_FPSR_IOC BIT(0)
+#define AARCH64_FPSR_DZC BIT(1)
+#define AARCH64_FPSR_OFC BIT(2)
+#define AARCH64_FPSR_UFC BIT(3)
+#define AARCH64_FPSR_IXC BIT(4)
+#define AARCH64_FPSR_IDC BIT(7)
+#define AARCH64_FPSR_STICKY \
+	(AARCH64_FPSR_IOC | AARCH64_FPSR_DZC | AARCH64_FPSR_OFC | \
+	 AARCH64_FPSR_UFC | AARCH64_FPSR_IXC | AARCH64_FPSR_IDC)
 #define AARCH64_FPCR_RMODE_POSINF BIT(22)
 #define AARCH64_FPCR_RMODE_NEGINF BIT(23)
 #define AARCH64_FPCR_RMODE_ZERO (BIT(22) | BIT(23))
 #define AARCH64_FPCR_FZ BIT(24)
+#define AARCH64_FPCR_DN BIT(25)
 #define NZCV (PSR_N_BIT | PSR_Z_BIT | PSR_C_BIT | PSR_V_BIT)
 #define FP32_POS_INF 0x7f800000U
 #define FP32_NEG_INF 0xff800000U
@@ -56,6 +65,8 @@
 #define FP32_TWO_POINT_FIVE 0x40200000U
 #define FP32_SNAN 0x7f800001U
 #define FP32_QNAN 0x7fc00000U
+#define FP32_SNAN_PAYLOAD 0x7f812345U
+#define FP32_QNAN_PAYLOAD 0x7fc12345U
 #define FP32_FOUR 0x40800000U
 #define FP32_NEG_ONE 0xbf800000U
 #define FP32_FMA_A 0x3f800800U
@@ -67,6 +78,8 @@
 #define FP16_TWO_POINT_FIVE 0x4100U
 #define FP16_POS_INF 0x7c00U
 #define FP16_NEG_ONE_POINT_FIVE 0xbe00U
+#define FP16_SNAN_PAYLOAD 0x7c55U
+#define FP16_QNAN_PAYLOAD 0x7e55U
 #define FP64_ONE 0x3ff0000000000000ULL
 #define FP64_TWO 0x4000000000000000ULL
 #define FP64_ONE_POINT_FIVE 0x3ff8000000000000ULL
@@ -74,6 +87,8 @@
 #define FP64_TWO_POINT_FIVE 0x4004000000000000ULL
 #define FP64_POS_INF 0x7ff0000000000000ULL
 #define FP64_QNAN 0x7ff8000000000000ULL
+#define FP64_SNAN_PAYLOAD 0x7ff0123456789abcULL
+#define FP64_QNAN_PAYLOAD 0x7ff8123456789abcULL
 #define FP64_FOUR 0x4010000000000000ULL
 #define FP64_THREE 0x4008000000000000ULL
 #define FP64_MIN_SUBNORMAL 0x1ULL
@@ -385,7 +400,7 @@ static void orlix_tcti_scalar_fp_seed_simd(void)
 
 	current->thread.user_simd_valid = 1;
 	current->thread.user_fpcr = 0;
-	current->thread.user_fpsr = 0;
+	current->thread.user_fpsr = AARCH64_FPSR_STICKY;
 	for (index = 0; index < ARRAY_SIZE(current->thread.user_simd); index++)
 		current->thread.user_simd[index] =
 			(index % 2U) ? 0 : (0x55550000ULL | (index / 2U));
@@ -2158,29 +2173,80 @@ static void orlix_tcti_scalar_fp_run_extra_vectors(struct kunit *test,
 			if (test->status == KUNIT_FAILURE)
 				return;
 		}
-		return;
-	}
-	if (!strcmp(mnemonic, "FCVT")) {
-		static const u64 fp32[] = {
-			FP32_ONE_POINT_FIVE, FP32_TWO_POINT_FIVE, FP32_POS_INF,
-		};
-		static const u64 fp64[] = {
-			FP64_ONE_POINT_FIVE, FP64_TWO_POINT_FIVE, FP64_POS_INF,
-		};
-		static const u64 fp16[] = {
-			FP16_ONE_POINT_FIVE, FP16_TWO_POINT_FIVE, FP16_POS_INF,
-		};
-		size_t i;
-
-		for (i = 0; i < ARRAY_SIZE(fp32); i++) {
+		if (!strcmp(mnemonic, "FADD")) {
 			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
-			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
-				orlix_tcti_scalar_fp_src_lane_bits(source, fp32[i],
-					fp64[i], fp16[i]);
+			current->thread.user_fpsr = AARCH64_FPSR_STICKY;
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE,
+							       FP64_ONE);
+			current->thread.user_simd[rm * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_TWO,
+							       FP64_TWO);
 			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
 							 regs, code);
 			if (test->status == KUNIT_FAILURE)
 				return;
+			KUNIT_ASSERT_EQ(test, AARCH64_FPSR_STICKY,
+					current->thread.user_fpsr);
+
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_fpsr =
+				AARCH64_FPSR_STICKY & ~AARCH64_FPSR_IOC;
+			current->thread.user_simd[rn * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source,
+					FP32_SNAN_PAYLOAD, FP64_SNAN_PAYLOAD);
+			current->thread.user_simd[rm * 2U] =
+				orlix_tcti_scalar_fp_lane_bits(source, FP32_ONE,
+							       FP64_ONE);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			KUNIT_ASSERT_EQ(test, AARCH64_FPSR_STICKY,
+					current->thread.user_fpsr);
+		}
+		return;
+	}
+	if (!strcmp(mnemonic, "FCVT")) {
+		static const struct {
+			u64 fp32;
+			u64 fp64;
+			u64 fp16;
+			unsigned long fpcr;
+			bool raises_ioc;
+		} vectors[] = {
+			{ FP32_ONE_POINT_FIVE, FP64_ONE_POINT_FIVE,
+			  FP16_ONE_POINT_FIVE, 0, false },
+			{ FP32_TWO_POINT_FIVE, FP64_TWO_POINT_FIVE,
+			  FP16_TWO_POINT_FIVE, 0, false },
+			{ FP32_POS_INF, FP64_POS_INF, FP16_POS_INF, 0, false },
+			{ FP32_QNAN_PAYLOAD, FP64_QNAN_PAYLOAD,
+			  FP16_QNAN_PAYLOAD, 0, false },
+			{ FP32_SNAN_PAYLOAD, FP64_SNAN_PAYLOAD,
+			  FP16_SNAN_PAYLOAD, 0, true },
+			{ FP32_QNAN_PAYLOAD, FP64_QNAN_PAYLOAD,
+			  FP16_QNAN_PAYLOAD, AARCH64_FPCR_DN, false },
+			{ FP32_SNAN_PAYLOAD, FP64_SNAN_PAYLOAD,
+			  FP16_SNAN_PAYLOAD, AARCH64_FPCR_DN, true },
+		};
+		size_t i;
+
+		for (i = 0; i < ARRAY_SIZE(vectors); i++) {
+			orlix_tcti_scalar_fp_seed(source, regs, code, instruction);
+			current->thread.user_fpcr = vectors[i].fpcr;
+			if (vectors[i].raises_ioc)
+				current->thread.user_fpsr &= ~AARCH64_FPSR_IOC;
+			current->thread.user_simd[orlix_tcti_scalar_fp_rn_index(instruction) * 2U] =
+				orlix_tcti_scalar_fp_src_lane_bits(source,
+					vectors[i].fp32, vectors[i].fp64,
+					vectors[i].fp16);
+			orlix_tcti_scalar_fp_compare_run(test, source, instruction,
+							 regs, code);
+			if (test->status == KUNIT_FAILURE)
+				return;
+			if (vectors[i].raises_ioc)
+				KUNIT_ASSERT_NE(test, 0UL,
+					current->thread.user_fpsr & AARCH64_FPSR_IOC);
 		}
 		if (strstr(source->name, "_SD") || strstr(source->name, "_HS") ||
 		    strstr(source->name, "_HD")) {
