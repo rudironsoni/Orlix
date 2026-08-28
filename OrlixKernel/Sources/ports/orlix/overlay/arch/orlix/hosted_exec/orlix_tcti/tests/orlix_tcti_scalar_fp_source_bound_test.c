@@ -57,7 +57,7 @@
 #define FP32_QNAN 0x7fc00000U
 #define FP32_FOUR 0x40800000U
 #define FP32_NEG_ONE 0xbf800000U
-#define FP32_FMA_A 0x3f801000U
+#define FP32_FMA_A 0x3f800800U
 #define FP16_ONE 0x3c00U
 #define FP64_ONE 0x3ff0000000000000ULL
 #define FP64_TWO 0x4000000000000000ULL
@@ -171,6 +171,24 @@ static u32 orlix_tcti_scalar_fp_dest_obligation(
 			return ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS;
 	}
 	return ORLIX_TCTI_TARGET_PROOF_OBLIGATION_FP_SIMD;
+}
+
+static bool orlix_tcti_scalar_fp_gpr_rn(
+	const struct orlix_tcti_test_fp_source *source)
+{
+	const char *name;
+
+	if (!source)
+		return false;
+	if (!strcmp(source->mnemonic, "SCVTF") ||
+	    !strcmp(source->mnemonic, "UCVTF"))
+		return true;
+	if (strcmp(source->mnemonic, "FMOV"))
+		return false;
+	name = source->name;
+	return strstr(name, "S32") || strstr(name, "D64") ||
+		strstr(name, "V64I") || strstr(name, "H32") ||
+		strstr(name, "H64");
 }
 
 static const struct orlix_tcti_test_fp_source *
@@ -636,7 +654,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 	u64 right = c->simd[rm * 2U];
 	u64 acc = c->simd[ra * 2U];
 	u64 result = 0;
-	u64 gpr_n = c->regs->regs[rn];
+	u64 gpr_n = (rn == 31U) ? 0 : c->regs->regs[rn];
 	u64 gpr_out = 0;
 	unsigned long nzcv = 0;
 	u8 fbits;
@@ -1252,7 +1270,7 @@ static int orlix_tcti_scalar_fp_host_body(void *opaque)
 
 	c->out_simd[0] = result;
 	c->out_simd[1] = 0;
-	c->out_gpr[0] = gpr_out;
+	c->out_gpr[0] = (rd == 31U) ? c->regs->regs[31] : gpr_out;
 	*c->out_nzcv = nzcv;
 	return 0;
 }
@@ -1674,6 +1692,28 @@ static void orlix_tcti_scalar_fp_run_register_vectors(struct kunit *test,
 		alias_rn = (alias_rn & ~(0x1fU << 10)) | (19U << 10);
 	if (alias_rn != instruction && alias_rn != high)
 		orlix_tcti_scalar_fp_compare_encoding(test, source, alias_rn, true);
+	if (test->status == KUNIT_FAILURE)
+		return;
+	if (orlix_tcti_scalar_fp_gpr_rn(source) && rn_free) {
+		u32 zrn = instruction;
+
+		zrn = (zrn & ~(0x1fU << 5)) | (31U << 5);
+		if (zrn != instruction && zrn != high && zrn != alias_rn) {
+			orlix_tcti_scalar_fp_compare_encoding(test, source, zrn,
+							      true);
+			if (test->status == KUNIT_FAILURE)
+				return;
+		}
+	}
+	if (orlix_tcti_scalar_fp_dest_obligation(source) ==
+	    ORLIX_TCTI_TARGET_PROOF_OBLIGATION_REGISTERS && rd_free) {
+		u32 zrd = instruction;
+
+		zrd = (zrd & ~0x1fU) | 31U;
+		if (zrd != instruction && zrd != high)
+			orlix_tcti_scalar_fp_compare_encoding(test, source, zrd,
+							      true);
+	}
 }
 
 static void orlix_tcti_scalar_fp_production_resume(struct kunit *test)
